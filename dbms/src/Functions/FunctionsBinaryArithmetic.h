@@ -1749,7 +1749,7 @@ private:
         }
         if (typeid_cast<const T0 *>(left_type.get()))
         {
-            if (   checkRightType<T0, DataTypeDate>(arguments, type_res)
+            if (checkRightType<T0, DataTypeDate>(arguments, type_res)
                 || checkRightType<T0, DataTypeDateTime>(arguments, type_res)
                 || checkRightType<T0, DataTypeUInt8>(arguments, type_res)
                 || checkRightType<T0, DataTypeUInt16>(arguments, type_res)
@@ -1793,7 +1793,8 @@ private:
             return {};
 
         if (interval_arg == 0 && function_is_minus)
-            throw Exception("Wrong order of arguments for function " + getName() + ": argument of type Interval cannot be first.",
+            throw Exception(
+                "Wrong order of arguments for function " + getName() + ": argument of type Interval cannot be first.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         const DataTypeDate * date_data_type = checkAndGetDataType<DataTypeDate>(interval_arg == 0 ? type1.get() : type0.get());
@@ -1802,7 +1803,8 @@ private:
         {
             date_time_data_type = checkAndGetDataType<DataTypeDateTime>(interval_arg == 0 ? type1.get() : type0.get());
             if (!date_time_data_type)
-                throw Exception("Wrong argument types for function " + getName() + ": if one argument is Interval, then another must be Date or DateTime.",
+                throw Exception(
+                    "Wrong argument types for function " + getName() + ": if one argument is Interval, then another must be Date or DateTime.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
@@ -1857,7 +1859,7 @@ public:
                 return type_res;
         }
 
-        if (!( checkLeftType<DataTypeDate>(arguments, type_res)
+        if (!(checkLeftType<DataTypeDate>(arguments, type_res)
             || checkLeftType<DataTypeDateTime>(arguments, type_res)
             || checkLeftType<DataTypeUInt8>(arguments, type_res)
             || checkLeftType<DataTypeUInt16>(arguments, type_res)
@@ -1977,10 +1979,11 @@ public:
             using ResultDataType = std::decay_t<decltype(result_type)>;
             constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
             constexpr bool is_multiply [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, MultiplyImpl<UInt8, UInt8>>;
-            constexpr bool is_division [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, DivideFloatingImpl<UInt8, UInt8>> ||
-                                            std::is_same_v<Op<UInt8, UInt8>, TiDBDivideFloatingImpl<UInt8, UInt8>> ||
-                                            std::is_same_v<Op<UInt8, UInt8>, DivideIntegralImpl<UInt8, UInt8>> ||
-                                            std::is_same_v<Op<UInt8, UInt8>, DivideIntegralOrZeroImpl<UInt8, UInt8>>;
+            constexpr bool is_division [[maybe_unused]] =
+                std::is_same_v<Op<UInt8, UInt8>, DivideFloatingImpl<UInt8, UInt8>>
+                || std::is_same_v<Op<UInt8, UInt8>, TiDBDivideFloatingImpl<UInt8, UInt8>>
+                || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralImpl<UInt8, UInt8>>
+                || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralOrZeroImpl<UInt8, UInt8>>;
 
             using T0 = typename LeftDataType::FieldType;
             using T1 = typename RightDataType::FieldType;
@@ -2251,6 +2254,7 @@ public:
     }
 };
 
+// clang-format off
 struct NamePlus                 { static constexpr auto name = "plus"; };
 struct NameMinus                { static constexpr auto name = "minus"; };
 struct NameMultiply             { static constexpr auto name = "multiply"; };
@@ -2271,6 +2275,7 @@ struct NameLeast                { static constexpr auto name = "least"; };
 struct NameGreatest             { static constexpr auto name = "greatest"; };
 struct NameGCD                  { static constexpr auto name = "gcd"; };
 struct NameLCM                  { static constexpr auto name = "lcm"; };
+// clang-format on
 
 template<typename A, typename B> using PlusImpl_t = PlusImpl<A, B>;
 using FunctionPlus = FunctionBinaryArithmetic<PlusImpl_t, NamePlus>;

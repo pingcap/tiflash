@@ -114,22 +114,24 @@ struct RoundDurationImpl
 
     static inline ResultType apply(A x)
     {
+        // clang-format off
         return x < 1 ? 0
-                     : (x < 10 ? 1
-                               : (x < 30 ? 10
-                                         : (x < 60 ? 30
-                                                   : (x < 120 ? 60
-                                                              : (x < 180 ? 120
-                                                                         : (x < 240 ? 180
-                                                                                    : (x < 300 ? 240
-                                                                                               : (x < 600 ? 300
-                                                                                                          : (x < 1200 ? 600
-                                                                                                                      : (x < 1800 ? 1200
-                                                                                                                                  : (x < 3600 ? 1800
-                                                                                                                                              : (x < 7200 ? 3600
-                                                                                                                                                          : (x < 18000 ? 7200
-                                                                                                                                                                       : (x < 36000 ? 18000
-                                                                                                                                                                                    : 36000))))))))))))));
+        : (x < 10 ? 1
+        : (x < 30 ? 10
+        : (x < 60 ? 30
+        : (x < 120 ? 60
+        : (x < 180 ? 120
+        : (x < 240 ? 180
+        : (x < 300 ? 240
+        : (x < 600 ? 300
+        : (x < 1200 ? 600
+        : (x < 1800 ? 1200
+        : (x < 3600 ? 1800
+        : (x < 7200 ? 3600
+        : (x < 18000 ? 7200
+        : (x < 36000 ? 18000
+        : 36000))))))))))))));
+        // clang-format on
     }
 };
 
@@ -147,13 +149,15 @@ struct RoundAgeImpl
 
     static inline ResultType apply(A x)
     {
+        // clang-format off
         return x < 1 ? 0
-                     : (x < 18 ? 17
-                               : (x < 25 ? 18
-                                         : (x < 35 ? 25
-                                                   : (x < 45 ? 35
-                                                             : (x < 55 ? 45
-                                                                       : 55)))));
+        : (x < 18 ? 17
+        : (x < 25 ? 18
+        : (x < 35 ? 25
+        : (x < 45 ? 35
+        : (x < 55 ? 45
+        : 55)))));
+        // clang-format on
     }
 };
 
@@ -588,8 +592,9 @@ public:
         case 10000000000000000000ULL:
             return applyImpl<10000000000000000000ULL>(in, out);
         default:
-            throw Exception("Logical error: unexpected 'scale' parameter passed to function IntegerRoundingComputation::compute",
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Logical error: unexpected 'scale' parameter passed to function IntegerRoundingComputation::compute",
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
 };
@@ -649,11 +654,13 @@ public:
 };
 
 template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename OutputType = T>
-using FunctionRoundingImpl = std::conditional_t<std::is_floating_point_v<T>,
-                                                FloatRoundingImpl<T, rounding_mode, scale_mode>,
-                                                std::conditional_t<std::is_integral_v<T>,
-                                                                   IntegerRoundingImpl<T, rounding_mode, scale_mode>,
-                                                                   DecimalRoundingImpl<T, rounding_mode, scale_mode, OutputType>>>;
+using FunctionRoundingImpl = std::conditional_t<
+    std::is_floating_point_v<T>,
+    FloatRoundingImpl<T, rounding_mode, scale_mode>,
+    std::conditional_t<
+        std::is_integral_v<T>,
+        IntegerRoundingImpl<T, rounding_mode, scale_mode>,
+        DecimalRoundingImpl<T, rounding_mode, scale_mode, OutputType>>>;
 
 
 /** Select the appropriate processing algorithm depending on the scale and OutputType
@@ -777,14 +784,16 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if ((arguments.size() < 1) || (arguments.size() > 2))
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be 1 or 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed "
+                    + toString(arguments.size()) + ", should be 1 or 2.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
             if (!type->isNumber() && !type->isDecimal())
-                throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0];
     }
@@ -809,9 +818,10 @@ public:
               || executeForType<Decimal128>(block, arguments, result)
               || executeForType<Decimal256>(block, arguments, result)))
         {
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
@@ -864,14 +874,16 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if ((arguments.size() < 1) || (arguments.size() > 2))
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be 1 or 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed "
+                    + toString(arguments.size()) + ", should be 1 or 2.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & type : arguments)
             if (!type->isDecimal())
-                throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return std::make_shared<DataTypeInt64>();
     }
 
@@ -885,9 +897,10 @@ public:
               || executeForType<Decimal128>(block, arguments, result)
               || executeForType<Decimal256>(block, arguments, result)))
         {
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
@@ -1220,11 +1233,13 @@ struct TiDBRound
         auto frac_column = checkAndGetColumn<FracColumn>(args.frac_column.get());
 
         if (input_column == nullptr)
-            throw Exception(fmt::format("Illegal column {} for the first argument of function round", args.input_column->getName()),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} for the first argument of function round", args.input_column->getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
         if (frac_column == nullptr)
-            throw Exception(fmt::format("Illegal column {} for the second argument of function round", args.frac_column->getName()),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} for the second argument of function round", args.frac_column->getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
 
         auto output_column = typeid_cast<OutputColumn *>(args.output_column.get());
         assert(output_column != nullptr);
@@ -1341,8 +1356,9 @@ private:
         }
         else
         {
-            throw Exception(fmt::format("Illegal frac column with type {}, expect const Int64/UInt64", column->getField().getTypeName()),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal frac column with type {}, expect const Int64/UInt64", column->getField().getTypeName()),
+                ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 
@@ -1520,63 +1536,34 @@ private:
 
         auto input_type = arguments[0].type;
         if (!input_type->isNumber() && !input_type->isDecimal())
-            throw Exception(fmt::format("Illegal type {} of first argument of function {}", input_type->getName(), getName()),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", input_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         // the second argument frac must be integers.
         auto frac_type = arguments[1].type;
         if (!frac_type->isInteger())
-            throw Exception(fmt::format("Illegal type {} of second argument of function {}", frac_type->getName(), getName()),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", frac_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
 
-struct NameRoundToExp2
-{
-    static constexpr auto name = "roundToExp2";
-};
-struct NameRoundDuration
-{
-    static constexpr auto name = "roundDuration";
-};
-struct NameRoundAge
-{
-    static constexpr auto name = "roundAge";
-};
+// clang-format off
+struct NameRoundToExp2 { static constexpr auto name = "roundToExp2"; };
+struct NameRoundDuration { static constexpr auto name = "roundDuration"; };
+struct NameRoundAge { static constexpr auto name = "roundAge"; };
 
-struct NameRound
-{
-    static constexpr auto name = "round";
-};
-struct NameCeil
-{
-    static constexpr auto name = "ceil";
-};
-struct NameFloor
-{
-    static constexpr auto name = "floor";
-};
-struct NameTrunc
-{
-    static constexpr auto name = "trunc";
-};
+struct NameRound { static constexpr auto name = "round"; };
+struct NameCeil { static constexpr auto name = "ceil"; };
+struct NameFloor { static constexpr auto name = "floor"; };
+struct NameTrunc { static constexpr auto name = "trunc"; };
 
-struct NameRoundDecimalToInt
-{
-    static constexpr auto name = "roundDecimalToInt";
-};
-struct NameCeilDecimalToInt
-{
-    static constexpr auto name = "ceilDecimalToInt";
-};
-struct NameFloorDecimalToInt
-{
-    static constexpr auto name = "floorDecimalToInt";
-};
-struct NameTruncDecimalToInt
-{
-    static constexpr auto name = "truncDecimalToInt";
-};
+struct NameRoundDecimalToInt { static constexpr auto name = "roundDecimalToInt"; };
+struct NameCeilDecimalToInt { static constexpr auto name = "ceilDecimalToInt"; };
+struct NameFloorDecimalToInt { static constexpr auto name = "floorDecimalToInt"; };
+struct NameTruncDecimalToInt { static constexpr auto name = "truncDecimalToInt"; };
+// clang-format on
 
 using FunctionRoundToExp2 = FunctionUnaryArithmetic<RoundToExp2Impl, NameRoundToExp2, false>;
 using FunctionRoundDuration = FunctionUnaryArithmetic<RoundDurationImpl, NameRoundDuration, false>;
@@ -1602,17 +1589,10 @@ struct PositiveMonotonicity
     }
 };
 
-template <>
-struct FunctionUnaryArithmeticMonotonicity<NameRoundToExp2> : PositiveMonotonicity
-{
-};
-template <>
-struct FunctionUnaryArithmeticMonotonicity<NameRoundDuration> : PositiveMonotonicity
-{
-};
-template <>
-struct FunctionUnaryArithmeticMonotonicity<NameRoundAge> : PositiveMonotonicity
-{
-};
+// clang-format off
+template <> struct FunctionUnaryArithmeticMonotonicity<NameRoundToExp2> : PositiveMonotonicity {};
+template <> struct FunctionUnaryArithmeticMonotonicity<NameRoundDuration> : PositiveMonotonicity {};
+template <> struct FunctionUnaryArithmeticMonotonicity<NameRoundAge> : PositiveMonotonicity {};
+// clang-format on
 
 } // namespace DB

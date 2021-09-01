@@ -270,8 +270,9 @@ public:
               || checkType<DataTypeDecimal128>(arguments, result)
               || checkType<DataTypeDecimal256>(arguments, result)
               || checkType<DataTypeFloat64>(arguments, result)))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return result;
     }
@@ -292,9 +293,10 @@ public:
               || executeDecimalType<Decimal256>(block, arguments, result)
               || executeType<Float32>(block, arguments, result)
               || executeType<Float64>(block, arguments, result)))
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 
     bool hasInformationAboutMonotonicity() const override
@@ -308,27 +310,13 @@ public:
     }
 };
 
-
-struct NameNegate
-{
-    static constexpr auto name = "negate";
-};
-struct NameAbs
-{
-    static constexpr auto name = "abs";
-};
-struct NameBitNot
-{
-    static constexpr auto name = "bitNot";
-};
-struct NameIntExp2
-{
-    static constexpr auto name = "intExp2";
-};
-struct NameIntExp10
-{
-    static constexpr auto name = "intExp10";
-};
+// clang-format off
+struct NameNegate               { static constexpr auto name = "negate"; };
+struct NameAbs                  { static constexpr auto name = "abs"; };
+struct NameBitNot               { static constexpr auto name = "bitNot"; };
+struct NameIntExp2              { static constexpr auto name = "intExp2"; };
+struct NameIntExp10             { static constexpr auto name = "intExp10"; };
+// clang-format on
 
 using FunctionNegate = FunctionUnaryArithmetic<NegateImpl, NameNegate, true>;
 using FunctionAbs = FunctionUnaryArithmetic<AbsImpl, NameAbs, false>;
@@ -356,8 +344,12 @@ struct FunctionUnaryArithmeticMonotonicity<NameAbs>
     static bool has() { return true; }
     static IFunction::Monotonicity get(const Field & left, const Field & right)
     {
-        Float64 left_float = left.isNull() ? -std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
-        Float64 right_float = right.isNull() ? std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
+        Float64 left_float = left.isNull()
+            ? -std::numeric_limits<Float64>::infinity()
+            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
+        Float64 right_float = right.isNull()
+            ? std::numeric_limits<Float64>::infinity()
+            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
 
         if ((left_float < 0 && right_float > 0) || (left_float > 0 && right_float < 0))
             return {};
@@ -382,8 +374,12 @@ struct FunctionUnaryArithmeticMonotonicity<NameIntExp2>
     static bool has() { return true; }
     static IFunction::Monotonicity get(const Field & left, const Field & right)
     {
-        Float64 left_float = left.isNull() ? -std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
-        Float64 right_float = right.isNull() ? std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
+        Float64 left_float = left.isNull()
+            ? -std::numeric_limits<Float64>::infinity()
+            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
+        Float64 right_float = right.isNull()
+            ? std::numeric_limits<Float64>::infinity()
+            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
 
         if (left_float < 0 || right_float > 63)
             return {};
@@ -398,8 +394,12 @@ struct FunctionUnaryArithmeticMonotonicity<NameIntExp10>
     static bool has() { return true; }
     static IFunction::Monotonicity get(const Field & left, const Field & right)
     {
-        Float64 left_float = left.isNull() ? -std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
-        Float64 right_float = right.isNull() ? std::numeric_limits<Float64>::infinity() : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
+        Float64 left_float = left.isNull()
+            ? -std::numeric_limits<Float64>::infinity()
+            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), left);
+        Float64 right_float = right.isNull()
+            ? std::numeric_limits<Float64>::infinity()
+            : applyVisitor(FieldVisitorConvertToNumber<Float64>(), right);
 
         if (left_float < 0 || right_float > 19)
             return {};

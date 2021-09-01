@@ -304,7 +304,25 @@ private:
 
     void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null)
     {
-        if (!convertTypeToUInt8<Int8>(column, res, res_not_null) && !convertTypeToUInt8<Int16>(column, res, res_not_null) && !convertTypeToUInt8<Int32>(column, res, res_not_null) && !convertTypeToUInt8<Int64>(column, res, res_not_null) && !convertTypeToUInt8<UInt16>(column, res, res_not_null) && !convertTypeToUInt8<UInt32>(column, res, res_not_null) && !convertTypeToUInt8<UInt64>(column, res, res_not_null) && !convertTypeToUInt8<Float32>(column, res, res_not_null) && !convertTypeToUInt8<Float64>(column, res, res_not_null) && !convertNullableTypeToUInt8<Int8>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<Int16>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<Int32>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<Int64>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<UInt8>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<UInt16>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<UInt32>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<UInt64>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<Float32>(column, res, res_not_null, input_has_null) && !convertNullableTypeToUInt8<Float64>(column, res, res_not_null, input_has_null))
+        if (!convertTypeToUInt8<Int8>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int16>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int32>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int64>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt16>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt32>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt64>(column, res, res_not_null)
+            && !convertTypeToUInt8<Float32>(column, res, res_not_null)
+            && !convertTypeToUInt8<Float64>(column, res, res_not_null)
+            && !convertNullableTypeToUInt8<Int8>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int16>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int64>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt8>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt16>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt64>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Float32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Float64>(column, res, res_not_null, input_has_null))
             throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -323,20 +341,23 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed "
+                    + toString(arguments.size()) + ", should be at least 2.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         bool has_nullable_input_column = false;
         for (size_t i = 0; i < arguments.size(); ++i)
         {
             has_nullable_input_column |= arguments[i]->isNullable();
             if (!(arguments[i]->isNumber()
-                  || (special_impl_for_nulls && (arguments[i]->onlyNull() || removeNullable(arguments[i])->isNumber()))))
-                throw Exception("Illegal type ("
-                                    + arguments[i]->getName()
-                                    + ") of " + toString(i + 1) + " argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                  || (special_impl_for_nulls
+                      && (arguments[i]->onlyNull()
+                          || removeNullable(arguments[i])->isNumber()))))
+                throw Exception(
+                    "Illegal type (" + arguments[i]->getName() + ") of "
+                        + toString(i + 1) + " argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         if (has_nullable_input_column)
@@ -379,9 +400,9 @@ public:
                 if (const_val_input_has_null)
                     block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
                 else
-                    block.getByPosition(result).column = has_nullable_input_column ? makeNullable(
-                                                             DataTypeUInt8().createColumnConst(rows, toField(const_val)))
-                                                                                   : DataTypeUInt8().createColumnConst(rows, toField(const_val));
+                    block.getByPosition(result).column = has_nullable_input_column
+                        ? makeNullable(DataTypeUInt8().createColumnConst(rows, toField(const_val)))
+                        : DataTypeUInt8().createColumnConst(rows, toField(const_val));
             }
             return;
         }
@@ -474,8 +495,7 @@ public:
                     if (vec_input_has_null[i] && vec_res_not_null[i])
                         Impl::adjustForNullValue(vec_res[i], vec_input_has_null[i]);
                 }
-                block.getByPosition(result).column = ColumnNullable::create(std::move(col_res),
-                                                                            std::move(col_input_has_null));
+                block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(col_input_has_null));
             }
             else
                 block.getByPosition(result).column = std::move(col_res);
@@ -521,10 +541,10 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isNumber())
-            throw Exception("Illegal type ("
-                                + arguments[0]->getName()
-                                + ") of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal type (" + arguments[0]->getName()
+                    + ") of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt8>();
     }
@@ -543,29 +563,19 @@ public:
               || executeType<Int64>(block, arguments, result)
               || executeType<Float32>(block, arguments, result)
               || executeType<Float64>(block, arguments, result)))
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                                + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
-
-struct NameAnd
-{
-    static constexpr auto name = "and";
-};
-struct NameOr
-{
-    static constexpr auto name = "or";
-};
-struct NameXor
-{
-    static constexpr auto name = "xor";
-};
-struct NameNot
-{
-    static constexpr auto name = "not";
-};
+// clang-format off
+struct NameAnd { static constexpr auto name = "and"; };
+struct NameOr { static constexpr auto name = "or"; };
+struct NameXor { static constexpr auto name = "xor"; };
+struct NameNot { static constexpr auto name = "not"; };
+// clang-format on
 
 using FunctionAnd = FunctionAnyArityLogical<AndImpl, NameAnd, true>;
 using FunctionOr = FunctionAnyArityLogical<OrImpl, NameOr, true>;
