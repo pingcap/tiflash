@@ -52,6 +52,7 @@ public:
 
 private:
     DAGSchema schema;
+    bool has_enforce_encode_type;
     pingcap::coprocessor::ResponseIter resp_iter;
 
 public:
@@ -59,8 +60,10 @@ public:
         const DAGSchema & schema_,
         pingcap::kv::Cluster * cluster,
         std::vector<pingcap::coprocessor::copTask> tasks,
+        bool has_enforce_encode_type_,
         int concurrency)
         : schema(schema_)
+        , has_enforce_encode_type(has_enforce_encode_type_)
         , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
     {
         resp_iter.open();
@@ -85,6 +88,10 @@ public:
         std::shared_ptr<tipb::SelectResponse> resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(data))
         {
+            if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock)
+                return {nullptr, true, "Encode type of coprocessor response is not CHBlock, "
+                                       "maybe the version of some TiFlash node in the cluster is not match with this one",
+                        false};
             return {resp, false, "", false};
         }
         else
