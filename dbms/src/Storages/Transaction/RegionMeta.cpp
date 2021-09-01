@@ -152,21 +152,38 @@ void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
 
 WaitIndexResult RegionMeta::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running) const
 {
-    auto timeout_timepoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
     std::unique_lock<std::mutex> lock(mutex);
     WaitIndexResult status = WaitIndexResult::Finished;
-    if (!cv.wait_until(lock, timeout_timepoint, [&] {
+    if (timeout_ms != 0)
+    {
+        // wait for applied index with a timeout
+        auto timeout_timepoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+        if (!cv.wait_until(lock, timeout_timepoint, [&] {
+                if (!check_running())
+                {
+                    status = WaitIndexResult::Terminated;
+                    return true;
+                }
+                return doCheckIndex(index);
+            }))
+        {
+            // not terminated && not reach the `index` => timeout
+            status = WaitIndexResult::Timeout;
+        }
+    }
+    else
+    {
+        // wait infinitely
+        cv.wait(lock, [&] {
             if (!check_running())
             {
                 status = WaitIndexResult::Terminated;
                 return true;
             }
             return doCheckIndex(index);
-        }))
-    {
-        // not terminated && not reach the `index` => timeout
-        status = WaitIndexResult::Timeout;
+        });
     }
+
     return status;
 }
 
