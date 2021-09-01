@@ -164,7 +164,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
 
-    return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log->getLog());
+    return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*retry_for_wait_index_timeout*/ true, tmt, log->getLog());
 }
 
 /// Will assign region_retry
@@ -194,7 +194,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             }
             if (mvcc_query_info->regions_query_info.empty())
                 return {};
-            return doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log->getLog());
+            return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*retry_for_wait_index_timeout*/ false, tmt, log->getLog());
         }
         catch (const LockException & e)
         {

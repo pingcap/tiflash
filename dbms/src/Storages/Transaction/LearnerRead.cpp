@@ -10,8 +10,11 @@
 #include <Storages/Transaction/Utils.h>
 #include <common/ThreadPool.h>
 #include <common/likely.h>
+#include <fmt/format.h>
 
 #include <ext/scope_guard.h>
+#include "Storages/Transaction/RegionException.h"
+#include "Storages/Transaction/Types.h"
 
 namespace DB
 {
@@ -140,6 +143,7 @@ LearnerReadSnapshot doLearnerRead(
     const TiDB::TableID table_id,
     MvccQueryInfo & mvcc_query_info_,
     size_t num_streams,
+    bool retry_for_wait_index_timeout,
     TMTContext & tmt,
     Poco::Logger * log)
 {
@@ -282,6 +286,15 @@ LearnerReadSnapshot doLearnerRead(
             }
         }
 
+        auto handle_wait_timeout_region = [&unavailable_regions, retry_for_wait_index_timeout](const DB::RegionID region_id) {
+            if (retry_for_wait_index_timeout)
+            {
+                // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
+                unavailable_regions.add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
+                return;
+            }
+            throw TiFlashException(fmt::format("Region {} is unavailable", region_id), Errors::Coprocessor::RegionError);
+        };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < region_end_idx; ++region_idx, ++read_index_res_idx)
         {
@@ -293,35 +306,32 @@ LearnerReadSnapshot doLearnerRead(
 
             auto & region = regions_snapshot.find(region_to_query.region_id)->second;
 
+            auto total_wait_index_elapsed_ms = watch.elapsedMilliseconds();
+            auto index_to_wait = batch_read_index_result.find(region_to_query.region_id)->second.read_index();
+            if (wait_index_timeout_ms == 0 || total_wait_index_elapsed_ms <= wait_index_timeout_ms)
             {
-                auto total_wait_index_elapsed_ms = watch.elapsedMilliseconds();
-                auto index_to_wait = batch_read_index_result.find(region_to_query.region_id)->second.read_index();
-                if (wait_index_timeout_ms == 0 || total_wait_index_elapsed_ms <= wait_index_timeout_ms)
+                // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
+                // a specify Region.
+                auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt);
+                if (wait_res != WaitIndexResult::Finished)
                 {
-                    // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
-                    // a specify Region.
-                    auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt);
-                    if (wait_res != WaitIndexResult::Finished)
-                    {
-                        // If server is being terminated / time-out, retry region to other store.
-                        unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
-                        continue;
-                    }
-                    if (time_cost > 0)
-                    {
-                        // Only record information if wait-index does happen
-                        GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
-                    }
+                    handle_wait_timeout_region(region_to_query.region_id);
+                    continue;
                 }
-                else
+                if (time_cost > 0)
                 {
-                    // Wait index timeout is enabled && timeout happens, simply check the Region index instead of wait index
-                    // for Regions one by one.
-                    if (!region->checkIndex(index_to_wait))
-                    {
-                        unavailable_regions.add(region_to_query.region_id, RegionException::RegionReadStatus::NOT_FOUND);
-                        continue;
-                    }
+                    // Only record information if wait-index does happen
+                    GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
+                }
+            }
+            else
+            {
+                // Wait index timeout is enabled && timeout happens, simply check the Region index instead of wait index
+                // for Regions one by one.
+                if (!region->checkIndex(index_to_wait))
+                {
+                    handle_wait_timeout_region(region_to_query.region_id);
+                    continue;
                 }
             }
 
