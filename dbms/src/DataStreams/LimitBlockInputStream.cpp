@@ -1,13 +1,15 @@
-#include <algorithm>
-
 #include <DataStreams/LimitBlockInputStream.h>
+
+#include <algorithm>
 
 
 namespace DB
 {
-
-LimitBlockInputStream::LimitBlockInputStream(const BlockInputStreamPtr & input, size_t limit_, size_t offset_, bool always_read_till_end_)
-    : limit(limit_), offset(offset_), always_read_till_end(always_read_till_end_)
+LimitBlockInputStream::LimitBlockInputStream(const BlockInputStreamPtr & input, size_t limit_, size_t offset_, bool always_read_till_end_, const LogWithPrefixPtr & log_)
+    : limit(limit_)
+    , offset(offset_)
+    , always_read_till_end(always_read_till_end_)
+    , log(getLogWithPrefix(log_))
 {
     children.push_back(input);
 }
@@ -51,9 +53,10 @@ Block LimitBlockInputStream::readImpl()
         static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows));
 
     size_t length = std::min(
-        static_cast<Int64>(limit), std::min(
-        static_cast<Int64>(pos) - static_cast<Int64>(offset),
-        static_cast<Int64>(limit) + static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows)));
+        static_cast<Int64>(limit),
+        std::min(
+            static_cast<Int64>(pos) - static_cast<Int64>(offset),
+            static_cast<Int64>(limit) + static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows)));
 
     for (size_t i = 0; i < res.columns(); ++i)
         res.safeGetByPosition(i).column = res.safeGetByPosition(i).column->cut(start, length);
@@ -61,5 +64,4 @@ Block LimitBlockInputStream::readImpl()
     return res;
 }
 
-}
-
+} // namespace DB
