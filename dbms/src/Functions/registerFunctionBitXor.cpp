@@ -1,5 +1,5 @@
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsArithmetic.h>
+#include <Functions/FunctionsBinaryArithmetic.h>
 #include <Functions/registerFunctionBitXor.h>
 
 namespace DB

@@ -3,8 +3,8 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsArithmetic.h>
 #include <Functions/IFunction.h>
 
 
@@ -36,6 +36,11 @@ namespace DB
   *
   * Warning! At this point, the arguments needle, pattern, n, replacement must be constants.
   */
+
+namespace ErrorCodes
+{
+extern const int ILLEGAL_COLUMN;
+}
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
 
