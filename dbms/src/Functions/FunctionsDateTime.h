@@ -976,8 +976,12 @@ struct AddSecondsImpl
         my_time.minute = (current_second % 3600) / 60;
         my_time.second = current_second % 60;
 
-
-        return my_time.toPackedUInt() & MyTimeBase::CORE_TIME_BIT_FIELD_MASK;
+        auto packet = my_time.toPackedUInt();
+        if ((t & MyTimeBase::FSPTT_BIT_FIELD_MASK) == MyTimeBase::FSPTT_FOR_DATE)
+        {
+            packet &= MyTimeBase::CORE_TIME_BIT_FIELD_MASK;
+        }
+        return packet;
     }
 };
 
@@ -1093,7 +1097,12 @@ struct AddMonthsImpl
         }
         MyDateTime my_time(t);
         addMonths(my_time, delta);
-        return my_time.toPackedUInt();
+        auto packet = my_time.toPackedUInt();
+        if ((t & MyTimeBase::FSPTT_BIT_FIELD_MASK) == MyTimeBase::FSPTT_FOR_DATE)
+        {
+            packet |= MyTimeBase::FSPTT_FOR_DATE;
+        }
+        return packet;
     }
 };
 
