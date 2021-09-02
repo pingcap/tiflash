@@ -176,6 +176,11 @@ BaseBuffView strIntoView(const std::string * str_ptr)
     return BaseBuffView{str_ptr->data(), str_ptr->size()};
 }
 
+BaseBuffView strIntoView(const std::string & view)
+{
+    return BaseBuffView{view.data(), view.size()};
+}
+
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const
 {
     return fn_is_encryption_enabled(proxy_ptr);
