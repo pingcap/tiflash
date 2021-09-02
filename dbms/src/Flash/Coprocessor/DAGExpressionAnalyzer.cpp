@@ -502,7 +502,7 @@ void DAGExpressionAnalyzer::appendAggregation(
                 types[0] = type;
                 aggregate.argument_names[0] = name;
 
-                String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
+                String func_string = genFuncString(agg_func_name, aggregate.argument_names, {collator});
                 bool duplicate = false;
                 for (const auto & pre_agg : aggregate_descriptions)
                 {
