@@ -5,7 +5,9 @@
 #include <Databases/IDatabase.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/MarkCache.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <chrono>
 
@@ -130,16 +132,10 @@ void AsynchronousMetrics::update()
     {
         auto databases = context.getDatabases();
 
-        size_t max_queue_size = 0;
-        size_t max_inserts_in_queue = 0;
-        size_t max_merges_in_queue = 0;
-
-        size_t sum_queue_size = 0;
-        size_t sum_inserts_in_queue = 0;
-        size_t sum_merges_in_queue = 0;
-
-        size_t max_absolute_delay = 0;
-        size_t max_relative_delay = 0;
+        double max_dt_stable_oldest_snapshot_lifetime = 0.0;
+        double max_dt_delta_oldest_snapshot_lifetime = 0.0;
+        double max_dt_meta_oldest_snapshot_lifetime = 0.0;
+        size_t max_dt_background_tasks_length = 0;
 
         size_t max_part_count_for_partition = 0;
 
@@ -149,24 +145,25 @@ void AsynchronousMetrics::update()
             {
                 auto & table = iterator->table();
 
-                if (StorageMergeTree * table_merge_tree = dynamic_cast<StorageMergeTree *>(table.get()); table_merge_tree)
+                if (auto dt_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(table); dt_storage)
+                {
+                    auto stat = dt_storage->getStore()->getStat();
+                    calculateMax(max_dt_stable_oldest_snapshot_lifetime, stat.storage_stable_oldest_snapshot_lifetime);
+                    calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
+                    calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
+                    calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
+                }
+                else if (StorageMergeTree * table_merge_tree = dynamic_cast<StorageMergeTree *>(table.get()); table_merge_tree)
                 {
                     calculateMax(max_part_count_for_partition, table_merge_tree->getData().getMaxPartsCountForPartition());
                 }
             }
         }
 
-        set("ReplicasMaxQueueSize", max_queue_size);
-        set("ReplicasMaxInsertsInQueue", max_inserts_in_queue);
-        set("ReplicasMaxMergesInQueue", max_merges_in_queue);
-
-        set("ReplicasSumQueueSize", sum_queue_size);
-        set("ReplicasSumInsertsInQueue", sum_inserts_in_queue);
-        set("ReplicasSumMergesInQueue", sum_merges_in_queue);
-
-        set("ReplicasMaxAbsoluteDelay", max_absolute_delay);
-        set("ReplicasMaxRelativeDelay", max_relative_delay);
-
+        set("MaxDTStableOldestSnapshotLifetime", max_dt_stable_oldest_snapshot_lifetime);
+        set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
+        set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
+        set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
         set("MaxPartCountForPartition", max_part_count_for_partition);
     }
 
