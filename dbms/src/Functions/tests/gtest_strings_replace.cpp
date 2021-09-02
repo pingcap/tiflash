@@ -37,19 +37,17 @@ protected:
             // Maybe another test has already registed, ignore exception here.
         }
     }
-};
 
-namespace
-{
-auto toVec = [](const std::vector<std::optional<String>> & v) {
-    return createColumn<Nullable<String>>(v);
-};
+    ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
+    {
+        return createColumn<Nullable<String>>(v);
+    }
 
-auto toConst = [](const String & s) {
-    return createConstColumn<Nullable<String>>(1, s);
+    ColumnWithTypeAndName toConst(const String & s)
+    {
+        return createConstColumn<Nullable<String>>(1, s);
+    }
 };
-} // namespace
-
 
 TEST_F(StringReplace, string_replace_all_unit_Test)
 try
