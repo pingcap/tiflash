@@ -250,13 +250,13 @@ static String buildTupleFunctionForGroupConcat(
         order_columns.emplace_back(name, type);
         names_and_types.emplace_back(name, type);
         if (removeNullable(type)->isString())
-            collators.push_back(getCollatorFromExpr(expr.children(i)));
+            collators.push_back(getCollatorFromExpr(expr.order_by(i).expr()));
         else
             collators.push_back(nullptr);
     }
     sort_desc = getSortDescription(order_columns, expr.order_by());
 
-    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+    return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
 static const String tidb_cast_name = "tidb_cast";
