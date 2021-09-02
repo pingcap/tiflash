@@ -1,6 +1,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Join.h>
+#include <Poco/Glob.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <chrono>
@@ -13,6 +14,19 @@ namespace tests
 class JoinBenchmark : public ::testing::Test
 {
 protected:
+    Poco::Logger * logger = &Poco::Logger::get(::testing::UnitTest::GetInstance()->current_test_info()->test_case_name());
+
+    using BlockStream = std::vector<Block>;
+    using BlockStreams = std::vector<BlockStream>;
+    using Workers = std::vector<std::thread>;
+    using ResultMap = std::unordered_map<Int64, size_t>;
+
+    struct Result
+    {
+        size_t count = 0;
+        ResultMap map;
+    };
+
     class Reader
     {
     public:
@@ -39,57 +53,130 @@ protected:
         NativeBlockInputStream stream;
     };
 
-    using Blocks = std::vector<Block>;
-    using Workers = std::vector<std::thread>;
-
-    using TestData = std::vector<Blocks>;
-    using ResultMap = std::unordered_map<Int64, size_t>;
-
-    struct Result
+    class TestDataSet
     {
-        size_t count = 0;
-        ResultMap map;
-    };
-
-    TestData getTestData(const String & folder, const String & prefix, size_t n)
-    {
-        TestData data;
-        data.resize(n);
-
-        for (size_t i = 0; i < n; ++i)
+    public:
+        TestDataSet(String folder_)
+            : folder(folder_)
         {
-            Reader reader(fmt::format("{}/{}-{}.data", folder, prefix, i));
+            std::set<String> build_files, probe_files;
+            Poco::Glob::glob(fmt::format("{}/build-*.data", folder), build_files);
+            Poco::Glob::glob(fmt::format("{}/probe-*.data", folder), probe_files);
 
+            num_build_threads = build_files.size();
+            num_probe_threads = probe_files.size();
+
+            build_streams = readBlockStreams(build_files);
+            probe_streams = readBlockStreams(probe_files);
+            answer = readResult(fmt::format("{}/result.csv", folder));
+        }
+
+        size_t getNumBuildThreads() const
+        {
+            return num_build_threads;
+        }
+
+        size_t getNumProbeThreads() const
+        {
+            return num_probe_threads;
+        }
+
+        Block getBuildSampleBlock() const
+        {
+            for (const auto & stream : build_streams)
+            {
+                if (!stream.empty())
+                    return stream.front().cloneEmpty();
+            }
+
+            throw TiFlashTestException("Can't provide sample block because test data set is empty");
+        }
+
+        const BlockStream & getBuildStream(size_t i) const
+        {
+            if (i >= num_build_threads)
+                throw TiFlashTestException(fmt::format("Index is too large for build data: i = {}", i));
+
+            return build_streams[i];
+        }
+
+        const BlockStream & getProbeStream(size_t i) const
+        {
+            if (i >= num_probe_threads)
+                throw TiFlashTestException(fmt::format("Index is too large for probe data: i = {}", i));
+
+            return probe_streams[i];
+        }
+
+        BlockStreams cloneProbeStreams() const
+        {
+            return probe_streams;
+        }
+
+        const Result & getAnswer() const
+        {
+            return answer;
+        }
+
+    private:
+        BlockStream readBlockStream(const String & path)
+        {
+            Reader reader(path);
+
+            BlockStream stream;
             while (true)
             {
                 auto block = reader.read();
 
                 if (block)
-                    data[i].emplace_back(std::move(block));
+                    stream.emplace_back(std::move(block));
                 else
                     break;
             }
+
+            return stream;
         }
 
-        return data;
-    }
-
-    Result getAnswer(const String & folder)
-    {
-        Result answer;
-
-        std::ifstream file(fmt::format("{}/result.csv", folder));
-
-        Int64 key;
-        size_t count;
-        while (file >> key >> count)
+        BlockStreams readBlockStreams(const std::set<String> & paths)
         {
-            answer.count += count;
-            answer.map[key] += count;
+            BlockStreams streams;
+            streams.resize(paths.size());
+
+            size_t i = 0;
+            for (const auto & path : paths)
+            {
+                streams[i] = readBlockStream(path);
+                ++i;
+            }
+
+            return streams;
         }
 
-        return answer;
-    }
+        Result readResult(const String & path)
+        {
+            Result result;
+            result.count = 0;
+
+            std::ifstream file(path);
+            if (file.fail())
+                throw TiFlashTestException(fmt::format("Failed to read file '{}'", path));
+
+            Int64 key;
+            size_t count;
+            while (file >> key >> count)
+            {
+                result.count += count;
+                result.map[key] += count;
+            }
+
+            return result;
+        }
+
+        String folder;
+        size_t num_build_threads, num_probe_threads;
+        BlockStreams build_streams, probe_streams;
+        Result answer;
+    };
 };
 
 TEST_F(JoinBenchmark, SmallParallelJoin)
@@ -102,16 +189,16 @@ TEST_F(JoinBenchmark, SmallParallelJoin)
 
     // test data are outside tics repo.
     String data_folder = "/pingcap/data/small-parallel-join";
-    auto build_data = getTestData(data_folder, "build", 3);
-    auto original_probe_data = getTestData(data_folder, "probe", 4);
-    auto answer = getAnswer(data_folder);
+    TestDataSet dataset(data_folder);
+
+    size_t num_build_threads = dataset.getNumBuildThreads();
+    size_t num_probe_threads = dataset.getNumProbeThreads();
+    LOG_DEBUG(logger, fmt::format("num_build_threads = {}, num_probe_threads = {}", num_build_threads, num_probe_threads));
 
     for (size_t round = 0; round < n_repeat; ++round)
     {
         // join.joinBlock is done in-place, so we have to clone test data blocks first.
-        // note: due to COW, probe_data and original_probe_data share the same underlying memories at here,
-        // but after join.joinBlock, they will not share memories any more.
-        auto probe_data = original_probe_data;
+        auto probe_streams = dataset.cloneProbeStreams();
 
         using clock = std::chrono::steady_clock;
         auto begin_time = clock::now();
@@ -181,67 +268,63 @@ TEST_F(JoinBenchmark, SmallParallelJoin)
             nullptr,
             65536);
 
-        join.setSampleBlock(build_data[0][0].cloneEmpty());
+        join.setSampleBlock(dataset.getBuildSampleBlock());
 
         Workers build_workers;
-        build_workers.reserve(3);
+        build_workers.reserve(num_build_threads);
 
-        for (size_t i = 0; i < 3; ++i)
+        for (size_t i = 0; i < num_build_threads; ++i)
         {
             build_workers.emplace_back([&, i] {
-                for (const auto & block : build_data[i])
+                for (const auto & block : dataset.getBuildStream(i))
                     join.insertFromBlock(block, i);
             });
         }
 
-        for (size_t i = 0; i < 3; ++i)
-        {
+        for (size_t i = 0; i < num_build_threads; ++i)
             build_workers[i].join();
-        }
 
         join.setFinishBuildTable(true);
 
         Workers probe_workers;
-        probe_workers.reserve(4);
+        probe_workers.reserve(num_probe_threads);
 
-        for (size_t i = 0; i < 4; ++i)
+        for (size_t i = 0; i < num_probe_threads; ++i)
         {
             probe_workers.emplace_back([&, i] {
-                for (auto & block : probe_data[i])
+                for (auto & block : probe_streams[i])
                     join.joinBlock(block);
             });
         }
 
-        for (size_t i = 0; i < 4; ++i)
-        {
+        for (size_t i = 0; i < num_probe_threads; ++i)
             probe_workers[i].join();
-        }
 
         auto end_time = clock::now();
         auto time_used_in_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - begin_time).count();
-        LOG_INFO(&Poco::Logger::get("SmallParallelJoin"), fmt::format("round {}: {}ms", round, time_used_in_ms));
+        LOG_INFO(logger, fmt::format("round {}: {}ms", round, time_used_in_ms));
 
         // check result.
 
         size_t count = 0;
-        for (size_t i = 0; i < 4; ++i)
+        for (size_t i = 0; i < num_probe_threads; ++i)
         {
-            for (const Block & block : probe_data[i])
+            for (const Block & block : probe_streams[i])
                 count += block.rows();
         }
 
-        ASSERT_EQ(answer.count, count);
+        ASSERT_EQ(dataset.getAnswer().count, count);
 
         if constexpr (!only_check_total_rows)
         {
-            // std::cout << probe_data[0][10].dumpStructure() << std::endl;
+            // std::cout << probe_streams[0][10].dumpStructure() << std::endl;
             String l_partkey_name = "__QB_7_l_partkey";
             String c_nationkey_name = "__QB_6_exchange_receiver_0";
 
             std::unordered_map<Int64, size_t> map;
-            for (size_t i = 0; i < 4; ++i)
+            for (size_t i = 0; i < num_probe_threads; ++i)
             {
-                for (const auto & block : probe_data[i])
+                for (const auto & block : probe_streams[i])
                 {
                     auto l_partkey = block.getByName(l_partkey_name).column;
                     auto c_nationkey = block.getByName(c_nationkey_name).column;
@@ -254,7 +337,7 @@ TEST_F(JoinBenchmark, SmallParallelJoin)
                 }
             }
 
-            ASSERT_EQ(answer.map, map);
+            ASSERT_EQ(dataset.getAnswer().map, map);
         }
     }
 }
