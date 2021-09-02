@@ -8,6 +8,8 @@ function check_src_path() {
   fi
 }
 
+ENABLE_CLANG_TIDY_CHECK=${ENABLE_CLANG_TIDY_CHECK:-true}
+
 if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
   command -v clang-tidy > /dev/null 2>&1
   if [[ $? != 0 ]]; then
@@ -29,8 +31,6 @@ set -ueox pipefail
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
-
-ENABLE_CLANG_TIDY_CHECK=${ENABLE_CLANG_TIDY_CHECK:-true}
 
 # check with clang-tidy after build to generate kvproto & tipb & re2_st.
 if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
