@@ -1175,35 +1175,56 @@ struct SubtractYearsImpl : SubtractIntervalImpl<AddYearsImpl>
     static constexpr auto name = "subtractYears";
 };
 
+template <typename ToType>
+static inline bool checkDateTimeValidAndReformatDate(ToType & packed)
+{
+    MyDateTime dateTime(packed);
+    if (dateTime.year == 0)
+    {
+        dateTime.month = 0;
+        dateTime.day = 0;
+        packed = dateTime.toPackedUInt();
+    }
+    return !(dateTime.year >= 0 && dateTime.year <= 9999);
+}
 
 template <typename FromType, typename ToType, typename Transform>
 struct Adder
 {
-    static void vector_vector(const PaddedPODArray<FromType> & vec_from, PaddedPODArray<ToType> & vec_to, const IColumn & delta, const DateLUTImpl & time_zone)
+    static void vector_vector(const PaddedPODArray<FromType> & vec_from, PaddedPODArray<ToType> & vec_to, const IColumn & delta, const DateLUTImpl & time_zone, ColumnUInt8::Container * vec_null_map_to)
     {
         size_t size = vec_from.size();
         vec_to.resize(size);
 
         for (size_t i = 0; i < size; ++i)
-            vec_to[i] = Transform::execute(vec_from[i], delta.getInt(i), time_zone);
+        {
+            Transform::execute(vec_from[i], delta.getInt(i), time_zone);
+            (*vec_null_map_to)[i] = checkDateTimeValidAndReformatDate<ToType>(vec_to[i]);
+        }
     }
 
-    static void vector_constant(const PaddedPODArray<FromType> & vec_from, PaddedPODArray<ToType> & vec_to, Int64 delta, const DateLUTImpl & time_zone)
+    static void vector_constant(const PaddedPODArray<FromType> & vec_from, PaddedPODArray<ToType> & vec_to, Int64 delta, const DateLUTImpl & time_zone, ColumnUInt8::Container * vec_null_map_to)
     {
         size_t size = vec_from.size();
         vec_to.resize(size);
 
         for (size_t i = 0; i < size; ++i)
+        {
             vec_to[i] = Transform::execute(vec_from[i], delta, time_zone);
+            (*vec_null_map_to)[i] = checkDateTimeValidAndReformatDate<ToType>(vec_to[i]);
+        }
     }
 
-    static void constant_vector(const FromType & from, PaddedPODArray<ToType> & vec_to, const IColumn & delta, const DateLUTImpl & time_zone)
+    static void constant_vector(const FromType & from, PaddedPODArray<ToType> & vec_to, const IColumn & delta, const DateLUTImpl & time_zone, ColumnUInt8::Container * vec_null_map_to)
     {
         size_t size = delta.size();
         vec_to.resize(size);
 
         for (size_t i = 0; i < size; ++i)
+        {
             vec_to[i] = Transform::execute(from, delta.getInt(i), time_zone);
+            (*vec_null_map_to)[i] = checkDateTimeValidAndReformatDate<ToType>(vec_to[i]);
+        }
     }
 };
 
@@ -1213,8 +1234,11 @@ struct DateTimeAddIntervalImpl
 {
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result)
     {
-        using ToType = decltype(Transform::execute(FromType(), 0, std::declval<DateLUTImpl>()));
+        using ToType = decltype(Transform::execute(FromType(), Int64(), std::declval<DateLUTImpl>()));
         using Op = Adder<FromType, ToType, Transform>;
+
+        ColumnUInt8::MutablePtr col_null_map_to;
+        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
 
         const DateLUTImpl & time_zone = use_utc_timezone ? DateLUT::instance("UTC") : extractTimeZoneFromFunctionArguments(block, arguments, 2, 0);
 
@@ -1226,18 +1250,21 @@ struct DateTimeAddIntervalImpl
 
             const IColumn & delta_column = *block.getByPosition(arguments[1]).column;
 
-            if (const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column))
-                Op::vector_constant(sources->getData(), col_to->getData(), delta_const_column->getInt(0), time_zone);
-            else
-                Op::vector_vector(sources->getData(), col_to->getData(), delta_column, time_zone);
+            col_null_map_to = ColumnUInt8::create(sources->size(), 0);
+            vec_null_map_to = &col_null_map_to->getData();
 
-            block.getByPosition(result).column = std::move(col_to);
+            if (const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column))
+                Op::vector_constant(sources->getData(), col_to->getData(), delta_const_column->getInt(0), time_zone, vec_null_map_to);
+            else
+                Op::vector_vector(sources->getData(), col_to->getData(), delta_column, time_zone, vec_null_map_to);
+
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
         }
         else if (const auto * sources = checkAndGetColumnConst<ColumnVector<FromType>>(source_col.get()))
         {
             auto col_to = ColumnVector<ToType>::create();
-            Op::constant_vector(sources->template getValue<FromType>(), col_to->getData(), *block.getByPosition(arguments[1]).column, time_zone);
-            block.getByPosition(result).column = std::move(col_to);
+            Op::constant_vector(sources->template getValue<FromType>(), col_to->getData(), *block.getByPosition(arguments[1]).column, time_zone, vec_null_map_to);
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
         }
         else
         {
