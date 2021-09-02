@@ -40,7 +40,13 @@ RegionException::RegionReadStatus GetRegionReadStatus(
 }
 
 std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus>
-MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id, bool batch_cop)
+MakeRegionQueryInfos(
+    const RegionInfoMap & dag_region_infos,
+    const std::unordered_set<RegionID> & region_force_retry,
+    TMTContext & tmt,
+    MvccQueryInfo & mvcc_info,
+    TableID table_id,
+    bool batch_cop [[maybe_unused]])
 {
     mvcc_info.regions_query_info.clear();
     RegionRetryList region_need_retry;
