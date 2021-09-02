@@ -52,6 +52,8 @@ namespace DB::TargetSpecific
     struct _TiflashGenericTarget_##NAME                            \
     {                                                              \
         using ReturnType = RETURN;                                 \
+        static constexpr size_t WORD_SIZE = 16;                    \
+        using SimdWord = ::DB::TargetSpecific::Word<16>;           \
         TIFLASH_DUMMY_FUNCTION_DEFINITION                          \
         static __attribute__((noinline)) RETURN invoke __VA_ARGS__ \
     };
@@ -66,6 +68,8 @@ namespace DB::TargetSpecific
     {                                                              \
         using ReturnType = RETURN;                                 \
         using Checker = ::DB::TargetSpecific::AVXChecker;          \
+        static constexpr size_t WORD_SIZE = 32;                    \
+        using SimdWord = ::DB::TargetSpecific::Word<32>;           \
         TIFLASH_DUMMY_FUNCTION_DEFINITION                          \
         static __attribute__((noinline)) RETURN invoke __VA_ARGS__ \
     };                                                             \
@@ -97,6 +101,8 @@ struct AVXChecker
     {                                                               \
         using ReturnType = RETURN;                                  \
         using Checker = ::DB::TargetSpecific::AVX512Checker;        \
+        static constexpr size_t WORD_SIZE = 64;                     \
+        using SimdWord = ::DB::TargetSpecific::Word<64>;            \
         TIFLASH_DUMMY_FUNCTION_DEFINITION                           \
         static __attribute__((noinline)) RETURN invoke __VA_ARGS__  \
     };                                                              \
@@ -132,6 +138,8 @@ struct AVX512Checker
     {                                                              \
         using ReturnType = RETURN;                                 \
         using Checker = ::DB::TargetSpecific::SSE4Checker;         \
+        static constexpr size_t WORD_SIZE = 16;                    \
+        using SimdWord = ::DB::TargetSpecific::Word<16>;           \
         TIFLASH_DUMMY_FUNCTION_DEFINITION                          \
         static __attribute__((noinline)) RETURN invoke __VA_ARGS__ \
     };                                                             \
@@ -243,5 +251,157 @@ struct Dispatch<Last>
     TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(RETURN, NAME, ARG_LIST __VA_ARGS__)    \
     TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ARG_LIST __VA_ARGS__) \
     TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)
+
+namespace Detail
+{
+template <size_t LENGTH>
+struct MarkChecker;
+
+#ifdef __x86_64__
+template <>
+struct MarkChecker<64>
+{
+    template <class T>
+    __attribute__((always_inline, target("avx512bw"))) static bool isByteAllMarked(T val)
+    {
+        return _mm512_movepi8_mask(val.as_int8) == 0xFFFF'FFFF'FFFF'FFFFu;
+    }
+};
+
+template <>
+struct MarkChecker<32>
+{
+    template <class T>
+    __attribute__((always_inline, target("avx2"))) static bool isByteAllMarked(T val)
+    {
+        return _mm256_movemask_epi8(val.as_int8) == 0xFFFF'FFFFu;
+    }
+};
+#endif
+
+template <>
+struct MarkChecker<16>
+{
+    template <class T>
+    __attribute__((always_inline)) static bool isByteAllMarked(T val)
+    {
+#ifdef __x86_64__
+        return _mm_movemask_epi8(reinterpret_cast<__m128i &>(val.as_int8)) == 0xFFFFu;
+#else
+        return (val.as_uint64[0] & val.as_uint64[1]) == 0xFFFF'FFFF'FFFF'FFFFu;
+#endif
+    }
+};
+} // namespace Detail
+
+template <size_t LENGTH>
+struct Word
+{
+#define DECLARE_TYPE(TYPE_PREFIX) \
+    typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH))) TYPE_PREFIX##vec_t;
+    DECLARE_TYPE(int8);
+    DECLARE_TYPE(int16);
+    DECLARE_TYPE(int32);
+    DECLARE_TYPE(int64);
+    DECLARE_TYPE(uint8);
+    DECLARE_TYPE(uint16);
+    DECLARE_TYPE(uint32);
+    DECLARE_TYPE(uint64);
+#undef DECLARE_TYPE
+
+#define ENUM_TYPE(TYPE_PREFIX) \
+    TYPE_PREFIX##vec_t as_##TYPE_PREFIX;
+    union
+    {
+        ENUM_TYPE(int8);
+        ENUM_TYPE(int16);
+        ENUM_TYPE(int32);
+        ENUM_TYPE(int64);
+        ENUM_TYPE(uint8);
+        ENUM_TYPE(uint16);
+        ENUM_TYPE(uint32);
+        ENUM_TYPE(uint64);
+    };
+#undef ENUM_TYPE
+
+
+#define GET_TYPE(TYPE_PREFIX)                         \
+    if constexpr (std::is_same_v<TYPE_PREFIX##_t, T>) \
+    {                                                 \
+        return as_##TYPE_PREFIX;                      \
+    }
+
+    template <class T>
+    __attribute__((always_inline)) auto & get()
+    {
+        GET_TYPE(int8);
+        GET_TYPE(int16);
+        GET_TYPE(int32);
+        GET_TYPE(int64);
+        GET_TYPE(uint8);
+        GET_TYPE(uint16);
+        GET_TYPE(uint32);
+        GET_TYPE(uint64);
+        __builtin_unreachable();
+    }
+
+    template <class T>
+    __attribute__((always_inline)) const auto & get() const
+    {
+        GET_TYPE(int8);
+        GET_TYPE(int16);
+        GET_TYPE(int32);
+        GET_TYPE(int64);
+        GET_TYPE(uint8);
+        GET_TYPE(uint16);
+        GET_TYPE(uint32);
+        GET_TYPE(uint64);
+        __builtin_unreachable();
+    }
+
+#undef GET_TYPE
+
+    [[nodiscard]] __attribute__((always_inline)) bool isByteAllMarked() const
+    {
+        return Detail::MarkChecker<LENGTH>::isByteAllMarked(*this);
+    }
+
+    __attribute__((always_inline)) static Word from_aligned(const void * src)
+    {
+        Word result{};
+        const auto * address = __builtin_assume_aligned(src, LENGTH);
+        __builtin_memcpy(&result, address, LENGTH);
+        return result;
+    }
+
+    __attribute__((always_inline)) static Word from_unaligned(const void * src)
+    {
+        Word result{};
+        __builtin_memcpy(&result, src, LENGTH);
+        return result;
+    }
+
+    template <class T>
+    __attribute__((always_inline)) static Word from_single(T val)
+    {
+        Word result{};
+        for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
+        {
+            result.template get<T>()[i] = val;
+        }
+        return result;
+    }
+
+    template <class T>
+    __attribute__((always_inline)) static Word from_array(const std::array<T, LENGTH / sizeof(T)> & arr)
+    {
+        Word result{};
+        for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
+        {
+            result.template get<T>()[i] = arr[i];
+        }
+        return result;
+    }
+};
 
 } // namespace DB::TargetSpecific
