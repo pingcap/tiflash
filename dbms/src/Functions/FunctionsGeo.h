@@ -70,7 +70,7 @@ private:
         return std::make_shared<DataTypeFloat64>();
     }
 
-    instrs_t getInstructions(const Block & block, const ColumnNumbers & arguments, bool & out_const)
+    instrs_t getInstructions(const Block & block, const ColumnNumbers & arguments, bool & out_const) const
     {
         instrs_t result;
         out_const = true;
@@ -97,7 +97,7 @@ private:
     }
 
     /// https://en.wikipedia.org/wiki/Great-circle_distance
-    Float64 greatCircleDistance(Float64 lon1Deg, Float64 lat1Deg, Float64 lon2Deg, Float64 lat2Deg)
+    Float64 greatCircleDistance(Float64 lon1Deg, Float64 lat1Deg, Float64 lon2Deg, Float64 lat2Deg) const
     {
         if (lon1Deg < -180 || lon1Deg > 180 ||
             lon2Deg < -180 || lon2Deg > 180 ||
@@ -117,7 +117,7 @@ private:
     }
 
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto size = block.rows();
 
@@ -224,7 +224,7 @@ private:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto size = block.rows();
 

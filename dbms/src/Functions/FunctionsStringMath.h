@@ -57,7 +57,7 @@ public:
         return std::make_shared<DataTypeInt64>();
     }
     bool useDefaultImplementationForConstants() const override { return true; }
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto arg = block.getByPosition(arguments[0]).column.get();
         auto col_res = ColumnVector<Int64>::create();
@@ -317,7 +317,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
 
         const auto first_int_arg = block.getByPosition(arguments[1]).column.get();

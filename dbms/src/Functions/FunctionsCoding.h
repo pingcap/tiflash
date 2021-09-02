@@ -126,7 +126,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -141,7 +141,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto & col_type_name = block.getByPosition(arguments[0]);
         const ColumnPtr & column = col_type_name.column;
@@ -202,7 +202,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -216,7 +216,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         auto [column, nullmap] = removeNullable(block.getByPosition(arguments[0]).column.get());
 
@@ -314,7 +314,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto & col_type_name = block.getByPosition(arguments[0]);
         const ColumnPtr & column = col_type_name.column;
@@ -393,7 +393,7 @@ private:
             && ((*reinterpret_cast<const UInt64 *>(address + 8) & 0x00000000FFFFFFFFull) == 0x00000000FFFF0000ull);
     }
 
-    void cutAddress(const unsigned char * address, char *& dst, UInt8 zeroed_tail_bytes_count)
+    void cutAddress(const unsigned char * address, char *& dst, UInt8 zeroed_tail_bytes_count) const
     {
         formatIPv6(address, dst, zeroed_tail_bytes_count);
     }
@@ -557,7 +557,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
 
@@ -743,7 +743,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto [column, nullmap] = removeNullable(block.getByPosition(arguments[0]).column.get());
 
@@ -814,7 +814,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return mask_tail_octets == 0; }
+    bool isInjective(const Block &) const override { return mask_tail_octets == 0; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -828,7 +828,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
 
@@ -908,7 +908,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
 
@@ -1006,7 +1006,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto [column, nullmap] = removeNullable(block.getByPosition(arguments[0]).column.get());
 
@@ -1058,7 +1058,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1071,7 +1071,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto & col_type_name = block.getByPosition(arguments[0]);
         const ColumnPtr & column = col_type_name.column;
@@ -1114,7 +1114,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1146,7 +1146,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
 
@@ -1240,7 +1240,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
 
@@ -1288,7 +1288,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1303,7 +1303,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnWithTypeAndName & col_type_name = block.getByPosition(arguments[0]);
         const ColumnPtr & column = col_type_name.column;
@@ -1380,7 +1380,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1399,7 +1399,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnWithTypeAndName & col_type_name = block.getByPosition(arguments[0]);
         const ColumnPtr & column = col_type_name.column;
@@ -1481,9 +1481,9 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes &) const override { return std::make_shared<DataTypeUUID>(); }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         auto col_res = ColumnVector<UInt128>::create();
         typename ColumnVector<UInt128>::Container & vec_to = col_res->getData();
@@ -1514,7 +1514,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1528,7 +1528,7 @@ public:
     }
 
     template <typename T>
-    void executeOneUInt(T x, char *& out)
+    void executeOneUInt(T x, char *& out) const
     {
         bool was_nonzero = false;
         for (int offset = (sizeof(T) - 1) * 8; offset >= 0; offset -= 8)
@@ -1549,7 +1549,7 @@ public:
     }
 
     template <typename T>
-    bool tryExecuteUInt(const IColumn * col, ColumnPtr & col_res)
+    bool tryExecuteUInt(const IColumn * col, ColumnPtr & col_res) const
     {
         const ColumnVector<T> * col_vec = checkAndGetColumn<ColumnVector<T>>(col);
 
@@ -1593,7 +1593,7 @@ public:
         }
     }
 
-    void executeOneString(const UInt8 * pos, const UInt8 * end, char *& out)
+    void executeOneString(const UInt8 * pos, const UInt8 * end, char *& out) const
     {
         while (pos < end)
         {
@@ -1605,7 +1605,7 @@ public:
         ++out;
     }
 
-    bool tryExecuteString(const IColumn * col, ColumnPtr & col_res)
+    bool tryExecuteString(const IColumn * col, ColumnPtr & col_res) const
     {
         const ColumnString * col_str_in = checkAndGetColumn<ColumnString>(col);
 
@@ -1649,7 +1649,7 @@ public:
         }
     }
 
-    bool tryExecuteFixedString(const IColumn * col, ColumnPtr & col_res)
+    bool tryExecuteFixedString(const IColumn * col, ColumnPtr & col_res) const
     {
         const ColumnFixedString * col_fstr_in = checkAndGetColumn<ColumnFixedString>(col);
 
@@ -1697,7 +1697,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * column = block.getByPosition(arguments[0]).column.get();
         ColumnPtr & res_column = block.getByPosition(result).column;
@@ -1722,7 +1722,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1733,7 +1733,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void unhexOne(const char * pos, const char * end, char *& out)
+    void unhexOne(const char * pos, const char * end, char *& out) const
     {
         if ((end - pos) & 1)
         {
@@ -1753,7 +1753,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
 
@@ -1810,7 +1810,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1824,7 +1824,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
 
     template <typename T>
-    bool tryExecute(const IColumn * column, ColumnPtr & out_column)
+    bool tryExecute(const IColumn * column, ColumnPtr & out_column) const
     {
         if (const ColumnVector<T> * col_from = checkAndGetColumn<ColumnVector<T>>(column))
         {
@@ -1861,7 +1861,7 @@ public:
         }
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * in_column = block.getByPosition(arguments[0]).column.get();
         ColumnPtr & out_column = block.getByPosition(result).column;
@@ -1899,7 +1899,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    bool tryExecuteString(const IColumn * col, ColumnPtr & col_res)
+    bool tryExecuteString(const IColumn * col, ColumnPtr & col_res) const
     {
         const ColumnString * col_str_in = checkAndGetColumn<ColumnString>(col);
 
@@ -1946,7 +1946,7 @@ public:
         }
     }
 
-    bool tryExecuteFixedString(const IColumn * col, ColumnPtr & col_res)
+    bool tryExecuteFixedString(const IColumn * col, ColumnPtr & col_res) const
     {
         const ColumnFixedString * col_fstr_in = checkAndGetColumn<ColumnFixedString>(col);
 
@@ -1992,7 +1992,7 @@ public:
         }
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * column = block.getByPosition(arguments[0]).column.get();
         ColumnPtr & res_column = block.getByPosition(result).column;

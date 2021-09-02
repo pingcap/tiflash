@@ -855,7 +855,7 @@ public:
         }
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (arguments.size() == 1)
         {

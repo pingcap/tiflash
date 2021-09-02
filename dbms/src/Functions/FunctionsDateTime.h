@@ -818,7 +818,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IDataType * from_type = block.getByPosition(arguments[0]).type.get();
 
@@ -1267,7 +1267,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {2}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IDataType * from_type = block.getByPosition(arguments[0]).type.get();
 
@@ -1323,7 +1323,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
@@ -1398,7 +1398,8 @@ public:
 
 private:
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    void dispatchForColumns(const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map)
+    void dispatchForColumns(
+            const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map) const
     {
         auto * x_const = checkAndGetColumnConst<ColumnUInt64>(&x);
         auto * y_const = checkAndGetColumnConst<ColumnUInt64>(&y);
@@ -1421,8 +1422,9 @@ private:
     }
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    void vector_vector(const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
-            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    void vector_vector(
+            const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
@@ -1435,8 +1437,9 @@ private:
     }
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    void vector_constant(const ColumnVector<UInt64> & x, UInt64 y,
-            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    void vector_constant(
+            const ColumnVector<UInt64> & x, UInt64 y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
     {
         const auto & x_data = x.getData();
         if (y == 0)
@@ -1456,8 +1459,9 @@ private:
     }
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    void constant_vector(UInt64 x, const ColumnVector<UInt64> & y,
-            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    void constant_vector(
+            UInt64 x, const ColumnVector<UInt64> & y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
     {
         const auto & y_data = y.getData();
         if (x == 0)
@@ -1475,7 +1479,8 @@ private:
         }
     }
 
-    void calculateTimeDiff(const MyDateTime &x, const MyDateTime &y, Int64 & seconds, int & micro_seconds, bool & neg) {
+    void calculateTimeDiff(const MyDateTime &x, const MyDateTime &y, Int64 & seconds, int & micro_seconds, bool & neg) const
+    {
         Int64 days_x = calcDayNum(x.year, x.month, x.day);
         Int64 days_y = calcDayNum(y.year, y.month, y.day);
         Int64 days = days_y - days_x;
@@ -1641,7 +1646,7 @@ private:
     };
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    Int64 calculate(UInt64 x, UInt64 y)
+    Int64 calculate(UInt64 x, UInt64 y) const
     {
         MyDateTime x_time(x);
         MyDateTime y_time(y);
@@ -1690,7 +1695,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         bool has_nullable = false;
         bool has_null_constant = false;
@@ -1738,7 +1743,7 @@ public:
         block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
     }
 private:
-    void dispatch(const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map)
+    void dispatch(const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map) const
     {
         auto * x_const = checkAndGetColumnConst<ColumnUInt64>(&x);
         auto * y_const = checkAndGetColumnConst<ColumnUInt64>(&y);
@@ -1760,8 +1765,9 @@ private:
         }
     }
 
-    void vector_vector(const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
-                       ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    void vector_vector(
+            const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
+                       ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
@@ -1773,8 +1779,9 @@ private:
         }
     }
 
-    void vector_constant(const ColumnVector<UInt64> & x, UInt64 y,
-                         ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    void vector_constant(
+            const ColumnVector<UInt64> & x, UInt64 y,
+                         ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
     {
         const auto & x_data = x.getData();
         if (y == 0)
@@ -1793,8 +1800,9 @@ private:
         }
     }
 
-    void constant_vector(UInt64 x, const ColumnVector<UInt64> & y,
-                         ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    void constant_vector(
+            UInt64 x, const ColumnVector<UInt64> & y,
+                         ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
     {
         const auto & y_data = y.getData();
         if (x == 0)
@@ -1812,7 +1820,7 @@ private:
         }
     }
 
-    Int64 calculate(UInt64 x_packed, UInt64 y_packed)
+    Int64 calculate(UInt64 x_packed, UInt64 y_packed) const
     {
         MyDateTime x(x_packed);
         MyDateTime y(y_packed);
@@ -1876,7 +1884,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0, 3}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
@@ -1920,7 +1928,7 @@ private:
     void dispatchForColumns(
         const IColumn & x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result)
+        ColumnInt64::Container & result) const
     {
         if (auto * x_vec = checkAndGetColumn<ColumnUInt16>(&x))
             dispatchForSecondColumn<Transform>(*x_vec, y, timezone_x, timezone_y, result);
@@ -1938,7 +1946,7 @@ private:
     void dispatchForSecondColumn(
         const ColumnVector<T1> & x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result)
+        ColumnInt64::Container & result) const
     {
         if (auto * y_vec = checkAndGetColumn<ColumnUInt16>(&y))
             vector_vector<Transform>(x, *y_vec, timezone_x, timezone_y, result);
@@ -1956,7 +1964,7 @@ private:
     void dispatchConstForSecondColumn(
         T1 x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result)
+        ColumnInt64::Container & result) const
     {
         if (auto * y_vec = checkAndGetColumn<ColumnUInt16>(&y))
             constant_vector<Transform>(x, *y_vec, timezone_x, timezone_y, result);
@@ -1970,7 +1978,7 @@ private:
     void vector_vector(
         const ColumnVector<T1> & x, const ColumnVector<T2> & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result)
+        ColumnInt64::Container & result) const
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
@@ -1982,7 +1990,7 @@ private:
     void vector_constant(
         const ColumnVector<T1> & x, T2 y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result)
+        ColumnInt64::Container & result) const
     {
         const auto & x_data = x.getData();
         for (size_t i = 0, size = x.size(); i < size; ++i)
@@ -1993,7 +2001,7 @@ private:
     void constant_vector(
         T1 x, const ColumnVector<T2> & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result)
+        ColumnInt64::Container & result) const
     {
         const auto & y_data = y.getData();
         for (size_t i = 0, size = y.size(); i < size; ++i)
@@ -2001,7 +2009,7 @@ private:
     }
 
     template <typename Transform, typename T1, typename T2>
-    Int64 calculate(T1 x, T2 y, const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y)
+    Int64 calculate(T1 x, T2 y, const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y) const
     {
         return Int64(Transform::execute(y, timezone_y))
              - Int64(Transform::execute(x, timezone_x));
@@ -2028,9 +2036,9 @@ public:
         return std::make_shared<DataTypeDateTime>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt32().createColumnConst(
             block.rows(),
@@ -2057,9 +2065,9 @@ public:
         return std::make_shared<DataTypeDate>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt16().createColumnConst(
             block.rows(),
@@ -2086,9 +2094,9 @@ public:
         return std::make_shared<DataTypeDate>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt16().createColumnConst(
             block.rows(),
@@ -2135,7 +2143,7 @@ public:
         return arguments[0].type;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override {
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override {
         static const DateLUTImpl & UTC = DateLUT::instance("UTC");
         if (const ColumnVector<FromFieldType> *col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get())) {
@@ -2202,7 +2210,7 @@ public:
         return arguments[0].type;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (const ColumnVector<FromFieldType> * col_from
             = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
@@ -2264,7 +2272,7 @@ public:
         return std::make_shared<DataTypeDateTime>(time_zone_name);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         block.getByPosition(result).column = block.getByPosition(arguments[0]).column;
     }
@@ -2295,7 +2303,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (const ColumnUInt32 * times = typeid_cast<const ColumnUInt32 *>(block.getByPosition(arguments[0]).column.get()))
         {
@@ -2424,7 +2432,7 @@ public:
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDateTime>());
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto starts = checkAndGetColumn<ColumnUInt32>(block.getByPosition(arguments[0]).column.get());
         auto const_starts = checkAndGetColumnConst<ColumnUInt32>(block.getByPosition(arguments[0]).column.get());
@@ -2565,7 +2573,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)

@@ -92,7 +92,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
     String getName() const override;
@@ -121,7 +121,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
     void perform(Block & block, const ColumnNumbers & arguments, size_t result, ArrayImpl::NullMapBuilder & builder);
@@ -758,7 +758,7 @@ private:
     using ResultColumnType = ColumnVector<typename IndexConv::ResultType>;
 
     template <typename T>
-    bool executeNumber(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeNumber(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         return executeNumberNumber<T, UInt8>(block, arguments, result)
             || executeNumberNumber<T, UInt16>(block, arguments, result)
@@ -774,7 +774,7 @@ private:
     }
 
     template <typename T, typename U>
-    bool executeNumberNumber(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeNumberNumber(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -822,7 +822,7 @@ private:
         return true;
     }
 
-    bool executeString(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeString(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -872,7 +872,7 @@ private:
         return true;
     }
 
-    bool executeConst(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeConst(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const ColumnConst * col_array = checkAndGetColumnConst<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -948,7 +948,7 @@ private:
         return true;
     }
 
-    bool executeGeneric(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeGeneric(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -1036,7 +1036,7 @@ public:
     }
 
     /// Perform function on the given block.
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         /// If one or both arguments passed to this function are nullable,
         /// we create a new block that contains non-nullable arguments:
@@ -1148,7 +1148,7 @@ public:
 
 private:
     /// Perform function on the given block. Internal version.
-    void perform(Block & block, const ColumnNumbers & arguments, size_t result)
+    void perform(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if (!(executeNumber<UInt8>(block, arguments, result)
             || executeNumber<UInt16>(block, arguments, result)
@@ -1184,7 +1184,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 };
 
 
@@ -1204,7 +1204,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
     /// Initially allocate a piece of memory for 512 elements. NOTE: This is just a guess.
@@ -1243,7 +1243,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
     /// Initially allocate a piece of memory for 512 elements. NOTE: This is just a guess.
@@ -1295,7 +1295,7 @@ private:
         return std::make_shared<DataTypeArray>(std::make_shared<DataType>());
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         using UnderlyingColumnType = typename TypeToColumnType<typename DataType::FieldType>::ColumnType;
 
@@ -1325,7 +1325,7 @@ private:
     template <typename T>
     bool executeInternal(Block & block, const IColumn * arg, const size_t result);
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override;
 };
 
 
@@ -1342,7 +1342,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 };
 
 
@@ -1359,7 +1359,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
     bool executeConst(Block & block, const ColumnNumbers & arguments, size_t result);
@@ -1404,7 +1404,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 private:
     /// lazy initialization in getReturnTypeImpl
     /// TODO: init in FunctionBuilder
@@ -1426,7 +1426,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -1448,7 +1448,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return false; }
@@ -1468,7 +1468,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return false; }
@@ -1509,7 +1509,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return false; }
@@ -1553,7 +1553,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -1610,7 +1610,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -1655,7 +1655,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return false; }

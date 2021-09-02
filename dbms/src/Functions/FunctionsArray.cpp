@@ -60,7 +60,7 @@ DataTypePtr FunctionArray::getReturnTypeImpl(const DataTypes & arguments) const
     return std::make_shared<DataTypeArray>(getLeastSupertype(arguments));
 }
 
-void FunctionArray::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArray::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     size_t num_elements = arguments.size();
 
@@ -776,7 +776,7 @@ DataTypePtr FunctionArrayElement::getReturnTypeImpl(const DataTypes & arguments)
     return array_type->getNestedType();
 }
 
-void FunctionArrayElement::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayElement::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     /// Check nullability.
     bool is_array_of_nullable = false;
@@ -868,7 +868,7 @@ void FunctionArrayElement::executeImpl(Block & block, const ColumnNumbers & argu
 }
 
 void FunctionArrayElement::perform(Block & block, const ColumnNumbers & arguments, size_t result,
-    ArrayImpl::NullMapBuilder & builder)
+    ArrayImpl::NullMapBuilder & builder) const
 {
     if (executeTuple(block, arguments, result))
     {
@@ -936,7 +936,7 @@ DataTypePtr FunctionArrayEnumerate::getReturnTypeImpl(const DataTypes & argument
     return std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt32>());
 }
 
-void FunctionArrayEnumerate::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayEnumerate::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     if (const ColumnArray * array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get()))
     {
@@ -994,7 +994,7 @@ DataTypePtr FunctionArrayUniq::getReturnTypeImpl(const DataTypes & arguments) co
     return std::make_shared<DataTypeUInt32>();
 }
 
-void FunctionArrayUniq::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayUniq::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     Columns array_columns(arguments.size());
     const ColumnArray::Offsets * offsets = nullptr;
@@ -1124,7 +1124,7 @@ bool FunctionArrayUniq::executeNumber(const ColumnArray * array, const IColumn *
     return true;
 }
 
-bool FunctionArrayUniq::executeString(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values)
+bool FunctionArrayUniq::executeString(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values) const
 {
     const IColumn * inner_col;
 
@@ -1176,7 +1176,7 @@ bool FunctionArrayUniq::execute128bit(
     const ColumnRawPtrs & columns,
     const ColumnRawPtrs & null_maps,
     ColumnUInt32::Container & res_values,
-    bool has_nullable_columns)
+    bool has_nullable_columns) const
 {
     size_t count = columns.size();
     size_t keys_bytes = 0;
@@ -1252,7 +1252,7 @@ bool FunctionArrayUniq::execute128bit(
 void FunctionArrayUniq::executeHashed(
     const ColumnArray::Offsets & offsets,
     const ColumnRawPtrs & columns,
-    ColumnUInt32::Container & res_values)
+    ColumnUInt32::Container & res_values) const
 {
     size_t count = columns.size();
 
@@ -1303,7 +1303,7 @@ DataTypePtr FunctionArrayEnumerateUniq::getReturnTypeImpl(const DataTypes & argu
     return std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt32>());
 }
 
-void FunctionArrayEnumerateUniq::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayEnumerateUniq::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     Columns array_columns(arguments.size());
     const ColumnArray::Offsets * offsets = nullptr;
@@ -1386,7 +1386,7 @@ void FunctionArrayEnumerateUniq::executeImpl(Block & block, const ColumnNumbers 
 
 
 template <typename T>
-bool FunctionArrayEnumerateUniq::executeNumber(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values)
+bool FunctionArrayEnumerateUniq::executeNumber(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values) const
 {
     const IColumn * inner_col;
 
@@ -1431,7 +1431,7 @@ bool FunctionArrayEnumerateUniq::executeNumber(const ColumnArray * array, const 
     return true;
 }
 
-bool FunctionArrayEnumerateUniq::executeString(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values)
+bool FunctionArrayEnumerateUniq::executeString(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values)const
 {
     const IColumn * inner_col;
 
@@ -1480,7 +1480,7 @@ bool FunctionArrayEnumerateUniq::execute128bit(
     const ColumnRawPtrs & columns,
     const ColumnRawPtrs & null_maps,
     ColumnUInt32::Container & res_values,
-    bool has_nullable_columns)
+    bool has_nullable_columns)const
 {
     size_t count = columns.size();
     size_t keys_bytes = 0;
@@ -1541,7 +1541,7 @@ bool FunctionArrayEnumerateUniq::execute128bit(
 void FunctionArrayEnumerateUniq::executeHashed(
     const ColumnArray::Offsets & offsets,
     const ColumnRawPtrs & columns,
-    ColumnUInt32::Container & res_values)
+    ColumnUInt32::Container & res_values)const
 {
     size_t count = columns.size();
 
@@ -1902,7 +1902,7 @@ namespace
     }
 }
 
-void FunctionEmptyArrayToSingle::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionEmptyArrayToSingle::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     if (FunctionEmptyArrayToSingleImpl::executeConst(block, arguments, result))
         return;
@@ -1972,7 +1972,7 @@ DataTypePtr FunctionRange::getReturnTypeImpl(const DataTypes & arguments) const
 }
 
 template <typename T>
-bool FunctionRange::executeInternal(Block & block, const IColumn * arg, const size_t result)
+bool FunctionRange::executeInternal(Block & block, const IColumn * arg, const size_t result)const
 {
     static constexpr size_t max_elements = 100'000'000;
 
@@ -2020,7 +2020,7 @@ bool FunctionRange::executeInternal(Block & block, const IColumn * arg, const si
         return false;
 }
 
-void FunctionRange::executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result)
+void FunctionRange::executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const
 {
     const auto col = block.getByPosition(arguments[0]).column.get();
 
@@ -2057,7 +2057,7 @@ DataTypePtr FunctionArrayReverse::getReturnTypeImpl(const DataTypes & arguments)
     return arguments[0];
 }
 
-void FunctionArrayReverse::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayReverse::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     if (executeConst(block, arguments, result))
         return;
@@ -2114,7 +2114,7 @@ void FunctionArrayReverse::executeImpl(Block & block, const ColumnNumbers & argu
     block.getByPosition(result).column = std::move(res_ptr);
 }
 
-bool FunctionArrayReverse::executeConst(Block & block, const ColumnNumbers & arguments, size_t result)
+bool FunctionArrayReverse::executeConst(Block & block, const ColumnNumbers & arguments, size_t result)const
 {
     if (const ColumnConst * const_array = checkAndGetColumnConst<ColumnArray>(block.getByPosition(arguments[0]).column.get()))
     {
@@ -2139,7 +2139,7 @@ bool FunctionArrayReverse::executeNumber(
     const IColumn & src_data, const ColumnArray::Offsets & src_offsets,
     IColumn & res_data_col,
     const ColumnNullable * nullable_col,
-    ColumnNullable * nullable_res_col)
+    ColumnNullable * nullable_res_col)const
 {
     auto do_reverse = [](const auto & src_data, const auto & src_offsets, auto & res_data)
     {
@@ -2193,7 +2193,7 @@ bool FunctionArrayReverse::executeFixedString(
     const IColumn & src_data, const ColumnArray::Offsets & src_offsets,
     IColumn & res_data_col,
     const ColumnNullable * nullable_col,
-    ColumnNullable * nullable_res_col)
+    ColumnNullable * nullable_res_col)const
 {
     if (const ColumnFixedString * src_data_concrete = checkAndGetColumn<ColumnFixedString>(&src_data))
     {
@@ -2266,7 +2266,7 @@ bool FunctionArrayReverse::executeString(
     const IColumn & src_data, const ColumnArray::Offsets & src_array_offsets,
     IColumn & res_data_col,
     const ColumnNullable * nullable_col,
-    ColumnNullable * nullable_res_col)
+    ColumnNullable * nullable_res_col)const
 {
     if (const ColumnString * src_data_concrete = checkAndGetColumn<ColumnString>(&src_data))
     {
@@ -2402,7 +2402,7 @@ DataTypePtr FunctionArrayReduce::getReturnTypeImpl(const ColumnsWithTypeAndName 
 
 
 
-void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayReduce::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     IAggregateFunction & agg_func = *aggregate_function.get();
 
@@ -2534,7 +2534,7 @@ DataTypePtr FunctionArrayConcat::getReturnTypeImpl(const DataTypes & arguments) 
     return getLeastSupertype(arguments);
 }
 
-void FunctionArrayConcat::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayConcat::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     const DataTypePtr & return_type = block.getByPosition(result).type;
 
@@ -2627,7 +2627,7 @@ DataTypePtr FunctionArraySlice::getReturnTypeImpl(const DataTypes & arguments) c
     return arguments[0];
 }
 
-void FunctionArraySlice::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArraySlice::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     const auto & return_type = block.getByPosition(result).type;
 
@@ -2729,7 +2729,7 @@ DataTypePtr FunctionArrayPush::getReturnTypeImpl(const DataTypes & arguments) co
     return std::make_shared<DataTypeArray>(getLeastSupertype(types));
 }
 
-void FunctionArrayPush::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayPush::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     const auto & return_type = block.getByPosition(result).type;
 
@@ -2814,7 +2814,7 @@ DataTypePtr FunctionArrayPop::getReturnTypeImpl(const DataTypes & arguments) con
     return arguments[0];
 }
 
-void FunctionArrayPop::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayPop::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     const auto & return_type = block.getByPosition(result).type;
 
@@ -2888,7 +2888,7 @@ DataTypePtr FunctionArrayHasAllAny::getReturnTypeImpl(const DataTypes & argument
     return std::make_shared<DataTypeUInt8>();
 }
 
-void FunctionArrayHasAllAny::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayHasAllAny::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     size_t rows = block.rows();
     size_t num_args = arguments.size();
@@ -3147,7 +3147,7 @@ FunctionArrayIntersect::UnpackedArrays FunctionArrayIntersect::prepareArrays(con
     return arrays;
 }
 
-void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     const auto & return_type = block.getByPosition(result).type;
     auto return_type_array = checkAndGetDataType<DataTypeArray>(return_type.get());
@@ -3223,7 +3223,7 @@ void FunctionArrayIntersect::NumberExecutor::operator()()
 };
 
 template <typename Map, typename ColumnType, bool is_numeric_column>
-ColumnPtr FunctionArrayIntersect::execute(const UnpackedArrays & arrays, MutableColumnPtr result_data_ptr)
+ColumnPtr FunctionArrayIntersect::execute(const UnpackedArrays & arrays, MutableColumnPtr result_data_ptr)const
 {
     auto args = arrays.nested_columns.size();
     auto rows = arrays.offsets.front()->size();
@@ -3365,7 +3365,7 @@ DataTypePtr FunctionArrayResize::getReturnTypeImpl(const DataTypes & arguments) 
         return std::make_shared<DataTypeArray>(getLeastSupertype({array_type->getNestedType(), arguments[2]}));
 }
 
-void FunctionArrayResize::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionArrayResize::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     const auto & return_type = block.getByPosition(result).type;
 

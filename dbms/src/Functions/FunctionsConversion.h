@@ -1028,7 +1028,7 @@ public:
 
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
-    bool isInjective(const Block &) override { return std::is_same_v<Name, NameToString>; }
+    bool isInjective(const Block &) const override { return std::is_same_v<Name, NameToString>; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
@@ -1072,7 +1072,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         try
         {
@@ -1117,7 +1117,7 @@ public:
     }
 
 private:
-    void executeInternal(Block & block, const ColumnNumbers & arguments, size_t result)
+    void executeInternal(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if (!arguments.size())
             throw Exception{"Function " + getName() + " expects at least 1 arguments",
@@ -1248,7 +1248,7 @@ public:
         return res;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IDataType * from_type = block.getByPosition(arguments[0]).type.get();
 
@@ -1287,7 +1287,7 @@ public:
     }
 
     // This function seems not to be called.
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const PrecType prec = block.getByPosition(arguments[1]).column->getUInt(0);
         const ScaleType scale = block.getByPosition(arguments[2]).column->getUInt(0);
@@ -1349,7 +1349,7 @@ public:
     }
 
     size_t getNumberOfArguments() const override { return 2; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
@@ -1367,7 +1367,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto n = block.getByPosition(arguments[1]).column->getUInt(0);
         return execute(block, arguments, result, n);
@@ -1439,7 +1439,7 @@ public:
 
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
-    bool isInjective(const Block &) override { return true; }
+    bool isInjective(const Block &) const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return false; }
 
@@ -1464,7 +1464,8 @@ public:
     static constexpr int scale_multiplier[] = {1000000, 100000, 10000, 1000, 100, 10, 1};
 
     template <typename T>
-    void decimalToMyDatetime(const ColumnPtr & input_col, ColumnUInt64::Container & datetime_res, ColumnUInt8::Container & null_res, UInt32 scale, Int256 & scale_divisor, Int256 & scale_round_divisor)
+    void decimalToMyDatetime(
+            const ColumnPtr & input_col, ColumnUInt64::Container & datetime_res, ColumnUInt8::Container & null_res, UInt32 scale, Int256 & scale_divisor, Int256 & scale_round_divisor) const
     {
         const auto & timezone_info = context.getTimezoneInfo();
         const auto * datelut = timezone_info.timezone;
@@ -1573,7 +1574,7 @@ public:
         }
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto & input_column = block.getByPosition(arguments[0]).column;
         ColumnPtr decimal_column = input_column;
@@ -1665,7 +1666,7 @@ public:
     }
 
     size_t getNumberOfArguments() const override { return 2; }
-    bool isInjective(const Block &) override { return false; }
+    bool isInjective(const Block &) const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
@@ -1680,7 +1681,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto * col_from = checkAndGetColumn<ColumnVector<UInt64>>(block.getByPosition(arguments[0]).column.get());
         const auto & vec_from = col_from->getData();
@@ -1734,7 +1735,7 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 2; }
-    bool isInjective(const Block &) override { return false; }
+    bool isInjective(const Block &) const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
@@ -1767,10 +1768,10 @@ public:
         }
     }
 
-    // FIXME: Should we override other method?
+    // FIXME: Should we const override other method?
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto & input_column = block.getByPosition(arguments[0]).column;
         const size_t num_rows = input_column->size();
@@ -2308,12 +2309,12 @@ using FunctionParseDateTimeBestEffortOrNull = FunctionConvertFromString<
     ConvertFromStringParsingMode::BestEffort>;
 
 
-class PreparedFunctionCast : public PreparedFunctionImpl
+class ExecutableFunctionCast : public IExecutableFunction 
 {
 public:
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t)>;
 
-    explicit PreparedFunctionCast(WrapperType && wrapper_function, const char * name)
+    ExecutableFunctionCast(WrapperType && wrapper_function, const char * name)
         : wrapper_function(std::move(wrapper_function))
         , name(name)
     {}
@@ -2321,7 +2322,7 @@ public:
     String getName() const override { return name; }
 
 protected:
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         /// drop second argument, pass others
         ColumnNumbers new_arguments{arguments.front()};
@@ -2358,9 +2359,9 @@ public:
     const DataTypes & getArgumentTypes() const override { return argument_types; }
     const DataTypePtr & getReturnType() const override { return return_type; }
 
-    PreparedFunctionPtr prepare(const Block & /*sample_block*/) const override
+    ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override
     {
-        return std::make_shared<PreparedFunctionCast>(prepare(getArgumentTypes()[0], getReturnType()), name);
+        return std::make_shared<ExecutableFunctionCast>(prepare(getArgumentTypes()[0], getReturnType()), name);
     }
 
     String getName() const override { return name; }
@@ -2392,11 +2393,11 @@ private:
 
         /// Check conversion using underlying function
         {
-            function->getReturnType(ColumnsWithTypeAndName(1, {nullptr, from_type, ""}));
+            DefaultFunctionBuilder(function).getReturnType(ColumnsWithTypeAndName(1, {nullptr, from_type, ""}));
         }
 
         return [function](Block & block, const ColumnNumbers & arguments, const size_t result) {
-            function->execute(block, arguments, result);
+            DefaultExecutable(function).execute(block, arguments, result);
         };
     }
 
@@ -2555,11 +2556,11 @@ private:
 
             /// Check conversion using underlying function
             {
-                function->getReturnType(ColumnsWithTypeAndName(1, {nullptr, from_type, ""}));
+                DefaultFunctionBuilder(function).getReturnType(ColumnsWithTypeAndName(1, {nullptr, from_type, ""}));
             }
 
             return [function](Block & block, const ColumnNumbers & arguments, const size_t result) {
-                function->execute(block, arguments, result);
+                DefaultExecutable(function).execute(block, arguments, result);
             };
         }
         else
@@ -2794,7 +2795,7 @@ private:
     }
 };
 
-class FunctionBuilderCast : public FunctionBuilderImpl
+class FunctionBuilderCast : public IFunctionBuilder
 {
 public:
     using MonotonicityForRange = FunctionCast::MonotonicityForRange;

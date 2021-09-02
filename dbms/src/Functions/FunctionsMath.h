@@ -59,7 +59,7 @@ private:
         return std::make_shared<DataTypeFloat64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, const size_t result) const override
     {
         block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Impl::value);
     }
@@ -164,7 +164,7 @@ private:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto arg = block.getByPosition(arguments[0]).column.get();
 
@@ -537,7 +537,7 @@ private:
         return false;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto left_arg = block.getByPosition(arguments[0]).column.get();
 

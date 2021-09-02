@@ -111,9 +111,9 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, const size_t result) const override
     {
         block.getByPosition(result).column = DataTypeString().createColumnConst(block.rows(), db_name);
     }
@@ -135,9 +135,9 @@ public:
         return name;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -155,7 +155,7 @@ public:
     /** convertToFullColumn needed because in distributed query processing,
       *    each server returns its own value.
       */
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(
             block.rows(), Poco::Net::DNS::hostName())->convertToFullColumnIfConst();
@@ -193,7 +193,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
 
     /// Execute the function on the block.
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 };
 
 
@@ -225,7 +225,7 @@ public:
     }
 
     /// Execute the function on the block.
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         block.getByPosition(result).column
             = DataTypeString().createColumnConst(block.rows(), block.getByPosition(arguments[0]).type->getName());
@@ -265,7 +265,7 @@ public:
         throw Exception("The argument for function " + getName() + " must be Enum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (auto type = checkAndGetDataType<DataTypeEnum8>(block.getByPosition(arguments[0]).type.get()))
             block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(type->getValues().size()));
@@ -305,7 +305,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         block.getByPosition(result).column
             = DataTypeString().createColumnConst(block.rows(), block.getByPosition(arguments[0]).column->getName());
@@ -341,7 +341,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto & elem = block.getByPosition(arguments[0]);
 
@@ -381,7 +381,7 @@ public:
         return arguments[0];
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IDataType & type = *block.getByPosition(arguments[0]).type;
         block.getByPosition(result).column = type.createColumnConst(block.rows(), type.getDefault());
@@ -404,9 +404,9 @@ public:
         return name;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -421,7 +421,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         size_t size = block.rows();
         block.getByPosition(result).column = ColumnUInt64::create(size, size);
@@ -449,9 +449,9 @@ public:
         return 0;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -461,7 +461,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         size_t size = block.rows();
         auto column = ColumnUInt64::create();
@@ -499,9 +499,9 @@ public:
         return 0;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -511,7 +511,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         size_t current_block_number = block_number++;
         block.getByPosition(result).column = ColumnUInt64::create(block.rows(), current_block_number);
@@ -543,9 +543,9 @@ public:
         return 0;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -555,7 +555,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         size_t rows_in_block = block.rows();
         size_t current_row_number = rows.fetch_add(rows_in_block);
@@ -617,7 +617,7 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * col = block.getByPosition(arguments[0]).column.get();
 
@@ -674,7 +674,7 @@ public:
         return arguments[0];
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto & src = block.getByPosition(arguments[0]).column;
         if (ColumnPtr converted = src->convertToFullColumnIfConst())
@@ -765,7 +765,7 @@ public:
         return false;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnWithTypeAndName & left_arg = block.getByPosition(arguments[0]);
         if constexpr (!ignore_null)
@@ -892,7 +892,7 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(0));
     }
@@ -940,7 +940,7 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(1));
     }
@@ -971,7 +971,7 @@ public:
         return arguments.front();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         block.getByPosition(result).column = block.getByPosition(arguments.front()).column;
     }
@@ -1000,9 +1000,9 @@ public:
     }
 
     /** It could return many different values for single argument. */
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -1016,7 +1016,7 @@ public:
         return arr->getNestedType();
     }
 
-    void executeImpl(Block & /*block*/, const ColumnNumbers & /*arguments*/, size_t /*result*/) override
+    void executeImpl(Block & /*block*/, const ColumnNumbers & /*arguments*/, size_t /*result*/) const override
     {
         throw Exception("Function " + getName() + " must not be executed directly.", ErrorCodes::FUNCTION_IS_SPECIAL);
     }
@@ -1107,7 +1107,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2, 3}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         Int64 min = extractConstant<Int64>(block, arguments, 1, "Second"); /// The level at which the line has zero length.
         Int64 max = extractConstant<Int64>(block, arguments, 2, "Third"); /// The level at which the line has the maximum length.
@@ -1233,7 +1233,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto in = block.getByPosition(arguments.front()).column.get();
 
@@ -1362,7 +1362,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         static const std::string version = getVersion();
         block.getByPosition(result).column = DataTypeString().createColumnConst(block.rows(), version);
@@ -1403,9 +1403,9 @@ public:
         return std::make_shared<DataTypeUInt32>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt32().createColumnConst(block.rows(), static_cast<UInt64>(uptime));
     }
@@ -1440,9 +1440,9 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeString().createColumnConst(block.rows(), DateLUT::instance().getTimeZone());
     }
@@ -1474,9 +1474,9 @@ public:
         return 1;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -1491,7 +1491,7 @@ public:
         return type->getReturnType();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnAggregateFunction * column_with_states
             = typeid_cast<const ColumnAggregateFunction *>(&*block.getByPosition(arguments.at(0)).column);
@@ -1630,7 +1630,7 @@ public:
         return 1;
     }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -1646,7 +1646,7 @@ public:
         return res;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto & src = block.getByPosition(arguments.at(0));
         const auto & res_type = block.getByPosition(result).type;
@@ -1706,7 +1706,7 @@ public:
         return type->getReturnType();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnAggregateFunction * column_with_states
             = typeid_cast<const ColumnAggregateFunction *>(&*block.getByPosition(arguments.at(0)).column);
@@ -1753,9 +1753,9 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
     const Context & global_context;
@@ -1884,7 +1884,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto in = block.getByPosition(arguments.front()).column.get();
 

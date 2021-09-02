@@ -37,7 +37,7 @@ DataTypePtr FunctionModelEvaluate::getReturnTypeImpl(const DataTypes & arguments
     return std::make_shared<DataTypeFloat64>();
 }
 
-void FunctionModelEvaluate::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionModelEvaluate::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     const auto name_col = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
     if (!name_col)

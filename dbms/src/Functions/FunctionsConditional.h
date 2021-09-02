@@ -126,7 +126,7 @@ private:
         Block & block,
         const ColumnNumbers & arguments,
         size_t result,
-        const ColumnVector<T0> * col_left)
+        const ColumnVector<T0> * col_left) const
     {
         const ColumnVector<T1> * col_right_vec = checkAndGetColumn<ColumnVector<T1>>(block.getByPosition(arguments[2]).column.get());
         const ColumnConst * col_right_const = checkAndGetColumnConst<ColumnVector<T1>>(block.getByPosition(arguments[2]).column.get());
@@ -150,7 +150,7 @@ private:
         Block & block,
         const ColumnNumbers & arguments,
         size_t result,
-        const ColumnConst * col_left)
+        const ColumnConst * col_left) const
     {
         const ColumnVector<T1> * col_right_vec = checkAndGetColumn<ColumnVector<T1>>(block.getByPosition(arguments[2]).column.get());
         const ColumnConst * col_right_const = checkAndGetColumnConst<ColumnVector<T1>>(block.getByPosition(arguments[2]).column.get());
@@ -174,7 +174,7 @@ private:
         [[maybe_unused]] Block & block,
         [[maybe_unused]] const ColumnNumbers & arguments,
         [[maybe_unused]] size_t result,
-        [[maybe_unused]] const ColumnArray * col_left_array)
+        [[maybe_unused]] const ColumnArray * col_left_array) const
     {
         if constexpr (std::is_same_v<NumberTraits::Error, typename NumberTraits::ResultOfIf<T0, T1>::Type>)
             return false;
@@ -234,7 +234,7 @@ private:
         [[maybe_unused]] Block & block,
         [[maybe_unused]] const ColumnNumbers & arguments,
         [[maybe_unused]] size_t result,
-        [[maybe_unused]] const ColumnConst * col_left_const_array)
+        [[maybe_unused]] const ColumnConst * col_left_const_array) const
     {
         if constexpr (std::is_same_v<NumberTraits::Error, typename NumberTraits::ResultOfIf<T0, T1>::Type>)
             return false;
@@ -289,7 +289,7 @@ private:
     }
 
     template <typename T0>
-    bool executeLeftType(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeLeftType(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const IColumn * col_left_untyped = block.getByPosition(arguments[1]).column.get();
 
@@ -390,7 +390,7 @@ private:
         return false;
     }
 
-    bool executeString(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeString(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const IColumn * col_then_untyped = block.getByPosition(arguments[1]).column.get();
         const IColumn * col_else_untyped = block.getByPosition(arguments[2]).column.get();
@@ -468,7 +468,7 @@ private:
         return false;
     }
 
-    bool executeGenericArray(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeGenericArray(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         /// For generic implementation, arrays must be of same type.
         if (!block.getByPosition(arguments[1]).type->equals(*block.getByPosition(arguments[2]).type))
@@ -509,7 +509,7 @@ private:
         return false;
     }
 
-    bool executeTuple(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeTuple(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         /// Calculate function for each corresponding elements of tuples.
 
@@ -565,7 +565,7 @@ private:
         return true;
     }
 
-    bool executeForNullableCondition(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeForNullableCondition(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const ColumnWithTypeAndName & arg_cond = block.getByPosition(arguments[0]);
         bool cond_is_null = arg_cond.column->onlyNull();
@@ -637,7 +637,7 @@ private:
         return column;
     }
 
-    bool executeForNullableThenElse(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeForNullableThenElse(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const ColumnWithTypeAndName & arg_cond = block.getByPosition(arguments[0]);
         const ColumnWithTypeAndName & arg_then = block.getByPosition(arguments[1]);
@@ -716,7 +716,7 @@ private:
         return true;
     }
 
-    bool executeForNullThenElse(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeForNullThenElse(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const ColumnWithTypeAndName & arg_cond = block.getByPosition(arguments[0]);
         const ColumnWithTypeAndName & arg_then = block.getByPosition(arguments[1]);
@@ -841,7 +841,7 @@ public:
         return getLeastSupertype({arguments[1], arguments[2]});
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (executeForNullableCondition(block, arguments, result)
             || executeForNullThenElse(block, arguments, result)
@@ -928,7 +928,7 @@ public:
     size_t getNumberOfArguments() const override { return 0; }
     bool useDefaultImplementationForNulls() const override { return false; }
     DataTypePtr getReturnTypeImpl(const DataTypes & args) const override;
-    void executeImpl(Block & block, const ColumnNumbers & args, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & args, size_t result) const override;
 
 private:
     const Context & context;
@@ -949,7 +949,7 @@ public:
     size_t getNumberOfArguments() const override { return 0; }
     String getName() const override;
     DataTypePtr getReturnTypeImpl(const DataTypes & args) const override;
-    void executeImpl(Block & block, const ColumnNumbers & args, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & args, size_t result) const override;
 
 private:
     const Context & context;

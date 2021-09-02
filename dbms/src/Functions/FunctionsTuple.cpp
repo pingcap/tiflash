@@ -50,7 +50,7 @@ public:
         return 0;
     }
 
-    bool isInjective(const Block &) override
+    bool isInjective(const Block &) const override
     {
         return true;
     }
@@ -66,7 +66,7 @@ public:
         return std::make_shared<DataTypeTuple>(arguments);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         size_t tuple_size = arguments.size();
         Columns tuple_columns(tuple_size);
@@ -142,7 +142,7 @@ public:
         return out_return_type;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         Columns array_offsets;
 

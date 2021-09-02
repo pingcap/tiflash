@@ -93,9 +93,9 @@ private:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto dict_name_col = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!dict_name_col)
@@ -129,7 +129,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatchSimple(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -152,7 +152,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatchComplex(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -218,7 +218,7 @@ private:
     bool useDefaultImplementationForConstants() const final { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return {0, 1}; }
 
-    bool isInjective(const Block & sample_block) override
+    bool isInjective(const Block & sample_block) const override
     {
         return isDictGetFunctionInjective(dictionaries, sample_block);
     }
@@ -258,9 +258,9 @@ private:
         return std::make_shared<DataTypeString>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto dict_name_col = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!dict_name_col)
@@ -288,7 +288,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatch(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -319,7 +319,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatchComplex(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -359,7 +359,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatchRange(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -392,7 +392,7 @@ private:
     template <typename DictionaryType>
     void executeRange(
         Block & block, const size_t result, const DictionaryType * dictionary, const std::string & attr_name,
-        const ColumnUInt64 * id_col, const IColumn * date_col_untyped)
+        const ColumnUInt64 * id_col, const IColumn * date_col_untyped) const
     {
         if (const auto date_col = checkAndGetColumn<ColumnUInt16>(date_col_untyped))
         {
@@ -416,7 +416,7 @@ private:
     template <typename DictionaryType>
     void executeRange(
         Block & block, const size_t result, const DictionaryType * dictionary, const std::string & attr_name,
-        const ColumnConst * id_col, const IColumn * date_col_untyped)
+        const ColumnConst * id_col, const IColumn * date_col_untyped) const
     {
         if (const auto date_col = checkAndGetColumn<ColumnUInt16>(date_col_untyped))
         {
@@ -488,9 +488,9 @@ private:
         return std::make_shared<DataTypeString>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto dict_name_col = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!dict_name_col)
@@ -517,7 +517,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatch(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -543,7 +543,7 @@ private:
     template <typename DictionaryType>
     void executeDispatch(
         Block & block, const ColumnNumbers & arguments, const size_t result, const DictionaryType * dictionary,
-        const std::string & attr_name, const ColumnUInt64 * id_col)
+        const std::string & attr_name, const ColumnUInt64 * id_col) const
     {
         const auto default_col_untyped = block.getByPosition(arguments[3]).column.get();
 
@@ -571,7 +571,7 @@ private:
     template <typename DictionaryType>
     void executeDispatch(
         Block & block, const ColumnNumbers & arguments, const size_t result, const DictionaryType * dictionary,
-        const std::string & attr_name, const ColumnConst * id_col)
+        const std::string & attr_name, const ColumnConst * id_col) const
     {
         const auto default_col_untyped = block.getByPosition(arguments[3]).column.get();
 
@@ -599,7 +599,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatchComplex(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -724,7 +724,7 @@ private:
     bool useDefaultImplementationForConstants() const final { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return {0, 1}; }
 
-    bool isInjective(const Block & sample_block) override
+    bool isInjective(const Block & sample_block) const override
     {
         return isDictGetFunctionInjective(dictionaries, sample_block);
     }
@@ -754,9 +754,9 @@ private:
         return std::make_shared<DataType>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto dict_name_col = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!dict_name_col)
@@ -784,7 +784,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatch(Block & block, const ColumnNumbers & arguments, const size_t result,
-        const IDictionaryBase * dictionary)
+        const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -824,7 +824,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatchComplex(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -865,7 +865,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatchRange(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -896,7 +896,7 @@ private:
     template <typename DictionaryType>
     void executeRange(
         Block & block, const size_t result, const DictionaryType * dictionary, const std::string & attr_name,
-        const ColumnUInt64 * id_col, const IColumn * date_col_untyped)
+        const ColumnUInt64 * id_col, const IColumn * date_col_untyped) const
     {
         if (const auto date_col = checkAndGetColumn<ColumnUInt16>(date_col_untyped))
         {
@@ -927,7 +927,7 @@ private:
     template <typename DictionaryType>
     void executeRange(
         Block & block, const size_t result, const DictionaryType * dictionary, const std::string & attr_name,
-        const ColumnConst * id_col, const IColumn * date_col_untyped)
+        const ColumnConst * id_col, const IColumn * date_col_untyped) const
     {
         if (const auto date_col = checkAndGetColumn<ColumnUInt16>(date_col_untyped))
         {
@@ -1029,9 +1029,9 @@ private:
         return std::make_shared<DataType>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto dict_name_col = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!dict_name_col)
@@ -1058,7 +1058,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatch(Block & block, const ColumnNumbers & arguments, const size_t result,
-        const IDictionaryBase * dictionary)
+        const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -1084,7 +1084,7 @@ private:
     template <typename DictionaryType>
     void executeDispatch(
         Block & block, const ColumnNumbers & arguments, const size_t result, const DictionaryType * dictionary,
-        const std::string & attr_name, const ColumnUInt64 * id_col)
+        const std::string & attr_name, const ColumnUInt64 * id_col) const
     {
         const auto default_col_untyped = block.getByPosition(arguments[3]).column.get();
 
@@ -1115,7 +1115,7 @@ private:
     template <typename DictionaryType>
     void executeDispatch(
         Block & block, const ColumnNumbers & arguments, const size_t result, const DictionaryType * dictionary,
-        const std::string & attr_name, const ColumnConst * id_col)
+        const std::string & attr_name, const ColumnConst * id_col) const
     {
         const auto default_col_untyped = block.getByPosition(arguments[3]).column.get();
 
@@ -1146,7 +1146,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatchComplex(
-        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary)
+        Block & block, const ColumnNumbers & arguments, const size_t result, const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -1244,7 +1244,7 @@ public:
 
 private:
     size_t getNumberOfArguments() const override { return 2; }
-    bool isInjective(const Block & /*sample_block*/) override { return true; }
+    bool isInjective(const Block & /*sample_block*/) const override { return true; }
 
     bool useDefaultImplementationForConstants() const final { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return {0}; }
@@ -1262,9 +1262,9 @@ private:
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>());
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto dict_name_col = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!dict_name_col)
@@ -1288,7 +1288,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatch(Block & block, const ColumnNumbers & arguments, const size_t result,
-        const IDictionaryBase * dictionary)
+        const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -1422,9 +1422,9 @@ private:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto dict_name_col = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!dict_name_col)
@@ -1448,7 +1448,7 @@ private:
 
     template <typename DictionaryType>
     bool executeDispatch(Block & block, const ColumnNumbers & arguments, const size_t result,
-        const IDictionaryBase * dictionary)
+        const IDictionaryBase * dictionary) const
     {
         const auto dict = typeid_cast<const DictionaryType *>(dictionary);
         if (!dict)
@@ -1473,7 +1473,7 @@ private:
 
     template <typename DictionaryType>
     bool execute(Block & block, const size_t result, const DictionaryType * dictionary,
-        const ColumnUInt64 * child_id_col, const IColumn * ancestor_id_col_untyped)
+        const ColumnUInt64 * child_id_col, const IColumn * ancestor_id_col_untyped) const
     {
         if (const auto ancestor_id_col = checkAndGetColumn<ColumnUInt64>(ancestor_id_col_untyped))
         {
@@ -1512,7 +1512,7 @@ private:
 
     template <typename DictionaryType>
     bool execute(Block & block, const size_t result, const DictionaryType * dictionary,
-        const ColumnConst * child_id_col, const IColumn * ancestor_id_col_untyped)
+        const ColumnConst * child_id_col, const IColumn * ancestor_id_col_untyped) const
     {
         if (const auto ancestor_id_col = checkAndGetColumn<ColumnUInt64>(ancestor_id_col_untyped))
         {

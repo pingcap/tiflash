@@ -142,7 +142,7 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
 
         const IColumn * point_col = block.getByPosition(arguments[0]).column.get();
@@ -175,7 +175,7 @@ public:
 
 private:
 
-    Float64 getCoordinateFromField(const Field & field)
+    Float64 getCoordinateFromField(const Field & field) const
     {
         switch (field.getType())
         {
@@ -194,7 +194,7 @@ private:
     }
 
     template <typename Type>
-    ColumnPtr executeForType(const IColumn & x, const IColumn & y, Block & block, const ColumnNumbers & arguments)
+    ColumnPtr executeForType(const IColumn & x, const IColumn & y, Block & block, const ColumnNumbers & arguments) const
     {
         Polygon<Type> polygon;
 

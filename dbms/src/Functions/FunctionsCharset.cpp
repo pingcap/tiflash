@@ -77,15 +77,16 @@ private:
     /// Separate converter is created for each thread.
     using Pool = ObjectPoolMap<Converter, String>;
 
-    Pool::Pointer getConverter(const String & charset)
+    Pool::Pointer getConverter(const String & charset) const
     {
         static Pool pool;
         return pool.get(charset, [&charset] { return new Converter(charset); });
     }
 
-    void convert(const String & from_charset, const String & to_charset,
+    void convert(
+            const String & from_charset, const String & to_charset,
         const ColumnString::Chars_t & from_chars, const ColumnString::Offsets & from_offsets,
-        ColumnString::Chars_t & to_chars, ColumnString::Offsets & to_offsets)
+        ColumnString::Chars_t & to_chars, ColumnString::Offsets & to_offsets) const
     {
         auto converter_from = getConverter(from_charset);
         auto converter_to = getConverter(to_charset);
@@ -179,7 +180,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnWithTypeAndName & arg_from = block.getByPosition(arguments[0]);
         const ColumnWithTypeAndName & arg_charset_from = block.getByPosition(arguments[1]);

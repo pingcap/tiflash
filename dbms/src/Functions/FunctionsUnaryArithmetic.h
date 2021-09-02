@@ -248,7 +248,7 @@ public:
     }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return is_injective; }
+    bool isInjective(const Block &) const override { return is_injective; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -277,7 +277,7 @@ public:
         return result;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (!(executeType<UInt8>(block, arguments, result)
               || executeType<UInt16>(block, arguments, result)

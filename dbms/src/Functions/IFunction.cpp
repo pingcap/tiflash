@@ -134,7 +134,7 @@ bool allArgumentsAreConstants(const Block & block, const ColumnNumbers & args)
 }
 }
 
-bool PreparedFunctionImpl::defaultImplementationForConstantArguments(Block & block, const ColumnNumbers & args, size_t result)
+bool IExecutableFunction::defaultImplementationForConstantArguments(Block & block, const ColumnNumbers & args, size_t result) const
 {
     ColumnNumbers arguments_to_remain_constants = getArgumentsThatAreAlwaysConstant();
 
@@ -183,7 +183,7 @@ bool PreparedFunctionImpl::defaultImplementationForConstantArguments(Block & blo
 }
 
 
-bool PreparedFunctionImpl::defaultImplementationForNulls(Block & block, const ColumnNumbers & args, size_t result)
+bool IExecutableFunction::defaultImplementationForNulls(Block & block, const ColumnNumbers & args, size_t result) const
 {
     if (args.empty() || !useDefaultImplementationForNulls())
         return false;
@@ -207,7 +207,7 @@ bool PreparedFunctionImpl::defaultImplementationForNulls(Block & block, const Co
     return false;
 }
 
-void PreparedFunctionImpl::execute(Block & block, const ColumnNumbers & args, size_t result)
+void IExecutableFunction::execute(Block & block, const ColumnNumbers & args, size_t result) const
 {
     if (defaultImplementationForConstantArguments(block, args, result))
         return;
@@ -218,7 +218,7 @@ void PreparedFunctionImpl::execute(Block & block, const ColumnNumbers & args, si
     executeImpl(block, args, result);
 }
 
-void FunctionBuilderImpl::checkNumberOfArguments(size_t number_of_arguments) const
+void IFunctionBuilder::checkNumberOfArguments(size_t number_of_arguments) const
 {
     if (isVariadic())
         return;
@@ -231,7 +231,12 @@ void FunctionBuilderImpl::checkNumberOfArguments(size_t number_of_arguments) con
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 }
 
-DataTypePtr FunctionBuilderImpl::getReturnType(const ColumnsWithTypeAndName & arguments) const
+FunctionBasePtr IFunctionBuilder::build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator) const
+{
+    return buildImpl(arguments, getReturnType(arguments), collator);
+}
+
+DataTypePtr IFunctionBuilder::getReturnType(const ColumnsWithTypeAndName & arguments) const
 {
     checkNumberOfArguments(arguments.size());
 
@@ -254,4 +259,12 @@ DataTypePtr FunctionBuilderImpl::getReturnType(const ColumnsWithTypeAndName & ar
 
     return getReturnTypeImpl(arguments);
 }
+
+void IFunctionBuilder::getLambdaArgumentTypes(DataTypes & arguments [[maybe_unused]]) const
+{
+    checkNumberOfArguments(arguments.size());
+    return getLambdaArgumentTypesImpl(arguments);
 }
+
+} // namespace DB
+

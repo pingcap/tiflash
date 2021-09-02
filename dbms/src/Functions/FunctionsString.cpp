@@ -655,7 +655,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
@@ -726,7 +726,7 @@ public:
         return 1;
     }
 
-    bool isInjective(const Block &) override
+    bool isInjective(const Block &) const override
     {
         return true;
     }
@@ -743,7 +743,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
@@ -792,7 +792,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
@@ -846,7 +846,7 @@ public:
         return 0;
     }
 
-    bool isInjective(const Block &) override
+    bool isInjective(const Block &) const override
     {
         return is_injective;
     }
@@ -875,7 +875,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         if (!is_injective && !arguments.empty() && checkDataType<DataTypeArray>(block.getByPosition(arguments[0]).type.get()))
             return FunctionArrayConcat(context).executeImpl(block, arguments, result);
@@ -979,7 +979,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         if (arguments.size() == 1)
         {
@@ -1040,7 +1040,7 @@ public:
         return makeNullable(std::make_shared<DataTypeString>());
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         Block nested_block = createBlockWithNestedColumns(block, arguments, result);
         StringSources sources(arguments.size());
@@ -1172,7 +1172,7 @@ public:
         block.getByPosition(result).column = std::move(col_res);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         size_t number_of_arguments = arguments.size();
 
@@ -1271,7 +1271,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
 
@@ -1382,7 +1382,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
 
@@ -1459,7 +1459,7 @@ private:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto & column = block.getByPosition(arguments[0]).column;
         const auto & column_char = block.getByPosition(arguments[1]).column;
@@ -1559,7 +1559,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         if (arguments.size() == 1)
             executeTrim(block, arguments, result);
@@ -1656,7 +1656,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block &block, const ColumnNumbers &arguments, const size_t result) override {
+    void executeImpl(Block &block, const ColumnNumbers &arguments, const size_t result) const override {
         if (arguments.size() == 1)
             executeTrim(block, arguments, result);
         else if (arguments.size() == 2)
@@ -2161,7 +2161,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         if (arguments.size() == 3)
             executePad(block, arguments, result);
@@ -2256,7 +2256,7 @@ public:
 		return std::make_shared<DataTypeString>();
 	}
 
-	void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+	void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
 	{
 		if (arguments.size() == 3)
 			executePadUTF8(block, arguments, result);
@@ -2816,7 +2816,7 @@ public:
         return std::make_shared<DataTypeInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
@@ -2869,7 +2869,7 @@ public:
         return std::make_shared<DataTypeInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
@@ -2921,7 +2921,7 @@ public:
         return std::make_shared<DataTypeInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);

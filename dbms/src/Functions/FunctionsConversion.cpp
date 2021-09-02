@@ -64,7 +64,7 @@ public:
         return std::make_shared<DataTypeDecimal64>(12+fsp, fsp);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
 
@@ -124,7 +124,7 @@ public:
 private:
     const TimezoneInfo & timezone_;
 
-    bool getUnixTimeStampHelper(UInt64 packed, UInt64 & ret)
+    bool getUnixTimeStampHelper(UInt64 packed, UInt64 & ret)const
     {
         static const auto & lut_utc = DateLUT::instance("UTC");
 

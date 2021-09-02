@@ -138,7 +138,7 @@ public:
 
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
-    bool isDeterministicInScopeOfQuery() override { return false; }
+    bool isDeterministicInScopeOfQuery() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -150,7 +150,7 @@ public:
         return std::make_shared<DataTypeNumber<typename Impl::ReturnType>>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         auto col_to = ColumnVector<ToType>::create();
         typename ColumnVector<ToType>::Container & vec_to = col_to->getData();
@@ -196,7 +196,7 @@ public:
         return std::make_shared<DataTypeNumber<typename Impl::ReturnType>>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         if (!is_initialized)
         {

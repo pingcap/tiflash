@@ -128,7 +128,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto in_untyped = block.getByPosition(arguments[0]).column.get();
         const auto centroids_array_untyped = block.getByPosition(arguments[1]).column.get();
@@ -144,12 +144,12 @@ public:
     }
 
 protected:
-    virtual ClusterOperation getOperation()
+    virtual ClusterOperation getOperation()const
     {
         return ClusterOperation::FindClusterIndex;
     }
 
-    virtual void executeImplTyped(const IColumn* in_untyped, IColumn* out_untyped, const IColumn* centroids_array_untyped)
+    virtual void executeImplTyped(const IColumn* in_untyped, IColumn* out_untyped, const IColumn* centroids_array_untyped) const
     {
         if (!executeOperation<UInt8, UInt64>(in_untyped, out_untyped, centroids_array_untyped)
                 && !executeOperation<UInt16, UInt64>(in_untyped, out_untyped, centroids_array_untyped)
@@ -171,7 +171,7 @@ protected:
     // Match the type of the centrods array and convert them to Float64, because we
     // don't want to have problems calculating negative distances of UInts
     template <typename CentroidsType>
-    bool fillCentroids(const IColumn * centroids_array_untyped, std::vector<Float64> & centroids)
+    bool fillCentroids(const IColumn * centroids_array_untyped, std::vector<Float64> & centroids) const
     {
         const ColumnConst * const_centroids_array = checkAndGetColumnConst<ColumnVector<Array>>(centroids_array_untyped);
 
@@ -195,7 +195,7 @@ protected:
     }
 
     template <typename CentroidsType, typename OutputType>
-    bool executeOperation(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * centroids_array_untyped)
+    bool executeOperation(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * centroids_array_untyped) const
     {
         // Match the type of the output
         auto out = typeid_cast<ColumnVector<OutputType> *>(out_untyped);
@@ -224,7 +224,7 @@ protected:
     }
 
     template <typename InputType, typename OutputType, typename CentroidsType>
-    bool executeOperationTyped(const IColumn * in_untyped, PaddedPODArray<OutputType> & dst, const IColumn * centroids_array_untyped)
+    bool executeOperationTyped(const IColumn * in_untyped, PaddedPODArray<OutputType> & dst, const IColumn * centroids_array_untyped)const
     {
         const auto maybe_const = in_untyped->convertToFullColumnIfConst();
         if (maybe_const)
@@ -280,12 +280,12 @@ public:
     }
 
 protected:
-    ClusterOperation getOperation() override
+    ClusterOperation getOperation() const override
     {
         return ClusterOperation::FindCentroidValue;
     }
 
-    void executeImplTyped(const IColumn* in_untyped, IColumn* out_untyped, const IColumn* centroids_array_untyped) override
+    void executeImplTyped(const IColumn* in_untyped, IColumn* out_untyped, const IColumn* centroids_array_untyped) const override
     {
         if (!executeOperation<UInt8, UInt8>(in_untyped, out_untyped, centroids_array_untyped)
             && !executeOperation<UInt16, UInt16>(in_untyped, out_untyped, centroids_array_untyped)

@@ -143,7 +143,7 @@ public:
         }
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const ColumnConst * array_from = checkAndGetColumnConst<ColumnArray>(block.getByPosition(arguments[1]).column.get());
         const ColumnConst * array_to = checkAndGetColumnConst<ColumnArray>(block.getByPosition(arguments[2]).column.get());
@@ -189,7 +189,7 @@ public:
     }
 
 private:
-    void executeConst(Block & block, const ColumnNumbers & arguments, const size_t result)
+    void executeConst(Block & block, const ColumnNumbers & arguments, const size_t result)const
     {
         /// Materialize the input column and compute the function as usual.
 
@@ -215,7 +215,7 @@ private:
     }
 
     template <typename T>
-    bool executeNum(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * default_untyped)
+    bool executeNum(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * default_untyped)const
     {
         if (const auto in = checkAndGetColumn<ColumnVector<T>>(in_untyped))
         {
@@ -277,7 +277,7 @@ private:
         return false;
     }
 
-    bool executeString(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * default_untyped)
+    bool executeString(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * default_untyped)const
     {
         if (const auto in = checkAndGetColumn<ColumnString>(in_untyped))
         {
@@ -336,7 +336,7 @@ private:
     }
 
     template <typename T, typename U>
-    bool executeNumToNumWithConstDefault(const ColumnVector<T> * in, IColumn * out_untyped)
+    bool executeNumToNumWithConstDefault(const ColumnVector<T> * in, IColumn * out_untyped)const
     {
         auto out = typeid_cast<ColumnVector<U> *>(out_untyped);
         if (!out)
@@ -347,7 +347,7 @@ private:
     }
 
     template <typename T, typename U>
-    bool executeNumToNumWithNonConstDefault(const ColumnVector<T> * in, IColumn * out_untyped, const IColumn * default_untyped)
+    bool executeNumToNumWithNonConstDefault(const ColumnVector<T> * in, IColumn * out_untyped, const IColumn * default_untyped)const
     {
         auto out = typeid_cast<ColumnVector<U> *>(out_untyped);
         if (!out)
@@ -373,7 +373,7 @@ private:
     }
 
     template <typename T, typename U, typename V>
-    bool executeNumToNumWithNonConstDefault2(const ColumnVector<T> * in, ColumnVector<U> * out, const IColumn * default_untyped)
+    bool executeNumToNumWithNonConstDefault2(const ColumnVector<T> * in, ColumnVector<U> * out, const IColumn * default_untyped)const
     {
         auto col_default = checkAndGetColumn<ColumnVector<V>>(default_untyped);
         if (!col_default)
@@ -384,7 +384,7 @@ private:
     }
 
     template <typename T>
-    bool executeNumToStringWithConstDefault(const ColumnVector<T> * in, IColumn * out_untyped)
+    bool executeNumToStringWithConstDefault(const ColumnVector<T> * in, IColumn * out_untyped)const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -397,7 +397,7 @@ private:
     }
 
     template <typename T>
-    bool executeNumToStringWithNonConstDefault(const ColumnVector<T> * in, IColumn * out_untyped, const IColumn * default_untyped)
+    bool executeNumToStringWithNonConstDefault(const ColumnVector<T> * in, IColumn * out_untyped, const IColumn * default_untyped)const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -419,7 +419,7 @@ private:
     }
 
     template <typename U>
-    bool executeStringToNumWithConstDefault(const ColumnString * in, IColumn * out_untyped)
+    bool executeStringToNumWithConstDefault(const ColumnString * in, IColumn * out_untyped)const
     {
         auto out = typeid_cast<ColumnVector<U> *>(out_untyped);
         if (!out)
@@ -430,7 +430,7 @@ private:
     }
 
     template <typename U>
-    bool executeStringToNumWithNonConstDefault(const ColumnString * in, IColumn * out_untyped, const IColumn * default_untyped)
+    bool executeStringToNumWithNonConstDefault(const ColumnString * in, IColumn * out_untyped, const IColumn * default_untyped)const
     {
         auto out = typeid_cast<ColumnVector<U> *>(out_untyped);
         if (!out)
@@ -455,7 +455,7 @@ private:
     }
 
     template <typename U, typename V>
-    bool executeStringToNumWithNonConstDefault2(const ColumnString * in, ColumnVector<U> * out, const IColumn * default_untyped)
+    bool executeStringToNumWithNonConstDefault2(const ColumnString * in, ColumnVector<U> * out, const IColumn * default_untyped)const
     {
         auto col_default = checkAndGetColumn<ColumnVector<V>>(default_untyped);
         if (!col_default)
@@ -465,7 +465,7 @@ private:
         return true;
     }
 
-    bool executeStringToString(const ColumnString * in, IColumn * out_untyped)
+    bool executeStringToString(const ColumnString * in, IColumn * out_untyped)const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -475,7 +475,7 @@ private:
         return true;
     }
 
-    bool executeStringToStringWithConstDefault(const ColumnString * in, IColumn * out_untyped)
+    bool executeStringToStringWithConstDefault(const ColumnString * in, IColumn * out_untyped)const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -487,7 +487,7 @@ private:
         return true;
     }
 
-    bool executeStringToStringWithNonConstDefault(const ColumnString * in, IColumn * out_untyped, const IColumn * default_untyped)
+    bool executeStringToStringWithNonConstDefault(const ColumnString * in, IColumn * out_untyped, const IColumn * default_untyped)const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -510,7 +510,7 @@ private:
 
 
     template <typename T, typename U>
-    void executeImplNumToNumWithConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, U dst_default)
+    void executeImplNumToNumWithConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, U dst_default)const
     {
         const auto & table = *table_num_to_num;
         size_t size = src.size();
@@ -526,7 +526,7 @@ private:
     }
 
     template <typename T, typename U, typename V>
-    void executeImplNumToNumWithNonConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default)
+    void executeImplNumToNumWithNonConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default)const
     {
         const auto & table = *table_num_to_num;
         size_t size = src.size();
@@ -542,7 +542,7 @@ private:
     }
 
     template <typename T>
-    void executeImplNumToNum(const PaddedPODArray<T> & src, PaddedPODArray<T> & dst)
+    void executeImplNumToNum(const PaddedPODArray<T> & src, PaddedPODArray<T> & dst)const
     {
         const auto & table = *table_num_to_num;
         size_t size = src.size();
@@ -559,7 +559,7 @@ private:
 
     template <typename T>
     void executeImplNumToStringWithConstDefault(const PaddedPODArray<T> & src,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)
+        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)const
     {
         const auto & table = *table_num_to_string;
         size_t size = src.size();
@@ -579,7 +579,7 @@ private:
     template <typename T>
     void executeImplNumToStringWithNonConstDefault(const PaddedPODArray<T> & src,
         ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets,
-        const ColumnString::Chars_t & dst_default_data, const ColumnString::Offsets & dst_default_offsets)
+        const ColumnString::Chars_t & dst_default_data, const ColumnString::Offsets & dst_default_offsets)const
     {
         const auto & table = *table_num_to_string;
         size_t size = src.size();
@@ -610,7 +610,7 @@ private:
     template <typename U>
     void executeImplStringToNumWithConstDefault(
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        PaddedPODArray<U> & dst, U dst_default)
+        PaddedPODArray<U> & dst, U dst_default)const
     {
         const auto & table = *table_string_to_num;
         size_t size = src_offsets.size();
@@ -631,7 +631,7 @@ private:
     template <typename U, typename V>
     void executeImplStringToNumWithNonConstDefault(
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default)
+        PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default)const
     {
         const auto & table = *table_string_to_num;
         size_t size = src_offsets.size();
@@ -652,7 +652,7 @@ private:
     template <bool with_default>
     void executeImplStringToStringWithOrWithoutConstDefault(
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)
+        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)const
     {
         const auto & table = *table_string_to_string;
         size_t size = src_offsets.size();
@@ -676,14 +676,14 @@ private:
 
     void executeImplStringToString(
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets)
+        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets)const
     {
         executeImplStringToStringWithOrWithoutConstDefault<false>(src_data, src_offsets, dst_data, dst_offsets, {});
     }
 
     void executeImplStringToStringWithConstDefault(
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)
+        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)const
     {
         executeImplStringToStringWithOrWithoutConstDefault<true>(src_data, src_offsets, dst_data, dst_offsets, dst_default);
     }
@@ -691,7 +691,7 @@ private:
     void executeImplStringToStringWithNonConstDefault(
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
         ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets,
-        const ColumnString::Chars_t & dst_default_data, const ColumnString::Offsets & dst_default_offsets)
+        const ColumnString::Chars_t & dst_default_data, const ColumnString::Offsets & dst_default_offsets)const
     {
         const auto & table = *table_string_to_string;
         size_t size = src_offsets.size();
@@ -744,7 +744,7 @@ private:
     std::mutex mutex;
 
     /// Can be called from different threads. It works only on the first call.
-    void initialize(const Array & from, const Array & to, Block & block, const ColumnNumbers & arguments)
+    void initialize(const Array & from, const Array & to, Block & block, const ColumnNumbers & arguments)const
     {
         if (initialized)
             return;

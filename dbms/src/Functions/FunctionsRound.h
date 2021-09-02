@@ -801,7 +801,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (!(executeForType<UInt8>(block, arguments, result)
               || executeForType<UInt16>(block, arguments, result)
@@ -890,7 +890,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (!(executeForType<Decimal32>(block, arguments, result)
               || executeForType<Decimal64>(block, arguments, result)
@@ -1414,7 +1414,7 @@ private:
         }
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         ColumnsWithTypeAndName columns;
         for (const auto & position : arguments)
