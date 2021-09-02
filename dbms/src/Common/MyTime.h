@@ -156,7 +156,7 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
-Field parseMyDateTime(const String & str, int8_t fsp = 6);
+Field parseMyDateTime(const String & str, int8_t fsp = 6, bool needCheckValid = false);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
 

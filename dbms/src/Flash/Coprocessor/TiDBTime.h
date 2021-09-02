@@ -36,7 +36,7 @@ public:
 
         Int8 realFsp = fsp;
 
-        if (my_date_time.micro_second <= UInt32(999999) && my_date_time.micro_second > UInt32(0))
+        if (realFsp < 0 && my_date_time.micro_second <= UInt32(999999) && my_date_time.micro_second > UInt32(0))
         {
             realFsp = static_cast<Int8>(6);
         }
