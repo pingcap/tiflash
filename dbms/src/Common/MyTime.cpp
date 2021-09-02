@@ -272,7 +272,7 @@ MyTimeBase::MyTimeBase(UInt64 packed)
     minute = UInt8((hms >> 6) & ((1 << 6) - 1));
     hour = UInt16(hms >> 12);
 
-    micro_second = packed & MyTimeBase::MICROSECOND_BIT_FIELD_MASK;
+    micro_second = (packed & MyTimeBase::MICROSECOND_BIT_FIELD_MASK) >> MyTimeBase::MICROSECOND_BIT_FIELD_OFFSET;
 }
 
 MyTimeBase::MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
