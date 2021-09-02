@@ -13,7 +13,12 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION(
         }
         for (size_t i = 0; i < length; ++i)
         {
-            ASSERT_EQ(static_cast<int>(dst[i] - 1), static_cast<int>(src[i]));
+            auto x = dst[i] - 1;
+            asm volatile(""
+                         :
+                         : "r,m"(x)
+                         : "memory");
+            ASSERT_EQ(static_cast<int>(x), static_cast<int>(src[i]));
         }
     })
 
@@ -27,4 +32,28 @@ TEST(TargetSpecific, byteAddition)
         i = rand() % 26 + 'a';
     }
     byteAddition(data.data(), result.data(), 512);
+}
+
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_ALONE(void, sumIntFromZero, (const int * __restrict src, size_t length))
+TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION(void, sumIntFromZero, (src, length), (const int * __restrict src, size_t length), {
+    int acc = 0;
+    for (size_t i = 0; i < length; ++i)
+    {
+        acc += src[i];
+    }
+    asm volatile(""
+                 :
+                 : "r,m"(acc)
+                 : "memory");
+    ASSERT_EQ(static_cast<size_t>(acc), length * (length + 1) / 2);
+})
+
+TEST(TargetSpecific, sumIntFromZero)
+{
+    std::vector<int> data(512);
+    for (int i = 1; i <= 512; ++i)
+    {
+        data[i - 1] = i;
+    }
+    sumIntFromZero(data.data(), 512);
 }

@@ -49,12 +49,15 @@
 namespace DB::TargetSpecific
 {
 #define TIFLASH_DECLARE_GENERIC_FUNCTION(RETURN, NAME, ...)        \
-    struct _TiflashGeneric_##NAME                                  \
+    struct _TiflashGenericTarget_##NAME                            \
     {                                                              \
         using ReturnType = RETURN;                                 \
         TIFLASH_DUMMY_FUNCTION_DEFINITION                          \
         static __attribute__((noinline)) RETURN invoke __VA_ARGS__ \
     };
+#define TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE) _TiflashGenericTarget_##NAME
+#define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ...) \
+    __attribute__((noinline)) RETURN TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE)::invoke __VA_ARGS__
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 #define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(RETURN, NAME, ...)   \
@@ -67,7 +70,12 @@ namespace DB::TargetSpecific
         static __attribute__((noinline)) RETURN invoke __VA_ARGS__ \
     };                                                             \
     TIFLASH_END_TARGET_SPECIFIC_CODE
+
 #define TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE) _TiflashAVXTarget_##NAME
+#define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX(RETURN, NAME, ...)                           \
+    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                                             \
+    __attribute__((noinline)) RETURN TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE)::invoke __VA_ARGS__; \
+    TIFLASH_END_TARGET_SPECIFIC_CODE
 // today, most applicable targets support AVX2 and AVX in the same time, we hence coalesce the cases.
 struct AVXChecker
 {
@@ -79,6 +87,7 @@ struct AVXChecker
 #else
 #define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(...)
 #define TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE) ::DB::TargetSpecific::SkipTarget<TYPE>
+#define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX(...)
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
@@ -93,7 +102,10 @@ struct AVXChecker
     };                                                              \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE) _TiflashAVX512Target_##NAME
-
+#define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(RETURN, NAME, ...)                           \
+    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                                                             \
+    __attribute__((noinline)) RETURN TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE)::invoke __VA_ARGS__; \
+    TIFLASH_END_TARGET_SPECIFIC_CODE
 // again, it is not worthy to be too specific about targets, there will be too many cases. let us only
 // enable this only for targets that is modern enough.
 struct AVX512Checker
@@ -110,6 +122,7 @@ struct AVX512Checker
 #else
 #define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(...)
 #define TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE) ::DB::TargetSpecific::SkipTarget<TYPE>
+#define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(...)
 #endif
 
 #ifdef __x86_64__
@@ -124,6 +137,11 @@ struct AVX512Checker
     };                                                             \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE) _TiflashSSE4Target_##NAME
+#define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(RETURN, NAME, ...)                           \
+    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                                                             \
+    __attribute__((noinline)) RETURN TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE)::invoke __VA_ARGS__; \
+    TIFLASH_END_TARGET_SPECIFIC_CODE
+
 // again, it is not worthy to be too specific about targets, there will be too many cases. let us only
 // enable this for targets that is modern enable
 struct SSE4Checker
@@ -136,6 +154,7 @@ struct SSE4Checker
 #else
 #define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(...)
 #define TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE) ::DB::TargetSpecific::SkipTarget<TYPE>
+#define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(...)
 #endif
 
 template <class T>
@@ -178,7 +197,16 @@ struct Dispatch<Last>
     }
 };
 
-/// TIFLASH_MULTITARGET_ENTRANCE
+#define TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)                                       \
+    RETURN NAME ARG_LIST                                                                                      \
+    {                                                                                                         \
+        return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN),                     \
+                                              TIFLASH_AVX_DISPATCH_UNIT(NAME, RETURN),                        \
+                                              TIFLASH_SSE4_DISPATCH_UNIT(NAME, RETURN),                       \
+                                              TIFLASH_GENERIC_DISPATCH_UNIT(NAME, RETURN)>::invoke ARG_NAMES; \
+    }
+
+/// TIFLASH_DECLARE_MULTITARGET_FUNCTION
 /// \example
 /// One can use the macro in the following way:
 /// \code{.cpp}
@@ -195,16 +223,6 @@ struct Dispatch<Last>
 /// \code{.cpp}
 /// int plus(int a, int b);
 /// \endcode
-#define TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)                   \
-    RETURN NAME ARG_LIST                                                                  \
-    {                                                                                     \
-        return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN), \
-                                              TIFLASH_AVX_DISPATCH_UNIT(NAME, RETURN),    \
-                                              TIFLASH_SSE4_DISPATCH_UNIT(NAME, RETURN),   \
-                                              _TiflashGeneric_##NAME>::invoke ARG_NAMES;  \
-    }
-
-
 #define TIFLASH_DECLARE_MULTITARGET_FUNCTION(RETURN, NAME, ARG_NAMES, ARG_LIST, ...) \
     TIFLASH_DECLARE_GENERIC_FUNCTION(RETURN, NAME, ARG_LIST __VA_ARGS__)             \
     TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST __VA_ARGS__)       \
@@ -212,5 +230,18 @@ struct Dispatch<Last>
     TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST __VA_ARGS__)     \
     TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)
 
+#define TIFLASH_DECLARE_MULTITARGET_FUNCTION_ALONE(RETURN, NAME, ARG_LIST) \
+    TIFLASH_DECLARE_GENERIC_FUNCTION(RETURN, NAME, ARG_LIST;)              \
+    TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST;)        \
+    TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST;)         \
+    TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST;)      \
+    RETURN NAME ARG_LIST;
+
+#define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION(RETURN, NAME, ARG_NAMES, ARG_LIST, ...) \
+    TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX(RETURN, NAME, ARG_LIST __VA_ARGS__)     \
+    TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(RETURN, NAME, ARG_LIST __VA_ARGS__)  \
+    TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(RETURN, NAME, ARG_LIST __VA_ARGS__)    \
+    TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ARG_LIST __VA_ARGS__) \
+    TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)
 
 } // namespace DB::TargetSpecific
