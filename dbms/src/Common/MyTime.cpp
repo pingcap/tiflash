@@ -272,7 +272,7 @@ MyTimeBase::MyTimeBase(UInt64 packed)
     minute = UInt8((hms >> 6) & ((1 << 6) - 1));
     hour = UInt16(hms >> 12);
 
-    micro_second = packed % (1 << 24);
+    micro_second = packed & MyTimeBase::MICROSECOND_BIT_FIELD_MASK;
 }
 
 MyTimeBase::MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
@@ -289,7 +289,7 @@ UInt64 MyTimeBase::toPackedUInt() const
 {
     UInt64 ymd = ((year * 13 + month) << 5) | day;
     UInt64 hms = (hour << 12) | (minute << 6) | second;
-    return (ymd << 17 | hms) << 24 | micro_second;
+    return (ymd << 17 | hms) << 24 | (micro_second << 4);
 }
 
 // TODO this function will be revised once we changed MyTime to CoreTime in TiFlash.
@@ -517,6 +517,8 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
     bool hhmmss = false;
 
+    bool is_date = false;
+
     auto [seps, frac_str, has_tz, tz_sign, tz_hour, tz_sep, tz_minute] = splitDatetime(str);
 
     bool truncated_or_incorrect = false;
@@ -632,6 +634,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
             {
             case 0:
                 ret = 1;
+                is_date = true;
                 break;
             case 1:
             case 2:
@@ -674,6 +677,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         // YYYY-MM-DD
         scanTimeArgs(seps, {&year, &month, &day});
+        is_date = true;
         break;
     }
     case 4:
@@ -792,7 +796,13 @@ Field parseMyDateTime(const String & str, int8_t fsp)
         result = MyDateTime(tmp);
     }
 
-    return result.toPackedUInt();
+    auto packet = result.toPackedUInt();
+
+    if (is_date)
+    {
+        packet |= MyTimeBase::FSPTT_FOR_DATE;
+    }
+    return packet;
 }
 
 String MyDateTime::toString(int fsp) const

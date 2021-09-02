@@ -977,7 +977,7 @@ struct AddSecondsImpl
         my_time.second = current_second % 60;
 
 
-        return my_time.toPackedUInt();
+        return my_time.toPackedUInt() & MyTimeBase::CORE_TIME_BIT_FIELD_MASK;
     }
 };
 
@@ -1042,7 +1042,12 @@ struct AddDaysImpl
         }
         MyDateTime my_time(t);
         addDays(my_time, delta);
-        return my_time.toPackedUInt();
+        auto packet = my_time.toPackedUInt();
+        if ((t & MyTimeBase::FSPTT_BIT_FIELD_MASK) == MyTimeBase::FSPTT_FOR_DATE)
+        {
+            packet |= MyTimeBase::FSPTT_FOR_DATE;
+        }
+        return packet;
     }
 };
 

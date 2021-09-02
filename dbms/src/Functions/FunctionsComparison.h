@@ -36,12 +36,8 @@ namespace DB
   * You can compare the following types:
   * - numbers;
   * - strings and fixed strings;
-  * - dates;
-  * - datetimes;
   *   within each group, but not from different groups;
   * - tuples (lexicographic comparison).
-  *
-  * Exception: You can compare the date and datetime with a constant string. Example: EventDate = '2015-01-01'.
   *
   * TODO Arrays.
   */
@@ -95,6 +91,52 @@ struct NumComparisonImpl
     static void constant_constant(A a, B b, UInt8 & c)
     {
         c = Op::apply(a, b);
+    }
+};
+
+template<typename A, typename B, typename Op>
+struct TimeComparisonImpl
+{
+    static void NO_INLINE vector_vector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    {
+        size_t size = a.size();
+        const A * __restrict a_pos = &a[0];
+        const B * __restrict b_pos = &b[0];
+        UInt8 * __restrict c_pos = &c[0];
+        const A * a_end = a_pos + size;
+
+        while (a_pos < a_end)
+        {
+            *c_pos = Op::apply((*a_pos & MyTimeBase::CORE_TIME_BIT_FIELD_MASK), (*b_pos & MyTimeBase::CORE_TIME_BIT_FIELD_MASK));
+            ++a_pos;
+            ++b_pos;
+            ++c_pos;
+        }
+    }
+
+    static void NO_INLINE vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
+    {
+        size_t size = a.size();
+        const A * __restrict a_pos = &a[0];
+        UInt8 * __restrict c_pos = &c[0];
+        const A * a_end = a_pos + size;
+
+        while (a_pos < a_end)
+        {
+            *c_pos = Op::apply((*a_pos & MyTimeBase::CORE_TIME_BIT_FIELD_MASK), b);
+            ++a_pos;
+            ++c_pos;
+        }
+    }
+
+    static void constant_vector(A a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    {
+        TimeComparisonImpl<B, A, typename Op::SymmetricOp>::vector_constant(b, a, c);
+    }
+
+    static void constant_constant(A a, B b, UInt8 & c)
+    {
+        c = Op::apply((a & MyTimeBase::CORE_TIME_BIT_FIELD_MASK), (b & MyTimeBase::CORE_TIME_BIT_FIELD_MASK));
     }
 };
 
@@ -1586,6 +1628,76 @@ public:
                             ErrorCodes::LOGICAL_ERROR);
     }
 
+    bool executeTime(
+        Block & block,
+        size_t result,
+        const IColumn * col_left_untyped,
+        const IColumn * col_right_untyped,
+        const DataTypePtr & left_type,
+        const DataTypePtr & right_type)
+    {
+        if ((checkDataType<DataTypeMyDate>(left_type.get()) || checkDataType<DataTypeMyDateTime>(left_type.get()))
+            && (checkDataType<DataTypeMyDate>(right_type.get()) || checkDataType<DataTypeMyDateTime>(right_type.get())))
+        {
+            if (const ColumnVector<UInt64> * col_left = checkAndGetColumn<ColumnVector<UInt64>>(col_left_untyped))
+            {
+                if (const ColumnVector<UInt64> * col_right = checkAndGetColumn<ColumnVector<UInt64>>(col_right_untyped))
+                {
+                    auto col_res = ColumnUInt8::create();
+
+                    ColumnUInt8::Container & vec_res = col_res->getData();
+                    vec_res.resize(col_left->getData().size());
+                    TimeComparisonImpl<UInt64, UInt64, Op<UInt64, UInt64>>::vector_vector(col_left->getData(), col_right->getData(), vec_res);
+
+                    block.getByPosition(result).column = std::move(col_res);
+                    return true;
+                }
+                else if (auto col_right = checkAndGetColumnConst<ColumnVector<UInt64>>(col_right_untyped))
+                {
+                    auto col_res = ColumnUInt8::create();
+
+                    ColumnUInt8::Container & vec_res = col_res->getData();
+                    vec_res.resize(col_left->size());
+                    TimeComparisonImpl<UInt64, UInt64, Op<UInt64, UInt64>>::vector_constant(col_left->getData(), col_right->template getValue<UInt64>(), vec_res);
+
+                    block.getByPosition(result).column = std::move(col_res);
+                    return true;
+                } else
+                    throw Exception("Illegal column " + col_right_untyped->getName()
+                                        + " of second argument of function " + getName(),
+                                    ErrorCodes::ILLEGAL_COLUMN);
+            }
+            else if (auto col_left = checkAndGetColumnConst<ColumnVector<UInt64>>(col_left_untyped))
+            {
+                if (const ColumnVector<UInt64> * col_right = checkAndGetColumn<ColumnVector<UInt64>>(col_right_untyped))
+                {
+                    auto col_res = ColumnUInt8::create();
+
+                    ColumnUInt8::Container & vec_res = col_res->getData();
+                    vec_res.resize(col_left->size());
+                    NumComparisonImpl<UInt64, UInt64, Op<UInt64, UInt64>>::constant_vector(col_left->template getValue<UInt64>(), col_right->getData(), vec_res);
+
+                    block.getByPosition(result).column = std::move(col_res);
+                    return true;
+                }
+                else if (auto col_right = checkAndGetColumnConst<ColumnVector<UInt64>>(col_right_untyped))
+                {
+                    UInt8 res = 0;
+                    NumComparisonImpl<UInt64, UInt64, Op<UInt64, UInt64>>::constant_constant(col_left->template getValue<UInt64>(), col_right->template getValue<UInt64>(), res);
+
+                    block.getByPosition(result).column = DataTypeUInt8().createColumnConst(col_left->size(), toField(res));
+                    return true;
+                }
+                else
+                    throw Exception("Illegal column " + col_right_untyped->getName()
+                                    + " of second argument of function " + getName(),
+                                    ErrorCodes::ILLEGAL_COLUMN);
+            }
+        }
+
+        return false;
+    }
+
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
         const auto & col_with_type_and_name_left = block.getByPosition(arguments[0]);
@@ -1599,6 +1711,7 @@ public:
         if (left_is_num && right_is_num)
         {
             if (!(executeDateWithDateTimeOrDateTimeWithDate(block, result, col_left_untyped, col_right_untyped, col_with_type_and_name_left.type, col_with_type_and_name_right.type)
+                  || executeTime(block, result, col_left_untyped, col_right_untyped, col_with_type_and_name_left.type, col_with_type_and_name_right.type)
                   || executeNumLeftType<UInt8>(block, result, col_left_untyped, col_right_untyped)
                   || executeNumLeftType<UInt16>(block, result, col_left_untyped, col_right_untyped)
                   || executeNumLeftType<UInt32>(block, result, col_left_untyped, col_right_untyped)
