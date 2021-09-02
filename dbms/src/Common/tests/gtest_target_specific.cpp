@@ -1,4 +1,4 @@
-#include <Core/TargetSpecific.h>
+#include <Common/TargetSpecific.h>
 #include <gtest/gtest.h>
 
 TIFLASH_DECLARE_MULTITARGET_FUNCTION(
