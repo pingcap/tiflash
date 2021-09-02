@@ -110,8 +110,8 @@ try
         executeFunction(
             "replaceAll",
             toVec({"  hello   ", "   h e llo", "hello    ", "     ", "hello, world"}),
-            toVec({"", "x", "xx", " ", ","}),
-            toConst(" ")));
+            toConst(" "),
+            toVec({"", "x", "xx", " ", ","})));
 
     /// non-const needle and non-const replacement
     ASSERT_COLUMN_EQ(
@@ -167,8 +167,8 @@ try
         executeFunction(
             "replaceAll",
             toVec({"  你好   ", "   你 好", "你好 你好", "你 好     ", "你不好"}),
-            toVec({"", " 你", "你好", " 你", "你好"}),
-            toConst("你")));
+            toConst("你"),
+            toVec({"", " 你", "你好", " 你", "你好"})));
 
     /// non-const needle and non-const replacement
     ASSERT_COLUMN_EQ(
