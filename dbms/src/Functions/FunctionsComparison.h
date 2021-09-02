@@ -94,7 +94,7 @@ struct NumComparisonImpl
     }
 };
 
-template<typename A, typename B, typename Op>
+template <typename A, typename B, typename Op>
 struct TimeComparisonImpl
 {
     static void NO_INLINE vector_vector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
@@ -1662,7 +1662,8 @@ public:
 
                     block.getByPosition(result).column = std::move(col_res);
                     return true;
-                } else
+                }
+                else
                     throw Exception("Illegal column " + col_right_untyped->getName()
                                         + " of second argument of function " + getName(),
                                     ErrorCodes::ILLEGAL_COLUMN);
@@ -1690,7 +1691,7 @@ public:
                 }
                 else
                     throw Exception("Illegal column " + col_right_untyped->getName()
-                                    + " of second argument of function " + getName(),
+                                        + " of second argument of function " + getName(),
                                     ErrorCodes::ILLEGAL_COLUMN);
             }
         }
