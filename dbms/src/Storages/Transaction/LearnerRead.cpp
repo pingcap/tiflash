@@ -143,7 +143,7 @@ LearnerReadSnapshot doLearnerRead(
     const TiDB::TableID table_id,
     MvccQueryInfo & mvcc_query_info_,
     size_t num_streams,
-    bool retry_for_wait_index_timeout,
+    bool wait_index_timeout_as_region_not_found,
     TMTContext & tmt,
     Poco::Logger * log)
 {
@@ -286,13 +286,14 @@ LearnerReadSnapshot doLearnerRead(
             }
         }
 
-        auto handle_wait_timeout_region = [&unavailable_regions, retry_for_wait_index_timeout](const DB::RegionID region_id) {
-            if (retry_for_wait_index_timeout)
+        auto handle_wait_timeout_region = [&unavailable_regions, wait_index_timeout_as_region_not_found](const DB::RegionID region_id) {
+            if (wait_index_timeout_as_region_not_found)
             {
                 // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
                 unavailable_regions.add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
                 return;
             }
+            // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
             throw TiFlashException(fmt::format("Region {} is unavailable", region_id), Errors::Coprocessor::RegionError);
         };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
@@ -368,8 +369,11 @@ LearnerReadSnapshot doLearnerRead(
         GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
         auto wait_index_elapsed_ms = watch.elapsedMilliseconds();
         LOG_DEBUG(log,
-                  "Finish wait index | resolve locks | check memory cache for " << batch_read_index_req.size() << " regions, cost "
-                                                                                << wait_index_elapsed_ms << "ms");
+                  fmt::format(
+                      "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions",
+                      batch_read_index_req.size(),
+                      wait_index_elapsed_ms,
+                      unavailable_regions.size()));
     };
 
     auto start_time = Clock::now();

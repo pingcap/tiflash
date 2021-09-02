@@ -29,7 +29,7 @@ doLearnerRead(
     const TiDB::TableID table_id,
     MvccQueryInfo & mvcc_query_info,
     size_t num_streams,
-    bool retry_for_wait_index_timeout,
+    bool wait_index_timeout_as_region_not_found,
     TMTContext & tmt,
     Poco::Logger * log);
 
