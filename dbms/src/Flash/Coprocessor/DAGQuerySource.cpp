@@ -81,7 +81,7 @@ String DAGQuerySource::str(size_t)
 
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
-    return std::make_unique<InterpreterDAG>(context, *this);
+    return std::make_unique<InterpreterDAG>(context, *this, log);
 }
 
 } // namespace DB
