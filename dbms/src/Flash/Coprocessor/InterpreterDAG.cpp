@@ -26,9 +26,8 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, 
     , dag(dag_)
     , keep_session_timezone_info(
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
+    , log(log_)
 {
-    log = log_ != nullptr ? log : std::make_shared<LogWithPrefix>(&Poco::Logger::get("InterpreterDAG"), "");
-
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())
         max_streams = settings.max_threads;
@@ -84,7 +83,7 @@ BlockIO InterpreterDAG::execute()
     DAGPipeline pipeline;
     pipeline.streams = streams;
 
-    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
+    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
     if (!subqueriesForSets.empty())
     {
         const Settings & settings = context.getSettingsRef();
