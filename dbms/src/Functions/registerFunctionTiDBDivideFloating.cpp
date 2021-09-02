@@ -1,7 +1,7 @@
 #include <Functions/registerFunctionTiDBDivideFloating.h>
 
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsArithmetic.h>
+#include <Functions/FunctionsBinaryArithmetic.h>
 
 namespace DB
 {

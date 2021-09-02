@@ -983,6 +983,10 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & 
             ret = true;
         }
     }
+    NamesWithAliases project_cols;
+    for (auto & col : source_columns)
+        project_cols.emplace_back(col.name, col.name);
+    actions->add(ExpressionAction::project(project_cols));
     return ret;
 }
 

@@ -13,10 +13,10 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, const tipb::DAGRequest & dag_request_, const std::shared_ptr<LogWithPrefix> & log_, const bool is_batch_cop_)
+DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & regions_for_remote_read_, const tipb::DAGRequest & dag_request_, const std::shared_ptr<LogWithPrefix> & log_, const bool is_batch_cop_)
     : context(context_)
     , regions(regions_)
-    , retry_regions(retry_regions_)
+    , regions_for_remote_read(regions_for_remote_read_)
     , dag_request(dag_request_)
     , is_batch_cop(is_batch_cop_)
     , log(log_)
@@ -49,6 +49,12 @@ void DAGQuerySource::analyzeDAGEncodeType()
     {
         /// always use CHBlock encode type for data exchange between TiFlash nodes
         encode_type = tipb::EncodeType::TypeCHBlock;
+        return;
+    }
+    if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
+    {
+        encode_type = dag_request.encode_type();
+        assert(encode_type == tipb::EncodeType::TypeCHBlock);
         return;
     }
     encode_type = dag_request.encode_type();
