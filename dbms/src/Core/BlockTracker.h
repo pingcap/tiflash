@@ -10,9 +10,11 @@ namespace DB
 class BlockTracker
 {
 public:
+    BlockTracker() = default;
     BlockTracker(const String & name_)
         : name(name_)
     {}
+    explicit BlockTracker(BlockTracker &&) = default;
 
     String getDataFileName() const
     {
@@ -65,6 +67,18 @@ private:
 
     String name;
     std::unique_ptr<Writer> writer;
+};
+
+class BlockTrackerManager
+{
+public:
+    static BlockTracker & getTracker(const String & name)
+    {
+        thread_local std::unordered_map<String, BlockTracker> trackers;
+
+        auto result = trackers.emplace(name, BlockTracker(name));
+        return result.first->second;
+    }
 };
 
 } // namespace DB
