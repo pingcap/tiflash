@@ -72,13 +72,13 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     }
 }
 
-BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t max_threads)
+BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t max_threads, const LogWithPrefixPtr & log)
 {
     BlockInputStreamPtr ret = nullptr;
     if (pipeline.streams_with_non_joined_data.size() == 1)
         ret = pipeline.streams_with_non_joined_data.at(0);
     else if (pipeline.streams_with_non_joined_data.size() > 1)
-        ret = std::make_shared<UnionBlockInputStream<>>(pipeline.streams_with_non_joined_data, nullptr, max_threads);
+        ret = std::make_shared<UnionBlockInputStream<>>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
     pipeline.streams_with_non_joined_data.clear();
     return ret;
 }
@@ -360,7 +360,7 @@ void DAGQueryBlockInterpreter::prepareJoin(
     ExpressionActionsChain chain;
     if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
     {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
     }
 }
 
@@ -604,7 +604,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     size_t stream_index = 0;
     right_pipeline.transform(
         [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++, log); });
-    executeUnion(right_pipeline, max_streams);
+    executeUnion(right_pipeline, max_streams, log);
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
@@ -701,7 +701,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     if (pipeline.streams.size() > 1)
     {
         before_agg_streams = pipeline.streams.size();
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams);
+        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
             stream_with_non_joined_data,
@@ -709,12 +709,13 @@ void DAGQueryBlockInterpreter::executeAggregation(
             context.getFileProvider(),
             true,
             max_streams,
-            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads));
+            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
+            log);
         pipeline.streams.resize(1);
     }
     else
     {
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams);
+        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
         BlockInputStreams inputs;
         if (!pipeline.streams.empty())
             inputs.push_back(pipeline.firstStream());
@@ -723,10 +724,11 @@ void DAGQueryBlockInterpreter::executeAggregation(
         if (stream_with_non_joined_data)
             inputs.push_back(stream_with_non_joined_data);
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs),
+            std::make_shared<ConcatBlockInputStream>(inputs, log),
             params,
             context.getFileProvider(),
-            true);
+            true,
+            log);
     }
     // add cast
 }
@@ -739,14 +741,14 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
     }
 }
 
-void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams)
+void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log)
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.size() == 0)
         return;
-    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams);
+    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log);
     if (pipeline.streams.size() > 0)
     {
-        pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, non_joined_data_stream, max_streams);
+        pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, non_joined_data_stream, max_streams, log);
         pipeline.streams.resize(1);
     }
     else if (non_joined_data_stream != nullptr)
@@ -762,7 +764,7 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<
     Int64 limit = query_block.limitOrTopN->topn().limit();
 
     pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, limit);
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, limit, log);
 
         /// Limits on sorting
         IProfilingBlockInputStream::LocalLimits limits;
@@ -774,7 +776,7 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<
     });
 
     /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams);
+    executeUnion(pipeline, max_streams, log);
 
     /// Merge the sorted blocks.
     pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
@@ -783,7 +785,8 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<
         settings.max_block_size,
         limit,
         settings.max_bytes_before_external_sort,
-        context.getTemporaryPath());
+        context.getTemporaryPath(),
+        log);
 }
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
@@ -1067,19 +1070,19 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                     {
                         project_for_cop_read = generateProjectExpressionActions(stream, context, res.project_after_ts_and_filter_for_remote_read);
                     }
-                    stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read);
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log);
                 }
             }
             else
             {
                 /// execute timezone cast if needed
                 if (res.need_timezone_cast_after_tablescan)
-                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast);
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast, log);
                 /// execute selection if needed
                 if (res.has_where)
-                    stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name);
+                    stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name, log);
                 if (res.project_after_where)
-                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_where);
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_where, log);
             }
         }
     }
@@ -1150,11 +1153,11 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
         limit = query_block.limitOrTopN->limit().limit();
     else
         limit = query_block.limitOrTopN->topn().limit();
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, false); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, false, log); });
     if (pipeline.hasMoreThanOneStream())
     {
-        executeUnion(pipeline, max_streams);
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, false); });
+        executeUnion(pipeline, max_streams, log);
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, false, log); });
     }
 }
 
@@ -1165,11 +1168,11 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     if (pipeline.streams_with_non_joined_data.size() > 0)
     {
         size_t concurrency = pipeline.streams.size();
-        executeUnion(pipeline, max_streams);
+        executeUnion(pipeline, max_streams, log);
         if (!query_block.isRootQueryBlock() && concurrency > 1)
         {
             BlockInputStreamPtr shared_query_block_input_stream
-                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream());
+                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
             pipeline.streams.assign(concurrency, shared_query_block_input_stream);
         }
     }
@@ -1179,7 +1182,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     {
         size_t concurrency = before_agg_streams;
         BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream());
+            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
         pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
 
