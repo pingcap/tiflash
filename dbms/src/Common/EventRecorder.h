@@ -7,14 +7,18 @@
 class EventRecorder
 {
 public:
-    EventRecorder(ProfileEvents::Event event_, ProfileEvents::Event event_elapsed_) : event(event_), event_elapsed(event_elapsed_), watch()
+    EventRecorder(ProfileEvents::Event event_, ProfileEvents::Event event_elapsed_)
+        : event(event_)
+        , event_elapsed(event_elapsed_)
+        , watch()
     {
         watch.start();
     }
 
     ~EventRecorder()
     {
-      if (!done) submit();
+        if (!done)
+            submit();
     }
 
     inline void submit()

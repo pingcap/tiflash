@@ -1,6 +1,7 @@
 #include "DNSCache.h"
-#include <Common/SimpleCache.h>
+
 #include <Common/Exception.h>
+#include <Common/SimpleCache.h>
 #include <Core/Types.h>
 #include <Poco/Net/DNS.h>
 #include <Poco/Net/NetException.h>
@@ -10,10 +11,9 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
+extern const int BAD_ARGUMENTS;
 }
 
 
@@ -80,7 +80,9 @@ struct DNSCache::Impl
 };
 
 
-DNSCache::DNSCache() : impl(std::make_unique<DNSCache::Impl>()) {}
+DNSCache::DNSCache()
+    : impl(std::make_unique<DNSCache::Impl>())
+{}
 
 Poco::Net::IPAddress DNSCache::resolveHost(const std::string & host)
 {
@@ -104,4 +106,4 @@ void DNSCache::drop()
 DNSCache::~DNSCache() = default;
 
 
-}
+} // namespace DB

@@ -1,27 +1,27 @@
 #pragma once
 
-#include <boost/program_options.hpp>
-#include <boost/algorithm/string.hpp>
+#include <Client/Connection.h>
+#include <Common/HTMLForm.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Interpreters/Context.h>
-#include <IO/copyData.h>
-#include <IO/ReadBufferFromIStream.h>
 #include <IO/ReadBufferFromFile.h>
-#include <Storages/StorageMemory.h>
-#include <Client/Connection.h>
+#include <IO/ReadBufferFromIStream.h>
+#include <IO/copyData.h>
+#include <Interpreters/Context.h>
 #include <Poco/Net/HTMLForm.h>
-#include <Poco/Net/PartHandler.h>
 #include <Poco/Net/MessageHeader.h>
-#include <Common/HTMLForm.h>
+#include <Poco/Net/PartHandler.h>
+#include <Storages/StorageMemory.h>
+
+#include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
+extern const int BAD_ARGUMENTS;
 }
 
 
@@ -30,9 +30,9 @@ namespace ErrorCodes
 class BaseExternalTable
 {
 public:
-    std::string file;       /// File with data or '-' if stdin
-    std::string name;       /// The name of the table
-    std::string format;     /// Name of the data storage format
+    std::string file; /// File with data or '-' if stdin
+    std::string name; /// The name of the table
+    std::string format; /// Name of the data storage format
 
     /// Description of the table structure: (column name, data type name)
     std::vector<std::pair<std::string, std::string>> structure;
@@ -40,10 +40,10 @@ public:
     std::unique_ptr<ReadBuffer> read_buffer;
     Block sample_block;
 
-    virtual ~BaseExternalTable() {};
+    virtual ~BaseExternalTable(){};
 
     /// Initialize read_buffer, depending on the data source. By default, does nothing.
-    virtual void initReadBuffer() {};
+    virtual void initReadBuffer(){};
 
     /// Get the table data - a pair (a thread with the contents of the table, the name of the table)
     ExternalTableData getData(const Context & context)
@@ -51,7 +51,11 @@ public:
         initReadBuffer();
         initSampleBlock();
         ExternalTableData res = std::make_pair(std::make_shared<AsynchronousBlockInputStream>(context.getInputFormat(
-            format, *read_buffer, sample_block, DEFAULT_BLOCK_SIZE)), name);
+                                                   format,
+                                                   *read_buffer,
+                                                   sample_block,
+                                                   DEFAULT_BLOCK_SIZE)),
+                                               name);
         return res;
     }
 
@@ -165,13 +169,17 @@ public:
 
 /// Parsing of external table used when sending tables via http
 /// The `handlePart` function will be called for each table passed,
- /// so it's also necessary to call `clean` at the end of the `handlePart`.
-class ExternalTablesHandler : public Poco::Net::PartHandler, BaseExternalTable
+/// so it's also necessary to call `clean` at the end of the `handlePart`.
+class ExternalTablesHandler : public Poco::Net::PartHandler
+    , BaseExternalTable
 {
 public:
     std::vector<std::string> names;
 
-    ExternalTablesHandler(Context & context_, Poco::Net::NameValueCollection params_) : context(context_), params(params_) { }
+    ExternalTablesHandler(Context & context_, Poco::Net::NameValueCollection params_)
+        : context(context_)
+        , params(params_)
+    {}
 
     void handlePart(const Poco::Net::MessageHeader & header, std::istream & stream)
     {
@@ -206,7 +214,7 @@ public:
         /// Write data
         data.first->readPrefix();
         output->writePrefix();
-        while(Block block = data.first->read())
+        while (Block block = data.first->read())
             output->write(block);
         data.first->readSuffix();
         output->writeSuffix();
@@ -222,4 +230,4 @@ private:
 };
 
 
-}
+} // namespace DB
