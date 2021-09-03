@@ -124,40 +124,40 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
-    void perform(Block & block, const ColumnNumbers & arguments, size_t result, ArrayImpl::NullMapBuilder & builder);
+    void perform(Block & block, const ColumnNumbers & arguments, size_t result, ArrayImpl::NullMapBuilder & builder) const;
 
     template <typename DataType>
     bool executeNumberConst(Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
-        ArrayImpl::NullMapBuilder & builder);
+        ArrayImpl::NullMapBuilder & builder) const;
 
     template <typename IndexType, typename DataType>
     bool executeNumber(Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
-        ArrayImpl::NullMapBuilder & builder);
+        ArrayImpl::NullMapBuilder & builder) const;
 
     bool executeStringConst(Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
-        ArrayImpl::NullMapBuilder & builder);
+        ArrayImpl::NullMapBuilder & builder) const;
 
     template <typename IndexType>
     bool executeString(Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
-        ArrayImpl::NullMapBuilder & builder);
+        ArrayImpl::NullMapBuilder & builder)const;
 
     bool executeGenericConst(Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
-        ArrayImpl::NullMapBuilder & builder);
+        ArrayImpl::NullMapBuilder & builder)const;
 
     template <typename IndexType>
     bool executeGeneric(Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
-        ArrayImpl::NullMapBuilder & builder);
+        ArrayImpl::NullMapBuilder & builder)const;
 
     template <typename IndexType>
     bool executeConst(Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
-        ArrayImpl::NullMapBuilder & builder);
+        ArrayImpl::NullMapBuilder & builder)const;
 
     template <typename IndexType>
-    bool executeArgument(Block & block, const ColumnNumbers & arguments, size_t result, ArrayImpl::NullMapBuilder & builder);
+    bool executeArgument(Block & block, const ColumnNumbers & arguments, size_t result, ArrayImpl::NullMapBuilder & builder)const;
 
     /** For a tuple array, the function is evaluated component-wise for each element of the tuple.
       */
-    bool executeTuple(Block & block, const ColumnNumbers & arguments, size_t result);
+    bool executeTuple(Block & block, const ColumnNumbers & arguments, size_t result)const;
 };
 
 
@@ -1211,21 +1211,21 @@ private:
     static constexpr size_t INITIAL_SIZE_DEGREE = 9;
 
     template <typename T>
-    bool executeNumber(const ColumnArray * array,  const IColumn * null_map, ColumnUInt32::Container & res_values);
+    bool executeNumber(const ColumnArray * array,  const IColumn * null_map, ColumnUInt32::Container & res_values) const;
 
-    bool executeString(const ColumnArray * array,  const IColumn * null_map, ColumnUInt32::Container & res_values);
+    bool executeString(const ColumnArray * array,  const IColumn * null_map, ColumnUInt32::Container & res_values) const;
 
     bool execute128bit(
         const ColumnArray::Offsets & offsets,
         const ColumnRawPtrs & columns,
         const ColumnRawPtrs & null_maps,
         ColumnUInt32::Container & res_values,
-        bool has_nullable_columns);
+        bool has_nullable_columns) const;
 
     void executeHashed(
         const ColumnArray::Offsets & offsets,
         const ColumnRawPtrs & columns,
-        ColumnUInt32::Container & res_values);
+        ColumnUInt32::Container & res_values) const;
 };
 
 
@@ -1250,21 +1250,21 @@ private:
     static constexpr size_t INITIAL_SIZE_DEGREE = 9;
 
     template <typename T>
-    bool executeNumber(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values);
+    bool executeNumber(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values)const;
 
-    bool executeString(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values);
+    bool executeString(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values)const;
 
     bool execute128bit(
         const ColumnArray::Offsets & offsets,
         const ColumnRawPtrs & columns,
         const ColumnRawPtrs & null_maps,
         ColumnUInt32::Container & res_values,
-        bool has_nullable_columns);
+        bool has_nullable_columns) const;
 
     void executeHashed(
         const ColumnArray::Offsets & offsets,
         const ColumnRawPtrs & columns,
-        ColumnUInt32::Container & res_values);
+        ColumnUInt32::Container & res_values) const;
 };
 
 
@@ -1323,7 +1323,7 @@ private:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
     template <typename T>
-    bool executeInternal(Block & block, const IColumn * arg, const size_t result);
+    bool executeInternal(Block & block, const IColumn * arg, const size_t result) const;
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override;
 };
@@ -1362,26 +1362,26 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
-    bool executeConst(Block & block, const ColumnNumbers & arguments, size_t result);
+    bool executeConst(Block & block, const ColumnNumbers & arguments, size_t result)const;
 
     template <typename T>
     bool executeNumber(
         const IColumn & src_data, const ColumnArray::Offsets & src_offsets,
         IColumn & res_data_col,
         const ColumnNullable * nullable_col,
-        ColumnNullable * nullable_res_col);
+        ColumnNullable * nullable_res_col)const;
 
     bool executeFixedString(
         const IColumn & src_data, const ColumnArray::Offsets & src_offsets,
         IColumn & res_data_col,
         const ColumnNullable * nullable_col,
-        ColumnNullable * nullable_res_col);
+        ColumnNullable * nullable_res_col)const;
 
     bool executeString(
         const IColumn & src_data, const ColumnArray::Offsets & src_array_offsets,
         IColumn & res_data_col,
         const ColumnNullable * nullable_col,
-        ColumnNullable * nullable_res_col);
+        ColumnNullable * nullable_res_col)const;
 };
 
 

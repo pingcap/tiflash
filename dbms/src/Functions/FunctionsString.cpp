@@ -760,7 +760,7 @@ public:
         }
         else if (checkColumn<ColumnArray>(column.get()))
         {
-            FunctionArrayReverse().execute(block, arguments, result);
+            FunctionArrayReverse().executeImpl(block, arguments, result);
         }
         else
             throw Exception(
@@ -889,7 +889,7 @@ public:
 private:
     const Context & context;
 
-    void executeBinary(Block & block, const ColumnNumbers & arguments, const size_t result)
+    void executeBinary(Block & block, const ColumnNumbers & arguments, const size_t result)const
     {
         const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
         const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
@@ -917,7 +917,7 @@ private:
         block.getByPosition(result).column = std::move(c_res);
     }
 
-    void executeNAry(Block & block, const ColumnNumbers & arguments, const size_t result)
+    void executeNAry(Block & block, const ColumnNumbers & arguments, const size_t result)const
     {
         size_t num_sources = arguments.size();
         StringSources sources(num_sources);
@@ -1136,7 +1136,7 @@ public:
         const ColumnConst * column_start_const, const ColumnConst * column_length_const,
         Int64 start_value, Int64 length_value,
         Block & block, size_t result,
-        Source && source)
+        Source && source) const
     {
        auto col_res = ColumnString::create();
 
@@ -1553,7 +1553,7 @@ public:
             if (!arg->isStringOrFixedString())
                 throw Exception{
                     "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
-					ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
         return std::make_shared<DataTypeString>();
@@ -1567,12 +1567,12 @@ public:
             executeTrimWs(block, arguments, result);
         else
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-								+ ", should beat least 1.",
-							ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                                                + ", should beat least 1.",
+                                                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
 private:
-    void executeTrim(Block & block, const ColumnNumbers & arguments, const size_t result)
+    void executeTrim(Block & block, const ColumnNumbers & arguments, const size_t result) const
     {
         const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
@@ -1590,7 +1590,7 @@ private:
         block.getByPosition(result).column = std::move(c_res);
     }
 
-    void executeTrimWs(Block & block, const ColumnNumbers & arguments, const size_t result)
+    void executeTrimWs(Block & block, const ColumnNumbers & arguments, const size_t result)const
     {
         const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
         const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
@@ -1669,7 +1669,7 @@ public:
     }
 
 private:
-    void executeTrim(Block &block, const ColumnNumbers &arguments, const size_t result) {
+    void executeTrim(Block &block, const ColumnNumbers &arguments, const size_t result)const {
         const IColumn *c0 = block.getByPosition(arguments[0]).column.get();
         const ColumnString *c0_string = checkAndGetColumn<ColumnString>(c0);
         const ColumnConst *c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
@@ -1689,7 +1689,7 @@ private:
         block.getByPosition(result).column = std::move(c_res);
     }
 
-    void executeTrimWs(Block &block, const ColumnNumbers &arguments, const size_t result) {
+    void executeTrimWs(Block &block, const ColumnNumbers &arguments, const size_t result)const {
         const IColumn *c0 = block.getByPosition(arguments[0]).column.get();
         const IColumn *c1 = block.getByPosition(arguments[1]).column.get();
 
@@ -2172,7 +2172,7 @@ public:
     }
 
 private:
-    void executePad(Block & block, const ColumnNumbers & arguments, const size_t result)
+    void executePad(Block & block, const ColumnNumbers & arguments, const size_t result)const
     {
         ColumnPtr column_string = block.getByPosition(arguments[0]).column;
         ColumnPtr column_length = block.getByPosition(arguments[1]).column;
@@ -2217,86 +2217,86 @@ template <typename Name, bool is_left>
 class PadUTF8Impl : public IFunction
 {
 public:
-	static constexpr auto name = Name::name;
-	explicit PadUTF8Impl() {}
-	static FunctionPtr create(const Context & )
-	{
-		return std::make_shared<PadUTF8Impl>();
-	}
+        static constexpr auto name = Name::name;
+        explicit PadUTF8Impl() {}
+        static FunctionPtr create(const Context & )
+        {
+                return std::make_shared<PadUTF8Impl>();
+        }
 
-	String getName() const override
-	{
-		return name;
-	}
+        String getName() const override
+        {
+                return name;
+        }
 
-	size_t getNumberOfArguments() const override
-	{
-		return 3;
-	}
+        size_t getNumberOfArguments() const override
+        {
+                return 3;
+        }
 
-	DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-	{
-		if (arguments.size() != 3)
-			throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-								+ ", must be 3.",
-							ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+        {
+                if (arguments.size() != 3)
+                        throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                                                                + ", must be 3.",
+                                                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-		if (!arguments[0]->isStringOrFixedString())
-			throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                if (!arguments[0]->isStringOrFixedString())
+                        throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-		if (!arguments[1]->isNumber())
-			throw Exception("Illegal type " + arguments[1]->getName()
-								+ " of second argument of function "
-								+ getName(),
-							ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                if (!arguments[1]->isNumber())
+                        throw Exception("Illegal type " + arguments[1]->getName()
+                                                                + " of second argument of function "
+                                                                + getName(),
+                                                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-		if (!arguments[2]->isStringOrFixedString())
-			throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                if (!arguments[2]->isStringOrFixedString())
+                        throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-		return std::make_shared<DataTypeString>();
-	}
+                return std::make_shared<DataTypeString>();
+        }
 
-	void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
-	{
-		if (arguments.size() == 3)
-			executePadUTF8(block, arguments, result);
-		else
-			throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-								+ ", should beat least 1.",
-							ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-	}
+        void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
+        {
+                if (arguments.size() == 3)
+                        executePadUTF8(block, arguments, result);
+                else
+                        throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                                                                + ", should beat least 1.",
+                                                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
 
 private:
-	void executePadUTF8(Block & block, const ColumnNumbers & arguments, const size_t result)
-	{
-		ColumnPtr column_string = block.getByPosition(arguments[0]).column;
-		ColumnPtr column_length = block.getByPosition(arguments[1]).column;
-		ColumnPtr column_padding = block.getByPosition(arguments[2]).column;
+        void executePadUTF8(Block & block, const ColumnNumbers & arguments, const size_t result)const
+        {
+                ColumnPtr column_string = block.getByPosition(arguments[0]).column;
+                ColumnPtr column_length = block.getByPosition(arguments[1]).column;
+                ColumnPtr column_padding = block.getByPosition(arguments[2]).column;
 
-		const ColumnConst * column_length_const = checkAndGetColumn<ColumnConst>(column_length.get());
-		const ColumnConst * column_padding_const = checkAndGetColumnConst<ColumnString>(column_padding.get());
+                const ColumnConst * column_length_const = checkAndGetColumn<ColumnConst>(column_length.get());
+                const ColumnConst * column_padding_const = checkAndGetColumnConst<ColumnString>(column_padding.get());
 
-		Int64 length_value = 0;
+                Int64 length_value = 0;
 
-		if (column_length_const)
-		{
-			length_value = column_length_const->getInt(0);
-			if (length_value < 0)
-				throw Exception("Second argument provided for function " + getName() + " could not be negative.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-		}
-		if (column_padding_const == nullptr)
-		{
-			throw Exception("Third argument provided for function " + getName() + " should be literal string.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-		}
+                if (column_length_const)
+                {
+                        length_value = column_length_const->getInt(0);
+                        if (length_value < 0)
+                                throw Exception("Second argument provided for function " + getName() + " could not be negative.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                }
+                if (column_padding_const == nullptr)
+                {
+                        throw Exception("Third argument provided for function " + getName() + " should be literal string.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                }
 
-		auto c_res = ColumnString::create();
+                auto c_res = ColumnString::create();
         auto column_padding_string = checkAndGetColumn<ColumnString>(column_padding_const->getDataColumnPtr().get());
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
-			vector(col->getChars(), col->getOffsets(), length_value, column_padding_string->getChars(),
+                        vector(col->getChars(), col->getOffsets(), length_value, column_padding_string->getChars(),
                    column_padding_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_string.get()))
-			vector(col->getChars(), col->getN(), col->size(), length_value, column_padding_string->getChars(),
-				   column_padding_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
+                        vector(col->getChars(), col->getN(), col->size(), length_value, column_padding_string->getChars(),
+                                   column_padding_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (const ColumnConst * col = checkAndGetColumnConst<ColumnString>(column_string.get()))
         {
             const auto *col_string = checkAndGetColumn<ColumnString>(col->getDataColumnPtr().get());
@@ -2322,8 +2322,8 @@ private:
                          c_res->getOffsets());
         }
 
-		block.getByPosition(result).column = std::move(c_res);
-	}
+                block.getByPosition(result).column = std::move(c_res);
+        }
 
     static void vector(const ColumnString::Chars_t & data,
                        const ColumnString::Offsets & offsets,
@@ -2353,7 +2353,7 @@ private:
                 {
                     while (left > 0 && pad_len != 0)
                     {
-                    	/// insert into one utf8 character
+                        /// insert into one utf8 character
                         ColumnString::Offset pad_bytes;
 
                         if (pad_data[per_pad_offset] < 0xBF)
@@ -2368,30 +2368,30 @@ private:
                         memcpy(&res_data[res_offset], &pad_data[per_pad_offset], pad_bytes);
                         res_offset += pad_bytes;
                         --left;
-						per_pad_offset = (per_pad_offset + pad_bytes) % (pad_offsets[0] - 1);
+                                                per_pad_offset = (per_pad_offset + pad_bytes) % (pad_offsets[0] - 1);
                     }
 
                     /// including the tailing '\0'
-					memcpy(&res_data[res_offset], &data[prev_offset], offsets[i] - prev_offset);
+                                        memcpy(&res_data[res_offset], &data[prev_offset], offsets[i] - prev_offset);
                     res_offset += offsets[i] - prev_offset;
                 }
                 else
-				{
+                                {
                     memcpy(&res_data[res_offset], &data[prev_offset], offsets[i] - prev_offset - 1);
                     res_offset += offsets[i] - prev_offset - 1;
 
                     while (left > 0 && pad_len != 0)
                     {
-						/// insert into one utf8 character
+                                                /// insert into one utf8 character
                         ColumnString::Offset pad_bytes;
 
-						if (pad_data[per_pad_offset] < 0xBF)
+                                                if (pad_data[per_pad_offset] < 0xBF)
                             pad_bytes = 1;
-						else if (pad_data[per_pad_offset] < 0xE0)
+                                                else if (pad_data[per_pad_offset] < 0xE0)
                             pad_bytes = 2;
-						else if (pad_data[per_pad_offset] < 0xF0)
-							pad_bytes = 3;
-						else
+                                                else if (pad_data[per_pad_offset] < 0xF0)
+                                                        pad_bytes = 3;
+                                                else
                             pad_bytes = 1;
 
                         memcpy(&res_data[res_offset], &pad_data[per_pad_offset], pad_bytes);
@@ -2400,7 +2400,7 @@ private:
                         per_pad_offset = (per_pad_offset + pad_bytes) % (pad_offsets[0] - 1);
                     }
 
-					/// including the tailing '\0'
+                                        /// including the tailing '\0'
                     res_data[res_offset] = 0x0;
                     ++res_offset;
                 }
@@ -2412,7 +2412,7 @@ private:
                 size_t left = length;
                 while (left > 0)
                 {
-                	/// get length parameter characters
+                        /// get length parameter characters
                     ColumnString::Offset pad_bytes;
 
                     if (data[j] < 0xBF)
@@ -2430,7 +2430,7 @@ private:
                     --left;
                 }
 
-				/// including the tailing '\0'
+                                /// including the tailing '\0'
                 res_data[res_offset] = 0x0;
                 ++res_offset;
             }
@@ -2440,125 +2440,125 @@ private:
         }
     }
 
-	static void vector(const ColumnString::Chars_t & data,
-					   size_t fixed_len,
-					   size_t size,
-					   size_t length,
-					   const ColumnString::Chars_t & pad_data,
-					   const ColumnString::Offsets & pad_offsets,
-					   ColumnString::Chars_t & res_data,
-					   ColumnString::Offsets & res_offsets)
-	{
-		res_data.reserve(3 * length * size);
-		res_offsets.resize(size);
+        static void vector(const ColumnString::Chars_t & data,
+                                           size_t fixed_len,
+                                           size_t size,
+                                           size_t length,
+                                           const ColumnString::Chars_t & pad_data,
+                                           const ColumnString::Offsets & pad_offsets,
+                                           ColumnString::Chars_t & res_data,
+                                           ColumnString::Offsets & res_offsets)
+        {
+                res_data.reserve(3 * length * size);
+                res_offsets.resize(size);
 
-		ColumnString::Offset prev_offset = 0;
-		ColumnString::Offset res_offset = 0;
-		for (size_t i = 0; i < size; ++i)
-		{
-			size_t byte_len = strlen(reinterpret_cast<const char *>(&(data[prev_offset])));
-			ColumnString::Offset len = UTF8::countCodePoints(&data[prev_offset], byte_len);
-			ColumnString::Offset pad_len = UTF8::countCodePoints(&pad_data[0], pad_offsets[0] - 1);
+                ColumnString::Offset prev_offset = 0;
+                ColumnString::Offset res_offset = 0;
+                for (size_t i = 0; i < size; ++i)
+                {
+                        size_t byte_len = strlen(reinterpret_cast<const char *>(&(data[prev_offset])));
+                        ColumnString::Offset len = UTF8::countCodePoints(&data[prev_offset], byte_len);
+                        ColumnString::Offset pad_len = UTF8::countCodePoints(&pad_data[0], pad_offsets[0] - 1);
 
-			/// if the origin len of input less than the length parameter
-			if (len < length)
-			{
-				size_t left = length - len;
-				ColumnString::Offset per_pad_offset = 0;
-				if (is_left)
-				{
-					while (left > 0 && pad_len != 0)
-					{
-						/// insert into one utf8 character
-						ColumnString::Offset pad_bytes;
+                        /// if the origin len of input less than the length parameter
+                        if (len < length)
+                        {
+                                size_t left = length - len;
+                                ColumnString::Offset per_pad_offset = 0;
+                                if (is_left)
+                                {
+                                        while (left > 0 && pad_len != 0)
+                                        {
+                                                /// insert into one utf8 character
+                                                ColumnString::Offset pad_bytes;
 
-						if (pad_data[per_pad_offset] < 0xBF)
-							pad_bytes = 1;
-						else if (pad_data[per_pad_offset] < 0xE0)
-							pad_bytes = 2;
-						else if (pad_data[per_pad_offset] < 0xF0)
-							pad_bytes = 3;
-						else
-							pad_bytes = 1;
+                                                if (pad_data[per_pad_offset] < 0xBF)
+                                                        pad_bytes = 1;
+                                                else if (pad_data[per_pad_offset] < 0xE0)
+                                                        pad_bytes = 2;
+                                                else if (pad_data[per_pad_offset] < 0xF0)
+                                                        pad_bytes = 3;
+                                                else
+                                                        pad_bytes = 1;
 
-						memcpy(&res_data[res_offset], &pad_data[per_pad_offset], pad_bytes);
-						res_offset += pad_bytes;
-						--left;
-						per_pad_offset = (per_pad_offset + pad_bytes) % (pad_offsets[0] - 1);
-					}
+                                                memcpy(&res_data[res_offset], &pad_data[per_pad_offset], pad_bytes);
+                                                res_offset += pad_bytes;
+                                                --left;
+                                                per_pad_offset = (per_pad_offset + pad_bytes) % (pad_offsets[0] - 1);
+                                        }
 
-					memcpy(&res_data[res_offset], &data[prev_offset], byte_len);
-					res_offset += byte_len;
+                                        memcpy(&res_data[res_offset], &data[prev_offset], byte_len);
+                                        res_offset += byte_len;
 
-					/// including the tailing '\0'
-					res_data[res_offset] = 0x0;
-					res_offset += 1;
-				}
-				else
-				{
-					memcpy(&res_data[res_offset], &data[prev_offset], byte_len);
-					res_offset += byte_len;
+                                        /// including the tailing '\0'
+                                        res_data[res_offset] = 0x0;
+                                        res_offset += 1;
+                                }
+                                else
+                                {
+                                        memcpy(&res_data[res_offset], &data[prev_offset], byte_len);
+                                        res_offset += byte_len;
 
-					while (left > 0 && pad_len != 0)
-					{
-						/// insert into one utf8 character
-						ColumnString::Offset pad_bytes;
+                                        while (left > 0 && pad_len != 0)
+                                        {
+                                                /// insert into one utf8 character
+                                                ColumnString::Offset pad_bytes;
 
-						if (pad_data[per_pad_offset] < 0xBF)
-							pad_bytes = 1;
-						else if (pad_data[per_pad_offset] < 0xE0)
-							pad_bytes = 2;
-						else if (pad_data[per_pad_offset] < 0xF0)
-							pad_bytes = 3;
-						else
-							pad_bytes = 1;
+                                                if (pad_data[per_pad_offset] < 0xBF)
+                                                        pad_bytes = 1;
+                                                else if (pad_data[per_pad_offset] < 0xE0)
+                                                        pad_bytes = 2;
+                                                else if (pad_data[per_pad_offset] < 0xF0)
+                                                        pad_bytes = 3;
+                                                else
+                                                        pad_bytes = 1;
 
-						memcpy(&res_data[res_offset], &pad_data[per_pad_offset], pad_bytes);
-						res_offset += pad_bytes;
-						--left;
-						per_pad_offset = (per_pad_offset + pad_bytes) % (pad_offsets[0] - 1);
-					}
+                                                memcpy(&res_data[res_offset], &pad_data[per_pad_offset], pad_bytes);
+                                                res_offset += pad_bytes;
+                                                --left;
+                                                per_pad_offset = (per_pad_offset + pad_bytes) % (pad_offsets[0] - 1);
+                                        }
 
-					/// including the tailing '\0'
-					res_data[res_offset] = 0x0;
-					++res_offset;
-				}
-			}
-			else
-			{
-				ColumnString::Offset j = prev_offset;
+                                        /// including the tailing '\0'
+                                        res_data[res_offset] = 0x0;
+                                        ++res_offset;
+                                }
+                        }
+                        else
+                        {
+                                ColumnString::Offset j = prev_offset;
 
-				size_t left = length;
+                                size_t left = length;
 
-				/// get length parameter characters
-				while (left > 0)
-				{
-					ColumnString::Offset pad_bytes;
+                                /// get length parameter characters
+                                while (left > 0)
+                                {
+                                        ColumnString::Offset pad_bytes;
 
-					if (data[j] < 0xBF)
-						pad_bytes = 1;
-					else if (data[j] < 0xE0)
-						pad_bytes = 2;
-					else if (data[j] < 0xF0)
-						pad_bytes = 3;
-					else
-						pad_bytes = 1;
+                                        if (data[j] < 0xBF)
+                                                pad_bytes = 1;
+                                        else if (data[j] < 0xE0)
+                                                pad_bytes = 2;
+                                        else if (data[j] < 0xF0)
+                                                pad_bytes = 3;
+                                        else
+                                                pad_bytes = 1;
 
-					memcpy(&res_data[res_offset], &data[j], pad_bytes);
-					j += pad_bytes;
-					res_offset += pad_bytes;
-					--left;
-				}
+                                        memcpy(&res_data[res_offset], &data[j], pad_bytes);
+                                        j += pad_bytes;
+                                        res_offset += pad_bytes;
+                                        --left;
+                                }
 
-				/// including the tailing '\0'
-				res_data[res_offset] = 0x0;
-				++res_offset;
-			}
+                                /// including the tailing '\0'
+                                res_data[res_offset] = 0x0;
+                                ++res_offset;
+                        }
 
-			res_offsets[i] = res_offset;
-			prev_offset += fixed_len;
-		}
-	}
+                        res_offsets[i] = res_offset;
+                        prev_offset += fixed_len;
+                }
+        }
 
     static void vector_const(const ColumnString::Chars_t & data,
                        const ColumnString::Offsets & offsets,
@@ -2963,7 +2963,7 @@ public:
     }
 
 private:
-    Int64 getPositionUTF8(const String &c1_str, Int64 idx)
+    Int64 getPositionUTF8(const String &c1_str, Int64 idx)const
     {
         if (idx == -1)
             return 0;
@@ -3034,7 +3034,7 @@ struct NameLPad
 };
 struct NameLPadUTF8
 {
-	static constexpr auto name = "lpadUTF8";
+        static constexpr auto name = "lpadUTF8";
 };
 struct NameRPad
 {
@@ -3042,7 +3042,7 @@ struct NameRPad
 };
 struct NameRPadUTF8
 {
-	static constexpr auto name = "rpadUTF8";
+        static constexpr auto name = "rpadUTF8";
 };
 struct NameConcat
 {
@@ -3084,8 +3084,8 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionTrimUTF8>();
     factory.registerFunction<FunctionLTrimUTF8>();
     factory.registerFunction<FunctionRTrimUTF8>();
-	factory.registerFunction<FunctionLPadUTF8>();
-	factory.registerFunction<FunctionRPadUTF8>();
+        factory.registerFunction<FunctionLPadUTF8>();
+        factory.registerFunction<FunctionRPadUTF8>();
     factory.registerFunction<FunctionConcat>();
     factory.registerFunction<FunctionConcatAssumeInjective>();
     factory.registerFunction<FunctionTiDBConcat>();

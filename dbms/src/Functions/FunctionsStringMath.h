@@ -198,8 +198,9 @@ struct ConvImpl
 class FunctionConv : public IFunction
 {
     template <typename FirstIntType, typename SecondIntType, typename FirstIntColumn, typename SecondIntColumn>
-    void executeWithIntTypes(Block & block, const ColumnNumbers & arguments, const size_t result,
-        const FirstIntColumn * first_int_arg_typed, const SecondIntColumn * second_int_arg_typed)
+    void executeWithIntTypes(
+            Block & block, const ColumnNumbers & arguments, const size_t result,
+        const FirstIntColumn * first_int_arg_typed, const SecondIntColumn * second_int_arg_typed) const
     {
         const auto string_arg = block.getByPosition(arguments[0]).column.get();
 
@@ -227,8 +228,9 @@ class FunctionConv : public IFunction
     }
 
     template <typename FirstIntType, typename SecondIntType, typename FirstIntColumn>
-    bool executeIntRight(Block & block, const ColumnNumbers & arguments, const size_t result, const FirstIntColumn * first_int_arg_typed,
-        const IColumn * second_int_arg)
+    bool executeIntRight(
+            Block & block, const ColumnNumbers & arguments, const size_t result, const FirstIntColumn * first_int_arg_typed,
+        const IColumn * second_int_arg) const
     {
         if (const auto second_int_arg_typed = checkAndGetColumn<ColumnVector<SecondIntType>>(second_int_arg))
         {
@@ -245,7 +247,7 @@ class FunctionConv : public IFunction
     }
 
     template <typename FirstIntType>
-    bool executeIntLeft(Block & block, const ColumnNumbers & arguments, const size_t result, const IColumn * first_int_arg)
+    bool executeIntLeft(Block & block, const ColumnNumbers & arguments, const size_t result, const IColumn * first_int_arg)const
     {
         if (const auto first_int_arg_typed = checkAndGetColumn<ColumnVector<FirstIntType>>(first_int_arg))
         {

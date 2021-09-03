@@ -479,7 +479,7 @@ public:
 class FunctionBlockNumber : public IFunction
 {
 private:
-    std::atomic<size_t> block_number{0};
+    mutable std::atomic<size_t> block_number{0};
 
 public:
     static constexpr auto name = "blockNumber";
@@ -523,7 +523,7 @@ public:
 class FunctionRowNumberInAllBlocks : public IFunction
 {
 private:
-    std::atomic<size_t> rows{0};
+    mutable std::atomic<size_t> rows{0};
 
 public:
     static constexpr auto name = "rowNumberInAllBlocks";
@@ -1043,7 +1043,7 @@ DataTypePtr FunctionReplicate::getReturnTypeImpl(const DataTypes & arguments) co
     return std::make_shared<DataTypeArray>(arguments[0]);
 }
 
-void FunctionReplicate::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionReplicate::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     ColumnPtr first_column = block.getByPosition(arguments[0]).column;
 
@@ -1251,7 +1251,7 @@ public:
     }
 
     template <typename T>
-    bool execute(Block & block, const IColumn * in_untyped, const size_t result)
+    bool execute(Block & block, const IColumn * in_untyped, const size_t result) const
     {
         if (const auto in = checkAndGetColumn<ColumnVector<T>>(in_untyped))
         {
@@ -1762,7 +1762,7 @@ private:
 };
 
 
-void FunctionVisibleWidth::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionVisibleWidth::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     auto & src = block.getByPosition(arguments[0]);
     size_t size = block.rows();
@@ -1809,7 +1809,7 @@ DataTypePtr FunctionHasColumnInTable::getReturnTypeImpl(const ColumnsWithTypeAnd
 }
 
 
-void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     auto get_string_from_block = [&](size_t column_pos) -> String
     {
@@ -1902,7 +1902,7 @@ public:
     }
 
     template <typename T>
-    bool execute(Block & block, const IColumn * in_untyped, const size_t result)
+    bool execute(Block & block, const IColumn * in_untyped, const size_t result) const
     {
         if (const auto in = checkAndGetColumn<ColumnVector<T>>(in_untyped))
         {

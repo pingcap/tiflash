@@ -209,7 +209,7 @@ private:
         tmp_block.insert(block.getByPosition(result));
         size_t tmp_result = arguments.size();
 
-        execute(tmp_block, tmp_arguments, tmp_result);
+        executeImpl(tmp_block, tmp_arguments, tmp_result);
 
         block.getByPosition(result).column = tmp_block.getByPosition(tmp_result).column;
     }
@@ -342,7 +342,7 @@ private:
         if (!out)
             return false;
 
-        executeImplNumToNumWithConstDefault<T, U>(in->getData(), out->getData(), const_default_value.get<U>());
+        executeImplNumToNumWithConstDefault<T, U>(in->getData(), out->getData(), cache.const_default_value.get<U>());
         return true;
     }
 
@@ -390,7 +390,7 @@ private:
         if (!out)
             return false;
 
-        const String & default_str = const_default_value.get<const String &>();
+        const String & default_str = cache.const_default_value.get<const String &>();
         StringRef default_string_ref{default_str.data(), default_str.size() + 1};
         executeImplNumToStringWithConstDefault<T>(in->getData(), out->getChars(), out->getOffsets(), default_string_ref);
         return true;
@@ -425,7 +425,7 @@ private:
         if (!out)
             return false;
 
-        executeImplStringToNumWithConstDefault<U>(in->getChars(), in->getOffsets(), out->getData(), const_default_value.get<U>());
+        executeImplStringToNumWithConstDefault<U>(in->getChars(), in->getOffsets(), out->getData(), cache.const_default_value.get<U>());
         return true;
     }
 
@@ -481,7 +481,7 @@ private:
         if (!out)
             return false;
 
-        const String & default_str = const_default_value.get<const String &>();
+        const String & default_str = cache.const_default_value.get<const String &>();
         StringRef default_string_ref{default_str.data(), default_str.size() + 1};
         executeImplStringToStringWithConstDefault(in->getChars(), in->getOffsets(), out->getChars(), out->getOffsets(), default_string_ref);
         return true;
@@ -512,7 +512,7 @@ private:
     template <typename T, typename U>
     void executeImplNumToNumWithConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, U dst_default)const
     {
-        const auto & table = *table_num_to_num;
+        const auto & table = *cache.table_num_to_num;
         size_t size = src.size();
         dst.resize(size);
         for (size_t i = 0; i < size; ++i)
@@ -528,7 +528,7 @@ private:
     template <typename T, typename U, typename V>
     void executeImplNumToNumWithNonConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default)const
     {
-        const auto & table = *table_num_to_num;
+        const auto & table = *cache.table_num_to_num;
         size_t size = src.size();
         dst.resize(size);
         for (size_t i = 0; i < size; ++i)
@@ -544,7 +544,7 @@ private:
     template <typename T>
     void executeImplNumToNum(const PaddedPODArray<T> & src, PaddedPODArray<T> & dst)const
     {
-        const auto & table = *table_num_to_num;
+        const auto & table = *cache.table_num_to_num;
         size_t size = src.size();
         dst.resize(size);
         for (size_t i = 0; i < size; ++i)
@@ -561,7 +561,7 @@ private:
     void executeImplNumToStringWithConstDefault(const PaddedPODArray<T> & src,
         ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)const
     {
-        const auto & table = *table_num_to_string;
+        const auto & table = *cache.table_num_to_string;
         size_t size = src.size();
         dst_offsets.resize(size);
         ColumnString::Offset current_dst_offset = 0;
@@ -581,7 +581,7 @@ private:
         ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets,
         const ColumnString::Chars_t & dst_default_data, const ColumnString::Offsets & dst_default_offsets)const
     {
-        const auto & table = *table_num_to_string;
+        const auto & table = *cache.table_num_to_string;
         size_t size = src.size();
         dst_offsets.resize(size);
         ColumnString::Offset current_dst_offset = 0;
@@ -612,7 +612,7 @@ private:
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
         PaddedPODArray<U> & dst, U dst_default)const
     {
-        const auto & table = *table_string_to_num;
+        const auto & table = *cache.table_string_to_num;
         size_t size = src_offsets.size();
         dst.resize(size);
         ColumnString::Offset current_src_offset = 0;
@@ -633,7 +633,7 @@ private:
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
         PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default)const
     {
-        const auto & table = *table_string_to_num;
+        const auto & table = *cache.table_string_to_num;
         size_t size = src_offsets.size();
         dst.resize(size);
         ColumnString::Offset current_src_offset = 0;
@@ -654,7 +654,7 @@ private:
         const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
         ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)const
     {
-        const auto & table = *table_string_to_string;
+        const auto & table = *cache.table_string_to_string;
         size_t size = src_offsets.size();
         dst_offsets.resize(size);
         ColumnString::Offset current_src_offset = 0;
@@ -693,7 +693,7 @@ private:
         ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets,
         const ColumnString::Chars_t & dst_default_data, const ColumnString::Offsets & dst_default_offsets)const
     {
-        const auto & table = *table_string_to_string;
+        const auto & table = *cache.table_string_to_string;
         size_t size = src_offsets.size();
         dst_offsets.resize(size);
         ColumnString::Offset current_src_offset = 0;
@@ -726,36 +726,41 @@ private:
 
     /// Different versions of the hash tables to implement the mapping.
 
-    using NumToNum = HashMap<UInt64, UInt64, HashCRC32<UInt64>>;
-    using NumToString = HashMap <UInt64, StringRef, HashCRC32<UInt64>>;     /// Everywhere StringRef's with trailing zero.
-    using StringToNum = HashMap<StringRef, UInt64, StringRefHash>;
-    using StringToString = HashMap<StringRef, StringRef, StringRefHash>;
+    struct Cache
+    {
+        using NumToNum = HashMap<UInt64, UInt64, HashCRC32<UInt64>>;
+        using NumToString = HashMap<UInt64, StringRef, HashCRC32<UInt64>>;     /// Everywhere StringRef's with trailing zero.
+        using StringToNum = HashMap<StringRef, UInt64, StringRefHash>;
+        using StringToString = HashMap<StringRef, StringRef, StringRefHash>;
 
-    std::unique_ptr<NumToNum> table_num_to_num;
-    std::unique_ptr<NumToString> table_num_to_string;
-    std::unique_ptr<StringToNum> table_string_to_num;
-    std::unique_ptr<StringToString> table_string_to_string;
+        std::unique_ptr<NumToNum> table_num_to_num;
+        std::unique_ptr<NumToString> table_num_to_string;
+        std::unique_ptr<StringToNum> table_string_to_num;
+        std::unique_ptr<StringToString> table_string_to_string;
 
-    Arena string_pool;
+        Arena string_pool;
 
-    Field const_default_value;    /// Null, if not specified.
+        Field const_default_value;    /// Null, if not specified.
 
-    std::atomic<bool> initialized {false};
-    std::mutex mutex;
+        std::atomic<bool> initialized{false};
+        std::mutex mutex;
+    };
+
+    mutable Cache cache;
 
     /// Can be called from different threads. It works only on the first call.
     void initialize(const Array & from, const Array & to, Block & block, const ColumnNumbers & arguments)const
     {
-        if (initialized)
+        if (cache.initialized)
             return;
 
         const size_t size = from.size();
         if (0 == size)
             throw Exception{"Empty arrays are illegal in function " + getName(), ErrorCodes::BAD_ARGUMENTS};
 
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex> lock(cache.mutex);
 
-        if (initialized)
+        if (cache.initialized)
             return;
 
         if (from.size() != to.size())
@@ -772,7 +777,7 @@ private:
             const ColumnConst * const_default_col = typeid_cast<const ColumnConst *>(default_col);
 
             if (const_default_col)
-                const_default_value = (*const_default_col)[0];
+                cache.const_default_value = (*const_default_col)[0];
 
             /// Do we need to convert the elements `to` and `default_value` to the smallest common type that is Float64?
             bool default_col_is_float =
@@ -793,7 +798,7 @@ private:
             else if (!default_col_is_float && to_is_float)
             {
                 if (const_default_col)
-                    const_default_value = applyVisitor(FieldVisitorConvertToNumber<Float64>(), const_default_value);
+                    cache.const_default_value = applyVisitor(FieldVisitorConvertToNumber<Float64>(), cache.const_default_value);
             }
         }
 
@@ -801,48 +806,48 @@ private:
 
         if (from[0].getType() != Field::Types::String && to[0].getType() != Field::Types::String)
         {
-            table_num_to_num = std::make_unique<NumToNum>();
-            auto & table = *table_num_to_num;
+            cache.table_num_to_num = std::make_unique<Cache::NumToNum>();
+            auto & table = *cache.table_num_to_num;
             for (size_t i = 0; i < size; ++i)
                 table[from[i].get<UInt64>()] = (*used_to)[i].get<UInt64>();
         }
         else if (from[0].getType() != Field::Types::String && to[0].getType() == Field::Types::String)
         {
-            table_num_to_string = std::make_unique<NumToString>();
-            auto & table = *table_num_to_string;
+            cache.table_num_to_string = std::make_unique<Cache::NumToString>();
+            auto & table = *cache.table_num_to_string;
             for (size_t i = 0; i < size; ++i)
             {
                 const String & str_to = to[i].get<const String &>();
-                StringRef ref{string_pool.insert(str_to.data(), str_to.size() + 1), str_to.size() + 1};
+                StringRef ref{cache.string_pool.insert(str_to.data(), str_to.size() + 1), str_to.size() + 1};
                 table[from[i].get<UInt64>()] = ref;
             }
         }
         else if (from[0].getType() == Field::Types::String && to[0].getType() != Field::Types::String)
         {
-            table_string_to_num = std::make_unique<StringToNum>();
-            auto & table = *table_string_to_num;
+            cache.table_string_to_num = std::make_unique<Cache::StringToNum>();
+            auto & table = *cache.table_string_to_num;
             for (size_t i = 0; i < size; ++i)
             {
                 const String & str_from = from[i].get<const String &>();
-                StringRef ref{string_pool.insert(str_from.data(), str_from.size() + 1), str_from.size() + 1};
+                StringRef ref{cache.string_pool.insert(str_from.data(), str_from.size() + 1), str_from.size() + 1};
                 table[ref] = (*used_to)[i].get<UInt64>();
             }
         }
         else if (from[0].getType() == Field::Types::String && to[0].getType() == Field::Types::String)
         {
-            table_string_to_string = std::make_unique<StringToString>();
-            auto & table = *table_string_to_string;
+            cache.table_string_to_string = std::make_unique<Cache::StringToString>();
+            auto & table = *cache.table_string_to_string;
             for (size_t i = 0; i < size; ++i)
             {
                 const String & str_from = from[i].get<const String &>();
                 const String & str_to = to[i].get<const String &>();
-                StringRef ref_from{string_pool.insert(str_from.data(), str_from.size() + 1), str_from.size() + 1};
-                StringRef ref_to{string_pool.insert(str_to.data(), str_to.size() + 1), str_to.size() + 1};
+                StringRef ref_from{cache.string_pool.insert(str_from.data(), str_from.size() + 1), str_from.size() + 1};
+                StringRef ref_to{cache.string_pool.insert(str_to.data(), str_to.size() + 1), str_to.size() + 1};
                 table[ref_from] = ref_to;
             }
         }
 
-        initialized = true;
+        cache.initialized = true;
     }
 };
 

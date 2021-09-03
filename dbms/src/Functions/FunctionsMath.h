@@ -97,7 +97,7 @@ private:
     }
 
     template <typename FieldType>
-    bool execute(Block & block, const IColumn * arg, const size_t result)
+    bool execute(Block & block, const IColumn * arg, const size_t result) const
     {
         if (const auto col = checkAndGetColumn<ColumnVector<FieldType>>(arg))
         {
@@ -277,7 +277,7 @@ private:
 
     template <typename LeftType, typename RightType>
     bool executeRight(Block & block, const size_t result, const ColumnConst * left_arg,
-        const IColumn * right_arg)
+        const IColumn * right_arg) const
     {
         if (const auto right_arg_typed = checkAndGetColumn<ColumnVector<RightType>>(right_arg))
         {
@@ -346,7 +346,7 @@ private:
 
     template <typename LeftType, typename RightType>
     bool executeRight(Block & block, const size_t result, const ColumnVector<LeftType> * left_arg,
-        const IColumn * right_arg)
+        const IColumn * right_arg) const
     {
         if (const auto right_arg_typed = checkAndGetColumn<ColumnVector<RightType>>(right_arg))
         {
@@ -481,7 +481,7 @@ private:
 
     template <typename LeftType>
     bool executeLeft(Block & block, const ColumnNumbers & arguments, const size_t result,
-        const IColumn * left_arg)
+        const IColumn * left_arg) const
     {
         if (const auto left_arg_typed = checkAndGetColumn<ColumnVector<LeftType>>(left_arg))
         {

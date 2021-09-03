@@ -463,8 +463,9 @@ FunctionPtr FunctionArrayElement::create(const Context &)
 
 
 template <typename DataType>
-bool FunctionArrayElement::executeNumberConst(Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
-    ArrayImpl::NullMapBuilder & builder)
+bool FunctionArrayElement::executeNumberConst(
+        Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
+    ArrayImpl::NullMapBuilder & builder) const
 {
     const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -492,8 +493,9 @@ bool FunctionArrayElement::executeNumberConst(Block & block, const ColumnNumbers
 }
 
 template <typename IndexType, typename DataType>
-bool FunctionArrayElement::executeNumber(Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
-    ArrayImpl::NullMapBuilder & builder)
+bool FunctionArrayElement::executeNumber(
+        Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
+    ArrayImpl::NullMapBuilder & builder) const
 {
     const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -514,8 +516,9 @@ bool FunctionArrayElement::executeNumber(Block & block, const ColumnNumbers & ar
     return true;
 }
 
-bool FunctionArrayElement::executeStringConst(Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
-    ArrayImpl::NullMapBuilder & builder)
+bool FunctionArrayElement::executeStringConst(
+        Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
+    ArrayImpl::NullMapBuilder & builder) const
 {
     const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -555,8 +558,9 @@ bool FunctionArrayElement::executeStringConst(Block & block, const ColumnNumbers
 }
 
 template <typename IndexType>
-bool FunctionArrayElement::executeString(Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
-    ArrayImpl::NullMapBuilder & builder)
+bool FunctionArrayElement::executeString(
+        Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
+    ArrayImpl::NullMapBuilder & builder) const
 {
     const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -583,8 +587,9 @@ bool FunctionArrayElement::executeString(Block & block, const ColumnNumbers & ar
     return true;
 }
 
-bool FunctionArrayElement::executeGenericConst(Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
-    ArrayImpl::NullMapBuilder & builder)
+bool FunctionArrayElement::executeGenericConst(
+        Block & block, const ColumnNumbers & arguments, size_t result, const Field & index,
+    ArrayImpl::NullMapBuilder & builder) const
 {
     const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -608,8 +613,9 @@ bool FunctionArrayElement::executeGenericConst(Block & block, const ColumnNumber
 }
 
 template <typename IndexType>
-bool FunctionArrayElement::executeGeneric(Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
-    ArrayImpl::NullMapBuilder & builder)
+bool FunctionArrayElement::executeGeneric(
+        Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
+    ArrayImpl::NullMapBuilder & builder) const
 {
     const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -627,8 +633,9 @@ bool FunctionArrayElement::executeGeneric(Block & block, const ColumnNumbers & a
 }
 
 template <typename IndexType>
-bool FunctionArrayElement::executeConst(Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
-    ArrayImpl::NullMapBuilder & builder)
+bool FunctionArrayElement::executeConst(
+        Block & block, const ColumnNumbers & arguments, size_t result, const PaddedPODArray<IndexType> & indices,
+    ArrayImpl::NullMapBuilder & builder) const
 {
     const ColumnArray * col_array = checkAndGetColumnConstData<ColumnArray>(block.getByPosition(arguments[0]).column.get());
 
@@ -671,8 +678,9 @@ bool FunctionArrayElement::executeConst(Block & block, const ColumnNumbers & arg
 }
 
 template <typename IndexType>
-bool FunctionArrayElement::executeArgument(Block & block, const ColumnNumbers & arguments, size_t result,
-    ArrayImpl::NullMapBuilder & builder)
+bool FunctionArrayElement::executeArgument(
+        Block & block, const ColumnNumbers & arguments, size_t result,
+    ArrayImpl::NullMapBuilder & builder) const
 {
     auto index = checkAndGetColumn<ColumnVector<IndexType>>(block.getByPosition(arguments[1]).column.get());
 
@@ -703,7 +711,8 @@ bool FunctionArrayElement::executeArgument(Block & block, const ColumnNumbers & 
     return true;
 }
 
-bool FunctionArrayElement::executeTuple(Block & block, const ColumnNumbers & arguments, size_t result)
+bool FunctionArrayElement::executeTuple(
+        Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     const ColumnArray * col_array = typeid_cast<const ColumnArray *>(block.getByPosition(arguments[0]).column.get());
 
@@ -867,7 +876,8 @@ void FunctionArrayElement::executeImpl(Block & block, const ColumnNumbers & argu
     }
 }
 
-void FunctionArrayElement::perform(Block & block, const ColumnNumbers & arguments, size_t result,
+void FunctionArrayElement::perform(
+        Block & block, const ColumnNumbers & arguments, size_t result,
     ArrayImpl::NullMapBuilder & builder) const
 {
     if (executeTuple(block, arguments, result))
@@ -1077,7 +1087,8 @@ void FunctionArrayUniq::executeImpl(Block & block, const ColumnNumbers & argumen
 }
 
 template <typename T>
-bool FunctionArrayUniq::executeNumber(const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values)
+bool FunctionArrayUniq::executeNumber(
+        const ColumnArray * array, const IColumn * null_map, ColumnUInt32::Container & res_values) const
 {
     const IColumn * inner_col;
 
@@ -3223,7 +3234,7 @@ void FunctionArrayIntersect::NumberExecutor::operator()()
 };
 
 template <typename Map, typename ColumnType, bool is_numeric_column>
-ColumnPtr FunctionArrayIntersect::execute(const UnpackedArrays & arrays, MutableColumnPtr result_data_ptr)const
+ColumnPtr FunctionArrayIntersect::execute(const UnpackedArrays & arrays, MutableColumnPtr result_data_ptr)
 {
     auto args = arrays.nested_columns.size();
     auto rows = arrays.offsets.front()->size();

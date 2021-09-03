@@ -51,7 +51,7 @@ public:
         throw Exception("Cannot reinterpret " + type.getName() + " as String because it is not contiguous in memory", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    void executeToString(const IColumn & src, ColumnString & dst)
+    void executeToString(const IColumn & src, ColumnString & dst) const
     {
         size_t rows = src.size();
         ColumnString::Chars_t & data_to = dst.getChars();

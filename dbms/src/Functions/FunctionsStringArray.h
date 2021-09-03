@@ -432,7 +432,7 @@ private:
         const ColumnArray::Offsets & src_array_offsets,
         const char * delimiter, const size_t delimiter_size,
         ColumnString::Chars_t & dst_chars,
-        ColumnString::Offsets & dst_string_offsets)
+        ColumnString::Offsets & dst_string_offsets) const
     {
         size_t size = src_array_offsets.size();
 

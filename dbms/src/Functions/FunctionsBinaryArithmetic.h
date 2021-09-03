@@ -1884,7 +1884,7 @@ public:
     }
 
     template <typename F>
-    bool castType(const IDataType * type, F && f)
+    bool castType(const IDataType * type, F && f) const
     {
         return castTypeToEither<
             DataTypeUInt8,
@@ -1907,7 +1907,7 @@ public:
     }
 
     template <typename F>
-    bool castBothTypes(DataTypePtr left, DataTypePtr right, DataTypePtr result, F && f)
+    bool castBothTypes(DataTypePtr left, DataTypePtr right, DataTypePtr result, F && f) const
     {
         return castType(left.get(), [&](const auto & left_, bool is_left_nullable_) {
             return castType(right.get(), [&](const auto & right_, bool is_right_nullable_) {

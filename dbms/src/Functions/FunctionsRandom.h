@@ -171,8 +171,8 @@ private:
     using ToType = typename Impl::ReturnType;
 
     /// The value is one for different blocks.
-    bool is_initialized = false;
-    ToType value;
+    mutable bool is_initialized = false;
+    mutable ToType value;
 
 public:
     static constexpr auto name = Name::name;

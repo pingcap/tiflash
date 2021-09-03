@@ -749,7 +749,7 @@ public:
 
 private:
     template <typename T>
-    bool executeForType(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeForType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if constexpr (IsDecimal<T>)
         {
@@ -851,7 +851,7 @@ public:
 
 private:
     template <typename T>
-    bool executeForType(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeForType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         static_assert(IsDecimal<T>);
         if (auto col = checkAndGetColumn<ColumnDecimal<T>>(block.getByPosition(arguments[0]).column.get()))
@@ -1448,12 +1448,12 @@ private:
     }
 
     template <typename F>
-    bool castToNumericDataTypes(const IDataType * input_type, const F & f)
+    bool castToNumericDataTypes(const IDataType * input_type, const F & f)const
     {
         return castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256, DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(input_type, f);
     }
 
-    void checkInputTypeAndApply(const TiDBRoundArguments & args)
+    void checkInputTypeAndApply(const TiDBRoundArguments & args) const
     {
         if (!castToNumericDataTypes(args.input_type.get(), [&](const auto & input_type, bool) {
                 using InputDataType = std::decay_t<decltype(input_type)>;
@@ -1468,7 +1468,7 @@ private:
     }
 
     template <typename InputType>
-    void checkFracTypeAndApply(const TiDBRoundArguments & args)
+    void checkFracTypeAndApply(const TiDBRoundArguments & args) const
     {
         if (!castTypeToEither<DataTypeInt64, DataTypeUInt64>(args.frac_type.get(), [&](const auto & frac_type, bool) {
                 using FracDataType = std::decay_t<decltype(frac_type)>;
@@ -1483,7 +1483,7 @@ private:
     }
 
     template <typename InputType, typename FracType>
-    void checkOutputTypeAndApply(const TiDBRoundArguments & args)
+    void checkOutputTypeAndApply(const TiDBRoundArguments & args) const
     {
         if (!castToNumericDataTypes(args.output_type.get(), [&](const auto & output_type, bool) {
                 using OutputDataType = std::decay_t<decltype(output_type)>;
@@ -1495,7 +1495,7 @@ private:
     }
 
     template <typename InputType, typename FracType, typename OutputType>
-    bool checkColumnsAndApply(const TiDBRoundArguments & args)
+    bool checkColumnsAndApply(const TiDBRoundArguments & args) const
     {
         constexpr bool check_integer_output
             = is_signed_v<InputType> ? std::is_same_v<OutputType, Int64> : std::is_same_v<OutputType, UInt64>;

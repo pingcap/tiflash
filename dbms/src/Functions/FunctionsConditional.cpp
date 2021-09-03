@@ -40,7 +40,7 @@ String FunctionMultiIf::getName() const
 }
 
 
-void FunctionMultiIf::executeImpl(Block & block, const ColumnNumbers & args, size_t result)
+void FunctionMultiIf::executeImpl(Block & block, const ColumnNumbers & args, size_t result) const
 {
     /** We will gather values from columns in branches to result column,
       *  depending on values of conditions.
@@ -262,19 +262,19 @@ DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args
             dst_array_types.push_back({nullptr, args[i], {}});
     }
 
-    FunctionArray fun_array{context};
+    DefaultFunctionBuilder fun_array(std::make_shared<FunctionArray>(context));
 
     DataTypePtr src_array_type = fun_array.getReturnType(src_array_types);
     DataTypePtr dst_array_type = fun_array.getReturnType(dst_array_types);
 
     /// Finally get the return type of the transform function.
-    FunctionTransform fun_transform;
+    DefaultFunctionBuilder fun_transform(std::make_shared<FunctionTransform>());
     ColumnsWithTypeAndName transform_args = {{nullptr, args.front(), {}}, {nullptr, src_array_type, {}},
                                              {nullptr, dst_array_type, {}}, {nullptr, args.back(), {}}};
     return fun_transform.getReturnType(transform_args);
 }
 
-void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers & args, size_t result)
+void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers & args, size_t result) const
 {
     if (!args.size())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
@@ -309,10 +309,12 @@ void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers 
         }
     }
 
-    FunctionArray fun_array{context};
+    auto fun_array = std::make_shared<FunctionArray>(context);
+    DefaultFunctionBuilder fun_builder_array(fun_array);
+    DefaultExecutable executable_array(fun_array);
 
-    DataTypePtr src_array_type = fun_array.getReturnType(src_array_types);
-    DataTypePtr dst_array_type = fun_array.getReturnType(dst_array_types);
+    DataTypePtr src_array_type = fun_builder_array.getReturnType(src_array_types);
+    DataTypePtr dst_array_type = fun_builder_array.getReturnType(dst_array_types);
 
     Block temp_block = block;
 
@@ -322,11 +324,11 @@ void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers 
     size_t dst_array_pos = temp_block.columns();
     temp_block.insert({nullptr, dst_array_type, ""});
 
-    fun_array.execute(temp_block, src_array_args, src_array_pos);
-    fun_array.execute(temp_block, dst_array_args, dst_array_pos);
+    executable_array.execute(temp_block, src_array_args, src_array_pos);
+    executable_array.execute(temp_block, dst_array_args, dst_array_pos);
 
     /// Execute transform.
-    FunctionTransform fun_transform;
+    DefaultExecutable fun_transform(std::make_shared<FunctionTransform>());
 
     ColumnNumbers transform_args{args.front(), src_array_pos, dst_array_pos, args.back()};
     fun_transform.execute(temp_block, transform_args, result);
