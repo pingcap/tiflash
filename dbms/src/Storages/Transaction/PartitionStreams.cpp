@@ -279,6 +279,36 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
     }
 }
 
+// ParseTS parses the ts to (physical,logical).
+// Reference: https://github.com/tikv/pd/blob/v5.1.1/pkg/tsoutil/tso.go#L22-L33
+// ts: timestamp from TSO.
+// Return <physical time in ms, logical time>.
+static inline std::pair<UInt64, UInt64> parseTS(UInt64 ts)
+{
+    constexpr int physical_shift_bits = 18;
+    constexpr UInt64 logical_bits = (1 << physical_shift_bits) - 1;
+    auto logical = ts & logical_bits;
+    auto physical = ts >> physical_shift_bits;
+    return {physical, logical};
+}
+
+static inline void reportUpstreamLatency(const RegionDataReadInfoList & data_list_read)
+{
+    if (unlikely(data_list_read.empty()))
+    {
+        return;
+    }
+    auto ts = std::get<2>(data_list_read.front());
+    auto [physical_ms, logical] = parseTS(ts);
+    std::ignore = logical;
+    UInt64 curr_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+    if (likely(curr_ms > physical_ms))
+    {
+        auto latency_ms = curr_ms - physical_ms;
+        GET_METRIC(tiflash_raft_upstream_latency, type_write).Observe(static_cast<double>(latency_ms) / 1000.0);
+    }
+}
+
 void RegionTable::writeBlockByRegion(
     Context & context,
     const RegionPtrWithBlock & region,
@@ -300,6 +330,7 @@ void RegionTable::writeBlockByRegion(
     if (!data_list_read)
         return;
 
+    reportUpstreamLatency(*data_list_read);
     writeRegionDataToStorage(context, region, *data_list_read, log);
 
     RemoveRegionCommitCache(region, *data_list_read, lock_region);

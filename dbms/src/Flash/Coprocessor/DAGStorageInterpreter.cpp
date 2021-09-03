@@ -11,18 +11,20 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char region_exception_after_read_from_storage_some_error[];
 extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_after_learner_read[];
+extern const char force_remote_read_for_batch_cop[];
 } // namespace FailPoints
 
 namespace
 {
 RegionException::RegionReadStatus GetRegionReadStatus(
-    const RegionInfo & check_info, const RegionPtr & current_region, ImutRegionRangePtr & region_range)
+    const RegionInfo & check_info,
+    const RegionPtr & current_region,
+    ImutRegionRangePtr & region_range)
 {
     if (!current_region)
         return RegionException::RegionReadStatus::NOT_FOUND;
@@ -38,8 +40,13 @@ RegionException::RegionReadStatus GetRegionReadStatus(
 }
 
 std::tuple<std::optional<RegionRetryList>, RegionException::RegionReadStatus>
-MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt,
-    MvccQueryInfo & mvcc_info, TableID table_id)
+MakeRegionQueryInfos(
+    const RegionInfoMap & dag_region_infos,
+    const std::unordered_set<RegionID> & region_force_retry,
+    TMTContext & tmt,
+    MvccQueryInfo & mvcc_info,
+    TableID table_id,
+    bool batch_cop [[maybe_unused]])
 {
     mvcc_info.regions_query_info.clear();
     RegionRetryList region_need_retry;
@@ -49,7 +56,8 @@ MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordere
         if (r.key_ranges.empty())
         {
             throw TiFlashException(
-                "Income key ranges is empty for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
+                "Income key ranges is empty for region: " + std::to_string(r.region_id),
+                Errors::Coprocessor::BadRequest);
         }
         if (region_force_retry.count(id))
         {
@@ -58,8 +66,12 @@ MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordere
             continue;
         }
         ImutRegionRangePtr region_range{nullptr};
-        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
-            status != RegionException::RegionReadStatus::OK)
+        auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
+        fiu_do_on(FailPoints::force_remote_read_for_batch_cop, {
+            if (batch_cop)
+                status = RegionException::RegionReadStatus::NOT_FOUND;
+        });
+        if (status != RegionException::RegionReadStatus::OK)
         {
             region_need_retry.emplace_back(r);
             status_res = status;
@@ -76,14 +88,16 @@ MakeRegionQueryInfos(const RegionInfoMap & dag_region_infos, const std::unordere
                 TableID table_id_in_range = -1;
                 if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != table_id)
                 {
-                    throw TiFlashException("Income key ranges is illegal for region: " + std::to_string(r.region_id)
+                    throw TiFlashException(
+                        "Income key ranges is illegal for region: " + std::to_string(r.region_id)
                             + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
                             + std::to_string(table_id),
                         Errors::Coprocessor::BadRequest);
                 }
                 if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                     throw TiFlashException(
-                        "Income key ranges is illegal for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
+                        "Income key ranges is illegal for region: " + std::to_string(r.region_id),
+                        Errors::Coprocessor::BadRequest);
             }
             info.required_handle_ranges = r.key_ranges;
             info.bypass_lock_ts = r.bypass_lock_ts;
@@ -108,17 +122,17 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     const std::vector<const tipb::Expr *> & conditions_,
     size_t max_streams_,
     const std::shared_ptr<LogWithPrefix> & log_)
-    : context(context_),
-      dag(dag_),
-      query_block(query_block_),
-      table_scan(ts),
-      conditions(conditions_),
-      max_streams(max_streams_),
-      log(log_),
-      table_id(ts.table_id()),
-      settings(context.getSettingsRef()),
-      tmt(context.getTMTContext()),
-      mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
+    : context(context_)
+    , dag(dag_)
+    , query_block(query_block_)
+    , table_scan(ts)
+    , conditions(conditions_)
+    , max_streams(max_streams_)
+    , log(log_)
+    , table_id(ts.table_id())
+    , settings(context.getSettingsRef())
+    , tmt(context.getTMTContext())
+    , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
     log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("DAGStorageInterpreter"), "");
 }
@@ -141,7 +155,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     if (!mvcc_query_info->regions_query_info.empty())
         doLocalRead(pipeline, settings.max_block_size);
 
-    for (auto & region_info : dag.getRetryRegions())
+    for (auto & region_info : dag.getRegionsForRemoteRead())
         region_retry.emplace_back(region_info);
 
     null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns));
@@ -157,7 +171,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
         {},
         tmt,
         *mvcc_query_info,
-        table_id);
+        table_id,
+        false);
 
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
@@ -168,6 +183,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
 /// Will assign region_retry
 LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 {
+    if (dag.getRegions().empty())
+        return {};
     std::unordered_set<RegionID> force_retry;
     for (;;)
     {
@@ -179,7 +196,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
                 force_retry,
                 tmt,
                 *mvcc_query_info,
-                table_id);
+                table_id,
+                true);
             UNUSED(status);
 
             if (retry)
@@ -296,12 +314,12 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                         }
                     }
                     LOG_WARNING(log,
-                        "RegionException after read from storage, regions ["
-                            << ss.str() << "], message: " << e.message()
-                            << (regions_query_info.empty() ? "" : ", retry to read from local"));
+                                "RegionException after read from storage, regions ["
+                                    << ss.str() << "], message: " << e.message()
+                                    << (regions_query_info.empty() ? "" : ", retry to read from local"));
                     if (unlikely(regions_query_info.empty()))
                         break; // no available region in local, break retry loop
-                    continue;  // continue to retry read from local storage
+                    continue; // continue to retry read from local storage
                 }
                 else
                 {
@@ -323,7 +341,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
             {
                 // Throw an exception for TiDB / TiSpark to retry
                 e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                    + "`, table_id: " + DB::toString(table_id) + ")");
+                             + "`, table_id: " + DB::toString(table_id) + ")");
                 throw;
             }
         }
@@ -331,7 +349,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
         {
             /// Other unknown exceptions
             e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                + "`, table_id: " + DB::toString(table_id) + ")");
+                         + "`, table_id: " + DB::toString(table_id) + ")");
             throw;
         }
     }
@@ -369,8 +387,8 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DT)
         {
             throw TiFlashException("Specifying schema_version for non-managed storage: " + storage_->getName()
-                    + ", table: " + storage_->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
-                Errors::Coprocessor::Internal);
+                                       + ", table: " + storage_->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
+                                   Errors::Coprocessor::Internal);
         }
 
         auto lock = storage_->lockStructureForShare(context.getCurrentQueryId());
@@ -385,8 +403,8 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
             throw TiFlashException("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
-                    + " newer than query schema version " + std::to_string(query_schema_version),
-                Errors::Table::SchemaVersionError);
+                                       + " newer than query schema version " + std::to_string(query_schema_version),
+                                   Errors::Table::SchemaVersionError);
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
@@ -404,8 +422,8 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
 
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
         LOG_DEBUG(log,
-            __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
-                                << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+                  __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
+                                      << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
     };
 
     auto sync_schema = [&] {
@@ -449,8 +467,8 @@ std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColu
     {
         throw TiFlashException("Limit for number of columns to read exceeded. "
                                "Requested: "
-                + toString(table_scan.columns().size()) + ", maximum: " + toString(max_columns_to_read),
-            Errors::BroadcastJoin::TooManyColumns);
+                                   + toString(table_scan.columns().size()) + ", maximum: " + toString(max_columns_to_read),
+                               Errors::BroadcastJoin::TooManyColumns);
     }
 
     Names required_columns_;
@@ -486,20 +504,30 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
         context.getQueryContext().getDAGContext()->retry_regions.push_back(r.get());
     }
     LOG_DEBUG(log, ({
-        std::stringstream ss;
-        ss << "Start to retry " << region_retry.size() << " regions (";
-        for (auto & r : region_retry)
-            ss << r.get().region_id << ",";
-        ss << ")";
-        ss.str();
-    }));
+                  std::stringstream ss;
+                  ss << "Start to retry " << region_retry.size() << " regions (";
+                  for (auto & r : region_retry)
+                      ss << r.get().region_id << ",";
+                  ss << ")";
+                  ss.str();
+              }));
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;
+    auto * executor = dag_req.mutable_root_executor();
+    if (query_block.selection != nullptr)
+    {
+        executor->set_tp(tipb::ExecType::TypeSelection);
+        executor->set_executor_id(query_block.selection->executor_id());
+        auto * selection = executor->mutable_selection();
+        for (auto & condition : query_block.selection->selection().conditions())
+            *selection->add_conditions() = condition;
+        executor = selection->mutable_child();
+    }
 
     {
         const auto & table_info = storage->getTableInfo();
-        tipb::Executor * ts_exec = dag_req.add_executors();
+        tipb::Executor * ts_exec = executor;
         ts_exec->set_tp(tipb::ExecType::TypeTableScan);
         ts_exec->set_executor_id(query_block.source->executor_id());
         *(ts_exec->mutable_tbl_scan()) = table_scan;
@@ -525,13 +553,17 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
             dag_req.add_output_offsets(i);
         }
         dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+        dag_req.set_force_encode_type(true);
     }
     /// do not collect execution summaries because in this case because the execution summaries
     /// will be collected by CoprocessorBlockInputStream
     dag_req.set_collect_execution_summaries(false);
+    if (dag.getDAGRequest().has_time_zone_name() && !dag.getDAGRequest().time_zone_name().empty())
+        dag_req.set_time_zone_name(dag.getDAGRequest().time_zone_name());
+    if (dag.getDAGRequest().has_time_zone_offset())
+        dag_req.set_time_zone_offset(dag.getDAGRequest().time_zone_offset());
     return std::make_tuple(dag_req, schema);
 }
 
 
 } // namespace DB
-

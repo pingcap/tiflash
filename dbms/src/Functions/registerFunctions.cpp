@@ -1,13 +1,9 @@
+#include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 
-#include <Functions/FunctionFactory.h>
-
-
-#include <iostream>
 
 namespace DB
 {
-
 /** These functions are defined in a separate translation units.
   * This is done in order to reduce the consumption of RAM during build, and to speed up the parallel build.
   */
@@ -85,4 +81,4 @@ void registerFunctions()
     registerFunctionsStringMath(factory);
 }
 
-}
+} // namespace DB

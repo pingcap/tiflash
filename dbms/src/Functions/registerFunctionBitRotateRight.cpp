@@ -1,7 +1,7 @@
 #include <Functions/registerFunctionBitRotateRight.h>
 
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsArithmetic.h>
+#include <Functions/FunctionsBinaryArithmetic.h>
 
 namespace DB
 {

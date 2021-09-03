@@ -1,3 +1,5 @@
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -11,6 +13,7 @@
 #include <Storages/Transaction/TMTContext.h>
 
 #include <chrono>
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -364,6 +367,10 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
                                                 UInt64 term,
                                                 TMTContext & tmt)
 {
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_admin).Observe(watch.elapsedSeconds());
+    });
     auto type = request.cmd_type();
     switch (request.cmd_type())
     {

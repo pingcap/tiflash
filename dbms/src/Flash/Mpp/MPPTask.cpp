@@ -34,6 +34,7 @@ extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
+extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
 String MPPTaskId::toString() const
@@ -44,7 +45,7 @@ String MPPTaskId::toString() const
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
-    , log(std::make_shared<LogWithPrefix>(&Poco::Logger::get(fmt::format("task {}", meta_.task_id())), fmt::format("[task {} query {}]", meta.task_id(), meta.start_ts())))
+    , log(std::make_shared<LogWithPrefix>(&Poco::Logger::get("MPPTask"), fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
@@ -132,6 +133,7 @@ void MPPTask::unregisterTask()
 
 bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
 {
+    fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
     RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
         return true;
@@ -317,6 +319,7 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
+    String err_msg;
     LOG_INFO(log, "task starts running");
     try
     {
@@ -370,26 +373,34 @@ void MPPTask::runImpl()
     }
     catch (Exception & e)
     {
-        LOG_ERROR(log, "task running meets error " << e.displayText() << " Stack Trace : " << e.getStackTrace().toString());
-        writeErrToAllTunnel(e.displayText());
+        err_msg = e.displayText();
+        LOG_ERROR(log, "task running meets error: " << err_msg << " Stack Trace : " << e.getStackTrace().toString());
     }
     catch (std::exception & e)
     {
-        LOG_ERROR(log, "task running meets error " << e.what());
-        writeErrToAllTunnel(e.what());
+        err_msg = e.what();
+        LOG_ERROR(log, "task running meets error: " << err_msg);
     }
     catch (...)
     {
-        LOG_ERROR(log, "unrecovered error");
-        writeErrToAllTunnel("unrecovered fatal error");
+        err_msg = "unrecovered error";
+        LOG_ERROR(log, "task running meets error: " << err_msg);
     }
-    auto throughput = dag_context->getTableScanThroughput();
-    if (throughput.first)
-        GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
+    if (err_msg.empty())
+    {
+        // todo when error happens, should try to update the metrics if it is available
+        auto throughput = dag_context->getTableScanThroughput();
+        if (throughput.first)
+            GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
+        auto process_info = context.getProcessListElement()->getInfo();
+        auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+        GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
+    }
+    else
+    {
+        writeErrToAllTunnel(err_msg);
+    }
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
-    auto process_info = context.getProcessListElement()->getInfo();
-    auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-    GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
     unregisterTask();
     status = FINISHED;
 }
