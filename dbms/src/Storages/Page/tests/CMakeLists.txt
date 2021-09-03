@@ -26,6 +26,7 @@ list (APPEND page_stress_testing_sources
     stress/PSRunnable.cpp
     stress/workload/Normal.cpp
     stress/workload/HighValidBigFileGC.cpp
+    stress/workload/HeavyMemoryCostInGC.cpp
 )
 
 list (APPEND page_stress_testing_header

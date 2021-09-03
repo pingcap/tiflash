@@ -20,6 +20,10 @@ template <typename Child>
 class StressWorkloadFunc
 {
 public:
+    static String name_func()
+    {
+        return Child::name();
+    }
     static UInt64 mask_func()
     {
         return Child::mask();
@@ -37,6 +41,7 @@ public:
         options = options_;
     }
 
+    virtual String desc() { return ""; };
     virtual void run(){};
     virtual bool verify()
     {
@@ -90,9 +95,8 @@ protected:
 class StressWorkloadManger
 {
 private:
-    using Workload = std::function<StressWorkload *()>;
-    std::map<UInt64, Workload> funcs;
-    // std::map<UInt64,std::function<StressWorkload*()>> funcs;
+    using workload_func = std::function<StressWorkload *()>;
+    std::map<UInt64, std::pair<String, workload_func>> funcs;
     UInt64 mask = 0;
 
 private:
@@ -111,23 +115,46 @@ public:
         options = env_;
     }
 
-    void reg(const UInt64 mask_, Workload func)
+    void reg(const String & name_, const UInt64 & mask_, const workload_func func)
     {
         if (mask_ & mask)
         {
             assert(false);
         }
         mask |= mask_;
-        funcs[mask_] = func;
+        funcs[mask_] = std::make_pair(name_, func);
     }
 
-    Workload get(const UInt64 mask_)
+    std::pair<String, workload_func> get(const UInt64 mask_)
     {
         auto it = funcs.find(mask_);
         if (it == funcs.end())
-            throw DB::Exception(
-                fmt::format("No registed workload. mask {} . ", mask_));
+            throw DB::Exception(fmt::format("No registed workload. mask {} . ", mask_));
         return it->second;
+    }
+
+    String toWorkloadSelctedString() const
+    {
+        String debug_string = "Selected Workloads : \n";
+        for (auto & it : funcs)
+        {
+            if (options.situation_mask & it.first)
+            {
+                debug_string += fmt::format("   Name : {} , mask : {}. \n", it.second.first, it.first);
+            }
+        }
+        return debug_string;
+    }
+
+    String toDebugStirng() const
+    {
+        String debug_string = "Support Workloads : \n";
+        for (auto & it : funcs)
+        {
+            debug_string += fmt::format("   Name : {} , mask : {}. \n", it.second.first, it.first);
+        }
+        debug_string += fmt::format("   Need to run all over? try use `-M {}`", mask);
+        return debug_string;
     }
 
     void runWorkload();
@@ -139,7 +166,8 @@ private:
 #define REGISTER_WORKLOAD(WORKLOAD)                                                     \
     static void __attribute__((constructor)) _work_load_register_named_##WORKLOAD(void) \
     {                                                                                   \
-        StressWorkloadManger::getInstance().reg(WORKLOAD::mask_func(),                  \
+        StressWorkloadManger::getInstance().reg(WORKLOAD::name_func(),                  \
+                                                WORKLOAD::mask_func(),                  \
                                                 []() -> WORKLOAD * {                    \
                                                     return new WORKLOAD();              \
                                                 });                                     \

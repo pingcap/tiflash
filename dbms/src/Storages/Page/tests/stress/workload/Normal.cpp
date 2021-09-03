@@ -4,16 +4,25 @@ class NormalWorkload : public StressWorkload
     , public StressWorkloadFunc<NormalWorkload>
 {
 public:
+    static String name()
+    {
+        return "Normal workload(The Origin one)";
+    }
+
     static UInt64 mask()
     {
         return NORMAL_WORKLOAD;
     }
 
 private:
+    String desc() override
+    {
+        return options.toDebugString();
+    }
+
     void run() override
     {
         pool.addCapacity(1 + options.num_writers + options.num_readers);
-        LOG_INFO(StressEnv::logger, "Start Running WorkLoad-Normal");
 
         DB::PageStorage::Config config;
         config.num_write_slots = options.num_writer_slots;

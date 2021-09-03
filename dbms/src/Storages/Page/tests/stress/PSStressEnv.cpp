@@ -13,6 +13,8 @@
 
 #include <boost/program_options.hpp>
 
+#include "PSWorkload.h"
+
 int StressEnvStatus::statrc()
 {
     return status > 0 ? 0 : (int)status;
@@ -66,6 +68,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
     if (options.count("help") > 0)
     {
         std::cerr << desc << std::endl;
+        std::cerr << StressWorkloadManger::getInstance().toDebugStirng() << std::endl;
         exit(0);
     }
 

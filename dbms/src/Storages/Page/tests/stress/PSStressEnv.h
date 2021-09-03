@@ -70,9 +70,8 @@ struct StressEnv
     std::vector<std::string> paths;
     std::vector<std::string> failpoints;
 
-    std::string toDebugString() const
+    String toDebugString() const
     {
-        // TBD add mask debug info
         return fmt::format("{{ num_writers: {}, num_readers: {}, clean_before_run: {}" //
                            ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
                            ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}] }}"
@@ -92,6 +91,7 @@ struct StressEnv
                            //
         );
     }
+
 
     static void initGlobalLogger();
 

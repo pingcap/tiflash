@@ -109,9 +109,12 @@ void StressWorkloadManger::runWorkload()
 {
     if (options.situation_mask == NORMAL_WORKLOAD)
     {
-        Workload func = get(NORMAL_WORKLOAD);
+        String name;
+        workload_func func;
+        std::tie(name, func) = get(NORMAL_WORKLOAD);
         auto workload = std::shared_ptr<StressWorkload>(func());
         workload->init(options);
+        LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
         workload->run();
         workload->result();
         return;
@@ -119,15 +122,17 @@ void StressWorkloadManger::runWorkload()
 
     // skip NORMAL_WORKLOAD
     funcs.erase(funcs.find(NORMAL_WORKLOAD));
+    std::cout << toWorkloadSelctedString() << std::endl;
 
     for (auto & it : funcs)
     {
-        if (options.situation_mask | it.first)
+        if (options.situation_mask & it.first)
         {
-            // TBD direct get , no need find twice
-            Workload func = get(it.first);
+            auto & name = it.second.first;
+            auto & func = it.second.second;
             auto workload = std::shared_ptr<StressWorkload>(func());
             workload->init(options);
+            LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", it.second.first, workload->desc()));
             workload->run();
             if (workload->verify())
             {
