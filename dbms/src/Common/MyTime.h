@@ -59,7 +59,7 @@ struct MyTimeBase
         TypeDuration
     };
 
-    UInt16 year; // year <= 9999
+    Int16 year; // year <= 9999
     UInt8 month; // month <= 12
     UInt8 day; // day <= 31
     // When it's type is Time, HH:MM:SS may be 839:59:59 to -839:59:59, so use int16 to avoid overflow
