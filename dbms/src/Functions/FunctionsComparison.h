@@ -977,7 +977,16 @@ private:
     }
 
     bool executeStringWithoutCollator(
-            Block & block, size_t result, const IColumn * c0, const IColumn * c1, const ColumnString * c0_string, const ColumnString * c1_string, const ColumnFixedString * c0_fixed_string, const ColumnFixedString * c1_fixed_string, const ColumnConst * c0_const, const ColumnConst * c1_const) const
+        Block & block,
+        size_t result,
+        const IColumn * c0,
+        const IColumn * c1,
+        const ColumnString * c0_string,
+        const ColumnString * c1_string,
+        const ColumnFixedString * c0_fixed_string,
+        const ColumnFixedString * c1_fixed_string,
+        const ColumnConst * c0_const,
+        const ColumnConst * c1_const) const
     {
         using StringImpl = StringComparisonImpl<Op<int, int>>;
 
@@ -1057,7 +1066,16 @@ private:
         }
     }
     bool executeStringWithCollator(
-            Block & block, size_t result, const IColumn * c0, const IColumn * c1, const ColumnString * c0_string, const ColumnString * c1_string, const ColumnFixedString * c0_fixed_string, const ColumnFixedString * c1_fixed_string, const ColumnConst * c0_const, const ColumnConst * c1_const) const
+        Block & block,
+        size_t result,
+        const IColumn * c0,
+        const IColumn * c1,
+        const ColumnString * c0_string,
+        const ColumnString * c1_string,
+        const ColumnFixedString * c0_fixed_string,
+        const ColumnFixedString * c1_fixed_string,
+        const ColumnConst * c0_const,
+        const ColumnConst * c1_const) const
     {
         using StringImpl = StringComparisonWithCollatorImpl<Op<int, int>>;
 
@@ -1313,7 +1331,11 @@ private:
 
     template <typename ComparisonFunction, typename ConvolutionFunction>
     void executeTupleEqualityImpl(
-            Block & block, size_t result, const ColumnsWithTypeAndName & x, const ColumnsWithTypeAndName & y, size_t tuple_size) const
+        Block & block,
+        size_t result,
+        const ColumnsWithTypeAndName & x,
+        const ColumnsWithTypeAndName & y,
+        size_t tuple_size) const
     {
         DefaultExecutable func_compare(std::make_shared<ComparisonFunction>());
         DefaultExecutable func_convolution(std::make_shared<ConvolutionFunction>());
@@ -1342,7 +1364,11 @@ private:
 
     template <typename HeadComparisonFunction, typename TailComparisonFunction>
     void executeTupleLessGreaterImpl(
-            Block & block, size_t result, const ColumnsWithTypeAndName & x, const ColumnsWithTypeAndName & y, size_t tuple_size) const
+        Block & block,
+        size_t result,
+        const ColumnsWithTypeAndName & x,
+        const ColumnsWithTypeAndName & y,
+        size_t tuple_size) const
     {
         DefaultExecutable func_compare_head(std::make_shared<HeadComparisonFunction>());
         DefaultExecutable func_compare_tail(std::make_shared<TailComparisonFunction>());
@@ -1438,7 +1464,7 @@ private:
     }
 
     template <typename T0, typename T1, bool is_left_date>
-    bool executeDateAndDateTimeCompare(Block & block, size_t result, const IColumn * c0, const IColumn * c1)const
+    bool executeDateAndDateTimeCompare(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
         bool c0_const = c0->isColumnConst();
         bool c1_const = c1->isColumnConst();
@@ -1571,7 +1597,7 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeDecimal(Block & block, size_t result, const ColumnWithTypeAndName & col_left, const ColumnWithTypeAndName & col_right)const
+    void executeDecimal(Block & block, size_t result, const ColumnWithTypeAndName & col_left, const ColumnWithTypeAndName & col_right) const
     {
         TypeIndex left_number = col_left.type->getTypeId();
         TypeIndex right_number = col_right.type->getTypeId();

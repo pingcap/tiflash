@@ -1,25 +1,24 @@
 #pragma once
 
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
-#include <Functions/IFunction.h>
-#include <Functions/FunctionsMiscellaneous.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsMiscellaneous.h>
+#include <Functions/IFunction.h>
+#include <Interpreters/ExpressionActions.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 /** Higher-order functions for arrays:
   *
@@ -310,20 +309,13 @@ struct ArraySumImpl
 
     static DataTypePtr getReturnType(const DataTypePtr & expression_return, const DataTypePtr & /*array_element*/)
     {
-        if (checkDataType<DataTypeUInt8>(&*expression_return) ||
-            checkDataType<DataTypeUInt16>(&*expression_return) ||
-            checkDataType<DataTypeUInt32>(&*expression_return) ||
-            checkDataType<DataTypeUInt64>(&*expression_return))
+        if (checkDataType<DataTypeUInt8>(&*expression_return) || checkDataType<DataTypeUInt16>(&*expression_return) || checkDataType<DataTypeUInt32>(&*expression_return) || checkDataType<DataTypeUInt64>(&*expression_return))
             return std::make_shared<DataTypeUInt64>();
 
-        if (checkDataType<DataTypeInt8>(&*expression_return) ||
-            checkDataType<DataTypeInt16>(&*expression_return) ||
-            checkDataType<DataTypeInt32>(&*expression_return) ||
-            checkDataType<DataTypeInt64>(&*expression_return))
+        if (checkDataType<DataTypeInt8>(&*expression_return) || checkDataType<DataTypeInt16>(&*expression_return) || checkDataType<DataTypeInt32>(&*expression_return) || checkDataType<DataTypeInt64>(&*expression_return))
             return std::make_shared<DataTypeInt64>();
 
-        if (checkDataType<DataTypeFloat32>(&*expression_return) ||
-            checkDataType<DataTypeFloat64>(&*expression_return))
+        if (checkDataType<DataTypeFloat32>(&*expression_return) || checkDataType<DataTypeFloat64>(&*expression_return))
             return std::make_shared<DataTypeFloat64>();
 
         throw Exception("arraySum cannot add values of type " + expression_return->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -381,16 +373,7 @@ struct ArraySumImpl
         const IColumn::Offsets & offsets = array.getOffsets();
         ColumnPtr res;
 
-        if (executeType< UInt8 , UInt64>(mapped, offsets, res) ||
-            executeType< UInt16, UInt64>(mapped, offsets, res) ||
-            executeType< UInt32, UInt64>(mapped, offsets, res) ||
-            executeType< UInt64, UInt64>(mapped, offsets, res) ||
-            executeType<  Int8 ,  Int64>(mapped, offsets, res) ||
-            executeType<  Int16,  Int64>(mapped, offsets, res) ||
-            executeType<  Int32,  Int64>(mapped, offsets, res) ||
-            executeType<  Int64,  Int64>(mapped, offsets, res) ||
-            executeType<Float32,Float64>(mapped, offsets, res) ||
-            executeType<Float64,Float64>(mapped, offsets, res))
+        if (executeType<UInt8, UInt64>(mapped, offsets, res) || executeType<UInt16, UInt64>(mapped, offsets, res) || executeType<UInt32, UInt64>(mapped, offsets, res) || executeType<UInt64, UInt64>(mapped, offsets, res) || executeType<Int8, Int64>(mapped, offsets, res) || executeType<Int16, Int64>(mapped, offsets, res) || executeType<Int32, Int64>(mapped, offsets, res) || executeType<Int64, Int64>(mapped, offsets, res) || executeType<Float32, Float64>(mapped, offsets, res) || executeType<Float64, Float64>(mapped, offsets, res))
             return res;
         else
             throw Exception("Unexpected column for arraySum: " + mapped->getName());
@@ -560,7 +543,9 @@ struct ArraySortImpl
     {
         const IColumn & column;
 
-        Less(const IColumn & column) : column(column) {}
+        Less(const IColumn & column)
+            : column(column)
+        {}
 
         bool operator()(size_t lhs, size_t rhs) const
         {
@@ -602,20 +587,13 @@ struct ArrayCumSumImpl
 
     static DataTypePtr getReturnType(const DataTypePtr & expression_return, const DataTypePtr & /*array_element*/)
     {
-        if (checkDataType<DataTypeUInt8>(&*expression_return) ||
-            checkDataType<DataTypeUInt16>(&*expression_return) ||
-            checkDataType<DataTypeUInt32>(&*expression_return) ||
-            checkDataType<DataTypeUInt64>(&*expression_return))
+        if (checkDataType<DataTypeUInt8>(&*expression_return) || checkDataType<DataTypeUInt16>(&*expression_return) || checkDataType<DataTypeUInt32>(&*expression_return) || checkDataType<DataTypeUInt64>(&*expression_return))
             return std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>());
 
-        if (checkDataType<DataTypeInt8>(&*expression_return) ||
-            checkDataType<DataTypeInt16>(&*expression_return) ||
-            checkDataType<DataTypeInt32>(&*expression_return) ||
-            checkDataType<DataTypeInt64>(&*expression_return))
+        if (checkDataType<DataTypeInt8>(&*expression_return) || checkDataType<DataTypeInt16>(&*expression_return) || checkDataType<DataTypeInt32>(&*expression_return) || checkDataType<DataTypeInt64>(&*expression_return))
             return std::make_shared<DataTypeArray>(std::make_shared<DataTypeInt64>());
 
-        if (checkDataType<DataTypeFloat32>(&*expression_return) ||
-            checkDataType<DataTypeFloat64>(&*expression_return))
+        if (checkDataType<DataTypeFloat32>(&*expression_return) || checkDataType<DataTypeFloat64>(&*expression_return))
             return std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat64>());
 
         throw Exception("arrayCumSum cannot add values of type " + expression_return->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -681,28 +659,17 @@ struct ArrayCumSumImpl
         }
         res_ptr = ColumnArray::create(std::move(res_nested), array.getOffsetsPtr());
         return true;
-
     }
 
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
         ColumnPtr res;
 
-        if (executeType< UInt8 , UInt64>(mapped, array, res) ||
-            executeType< UInt16, UInt64>(mapped, array, res) ||
-            executeType< UInt32, UInt64>(mapped, array, res) ||
-            executeType< UInt64, UInt64>(mapped, array, res) ||
-            executeType<  Int8 ,  Int64>(mapped, array, res) ||
-            executeType<  Int16,  Int64>(mapped, array, res) ||
-            executeType<  Int32,  Int64>(mapped, array, res) ||
-            executeType<  Int64,  Int64>(mapped, array, res) ||
-            executeType<Float32,Float64>(mapped, array, res) ||
-            executeType<Float64,Float64>(mapped, array, res))
+        if (executeType<UInt8, UInt64>(mapped, array, res) || executeType<UInt16, UInt64>(mapped, array, res) || executeType<UInt32, UInt64>(mapped, array, res) || executeType<UInt64, UInt64>(mapped, array, res) || executeType<Int8, Int64>(mapped, array, res) || executeType<Int16, Int64>(mapped, array, res) || executeType<Int32, Int64>(mapped, array, res) || executeType<Int64, Int64>(mapped, array, res) || executeType<Float32, Float64>(mapped, array, res) || executeType<Float64, Float64>(mapped, array, res))
             return res;
         else
             throw Exception("Unexpected column for arrayCumSum: " + mapped->getName());
     }
-
 };
 
 
@@ -727,7 +694,7 @@ public:
     {
         if (arguments.size() < 1)
             throw Exception("Function " + getName() + " needs at least one argument; passed "
-                            + toString(arguments.size()) + ".",
+                                + toString(arguments.size()) + ".",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (arguments.size() == 1)
@@ -740,15 +707,17 @@ public:
             const DataTypeArray * array_type = checkAndGetDataType<DataTypeArray>(&*arguments[i + 1]);
             if (!array_type)
                 throw Exception("Argument " + toString(i + 2) + " of function " + getName() + " must be array. Found "
-                                + arguments[i + 1]->getName() + " instead.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                    + arguments[i + 1]->getName() + " instead.",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             nested_types[i] = array_type->getNestedType();
         }
 
         const DataTypeFunction * function_type = checkAndGetDataType<DataTypeFunction>(&*arguments[0]);
         if (!function_type || function_type->getArgumentTypes().size() != nested_types.size())
             throw Exception("First argument for this overload of " + getName() + " must be a function with "
-                            + toString(nested_types.size()) + " arguments. Found "
-                            + arguments[0]->getName() + " instead.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + toString(nested_types.size()) + " arguments. Found "
+                                + arguments[0]->getName() + " instead.",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         arguments[0] = std::make_shared<DataTypeFunction>(nested_types);
     }
@@ -810,8 +779,8 @@ public:
         size_t min_args = Impl::needExpression() ? 2 : 1;
         if (arguments.size() < min_args)
             throw Exception("Function " + getName() + " needs at least "
-                            + toString(min_args) + " argument; passed "
-                            + toString(arguments.size()) + ".",
+                                + toString(min_args) + " argument; passed "
+                                + toString(arguments.size()) + ".",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (arguments.size() == 1)
@@ -820,13 +789,15 @@ public:
 
             if (!array_type)
                 throw Exception("The only argument for function " + getName() + " must be array. Found "
-                                + arguments[0].type->getName() + " instead.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                    + arguments[0].type->getName() + " instead.",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             DataTypePtr nested_type = array_type->getNestedType();
 
             if (Impl::needBoolean() && !checkDataType<DataTypeUInt8>(&*nested_type))
                 throw Exception("The only argument for function " + getName() + " must be array of UInt8. Found "
-                                + arguments[0].type->getName() + " instead.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                    + arguments[0].type->getName() + " instead.",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             return Impl::getReturnType(nested_type, nested_type);
         }
@@ -834,20 +805,21 @@ public:
         {
             if (arguments.size() > 2 && Impl::needOneArray())
                 throw Exception("Function " + getName() + " needs one array argument.",
-                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
             const auto data_type_function = checkAndGetDataType<DataTypeFunction>(arguments[0].type.get());
 
             if (!data_type_function)
                 throw Exception("First argument for function " + getName() + " must be a function.",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             /// The types of the remaining arguments are already checked in getLambdaArgumentTypes.
 
             DataTypePtr return_type = data_type_function->getReturnType();
             if (Impl::needBoolean() && !checkDataType<DataTypeUInt8>(&*return_type))
                 throw Exception("Expression for function " + getName() + " must return UInt8, found "
-                                + return_type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                    + return_type->getName(),
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             const auto first_array_type = checkAndGetDataType<DataTypeArray>(&*arguments[1].type);
 
@@ -879,7 +851,7 @@ public:
 
             if (!column_with_type_and_name.column)
                 throw Exception("First argument for function " + getName() + " must be a function.",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             const auto * column_function = typeid_cast<const ColumnFunction *>(column_with_type_and_name.column.get());
 
@@ -932,7 +904,8 @@ public:
                 }
 
                 arrays.emplace_back(ColumnWithTypeAndName(column_array->getDataPtr(),
-                                                          array_type->getNestedType(), array_with_type_and_name.name));
+                                                          array_type->getNestedType(),
+                                                          array_with_type_and_name.name));
             }
 
             /// Put all the necessary columns multiplied by the sizes of arrays into the block.
@@ -947,17 +920,50 @@ public:
 };
 
 
-struct NameArrayMap         { static constexpr auto name = "arrayMap"; };
-struct NameArrayFilter      { static constexpr auto name = "arrayFilter"; };
-struct NameArrayCount       { static constexpr auto name = "arrayCount"; };
-struct NameArrayExists      { static constexpr auto name = "arrayExists"; };
-struct NameArrayAll         { static constexpr auto name = "arrayAll"; };
-struct NameArraySum         { static constexpr auto name = "arraySum"; };
-struct NameArrayFirst       { static constexpr auto name = "arrayFirst"; };
-struct NameArrayFirstIndex  { static constexpr auto name = "arrayFirstIndex"; };
-struct NameArraySort        { static constexpr auto name = "arraySort"; };
-struct NameArrayReverseSort { static constexpr auto name = "arrayReverseSort"; };
-struct NameArrayCumSum      { static constexpr auto name = "arrayCumSum"; };
+struct NameArrayMap
+{
+    static constexpr auto name = "arrayMap";
+};
+struct NameArrayFilter
+{
+    static constexpr auto name = "arrayFilter";
+};
+struct NameArrayCount
+{
+    static constexpr auto name = "arrayCount";
+};
+struct NameArrayExists
+{
+    static constexpr auto name = "arrayExists";
+};
+struct NameArrayAll
+{
+    static constexpr auto name = "arrayAll";
+};
+struct NameArraySum
+{
+    static constexpr auto name = "arraySum";
+};
+struct NameArrayFirst
+{
+    static constexpr auto name = "arrayFirst";
+};
+struct NameArrayFirstIndex
+{
+    static constexpr auto name = "arrayFirstIndex";
+};
+struct NameArraySort
+{
+    static constexpr auto name = "arraySort";
+};
+struct NameArrayReverseSort
+{
+    static constexpr auto name = "arrayReverseSort";
+};
+struct NameArrayCumSum
+{
+    static constexpr auto name = "arrayCumSum";
+};
 
 using FunctionArrayMap = FunctionArrayMapped<ArrayMapImpl, NameArrayMap>;
 using FunctionArrayFilter = FunctionArrayMapped<ArrayFilterImpl, NameArrayFilter>;
@@ -971,4 +977,4 @@ using FunctionArraySort = FunctionArrayMapped<ArraySortImpl<true>, NameArraySort
 using FunctionArrayReverseSort = FunctionArrayMapped<ArraySortImpl<false>, NameArrayReverseSort>;
 using FunctionArrayCumSum = FunctionArrayMapped<ArrayCumSumImpl, NameArrayCumSum>;
 
-}
+} // namespace DB

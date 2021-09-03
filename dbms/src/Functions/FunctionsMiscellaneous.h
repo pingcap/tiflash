@@ -43,10 +43,10 @@ class FunctionExpression : public IFunctionBase
 public:
     FunctionExpression(
         const ExpressionActionsPtr & expression_actions,
-                       const DataTypes & argument_types,
-                       const Names & argument_names,
-                       const DataTypePtr & return_type,
-                       const std::string & return_name)
+        const DataTypes & argument_types,
+        const Names & argument_names,
+        const DataTypePtr & return_type,
+        const std::string & return_name)
         : expression_actions(expression_actions)
         , argument_types(argument_types)
         , argument_names(argument_names)
@@ -96,7 +96,7 @@ private:
 ///  execute(y) returns ColumnFunction(FunctionExpression(x + y), y) with type Function(x) -> function_return_type.
 class FunctionCapture : public IFunctionBase
     , public IExecutableFunction
-    , public IFunctionBuilder 
+    , public IFunctionBuilder
     , public std::enable_shared_from_this<FunctionCapture>
 {
 public:

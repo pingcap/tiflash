@@ -1,24 +1,23 @@
-#include <Functions/IFunction.h>
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionHelpers.h>
-#include <DataTypes/IDataType.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeArray.h>
-#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/IDataType.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
 #include <Interpreters/ExpressionActions.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ILLEGAL_INDEX;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ILLEGAL_INDEX;
+} // namespace ErrorCodes
 
 
 /** tuple(x, y, ...) is a function that allows you to group several columns
@@ -205,4 +204,4 @@ void registerFunctionsTuple(FunctionFactory & factory)
     factory.registerFunction<FunctionTupleElement>();
 }
 
-}
+} // namespace DB

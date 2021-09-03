@@ -1,28 +1,26 @@
-#include <Functions/IFunction.h>
-#include <Functions/FunctionHelpers.h>
-#include <Columns/ColumnNullable.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
 #include <Columns/ColumnConst.h>
-#include <Interpreters/ExpressionActions.h>
+#include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
-#include <ext/range.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+#include <Interpreters/ExpressionActions.h>
+
 #include <ext/collection_cast.h>
+#include <ext/range.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ILLEGAL_COLUMN;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ILLEGAL_COLUMN;
+} // namespace ErrorCodes
 
 namespace
 {
-
-
 /** Return ColumnNullable of src, with null map as OR-ed null maps of args columns in blocks.
   * Or ColumnConst(ColumnNullable) if the result is always NULL or if the result is constant and always not NULL.
   */
@@ -132,7 +130,7 @@ bool allArgumentsAreConstants(const Block & block, const ColumnNumbers & args)
             return false;
     return true;
 }
-}
+} // namespace
 
 bool IExecutableFunction::defaultImplementationForConstantArguments(Block & block, const ColumnNumbers & args, size_t result) const
 {
@@ -159,7 +157,7 @@ bool IExecutableFunction::defaultImplementationForConstantArguments(Block & bloc
         else
         {
             have_converted_columns = true;
-            temporary_block.insert({ static_cast<const ColumnConst *>(column.column.get())->getDataColumnPtr(), column.type, column.name });
+            temporary_block.insert({static_cast<const ColumnConst *>(column.column.get())->getDataColumnPtr(), column.type, column.name});
         }
     }
 
@@ -168,7 +166,7 @@ bool IExecutableFunction::defaultImplementationForConstantArguments(Block & bloc
       */
     if (!have_converted_columns)
         throw Exception("Number of arguments for function " + getName() + " doesn't match: the function requires more arguments",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     temporary_block.insert(block.getByPosition(result));
 
@@ -227,7 +225,7 @@ void IFunctionBuilder::checkNumberOfArguments(size_t number_of_arguments) const
 
     if (number_of_arguments != expected_number_of_arguments)
         throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                        + toString(number_of_arguments) + ", should be " + toString(expected_number_of_arguments),
+                            + toString(number_of_arguments) + ", should be " + toString(expected_number_of_arguments),
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 }
 
@@ -253,7 +251,6 @@ DataTypePtr IFunctionBuilder::getReturnType(const ColumnsWithTypeAndName & argum
             Block nested_block = createBlockWithNestedColumns(Block(arguments), ext::collection_cast<ColumnNumbers>(ext::range(0, arguments.size())));
             auto return_type = getReturnTypeImpl(ColumnsWithTypeAndName(nested_block.begin(), nested_block.end()));
             return makeNullable(return_type);
-
         }
     }
 
@@ -267,4 +264,3 @@ void IFunctionBuilder::getLambdaArgumentTypes(DataTypes & arguments [[maybe_unus
 }
 
 } // namespace DB
-

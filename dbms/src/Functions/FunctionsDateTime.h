@@ -1,41 +1,34 @@
 #pragma once
 
-#include <DataTypes/DataTypesNumber.h>
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
-#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
-
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnConst.h>
-#include <Columns/ColumnArray.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
-
-#include <Common/typeid_cast.h>
-
-#include <IO/WriteHelpers.h>
-
-#include <Functions/IFunction.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-
+#include <Functions/IFunction.h>
+#include <IO/WriteHelpers.h>
+#include <Poco/String.h>
 #include <common/DateLUT.h>
 
-#include <Poco/String.h>
-
 #include <type_traits>
-#include <DataTypes/DataTypeMyDate.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <Columns/ColumnNullable.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 static const Int64 SECOND_IN_ONE_DAY = 86400;
@@ -58,7 +51,7 @@ inline void fillMonthAndDay(int day_num, int & month, int & day, const int * acc
     month = day_num / 31;
     if (accumulated_days_per_month[month] < day_num)
         month++;
-    day = day_num - (month == 0 ? 0 : accumulated_days_per_month[month-1] + 1);
+    day = day_num - (month == 0 ? 0 : accumulated_days_per_month[month - 1] + 1);
 }
 
 inline void fromDayNum(MyDateTime & t, int day_num)
@@ -90,8 +83,8 @@ inline void fromDayNum(MyDateTime & t, int day_num)
 
         year = 1 + num_of_400_years * 400 + num_of_100_years * 100 + num_of_4_years * 4 + num_of_years;
     }
-    static const int ACCUMULATED_DAYS_PER_MONTH[] = {30,58,89,119,150,180,211,242,272,303,333,364};
-    static const int ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR[] = {30,59,90,120,151,181,212,243,273,304,334,365};
+    static const int ACCUMULATED_DAYS_PER_MONTH[] = {30, 58, 89, 119, 150, 180, 211, 242, 272, 303, 333, 364};
+    static const int ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR[] = {30, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
     bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
     fillMonthAndDay(day_num, month, day, is_leap_year ? ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR : ACCUMULATED_DAYS_PER_MONTH);
     t.year = year;
@@ -133,7 +126,6 @@ std::string extractTimeZoneNameFromFunctionArguments(const ColumnsWithTypeAndNam
 const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const ColumnNumbers & arguments, size_t time_zone_arg_num, size_t datetime_arg_num);
 
 
-
 #define TIME_SLOT_SIZE 1800
 
 /** Transformations.
@@ -169,7 +161,8 @@ struct ToDateImpl
     {
         return d;
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfDay", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -188,7 +181,8 @@ struct ToStartOfDayImpl
     {
         throw Exception("Illegal type Date of argument for function toStartOfDay", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfDay", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -207,7 +201,8 @@ struct ToMondayImpl
     {
         return time_zone.toFirstDayNumOfWeek(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toMonday", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -226,7 +221,8 @@ struct ToStartOfMonthImpl
     {
         return time_zone.toFirstDayNumOfMonth(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfMonday", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -245,7 +241,8 @@ struct ToStartOfQuarterImpl
     {
         return time_zone.toFirstDayNumOfQuarter(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfQuarter", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -264,7 +261,8 @@ struct ToStartOfYearImpl
     {
         return time_zone.toFirstDayNumOfYear(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfYear", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -286,7 +284,8 @@ struct ToTimeImpl
     {
         throw Exception("Illegal type Date of argument for function toTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -305,7 +304,8 @@ struct ToStartOfMinuteImpl
     {
         throw Exception("Illegal type Date of argument for function toStartOfMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -324,7 +324,8 @@ struct ToStartOfFiveMinuteImpl
     {
         throw Exception("Illegal type Date of argument for function toStartOfFiveMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfFiveMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -343,7 +344,8 @@ struct ToStartOfFifteenMinutesImpl
     {
         throw Exception("Illegal type Date of argument for function toStartOfFifteenMinutes", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfFifteenMinutes", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -363,7 +365,8 @@ struct ToStartOfHourImpl
     {
         throw Exception("Illegal type Date of argument for function toStartOfHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toStartOfHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -434,7 +437,8 @@ struct ToDayOfMonthImpl
     {
         return time_zone.toDayOfMonth(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 t, const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64 t, const DateLUTImpl &)
+    {
         return (UInt8)((t >> 41) & 31);
     }
 
@@ -453,7 +457,8 @@ struct ToDayOfWeekImpl
     {
         return time_zone.toDayOfWeek(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toDayOfWeek", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -473,7 +478,8 @@ struct ToHourImpl
     {
         throw Exception("Illegal type Date of argument for function toHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -492,7 +498,8 @@ struct ToMinuteImpl
     {
         throw Exception("Illegal type Date of argument for function toMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -511,7 +518,8 @@ struct ToSecondImpl
     {
         throw Exception("Illegal type Date of argument for function toSecond", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toSecond", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -530,7 +538,8 @@ struct ToRelativeYearNumImpl
     {
         return time_zone.toYear(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toRelativeYearNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -549,7 +558,8 @@ struct ToRelativeQuarterNumImpl
     {
         return time_zone.toRelativeQuarterNum(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toRelativeQuarterNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -568,7 +578,8 @@ struct ToRelativeMonthNumImpl
     {
         return time_zone.toRelativeMonthNum(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toRelativeMonthNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -587,7 +598,8 @@ struct ToRelativeWeekNumImpl
     {
         return time_zone.toRelativeWeekNum(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toRelativeWeekNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -606,7 +618,8 @@ struct ToRelativeDayNumImpl
     {
         return static_cast<DayNum>(d);
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toRelativeDayNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -626,7 +639,8 @@ struct ToRelativeHourNumImpl
     {
         return time_zone.toRelativeHourNum(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toRelativeHourNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -645,7 +659,8 @@ struct ToRelativeMinuteNumImpl
     {
         return time_zone.toRelativeMinuteNum(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toRelativeMinuteNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -664,7 +679,8 @@ struct ToRelativeSecondNumImpl
     {
         return time_zone.fromDayNum(DayNum(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toRelativeSecondNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -683,7 +699,8 @@ struct ToYYYYMMImpl
     {
         return time_zone.toNumYYYYMM(static_cast<DayNum>(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toYYYYMM", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -702,7 +719,8 @@ struct ToYYYYMMDDImpl
     {
         return time_zone.toNumYYYYMMDD(static_cast<DayNum>(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toYYYYMMDD", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -721,7 +739,8 @@ struct ToYYYYMMDDhhmmssImpl
     {
         return time_zone.toNumYYYYMMDDhhmmss(time_zone.toDate(static_cast<DayNum>(d)));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+    static inline UInt8 execute(UInt64, const DateLUTImpl &)
+    {
         throw Exception("Illegal type MyTime of argument for function toYYYYMMDDhhmmss", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -762,8 +781,8 @@ struct DateTimeTransformImpl
         else
         {
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of first argument of function " + Transform::name,
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function " + Transform::name,
+                            ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
@@ -789,8 +808,8 @@ public:
         {
             if (!arguments[0].type->isDateOrDateTime())
                 throw Exception{
-                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() +
-                    ". Should be a date or a date with time", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be a date or a date with time",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
         else if (arguments.size() == 2)
         {
@@ -798,15 +817,15 @@ public:
                 || !checkDataType<DataTypeString>(arguments[1].type.get()))
                 throw Exception{
                     "Function " + getName() + " supports 1 or 2 arguments. The 1st argument "
-                    "must be of type Date or DateTime. The 2nd argument (optional) must be "
-                    "a constant string with timezone name. The timezone argument is allowed "
-                    "only when the 1st argument has the type DateTime",
+                                              "must be of type Date or DateTime. The 2nd argument (optional) must be "
+                                              "a constant string with timezone name. The timezone argument is allowed "
+                                              "only when the 1st argument has the type DateTime",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
         else
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 1 or 2",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 1 or 2",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         /// For DateTime, if time zone is specified, attach it to type.
         if (std::is_same_v<ToDataType, DataTypeDateTime>)
@@ -830,7 +849,7 @@ public:
             DateTimeTransformImpl<DataTypeMyTimeBase::FieldType, typename ToDataType::FieldType, Transform>::execute(block, arguments, result);
         else
             throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
 
@@ -841,7 +860,7 @@ public:
 
     Monotonicity getMonotonicityForRange(const IDataType & type, const Field & left, const Field & right) const override
     {
-        IFunction::Monotonicity is_monotonic { true };
+        IFunction::Monotonicity is_monotonic{true};
         IFunction::Monotonicity is_not_monotonic;
 
         if (std::is_same_v<typename Transform::FactorTransform, ZeroTransform>)
@@ -861,14 +880,16 @@ public:
         if (checkAndGetDataType<DataTypeDate>(&type))
         {
             return Transform::FactorTransform::execute(UInt16(left.get<UInt64>()), date_lut)
-                == Transform::FactorTransform::execute(UInt16(right.get<UInt64>()), date_lut)
-                ? is_monotonic : is_not_monotonic;
+                    == Transform::FactorTransform::execute(UInt16(right.get<UInt64>()), date_lut)
+                ? is_monotonic
+                : is_not_monotonic;
         }
         else
         {
             return Transform::FactorTransform::execute(UInt32(left.get<UInt64>()), date_lut)
-                == Transform::FactorTransform::execute(UInt32(right.get<UInt64>()), date_lut)
-                ? is_monotonic : is_not_monotonic;
+                    == Transform::FactorTransform::execute(UInt32(right.get<UInt64>()), date_lut)
+                ? is_monotonic
+                : is_not_monotonic;
         }
     }
 };
@@ -883,7 +904,7 @@ static inline void addDays(MyDateTime & t, Int64 days)
 static inline void addMonths(MyDateTime & t, Int64 months)
 {
     // month in my_time start from 1
-    Int64 current_month = t.month -1;
+    Int64 current_month = t.month - 1;
     current_month += months;
     if (current_month >= 0)
     {
@@ -894,13 +915,13 @@ static inline void addMonths(MyDateTime & t, Int64 months)
     else
     {
         Int64 year = (-current_month) / 12;
-        if((-current_month) % 12 != 0)
+        if ((-current_month) % 12 != 0)
             year++;
         current_month += year * 12;
         t.year -= year;
     }
-    static const int day_num_in_month[] = {31,28,31,30,31,30,31,31,30,31,30,31};
-    static const int day_num_in_month_leap_year[] = {31,29,31,30,31,30,31,31,30,31,30,31};
+    static const int day_num_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    static const int day_num_in_month_leap_year[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     int max_day = 0;
     if (t.year % 400 == 0 || (t.year % 100 != 0 && t.year % 4 == 0))
         max_day = day_num_in_month_leap_year[current_month];
@@ -1109,13 +1130,34 @@ struct SubtractIntervalImpl
     }
 };
 
-struct SubtractSecondsImpl : SubtractIntervalImpl<AddSecondsImpl> { static constexpr auto name = "subtractSeconds"; };
-struct SubtractMinutesImpl : SubtractIntervalImpl<AddMinutesImpl> { static constexpr auto name = "subtractMinutes"; };
-struct SubtractHoursImpl : SubtractIntervalImpl<AddHoursImpl> { static constexpr auto name = "subtractHours"; };
-struct SubtractDaysImpl : SubtractIntervalImpl<AddDaysImpl> { static constexpr auto name = "subtractDays"; };
-struct SubtractWeeksImpl : SubtractIntervalImpl<AddWeeksImpl> { static constexpr auto name = "subtractWeeks"; };
-struct SubtractMonthsImpl : SubtractIntervalImpl<AddMonthsImpl> { static constexpr auto name = "subtractMonths"; };
-struct SubtractYearsImpl : SubtractIntervalImpl<AddYearsImpl> { static constexpr auto name = "subtractYears"; };
+struct SubtractSecondsImpl : SubtractIntervalImpl<AddSecondsImpl>
+{
+    static constexpr auto name = "subtractSeconds";
+};
+struct SubtractMinutesImpl : SubtractIntervalImpl<AddMinutesImpl>
+{
+    static constexpr auto name = "subtractMinutes";
+};
+struct SubtractHoursImpl : SubtractIntervalImpl<AddHoursImpl>
+{
+    static constexpr auto name = "subtractHours";
+};
+struct SubtractDaysImpl : SubtractIntervalImpl<AddDaysImpl>
+{
+    static constexpr auto name = "subtractDays";
+};
+struct SubtractWeeksImpl : SubtractIntervalImpl<AddWeeksImpl>
+{
+    static constexpr auto name = "subtractWeeks";
+};
+struct SubtractMonthsImpl : SubtractIntervalImpl<AddMonthsImpl>
+{
+    static constexpr auto name = "subtractMonths";
+};
+struct SubtractYearsImpl : SubtractIntervalImpl<AddYearsImpl>
+{
+    static constexpr auto name = "subtractYears";
+};
 
 
 template <typename FromType, typename ToType, typename Transform>
@@ -1184,8 +1226,8 @@ struct DateTimeAddIntervalImpl
         else
         {
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of first argument of function " + Transform::name,
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function " + Transform::name,
+                            ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
@@ -1210,20 +1252,20 @@ public:
     {
         if (arguments.size() != 2 && arguments.size() != 3)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 2 or 3",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 2 or 3",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         //todo support string as tidb support string
         if (!arguments[1].type->isNumber())
             throw Exception("Second argument for function " + getName() + " (delta) must be number",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2)
         {
             if (!arguments[0].type->isDateOrDateTime())
                 throw Exception{
-                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() +
-                    ". Should be a date or a date with time", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be a date or a date with time",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
         else
         {
@@ -1231,10 +1273,10 @@ public:
                 || !checkDataType<DataTypeString>(arguments[2].type.get()))
                 throw Exception{
                     "Function " + getName() + " supports 2 or 3 arguments. The 1st argument "
-                    "must be of type Date or DateTime. The 2nd argument must be number. "
-                    "The 3rd argument (optional) must be "
-                    "a constant string with timezone name. The timezone argument is allowed "
-                    "only when the 1st argument has the type DateTime",
+                                              "must be of type Date or DateTime. The 2nd argument must be number. "
+                                              "The 3rd argument (optional) must be "
+                                              "a constant string with timezone name. The timezone argument is allowed "
+                                              "only when the 1st argument has the type DateTime",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
@@ -1258,7 +1300,7 @@ public:
             // todo consider the fsp in delta part
             int fsp = 0;
             const auto * my_datetime_type = checkAndGetDataType<DataTypeMyDateTime>(arguments[0].type.get());
-            if(my_datetime_type != nullptr)
+            if (my_datetime_type != nullptr)
                 fsp = my_datetime_type->getFraction();
             return std::make_shared<DataTypeMyDateTime>(fsp);
         }
@@ -1279,7 +1321,7 @@ public:
             DateTimeAddIntervalImpl<DataTypeMyTimeBase::FieldType, Transform, true>::execute(block, arguments, result);
         else
             throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
 
@@ -1303,15 +1345,11 @@ public:
             throw Exception("First argument for function " + getName() + " (unit) must be String",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[1]).get()) &&
-           !checkDataType<DataTypeMyDate>(removeNullable(arguments[1]).get()) &&
-           !arguments[1]->onlyNull())
+        if (!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[1]).get()) && !checkDataType<DataTypeMyDate>(removeNullable(arguments[1]).get()) && !arguments[1]->onlyNull())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[2]).get()) &&
-           !checkDataType<DataTypeMyDate>(removeNullable(arguments[2]).get()) &&
-           !arguments[2]->onlyNull())
+        if (!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[2]).get()) && !checkDataType<DataTypeMyDate>(removeNullable(arguments[2]).get()) && !arguments[2]->onlyNull())
             throw Exception("Third argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -1333,7 +1371,7 @@ public:
 
         bool has_nullable = false;
         bool has_null_constant = false;
-        for(const auto & arg : arguments)
+        for (const auto & arg : arguments)
         {
             const auto & elem = block.getByPosition(arg);
             has_nullable |= elem.type->isNullable();
@@ -1384,12 +1422,13 @@ public:
         // warp null
 
         if (block.getByPosition(arguments[1]).type->isNullable()
-        || block.getByPosition(arguments[2]).type->isNullable())
+            || block.getByPosition(arguments[2]).type->isNullable())
         {
-            ColumnUInt8::Container &vec_result_null_map = result_null_map->getData();
+            ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
             ColumnPtr x_p = block.getByPosition(arguments[1]).column;
             ColumnPtr y_p = block.getByPosition(arguments[2]).column;
-            for (size_t i = 0; i < rows; i++) {
+            for (size_t i = 0; i < rows; i++)
+            {
                 vec_result_null_map[i] |= (x_p->isNullAt(i) || y_p->isNullAt(i));
             }
         }
@@ -1399,11 +1438,14 @@ public:
 private:
     template <typename MonthDiffCalculator, typename ResultCalculator>
     void dispatchForColumns(
-            const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map) const
+        const IColumn & x,
+        const IColumn & y,
+        ColumnInt64::Container & res,
+        ColumnUInt8::Container & res_null_map) const
     {
         auto * x_const = checkAndGetColumnConst<ColumnUInt64>(&x);
         auto * y_const = checkAndGetColumnConst<ColumnUInt64>(&y);
-        if(x_const)
+        if (x_const)
         {
             auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
             constant_vector<MonthDiffCalculator, ResultCalculator>(x_const->getValue<UInt64>(), *y_vec, res, res_null_map);
@@ -1423,8 +1465,10 @@ private:
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
     void vector_vector(
-            const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
-            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
+        const ColumnVector<UInt64> & x,
+        const ColumnVector<UInt64> & y,
+        ColumnInt64::Container & result,
+        ColumnUInt8::Container & result_null_map) const
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
@@ -1438,8 +1482,10 @@ private:
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
     void vector_constant(
-            const ColumnVector<UInt64> & x, UInt64 y,
-            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
+        const ColumnVector<UInt64> & x,
+        UInt64 y,
+        ColumnInt64::Container & result,
+        ColumnUInt8::Container & result_null_map) const
     {
         const auto & x_data = x.getData();
         if (y == 0)
@@ -1460,8 +1506,10 @@ private:
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
     void constant_vector(
-            UInt64 x, const ColumnVector<UInt64> & y,
-            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
+        UInt64 x,
+        const ColumnVector<UInt64> & y,
+        ColumnInt64::Container & result,
+        ColumnUInt8::Container & result_null_map) const
     {
         const auto & y_data = y.getData();
         if (x == 0)
@@ -1471,7 +1519,8 @@ private:
         }
         else
         {
-            for (size_t i = 0, size = y.size(); i < size; ++i) {
+            for (size_t i = 0, size = y.size(); i < size; ++i)
+            {
                 result_null_map[i] = (y_data[i] == 0);
                 if (!result_null_map[i])
                     result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x, y_data[i]);
@@ -1479,16 +1528,14 @@ private:
         }
     }
 
-    void calculateTimeDiff(const MyDateTime &x, const MyDateTime &y, Int64 & seconds, int & micro_seconds, bool & neg) const
+    void calculateTimeDiff(const MyDateTime & x, const MyDateTime & y, Int64 & seconds, int & micro_seconds, bool & neg) const
     {
         Int64 days_x = calcDayNum(x.year, x.month, x.day);
         Int64 days_y = calcDayNum(y.year, y.month, y.day);
         Int64 days = days_y - days_x;
 
-        Int64 tmp = (days * SECOND_IN_ONE_DAY + y.hour * 3600LL +
-                y.minute * 60LL + y.second - (x.hour * 3600LL + x.minute * 60LL + x.second)) * E6 +
-                y.micro_second - x.micro_second;
-        if(tmp < 0)
+        Int64 tmp = (days * SECOND_IN_ONE_DAY + y.hour * 3600LL + y.minute * 60LL + y.second - (x.hour * 3600LL + x.minute * 60LL + x.second)) * E6 + y.micro_second - x.micro_second;
+        if (tmp < 0)
         {
             tmp = -tmp;
             neg = true;
@@ -1504,7 +1551,7 @@ private:
             UInt32 months = 0;
             UInt32 year_begin, year_end, month_begin, month_end, day_begin, day_end;
             UInt32 second_begin, second_end, micro_second_begin, micro_second_end;
-            if(neg)
+            if (neg)
             {
                 year_begin = y_time.year;
                 year_end = x_time.year;
@@ -1533,16 +1580,14 @@ private:
 
             // calc years
             UInt32 years = year_end - year_begin;
-            if (month_end < month_begin ||
-                (month_end == month_begin && day_end < day_begin))
+            if (month_end < month_begin || (month_end == month_begin && day_end < day_begin))
             {
                 years--;
             }
 
             // calc months
             months = 12 * years;
-            if (month_end < month_begin ||
-                (month_end == month_begin && day_end < day_begin))
+            if (month_end < month_begin || (month_end == month_begin && day_end < day_begin))
             {
                 months += 12 - (month_begin - month_end);
             }
@@ -1555,9 +1600,7 @@ private:
             {
                 months--;
             }
-            else if ((day_end == day_begin) &&
-                       ((second_end < second_begin) ||
-                        (second_end == second_begin && micro_second_end < micro_second_begin)))
+            else if ((day_end == day_begin) && ((second_end < second_begin) || (second_end == second_begin && micro_second_end < micro_second_begin)))
             {
                 months--;
             }
@@ -1567,7 +1610,7 @@ private:
 
     struct DummyMonthDiffCalculatorImpl
     {
-        static inline UInt32 execute(const MyDateTime & , const MyDateTime & , const bool )
+        static inline UInt32 execute(const MyDateTime &, const MyDateTime &, const bool)
         {
             return 0;
         }
@@ -1575,7 +1618,7 @@ private:
 
     struct YearDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        static inline Int64 execute(const Int64, const Int64, const Int64 months, const int neg_value)
         {
             return months / 12 * neg_value;
         }
@@ -1583,7 +1626,7 @@ private:
 
     struct QuarterDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        static inline Int64 execute(const Int64, const Int64, const Int64 months, const int neg_value)
         {
             return months / 3 * neg_value;
         }
@@ -1591,7 +1634,7 @@ private:
 
     struct MonthDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        static inline Int64 execute(const Int64, const Int64, const Int64 months, const int neg_value)
         {
             return months * neg_value;
         }
@@ -1599,7 +1642,7 @@ private:
 
     struct WeekDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        static inline Int64 execute(const Int64 seconds, const Int64, const Int64, const int neg_value)
         {
             return seconds / SECOND_IN_ONE_DAY / 7 * neg_value;
         }
@@ -1607,7 +1650,7 @@ private:
 
     struct DayDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        static inline Int64 execute(const Int64 seconds, const Int64, const Int64, const int neg_value)
         {
             return seconds / SECOND_IN_ONE_DAY * neg_value;
         }
@@ -1615,7 +1658,7 @@ private:
 
     struct HourDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        static inline Int64 execute(const Int64 seconds, const Int64, const Int64, const int neg_value)
         {
             return seconds / 3600 * neg_value;
         }
@@ -1623,7 +1666,7 @@ private:
 
     struct MinuteDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        static inline Int64 execute(const Int64 seconds, const Int64, const Int64, const int neg_value)
         {
             return seconds / 60 * neg_value;
         }
@@ -1631,7 +1674,7 @@ private:
 
     struct SecondDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        static inline Int64 execute(const Int64 seconds, const Int64, const Int64, const int neg_value)
         {
             return seconds * neg_value;
         }
@@ -1639,7 +1682,7 @@ private:
 
     struct MicroSecondDiffResultCalculator
     {
-        static inline Int64 execute(const Int64 seconds, const Int64 micro_seconds, const Int64 , const int neg_value)
+        static inline Int64 execute(const Int64 seconds, const Int64 micro_seconds, const Int64, const int neg_value)
         {
             return (seconds * E6 + micro_seconds) * neg_value;
         }
@@ -1680,11 +1723,11 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if(!removeNullable(arguments[0]).get()->isDateOrDateTime())
+        if (!removeNullable(arguments[0]).get()->isDateOrDateTime())
             throw Exception("First argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!removeNullable(arguments[1]).get()->isDateOrDateTime())
+        if (!removeNullable(arguments[1]).get()->isDateOrDateTime())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -1699,7 +1742,7 @@ public:
     {
         bool has_nullable = false;
         bool has_null_constant = false;
-        for(const auto & arg : arguments)
+        for (const auto & arg : arguments)
         {
             const auto & elem = block.getByPosition(arg);
             has_nullable |= elem.type->isNullable();
@@ -1733,21 +1776,23 @@ public:
         if (block.getByPosition(arguments[0]).type->isNullable()
             || block.getByPosition(arguments[1]).type->isNullable())
         {
-            ColumnUInt8::Container &vec_result_null_map = result_null_map->getData();
+            ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
             ColumnPtr x_p = block.getByPosition(arguments[0]).column;
             ColumnPtr y_p = block.getByPosition(arguments[1]).column;
-            for (size_t i = 0; i < rows; i++) {
+            for (size_t i = 0; i < rows; i++)
+            {
                 vec_result_null_map[i] |= (x_p->isNullAt(i) || y_p->isNullAt(i));
             }
         }
         block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
     }
+
 private:
     void dispatch(const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map) const
     {
         auto * x_const = checkAndGetColumnConst<ColumnUInt64>(&x);
         auto * y_const = checkAndGetColumnConst<ColumnUInt64>(&y);
-        if(x_const)
+        if (x_const)
         {
             auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
             constant_vector(x_const->getValue<UInt64>(), *y_vec, res, res_null_map);
@@ -1766,8 +1811,10 @@ private:
     }
 
     void vector_vector(
-            const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
-                       ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
+        const ColumnVector<UInt64> & x,
+        const ColumnVector<UInt64> & y,
+        ColumnInt64::Container & result,
+        ColumnUInt8::Container & result_null_map) const
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
@@ -1780,8 +1827,10 @@ private:
     }
 
     void vector_constant(
-            const ColumnVector<UInt64> & x, UInt64 y,
-                         ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
+        const ColumnVector<UInt64> & x,
+        UInt64 y,
+        ColumnInt64::Container & result,
+        ColumnUInt8::Container & result_null_map) const
     {
         const auto & x_data = x.getData();
         if (y == 0)
@@ -1801,8 +1850,10 @@ private:
     }
 
     void constant_vector(
-            UInt64 x, const ColumnVector<UInt64> & y,
-                         ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map) const
+        UInt64 x,
+        const ColumnVector<UInt64> & y,
+        ColumnInt64::Container & result,
+        ColumnUInt8::Container & result_null_map) const
     {
         const auto & y_data = y.getData();
         if (x == 0)
@@ -1812,7 +1863,8 @@ private:
         }
         else
         {
-            for (size_t i = 0, size = y.size(); i < size; ++i) {
+            for (size_t i = 0, size = y.size(); i < size; ++i)
+            {
                 result_null_map[i] = (y_data[i] == 0);
                 if (!result_null_map[i])
                     result[i] = calculate(x, y_data[i]);
@@ -1859,24 +1911,24 @@ public:
     {
         if (arguments.size() != 3 && arguments.size() != 4)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 3 or 4",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 3 or 4",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!arguments[0]->isString())
             throw Exception("First argument for function " + getName() + " (unit) must be String",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isDateOrDateTime())
             throw Exception("Second argument for function " + getName() + " must be Date or DateTime",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[2]->isDateOrDateTime())
             throw Exception("Third argument for function " + getName() + " must be Date or DateTime",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 4 && !arguments[3]->isString())
             throw Exception("Fourth argument for function " + getName() + " (timezone) must be String",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -1926,8 +1978,10 @@ public:
 private:
     template <typename Transform>
     void dispatchForColumns(
-        const IColumn & x, const IColumn & y,
-        const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
+        const IColumn & x,
+        const IColumn & y,
+        const DateLUTImpl & timezone_x,
+        const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         if (auto * x_vec = checkAndGetColumn<ColumnUInt16>(&x))
@@ -1944,8 +1998,10 @@ private:
 
     template <typename Transform, typename T1>
     void dispatchForSecondColumn(
-        const ColumnVector<T1> & x, const IColumn & y,
-        const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
+        const ColumnVector<T1> & x,
+        const IColumn & y,
+        const DateLUTImpl & timezone_x,
+        const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         if (auto * y_vec = checkAndGetColumn<ColumnUInt16>(&y))
@@ -1962,8 +2018,10 @@ private:
 
     template <typename Transform, typename T1>
     void dispatchConstForSecondColumn(
-        T1 x, const IColumn & y,
-        const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
+        T1 x,
+        const IColumn & y,
+        const DateLUTImpl & timezone_x,
+        const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         if (auto * y_vec = checkAndGetColumn<ColumnUInt16>(&y))
@@ -1976,8 +2034,10 @@ private:
 
     template <typename Transform, typename T1, typename T2>
     void vector_vector(
-        const ColumnVector<T1> & x, const ColumnVector<T2> & y,
-        const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
+        const ColumnVector<T1> & x,
+        const ColumnVector<T2> & y,
+        const DateLUTImpl & timezone_x,
+        const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         const auto & x_data = x.getData();
@@ -1988,8 +2048,10 @@ private:
 
     template <typename Transform, typename T1, typename T2>
     void vector_constant(
-        const ColumnVector<T1> & x, T2 y,
-        const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
+        const ColumnVector<T1> & x,
+        T2 y,
+        const DateLUTImpl & timezone_x,
+        const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         const auto & x_data = x.getData();
@@ -1999,8 +2061,10 @@ private:
 
     template <typename Transform, typename T1, typename T2>
     void constant_vector(
-        T1 x, const ColumnVector<T2> & y,
-        const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
+        T1 x,
+        const ColumnVector<T2> & y,
+        const DateLUTImpl & timezone_x,
+        const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         const auto & y_data = y.getData();
@@ -2012,7 +2076,7 @@ private:
     Int64 calculate(T1 x, T2 y, const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y) const
     {
         return Int64(Transform::execute(y, timezone_y))
-             - Int64(Transform::execute(x, timezone_x));
+            - Int64(Transform::execute(x, timezone_x));
     }
 };
 
@@ -2108,6 +2172,7 @@ class FunctionMyTimeZoneConvertByOffset : public IFunction
 {
     using FromFieldType = typename DataTypeMyDateTime::FieldType;
     using ToFieldType = typename DataTypeMyDateTime::FieldType;
+
 public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionMyTimeZoneConvertByOffset>(); };
     static constexpr auto name = "ConvertTimeZoneByOffset";
@@ -2117,7 +2182,7 @@ public:
         return name;
     }
 
-    size_t getNumberOfArguments() const override {return 2; }
+    size_t getNumberOfArguments() const override { return 2; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -2128,39 +2193,42 @@ public:
     {
         if (arguments.size() != 2)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                            + toString(arguments.size()) + ", should be 2",
+                                + toString(arguments.size()) + ", should be 2",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
             throw Exception{
-                    "Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() +
-                    ". Should be MyDateTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                "Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() + ". Should be MyDateTime",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         if (!arguments[1].type->isInteger())
             throw Exception{
-                    "Illegal type " + arguments[1].type->getName() + " of second argument of function " + getName() +
-                    ". Should be Integer type", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                "Illegal type " + arguments[1].type->getName() + " of second argument of function " + getName() + ". Should be Integer type",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         return arguments[0].type;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override {
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
         static const DateLUTImpl & UTC = DateLUT::instance("UTC");
-        if (const ColumnVector<FromFieldType> *col_from
-                = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get())) {
+        if (const ColumnVector<FromFieldType> * col_from
+            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+        {
             auto col_to = ColumnVector<ToFieldType>::create();
-            const typename ColumnVector<FromFieldType>::Container &vec_from = col_from->getData();
-            typename ColumnVector<ToFieldType>::Container &vec_to = col_to->getData();
+            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+            typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
             size_t size = vec_from.size();
             vec_to.resize(size);
 
             const auto offset_col = block.getByPosition(arguments.back()).column.get();
             if (!offset_col->isColumnConst())
                 throw Exception{
-                        "Second argument of function " + getName() + " must be an integral constant",
-                        ErrorCodes::ILLEGAL_COLUMN};
+                    "Second argument of function " + getName() + " must be an integral constant",
+                    ErrorCodes::ILLEGAL_COLUMN};
 
             const auto offset = offset_col->getInt(0);
-            for (size_t i = 0; i < size; ++i) {
+            for (size_t i = 0; i < size; ++i)
+            {
                 UInt64 result_time = vec_from[i] + offset;
                 // todo maybe affected by daytime saving, need double check
                 convertTimeZoneByOffset(vec_from[i], result_time, offset, UTC);
@@ -2168,21 +2236,22 @@ public:
             }
 
             block.getByPosition(result).column = std::move(col_to);
-        } else
+        }
+        else
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                            + " of first argument of function " + name,
+                                + " of first argument of function " + name,
                             ErrorCodes::ILLEGAL_COLUMN);
     }
-
 };
 template <bool convert_from_utc>
 class FunctionMyTimeZoneConverter : public IFunction
 {
     using FromFieldType = typename DataTypeMyDateTime::FieldType;
     using ToFieldType = typename DataTypeMyDateTime::FieldType;
+
 public:
-    static constexpr auto name = convert_from_utc ? "ConvertTimeZoneFromUTC": "ConvertTimeZoneToUTC";
-    static FunctionPtr create(const Context &) {return std::make_shared<FunctionMyTimeZoneConverter>(); };
+    static constexpr auto name = convert_from_utc ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneToUTC";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionMyTimeZoneConverter>(); };
 
     String getName() const override
     {
@@ -2199,13 +2268,13 @@ public:
     {
         if (arguments.size() != 2)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 2",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 2",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
             throw Exception{
-                "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() +
-                ". Should be MyDateTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be MyDateTime",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         return arguments[0].type;
     }
@@ -2237,8 +2306,8 @@ public:
         }
         else
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-            + " of first argument of function " + name,
-            ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function " + name,
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -2260,13 +2329,13 @@ public:
     {
         if (arguments.size() != 2)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 2",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 2",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!checkDataType<DataTypeDateTime>(arguments[0].type.get()))
             throw Exception{
-                "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() +
-                ". Should be DateTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be DateTime",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         String time_zone_name = extractTimeZoneNameFromFunctionArguments(arguments, 1, 0);
         return std::make_shared<DataTypeDateTime>(time_zone_name);
@@ -2296,7 +2365,7 @@ public:
     {
         if (!checkDataType<DataTypeDateTime>(arguments[0].get()))
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be DateTime.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeDateTime>();
     }
@@ -2321,8 +2390,8 @@ public:
         }
         else
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                    + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of argument of function " + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -2331,8 +2400,10 @@ template <typename DurationType>
 struct TimeSlotsImpl
 {
     static void vector_vector(
-        const PaddedPODArray<UInt32> & starts, const PaddedPODArray<DurationType> & durations,
-        PaddedPODArray<UInt32> & result_values, ColumnArray::Offsets & result_offsets)
+        const PaddedPODArray<UInt32> & starts,
+        const PaddedPODArray<DurationType> & durations,
+        PaddedPODArray<UInt32> & result_values,
+        ColumnArray::Offsets & result_offsets)
     {
         size_t size = starts.size();
 
@@ -2353,8 +2424,10 @@ struct TimeSlotsImpl
     }
 
     static void vector_constant(
-        const PaddedPODArray<UInt32> & starts, DurationType duration,
-        PaddedPODArray<UInt32> & result_values, ColumnArray::Offsets & result_offsets)
+        const PaddedPODArray<UInt32> & starts,
+        DurationType duration,
+        PaddedPODArray<UInt32> & result_values,
+        ColumnArray::Offsets & result_offsets)
     {
         size_t size = starts.size();
 
@@ -2375,8 +2448,10 @@ struct TimeSlotsImpl
     }
 
     static void constant_vector(
-        UInt32 start, const PaddedPODArray<DurationType> & durations,
-        PaddedPODArray<UInt32> & result_values, ColumnArray::Offsets & result_offsets)
+        UInt32 start,
+        const PaddedPODArray<DurationType> & durations,
+        PaddedPODArray<UInt32> & result_values,
+        ColumnArray::Offsets & result_offsets)
     {
         size_t size = durations.size();
 
@@ -2397,7 +2472,8 @@ struct TimeSlotsImpl
     }
 
     static void constant_constant(
-        UInt32 start, DurationType duration,
+        UInt32 start,
+        DurationType duration,
         Array & result)
     {
         for (UInt32 value = start / TIME_SLOT_SIZE; value <= (start + duration) / TIME_SLOT_SIZE; ++value)
@@ -2423,11 +2499,11 @@ public:
     {
         if (!checkDataType<DataTypeDateTime>(arguments[0].get()))
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be DateTime.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!checkDataType<DataTypeUInt32>(arguments[1].get()))
             throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be UInt32.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDateTime>());
     }
@@ -2466,9 +2542,9 @@ public:
         }
         else
             throw Exception("Illegal columns " + block.getByPosition(arguments[0]).column->getName()
-                    + ", " + block.getByPosition(arguments[1]).column->getName()
-                    + " of arguments of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + ", " + block.getByPosition(arguments[1]).column->getName()
+                                + " of arguments of function " + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -2578,7 +2654,8 @@ public:
         auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
             throw TiFlashException(
-                "First argument for function " + getName() + " must be constant String", Errors::Coprocessor::BadRequest);
+                "First argument for function " + getName() + " must be constant String",
+                Errors::Coprocessor::BadRequest);
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
@@ -2672,7 +2749,9 @@ private:
 
     template <Func F>
     static void vector_string(
-        const ColumnString::Chars_t & vec_from, const ColumnString::Offsets & offsets_from, PaddedPODArray<Int64> & vec_to)
+        const ColumnString::Chars_t & vec_from,
+        const ColumnString::Offsets & offsets_from,
+        PaddedPODArray<Int64> & vec_to)
     {
         vec_to.resize(offsets_from.size() + 1);
         size_t current_offset = 0;
@@ -2757,4 +2836,4 @@ using FunctionSubtractWeeks = FunctionDateOrDateTimeAddInterval<SubtractWeeksImp
 using FunctionSubtractMonths = FunctionDateOrDateTimeAddInterval<SubtractMonthsImpl>;
 using FunctionSubtractYears = FunctionDateOrDateTimeAddInterval<SubtractYearsImpl>;
 
-}
+} // namespace DB

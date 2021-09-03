@@ -1448,7 +1448,7 @@ private:
     }
 
     template <typename F>
-    bool castToNumericDataTypes(const IDataType * input_type, const F & f)const
+    bool castToNumericDataTypes(const IDataType * input_type, const F & f) const
     {
         return castTypeToEither<DataTypeFloat32, DataTypeFloat64, DataTypeDecimal32, DataTypeDecimal64, DataTypeDecimal128, DataTypeDecimal256, DataTypeInt8, DataTypeUInt8, DataTypeInt16, DataTypeUInt16, DataTypeInt32, DataTypeUInt32, DataTypeInt64, DataTypeUInt64>(input_type, f);
     }

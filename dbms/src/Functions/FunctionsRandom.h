@@ -1,21 +1,20 @@
 #pragma once
 
-#include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnVector.h>
 #include <Columns/ColumnConst.h>
-#include <Functions/IFunction.h>
-#include <Functions/FunctionHelpers.h>
-#include <IO/WriteHelpers.h>
+#include <Columns/ColumnVector.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/randomSeed.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 /** Pseudo-random number generation functions.
@@ -40,38 +39,40 @@ namespace ErrorCodes
 
 namespace detail
 {
-    /// NOTE Probably
-    ///    http://www.pcg-random.org/
-    /// or http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/
-    /// or http://docs.yeppp.info/c/group__yep_random___w_e_l_l1024a.html
-    /// could go better.
+/// NOTE Probably
+///    http://www.pcg-random.org/
+/// or http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/
+/// or http://docs.yeppp.info/c/group__yep_random___w_e_l_l1024a.html
+/// could go better.
 
-    struct LinearCongruentialGenerator
+struct LinearCongruentialGenerator
+{
+    /// Constants from `man lrand48_r`.
+    static constexpr UInt64 a = 0x5DEECE66D;
+    static constexpr UInt64 c = 0xB;
+
+    /// And this is from `head -c8 /dev/urandom | xxd -p`
+    UInt64 current = 0x09826f4a081cee35ULL;
+
+    LinearCongruentialGenerator() {}
+    LinearCongruentialGenerator(UInt64 value)
+        : current(value)
+    {}
+
+    void seed(UInt64 value)
     {
-        /// Constants from `man lrand48_r`.
-        static constexpr UInt64 a = 0x5DEECE66D;
-        static constexpr UInt64 c = 0xB;
+        current = value;
+    }
 
-        /// And this is from `head -c8 /dev/urandom | xxd -p`
-        UInt64 current = 0x09826f4a081cee35ULL;
+    UInt32 next()
+    {
+        current = current * a + c;
+        return current >> 16;
+    }
+};
 
-        LinearCongruentialGenerator() {}
-        LinearCongruentialGenerator(UInt64 value) : current(value) {}
-
-        void seed(UInt64 value)
-        {
-            current = value;
-        }
-
-        UInt32 next()
-        {
-            current = current * a + c;
-            return current >> 16;
-        }
-    };
-
-    void seed(LinearCongruentialGenerator & generator, intptr_t additional_seed);
-}
+void seed(LinearCongruentialGenerator & generator, intptr_t additional_seed);
+} // namespace detail
 
 struct RandImpl
 {
@@ -144,8 +145,8 @@ public:
     {
         if (arguments.size() > 1)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 0 or 1.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 0 or 1.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return std::make_shared<DataTypeNumber<typename Impl::ReturnType>>();
     }
@@ -190,8 +191,8 @@ public:
     {
         if (arguments.size() > 1)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 0 or 1.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 0 or 1.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return std::make_shared<DataTypeNumber<typename Impl::ReturnType>>();
     }
@@ -211,13 +212,22 @@ public:
 };
 
 
-struct NameRand         { static constexpr auto name = "rand"; };
-struct NameRand64       { static constexpr auto name = "rand64"; };
-struct NameRandConstant { static constexpr auto name = "randConstant"; };
+struct NameRand
+{
+    static constexpr auto name = "rand";
+};
+struct NameRand64
+{
+    static constexpr auto name = "rand64";
+};
+struct NameRandConstant
+{
+    static constexpr auto name = "randConstant";
+};
 
-using FunctionRand = FunctionRandom<RandImpl, NameRand> ;
+using FunctionRand = FunctionRandom<RandImpl, NameRand>;
 using FunctionRand64 = FunctionRandom<Rand64Impl, NameRand64>;
 using FunctionRandConstant = FunctionRandomConstant<RandImpl, NameRandConstant>;
 
 
-}
+} // namespace DB

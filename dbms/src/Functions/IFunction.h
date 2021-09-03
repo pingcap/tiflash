@@ -378,4 +378,3 @@ private:
 using FunctionPtr = std::shared_ptr<IFunction>;
 
 } // namespace DB
-

@@ -188,7 +188,7 @@ private:
     }
 
     template <typename T0>
-    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result)const
+    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if (const ColumnVector<T0> * col = checkAndGetColumn<ColumnVector<T0>>(block.getByPosition(arguments[0]).column.get()))
         {
@@ -208,7 +208,7 @@ private:
     }
 
     template <typename T0>
-    bool executeDecimalType(Block & block, const ColumnNumbers & arguments, size_t result)const
+    bool executeDecimalType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if (const ColumnDecimal<T0> * col = checkAndGetColumn<ColumnDecimal<T0>>(block.getByPosition(arguments[0]).column.get()))
         {

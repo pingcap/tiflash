@@ -1465,7 +1465,12 @@ public:
 
     template <typename T>
     void decimalToMyDatetime(
-            const ColumnPtr & input_col, ColumnUInt64::Container & datetime_res, ColumnUInt8::Container & null_res, UInt32 scale, Int256 & scale_divisor, Int256 & scale_round_divisor) const
+        const ColumnPtr & input_col,
+        ColumnUInt64::Container & datetime_res,
+        ColumnUInt8::Container & null_res,
+        UInt32 scale,
+        Int256 & scale_divisor,
+        Int256 & scale_round_divisor) const
     {
         const auto & timezone_info = context.getTimezoneInfo();
         const auto * datelut = timezone_info.timezone;
@@ -2309,7 +2314,7 @@ using FunctionParseDateTimeBestEffortOrNull = FunctionConvertFromString<
     ConvertFromStringParsingMode::BestEffort>;
 
 
-class ExecutableFunctionCast : public IExecutableFunction 
+class ExecutableFunctionCast : public IExecutableFunction
 {
 public:
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t)>;

@@ -158,7 +158,7 @@ private:
     }
 
     template <typename ValueType>
-    ValueType createConstMask(const Block & block, const ColumnNumbers & arguments, bool & is_const)const
+    ValueType createConstMask(const Block & block, const ColumnNumbers & arguments, bool & is_const) const
     {
         is_const = true;
         ValueType mask = 0;
@@ -181,7 +181,7 @@ private:
     }
 
     template <typename ValueType>
-    PaddedPODArray<ValueType> createMask(const size_t size, const Block & block, const ColumnNumbers & arguments)const
+    PaddedPODArray<ValueType> createMask(const size_t size, const Block & block, const ColumnNumbers & arguments) const
     {
         PaddedPODArray<ValueType> mask(size, ValueType{});
 
@@ -202,7 +202,7 @@ private:
     }
 
     template <typename PosType, typename ValueType>
-    bool addToMaskImpl(PaddedPODArray<ValueType> & mask, const IColumn * const pos_col_untyped)const
+    bool addToMaskImpl(PaddedPODArray<ValueType> & mask, const IColumn * const pos_col_untyped) const
     {
         if (const auto pos_col = checkAndGetColumn<ColumnVector<PosType>>(pos_col_untyped))
         {

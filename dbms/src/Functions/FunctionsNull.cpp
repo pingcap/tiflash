@@ -1,17 +1,16 @@
-#include <Functions/FunctionsNull.h>
-#include <Functions/FunctionsLogical.h>
+#include <Columns/ColumnNullable.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsComparison.h>
 #include <Functions/FunctionsConditional.h>
-#include <Functions/FunctionFactory.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <Columns/ColumnNullable.h>
+#include <Functions/FunctionsLogical.h>
+#include <Functions/FunctionsNull.h>
 
 
 namespace DB
 {
-
 void registerFunctionsNull(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionIsNull>();
@@ -75,20 +74,14 @@ DataTypePtr FunctionIsNotNull::getReturnTypeImpl(const DataTypes &) const
 
 void FunctionIsNotNull::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
-    Block temp_block
-    {
+    Block temp_block{
         block.getByPosition(arguments[0]),
-        {
-            nullptr,
-            std::make_shared<DataTypeUInt8>(),
-            ""
-        },
-        {
-            nullptr,
-            std::make_shared<DataTypeUInt8>(),
-            ""
-        }
-    };
+        {nullptr,
+         std::make_shared<DataTypeUInt8>(),
+         ""},
+        {nullptr,
+         std::make_shared<DataTypeUInt8>(),
+         ""}};
 
     FunctionIsNull{}.executeImpl(temp_block, {0}, 1);
     FunctionNot{}.executeImpl(temp_block, {1}, 2);
@@ -284,7 +277,7 @@ void FunctionIfNull::executeImpl(Block & block, const ColumnNumbers & arguments,
 
 /// Implementation of nullIf.
 
-FunctionPtr FunctionNullIf::create(const Context & )
+FunctionPtr FunctionNullIf::create(const Context &)
 {
     return std::make_shared<FunctionNullIf>();
 }
@@ -379,4 +372,4 @@ void FunctionToNullable::executeImpl(Block & block, const ColumnNumbers & argume
     block.getByPosition(result).column = makeNullable(block.getByPosition(arguments[0]).column);
 }
 
-}
+} // namespace DB

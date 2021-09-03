@@ -5,8 +5,6 @@
 
 namespace DB
 {
-
-
 /** Implements the LIMIT relational operation.
   */
 class LimitBlockInputStream : public IProfilingBlockInputStream
@@ -33,4 +31,4 @@ private:
     bool always_read_till_end;
 };
 
-}
+} // namespace DB

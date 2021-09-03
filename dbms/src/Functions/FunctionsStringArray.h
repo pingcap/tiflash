@@ -1,27 +1,26 @@
 #pragma once
 
-#include <DataTypes/DataTypeArray.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnConst.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnString.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <Functions/Regexps.h>
-#include <Functions/FunctionHelpers.h>
-#include <DataTypes/DataTypeString.h>
 #include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 /** Functions that split strings into an array of strings or vice versa.
@@ -68,7 +67,7 @@ public:
     {
         if (!arguments[0]->isString())
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     /// Initialize by the function arguments.
@@ -126,11 +125,11 @@ public:
     {
         if (!arguments[0]->isString())
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isString())
             throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be String.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     void init(Block & block, const ColumnNumbers & arguments)
@@ -139,8 +138,8 @@ public:
 
         if (!col)
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of first argument of function " + getName() + ". Must be constant string.",
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function " + getName() + ". Must be constant string.",
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         String sep_str = col->getValue<String>();
 
@@ -207,8 +206,8 @@ public:
 
         if (!col)
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of first argument of function " + getName() + ". Must be constant string.",
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function " + getName() + ". Must be constant string.",
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         sep = col->getValue<String>();
 
@@ -259,13 +258,14 @@ private:
 
     Pos pos;
     Pos end;
+
 public:
     static constexpr auto name = "extractAll";
     static String getName() { return name; }
     static size_t getNumberOfArguments() { return 2; }
 
     /// Check the type of function arguments.
-    static void checkArguments( const DataTypes &  arguments )
+    static void checkArguments(const DataTypes & arguments)
     {
         SplitByStringImpl::checkArguments(arguments);
     }
@@ -277,8 +277,8 @@ public:
 
         if (!col)
             throw Exception("Illegal column " + block.getByPosition(arguments[1]).column->getName()
-                + " of first argument of function " + getName() + ". Must be constant string.",
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function " + getName() + ". Must be constant string.",
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         re = Regexps::get<false, false>(col->getValue<String>());
         capture = re->getNumberOfSubpatterns() > 0 ? 1 : 0;
@@ -346,8 +346,7 @@ public:
         size_t array_argument_position = arguments[generator.getStringsArgumentPosition()];
 
         const ColumnString * col_str = checkAndGetColumn<ColumnString>(block.getByPosition(array_argument_position).column.get());
-        const ColumnConst * col_const_str =
-                checkAndGetColumnConstStringOrFixedString(block.getByPosition(array_argument_position).column.get());
+        const ColumnConst * col_const_str = checkAndGetColumnConstStringOrFixedString(block.getByPosition(array_argument_position).column.get());
 
         auto col_res = ColumnArray::create(ColumnString::create());
         ColumnString & res_strings = typeid_cast<ColumnString &>(col_res->getData());
@@ -361,7 +360,7 @@ public:
             const ColumnString::Offsets & src_offsets = col_str->getOffsets();
 
             res_offsets.reserve(src_offsets.size());
-            res_strings_offsets.reserve(src_offsets.size() * 5);    /// Constant 5 - at random.
+            res_strings_offsets.reserve(src_offsets.size() * 5); /// Constant 5 - at random.
             res_strings_chars.reserve(src_chars.size());
 
             Pos token_begin = nullptr;
@@ -415,9 +414,9 @@ public:
         }
         else
             throw Exception("Illegal columns " + block.getByPosition(array_argument_position).column->getName()
-                    + ", " + block.getByPosition(array_argument_position).column->getName()
-                    + " of arguments of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + ", " + block.getByPosition(array_argument_position).column->getName()
+                                + " of arguments of function " + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -430,7 +429,8 @@ private:
         const ColumnString::Chars_t & src_chars,
         const ColumnString::Offsets & src_string_offsets,
         const ColumnArray::Offsets & src_array_offsets,
-        const char * delimiter, const size_t delimiter_size,
+        const char * delimiter,
+        const size_t delimiter_size,
         ColumnString::Chars_t & dst_chars,
         ColumnString::Offsets & dst_string_offsets) const
     {
@@ -442,9 +442,9 @@ private:
         /// With a small margin - as if the separator goes after the last string of the array.
         dst_chars.resize(
             src_chars.size()
-            + delimiter_size * src_string_offsets.size()    /// Separators after each string...
-            + src_array_offsets.size()                      /// Zero byte after each joined string
-            - src_string_offsets.size());                   /// The former zero byte after each string of the array
+            + delimiter_size * src_string_offsets.size() /// Separators after each string...
+            + src_array_offsets.size() /// Zero byte after each joined string
+            - src_string_offsets.size()); /// The former zero byte after each string of the array
 
         /// There will be as many strings as there were arrays.
         dst_string_offsets.resize(src_array_offsets.size());
@@ -463,7 +463,9 @@ private:
                 size_t bytes_to_copy = src_string_offsets[current_src_array_offset] - current_src_string_offset - 1;
 
                 memcpySmallAllowReadWriteOverflow15(
-                    &dst_chars[current_dst_string_offset], &src_chars[current_src_string_offset], bytes_to_copy);
+                    &dst_chars[current_dst_string_offset],
+                    &src_chars[current_src_string_offset],
+                    bytes_to_copy);
 
                 current_src_string_offset = src_string_offsets[current_src_array_offset];
                 current_dst_string_offset += bytes_to_copy;
@@ -500,8 +502,8 @@ public:
     {
         if (arguments.size() != 1 && arguments.size() != 2)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 1 or 2.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 1 or 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         const DataTypeArray * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
         if (!array_type || !array_type->getNestedType()->isString())
@@ -547,9 +549,13 @@ public:
             auto col_res = ColumnString::create();
 
             executeInternal(
-                col_string.getChars(), col_string.getOffsets(), col_arr.getOffsets(),
-                delimiter.data(), delimiter.size(),
-                col_res->getChars(), col_res->getOffsets());
+                col_string.getChars(),
+                col_string.getOffsets(),
+                col_arr.getOffsets(),
+                delimiter.data(),
+                delimiter.size(),
+                col_res->getChars(),
+                col_res->getOffsets());
 
             block.getByPosition(result).column = std::move(col_res);
         }
@@ -562,4 +568,4 @@ using FunctionSplitByChar = FunctionTokens<SplitByCharImpl>;
 using FunctionSplitByString = FunctionTokens<SplitByStringImpl>;
 using FunctionExtractAll = FunctionTokens<ExtractAllImpl>;
 
-}
+} // namespace DB

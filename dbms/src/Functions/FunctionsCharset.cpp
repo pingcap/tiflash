@@ -1,31 +1,30 @@
 #include <Common/config.h>
 #if USE_ICU
 
-#include <Functions/IFunction.h>
-#include <Functions/ObjectPool.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnString.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+#include <Functions/ObjectPool.h>
 #include <IO/WriteHelpers.h>
-#include <DataTypes/DataTypeString.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnConst.h>
-#include <Common/typeid_cast.h>
-#include <ext/range.h>
-
 #include <unicode/ucnv.h>
+
+#include <ext/range.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int LOGICAL_ERROR;
-    extern const int CANNOT_CREATE_CHARSET_CONVERTER;
-    extern const int CANNOT_CONVERT_CHARSET;
-    extern const int ILLEGAL_COLUMN;
-}
+extern const int BAD_ARGUMENTS;
+extern const int LOGICAL_ERROR;
+extern const int CANNOT_CREATE_CHARSET_CONVERTER;
+extern const int CANNOT_CONVERT_CHARSET;
+extern const int ILLEGAL_COLUMN;
+} // namespace ErrorCodes
 
 
 /** convertCharset(s, from, to)
@@ -51,21 +50,23 @@ private:
 
             if (U_SUCCESS(status))
                 ucnv_setToUCallBack(impl,
-                    UCNV_TO_U_CALLBACK_SUBSTITUTE,
-                    nullptr,
-                    nullptr, nullptr,
-                    &status);
+                                    UCNV_TO_U_CALLBACK_SUBSTITUTE,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    &status);
 
             if (U_SUCCESS(status))
                 ucnv_setFromUCallBack(impl,
-                    UCNV_FROM_U_CALLBACK_SUBSTITUTE,
-                    nullptr,
-                    nullptr, nullptr,
-                    &status);
+                                      UCNV_FROM_U_CALLBACK_SUBSTITUTE,
+                                      nullptr,
+                                      nullptr,
+                                      nullptr,
+                                      &status);
 
             if (!U_SUCCESS(status))
                 throw Exception("Cannot create UConverter with charset " + charset + ", error: " + String(u_errorName(status)),
-                    ErrorCodes::CANNOT_CREATE_CHARSET_CONVERTER);
+                                ErrorCodes::CANNOT_CREATE_CHARSET_CONVERTER);
         }
 
         ~Converter()
@@ -84,9 +85,12 @@ private:
     }
 
     void convert(
-            const String & from_charset, const String & to_charset,
-        const ColumnString::Chars_t & from_chars, const ColumnString::Offsets & from_offsets,
-        ColumnString::Chars_t & to_chars, ColumnString::Offsets & to_offsets) const
+        const String & from_charset,
+        const String & to_charset,
+        const ColumnString::Chars_t & from_chars,
+        const ColumnString::Offsets & from_offsets,
+        ColumnString::Chars_t & to_chars,
+        ColumnString::Offsets & to_offsets) const
     {
         auto converter_from = getConverter(from_charset);
         auto converter_to = getConverter(to_charset);
@@ -116,13 +120,15 @@ private:
                 UErrorCode status = U_ZERO_ERROR;
                 int32_t res = ucnv_toUChars(
                     converter_from->impl,
-                    uchars.data(), uchars.size(),
-                    reinterpret_cast<const char *>(&from_chars[current_from_offset]), from_string_size,
+                    uchars.data(),
+                    uchars.size(),
+                    reinterpret_cast<const char *>(&from_chars[current_from_offset]),
+                    from_string_size,
                     &status);
 
                 if (!U_SUCCESS(status))
                     throw Exception("Cannot convert from charset " + from_charset + ", error: " + String(u_errorName(status)),
-                        ErrorCodes::CANNOT_CONVERT_CHARSET);
+                                    ErrorCodes::CANNOT_CONVERT_CHARSET);
 
                 auto max_to_char_size = ucnv_getMaxCharSize(converter_to->impl);
                 auto max_to_size = UCNV_GET_MAX_BYTES_FOR_STRING(res, max_to_char_size);
@@ -131,13 +137,15 @@ private:
 
                 res = ucnv_fromUChars(
                     converter_to->impl,
-                    reinterpret_cast<char *>(&to_chars[current_to_offset]), max_to_size,
-                    uchars.data(), res,
+                    reinterpret_cast<char *>(&to_chars[current_to_offset]),
+                    max_to_size,
+                    uchars.data(),
+                    res,
                     &status);
 
                 if (!U_SUCCESS(status))
                     throw Exception("Cannot convert to charset " + to_charset + ", error: " + String(u_errorName(status)),
-                        ErrorCodes::CANNOT_CONVERT_CHARSET);
+                                    ErrorCodes::CANNOT_CONVERT_CHARSET);
 
                 current_to_offset += res;
             }
@@ -172,7 +180,8 @@ public:
         for (size_t i : ext::range(0, 3))
             if (!arguments[i]->isString())
                 throw Exception("Illegal type " + arguments[i]->getName() + " of argument of function " + getName()
-                    + ", must be String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                    + ", must be String",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -191,7 +200,7 @@ public:
 
         if (!col_charset_from || !col_charset_to)
             throw Exception("2nd and 3rd arguments of function " + getName() + " (source charset and destination charset) must be constant strings.",
-                ErrorCodes::ILLEGAL_COLUMN);
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         String charset_from = col_charset_from->getValue<String>();
         String charset_to = col_charset_to->getValue<String>();
@@ -204,7 +213,7 @@ public:
         }
         else
             throw Exception("Illegal column passed as first argument of function " + getName() + " (must be ColumnString).",
-                ErrorCodes::ILLEGAL_COLUMN);
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -214,15 +223,18 @@ void registerFunctionsCharset(FunctionFactory & factory)
     factory.registerFunction<FunctionConvertCharset>();
 }
 
-}
+} // namespace DB
 
 #else
 
 namespace DB
 {
-    class FunctionFactory;
-    void registerFunctionsCharset(FunctionFactory & factory) { (void)factory; }
+class FunctionFactory;
+void registerFunctionsCharset(FunctionFactory & factory)
+{
+    (void)factory;
 }
+} // namespace DB
 
 
 #endif

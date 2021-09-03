@@ -17,7 +17,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ILLEGAL_COLUMN;
@@ -52,7 +51,7 @@ public:
     {
         if (!arguments.front()->isStringOrFixedString())
             throw Exception{"Illegal type " + arguments.front()->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         // tidb get int64 from crc32, so we do the same thing
         return std::make_shared<DataTypeInt64>();
     }
@@ -183,8 +182,7 @@ struct ConvImpl
     }
 
     template <typename T1, typename T2, typename Column>
-    static void execute(const Column * arg_col0, const std::unique_ptr<IGetVecHelper<T1>> & arg_col1,
-        const std::unique_ptr<IGetVecHelper<T2>> & arg_col2, ColumnString & res_col)
+    static void execute(const Column * arg_col0, const std::unique_ptr<IGetVecHelper<T1>> & arg_col1, const std::unique_ptr<IGetVecHelper<T2>> & arg_col2, ColumnString & res_col)
     {
         for (size_t i = 0; i < arg_col0->size(); ++i)
         {
@@ -199,8 +197,11 @@ class FunctionConv : public IFunction
 {
     template <typename FirstIntType, typename SecondIntType, typename FirstIntColumn, typename SecondIntColumn>
     void executeWithIntTypes(
-            Block & block, const ColumnNumbers & arguments, const size_t result,
-        const FirstIntColumn * first_int_arg_typed, const SecondIntColumn * second_int_arg_typed) const
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result,
+        const FirstIntColumn * first_int_arg_typed,
+        const SecondIntColumn * second_int_arg_typed) const
     {
         const auto string_arg = block.getByPosition(arguments[0]).column.get();
 
@@ -223,13 +224,17 @@ class FunctionConv : public IFunction
         else
         {
             throw Exception{
-                "Illegal column " + string_arg->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN};
+                "Illegal column " + string_arg->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN};
         }
     }
 
     template <typename FirstIntType, typename SecondIntType, typename FirstIntColumn>
     bool executeIntRight(
-            Block & block, const ColumnNumbers & arguments, const size_t result, const FirstIntColumn * first_int_arg_typed,
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result,
+        const FirstIntColumn * first_int_arg_typed,
         const IColumn * second_int_arg) const
     {
         if (const auto second_int_arg_typed = checkAndGetColumn<ColumnVector<SecondIntType>>(second_int_arg))
@@ -247,7 +252,7 @@ class FunctionConv : public IFunction
     }
 
     template <typename FirstIntType>
-    bool executeIntLeft(Block & block, const ColumnNumbers & arguments, const size_t result, const IColumn * first_int_arg)const
+    bool executeIntLeft(Block & block, const ColumnNumbers & arguments, const size_t result, const IColumn * first_int_arg) const
     {
         if (const auto first_int_arg_typed = checkAndGetColumn<ColumnVector<FirstIntType>>(first_int_arg))
         {
@@ -267,8 +272,8 @@ class FunctionConv : public IFunction
             else
             {
                 throw Exception{"Illegal column " + block.getByPosition(arguments[1]).column->getName() + " of second argument of function "
-                        + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN};
+                                    + getName(),
+                                ErrorCodes::ILLEGAL_COLUMN};
             }
         }
         else if (const auto first_int_arg_typed = checkAndGetColumnConst<ColumnVector<FirstIntType>>(first_int_arg))
@@ -289,8 +294,8 @@ class FunctionConv : public IFunction
             else
             {
                 throw Exception{"Illegal column " + block.getByPosition(arguments[1]).column->getName() + " of second argument of function "
-                        + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN};
+                                    + getName(),
+                                ErrorCodes::ILLEGAL_COLUMN};
             }
         }
 
@@ -321,7 +326,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-
         const auto first_int_arg = block.getByPosition(arguments[1]).column.get();
 
         if (!executeIntLeft<UInt8>(block, arguments, result, first_int_arg)
@@ -334,7 +338,8 @@ public:
             && !executeIntLeft<Int64>(block, arguments, result, first_int_arg))
         {
             throw Exception{
-                "Illegal column " + first_int_arg->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN};
+                "Illegal column " + first_int_arg->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN};
         }
     }
 };

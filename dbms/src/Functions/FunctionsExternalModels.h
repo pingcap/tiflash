@@ -1,9 +1,8 @@
 #pragma once
 #include <Functions/IFunction.h>
 
-namespace  DB
+namespace DB
 {
-
 class ExternalModels;
 
 /// Evaluate external model.
@@ -17,7 +16,9 @@ public:
 
     static FunctionPtr create(const Context & context);
 
-    explicit FunctionModelEvaluate(const ExternalModels & models) : models(models) {}
+    explicit FunctionModelEvaluate(const ExternalModels & models)
+        : models(models)
+    {}
 
     String getName() const override { return name; }
 
@@ -35,4 +36,4 @@ private:
     const ExternalModels & models;
 };
 
-}
+} // namespace DB

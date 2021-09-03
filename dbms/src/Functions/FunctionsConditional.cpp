@@ -1,17 +1,16 @@
-#include <Functions/FunctionsConditional.h>
-#include <Functions/FunctionsArray.h>
-#include <Functions/FunctionsTransform.h>
-#include <Functions/FunctionFactory.h>
 #include <Columns/ColumnNullable.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsArray.h>
+#include <Functions/FunctionsConditional.h>
+#include <Functions/FunctionsTransform.h>
 #include <Interpreters/castColumn.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
 }
 
 void registerFunctionsConditional(FunctionFactory & factory)
@@ -164,15 +163,13 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
 {
     /// Arguments are the following: cond1, then1, cond2, then2, ... condN, thenN, else.
 
-    auto for_conditions = [&args](auto && f)
-    {
+    auto for_conditions = [&args](auto && f) {
         size_t conditions_end = args.size() - 1;
         for (size_t i = 0; i < conditions_end; i += 2)
             f(args[i]);
     };
 
-    auto for_branches = [&args](auto && f)
-    {
+    auto for_branches = [&args](auto && f) {
         size_t branches_end = args.size();
         for (size_t i = 1; i < branches_end; i += 2)
             f(args[i]);
@@ -181,13 +178,12 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
 
     if (!(args.size() >= 3 && args.size() % 2 == 1))
         throw Exception{"Invalid number of arguments for function " + getName(),
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
+                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
     /// Conditions must be UInt8, Nullable(UInt8) or Null. If one of conditions is Nullable, the result is also Nullable.
     bool have_nullable_condition = false;
 
-    for_conditions([&](const DataTypePtr & arg)
-    {
+    for_conditions([&](const DataTypePtr & arg) {
         const IDataType * nested_type;
         if (arg->isNullable())
         {
@@ -206,15 +202,15 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
 
         if (!checkDataType<DataTypeUInt8>(nested_type))
             throw Exception{"Illegal type " + arg->getName() + " of argument (condition) "
-                "of function " + getName() + ". Must be UInt8.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                                               "of function "
+                                + getName() + ". Must be UInt8.",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
     });
 
     DataTypes types_of_branches;
     types_of_branches.reserve(args.size() / 2 + 1);
 
-    for_branches([&](const DataTypePtr & arg)
-    {
+    for_branches([&](const DataTypePtr & arg) {
         types_of_branches.emplace_back(arg);
     });
 
@@ -245,7 +241,7 @@ DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args
 {
     if (!args.size())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
-            ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
+                        ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 
     /// See the comments in executeImpl() to understand why we actually have to
     /// get the return type of a transform function.
@@ -269,8 +265,7 @@ DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args
 
     /// Finally get the return type of the transform function.
     DefaultFunctionBuilder fun_transform(std::make_shared<FunctionTransform>());
-    ColumnsWithTypeAndName transform_args = {{nullptr, args.front(), {}}, {nullptr, src_array_type, {}},
-                                             {nullptr, dst_array_type, {}}, {nullptr, args.back(), {}}};
+    ColumnsWithTypeAndName transform_args = {{nullptr, args.front(), {}}, {nullptr, src_array_type, {}}, {nullptr, dst_array_type, {}}, {nullptr, args.back(), {}}};
     return fun_transform.getReturnType(transform_args);
 }
 
@@ -278,7 +273,7 @@ void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers 
 {
     if (!args.size())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
-            ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
+                        ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 
     /// In the following code, we turn the construction:
     /// CASE expr WHEN val[0] THEN branch[0] ... WHEN val[N-1] then branch[N-1] ELSE branchN
@@ -337,4 +332,4 @@ void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers 
     block.getByPosition(result).column = std::move(temp_block.getByPosition(result).column);
 }
 
-}
+} // namespace DB

@@ -5,8 +5,6 @@
 
 namespace DB
 {
-
-
 /** Combines several sources into one.
   * Unlike UnionBlockInputStream, it does this sequentially.
   * Blocks of different sources are not interleaved with each other.

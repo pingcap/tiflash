@@ -1,32 +1,32 @@
 #pragma once
 
-#include <mutex>
-#include <Common/FieldVisitors.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeArray.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/Arena.h>
-#include <common/StringRef.h>
+#include <Common/FieldVisitors.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/typeid_cast.h>
-#include <Functions/IFunction.h>
-#include <Functions/FunctionHelpers.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+#include <common/StringRef.h>
+
+#include <mutex>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ILLEGAL_COLUMN;
-}
+extern const int BAD_ARGUMENTS;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ILLEGAL_COLUMN;
+} // namespace ErrorCodes
 
 
 /** transform(x, from_array, to_array[, default]) - convert x according to an explicitly passed match.
@@ -73,22 +73,23 @@ public:
         const auto args_size = arguments.size();
         if (args_size != 3 && args_size != 4)
             throw Exception{
-                "Number of arguments for function " + getName() + " doesn't match: passed " +
-                    toString(args_size) + ", should be 3 or 4",
+                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(args_size) + ", should be 3 or 4",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
         const DataTypePtr & type_x = arguments[0];
 
         if (!type_x->isValueRepresentedByNumber() && !type_x->isString())
             throw Exception{"Unsupported type " + type_x->getName()
-                + " of first argument of function " + getName()
-                + ", must be numeric type or Date/DateTime or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                + " of first argument of function " + getName()
+                                + ", must be numeric type or Date/DateTime or String",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         const DataTypeArray * type_arr_from = checkAndGetDataType<DataTypeArray>(arguments[1].get());
 
         if (!type_arr_from)
             throw Exception{"Second argument of function " + getName()
-                + ", must be array of source values to transform from.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                + ", must be array of source values to transform from.",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         const auto type_arr_from_nested = type_arr_from->getNestedType();
 
@@ -96,14 +97,16 @@ public:
             || (!!type_x->isString() != !!type_arr_from_nested->isString()))
         {
             throw Exception{"First argument and elements of array of second argument of function " + getName()
-                + " must have compatible types: both numeric or both strings.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                + " must have compatible types: both numeric or both strings.",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
         const DataTypeArray * type_arr_to = checkAndGetDataType<DataTypeArray>(arguments[2].get());
 
         if (!type_arr_to)
             throw Exception{"Third argument of function " + getName()
-                + ", must be array of destination values to transform to.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                + ", must be array of destination values to transform to.",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         const DataTypePtr & type_arr_to_nested = type_arr_to->getNestedType();
 
@@ -112,8 +115,8 @@ public:
             if ((type_x->isValueRepresentedByNumber() != type_arr_to_nested->isValueRepresentedByNumber())
                 || (!!type_x->isString() != !!checkDataType<DataTypeString>(type_arr_to_nested.get())))
                 throw Exception{"Function " + getName()
-                    + " has signature: transform(T, Array(T), Array(U), U) -> U; or transform(T, Array(T), Array(T)) -> T; where T and U are types.",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                    + " has signature: transform(T, Array(T), Array(U), U) -> U; or transform(T, Array(T), Array(T)) -> T; where T and U are types.",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
             return type_x;
         }
@@ -123,14 +126,15 @@ public:
 
             if (!type_default->isValueRepresentedByNumber() && !type_default->isString())
                 throw Exception{"Unsupported type " + type_default->getName()
-                    + " of fourth argument (default value) of function " + getName()
-                    + ", must be numeric type or Date/DateTime or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                    + " of fourth argument (default value) of function " + getName()
+                                    + ", must be numeric type or Date/DateTime or String",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
             if ((type_default->isValueRepresentedByNumber() != type_arr_to_nested->isValueRepresentedByNumber())
                 || (!!checkDataType<DataTypeString>(type_default.get()) != !!checkDataType<DataTypeString>(type_arr_to_nested.get())))
                 throw Exception{"Function " + getName()
-                    + " have signature: transform(T, Array(T), Array(U), U) -> U; or transform(T, Array(T), Array(T)) -> T; where T and U are types.",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                                    + " have signature: transform(T, Array(T), Array(U), U) -> U; or transform(T, Array(T), Array(T)) -> T; where T and U are types.",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
             if (type_arr_to_nested->isValueRepresentedByNumber() && type_default->isValueRepresentedByNumber())
             {
@@ -189,7 +193,7 @@ public:
     }
 
 private:
-    void executeConst(Block & block, const ColumnNumbers & arguments, const size_t result)const
+    void executeConst(Block & block, const ColumnNumbers & arguments, const size_t result) const
     {
         /// Materialize the input column and compute the function as usual.
 
@@ -215,7 +219,7 @@ private:
     }
 
     template <typename T>
-    bool executeNum(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * default_untyped)const
+    bool executeNum(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * default_untyped) const
     {
         if (const auto in = checkAndGetColumn<ColumnVector<T>>(in_untyped))
         {
@@ -226,7 +230,7 @@ private:
                 {
                     throw Exception{
                         "Illegal column " + out_untyped->getName() + " of elements of array of third argument of function " + getName()
-                        + ", must be " + in->getName(),
+                            + ", must be " + in->getName(),
                         ErrorCodes::ILLEGAL_COLUMN};
                 }
 
@@ -277,7 +281,7 @@ private:
         return false;
     }
 
-    bool executeString(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * default_untyped)const
+    bool executeString(const IColumn * in_untyped, IColumn * out_untyped, const IColumn * default_untyped) const
     {
         if (const auto in = checkAndGetColumn<ColumnString>(in_untyped))
         {
@@ -336,7 +340,7 @@ private:
     }
 
     template <typename T, typename U>
-    bool executeNumToNumWithConstDefault(const ColumnVector<T> * in, IColumn * out_untyped)const
+    bool executeNumToNumWithConstDefault(const ColumnVector<T> * in, IColumn * out_untyped) const
     {
         auto out = typeid_cast<ColumnVector<U> *>(out_untyped);
         if (!out)
@@ -347,7 +351,7 @@ private:
     }
 
     template <typename T, typename U>
-    bool executeNumToNumWithNonConstDefault(const ColumnVector<T> * in, IColumn * out_untyped, const IColumn * default_untyped)const
+    bool executeNumToNumWithNonConstDefault(const ColumnVector<T> * in, IColumn * out_untyped, const IColumn * default_untyped) const
     {
         auto out = typeid_cast<ColumnVector<U> *>(out_untyped);
         if (!out)
@@ -373,7 +377,7 @@ private:
     }
 
     template <typename T, typename U, typename V>
-    bool executeNumToNumWithNonConstDefault2(const ColumnVector<T> * in, ColumnVector<U> * out, const IColumn * default_untyped)const
+    bool executeNumToNumWithNonConstDefault2(const ColumnVector<T> * in, ColumnVector<U> * out, const IColumn * default_untyped) const
     {
         auto col_default = checkAndGetColumn<ColumnVector<V>>(default_untyped);
         if (!col_default)
@@ -384,7 +388,7 @@ private:
     }
 
     template <typename T>
-    bool executeNumToStringWithConstDefault(const ColumnVector<T> * in, IColumn * out_untyped)const
+    bool executeNumToStringWithConstDefault(const ColumnVector<T> * in, IColumn * out_untyped) const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -397,7 +401,7 @@ private:
     }
 
     template <typename T>
-    bool executeNumToStringWithNonConstDefault(const ColumnVector<T> * in, IColumn * out_untyped, const IColumn * default_untyped)const
+    bool executeNumToStringWithNonConstDefault(const ColumnVector<T> * in, IColumn * out_untyped, const IColumn * default_untyped) const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -407,19 +411,21 @@ private:
         if (!default_col)
         {
             throw Exception{"Illegal column " + default_untyped->getName() + " of fourth argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
+                            ErrorCodes::ILLEGAL_COLUMN};
         }
 
         executeImplNumToStringWithNonConstDefault<T>(
             in->getData(),
-            out->getChars(), out->getOffsets(),
-            default_col->getChars(), default_col->getOffsets());
+            out->getChars(),
+            out->getOffsets(),
+            default_col->getChars(),
+            default_col->getOffsets());
 
         return true;
     }
 
     template <typename U>
-    bool executeStringToNumWithConstDefault(const ColumnString * in, IColumn * out_untyped)const
+    bool executeStringToNumWithConstDefault(const ColumnString * in, IColumn * out_untyped) const
     {
         auto out = typeid_cast<ColumnVector<U> *>(out_untyped);
         if (!out)
@@ -430,7 +436,7 @@ private:
     }
 
     template <typename U>
-    bool executeStringToNumWithNonConstDefault(const ColumnString * in, IColumn * out_untyped, const IColumn * default_untyped)const
+    bool executeStringToNumWithNonConstDefault(const ColumnString * in, IColumn * out_untyped, const IColumn * default_untyped) const
     {
         auto out = typeid_cast<ColumnVector<U> *>(out_untyped);
         if (!out)
@@ -448,14 +454,14 @@ private:
             && !executeStringToNumWithNonConstDefault2<U, Float64>(in, out, default_untyped))
         {
             throw Exception{"Illegal column " + default_untyped->getName() + " of fourth argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
+                            ErrorCodes::ILLEGAL_COLUMN};
         }
 
         return true;
     }
 
     template <typename U, typename V>
-    bool executeStringToNumWithNonConstDefault2(const ColumnString * in, ColumnVector<U> * out, const IColumn * default_untyped)const
+    bool executeStringToNumWithNonConstDefault2(const ColumnString * in, ColumnVector<U> * out, const IColumn * default_untyped) const
     {
         auto col_default = checkAndGetColumn<ColumnVector<V>>(default_untyped);
         if (!col_default)
@@ -465,7 +471,7 @@ private:
         return true;
     }
 
-    bool executeStringToString(const ColumnString * in, IColumn * out_untyped)const
+    bool executeStringToString(const ColumnString * in, IColumn * out_untyped) const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -475,7 +481,7 @@ private:
         return true;
     }
 
-    bool executeStringToStringWithConstDefault(const ColumnString * in, IColumn * out_untyped)const
+    bool executeStringToStringWithConstDefault(const ColumnString * in, IColumn * out_untyped) const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -487,7 +493,7 @@ private:
         return true;
     }
 
-    bool executeStringToStringWithNonConstDefault(const ColumnString * in, IColumn * out_untyped, const IColumn * default_untyped)const
+    bool executeStringToStringWithNonConstDefault(const ColumnString * in, IColumn * out_untyped, const IColumn * default_untyped) const
     {
         auto out = typeid_cast<ColumnString *>(out_untyped);
         if (!out)
@@ -497,20 +503,23 @@ private:
         if (!default_col)
         {
             throw Exception{"Illegal column " + default_untyped->getName() + " of fourth argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
+                            ErrorCodes::ILLEGAL_COLUMN};
         }
 
         executeImplStringToStringWithNonConstDefault(
-            in->getChars(), in->getOffsets(),
-            out->getChars(), out->getOffsets(),
-            default_col->getChars(), default_col->getOffsets());
+            in->getChars(),
+            in->getOffsets(),
+            out->getChars(),
+            out->getOffsets(),
+            default_col->getChars(),
+            default_col->getOffsets());
 
         return true;
     }
 
 
     template <typename T, typename U>
-    void executeImplNumToNumWithConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, U dst_default)const
+    void executeImplNumToNumWithConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, U dst_default) const
     {
         const auto & table = *cache.table_num_to_num;
         size_t size = src.size();
@@ -519,14 +528,14 @@ private:
         {
             auto it = table.find(src[i]);
             if (it != table.end())
-                memcpy(&dst[i], &it->getMapped(), sizeof(dst[i]));    /// little endian.
+                memcpy(&dst[i], &it->getMapped(), sizeof(dst[i])); /// little endian.
             else
                 dst[i] = dst_default;
         }
     }
 
     template <typename T, typename U, typename V>
-    void executeImplNumToNumWithNonConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default)const
+    void executeImplNumToNumWithNonConstDefault(const PaddedPODArray<T> & src, PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default) const
     {
         const auto & table = *cache.table_num_to_num;
         size_t size = src.size();
@@ -535,14 +544,14 @@ private:
         {
             auto it = table.find(src[i]);
             if (it != table.end())
-                memcpy(&dst[i], &it->getMapped(), sizeof(dst[i]));    /// little endian.
+                memcpy(&dst[i], &it->getMapped(), sizeof(dst[i])); /// little endian.
             else
                 dst[i] = dst_default[i];
         }
     }
 
     template <typename T>
-    void executeImplNumToNum(const PaddedPODArray<T> & src, PaddedPODArray<T> & dst)const
+    void executeImplNumToNum(const PaddedPODArray<T> & src, PaddedPODArray<T> & dst) const
     {
         const auto & table = *cache.table_num_to_num;
         size_t size = src.size();
@@ -559,7 +568,9 @@ private:
 
     template <typename T>
     void executeImplNumToStringWithConstDefault(const PaddedPODArray<T> & src,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)const
+                                                ColumnString::Chars_t & dst_data,
+                                                ColumnString::Offsets & dst_offsets,
+                                                StringRef dst_default) const
     {
         const auto & table = *cache.table_num_to_string;
         size_t size = src.size();
@@ -578,8 +589,10 @@ private:
 
     template <typename T>
     void executeImplNumToStringWithNonConstDefault(const PaddedPODArray<T> & src,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets,
-        const ColumnString::Chars_t & dst_default_data, const ColumnString::Offsets & dst_default_offsets)const
+                                                   ColumnString::Chars_t & dst_data,
+                                                   ColumnString::Offsets & dst_offsets,
+                                                   const ColumnString::Chars_t & dst_default_data,
+                                                   const ColumnString::Offsets & dst_default_offsets) const
     {
         const auto & table = *cache.table_num_to_string;
         size_t size = src.size();
@@ -609,8 +622,10 @@ private:
 
     template <typename U>
     void executeImplStringToNumWithConstDefault(
-        const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        PaddedPODArray<U> & dst, U dst_default)const
+        const ColumnString::Chars_t & src_data,
+        const ColumnString::Offsets & src_offsets,
+        PaddedPODArray<U> & dst,
+        U dst_default) const
     {
         const auto & table = *cache.table_string_to_num;
         size_t size = src_offsets.size();
@@ -630,8 +645,10 @@ private:
 
     template <typename U, typename V>
     void executeImplStringToNumWithNonConstDefault(
-        const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        PaddedPODArray<U> & dst, const PaddedPODArray<V> & dst_default)const
+        const ColumnString::Chars_t & src_data,
+        const ColumnString::Offsets & src_offsets,
+        PaddedPODArray<U> & dst,
+        const PaddedPODArray<V> & dst_default) const
     {
         const auto & table = *cache.table_string_to_num;
         size_t size = src_offsets.size();
@@ -651,8 +668,11 @@ private:
 
     template <bool with_default>
     void executeImplStringToStringWithOrWithoutConstDefault(
-        const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)const
+        const ColumnString::Chars_t & src_data,
+        const ColumnString::Offsets & src_offsets,
+        ColumnString::Chars_t & dst_data,
+        ColumnString::Offsets & dst_offsets,
+        StringRef dst_default) const
     {
         const auto & table = *cache.table_string_to_string;
         size_t size = src_offsets.size();
@@ -675,23 +695,31 @@ private:
     }
 
     void executeImplStringToString(
-        const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets)const
+        const ColumnString::Chars_t & src_data,
+        const ColumnString::Offsets & src_offsets,
+        ColumnString::Chars_t & dst_data,
+        ColumnString::Offsets & dst_offsets) const
     {
         executeImplStringToStringWithOrWithoutConstDefault<false>(src_data, src_offsets, dst_data, dst_offsets, {});
     }
 
     void executeImplStringToStringWithConstDefault(
-        const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets, StringRef dst_default)const
+        const ColumnString::Chars_t & src_data,
+        const ColumnString::Offsets & src_offsets,
+        ColumnString::Chars_t & dst_data,
+        ColumnString::Offsets & dst_offsets,
+        StringRef dst_default) const
     {
         executeImplStringToStringWithOrWithoutConstDefault<true>(src_data, src_offsets, dst_data, dst_offsets, dst_default);
     }
 
     void executeImplStringToStringWithNonConstDefault(
-        const ColumnString::Chars_t & src_data, const ColumnString::Offsets & src_offsets,
-        ColumnString::Chars_t & dst_data, ColumnString::Offsets & dst_offsets,
-        const ColumnString::Chars_t & dst_default_data, const ColumnString::Offsets & dst_default_offsets)const
+        const ColumnString::Chars_t & src_data,
+        const ColumnString::Offsets & src_offsets,
+        ColumnString::Chars_t & dst_data,
+        ColumnString::Offsets & dst_offsets,
+        const ColumnString::Chars_t & dst_default_data,
+        const ColumnString::Offsets & dst_default_offsets) const
     {
         const auto & table = *cache.table_string_to_string;
         size_t size = src_offsets.size();
@@ -729,7 +757,7 @@ private:
     struct Cache
     {
         using NumToNum = HashMap<UInt64, UInt64, HashCRC32<UInt64>>;
-        using NumToString = HashMap<UInt64, StringRef, HashCRC32<UInt64>>;     /// Everywhere StringRef's with trailing zero.
+        using NumToString = HashMap<UInt64, StringRef, HashCRC32<UInt64>>; /// Everywhere StringRef's with trailing zero.
         using StringToNum = HashMap<StringRef, UInt64, StringRefHash>;
         using StringToString = HashMap<StringRef, StringRef, StringRefHash>;
 
@@ -740,7 +768,7 @@ private:
 
         Arena string_pool;
 
-        Field const_default_value;    /// Null, if not specified.
+        Field const_default_value; /// Null, if not specified.
 
         std::atomic<bool> initialized{false};
         std::mutex mutex;
@@ -749,7 +777,7 @@ private:
     mutable Cache cache;
 
     /// Can be called from different threads. It works only on the first call.
-    void initialize(const Array & from, const Array & to, Block & block, const ColumnNumbers & arguments)const
+    void initialize(const Array & from, const Array & to, Block & block, const ColumnNumbers & arguments) const
     {
         if (cache.initialized)
             return;
@@ -780,8 +808,7 @@ private:
                 cache.const_default_value = (*const_default_col)[0];
 
             /// Do we need to convert the elements `to` and `default_value` to the smallest common type that is Float64?
-            bool default_col_is_float =
-                   checkColumn<ColumnFloat32>(default_col)
+            bool default_col_is_float = checkColumn<ColumnFloat32>(default_col)
                 || checkColumn<ColumnFloat64>(default_col)
                 || checkColumnConst<ColumnFloat32>(default_col)
                 || checkColumnConst<ColumnFloat64>(default_col);
@@ -851,4 +878,4 @@ private:
     }
 };
 
-}
+} // namespace DB

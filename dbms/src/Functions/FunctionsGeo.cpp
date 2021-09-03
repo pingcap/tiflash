@@ -1,40 +1,37 @@
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnTuple.h>
+#include <Common/ProfileEvents.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsGeo.h>
 #include <Functions/GeoUtils.h>
 #include <Functions/ObjectPool.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/ExpressionActions.h>
 
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
 
-#include <Interpreters/ExpressionActions.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <Columns/ColumnTuple.h>
-#include <IO/WriteHelpers.h>
-#include <DataTypes/DataTypeArray.h>
-#include <Columns/ColumnArray.h>
-#include <Common/ProfileEvents.h>
-
 
 namespace ProfileEvents
 {
-    extern const Event PolygonsAddedToPool;
-    extern const Event PolygonsInPoolAllocatedBytes;
-}
+extern const Event PolygonsAddedToPool;
+extern const Event PolygonsInPoolAllocatedBytes;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
-    extern const int BAD_ARGUMENTS;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-}
+extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
+extern const int BAD_ARGUMENTS;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+} // namespace ErrorCodes
 
 namespace FunctionPointInPolygonDetail
 {
-
 template <typename Polygon, typename PointInPolygonImpl>
 ColumnPtr callPointInPolygonImplWithPool(const IColumn & x, const IColumn & y, Polygon & polygon)
 {
@@ -42,8 +39,7 @@ ColumnPtr callPointInPolygonImplWithPool(const IColumn & x, const IColumn & y, P
     /// C++11 has thread-safe function-local statics on most modern compilers.
     static Pool known_polygons;
 
-    auto factory = [& polygon]()
-    {
+    auto factory = [&polygon]() {
         GeoUtils::normalizePolygon(polygon);
         auto ptr = std::make_unique<PointInPolygonImpl>(polygon);
 
@@ -69,13 +65,12 @@ ColumnPtr callPointInPolygonImpl(const IColumn & x, const IColumn & y, Polygon &
     return GeoUtils::pointInPolygon(x, y, impl);
 }
 
-}
+} // namespace FunctionPointInPolygonDetail
 
 template <template <typename> typename PointInPolygonImpl, bool use_object_pool = false>
 class FunctionPointInPolygon : public IFunction
 {
 public:
-
     template <typename Type>
     using Point = boost::geometry::model::d2::point_xy<Type>;
     template <typename Type>
@@ -112,7 +107,9 @@ public:
             throw Exception("Too few arguments", ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION);
         }
 
-        auto getMsgPrefix = [this](size_t i) { return "Argument " + toString(i + 1) + " for function " + getName(); };
+        auto getMsgPrefix = [this](size_t i) {
+            return "Argument " + toString(i + 1) + " for function " + getName();
+        };
 
         for (size_t i = 1; i < arguments.size(); ++i)
         {
@@ -144,7 +141,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-
         const IColumn * point_col = block.getByPosition(arguments[0]).column.get();
         auto const_tuple_col = checkAndGetColumn<ColumnConst>(point_col);
         if (const_tuple_col)
@@ -174,22 +170,21 @@ public:
     }
 
 private:
-
     Float64 getCoordinateFromField(const Field & field) const
     {
         switch (field.getType())
         {
-            case Field::Types::Float64:
-                return field.get<Float64>();
-            case Field::Types::Int64:
-                return field.get<Int64>();
-            case Field::Types::UInt64:
-                return field.get<UInt64>();
-            default:
-            {
-                std::string msg = "Expected numeric field, but got ";
-                throw Exception(msg + Field::Types::toString(field.getType()), ErrorCodes::LOGICAL_ERROR);
-            }
+        case Field::Types::Float64:
+            return field.get<Float64>();
+        case Field::Types::Int64:
+            return field.get<Int64>();
+        case Field::Types::UInt64:
+            return field.get<UInt64>();
+        default:
+        {
+            std::string msg = "Expected numeric field, but got ";
+            throw Exception(msg + Field::Types::toString(field.getType()), ErrorCodes::LOGICAL_ERROR);
+        }
         }
     }
 
@@ -198,7 +193,9 @@ private:
     {
         Polygon<Type> polygon;
 
-        auto getMsgPrefix = [this](size_t i) { return "Argument " + toString(i + 1) + " for function " + getName(); };
+        auto getMsgPrefix = [this](size_t i) {
+            return "Argument " + toString(i + 1) + " for function " + getName();
+        };
 
         for (size_t i = 1; i < arguments.size(); ++i)
         {
@@ -241,7 +238,6 @@ private:
 
         return callImpl(x, y, polygon);
     }
-
 };
 
 template <typename Type>
@@ -260,4 +256,4 @@ void registerFunctionsGeo(FunctionFactory & factory)
 
     factory.registerFunction<FunctionPointInPolygon<PointInPolygonWithGrid, true>>();
 }
-}
+} // namespace DB

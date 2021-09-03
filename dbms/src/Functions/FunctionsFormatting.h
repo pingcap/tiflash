@@ -1,22 +1,21 @@
-#include <Functions/IFunction.h>
-#include <Functions/FunctionHelpers.h>
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
-#include <Columns/ColumnConst.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <IO/WriteBufferFromVector.h>
-#include <IO/WriteHelpers.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+#include <IO/WriteBufferFromVector.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_COLUMN;
+extern const int ILLEGAL_COLUMN;
 }
 
 
@@ -56,17 +55,17 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (!(    executeType<UInt8>(block, arguments, result)
-            ||    executeType<UInt16>(block, arguments, result)
-            ||    executeType<UInt32>(block, arguments, result)
-            ||    executeType<UInt64>(block, arguments, result)
-            ||    executeType<Int8>(block, arguments, result)
-            ||    executeType<Int16>(block, arguments, result)
-            ||    executeType<Int32>(block, arguments, result)
-            ||    executeType<Int64>(block, arguments, result)))
+        if (!(executeType<UInt8>(block, arguments, result)
+              || executeType<UInt16>(block, arguments, result)
+              || executeType<UInt32>(block, arguments, result)
+              || executeType<UInt64>(block, arguments, result)
+              || executeType<Int8>(block, arguments, result)
+              || executeType<Int16>(block, arguments, result)
+              || executeType<Int32>(block, arguments, result)
+              || executeType<Int64>(block, arguments, result)))
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of argument of function " + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 
 private:
@@ -149,19 +148,19 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (!(    executeType<UInt8>(block, arguments, result)
-            ||    executeType<UInt16>(block, arguments, result)
-            ||    executeType<UInt32>(block, arguments, result)
-            ||    executeType<UInt64>(block, arguments, result)
-            ||    executeType<Int8>(block, arguments, result)
-            ||    executeType<Int16>(block, arguments, result)
-            ||    executeType<Int32>(block, arguments, result)
-            ||    executeType<Int64>(block, arguments, result)
-            ||    executeType<Float32>(block, arguments, result)
-            ||    executeType<Float64>(block, arguments, result)))
+        if (!(executeType<UInt8>(block, arguments, result)
+              || executeType<UInt16>(block, arguments, result)
+              || executeType<UInt32>(block, arguments, result)
+              || executeType<UInt64>(block, arguments, result)
+              || executeType<Int8>(block, arguments, result)
+              || executeType<Int16>(block, arguments, result)
+              || executeType<Int32>(block, arguments, result)
+              || executeType<Int64>(block, arguments, result)
+              || executeType<Float32>(block, arguments, result)
+              || executeType<Float64>(block, arguments, result)))
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of argument of function " + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 
 private:
@@ -197,4 +196,4 @@ private:
     }
 };
 
-}
+} // namespace DB

@@ -1,23 +1,19 @@
 #pragma once
 
-#include <queue>
-#include <Poco/TemporaryFile.h>
-
-#include <common/logger_useful.h>
-
-#include <Core/SortDescription.h>
 #include <Core/SortCursor.h>
-
+#include <Core/SortDescription.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
-
-#include <IO/ReadBufferFromFile.h>
 #include <IO/CompressedReadBuffer.h>
+#include <IO/ReadBufferFromFile.h>
+#include <Poco/TemporaryFile.h>
+#include <common/logger_useful.h>
+
+#include <queue>
 
 
 namespace DB
 {
-
 /** Merges stream of sorted each-separately blocks to sorted as-a-whole stream of blocks.
   * If data to sort is too much, could use external sorting, with temporary files.
   */
@@ -29,8 +25,7 @@ class MergeSortingBlocksBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
-    MergeSortingBlocksBlockInputStream(Blocks & blocks_, SortDescription & description_,
-        size_t max_merged_block_size_, size_t limit_ = 0);
+    MergeSortingBlocksBlockInputStream(Blocks & blocks_, SortDescription & description_, size_t max_merged_block_size_, size_t limit_ = 0);
 
     String getName() const override { return "MergeSortingBlocks"; }
 
@@ -71,9 +66,7 @@ class MergeSortingBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
-    MergeSortingBlockInputStream(const BlockInputStreamPtr & input, SortDescription & description_,
-        size_t max_merged_block_size_, size_t limit_,
-        size_t max_bytes_before_external_sort_, const std::string & tmp_path_);
+    MergeSortingBlockInputStream(const BlockInputStreamPtr & input, SortDescription & description_, size_t max_merged_block_size_, size_t limit_, size_t max_bytes_before_external_sort_, const std::string & tmp_path_);
 
     String getName() const override { return "MergeSorting"; }
 
@@ -117,7 +110,10 @@ private:
         BlockInputStreamPtr block_in;
 
         TemporaryFileStream(const std::string & path, const Block & header)
-            : file_in(path), compressed_in(file_in), block_in(std::make_shared<NativeBlockInputStream>(compressed_in, header, 0)) {}
+            : file_in(path)
+            , compressed_in(file_in)
+            , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, header, 0))
+        {}
     };
 
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
@@ -125,4 +121,4 @@ private:
     BlockInputStreams inputs_to_merge;
 };
 
-}
+} // namespace DB

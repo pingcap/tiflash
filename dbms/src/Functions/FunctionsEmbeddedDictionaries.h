@@ -1,37 +1,31 @@
 #pragma once
 
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeString.h>
-
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnConst.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
-
-#include <Interpreters/Context.h>
-#include <Interpreters/EmbeddedDictionaries.h>
-
-#include <Functions/IFunction.h>
-#include <Functions/FunctionHelpers.h>
-
-#include <Dictionaries/Embedded/RegionsHierarchy.h>
-#include <Dictionaries/Embedded/RegionsHierarchies.h>
-#include <Dictionaries/Embedded/RegionsNames.h>
-
+#include <Columns/ColumnsNumber.h>
 #include <Common/config.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Dictionaries/Embedded/RegionsHierarchies.h>
+#include <Dictionaries/Embedded/RegionsHierarchy.h>
+#include <Dictionaries/Embedded/RegionsNames.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/EmbeddedDictionaries.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int DICTIONARIES_WAS_NOT_LOADED;
-    extern const int BAD_ARGUMENTS;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int DICTIONARIES_WAS_NOT_LOADED;
+extern const int BAD_ARGUMENTS;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 /** Functions using Yandex.Metrica dictionaries
   * - dictionaries of regions, operating systems, search engines.
@@ -160,18 +154,18 @@ public:
     {
         if (arguments.size() != 1 && arguments.size() != 2)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 1 or 2.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 1 or 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (arguments[0]->getName() != TypeName<T>::get())
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName()
-                + " (must be " + String(TypeName<T>::get()) + ")",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<T>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2 && arguments[1]->getName() != TypeName<String>::get())
             throw Exception("Illegal type " + arguments[1]->getName() + " of the second ('point of view') argument of function " + getName()
-                + " (must be " + String(TypeName<T>::get()) + ")",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<T>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0];
     }
@@ -192,9 +186,9 @@ public:
 
             if (!key_col)
                 throw Exception("Illegal column " + block.getByPosition(arguments[1]).column->getName()
-                    + " of second ('point of view') argument of function " + name
-                    + ". Must be constant string.",
-                    ErrorCodes::ILLEGAL_COLUMN);
+                                    + " of second ('point of view') argument of function " + name
+                                    + ". Must be constant string.",
+                                ErrorCodes::ILLEGAL_COLUMN);
 
             dict_key = key_col->getValue<String>();
         }
@@ -217,8 +211,8 @@ public:
         }
         else
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                    + " of first argument of function " + name,
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function " + name,
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -254,23 +248,23 @@ public:
     {
         if (arguments.size() != 2 && arguments.size() != 3)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 2 or 3.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 2 or 3.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (arguments[0]->getName() != TypeName<T>::get())
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName()
-                + " (must be " + String(TypeName<T>::get()) + ")",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<T>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments[1]->getName() != TypeName<T>::get())
             throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName()
-                + " (must be " + String(TypeName<T>::get()) + ")",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<T>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 3 && arguments[2]->getName() != TypeName<String>::get())
             throw Exception("Illegal type " + arguments[2]->getName() + " of the third ('point of view') argument of function " + getName()
-                + " (must be " + String(TypeName<String>::get()) + ")",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<String>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt8>();
     }
@@ -288,9 +282,9 @@ public:
 
             if (!key_col)
                 throw Exception("Illegal column " + block.getByPosition(arguments[2]).column->getName()
-                + " of third ('point of view') argument of function " + name
-                + ". Must be constant string.",
-                ErrorCodes::ILLEGAL_COLUMN);
+                                    + " of third ('point of view') argument of function " + name
+                                    + ". Must be constant string.",
+                                ErrorCodes::ILLEGAL_COLUMN);
 
             dict_key = key_col->getValue<String>();
         }
@@ -350,13 +344,13 @@ public:
         else if (col_const1 && col_const2)
         {
             block.getByPosition(result).column = DataTypeUInt8().createColumnConst(col_const1->size(),
-                toField(Transform::apply(col_const1->template getValue<T>(), col_const2->template getValue<T>(), dict)));
+                                                                                   toField(Transform::apply(col_const1->template getValue<T>(), col_const2->template getValue<T>(), dict)));
         }
         else
             throw Exception("Illegal columns " + block.getByPosition(arguments[0]).column->getName()
-                    + " and " + block.getByPosition(arguments[1]).column->getName()
-                    + " of arguments of function " + name,
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " and " + block.getByPosition(arguments[1]).column->getName()
+                                + " of arguments of function " + name,
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -374,7 +368,7 @@ private:
 
 public:
     FunctionHierarchyWithDictionary(const std::shared_ptr<typename DictGetter::Src> & owned_dict_)
-    : owned_dict(owned_dict_)
+        : owned_dict(owned_dict_)
     {
         if (!owned_dict)
             throw Exception("Dictionaries was not loaded. You need to check configuration file.", ErrorCodes::DICTIONARIES_WAS_NOT_LOADED);
@@ -392,18 +386,18 @@ public:
     {
         if (arguments.size() != 1 && arguments.size() != 2)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 1 or 2.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 1 or 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (arguments[0]->getName() != TypeName<T>::get())
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName()
-            + " (must be " + String(TypeName<T>::get()) + ")",
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<T>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2 && arguments[1]->getName() != TypeName<String>::get())
             throw Exception("Illegal type " + arguments[1]->getName() + " of the second ('point of view') argument of function " + getName()
-                + " (must be " + String(TypeName<String>::get()) + ")",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<String>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeArray>(arguments[0]);
     }
@@ -424,9 +418,9 @@ public:
 
             if (!key_col)
                 throw Exception("Illegal column " + block.getByPosition(arguments[1]).column->getName()
-                + " of second ('point of view') argument of function " + name
-                + ". Must be constant string.",
-                ErrorCodes::ILLEGAL_COLUMN);
+                                    + " of second ('point of view') argument of function " + name
+                                    + ". Must be constant string.",
+                                ErrorCodes::ILLEGAL_COLUMN);
 
             dict_key = key_col->getValue<String>();
         }
@@ -461,24 +455,50 @@ public:
         }
         else
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of first argument of function " + name,
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function " + name,
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
 
-struct NameRegionToCity                { static constexpr auto name = "regionToCity"; };
-struct NameRegionToArea                { static constexpr auto name = "regionToArea"; };
-struct NameRegionToDistrict            { static constexpr auto name = "regionToDistrict"; };
-struct NameRegionToCountry             { static constexpr auto name = "regionToCountry"; };
-struct NameRegionToContinent           { static constexpr auto name = "regionToContinent"; };
-struct NameRegionToTopContinent        { static constexpr auto name = "regionToTopContinent"; };
-struct NameRegionToPopulation          { static constexpr auto name = "regionToPopulation"; };
-struct NameRegionHierarchy             { static constexpr auto name = "regionHierarchy"; };
-struct NameRegionIn                    { static constexpr auto name = "regionIn"; };
+struct NameRegionToCity
+{
+    static constexpr auto name = "regionToCity";
+};
+struct NameRegionToArea
+{
+    static constexpr auto name = "regionToArea";
+};
+struct NameRegionToDistrict
+{
+    static constexpr auto name = "regionToDistrict";
+};
+struct NameRegionToCountry
+{
+    static constexpr auto name = "regionToCountry";
+};
+struct NameRegionToContinent
+{
+    static constexpr auto name = "regionToContinent";
+};
+struct NameRegionToTopContinent
+{
+    static constexpr auto name = "regionToTopContinent";
+};
+struct NameRegionToPopulation
+{
+    static constexpr auto name = "regionToPopulation";
+};
+struct NameRegionHierarchy
+{
+    static constexpr auto name = "regionHierarchy";
+};
+struct NameRegionIn
+{
+    static constexpr auto name = "regionIn";
+};
 
-struct FunctionRegionToCity :
-    public FunctionTransformWithDictionary<UInt32, RegionToCityImpl,    RegionsHierarchyGetter,    NameRegionToCity>
+struct FunctionRegionToCity : public FunctionTransformWithDictionary<UInt32, RegionToCityImpl, RegionsHierarchyGetter, NameRegionToCity>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -486,8 +506,7 @@ struct FunctionRegionToCity :
     }
 };
 
-struct FunctionRegionToArea :
-    public FunctionTransformWithDictionary<UInt32, RegionToAreaImpl,    RegionsHierarchyGetter,    NameRegionToArea>
+struct FunctionRegionToArea : public FunctionTransformWithDictionary<UInt32, RegionToAreaImpl, RegionsHierarchyGetter, NameRegionToArea>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -495,8 +514,7 @@ struct FunctionRegionToArea :
     }
 };
 
-struct FunctionRegionToDistrict :
-    public FunctionTransformWithDictionary<UInt32, RegionToDistrictImpl, RegionsHierarchyGetter, NameRegionToDistrict>
+struct FunctionRegionToDistrict : public FunctionTransformWithDictionary<UInt32, RegionToDistrictImpl, RegionsHierarchyGetter, NameRegionToDistrict>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -504,8 +522,7 @@ struct FunctionRegionToDistrict :
     }
 };
 
-struct FunctionRegionToCountry :
-    public FunctionTransformWithDictionary<UInt32, RegionToCountryImpl, RegionsHierarchyGetter, NameRegionToCountry>
+struct FunctionRegionToCountry : public FunctionTransformWithDictionary<UInt32, RegionToCountryImpl, RegionsHierarchyGetter, NameRegionToCountry>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -513,8 +530,7 @@ struct FunctionRegionToCountry :
     }
 };
 
-struct FunctionRegionToContinent :
-    public FunctionTransformWithDictionary<UInt32, RegionToContinentImpl, RegionsHierarchyGetter, NameRegionToContinent>
+struct FunctionRegionToContinent : public FunctionTransformWithDictionary<UInt32, RegionToContinentImpl, RegionsHierarchyGetter, NameRegionToContinent>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -522,8 +538,7 @@ struct FunctionRegionToContinent :
     }
 };
 
-struct FunctionRegionToTopContinent :
-    public FunctionTransformWithDictionary<UInt32, RegionToTopContinentImpl, RegionsHierarchyGetter, NameRegionToTopContinent>
+struct FunctionRegionToTopContinent : public FunctionTransformWithDictionary<UInt32, RegionToTopContinentImpl, RegionsHierarchyGetter, NameRegionToTopContinent>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -531,8 +546,7 @@ struct FunctionRegionToTopContinent :
     }
 };
 
-struct FunctionRegionToPopulation :
-    public FunctionTransformWithDictionary<UInt32, RegionToPopulationImpl, RegionsHierarchyGetter, NameRegionToPopulation>
+struct FunctionRegionToPopulation : public FunctionTransformWithDictionary<UInt32, RegionToPopulationImpl, RegionsHierarchyGetter, NameRegionToPopulation>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -540,8 +554,7 @@ struct FunctionRegionToPopulation :
     }
 };
 
-struct FunctionRegionIn :
-    public FunctionIsInWithDictionary<UInt32, RegionInImpl, RegionsHierarchyGetter,    NameRegionIn>
+struct FunctionRegionIn : public FunctionIsInWithDictionary<UInt32, RegionInImpl, RegionsHierarchyGetter, NameRegionIn>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -549,8 +562,7 @@ struct FunctionRegionIn :
     }
 };
 
-struct FunctionRegionHierarchy :
-    public FunctionHierarchyWithDictionary<UInt32, RegionHierarchyImpl, RegionsHierarchyGetter, NameRegionHierarchy>
+struct FunctionRegionHierarchy : public FunctionHierarchyWithDictionary<UInt32, RegionHierarchyImpl, RegionsHierarchyGetter, NameRegionHierarchy>
 {
     static FunctionPtr create(const Context & context)
     {
@@ -595,18 +607,18 @@ public:
     {
         if (arguments.size() != 1 && arguments.size() != 2)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 1 or 2.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be 1 or 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (arguments[0]->getName() != TypeName<UInt32>::get())
             throw Exception("Illegal type " + arguments[0]->getName() + " of the first argument of function " + getName()
-                + " (must be " + String(TypeName<UInt32>::get()) + ")",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<UInt32>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2 && arguments[1]->getName() != TypeName<String>::get())
             throw Exception("Illegal type " + arguments[0]->getName() + " of the second argument of function " + getName()
-                + " (must be " + String(TypeName<String>::get()) + ")",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                + " (must be " + String(TypeName<String>::get()) + ")",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -627,8 +639,8 @@ public:
                 language = RegionsNames::getLanguageEnum(col_language->getValue<String>());
             else
                 throw Exception("Illegal column " + block.getByPosition(arguments[1]).column->getName()
-                        + " of the second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN);
+                                    + " of the second argument of function " + getName(),
+                                ErrorCodes::ILLEGAL_COLUMN);
         }
 
         const RegionsNames & dict = *owned_dict;
@@ -649,9 +661,9 @@ public:
         }
         else
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                    + " of the first argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of the first argument of function " + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
-};
+}; // namespace DB
