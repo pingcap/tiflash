@@ -439,7 +439,7 @@ void DAGExpressionAnalyzer::appendAggregation(
             aggregate.argument_names[i] = arg_name;
             step.required_output.push_back(arg_name);
         }
-        auto function_collator = getCollatorFromExpr(expr)
+        auto function_collator = getCollatorFromExpr(expr);
         String func_string = genFuncString(agg_func_name, aggregate.argument_names, {function_collator});
         bool duplicate = false;
         for (const auto & pre_agg : aggregate_descriptions)
