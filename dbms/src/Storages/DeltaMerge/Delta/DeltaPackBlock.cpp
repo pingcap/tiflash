@@ -153,7 +153,8 @@ Columns DeltaPackBlock::readFromCache(const ColumnDefines & column_defines, size
         {
             auto col_offset = it->second;
             // Copy data from cache
-            auto [type, col_data] = getDataTypeAndEmptyColumn(cd.id);
+            const auto & type = getDataType(cd.id);
+            auto col_data = type->createColumn();
             col_data->insertRangeFrom(*cache_block.getByPosition(col_offset).column, 0, rows);
             // Cast if need
             auto col_converted = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
@@ -210,7 +211,8 @@ Columns DeltaPackBlock::readFromDisk(const PageReader &    page_reader, //
 
         const auto & cd = column_defines[index];
         // Deserialize column by pack's schema
-        auto [type, col_data] = getDataTypeAndEmptyColumn(cd.id);
+        const auto & type = getDataType(cd.id);
+        auto col_data = type->createColumn();
         deserializeColumn(*col_data, type, data_buf, rows);
 
         columns[index_in_read_columns] = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
