@@ -95,9 +95,9 @@ public:
         return StringRef(&chars[offsetAt(n)], sizeAt(n));
     }
 
-/// Suppress gcc 7.3.1 warning: '*((void*)&<anonymous> +8)' may be used uninitialized in this function
-TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic push)
-TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic ignored "-Wmaybe-uninitialized")
+    /// Suppress gcc 7.3.1 warning: '*((void*)&<anonymous> +8)' may be used uninitialized in this function
+    TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic push)
+    TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic ignored "-Wmaybe-uninitialized")
 
     void insert(const Field & x) override
     {
@@ -110,7 +110,7 @@ TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic ignored "-Wmaybe-uninitialized")
         memcpy(&chars[old_size], s.c_str(), size_to_append);
         offsets.push_back(new_size);
     }
-TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic pop)
+    TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic pop)
 
     void insertFrom(const IColumn & src_, size_t n) override
     {

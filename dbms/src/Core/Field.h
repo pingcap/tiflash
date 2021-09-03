@@ -521,8 +521,8 @@ private:
 
 
     /// Assuming there was no allocated state or it was deallocated (see destroy).
-TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic push)
-TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic ignored "-Wmaybe-uninitialized")
+    TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic push)
+    TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic ignored "-Wmaybe-uninitialized")
     template <typename T>
     void createConcrete(T && x)
     {
@@ -531,7 +531,7 @@ TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic ignored "-Wmaybe-uninitialized")
         new (ptr) JustT(std::forward<T>(x));
         which = TypeToEnum<JustT>::value;
     }
-TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic pop)
+    TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic pop)
 
     /// Assuming same types.
     template <typename T>
