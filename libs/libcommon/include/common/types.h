@@ -5,14 +5,12 @@
 
 /// import UInt128 and UInt256
 #include <common/UInt128.h>
-
+#include <common/defines.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic ignored "-Wmaybe-uninitialized")
-#if defined(__clang__)
-#pragma GCC diagnostic ignored "-Wunknown-warning-option"
-#pragma GCC diagnostic ignored "-Wdeprecated-copy"
-#endif
+TIFLASH_CLANG_ONLY_PRAGMA(GCC diagnostic ignored "-Wunknown-warning-option")
+TIFLASH_CLANG_ONLY_PRAGMA(GCC diagnostic ignored "-Wdeprecated-copy")
 #include <boost/multiprecision/cpp_int.hpp>
 #pragma GCC diagnostic pop
 
