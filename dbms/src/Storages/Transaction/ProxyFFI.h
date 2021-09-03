@@ -62,7 +62,9 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     BaseBuffView req_buff,
     BaseBuffView resp_buff,
     RaftCmdHeader header);
-EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, WriteCmdsView req_buff, RaftCmdHeader header);
+EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server,
+                                       WriteCmdsView cmds,
+                                       RaftCmdHeader header);
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
 EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header);
