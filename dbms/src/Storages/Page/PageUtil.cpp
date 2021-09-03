@@ -80,7 +80,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         {
             size_t bytes_need_write = split_bytes == 0 ? (to_write - bytes_written) : std::min(to_write - bytes_written, split_bytes);
             res = file->pwrite(data + bytes_written, bytes_need_write, offset + bytes_written);
-
+#ifndef NDEBUG
             fiu_do_on(FailPoints::force_set_page_file_write_errno, {
                 if (enable_failpoint)
                 {
@@ -88,7 +88,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
                     errno = ENOSPC;
                 }
             });
-
+#endif
             if ((-1 == res || 0 == res) && errno != EINTR)
             {
                 ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
