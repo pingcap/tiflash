@@ -34,13 +34,14 @@ static void removeConstantsFromBlock(Block & block)
 
 static void removeConstantsFromSortDescription(const Block & header, SortDescription & description)
 {
-    description.erase(std::remove_if(description.begin(), description.end(), [&](const SortColumnDescription & elem) {
-                          if (!elem.column_name.empty())
-                              return header.getByName(elem.column_name).column->isColumnConst();
-                          else
-                              return header.safeGetByPosition(elem.column_number).column->isColumnConst();
-                      }),
-                      description.end());
+    description.erase(
+        std::remove_if(description.begin(), description.end(), [&](const SortColumnDescription & elem) {
+            if (!elem.column_name.empty())
+                return header.getByName(elem.column_name).column->isColumnConst();
+            else
+                return header.safeGetByPosition(elem.column_number).column->isColumnConst();
+        }),
+        description.end());
 }
 
 /** Add into block, whose constant columns was removed by previous function,
