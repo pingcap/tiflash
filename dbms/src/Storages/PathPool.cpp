@@ -339,25 +339,29 @@ String StableDiskDelegator::choosePath() const
     return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
 }
 
-String StableDiskDelegator::getDTFilePath(UInt64 file_id) const
+String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exist) const
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
     if (likely(iter != pool.dt_file_path_map.end()))
         return pool.main_path_infos[iter->second].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
-    throw Exception("Can not find path for DMFile [id=" + toString(file_id) + "]");
+    if (likely(throw_on_not_exist))
+        throw Exception("Can not find path for DMFile [id=" + toString(file_id) + "]");
+    return "";
 }
 
 void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::string_view path)
 {
     path.remove_suffix(1 + strlen(StoragePathPool::STABLE_FOLDER_NAME)); // remove '/stable' added in listPathsForStable/getDTFilePath
     std::lock_guard<std::mutex> lock{pool.mutex};
-    if (auto iter = pool.dt_file_path_map.find(file_id); iter != pool.dt_file_path_map.end())
+    if (auto iter = pool.dt_file_path_map.find(file_id); unlikely(iter != pool.dt_file_path_map.end()))
     {
-        auto & path_info = pool.main_path_infos[iter->second];
-        pool.dt_file_path_map.erase(iter);
-        path_info.file_size_map.erase(file_id);
+        const auto & path_info = pool.main_path_infos[iter->second];
+        throw DB::TiFlashException("Try to add a DTFile with duplicated id. [id=" + DB::toString(file_id) + "] [path=" + String(path)
+                + "] [existed_path=" + path_info.path + "]",
+            Errors::DeltaTree::Internal);
     }
+
     UInt32 index = UINT32_MAX;
     for (size_t i = 0; i < pool.main_path_infos.size(); i++)
     {
@@ -368,7 +372,9 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
         }
     }
     if (unlikely(index == UINT32_MAX))
-        throw Exception("Unrecognized path " + String(path));
+        throw DB::TiFlashException(
+            "Try to add a DTFile to an unrecognized path. [id=" + DB::toString(file_id) + "] [path=" + String(path) + "]",
+            Errors::DeltaTree::Internal);
     pool.dt_file_path_map.emplace(file_id, index);
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
     // update global used size
@@ -461,14 +467,15 @@ String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) 
     throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
 }
 
-void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size)
+void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left)
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = page_path_map.find(id_lvl);
     if (unlikely(iter == page_path_map.end()))
         return;
     auto index = iter->second;
-    page_path_map.erase(iter);
+    if (!meta_left)
+        page_path_map.erase(iter);
 
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[index].path, file_size);
 }
@@ -508,7 +515,7 @@ String PSDiskDelegatorSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lv
     return pool.latest_path_infos[0].path + "/" + path_prefix;
 }
 
-void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size)
+void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/)
 {
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[0].path, file_size);
 }
@@ -587,14 +594,15 @@ String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) c
     throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
 }
 
-void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size)
+void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left)
 {
     std::lock_guard<std::mutex> lock{mutex};
     auto iter = page_path_map.find(id_lvl);
     if (unlikely(iter == page_path_map.end()))
         return;
     auto index = iter->second;
-    page_path_map.erase(iter);
+    if (!meta_left)
+        page_path_map.erase(iter);
 
     pool.global_capacity->freeUsedSize(raft_path_infos[index].path, file_size);
 }

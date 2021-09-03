@@ -163,10 +163,11 @@ DeltaPacks DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
         }
         else if (auto f = pack->tryToFile(); f)
         {
-            auto new_ref_id = context.storage_pool.newDataPageId();
-            auto file_id    = f->getFile()->fileId();
+            auto delegator = context.path_pool.getStableDiskDelegator();
+            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto file_id = f->getFile()->fileId();
             wbs.data.putRefPage(new_ref_id, file_id);
-            auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
+            auto file_parent_path = delegator.getDTFilePath(file_id);
             auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* ref_id= */ new_ref_id, file_parent_path);
 
             auto new_pack = f->cloneWith(context, new_file, target_range);
