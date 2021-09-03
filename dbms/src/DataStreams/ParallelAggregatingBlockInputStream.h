@@ -5,7 +5,9 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
-#include <Interpreters/Aggregator.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/ParallelInputsProcessor.h>
+#include <Common/LogWithPrefix.h>
 
 
 namespace DB
@@ -21,13 +23,9 @@ public:
     /** Columns from key_names and arguments of aggregate functions must already be computed.
       */
     ParallelAggregatingBlockInputStream(
-        const BlockInputStreams & inputs,
-        const BlockInputStreamPtr & additional_input_at_end,
-        const Aggregator::Params & params_,
-        const FileProviderPtr & file_provider_,
-        bool final_,
-        size_t max_threads_,
-        size_t temporary_data_merge_threads_);
+        const BlockInputStreams & inputs, const BlockInputStreamPtr & additional_input_at_end,
+        const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, size_t max_threads_, size_t temporary_data_merge_threads_,
+        const LogWithPrefixPtr & log_ = nullptr);
 
     String getName() const override { return "ParallelAggregating"; }
 
@@ -76,9 +74,6 @@ private:
     };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 
-    Poco::Logger * log = &Poco::Logger::get("ParallelAggregatingBlockInputStream");
-
-
     ManyAggregatedDataVariants many_data;
     Exceptions exceptions;
 
@@ -124,6 +119,8 @@ private:
     /** From here we get the finished blocks after the aggregation.
       */
     std::unique_ptr<IBlockInputStream> impl;
+
+    LogWithPrefixPtr log;
 };
 
 } // namespace DB

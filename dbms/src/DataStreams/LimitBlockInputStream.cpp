@@ -5,10 +5,11 @@
 
 namespace DB
 {
-LimitBlockInputStream::LimitBlockInputStream(const BlockInputStreamPtr & input, size_t limit_, size_t offset_, bool always_read_till_end_)
+LimitBlockInputStream::LimitBlockInputStream(const BlockInputStreamPtr & input, size_t limit_, size_t offset_, bool always_read_till_end_, const LogWithPrefixPtr & log_)
     : limit(limit_)
     , offset(offset_)
     , always_read_till_end(always_read_till_end_)
+    , log(getLogWithPrefix(log_))
 {
     children.push_back(input);
 }
