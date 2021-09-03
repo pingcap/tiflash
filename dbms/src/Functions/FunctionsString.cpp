@@ -768,7 +768,7 @@ public:
         }
         else if (checkColumn<ColumnArray>(column.get()))
         {
-            FunctionArrayReverse().executeImpl(block, arguments, result);
+            DefaultExecutable(std::make_shared<FunctionArrayReverse>()).execute(block, arguments, result);
         }
         else
             throw Exception(
