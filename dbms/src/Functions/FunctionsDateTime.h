@@ -1175,15 +1175,16 @@ struct SubtractYearsImpl : SubtractIntervalImpl<AddYearsImpl>
     static constexpr auto name = "subtractYears";
 };
 
+// according to tidb, after date add if
+// year = 0, dateTime is valid and set year, month, day = 0
+// year < 0 or year > 9999, dateTime is invalid
 template <typename ToType>
 static inline bool checkDateTimeValidAndReformatDate(ToType & packed)
 {
     MyDateTime dateTime(packed);
     if (dateTime.year == 0)
     {
-        dateTime.month = 0;
-        dateTime.day = 0;
-        packed = dateTime.toPackedUInt();
+        packed &= (~MyTimeBase::YMD_MASK);
     }
     return !(dateTime.year >= 0 && dateTime.year <= 9999);
 }
@@ -1198,7 +1199,7 @@ struct Adder
 
         for (size_t i = 0; i < size; ++i)
         {
-            Transform::execute(vec_from[i], delta.getInt(i), time_zone);
+            vec_to[i] = Transform::execute(vec_from[i], delta.getInt(i), time_zone);
             (*vec_null_map_to)[i] = checkDateTimeValidAndReformatDate<ToType>(vec_to[i]);
         }
     }
