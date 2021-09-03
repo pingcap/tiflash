@@ -61,12 +61,19 @@ static void enrichBlockWithConstants(Block & block, const Block & header)
 
 
 MergeSortingBlockInputStream::MergeSortingBlockInputStream(
-    const BlockInputStreamPtr & input, SortDescription & description_,
-    size_t max_merged_block_size_, size_t limit_,
-    size_t max_bytes_before_external_sort_, const std::string & tmp_path_,
+    const BlockInputStreamPtr & input,
+    SortDescription & description_,
+    size_t max_merged_block_size_,
+    size_t limit_,
+    size_t max_bytes_before_external_sort_,
+    const std::string & tmp_path_,
     const LogWithPrefixPtr & log_)
-    : description(description_), max_merged_block_size(max_merged_block_size_), limit(limit_),
-    max_bytes_before_external_sort(max_bytes_before_external_sort_), tmp_path(tmp_path_), log(getLogWithPrefix(log_))
+    : description(description_)
+    , max_merged_block_size(max_merged_block_size_)
+    , limit(limit_)
+    , max_bytes_before_external_sort(max_bytes_before_external_sort_)
+    , tmp_path(tmp_path_)
+    , log(getLogWithPrefix(log_))
 {
     children.push_back(input);
     header = children.at(0)->getHeader();
@@ -161,9 +168,17 @@ Block MergeSortingBlockInputStream::readImpl()
 
 
 MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
-    Blocks & blocks_, SortDescription & description_, size_t max_merged_block_size_, size_t limit_, const LogWithPrefixPtr & log_)
-    : blocks(blocks_), header(blocks.at(0).cloneEmpty()), description(description_), max_merged_block_size(max_merged_block_size_), limit(limit_),
-    log(getLogWithPrefix(log_))
+    Blocks & blocks_,
+    SortDescription & description_,
+    size_t max_merged_block_size_,
+    size_t limit_,
+    const LogWithPrefixPtr & log_)
+    : blocks(blocks_)
+    , header(blocks.at(0).cloneEmpty())
+    , description(description_)
+    , max_merged_block_size(max_merged_block_size_)
+    , limit(limit_)
+    , log(getLogWithPrefix(log_))
 {
     Blocks nonempty_blocks;
     for (const auto & block : blocks)

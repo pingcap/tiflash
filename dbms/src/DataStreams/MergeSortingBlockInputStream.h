@@ -1,11 +1,6 @@
 #pragma once
 
-#include <queue>
-#include <Poco/TemporaryFile.h>
-
 #include <Common/LogWithPrefix.h>
-
-#include <Core/SortDescription.h>
 #include <Core/SortCursor.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -31,8 +26,7 @@ class MergeSortingBlocksBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
-    MergeSortingBlocksBlockInputStream(Blocks & blocks_, SortDescription & description_,
-        size_t max_merged_block_size_, size_t limit_ = 0, const LogWithPrefixPtr & log_ = nullptr);
+    MergeSortingBlocksBlockInputStream(Blocks & blocks_, SortDescription & description_, size_t max_merged_block_size_, size_t limit_ = 0, const LogWithPrefixPtr & log_ = nullptr);
 
     String getName() const override { return "MergeSortingBlocks"; }
 
@@ -74,10 +68,7 @@ class MergeSortingBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
-    MergeSortingBlockInputStream(const BlockInputStreamPtr & input, SortDescription & description_,
-        size_t max_merged_block_size_, size_t limit_,
-        size_t max_bytes_before_external_sort_, const std::string & tmp_path_,
-        const LogWithPrefixPtr & log_ = nullptr);
+    MergeSortingBlockInputStream(const BlockInputStreamPtr & input, SortDescription & description_, size_t max_merged_block_size_, size_t limit_, size_t max_bytes_before_external_sort_, const std::string & tmp_path_, const LogWithPrefixPtr & log_ = nullptr);
 
     String getName() const override { return "MergeSorting"; }
 
