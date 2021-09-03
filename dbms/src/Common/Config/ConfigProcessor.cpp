@@ -1,14 +1,9 @@
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-
+#include <common/defines.h>
+TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic push)
+TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic ignored "-Wmaybe-uninitialized")
 #include <Common/Config/cpptoml.h>
-
-#if !__clang__
-#pragma GCC diagnostic pop
-#endif
+TIFLASH_GCC_ONLY_PRAGMA(GCC diagnostic pop)
 
 #include <Common/Config/TOMLConfiguration.h>
 #include <Common/StringUtils/StringUtils.h>

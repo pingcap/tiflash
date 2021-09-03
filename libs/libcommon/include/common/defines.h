@@ -122,3 +122,15 @@ template <typename... Args>
 constexpr void UNUSED(Args &&... args [[maybe_unused]])
 {
 }
+
+#ifndef __clang__
+#define TIFLASH_GCC_ONLY_PRAGMA(X) _Pragma(#X)
+#else
+#define TIFLASH_GCC_ONLY_PRAGMA(X)
+#endif
+
+#ifdef __clang__
+#define TIFLASH_CLANG_ONLY_PRAGMA(X) _Pragma(#X)
+#else
+#define TIFLASH_CLANG_ONLY_PRAGMA(X)
+#endif
