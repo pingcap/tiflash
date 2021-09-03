@@ -11,9 +11,9 @@ namespace DB
 {
 namespace tests
 {
-class JoinBenchmark : public ::testing::Test
+class JoinBenchmark : public ::testing::TestWithParam<const char *>
 {
-protected:
+public:
     Poco::Logger * logger = &Poco::Logger::get(::testing::UnitTest::GetInstance()->current_test_info()->test_case_name());
 
     using BlockStream = std::vector<Block>;
@@ -179,16 +179,16 @@ protected:
     };
 };
 
-TEST_F(JoinBenchmark, SmallParallelJoin)
+TEST_P(JoinBenchmark, InnerJoin1)
 {
-    // TPC-H sf=1
     // select l_partkey + c_nationkey as result, count(*) from lineitem, customer where l_partkey = c_nationkey group by result order by result
 
-    constexpr size_t n_repeat = 10;
-    constexpr bool only_check_total_rows = false;
+    constexpr size_t n_repeat = 30;
+    constexpr bool no_check = false;
+    constexpr bool only_check_total_rows = true;
 
     // test data are outside tics repo.
-    String data_folder = "/pingcap/data/small-parallel-join";
+    String data_folder = GetParam();
     TestDataSet dataset(data_folder);
 
     size_t num_build_threads = dataset.getNumBuildThreads();
@@ -306,41 +306,49 @@ TEST_F(JoinBenchmark, SmallParallelJoin)
 
         // check result.
 
-        size_t count = 0;
-        for (size_t i = 0; i < num_probe_threads; ++i)
+        if (!no_check)
         {
-            for (const Block & block : probe_streams[i])
-                count += block.rows();
-        }
-
-        ASSERT_EQ(dataset.getAnswer().count, count);
-
-        if constexpr (!only_check_total_rows)
-        {
-            // std::cout << probe_streams[0][10].dumpStructure() << std::endl;
-            String l_partkey_name = "__QB_7_l_partkey";
-            String c_nationkey_name = "__QB_6_exchange_receiver_0";
-
-            std::unordered_map<Int64, size_t> map;
+            size_t count = 0;
             for (size_t i = 0; i < num_probe_threads; ++i)
             {
-                for (const auto & block : probe_streams[i])
-                {
-                    auto l_partkey = block.getByName(l_partkey_name).column;
-                    auto c_nationkey = block.getByName(c_nationkey_name).column;
-
-                    for (size_t j = 0; j < block.rows(); ++j)
-                    {
-                        Int64 key = l_partkey->getInt(j) + c_nationkey->getInt(j);
-                        ++map[key];
-                    }
-                }
+                for (const Block & block : probe_streams[i])
+                    count += block.rows();
             }
 
-            ASSERT_EQ(dataset.getAnswer().map, map);
+            ASSERT_EQ(dataset.getAnswer().count, count);
+
+            if constexpr (!only_check_total_rows)
+            {
+                // std::cout << probe_streams[0][10].dumpStructure() << std::endl;
+                String l_partkey_name = "__QB_7_l_partkey";
+                String c_nationkey_name = "__QB_6_exchange_receiver_0";
+
+                std::unordered_map<Int64, size_t> map;
+                for (size_t i = 0; i < num_probe_threads; ++i)
+                {
+                    for (const auto & block : probe_streams[i])
+                    {
+                        auto l_partkey = block.getByName(l_partkey_name).column;
+                        auto c_nationkey = block.getByName(c_nationkey_name).column;
+
+                        for (size_t j = 0; j < block.rows(); ++j)
+                        {
+                            Int64 key = l_partkey->getInt(j) + c_nationkey->getInt(j);
+                            ++map[key];
+                        }
+                    }
+                }
+
+                ASSERT_EQ(dataset.getAnswer().map, map);
+            }
         }
     }
 }
+
+INSTANTIATE_TEST_CASE_P(
+    Generated,
+    JoinBenchmark,
+    ::testing::Values("/pingcap/data/small-inner-join-1", "/pingcap/data/large-inner-join-1"));
 
 } // namespace tests
 
