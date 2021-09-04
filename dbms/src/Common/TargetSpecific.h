@@ -2,6 +2,9 @@
 #include <common/defines.h>
 #include <common/simd.h>
 #include <common/types.h>
+#ifdef __x86_64__
+#include <immintrin.h>
+#endif
 /*
  * The following code is largely inspired by
  * https://github.com/ClickHouse/ClickHouse/blob/ff0d3860d4eb742607cdb7857dc823f6de1105d2/src/Functions/TargetSpecific.h
@@ -48,31 +51,31 @@
 
 namespace DB::TargetSpecific
 {
-#define TIFLASH_DECLARE_GENERIC_FUNCTION(RETURN, NAME, ...)        \
-    struct _TiflashGenericTarget_##NAME                            \
-    {                                                              \
-        using ReturnType = RETURN;                                 \
-        static constexpr size_t WORD_SIZE = 16;                    \
-        using SimdWord = ::DB::TargetSpecific::Word<16>;           \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                          \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__ \
+#define TIFLASH_DECLARE_GENERIC_FUNCTION(RETURN, NAME, ...)               \
+    struct _TiflashGenericTarget_##NAME                                   \
+    {                                                                     \
+        using ReturnType = RETURN;                                        \
+        static constexpr size_t WORD_SIZE = 16;                           \
+        using SimdWord = ::DB::TargetSpecific::Detail::Generic::Word<16>; \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                 \
+        static __attribute__((noinline)) RETURN invoke __VA_ARGS__        \
     };
 #define TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE) _TiflashGenericTarget_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ...) \
     __attribute__((noinline)) RETURN TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE)::invoke __VA_ARGS__
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(RETURN, NAME, ...)   \
-    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                \
-    struct _TiflashAVXTarget_##NAME                                \
-    {                                                              \
-        using ReturnType = RETURN;                                 \
-        using Checker = ::DB::TargetSpecific::AVXChecker;          \
-        static constexpr size_t WORD_SIZE = 32;                    \
-        using SimdWord = ::DB::TargetSpecific::Word<32>;           \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                          \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__ \
-    };                                                             \
+#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(RETURN, NAME, ...)      \
+    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                   \
+    struct _TiflashAVXTarget_##NAME                                   \
+    {                                                                 \
+        using ReturnType = RETURN;                                    \
+        using Checker = ::DB::TargetSpecific::AVXChecker;             \
+        static constexpr size_t WORD_SIZE = 32;                       \
+        using SimdWord = ::DB::TargetSpecific::Detail::AVX::Word<32>; \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                             \
+        static __attribute__((noinline)) RETURN invoke __VA_ARGS__    \
+    };                                                                \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 
 #define TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE) _TiflashAVXTarget_##NAME
@@ -95,17 +98,17 @@ struct AVXChecker
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(RETURN, NAME, ...) \
-    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                              \
-    struct _TiflashAVX512Target_##NAME                              \
-    {                                                               \
-        using ReturnType = RETURN;                                  \
-        using Checker = ::DB::TargetSpecific::AVX512Checker;        \
-        static constexpr size_t WORD_SIZE = 64;                     \
-        using SimdWord = ::DB::TargetSpecific::Word<64>;            \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                           \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__  \
-    };                                                              \
+#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(RETURN, NAME, ...)      \
+    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                                   \
+    struct _TiflashAVX512Target_##NAME                                   \
+    {                                                                    \
+        using ReturnType = RETURN;                                       \
+        using Checker = ::DB::TargetSpecific::AVX512Checker;             \
+        static constexpr size_t WORD_SIZE = 64;                          \
+        using SimdWord = ::DB::TargetSpecific::Detail::AVX512::Word<64>; \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                \
+        static __attribute__((noinline)) RETURN invoke __VA_ARGS__       \
+    };                                                                   \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE) _TiflashAVX512Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(RETURN, NAME, ...)                           \
@@ -132,17 +135,17 @@ struct AVX512Checker
 #endif
 
 #ifdef __x86_64__
-#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(RETURN, NAME, ...)  \
-    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                               \
-    struct _TiflashSSE4Target_##NAME                               \
-    {                                                              \
-        using ReturnType = RETURN;                                 \
-        using Checker = ::DB::TargetSpecific::SSE4Checker;         \
-        static constexpr size_t WORD_SIZE = 16;                    \
-        using SimdWord = ::DB::TargetSpecific::Word<16>;           \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                          \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__ \
-    };                                                             \
+#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(RETURN, NAME, ...)      \
+    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                                   \
+    struct _TiflashSSE4Target_##NAME                                   \
+    {                                                                  \
+        using ReturnType = RETURN;                                     \
+        using Checker = ::DB::TargetSpecific::SSE4Checker;             \
+        static constexpr size_t WORD_SIZE = 16;                        \
+        using SimdWord = ::DB::TargetSpecific::Detail::SSE4::Word<16>; \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                              \
+        static __attribute__((noinline)) RETURN invoke __VA_ARGS__     \
+    };                                                                 \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE) _TiflashSSE4Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(RETURN, NAME, ...)                           \
@@ -264,7 +267,7 @@ struct MarkChecker<64>
     template <class T>
     __attribute__((always_inline, target("avx512bw"))) static bool isByteAllMarked(T val)
     {
-        return _mm512_movepi8_mask(val.as_int8) == 0xFFFF'FFFF'FFFF'FFFFu;
+        return _mm512_movepi8_mask(reinterpret_cast<__m512i &>(val.as_int8)) == 0xFFFF'FFFF'FFFF'FFFFu;
     }
 };
 
@@ -274,7 +277,7 @@ struct MarkChecker<32>
     template <class T>
     __attribute__((always_inline, target("avx2"))) static bool isByteAllMarked(T val)
     {
-        return _mm256_movemask_epi8(val.as_int8) == 0xFFFF'FFFFu;
+        return _mm256_movemask_epi8(reinterpret_cast<__m256i &>(val.as_int8)) == -1; //0xFFFF'FFFF
     }
 };
 #endif
@@ -286,7 +289,7 @@ struct MarkChecker<16>
     __attribute__((always_inline)) static bool isByteAllMarked(T val)
     {
 #ifdef __x86_64__
-        return _mm_movemask_epi8(reinterpret_cast<__m128i &>(val.as_int8)) == 0xFFFFu;
+        return _mm_movemask_epi8(reinterpret_cast<__m128i &>(val.as_int8)) == 0xFFFF;
 #else
         return (val.as_uint64[0] & val.as_uint64[1]) == 0xFFFF'FFFF'FFFF'FFFFu;
 #endif
@@ -294,36 +297,62 @@ struct MarkChecker<16>
 };
 } // namespace Detail
 
-template <size_t LENGTH>
-struct Word
-{
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+#define TIFLASH_AVX_NAMESPACE(...)            \
+    TIFLASH_BEGIN_AVX_SPECIFIC_CODE           \
+    namespace DB::TargetSpecific::Detail::AVX \
+    {                                         \
+    __VA_ARGS__                               \
+    }                                         \
+    TIFLASH_END_TARGET_SPECIFIC_CODE
+#else
+#define TIFLASH_AVX_NAMESPACE(...)
+#endif
+
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+#define TIFLASH_AVX512_NAMESPACE(...)            \
+    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE           \
+    namespace DB::TargetSpecific::Detail::AVX512 \
+    {                                            \
+    __VA_ARGS__                                  \
+    }                                            \
+    TIFLASH_END_TARGET_SPECIFIC_CODE
+#else
+#define TIFLASH_AVX512_NAMESPACE(...)
+#endif
+
+#ifdef __x86_64__
+#define TIFLASH_SSE4_NAMESPACE(...)            \
+    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE           \
+    namespace DB::TargetSpecific::Detail::SSE4 \
+    {                                          \
+    __VA_ARGS__                                \
+    }                                          \
+    TIFLASH_END_TARGET_SPECIFIC_CODE
+#else
+#define TIFLASH_SSE4_NAMESPACE(...)
+#endif
+
+#define TIFLASH_GENERIC_NAMESPACE(...)            \
+    namespace DB::TargetSpecific::Detail::Generic \
+    {                                             \
+    __VA_ARGS__                                   \
+    }
+
+#define TIFLASH_TARGET_SPECIFIC_NAMESPACE(...) \
+    TIFLASH_AVX_NAMESPACE(__VA_ARGS__)         \
+    TIFLASH_AVX512_NAMESPACE(__VA_ARGS__)      \
+    TIFLASH_SSE4_NAMESPACE(__VA_ARGS__)        \
+    TIFLASH_GENERIC_NAMESPACE(__VA_ARGS__)
+
+} // namespace DB::TargetSpecific
+
+
 #define DECLARE_TYPE(TYPE_PREFIX) \
     typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH))) TYPE_PREFIX##vec_t;
-    DECLARE_TYPE(int8);
-    DECLARE_TYPE(int16);
-    DECLARE_TYPE(int32);
-    DECLARE_TYPE(int64);
-    DECLARE_TYPE(uint8);
-    DECLARE_TYPE(uint16);
-    DECLARE_TYPE(uint32);
-    DECLARE_TYPE(uint64);
-#undef DECLARE_TYPE
 
 #define ENUM_TYPE(TYPE_PREFIX) \
     TYPE_PREFIX##vec_t as_##TYPE_PREFIX;
-    union
-    {
-        ENUM_TYPE(int8);
-        ENUM_TYPE(int16);
-        ENUM_TYPE(int32);
-        ENUM_TYPE(int64);
-        ENUM_TYPE(uint8);
-        ENUM_TYPE(uint16);
-        ENUM_TYPE(uint32);
-        ENUM_TYPE(uint64);
-    };
-#undef ENUM_TYPE
-
 
 #define GET_TYPE(TYPE_PREFIX)                         \
     if constexpr (std::is_same_v<TYPE_PREFIX##_t, T>) \
@@ -331,77 +360,112 @@ struct Word
         return as_##TYPE_PREFIX;                      \
     }
 
-    template <class T>
-    __attribute__((always_inline)) auto & get()
-    {
-        GET_TYPE(int8);
-        GET_TYPE(int16);
-        GET_TYPE(int32);
-        GET_TYPE(int64);
-        GET_TYPE(uint8);
-        GET_TYPE(uint16);
-        GET_TYPE(uint32);
-        GET_TYPE(uint64);
-        __builtin_unreachable();
-    }
+TIFLASH_TARGET_SPECIFIC_NAMESPACE(
+    template <size_t LENGTH>
+    struct Word {
+        DECLARE_TYPE(int8);
+        DECLARE_TYPE(int16);
+        DECLARE_TYPE(int32);
+        DECLARE_TYPE(int64);
+        DECLARE_TYPE(uint8);
+        DECLARE_TYPE(uint16);
+        DECLARE_TYPE(uint32);
+        DECLARE_TYPE(uint64);
 
-    template <class T>
-    __attribute__((always_inline)) const auto & get() const
-    {
-        GET_TYPE(int8);
-        GET_TYPE(int16);
-        GET_TYPE(int32);
-        GET_TYPE(int64);
-        GET_TYPE(uint8);
-        GET_TYPE(uint16);
-        GET_TYPE(uint32);
-        GET_TYPE(uint64);
-        __builtin_unreachable();
-    }
+        union
+        {
+            ENUM_TYPE(int8);
+            ENUM_TYPE(int16);
+            ENUM_TYPE(int32);
+            ENUM_TYPE(int64);
+            ENUM_TYPE(uint8);
+            ENUM_TYPE(uint16);
+            ENUM_TYPE(uint32);
+            ENUM_TYPE(uint64);
+        };
 
+        template <class T>
+        __attribute__((always_inline)) auto & get()
+        {
+            GET_TYPE(int8);
+            GET_TYPE(int16);
+            GET_TYPE(int32);
+            GET_TYPE(int64);
+            GET_TYPE(uint8);
+            GET_TYPE(uint16);
+            GET_TYPE(uint32);
+            GET_TYPE(uint64);
+            __builtin_unreachable();
+        }
+
+        template <class T>
+        __attribute__((always_inline)) const auto & get() const
+        {
+            GET_TYPE(int8);
+            GET_TYPE(int16);
+            GET_TYPE(int32);
+            GET_TYPE(int64);
+            GET_TYPE(uint8);
+            GET_TYPE(uint16);
+            GET_TYPE(uint32);
+            GET_TYPE(uint64);
+            __builtin_unreachable();
+        }
+
+        [[nodiscard]] __attribute__((always_inline)) bool isByteAllMarked() const
+        {
+            return Detail::MarkChecker<LENGTH>::isByteAllMarked(*this);
+        }
+
+        __attribute__((always_inline)) static Word from_aligned(const void * src)
+        {
+            Word result{};
+            const auto * address = __builtin_assume_aligned(src, LENGTH);
+            __builtin_memcpy(&result, address, LENGTH);
+            return result;
+        }
+
+        __attribute__((always_inline)) static Word from_unaligned(const void * src)
+        {
+            Word result{};
+            __builtin_memcpy(&result, src, LENGTH);
+            return result;
+        }
+
+        __attribute__((always_inline)) void to_aligned(void * dst)
+        {
+            const auto * address = __builtin_assume_aligned(dst, LENGTH);
+            __builtin_memcpy(dst, this, LENGTH);
+        }
+
+        __attribute__((always_inline)) void to_unaligned(void * dst)
+        {
+            __builtin_memcpy(dst, this, LENGTH);
+        }
+
+        template <class T>
+        __attribute__((always_inline)) static Word from_single(T val)
+        {
+            Word result{};
+            for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
+            {
+                result.template get<T>()[i] = val;
+            }
+            return result;
+        }
+
+        template <class T>
+        __attribute__((always_inline)) static Word from_array(const std::array<T, LENGTH / sizeof(T)> & arr)
+        {
+            Word result{};
+            for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
+            {
+                result.template get<T>()[i] = arr[i];
+            }
+            return result;
+        }
+    };)
+
+#undef DECLARE_TYPE
+#undef ENUM_TYPE
 #undef GET_TYPE
-
-    [[nodiscard]] __attribute__((always_inline)) bool isByteAllMarked() const
-    {
-        return Detail::MarkChecker<LENGTH>::isByteAllMarked(*this);
-    }
-
-    __attribute__((always_inline)) static Word from_aligned(const void * src)
-    {
-        Word result{};
-        const auto * address = __builtin_assume_aligned(src, LENGTH);
-        __builtin_memcpy(&result, address, LENGTH);
-        return result;
-    }
-
-    __attribute__((always_inline)) static Word from_unaligned(const void * src)
-    {
-        Word result{};
-        __builtin_memcpy(&result, src, LENGTH);
-        return result;
-    }
-
-    template <class T>
-    __attribute__((always_inline)) static Word from_single(T val)
-    {
-        Word result{};
-        for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
-        {
-            result.template get<T>()[i] = val;
-        }
-        return result;
-    }
-
-    template <class T>
-    __attribute__((always_inline)) static Word from_array(const std::array<T, LENGTH / sizeof(T)> & arr)
-    {
-        Word result{};
-        for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
-        {
-            result.template get<T>()[i] = arr[i];
-        }
-        return result;
-    }
-};
-
-} // namespace DB::TargetSpecific
