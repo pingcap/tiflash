@@ -270,7 +270,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                 auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, DMFile::ReadMetaMode::none());
                 if (dmfile->canGC())
                 {
+                    auto file_size = dmfile->getBytesOnDisk();
                     delegate.removeDTFile(dmfile->fileId());
+                    LOG_DEBUG(log, root_path << " DTFile " << file_id << " remove " << file_size << " bytes");
                     dmfile->remove(global_context.getFileProvider());
                 }
 
@@ -580,6 +582,7 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId fil
 
     auto delegator = path_pool.getStableDiskDelegator();
     delegator.addDTFile(file_id, file_size, parent_path);
+    LOG_DEBUG(log, parent_path << " DTFile " << file_id << " preIngestFile " << file_size << " bytes");
 }
 
 void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
@@ -2045,6 +2048,7 @@ void DeltaMergeStore::restoreStableFiles()
         {
             auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
+            LOG_DEBUG(log, root_path << " DTFile " << file_id << " restore " << dmfile->getBytesOnDisk() << " bytes");
         }
     }
 }

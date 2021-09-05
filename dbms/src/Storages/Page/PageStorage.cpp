@@ -364,7 +364,11 @@ void PageStorage::restore()
         for (auto & page_file : page_files)
         {
             size_t idx_in_delta_paths = delegator->addPageFileUsedSize(
-                page_file.fileIdLevel(), page_file.getDiskSize(), page_file.parentPath(), /*need_insert_location*/ true);
+                page_file.fileIdLevel(),
+                page_file.getDiskSize(),
+                page_file.parentPath(),
+                /*need_insert_location*/ true);
+            LOG_DEBUG(log, page_file.parentPath() << " PageFile " << page_file.fileIdLevel().first << "." << page_file.fileIdLevel().second << " restore " << page_file.getDiskSize() << "bytes");
             // Try best to reuse writable page files
             if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
@@ -567,7 +571,7 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
                                        bytes_written,
                                        file_to_write->parentPath(),
                                        /*need_insert_location*/ false);
-        LOG_DEBUG(log, "page file " << file_to_write->parentPath() << " " << file_to_write->fileIdLevel().first << "." << file_to_write->fileIdLevel().second << " write " << bytes_written << "bytes");
+        LOG_DEBUG(log, file_to_write->parentPath() << " PageFile " << file_to_write->fileIdLevel().first << "." << file_to_write->fileIdLevel().second << " write " << bytes_written << "bytes");
     }
     catch (...)
     {
@@ -1199,7 +1203,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
                 file.remove(true);
                 page_file.deleteEncryptionInfo();
                 delegator->removePageFile(page_file.fileIdLevel(), file_size, false);
-                LOG_DEBUG(log, "page file " << page_file.folderPath() << " "  << page_file.fileIdLevel().first << "." << page_file.fileIdLevel().second << " archive size " << file_size);
+                LOG_DEBUG(log, page_file.folderPath() << " PageFile "  << page_file.fileIdLevel().first << "." << page_file.fileIdLevel().second << " archive size " << file_size);
             }
         }
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
@@ -1269,7 +1273,7 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
             // work around by using a const_cast
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
             delegator->removePageFile(page_id_and_lvl, bytes_removed, true);
-            LOG_DEBUG(log, "page file " << page_file.folderPath() << " " << page_id_and_lvl.first << "." << page_id_and_lvl.second << " archive size " << bytes_removed);
+            LOG_DEBUG(log, page_file.folderPath() << " PageFile " << page_id_and_lvl.first << "." << page_id_and_lvl.second << " archive size " << bytes_removed);
             num_data_removed += 1;
         }
     }

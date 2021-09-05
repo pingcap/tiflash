@@ -452,7 +452,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
 
     // Free gc_file_writer and sync
     delegator->addPageFileUsedSize(gc_file_id, bytes_written, gc_file.parentPath(), /*need_insert_location*/ true);
-    LOG_DEBUG(log, "page file " << gc_file.parentPath() << " " << gc_file_id.first << "." << gc_file_id.second << " compact data " << bytes_written << "bytes");
+    LOG_DEBUG(log, gc_file.parentPath() << " PageFile " << gc_file_id.first << "." << gc_file_id.second << " compact data " << bytes_written << "bytes");
     return {std::move(gc_file_edit), bytes_written};
 }
 
