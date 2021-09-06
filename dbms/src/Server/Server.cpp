@@ -85,10 +85,8 @@
 #include <fstream>
 #endif
 
-#ifndef NDEBUG
 #ifdef FIU_ENABLE
 #include <fiu.h>
-#endif
 #endif
 
 
@@ -422,9 +420,9 @@ private:
 };
 
 // We only need this task run once.
-void backgroundInitStores(Context & global_context, Logger * log)
+void initStores(Context & global_context, Logger * log, bool lazily_init_store)
 {
-    auto initStores = [&global_context, log]() {
+    auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
@@ -445,7 +443,16 @@ void backgroundInitStores(Context & global_context, Logger * log)
             "Storage inited finish. [total_count=" << storages.size() << "] [init_count=" << init_cnt << "] [error_count=" << err_cnt
                                                    << "]");
     };
-    std::thread(initStores).detach();
+    if (lazily_init_store)
+    {
+        LOG_INFO(log, "Lazily init store.");
+        std::thread(do_init_stores).detach();
+    }
+    else
+    {
+        LOG_INFO(log, "Not lazily init store.");
+        do_init_stores();
+    }
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -453,10 +460,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     setThreadName("TiFlashMain");
 
     Logger * log = &logger();
-#ifndef NDEBUG
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
-#endif
 #endif
 
     UpdateMallocConfig(log);
@@ -854,7 +859,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Sync schemas done.");
 
-    backgroundInitStores(*global_context, log);
+    initStores(*global_context, log, storage_config.lazily_init_store);
 
     // After schema synced, set current database.
     global_context->setCurrentDatabase(default_database);
@@ -1238,23 +1243,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
 
+        auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
-            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
+            tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            LOG_INFO(log, "proxy is ready to serve, try to wake up all region leader by sending read index request");
-            {
-                std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
-                tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
-                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
-                });
-                tiflash_instance_wrap.proxy_helper->batchReadIndex(
-                    batch_read_index_req, tiflash_instance_wrap.tmt->batchReadIndexTimeout());
-            }
-            LOG_INFO(log, "start to wait for terminal signal");
+            LOG_INFO(log, "tiflash proxy is ready to serve, try to wake up all regions' leader");
+            WaitCheckRegionReady(tmt_context, terminate_signals_counter);
         }
 
         {
@@ -1264,12 +1262,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
             GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
-        global_context->getTMTContext().setStoreStatusRunning();
+        tmt_context.setStatusRunning();
+        LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
         {
-            global_context->getTMTContext().setTerminated();
-            LOG_INFO(log, "Set tmt context terminated");
+            LOG_INFO(log, "Set store status Stopping");
+            tmt_context.setStatusStopping();
+            {
+                // Wait until there is no read-index task.
+                while (tmt_context.getKVStore()->getReadIndexEvent())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+            tmt_context.setStatusTerminated();
+            LOG_INFO(log, "Set store status Terminated");
             // wait proxy to stop services
             if (proxy_conf.is_proxy_runnable)
             {

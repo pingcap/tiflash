@@ -1,12 +1,14 @@
 #pragma once
 
-#include <Common/Config/cpptoml.h>
-
 #include <istream>
 
 #include "Poco/DOM/AutoPtr.h"
 #include "Poco/Util/MapConfiguration.h"
 
+namespace cpptoml
+{
+class table;
+}
 namespace DB
 {
 

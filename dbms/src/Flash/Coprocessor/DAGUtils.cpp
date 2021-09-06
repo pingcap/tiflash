@@ -826,7 +826,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::AddDateDurationInt, "cast"},
     //{tipb::ScalarFuncSig::AddDateDurationDecimal, "cast"},
 
-    //{tipb::ScalarFuncSig::Date, "cast"},
+    {tipb::ScalarFuncSig::Date, "toMyDate"},
     //{tipb::ScalarFuncSig::Hour, "cast"},
     //{tipb::ScalarFuncSig::Minute, "cast"},
     //{tipb::ScalarFuncSig::Second, "cast"},

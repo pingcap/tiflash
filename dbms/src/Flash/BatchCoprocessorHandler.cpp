@@ -4,7 +4,6 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
