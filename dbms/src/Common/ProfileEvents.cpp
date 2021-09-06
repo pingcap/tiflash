@@ -195,7 +195,9 @@
     M(ChecksumBufferReadBytes)                  \
     M(ChecksumBufferWriteBytes)                 \
     M(ChecksumDigestBytes)                      \
-    M(ChecksumBufferSeek)
+    M(ChecksumBufferSeek)                       \
+                                                \
+    M(RaftWaitIndexTimeout)
 
 namespace ProfileEvents
 {
