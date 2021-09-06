@@ -46,11 +46,23 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_segment_ingest_packs_fail)                        \
     M(segment_merge_after_ingest_packs)                           \
     M(force_formal_page_file_not_exists)                          \
-    M(force_legacy_or_checkpoint_page_file_exists)
+    M(force_legacy_or_checkpoint_page_file_exists)                \
+    M(exception_in_creating_set_input_stream)
 
-#define APPLY_FOR_FAILPOINTS(M)        \
-    M(force_set_page_file_write_errno) \
-    M(minimum_block_size_for_cross_join)
+#define APPLY_FOR_FAILPOINTS(M)                              \
+    M(force_set_page_file_write_errno)                       \
+    M(force_split_io_size_4k)                                \
+    M(minimum_block_size_for_cross_join)                     \
+    M(random_exception_after_dt_write_done)                  \
+    M(random_slow_page_storage_write)                        \
+    M(random_exception_after_page_storage_sequence_acquired) \
+    M(random_slow_page_storage_remove_expired_snapshots)     \
+    M(random_slow_page_storage_list_all_live_files)          \
+    M(force_set_safepoint_when_decode_block)                 \
+    M(force_set_page_data_compact_batch)                     \
+    M(force_set_dtfile_exist_when_acquire_id)                \
+    M(force_no_local_region_for_mpp_task)                    \
+    M(force_remote_read_for_batch_cop)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \
@@ -65,7 +77,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_when_reading_from_dt_stream)     \
     M(pause_when_writing_to_dt_store)        \
     M(pause_when_ingesting_to_dt_store)      \
-    M(pause_when_altering_dt_store)
+    M(pause_when_altering_dt_store)          \
+    M(pause_after_copr_streams_acquired)
 
 namespace FailPoints
 {

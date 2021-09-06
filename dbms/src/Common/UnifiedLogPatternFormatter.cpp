@@ -3,6 +3,7 @@
 #include <IO/WriteHelpers.h>
 #include <Poco/Channel.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <fmt/core.h>
 #include <sys/time.h>
 
 #include <boost/algorithm/string.hpp>
@@ -13,7 +14,6 @@
 
 namespace DB
 {
-
 void UnifiedLogPatternFormatter::format(const Poco::Message & msg, std::string & text)
 {
     DB::WriteBufferFromString wb(text);
@@ -63,25 +63,25 @@ std::string UnifiedLogPatternFormatter::getPriorityString(const Poco::Message::P
 {
     switch (priority)
     {
-        case Poco::Message::Priority::PRIO_TRACE:
-            return "TRACE";
-        case Poco::Message::Priority::PRIO_DEBUG:
-            return "DEBUG";
-        case Poco::Message::Priority::PRIO_INFORMATION:
-            return "INFO";
-        case Poco::Message::Priority::PRIO_WARNING:
-            return "WARN";
-        case Poco::Message::Priority::PRIO_ERROR:
-            return "ERROR";
-        case Poco::Message::Priority::PRIO_FATAL:
-            return "FATAL";
-        case Poco::Message::Priority::PRIO_CRITICAL:
-            return "CRITICAL";
-        case Poco::Message::Priority::PRIO_NOTICE:
-            return "NOTICE";
+    case Poco::Message::Priority::PRIO_TRACE:
+        return "TRACE";
+    case Poco::Message::Priority::PRIO_DEBUG:
+        return "DEBUG";
+    case Poco::Message::Priority::PRIO_INFORMATION:
+        return "INFO";
+    case Poco::Message::Priority::PRIO_WARNING:
+        return "WARN";
+    case Poco::Message::Priority::PRIO_ERROR:
+        return "ERROR";
+    case Poco::Message::Priority::PRIO_FATAL:
+        return "FATAL";
+    case Poco::Message::Priority::PRIO_CRITICAL:
+        return "CRITICAL";
+    case Poco::Message::Priority::PRIO_NOTICE:
+        return "NOTICE";
 
-        default:
-            return "UNKNOWN";
+    default:
+        return "UNKNOWN";
     }
 }
 
@@ -101,9 +101,8 @@ std::string UnifiedLogPatternFormatter::getTimestamp() const
 
     int zone_offset = local_tm->tm_gmtoff;
 
-    char buffer[100] = "yyyy/MM/dd HH:mm:ss.SSS";
-
-    std::sprintf(buffer, "%04d/%02d/%02d %02d:%02d:%02d.%03d", year, month, day, hour, minute, second, milliseconds);
+    std::string buffer
+        = fmt::format("{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:03d}", year, month, day, hour, minute, second, milliseconds);
 
     std::stringstream ss;
     ss << buffer << " ";
@@ -118,10 +117,9 @@ std::string UnifiedLogPatternFormatter::getTimestamp() const
         ss << "-";
     else
         ss << "+";
-    char buff[] = "hh:mm";
-    std::sprintf(buff, "%02d:%02d", offset_tm->tm_hour, offset_tm->tm_min);
+    buffer = fmt::format("{0:02d}:{1:02d}", offset_tm->tm_hour, offset_tm->tm_min);
 
-    ss << buff;
+    ss << buffer;
 
     std::string result = ss.str();
     return result;
@@ -161,66 +159,66 @@ void UnifiedLogPatternFormatter::writeJSONString(WriteBuffer & buf, const std::s
     {
         switch (*it)
         {
-            case '\b':
-                writeChar('\\', buf);
-                writeChar('b', buf);
-                break;
-            case '\f':
-                writeChar('\\', buf);
-                writeChar('f', buf);
-                break;
-            case '\n':
-                writeChar('\\', buf);
-                writeChar('n', buf);
-                break;
-            case '\r':
-                writeChar('\\', buf);
-                writeChar('r', buf);
-                break;
-            case '\t':
-                writeChar('\\', buf);
-                writeChar('t', buf);
-                break;
-            case '\\':
-                writeChar('\\', buf);
-                writeChar('\\', buf);
-                break;
-            case '"':
-                writeChar('\\', buf);
-                writeChar('"', buf);
-                break;
-            default:
-                UInt8 c = *it;
-                if (c <= 0x1F)
-                {
-                    /// Escaping of ASCII control characters.
+        case '\b':
+            writeChar('\\', buf);
+            writeChar('b', buf);
+            break;
+        case '\f':
+            writeChar('\\', buf);
+            writeChar('f', buf);
+            break;
+        case '\n':
+            writeChar('\\', buf);
+            writeChar('n', buf);
+            break;
+        case '\r':
+            writeChar('\\', buf);
+            writeChar('r', buf);
+            break;
+        case '\t':
+            writeChar('\\', buf);
+            writeChar('t', buf);
+            break;
+        case '\\':
+            writeChar('\\', buf);
+            writeChar('\\', buf);
+            break;
+        case '"':
+            writeChar('\\', buf);
+            writeChar('"', buf);
+            break;
+        default:
+            UInt8 c = *it;
+            if (c <= 0x1F)
+            {
+                /// Escaping of ASCII control characters.
 
-                    UInt8 higher_half = c >> 4;
-                    UInt8 lower_half = c & 0xF;
+                UInt8 higher_half = c >> 4;
+                UInt8 lower_half = c & 0xF;
 
-                    writeCString("\\u00", buf);
-                    writeChar('0' + higher_half, buf);
+                writeCString("\\u00", buf);
+                writeChar('0' + higher_half, buf);
 
-                    if (lower_half <= 9)
-                        writeChar('0' + lower_half, buf);
-                    else
-                        writeChar('A' + lower_half - 10, buf);
-                }
-                else if (end - it >= 3 && it[0] == '\xE2' && it[1] == '\x80' && (it[2] == '\xA8' || it[2] == '\xA9'))
-                {
-                    /// This is for compatibility with JavaScript, because unescaped line separators are prohibited in string literals,
-                    ///  and these code points are alternative line separators.
-
-                    if (it[2] == '\xA8')
-                        writeCString("\\u2028", buf);
-                    if (it[2] == '\xA9')
-                        writeCString("\\u2029", buf);
-
-                    /// Byte sequence is 3 bytes long. We have additional two bytes to skip.
-                    it += 2;
-                }
+                if (lower_half <= 9)
+                    writeChar('0' + lower_half, buf);
                 else
-                    writeChar(*it, buf);
+                    writeChar('A' + lower_half - 10, buf);
+            }
+            else if (end - it >= 3 && it[0] == '\xE2' && it[1] == '\x80' && (it[2] == '\xA8' || it[2] == '\xA9'))
+            {
+                /// This is for compatibility with JavaScript, because unescaped line separators are prohibited in string literals,
+                ///  and these code points are alternative line separators.
+
+                if (it[2] == '\xA8')
+                    writeCString("\\u2028", buf);
+                if (it[2] == '\xA9')
+                    writeCString("\\u2029", buf);
+
+                /// Byte sequence is 3 bytes long. We have additional two bytes to skip.
+                it += 2;
+            }
+            else
+                writeChar(*it, buf);
         }
     }
     writeChar('"', buf);

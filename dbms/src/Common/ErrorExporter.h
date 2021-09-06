@@ -3,14 +3,16 @@
 #include <Common/TiFlashException.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
+#include <fmt/printf.h>
 
 namespace DB
 {
-
 class ErrorExporter
 {
 public:
-    explicit ErrorExporter(WriteBuffer & dest) : wb(dest) {}
+    explicit ErrorExporter(WriteBuffer & dest)
+        : wb(dest)
+    {}
 
     ErrorExporter() = delete;
 
@@ -31,13 +33,19 @@ const char * ErrorExporter::ERROR_TEMPLATE = "[\"%s\"]\n"
 
 void ErrorExporter::writeError(const TiFlashError & error)
 {
-    char buffer[4096];
-    std::sprintf(
-        buffer, ERROR_TEMPLATE, error.standardName().data(), error.message_template.data(), error.description.data(), error.workaround.data());
-    DB::writeString(std::string(buffer), wb);
+    String buffer = fmt::sprintf(
+        ERROR_TEMPLATE,
+        error.standardName().data(),
+        error.message_template.data(),
+        error.description.data(),
+        error.workaround.data());
+    DB::writeString(buffer, wb);
     return;
 }
 
-void ErrorExporter::flush() { wb.next(); }
+void ErrorExporter::flush()
+{
+    wb.next();
+}
 
 } // namespace DB

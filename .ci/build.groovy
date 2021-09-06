@@ -40,10 +40,23 @@ catchError {
                     }
                     util.checkoutTiCSFull("${ghprbActualCommit}", "${ghprbPullId}")
                 }
-                stage("Build & Upload") {
+                stage("Build") {
                     timeout(time: 70, unit: 'MINUTES') {
                         container("builder") {
-                            sh "NPROC=5 BUILD_BRANCH=${ghprbTargetBranch} release-centos7/build/build-tiflash-ci.sh"
+                            sh "NPROC=5 BUILD_BRANCH=${ghprbTargetBranch} ENABLE_FORMAT_CHECK=true release-centos7/build/build-tiflash-ci.sh"
+                        }
+                    }
+                }
+                stage("Static Analysis") {
+                    timeout(time: 360, unit: 'MINUTES') {
+                        container("builder") {
+                            echo "NPROC=5 /build/tics/release-centos7/build/static-analysis.sh"
+                        }
+                    }
+                }
+                stage("Upload") {
+                    timeout(time: 10, unit: 'MINUTES') {
+                        container("builder") {
                             sh "PULL_ID=${ghprbPullId} COMMIT_HASH=${ghprbActualCommit} release-centos7/build/upload-ci-build.sh"
                         }
                     }

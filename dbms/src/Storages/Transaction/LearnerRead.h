@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Core/Types.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/Region.h>

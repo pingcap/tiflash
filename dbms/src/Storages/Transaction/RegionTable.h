@@ -23,7 +23,6 @@ struct TableInfo;
 
 namespace DB
 {
-
 struct ColumnsDescription;
 class Context;
 class IStorage;
@@ -47,7 +46,8 @@ public:
     struct InternalRegion
     {
         InternalRegion(const RegionID region_id_, const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_)
-            : region_id(region_id_), range_in_table(range_in_table_)
+            : region_id(region_id_)
+            , range_in_table(range_in_table_)
         {}
 
         RegionID region_id;
@@ -61,7 +61,9 @@ public:
 
     struct Table : boost::noncopyable
     {
-        Table(const TableID table_id_) : table_id(table_id_) {}
+        Table(const TableID table_id_)
+            : table_id(table_id_)
+        {}
         TableID table_id;
         InternalRegions regions;
     };
@@ -84,7 +86,9 @@ public:
     {
         using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
 
-        FlushThresholds(FlushThresholdsData && data_) : data(std::make_shared<FlushThresholdsData>(std::move(data_))) {}
+        FlushThresholds(FlushThresholdsData && data_)
+            : data(std::make_shared<FlushThresholdsData>(std::move(data_)))
+        {}
 
         void setFlushThresholds(const FlushThresholdsData & flush_thresholds_)
         {
@@ -132,37 +136,37 @@ public:
     /// assuming that newer schema can always apply to older data by setting force_decode to true in RegionBlockReader::read.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
     static void writeBlockByRegion(Context & context,
-        const RegionPtrWithBlock & region,
-        RegionDataReadInfoList & data_list_to_remove,
-        Logger * log,
-        bool lock_region = true);
+                                   const RegionPtrWithBlock & region,
+                                   RegionDataReadInfoList & data_list_to_remove,
+                                   Poco::Logger * log,
+                                   bool lock_region = true);
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
     /// we directly ask RegionBlockReader::read to perform a read with the given start_ts and force_decode being true.
     using ReadBlockByRegionRes = std::variant<Block, RegionException::RegionReadStatus>;
     static ReadBlockByRegionRes readBlockByRegion(const TiDB::TableInfo & table_info,
-        const ColumnsDescription & columns,
-        const Names & column_names_to_read,
-        const RegionPtr & region,
-        RegionVersion region_version,
-        RegionVersion conf_version,
-        bool resolve_locks,
-        Timestamp start_ts,
-        const std::unordered_set<UInt64> * bypass_lock_ts,
-        RegionScanFilterPtr scan_filter = nullptr);
+                                                  const ColumnsDescription & columns,
+                                                  const Names & column_names_to_read,
+                                                  const RegionPtr & region,
+                                                  RegionVersion region_version,
+                                                  RegionVersion conf_version,
+                                                  bool resolve_locks,
+                                                  Timestamp start_ts,
+                                                  const std::unordered_set<UInt64> * bypass_lock_ts,
+                                                  RegionScanFilterPtr scan_filter = nullptr);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
     using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
     static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(TMTContext & tmt,
-        const TiDB::TableID table_id,
-        const RegionPtr & region,
-        const Timestamp start_ts,
-        const std::unordered_set<UInt64> * bypass_lock_ts,
-        RegionVersion region_version,
-        RegionVersion conf_version,
-        Logger * log);
+                                                                    const TiDB::TableID table_id,
+                                                                    const RegionPtr & region,
+                                                                    const Timestamp start_ts,
+                                                                    const std::unordered_set<UInt64> * bypass_lock_ts,
+                                                                    RegionVersion region_version,
+                                                                    RegionVersion conf_version,
+                                                                    Poco::Logger * log);
 
     void checkTableOptimize();
     void checkTableOptimize(TableID, const double);
@@ -201,7 +205,7 @@ private:
 
     mutable TableOptimizeChecker table_checker;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 
@@ -213,7 +217,9 @@ struct RegionPreDecodeBlockData
     RegionDataReadInfoList data_list_read; // if schema version changed, use kv data to rebuild block cache
 
     RegionPreDecodeBlockData(Block && block_, Int64 schema_version_, RegionDataReadInfoList && data_list_read_)
-        : block(std::move(block_)), schema_version(schema_version_), data_list_read(std::move(data_list_read_))
+        : block(std::move(block_))
+        , schema_version(schema_version_)
+        , data_list_read(std::move(data_list_read_))
     {}
     RegionPreDecodeBlockData(const RegionPreDecodeBlockData &) = delete;
     void toString(std::stringstream & ss) const
@@ -233,7 +239,10 @@ struct RegionPtrWithBlock
     using CachePtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWithBlock(const Base & base_, CachePtr cache = nullptr) : base(base_), pre_decode_cache(std::move(cache)) {}
+    RegionPtrWithBlock(const Base & base_, CachePtr cache = nullptr)
+        : base(base_)
+        , pre_decode_cache(std::move(cache))
+    {}
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }
@@ -253,7 +262,10 @@ struct RegionPtrWithSnapshotFiles
     using Base = RegionPtr;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<UInt64> ids_ = {}) : base(base_), ingest_ids(std::move(ids_)) {}
+    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<UInt64> ids_ = {})
+        : base(base_)
+        , ingest_ids(std::move(ids_))
+    {}
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }

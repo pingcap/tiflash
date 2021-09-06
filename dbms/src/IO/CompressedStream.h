@@ -4,21 +4,20 @@
 
 /** Common Defines */
 
-#define DBMS_MAX_COMPRESSED_SIZE 0x40000000ULL    /// 1GB
+#define DBMS_MAX_COMPRESSED_SIZE 0x40000000ULL /// 1GB
 
 #define COMPRESSED_BLOCK_HEADER_SIZE 9
 
 
 namespace DB
 {
-
 /** Compression method */
 enum class CompressionMethod
 {
     LZ4 = 1,
-    LZ4HC = 2,        /// The format is the same as for LZ4. The difference is only in compression.
-    ZSTD = 3,         /// Experimental algorithm: https://github.com/Cyan4973/zstd
-    NONE = 4,         /// No compression
+    LZ4HC = 2, /// The format is the same as for LZ4. The difference is only in compression.
+    ZSTD = 3, /// Experimental algorithm: https://github.com/Cyan4973/zstd
+    NONE = 4, /// No compression
 };
 
 /** The compressed block format is as follows:
@@ -44,11 +43,11 @@ enum class CompressionMethod
 
 enum class CompressionMethodByte : uint8_t
 {
-    NONE     = 0x02,
-    LZ4      = 0x82,
-    ZSTD     = 0x90,
+    NONE = 0x02,
+    LZ4 = 0x82,
+    ZSTD = 0x90,
     // COL_END is not a compreesion method, but a flag of column end used in compact file.
-    COL_END  = 0x66,
+    COL_END = 0x66,
 };
 
-}
+} // namespace DB

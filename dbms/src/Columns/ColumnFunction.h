@@ -1,12 +1,11 @@
 #pragma once
 
-#include <Core/NamesAndTypes.h>
-#include <Core/ColumnsWithTypeAndName.h>
 #include <Columns/IColumn.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/NamesAndTypes.h>
 
 namespace DB
 {
-
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
 
@@ -65,37 +64,39 @@ public:
         throw Exception("Cannot get insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertRangeFrom(const IColumn &, size_t, size_t) override
+    void insertRangeFrom(const IColumn &, size_t, size_t)
+        override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertData(const char *, size_t) override
+    void insertData(const char *, size_t)
+        override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    StringRef serializeValueIntoArena(size_t, Arena &, char const *&, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
+    StringRef serializeValueIntoArena(size_t, Arena &, char const *&, const TiDB::TiDBCollatorPtr &, String &) const override
     {
         throw Exception("Cannot serialize from " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    const char * deserializeAndInsertFromArena(const char *, std::shared_ptr<TiDB::ITiDBCollator>) override
+    const char * deserializeAndInsertFromArena(const char *, const TiDB::TiDBCollatorPtr &) override
     {
         throw Exception("Cannot deserialize to " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void updateHashWithValue(size_t, SipHash &, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
+    void updateHashWithValue(size_t, SipHash &, const TiDB::TiDBCollatorPtr &, String &) const override
     {
         throw Exception("updateHashWithValue is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void updateHashWithValues(IColumn::HashValues &, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override
+    void updateHashWithValues(IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &) const override
     {
         throw Exception("updateHashWithValues is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void updateWeakHash32(WeakHash32 &) const override
+    void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override
     {
         throw Exception("updateWeakHash32 is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -123,4 +124,4 @@ private:
     void appendArgument(const ColumnWithTypeAndName & column);
 };
 
-}
+} // namespace DB

@@ -1,17 +1,17 @@
 #pragma once
 
-#include <list>
-#include <queue>
-#include <atomic>
-#include <thread>
-#include <mutex>
-
-#include <common/logger_useful.h>
-
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/MemoryTracker.h>
+#include <Common/ThreadFactory.h>
+#include <Common/setThreadName.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <common/logger_useful.h>
+
+#include <atomic>
+#include <list>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 
 /** Allows to process multiple block input streams (sources) in parallel, using specified number of threads.
@@ -32,18 +32,17 @@
 
 namespace CurrentMetrics
 {
-    extern const Metric QueryThread;
+extern const Metric QueryThread;
 }
 
 namespace DB
 {
-
 /** Union mode.
   */
 enum class StreamUnionMode
 {
     Basic = 0, /// take out blocks
-    ExtraInfo  /// take out blocks + additional information
+    ExtraInfo /// take out blocks + additional information
 };
 
 /// Example of the handler.
@@ -82,7 +81,10 @@ public:
       *   and only after the completion of this work, create blocks of keys that are not found.
       */
     ParallelInputsProcessor(const BlockInputStreams & inputs_, const BlockInputStreamPtr & additional_input_at_end_, size_t max_threads_, Handler & handler_)
-        : inputs(inputs_), additional_input_at_end(additional_input_at_end_), max_threads(std::min(inputs_.size(), max_threads_)), handler(handler_)
+        : inputs(inputs_)
+        , additional_input_at_end(additional_input_at_end_)
+        , max_threads(std::min(inputs_.size(), max_threads_))
+        , handler(handler_)
     {
         for (size_t i = 0; i < inputs_.size(); ++i)
             unprepared_inputs.emplace(inputs_[i], i);
@@ -106,7 +108,7 @@ public:
         active_threads = max_threads;
         threads.reserve(max_threads);
         for (size_t i = 0; i < max_threads; ++i)
-            threads.emplace_back(std::bind(&ParallelInputsProcessor::thread, this, current_memory_tracker, i));
+            threads.emplace_back(ThreadFactory(true, "ParalInputsProc").newThread([this, i] { thread(i); }));
     }
 
     /// Ask all sources to stop earlier than they run out.
@@ -157,10 +159,13 @@ private:
     struct InputData
     {
         BlockInputStreamPtr in;
-        size_t i;        /// The source number (for debugging).
+        size_t i; /// The source number (for debugging).
 
         InputData() {}
-        InputData(const BlockInputStreamPtr & in_, size_t i_) : in(in_), i(i_) {}
+        InputData(const BlockInputStreamPtr & in_, size_t i_)
+            : in(in_)
+            , i(i_)
+        {}
     };
 
     void publishPayload(BlockInputStreamPtr & stream, Block & block, size_t thread_num)
@@ -174,9 +179,8 @@ private:
         }
     }
 
-    void thread(MemoryTracker * memory_tracker, size_t thread_num)
+    void thread(size_t thread_num)
     {
-        current_memory_tracker = memory_tracker;
         std::exception_ptr exception;
 
         setThreadName("ParalInputsProc");
@@ -242,13 +246,13 @@ private:
                 }
             }
 
-            handler.onFinish();       /// TODO If in `onFinish` or `onFinishThread` there is an exception, then std::terminate is called.
+            handler.onFinish(); /// TODO If in `onFinish` or `onFinishThread` there is an exception, then std::terminate is called.
         }
     }
 
     void loop(size_t thread_num)
     {
-        while (!finish)    /// You may need to stop work earlier than all sources run out.
+        while (!finish) /// You may need to stop work earlier than all sources run out.
         {
             InputData input;
 
@@ -341,14 +345,14 @@ private:
     std::mutex unprepared_inputs_mutex;
 
     /// How many sources ran out.
-    std::atomic<size_t> active_threads { 0 };
+    std::atomic<size_t> active_threads{0};
     /// Finish the threads work (before the sources run out).
-    std::atomic<bool> finish { false };
+    std::atomic<bool> finish{false};
     /// Wait for the completion of all threads.
-    std::atomic<bool> joined_threads { false };
+    std::atomic<bool> joined_threads{false};
 
-    Logger * log = &Logger::get("ParallelInputsProcessor");
+    Poco::Logger * log = &Poco::Logger::get("ParallelInputsProcessor");
 };
 
 
-}
+} // namespace DB

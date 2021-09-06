@@ -28,6 +28,10 @@ if (NOT NO_WERROR)
 endif ()
 
 find_package (Threads)
+find_package (CURL) # CURL_LIBRARIES can be unset till this file, so we find it explicitly
+if (TARGET CURL::libcurl)
+    set(CURL_LIBRARIES CURL::libcurl)
+endif()
 
 if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
@@ -107,12 +111,12 @@ list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctio
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
 add_library(clickhouse_common_io ${SPLIT_SHARED} ${clickhouse_common_io_headers} ${clickhouse_common_io_sources})
+target_include_directories(clickhouse_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR})
 
 if (ARCH_FREEBSD)
     target_compile_definitions (clickhouse_common_io PUBLIC CLOCK_MONOTONIC_COARSE=CLOCK_MONOTONIC_FAST)
 endif ()
 
-add_subdirectory(src/Common/ZooKeeper)
 add_subdirectory(src/Common/Config)
 
 if (MAKE_STATIC_LIBRARIES)
@@ -230,6 +234,8 @@ target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSI
 
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
+# https://cmake.org/pipermail/cmake/2016-May/063400.html
+target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
 
 add_subdirectory (tests)
 
@@ -256,6 +262,8 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/FunctionTestUtils.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})

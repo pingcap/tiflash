@@ -23,161 +23,6 @@
 namespace DB
 {
 
-/// Helpers to obtain keys (to use in a hash table or similar data structure) for various equi-JOINs.
-
-/// UInt8/16/32/64 or another types with same number of bits.
-template <typename FieldType>
-struct JoinKeyGetterOneNumber
-{
-    using Key = FieldType;
-
-    const FieldType * vec;
-
-    /** Created before processing of each block.
-      * Initialize some members, used in another methods, called in inner loops.
-      */
-    JoinKeyGetterOneNumber(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &)
-    {
-        vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
-    }
-
-    Key getKey(
-        const ColumnRawPtrs & /*key_columns*/,
-        size_t /*keys_size*/,                 /// number of key columns.
-        size_t i,                             /// row number to get key from.
-        const Sizes & /*key_sizes*/,
-        std::vector<String> & /*sort_key_containers*/) const    /// If keys are of fixed size - their sizes. Not used for methods with variable-length keys.
-    {
-        return unionCastToUInt64(vec[i]);
-    }
-
-    /// Place additional data into memory pool, if needed, when new key was inserted into hash table.
-    static void onNewKey(Key & /*key*/, Arena & /*pool*/) {}
-};
-
-/// For single String key.
-struct JoinKeyGetterString
-{
-    using Key = StringRef;
-
-    const ColumnString::Offsets * offsets;
-    const ColumnString::Chars_t * chars;
-    std::shared_ptr<TiDB::ITiDBCollator> collator;
-
-    JoinKeyGetterString(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators)
-    {
-        const IColumn & column = *key_columns[0];
-        const ColumnString & column_string = static_cast<const ColumnString &>(column);
-        offsets = &column_string.getOffsets();
-        chars = &column_string.getChars();
-        if (!collators.empty())
-            collator = collators[0];
-    }
-
-    Key getKey(
-        const ColumnRawPtrs &,
-        size_t,
-        size_t i,
-        const Sizes &,
-        std::vector<String> & sort_key_containers) const
-    {
-        Key key = StringRef(
-            &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-            (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-        if (collator != nullptr)
-        {
-            key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
-        }
-        return key;
-    }
-
-    static void onNewKey(Key & key, Arena & pool)
-    {
-        key.data = pool.insert(key.data, key.size);
-    }
-};
-
-/// For single FixedString key.
-struct JoinKeyGetterFixedString
-{
-    using Key = StringRef;
-
-    size_t n;
-    const ColumnFixedString::Chars_t * chars;
-
-    JoinKeyGetterFixedString(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &)
-    {
-        const IColumn & column = *key_columns[0];
-        const ColumnFixedString & column_string = static_cast<const ColumnFixedString &>(column);
-        n = column_string.getN();
-        chars = &column_string.getChars();
-    }
-
-    Key getKey(
-        const ColumnRawPtrs &,
-        size_t,
-        size_t i,
-        const Sizes &,
-        std::vector<String> &) const
-    {
-        return StringRef(&(*chars)[i * n], n);
-    }
-
-    static void onNewKey(Key & key, Arena & pool)
-    {
-        key.data = pool.insert(key.data, key.size);
-    }
-};
-
-/// For keys of fixed size, that could be packed in sizeof TKey width.
-template <typename TKey>
-struct JoinKeyGetterFixed
-{
-    using Key = TKey;
-
-    JoinKeyGetterFixed(const ColumnRawPtrs &, const TiDB::TiDBCollators &)
-    {
-    }
-
-    Key getKey(
-        const ColumnRawPtrs & key_columns,
-        size_t keys_size,
-        size_t i,
-        const Sizes & key_sizes,
-        std::vector<String> &) const
-    {
-        return packFixed<Key>(i, keys_size, key_columns, key_sizes);
-    }
-
-    static void onNewKey(Key &, Arena &) {}
-};
-
-/// Generic method, use crypto hash function.
-struct JoinKeyGetterHashed
-{
-    using Key = UInt128;
-    TiDB::TiDBCollators collators;
-
-    JoinKeyGetterHashed(const ColumnRawPtrs &, const TiDB::TiDBCollators & collators_)
-    {
-        collators = collators_;
-    }
-
-    Key getKey(
-        const ColumnRawPtrs & key_columns,
-        size_t keys_size,
-        size_t i,
-        const Sizes &,
-        std::vector<String> & sort_key_containers) const
-    {
-        return hash128(i, keys_size, key_columns, collators, sort_key_containers);
-    }
-
-    static void onNewKey(Key &, Arena &) {}
-};
-
-
-
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -352,7 +197,7 @@ public:
         M(key_fixed_string)            \
         M(keys128)                     \
         M(keys256)                     \
-        M(hashed)
+        M(serialized)
 
     enum class Type
     {
@@ -375,9 +220,9 @@ public:
         std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>>                     key64;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_string;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>>                        key_fixed_string;
-        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>>                     keys128;
-        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>>                     keys256;
-        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, TrivialHash>>                   hashed;
+        std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>>                   keys128;
+        std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>>                   keys256;
+        std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>>                                     serialized;
     };
 
     using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;

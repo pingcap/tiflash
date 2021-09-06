@@ -20,20 +20,19 @@ namespace DB
 {
 namespace DM
 {
-
 using GenPageId = std::function<PageId()>;
 class DeltaValueSpace;
 class DeltaValueSnapshot;
 
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
-using DeltaSnapshotPtr   = std::shared_ptr<DeltaValueSnapshot>;
+using DeltaSnapshotPtr = std::shared_ptr<DeltaValueSnapshot>;
 
 class DeltaValueReader;
 using DeltaValueReaderPtr = std::shared_ptr<DeltaValueReader>;
 
-using DeltaIndexCompacted    = DefaultDeltaTree::CompactedEntries;
+using DeltaIndexCompacted = DefaultDeltaTree::CompactedEntries;
 using DeltaIndexCompactedPtr = DefaultDeltaTree::CompactedEntriesPtr;
-using DeltaIndexIterator     = DeltaIndexCompacted::Iterator;
+using DeltaIndexIterator = DeltaIndexCompacted::Iterator;
 
 struct DMContext;
 struct WriteBatches;
@@ -44,24 +43,30 @@ static std::atomic_uint64_t NEXT_PACK_ID{0};
 class BlockOrDelete
 {
 private:
-    Block  block;
+    Block block;
     size_t block_offset;
 
     RowKeyRange delete_range;
 
 public:
-    BlockOrDelete(Block && block_, size_t offset_) : block(block_), block_offset(offset_) {}
-    BlockOrDelete(const RowKeyRange & delete_range_) : delete_range(delete_range_) {}
+    BlockOrDelete(Block && block_, size_t offset_)
+        : block(block_)
+        , block_offset(offset_)
+    {}
+    BlockOrDelete(const RowKeyRange & delete_range_)
+        : delete_range(delete_range_)
+    {}
 
-    bool   isBlock() { return (bool)block; }
+    bool isBlock() { return (bool)block; }
     auto & getBlock() { return block; };
-    auto   getBlockOffset() { return block_offset; }
+    auto getBlockOffset() { return block_offset; }
     auto & getDeleteRange() { return delete_range; }
 };
 
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
-class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>, private boost::noncopyable
+class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>
+    , private boost::noncopyable
 {
     friend class DeltaValueSpaceSnapshot;
 
@@ -69,15 +74,15 @@ public:
     using Lock = std::unique_lock<std::mutex>;
 
 private:
-    PageId     id;
+    PageId id;
     DeltaPacks packs;
 
-    std::atomic<size_t> rows    = 0;
-    std::atomic<size_t> bytes   = 0;
+    std::atomic<size_t> rows = 0;
+    std::atomic<size_t> bytes = 0;
     std::atomic<size_t> deletes = 0;
 
-    std::atomic<size_t> unsaved_rows    = 0;
-    std::atomic<size_t> unsaved_bytes   = 0;
+    std::atomic<size_t> unsaved_rows = 0;
+    std::atomic<size_t> unsaved_bytes = 0;
     std::atomic<size_t> unsaved_deletes = 0;
 
     /// This instance has been abandoned. Like after merge delta, split/merge.
@@ -88,13 +93,13 @@ private:
     /// Note that those things can not be done at the same time.
     std::atomic_bool is_updating = false;
 
-    std::atomic<size_t> last_try_flush_rows             = 0;
-    std::atomic<size_t> last_try_flush_bytes            = 0;
-    std::atomic<size_t> last_try_compact_packs          = 0;
-    std::atomic<size_t> last_try_merge_delta_rows       = 0;
-    std::atomic<size_t> last_try_merge_delta_bytes      = 0;
-    std::atomic<size_t> last_try_split_rows             = 0;
-    std::atomic<size_t> last_try_split_bytes            = 0;
+    std::atomic<size_t> last_try_flush_rows = 0;
+    std::atomic<size_t> last_try_flush_bytes = 0;
+    std::atomic<size_t> last_try_compact_packs = 0;
+    std::atomic<size_t> last_try_merge_delta_rows = 0;
+    std::atomic<size_t> last_try_merge_delta_bytes = 0;
+    std::atomic<size_t> last_try_split_rows = 0;
+    std::atomic<size_t> last_try_split_bytes = 0;
     std::atomic<size_t> last_try_place_delta_index_rows = 0;
 
     DeltaIndexPtr delta_index;
@@ -102,7 +107,7 @@ private:
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
-    Logger * log;
+    Poco::Logger * log;
 
 private:
     BlockPtr lastSchema();
@@ -252,7 +257,8 @@ public:
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 };
 
-class DeltaValueSnapshot : public std::enable_shared_from_this<DeltaValueSnapshot>, private boost::noncopyable
+class DeltaValueSnapshot : public std::enable_shared_from_this<DeltaValueSnapshot>
+    , private boost::noncopyable
 {
     friend class DeltaValueSpace;
 
@@ -265,11 +271,11 @@ private:
     StorageSnapshotPtr storage_snap;
 
     DeltaPacks packs;
-    size_t     rows;
-    size_t     bytes;
-    size_t     deletes;
+    size_t rows;
+    size_t bytes;
+    size_t deletes;
 
-    bool   is_common_handle;
+    bool is_common_handle;
     size_t rowkey_column_size;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
@@ -283,15 +289,15 @@ public:
         if (unlikely(is_update))
             throw Exception("Should not call this method when is_update is true", ErrorCodes::LOGICAL_ERROR);
 
-        auto c                = std::make_shared<DeltaValueSnapshot>(type);
-        c->is_update          = is_update;
+        auto c = std::make_shared<DeltaValueSnapshot>(type);
+        c->is_update = is_update;
         c->shared_delta_index = shared_delta_index;
-        c->storage_snap       = storage_snap;
-        c->packs              = packs;
-        c->rows               = rows;
-        c->bytes              = bytes;
-        c->deletes            = deletes;
-        c->is_common_handle   = is_common_handle;
+        c->storage_snap = storage_snap;
+        c->packs = packs;
+        c->rows = rows;
+        c->bytes = bytes;
+        c->deletes = deletes;
+        c->is_common_handle = is_common_handle;
         c->rowkey_column_size = rowkey_column_size;
 
         c->_delta = _delta;
@@ -319,6 +325,8 @@ public:
     size_t getBytes() const { return bytes; }
     size_t getDeletes() const { return deletes; }
 
+    RowKeyRange getSquashDeleteRange() const;
+
     const auto & getStorageSnapshot() { return storage_snap; }
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
 };
@@ -335,7 +343,7 @@ private:
 
     // The columns expected to read. Note that we will do reading exactly in this column order.
     ColumnDefinesPtr col_defs;
-    RowKeyRange      segment_range;
+    RowKeyRange segment_range;
 
     // The row count of each pack. Cache here to speed up checking.
     std::vector<size_t> pack_rows;
@@ -350,10 +358,10 @@ private:
     Block readPKVersion(size_t offset, size_t limit);
 
 public:
-    DeltaValueReader(const DMContext &        context_,
+    DeltaValueReader(const DMContext & context_,
                      const DeltaSnapshotPtr & delta_snap_,
                      const ColumnDefinesPtr & col_defs_,
-                     const RowKeyRange &      segment_range_);
+                     const RowKeyRange & segment_range_);
 
     // If we need to read columns besides pk and version, a DeltaValueReader can NOT be used more than once.
     // This method create a new reader based on then current one. It will reuse some cachees in the current reader.
@@ -372,34 +380,36 @@ public:
     // We use the result to update DeltaTree.
     BlockOrDeletes getPlaceItems(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
 
-    bool shouldPlace(const DMContext &   context,
-                     DeltaIndexPtr       my_delta_index,
+    bool shouldPlace(const DMContext & context,
+                     DeltaIndexPtr my_delta_index,
                      const RowKeyRange & segment_range,
                      const RowKeyRange & relevant_range,
-                     UInt64              max_version);
+                     UInt64 max_version);
 };
 
 class DeltaValueInputStream : public IBlockInputStream
 {
 private:
     DeltaValueReader reader;
-    DeltaPacks &     packs;
-    size_t           pack_count;
+    DeltaPacks & packs;
+    size_t pack_count;
 
     DeltaPackReaderPtr cur_pack_reader = {};
-    size_t             next_pack_index = 0;
+    size_t next_pack_index = 0;
 
 public:
-    DeltaValueInputStream(const DMContext &        context_,
+    DeltaValueInputStream(const DMContext & context_,
                           const DeltaSnapshotPtr & delta_snap_,
                           const ColumnDefinesPtr & col_defs_,
-                          const RowKeyRange &      segment_range_)
-        : reader(context_, delta_snap_, col_defs_, segment_range_), packs(reader.delta_snap->getPacks()), pack_count(packs.size())
+                          const RowKeyRange & segment_range_)
+        : reader(context_, delta_snap_, col_defs_, segment_range_)
+        , packs(reader.delta_snap->getPacks())
+        , pack_count(packs.size())
     {
     }
 
     String getName() const override { return "DeltaValue"; }
-    Block  getHeader() const override { return toEmptyBlock(*(reader.col_defs)); }
+    Block getHeader() const override { return toEmptyBlock(*(reader.col_defs)); }
 
     Block read() override
     {

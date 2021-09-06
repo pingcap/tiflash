@@ -41,7 +41,9 @@ public:
     std::shared_ptr<T> prev;
 
 public:
-    explicit MultiVersionCountableForDelta() : prev(nullptr) {}
+    explicit MultiVersionCountableForDelta()
+        : prev(nullptr)
+    {}
 
     virtual ~MultiVersionCountableForDelta() = default;
 };
@@ -59,15 +61,17 @@ class VersionSetWithDelta
 {
 public:
     using EditAcceptor = TEditAcceptor;
-    using VersionType  = TVersion;
-    using VersionPtr   = std::shared_ptr<VersionType>;
+    using VersionType = TVersion;
+    using VersionPtr = std::shared_ptr<VersionType>;
 
 public:
     explicit VersionSetWithDelta(const DB::stable::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
-        : current(std::move(VersionType::createBase())),                   //
-          snapshots(std::move(std::make_shared<Snapshot>(this, nullptr))), //
-          config(config_),
-          log(log_)
+        : current(std::move(VersionType::createBase()))
+        , //
+        snapshots(std::move(std::make_shared<Snapshot>(this, nullptr)))
+        , //
+        config(config_)
+        , log(log_)
     {
     }
 
@@ -102,7 +106,7 @@ public:
             ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentDelta);
         }
         // Make a view from head to new version, then apply edits on `current`.
-        auto         view = std::make_shared<TVersionView>(current);
+        auto view = std::make_shared<TVersionView>(current);
         EditAcceptor builder(view.get(), /* ignore_invalid_ref_= */ true, log);
         builder.apply(edit);
     }
@@ -115,26 +119,26 @@ public:
     {
     public:
         VersionSetWithDelta * vset;
-        TVersionView          view;
+        TVersionView view;
 
         Snapshot * prev;
         Snapshot * next;
 
     public:
-        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this)
-        {
-            CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
-        }
+        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_)
+            : vset(vset_)
+            , view(std::move(tail_))
+            , prev(this)
+            , next(this)
+        {}
 
         ~Snapshot()
         {
             vset->compactOnDeltaRelease(view.transferTailVersionOwn());
             // Remove snapshot from linked list
             std::unique_lock lock = vset->acquireForLock();
-            prev->next            = next;
-            next->prev            = prev;
-
-            CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
+            prev->next = next;
+            next->prev = prev;
         }
 
         const TVersionView * version() const { return &view; }
@@ -154,10 +158,10 @@ public:
 
         auto s = std::make_shared<Snapshot>(this, current);
         // Register snapshot to VersionSet
-        s->prev               = snapshots->prev;
-        s->next               = snapshots.get();
+        s->prev = snapshots->prev;
+        s->next = snapshots.get();
         snapshots->prev->next = s.get();
-        snapshots->prev       = s.get();
+        snapshots->prev = s.get();
         return s;
     }
 
@@ -315,8 +319,8 @@ public:
 
     static std::string versionToDebugString(VersionPtr tail)
     {
-        std::string            s;
-        bool                   is_first = true;
+        std::string s;
+        bool is_first = true;
         std::stack<VersionPtr> deltas;
         for (auto v = tail; v != nullptr; v = std::atomic_load(&v->prev))
         {
@@ -337,11 +341,11 @@ public:
     }
 
 protected:
-    mutable std::shared_mutex          read_write_mutex;
-    VersionPtr                         current;
-    SnapshotPtr                        snapshots;
+    mutable std::shared_mutex read_write_mutex;
+    VersionPtr current;
+    SnapshotPtr snapshots;
     DB::stable::MVCC::VersionSetConfig config;
-    Poco::Logger *                     log;
+    Poco::Logger * log;
 };
 
 } // namespace MVCC

@@ -14,7 +14,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;
@@ -29,7 +28,10 @@ extern const int IP_ADDRESS_NOT_ALLOWED;
 
 const Int8 VAR_SIZE = 0;
 
-bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr); }
+bool isFunctionExpr(const tipb::Expr & expr)
+{
+    return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr);
+}
 
 const String & getAggFunctionName(const tipb::Expr & expr)
 {
@@ -76,64 +78,65 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     Field f;
     switch (expr.tp())
     {
-        case tipb::ExprType::Null:
-            return "NULL";
-        case tipb::ExprType::Int64:
-            return std::to_string(decodeDAGInt64(expr.val()));
-        case tipb::ExprType::Uint64:
-            return std::to_string(decodeDAGUInt64(expr.val()));
-        case tipb::ExprType::Float32:
-            return std::to_string(decodeDAGFloat32(expr.val()));
-        case tipb::ExprType::Float64:
-            return std::to_string(decodeDAGFloat64(expr.val()));
-        case tipb::ExprType::String:
-            return decodeDAGString(expr.val());
-        case tipb::ExprType::Bytes:
-            return decodeDAGBytes(expr.val());
-        case tipb::ExprType::MysqlDecimal:
+    case tipb::ExprType::Null:
+        return "NULL";
+    case tipb::ExprType::Int64:
+        return std::to_string(decodeDAGInt64(expr.val()));
+    case tipb::ExprType::Uint64:
+        return std::to_string(decodeDAGUInt64(expr.val()));
+    case tipb::ExprType::Float32:
+        return std::to_string(decodeDAGFloat32(expr.val()));
+    case tipb::ExprType::Float64:
+        return std::to_string(decodeDAGFloat64(expr.val()));
+    case tipb::ExprType::String:
+        return decodeDAGString(expr.val());
+    case tipb::ExprType::Bytes:
+        return decodeDAGBytes(expr.val());
+    case tipb::ExprType::MysqlDecimal:
+    {
+        auto field = decodeDAGDecimal(expr.val());
+        if (field.getType() == Field::Types::Decimal32)
+            return field.get<DecimalField<Decimal32>>().toString();
+        else if (field.getType() == Field::Types::Decimal64)
+            return field.get<DecimalField<Decimal64>>().toString();
+        else if (field.getType() == Field::Types::Decimal128)
+            return field.get<DecimalField<Decimal128>>().toString();
+        else if (field.getType() == Field::Types::Decimal256)
+            return field.get<DecimalField<Decimal256>>().toString();
+        else
+            throw TiFlashException("Not decimal literal" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+    }
+    case tipb::ExprType::MysqlTime:
+    {
+        if (!expr.has_field_type())
+            throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+        auto t = decodeDAGUInt64(expr.val());
+        auto ret = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<UInt64>());
+        if (expr.field_type().tp() == TiDB::TypeTimestamp)
+            ret = ret + "_ts";
+        return ret;
+    }
+    case tipb::ExprType::ColumnRef:
+        return getColumnNameForColumnExpr(expr, input_col);
+    case tipb::ExprType::Count:
+    case tipb::ExprType::Sum:
+    case tipb::ExprType::Avg:
+    case tipb::ExprType::Min:
+    case tipb::ExprType::Max:
+    case tipb::ExprType::First:
+    case tipb::ExprType::ApproxCountDistinct:
+    case tipb::ExprType::GroupConcat:
+        func_name = getAggFunctionName(expr);
+        break;
+    case tipb::ExprType::ScalarFunc:
+        if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
         {
-            auto field = decodeDAGDecimal(expr.val());
-            if (field.getType() == Field::Types::Decimal32)
-                return field.get<DecimalField<Decimal32>>().toString();
-            else if (field.getType() == Field::Types::Decimal64)
-                return field.get<DecimalField<Decimal64>>().toString();
-            else if (field.getType() == Field::Types::Decimal128)
-                return field.get<DecimalField<Decimal128>>().toString();
-            else if (field.getType() == Field::Types::Decimal256)
-                return field.get<DecimalField<Decimal256>>().toString();
-            else
-                throw TiFlashException("Not decimal literal" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " not supported", Errors::Coprocessor::Unimplemented);
         }
-        case tipb::ExprType::MysqlTime:
-        {
-            if (!expr.has_field_type())
-                throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
-            auto t = decodeDAGUInt64(expr.val());
-            auto ret = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<UInt64>());
-            if (expr.field_type().tp() == TiDB::TypeTimestamp)
-                ret = ret + "_ts";
-            return ret;
-        }
-        case tipb::ExprType::ColumnRef:
-            return getColumnNameForColumnExpr(expr, input_col);
-        case tipb::ExprType::Count:
-        case tipb::ExprType::Sum:
-        case tipb::ExprType::Avg:
-        case tipb::ExprType::Min:
-        case tipb::ExprType::Max:
-        case tipb::ExprType::First:
-        case tipb::ExprType::ApproxCountDistinct:
-            func_name = getAggFunctionName(expr);
-            break;
-        case tipb::ExprType::ScalarFunc:
-            if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
-            {
-                throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " not supported", Errors::Coprocessor::Unimplemented);
-            }
-            func_name = scalar_func_map.find(expr.sig())->second;
-            break;
-        default:
-            throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " not supported", Errors::Coprocessor::Unimplemented);
+        func_name = scalar_func_map.find(expr.sig())->second;
+        break;
+    default:
+        throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " not supported", Errors::Coprocessor::Unimplemented);
     }
     // build function expr
     if (functionIsInOrGlobalInOperator(func_name))
@@ -170,35 +173,38 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     return ss.str();
 }
 
-const String & getTypeName(const tipb::Expr & expr) { return tipb::ExprType_Name(expr.tp()); }
+const String & getTypeName(const tipb::Expr & expr)
+{
+    return tipb::ExprType_Name(expr.tp());
+}
 
 bool isAggFunctionExpr(const tipb::Expr & expr)
 {
     switch (expr.tp())
     {
-        case tipb::ExprType::Count:
-        case tipb::ExprType::Sum:
-        case tipb::ExprType::Avg:
-        case tipb::ExprType::Min:
-        case tipb::ExprType::Max:
-        case tipb::ExprType::First:
-        case tipb::ExprType::GroupConcat:
-        case tipb::ExprType::Agg_BitAnd:
-        case tipb::ExprType::Agg_BitOr:
-        case tipb::ExprType::Agg_BitXor:
-        case tipb::ExprType::Std:
-        case tipb::ExprType::Stddev:
-        case tipb::ExprType::StddevPop:
-        case tipb::ExprType::StddevSamp:
-        case tipb::ExprType::VarPop:
-        case tipb::ExprType::VarSamp:
-        case tipb::ExprType::Variance:
-        case tipb::ExprType::JsonArrayAgg:
-        case tipb::ExprType::JsonObjectAgg:
-        case tipb::ExprType::ApproxCountDistinct:
-            return true;
-        default:
-            return false;
+    case tipb::ExprType::Count:
+    case tipb::ExprType::Sum:
+    case tipb::ExprType::Avg:
+    case tipb::ExprType::Min:
+    case tipb::ExprType::Max:
+    case tipb::ExprType::First:
+    case tipb::ExprType::GroupConcat:
+    case tipb::ExprType::Agg_BitAnd:
+    case tipb::ExprType::Agg_BitOr:
+    case tipb::ExprType::Agg_BitXor:
+    case tipb::ExprType::Std:
+    case tipb::ExprType::Stddev:
+    case tipb::ExprType::StddevPop:
+    case tipb::ExprType::StddevSamp:
+    case tipb::ExprType::VarPop:
+    case tipb::ExprType::VarSamp:
+    case tipb::ExprType::Variance:
+    case tipb::ExprType::JsonArrayAgg:
+    case tipb::ExprType::JsonObjectAgg:
+    case tipb::ExprType::ApproxCountDistinct:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -206,67 +212,70 @@ bool isLiteralExpr(const tipb::Expr & expr)
 {
     switch (expr.tp())
     {
-        case tipb::ExprType::Null:
-        case tipb::ExprType::Int64:
-        case tipb::ExprType::Uint64:
-        case tipb::ExprType::Float32:
-        case tipb::ExprType::Float64:
-        case tipb::ExprType::String:
-        case tipb::ExprType::Bytes:
-        case tipb::ExprType::MysqlBit:
-        case tipb::ExprType::MysqlDecimal:
-        case tipb::ExprType::MysqlDuration:
-        case tipb::ExprType::MysqlEnum:
-        case tipb::ExprType::MysqlHex:
-        case tipb::ExprType::MysqlSet:
-        case tipb::ExprType::MysqlTime:
-        case tipb::ExprType::MysqlJson:
-        case tipb::ExprType::ValueList:
-            return true;
-        default:
-            return false;
+    case tipb::ExprType::Null:
+    case tipb::ExprType::Int64:
+    case tipb::ExprType::Uint64:
+    case tipb::ExprType::Float32:
+    case tipb::ExprType::Float64:
+    case tipb::ExprType::String:
+    case tipb::ExprType::Bytes:
+    case tipb::ExprType::MysqlBit:
+    case tipb::ExprType::MysqlDecimal:
+    case tipb::ExprType::MysqlDuration:
+    case tipb::ExprType::MysqlEnum:
+    case tipb::ExprType::MysqlHex:
+    case tipb::ExprType::MysqlSet:
+    case tipb::ExprType::MysqlTime:
+    case tipb::ExprType::MysqlJson:
+    case tipb::ExprType::ValueList:
+        return true;
+    default:
+        return false;
     }
 }
 
-bool isColumnExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::ColumnRef; }
+bool isColumnExpr(const tipb::Expr & expr)
+{
+    return expr.tp() == tipb::ExprType::ColumnRef;
+}
 
 Field decodeLiteral(const tipb::Expr & expr)
 {
     switch (expr.tp())
     {
-        case tipb::ExprType::Null:
-            return Field();
-        case tipb::ExprType::Int64:
-            return decodeDAGInt64(expr.val());
-        case tipb::ExprType::Uint64:
-            return decodeDAGUInt64(expr.val());
-        case tipb::ExprType::Float32:
-            return Float64(decodeDAGFloat32(expr.val()));
-        case tipb::ExprType::Float64:
-            return decodeDAGFloat64(expr.val());
-        case tipb::ExprType::String:
-            return decodeDAGString(expr.val());
-        case tipb::ExprType::Bytes:
-            return decodeDAGBytes(expr.val());
-        case tipb::ExprType::MysqlDecimal:
-            return decodeDAGDecimal(expr.val());
-        case tipb::ExprType::MysqlTime:
-        {
-            if (!expr.has_field_type())
-                throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
-            auto t = decodeDAGUInt64(expr.val());
-            return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
-        }
-        case tipb::ExprType::MysqlBit:
-        case tipb::ExprType::MysqlDuration:
-        case tipb::ExprType::MysqlEnum:
-        case tipb::ExprType::MysqlHex:
-        case tipb::ExprType::MysqlSet:
-        case tipb::ExprType::MysqlJson:
-        case tipb::ExprType::ValueList:
-            throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported yet", Errors::Coprocessor::Unimplemented);
-        default:
-            throw TiFlashException("Should not reach here: not a literal expression", Errors::Coprocessor::Internal);
+    case tipb::ExprType::Null:
+        return Field();
+    case tipb::ExprType::Int64:
+        return decodeDAGInt64(expr.val());
+    case tipb::ExprType::Uint64:
+        return decodeDAGUInt64(expr.val());
+    case tipb::ExprType::Float32:
+        return Float64(decodeDAGFloat32(expr.val()));
+    case tipb::ExprType::Float64:
+        return decodeDAGFloat64(expr.val());
+    case tipb::ExprType::String:
+        return decodeDAGString(expr.val());
+    case tipb::ExprType::Bytes:
+        return decodeDAGBytes(expr.val());
+    case tipb::ExprType::MysqlDecimal:
+        return decodeDAGDecimal(expr.val());
+    case tipb::ExprType::MysqlTime:
+    {
+        if (!expr.has_field_type())
+            throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+        auto t = decodeDAGUInt64(expr.val());
+        return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
+    }
+    case tipb::ExprType::MysqlBit:
+    case tipb::ExprType::MysqlDuration:
+    case tipb::ExprType::MysqlEnum:
+    case tipb::ExprType::MysqlHex:
+    case tipb::ExprType::MysqlSet:
+    case tipb::ExprType::MysqlJson:
+    case tipb::ExprType::ValueList:
+        throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported yet", Errors::Coprocessor::Unimplemented);
+    default:
+        throw TiFlashException("Should not reach here: not a literal expression", Errors::Coprocessor::Internal);
     }
 }
 
@@ -289,7 +298,7 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type()
         && !((expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1)
-            || (expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().flen() == 0));
+             || (expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().flen() == 0));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
@@ -364,37 +373,37 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
 {
     switch (tp)
     {
-        case TiDB::TypeTiny:
-        case TiDB::TypeShort:
-        case TiDB::TypeInt24:
-        case TiDB::TypeLong:
-        case TiDB::TypeLongLong:
-        case TiDB::TypeYear:
-        case TiDB::TypeDouble:
-        case TiDB::TypeTime:
-        case TiDB::TypeDate:
-        case TiDB::TypeDatetime:
-        case TiDB::TypeNewDate:
-        case TiDB::TypeTimestamp:
-            return 8;
-        case TiDB::TypeFloat:
-            return 4;
-        case TiDB::TypeDecimal:
-        case TiDB::TypeNewDecimal:
-            return 40;
-        case TiDB::TypeVarchar:
-        case TiDB::TypeVarString:
-        case TiDB::TypeString:
-        case TiDB::TypeBlob:
-        case TiDB::TypeTinyBlob:
-        case TiDB::TypeMediumBlob:
-        case TiDB::TypeLongBlob:
-        case TiDB::TypeBit:
-        case TiDB::TypeEnum:
-        case TiDB::TypeJSON:
-            return VAR_SIZE;
-        default:
-            throw TiFlashException("not supported field type in arrow encode: " + std::to_string(tp), Errors::Coprocessor::Internal);
+    case TiDB::TypeTiny:
+    case TiDB::TypeShort:
+    case TiDB::TypeInt24:
+    case TiDB::TypeLong:
+    case TiDB::TypeLongLong:
+    case TiDB::TypeYear:
+    case TiDB::TypeDouble:
+    case TiDB::TypeTime:
+    case TiDB::TypeDate:
+    case TiDB::TypeDatetime:
+    case TiDB::TypeNewDate:
+    case TiDB::TypeTimestamp:
+        return 8;
+    case TiDB::TypeFloat:
+        return 4;
+    case TiDB::TypeDecimal:
+    case TiDB::TypeNewDecimal:
+        return 40;
+    case TiDB::TypeVarchar:
+    case TiDB::TypeVarString:
+    case TiDB::TypeString:
+    case TiDB::TypeBlob:
+    case TiDB::TypeTinyBlob:
+    case TiDB::TypeMediumBlob:
+    case TiDB::TypeLongBlob:
+    case TiDB::TypeBit:
+    case TiDB::TypeEnum:
+    case TiDB::TypeJSON:
+        return VAR_SIZE;
+    default:
+        throw TiFlashException("not supported field type in arrow encode: " + std::to_string(tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -410,9 +419,9 @@ void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value)
 void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
 {
     expr.set_tp(tipb::ExprType::Int64);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeDAGInt64(value, ss);
-    expr.set_val(ss.str());
+    expr.set_val(ss.releaseStr());
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeLongLong);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
@@ -421,9 +430,9 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value)
 {
     expr.set_tp(tipb::ExprType::MysqlTime);
-    std::stringstream ss;
+    WriteBufferFromOwnString ss;
     encodeDAGUInt64(packed_value, ss);
-    expr.set_val(ss.str());
+    expr.set_val(ss.releaseStr());
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeDatetime);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
@@ -443,14 +452,36 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr
     return nullptr;
 }
 
-std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromFieldType(const tipb::FieldType & field_type)
+SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns, const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items)
+{
+    SortDescription order_descr;
+    order_descr.reserve(by_items.size());
+    for (int i = 0; i < by_items.size(); i++)
+    {
+        const auto & name = order_columns[i].name;
+        int direction = by_items[i].desc() ? -1 : 1;
+        // MySQL/TiDB treats NULL as "minimum".
+        int nulls_direction = -1;
+        std::shared_ptr<ICollator> collator = nullptr;
+        if (removeNullable(order_columns[i].type)->isString())
+            collator = getCollatorFromExpr(by_items[i].expr());
+
+        order_descr.emplace_back(name, direction, nulls_direction, collator);
+    }
+    return order_descr;
+}
+
+TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)
 {
     if (field_type.collate() < 0)
         return TiDB::ITiDBCollator::getCollator(-field_type.collate());
     return nullptr;
 }
 
-bool hasUnsignedFlag(const tipb::FieldType & tp) { return tp.flag() & TiDB::ColumnFlagUnsigned; }
+bool hasUnsignedFlag(const tipb::FieldType & tp)
+{
+    return tp.flag() & TiDB::ColumnFlagUnsigned;
+}
 
 grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
 {
@@ -468,7 +499,7 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
     size_t columns = expected_types.size();
     if (block.columns() != columns)
         throw Exception("Block schema mismatch in " + context_description + ": different number of columns: expected "
-            + std::to_string(columns) + " columns, got " + std::to_string(block.columns()) + " columns");
+                        + std::to_string(columns) + " columns, got " + std::to_string(block.columns()) + " columns");
 
     for (size_t i = 0; i < columns; ++i)
     {
@@ -478,7 +509,7 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
         if (!expected->equals(*actual))
         {
             throw Exception("Block schema mismatch in " + context_description + ": different types: expected " + expected->getName()
-                + ", got " + actual->getName());
+                            + ", got " + actual->getName());
         }
     }
 }
@@ -486,10 +517,14 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
 extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
-    {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
-    {tipb::ExprType::First, "first_row"}, {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::Count, "count"},
+    {tipb::ExprType::Sum, "sum"},
+    {tipb::ExprType::Min, "min"},
+    {tipb::ExprType::Max, "max"},
+    {tipb::ExprType::First, "first_row"},
+    {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::GroupConcat, "groupArray"},
     //{tipb::ExprType::Avg, ""},
-    //{tipb::ExprType::GroupConcat, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},
@@ -506,37 +541,46 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
 
 std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
     {tipb::ExprType::Count, "countDistinct"},
+    {tipb::ExprType::GroupConcat, "groupUniqArray"},
 });
 
 std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
-    {tipb::ScalarFuncSig::CastIntAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastIntAsReal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastIntAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastIntAsDecimal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastIntAsInt, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastIntAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastIntAsString, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastIntAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastIntAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastRealAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastRealAsReal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastRealAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastRealAsInt, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastRealAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastRealAsString, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastRealAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastDecimalAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsReal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsString, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastDecimalAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"}, {tipb::ScalarFuncSig::CastStringAsReal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastStringAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastStringAsInt, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastStringAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastStringAsString, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastStringAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastStringAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastTimeAsInt, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"}, {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
@@ -557,46 +601,76 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastJsonAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastJsonAsJson, "cast"},
 
-    {tipb::ScalarFuncSig::CoalesceInt, "coalesce"}, {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceString, "coalesce"}, {tipb::ScalarFuncSig::CoalesceDecimal, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceTime, "coalesce"}, {tipb::ScalarFuncSig::CoalesceDuration, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceInt, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceString, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceDecimal, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceTime, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceDuration, "coalesce"},
     {tipb::ScalarFuncSig::CoalesceJson, "coalesce"},
 
-    {tipb::ScalarFuncSig::LTInt, "less"}, {tipb::ScalarFuncSig::LTReal, "less"}, {tipb::ScalarFuncSig::LTString, "less"},
-    {tipb::ScalarFuncSig::LTDecimal, "less"}, {tipb::ScalarFuncSig::LTTime, "less"}, {tipb::ScalarFuncSig::LTDuration, "less"},
+    {tipb::ScalarFuncSig::LTInt, "less"},
+    {tipb::ScalarFuncSig::LTReal, "less"},
+    {tipb::ScalarFuncSig::LTString, "less"},
+    {tipb::ScalarFuncSig::LTDecimal, "less"},
+    {tipb::ScalarFuncSig::LTTime, "less"},
+    {tipb::ScalarFuncSig::LTDuration, "less"},
     {tipb::ScalarFuncSig::LTJson, "less"},
 
-    {tipb::ScalarFuncSig::LEInt, "lessOrEquals"}, {tipb::ScalarFuncSig::LEReal, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LEString, "lessOrEquals"}, {tipb::ScalarFuncSig::LEDecimal, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LETime, "lessOrEquals"}, {tipb::ScalarFuncSig::LEDuration, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LEInt, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LEReal, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LEString, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LEDecimal, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LETime, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LEDuration, "lessOrEquals"},
     {tipb::ScalarFuncSig::LEJson, "lessOrEquals"},
 
-    {tipb::ScalarFuncSig::GTInt, "greater"}, {tipb::ScalarFuncSig::GTReal, "greater"}, {tipb::ScalarFuncSig::GTString, "greater"},
-    {tipb::ScalarFuncSig::GTDecimal, "greater"}, {tipb::ScalarFuncSig::GTTime, "greater"}, {tipb::ScalarFuncSig::GTDuration, "greater"},
+    {tipb::ScalarFuncSig::GTInt, "greater"},
+    {tipb::ScalarFuncSig::GTReal, "greater"},
+    {tipb::ScalarFuncSig::GTString, "greater"},
+    {tipb::ScalarFuncSig::GTDecimal, "greater"},
+    {tipb::ScalarFuncSig::GTTime, "greater"},
+    {tipb::ScalarFuncSig::GTDuration, "greater"},
     {tipb::ScalarFuncSig::GTJson, "greater"},
 
-    {tipb::ScalarFuncSig::GreatestInt, "greatest"}, {tipb::ScalarFuncSig::GreatestReal, "greatest"},
-    {tipb::ScalarFuncSig::GreatestString, "greatest"}, {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
+    {tipb::ScalarFuncSig::GreatestInt, "greatest"},
+    {tipb::ScalarFuncSig::GreatestReal, "greatest"},
+    {tipb::ScalarFuncSig::GreatestString, "greatest"},
+    {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
     {tipb::ScalarFuncSig::GreatestTime, "greatest"},
 
-    {tipb::ScalarFuncSig::LeastInt, "least"}, {tipb::ScalarFuncSig::LeastReal, "least"}, {tipb::ScalarFuncSig::LeastString, "least"},
-    {tipb::ScalarFuncSig::LeastDecimal, "least"}, {tipb::ScalarFuncSig::LeastTime, "least"},
+    {tipb::ScalarFuncSig::LeastInt, "least"},
+    {tipb::ScalarFuncSig::LeastReal, "least"},
+    {tipb::ScalarFuncSig::LeastString, "least"},
+    {tipb::ScalarFuncSig::LeastDecimal, "least"},
+    {tipb::ScalarFuncSig::LeastTime, "least"},
 
     //{tipb::ScalarFuncSig::IntervalInt, "cast"},
     //{tipb::ScalarFuncSig::IntervalReal, "cast"},
 
-    {tipb::ScalarFuncSig::GEInt, "greaterOrEquals"}, {tipb::ScalarFuncSig::GEReal, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GEString, "greaterOrEquals"}, {tipb::ScalarFuncSig::GEDecimal, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GETime, "greaterOrEquals"}, {tipb::ScalarFuncSig::GEDuration, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GEInt, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GEReal, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GEString, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GEDecimal, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GETime, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GEDuration, "greaterOrEquals"},
     {tipb::ScalarFuncSig::GEJson, "greaterOrEquals"},
 
-    {tipb::ScalarFuncSig::EQInt, "equals"}, {tipb::ScalarFuncSig::EQReal, "equals"}, {tipb::ScalarFuncSig::EQString, "equals"},
-    {tipb::ScalarFuncSig::EQDecimal, "equals"}, {tipb::ScalarFuncSig::EQTime, "equals"}, {tipb::ScalarFuncSig::EQDuration, "equals"},
+    {tipb::ScalarFuncSig::EQInt, "equals"},
+    {tipb::ScalarFuncSig::EQReal, "equals"},
+    {tipb::ScalarFuncSig::EQString, "equals"},
+    {tipb::ScalarFuncSig::EQDecimal, "equals"},
+    {tipb::ScalarFuncSig::EQTime, "equals"},
+    {tipb::ScalarFuncSig::EQDuration, "equals"},
     {tipb::ScalarFuncSig::EQJson, "equals"},
 
-    {tipb::ScalarFuncSig::NEInt, "notEquals"}, {tipb::ScalarFuncSig::NEReal, "notEquals"}, {tipb::ScalarFuncSig::NEString, "notEquals"},
-    {tipb::ScalarFuncSig::NEDecimal, "notEquals"}, {tipb::ScalarFuncSig::NETime, "notEquals"},
-    {tipb::ScalarFuncSig::NEDuration, "notEquals"}, {tipb::ScalarFuncSig::NEJson, "notEquals"},
+    {tipb::ScalarFuncSig::NEInt, "notEquals"},
+    {tipb::ScalarFuncSig::NEReal, "notEquals"},
+    {tipb::ScalarFuncSig::NEString, "notEquals"},
+    {tipb::ScalarFuncSig::NEDecimal, "notEquals"},
+    {tipb::ScalarFuncSig::NETime, "notEquals"},
+    {tipb::ScalarFuncSig::NEDuration, "notEquals"},
+    {tipb::ScalarFuncSig::NEJson, "notEquals"},
 
     //{tipb::ScalarFuncSig::NullEQInt, "cast"},
     //{tipb::ScalarFuncSig::NullEQReal, "cast"},
@@ -606,75 +680,118 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::NullEQDuration, "cast"},
     //{tipb::ScalarFuncSig::NullEQJson, "cast"},
 
-    {tipb::ScalarFuncSig::PlusReal, "plus"}, {tipb::ScalarFuncSig::PlusDecimal, "plus"}, {tipb::ScalarFuncSig::PlusInt, "plus"},
+    {tipb::ScalarFuncSig::PlusReal, "plus"},
+    {tipb::ScalarFuncSig::PlusDecimal, "plus"},
+    {tipb::ScalarFuncSig::PlusInt, "plus"},
 
-    {tipb::ScalarFuncSig::MinusReal, "minus"}, {tipb::ScalarFuncSig::MinusDecimal, "minus"}, {tipb::ScalarFuncSig::MinusInt, "minus"},
+    {tipb::ScalarFuncSig::MinusReal, "minus"},
+    {tipb::ScalarFuncSig::MinusDecimal, "minus"},
+    {tipb::ScalarFuncSig::MinusInt, "minus"},
 
-    {tipb::ScalarFuncSig::MultiplyReal, "multiply"}, {tipb::ScalarFuncSig::MultiplyDecimal, "multiply"},
+    {tipb::ScalarFuncSig::MultiplyReal, "multiply"},
+    {tipb::ScalarFuncSig::MultiplyDecimal, "multiply"},
     {tipb::ScalarFuncSig::MultiplyInt, "multiply"},
 
-    {tipb::ScalarFuncSig::DivideReal, "tidbDivide"}, {tipb::ScalarFuncSig::DivideDecimal, "tidbDivide"},
+    {tipb::ScalarFuncSig::DivideReal, "tidbDivide"},
+    {tipb::ScalarFuncSig::DivideDecimal, "tidbDivide"},
     //{tipb::ScalarFuncSig::IntDivideInt, "intDiv"},
     //{tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
 
-    {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
+    {tipb::ScalarFuncSig::ModReal, "modulo"},
+    {tipb::ScalarFuncSig::ModDecimal, "modulo"},
+    {tipb::ScalarFuncSig::ModIntUnsignedUnsigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntUnsignedSigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntSignedUnsigned, "modulo"},
+    {tipb::ScalarFuncSig::ModIntSignedSigned, "modulo"},
 
-    {tipb::ScalarFuncSig::MultiplyIntUnsigned, "multiply"}, {tipb::ScalarFuncSig::MinusIntUnsignedUnsigned, "minus"},
-    {tipb::ScalarFuncSig::MinusIntUnsignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntSignedUnsigned, "minus"},
-    {tipb::ScalarFuncSig::MinusIntSignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntForcedUnsignedUnsigned, "minus"},
-    {tipb::ScalarFuncSig::MinusIntForcedUnsignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntForcedSignedUnsigned, "minus"},
-    {tipb::ScalarFuncSig::IntDivideIntUnsignedUnsigned, "intDiv"}, {tipb::ScalarFuncSig::IntDivideIntUnsignedSigned, "intDiv"},
-    {tipb::ScalarFuncSig::IntDivideIntSignedUnsigned, "intDiv"}, {tipb::ScalarFuncSig::IntDivideIntSignedSigned, "intDiv"},
+    {tipb::ScalarFuncSig::MultiplyIntUnsigned, "multiply"},
+    {tipb::ScalarFuncSig::MinusIntUnsignedUnsigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntUnsignedSigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntSignedUnsigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntSignedSigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntForcedUnsignedUnsigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntForcedUnsignedSigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntForcedSignedUnsigned, "minus"},
+    {tipb::ScalarFuncSig::IntDivideIntUnsignedUnsigned, "intDiv"},
+    {tipb::ScalarFuncSig::IntDivideIntUnsignedSigned, "intDiv"},
+    {tipb::ScalarFuncSig::IntDivideIntSignedUnsigned, "intDiv"},
+    {tipb::ScalarFuncSig::IntDivideIntSignedSigned, "intDiv"},
 
-    {tipb::ScalarFuncSig::AbsInt, "abs"}, {tipb::ScalarFuncSig::AbsUInt, "abs"}, {tipb::ScalarFuncSig::AbsReal, "abs"},
+    {tipb::ScalarFuncSig::AbsInt, "abs"},
+    {tipb::ScalarFuncSig::AbsUInt, "abs"},
+    {tipb::ScalarFuncSig::AbsReal, "abs"},
     {tipb::ScalarFuncSig::AbsDecimal, "abs"},
 
-    {tipb::ScalarFuncSig::CeilIntToDec, "ceil"}, {tipb::ScalarFuncSig::CeilIntToInt, "ceil"}, {tipb::ScalarFuncSig::CeilDecToInt, "ceilDecimalToInt"},
-    {tipb::ScalarFuncSig::CeilDecToDec, "ceil"}, {tipb::ScalarFuncSig::CeilReal, "ceil"},
+    {tipb::ScalarFuncSig::CeilIntToDec, "ceil"},
+    {tipb::ScalarFuncSig::CeilIntToInt, "ceil"},
+    {tipb::ScalarFuncSig::CeilDecToInt, "ceilDecimalToInt"},
+    {tipb::ScalarFuncSig::CeilDecToDec, "ceil"},
+    {tipb::ScalarFuncSig::CeilReal, "ceil"},
 
-    {tipb::ScalarFuncSig::FloorIntToDec, "floor"}, {tipb::ScalarFuncSig::FloorIntToInt, "floor"},
-    {tipb::ScalarFuncSig::FloorDecToInt, "floorDecimalToInt"}, {tipb::ScalarFuncSig::FloorDecToDec, "floor"}, {tipb::ScalarFuncSig::FloorReal, "floor"},
+    {tipb::ScalarFuncSig::FloorIntToDec, "floor"},
+    {tipb::ScalarFuncSig::FloorIntToInt, "floor"},
+    {tipb::ScalarFuncSig::FloorDecToInt, "floorDecimalToInt"},
+    {tipb::ScalarFuncSig::FloorDecToDec, "floor"},
+    {tipb::ScalarFuncSig::FloorReal, "floor"},
 
-    {tipb::ScalarFuncSig::RoundReal, "round"}, {tipb::ScalarFuncSig::RoundInt, "round"}, {tipb::ScalarFuncSig::RoundDec, "round"},
-    //{tipb::ScalarFuncSig::RoundWithFracReal, "cast"},
-    //{tipb::ScalarFuncSig::RoundWithFracInt, "cast"},
-    //{tipb::ScalarFuncSig::RoundWithFracDec, "cast"},
+    {tipb::ScalarFuncSig::RoundReal, "tidbRound"},
+    {tipb::ScalarFuncSig::RoundInt, "tidbRound"},
+    {tipb::ScalarFuncSig::RoundDec, "tidbRound"},
+    {tipb::ScalarFuncSig::RoundWithFracReal, "tidbRoundWithFrac"},
+    {tipb::ScalarFuncSig::RoundWithFracInt, "tidbRoundWithFrac"},
+    {tipb::ScalarFuncSig::RoundWithFracDec, "tidbRoundWithFrac"},
 
     {tipb::ScalarFuncSig::Log1Arg, "log"},
-    //{tipb::ScalarFuncSig::Log2Args, "cast"},
-    {tipb::ScalarFuncSig::Log2, "log2"}, {tipb::ScalarFuncSig::Log10, "log10"},
+    {tipb::ScalarFuncSig::Log2Args, "log2args"},
+    {tipb::ScalarFuncSig::Log2, "log2"},
+    {tipb::ScalarFuncSig::Log10, "log10"},
 
     {tipb::ScalarFuncSig::Rand, "rand"},
     //{tipb::ScalarFuncSig::RandWithSeedFirstGen, "cast"},
 
     {tipb::ScalarFuncSig::Pow, "pow"},
-    //{tipb::ScalarFuncSig::Conv, "cast"},
-    //{tipb::ScalarFuncSig::CRC32, "cast"},
-    //{tipb::ScalarFuncSig::Sign, "cast"},
+    {tipb::ScalarFuncSig::Conv, "conv"},
+    {tipb::ScalarFuncSig::CRC32, "crc32"},
+    {tipb::ScalarFuncSig::Sign, "sign"},
 
-    {tipb::ScalarFuncSig::Sqrt, "sqrt"}, {tipb::ScalarFuncSig::Acos, "acos"}, {tipb::ScalarFuncSig::Asin, "asin"},
+    {tipb::ScalarFuncSig::Sqrt, "sqrt"},
+    {tipb::ScalarFuncSig::Acos, "acos"},
+    {tipb::ScalarFuncSig::Asin, "asin"},
     {tipb::ScalarFuncSig::Atan1Arg, "atan"},
     //{tipb::ScalarFuncSig::Atan2Args, "cast"},
     {tipb::ScalarFuncSig::Cos, "cos"},
     //{tipb::ScalarFuncSig::Cot, "cast"},
-    //{tipb::ScalarFuncSig::Degrees, "cast"},
+    {tipb::ScalarFuncSig::Degrees, "degrees"},
     {tipb::ScalarFuncSig::Exp, "exp"},
     //{tipb::ScalarFuncSig::PI, "cast"},
-    //{tipb::ScalarFuncSig::Radians, "cast"},
-    {tipb::ScalarFuncSig::Sin, "sin"}, {tipb::ScalarFuncSig::Tan, "tan"}, {tipb::ScalarFuncSig::TruncateInt, "trunc"},
+    {tipb::ScalarFuncSig::Radians, "radians"},
+    {tipb::ScalarFuncSig::Sin, "sin"},
+    {tipb::ScalarFuncSig::Tan, "tan"},
+    {tipb::ScalarFuncSig::TruncateInt, "trunc"},
     {tipb::ScalarFuncSig::TruncateReal, "trunc"},
     //{tipb::ScalarFuncSig::TruncateDecimal, "cast"},
     {tipb::ScalarFuncSig::TruncateUint, "trunc"},
 
-    {tipb::ScalarFuncSig::LogicalAnd, "and"}, {tipb::ScalarFuncSig::LogicalOr, "or"}, {tipb::ScalarFuncSig::LogicalXor, "xor"},
-    {tipb::ScalarFuncSig::UnaryNotDecimal, "not"}, {tipb::ScalarFuncSig::UnaryNotInt, "not"}, {tipb::ScalarFuncSig::UnaryNotReal, "not"},
-    {tipb::ScalarFuncSig::UnaryMinusInt, "negate"}, {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
-    {tipb::ScalarFuncSig::UnaryMinusDecimal, "negate"}, {tipb::ScalarFuncSig::DecimalIsNull, "isNull"},
-    {tipb::ScalarFuncSig::DurationIsNull, "isNull"}, {tipb::ScalarFuncSig::RealIsNull, "isNull"},
-    {tipb::ScalarFuncSig::StringIsNull, "isNull"}, {tipb::ScalarFuncSig::TimeIsNull, "isNull"}, {tipb::ScalarFuncSig::IntIsNull, "isNull"},
+    {tipb::ScalarFuncSig::LogicalAnd, "and"},
+    {tipb::ScalarFuncSig::LogicalOr, "or"},
+    {tipb::ScalarFuncSig::LogicalXor, "xor"},
+    {tipb::ScalarFuncSig::UnaryNotDecimal, "not"},
+    {tipb::ScalarFuncSig::UnaryNotInt, "not"},
+    {tipb::ScalarFuncSig::UnaryNotReal, "not"},
+    {tipb::ScalarFuncSig::UnaryMinusInt, "negate"},
+    {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
+    {tipb::ScalarFuncSig::UnaryMinusDecimal, "negate"},
+    {tipb::ScalarFuncSig::DecimalIsNull, "isNull"},
+    {tipb::ScalarFuncSig::DurationIsNull, "isNull"},
+    {tipb::ScalarFuncSig::RealIsNull, "isNull"},
+    {tipb::ScalarFuncSig::StringIsNull, "isNull"},
+    {tipb::ScalarFuncSig::TimeIsNull, "isNull"},
+    {tipb::ScalarFuncSig::IntIsNull, "isNull"},
     {tipb::ScalarFuncSig::JsonIsNull, "isNull"},
 
-    {tipb::ScalarFuncSig::BitAndSig, "bitAnd"}, {tipb::ScalarFuncSig::BitOrSig, "bitOr"}, {tipb::ScalarFuncSig::BitXorSig, "bitXor"},
+    {tipb::ScalarFuncSig::BitAndSig, "bitAnd"},
+    {tipb::ScalarFuncSig::BitOrSig, "bitOr"},
+    {tipb::ScalarFuncSig::BitXorSig, "bitXor"},
     {tipb::ScalarFuncSig::BitNegSig, "bitNot"},
     //{tipb::ScalarFuncSig::IntIsTrue, "cast"},
     //{tipb::ScalarFuncSig::RealIsTrue, "cast"},
@@ -699,24 +816,39 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::ValuesString, "cast"},
     //{tipb::ScalarFuncSig::ValuesTime, "cast"},
 
-    {tipb::ScalarFuncSig::InInt, "tidbIn"}, {tipb::ScalarFuncSig::InReal, "tidbIn"}, {tipb::ScalarFuncSig::InString, "tidbIn"},
-    {tipb::ScalarFuncSig::InDecimal, "tidbIn"}, {tipb::ScalarFuncSig::InTime, "tidbIn"}, {tipb::ScalarFuncSig::InDuration, "tidbIn"},
+    {tipb::ScalarFuncSig::InInt, "tidbIn"},
+    {tipb::ScalarFuncSig::InReal, "tidbIn"},
+    {tipb::ScalarFuncSig::InString, "tidbIn"},
+    {tipb::ScalarFuncSig::InDecimal, "tidbIn"},
+    {tipb::ScalarFuncSig::InTime, "tidbIn"},
+    {tipb::ScalarFuncSig::InDuration, "tidbIn"},
     {tipb::ScalarFuncSig::InJson, "tidbIn"},
 
-    {tipb::ScalarFuncSig::IfNullInt, "ifNull"}, {tipb::ScalarFuncSig::IfNullReal, "ifNull"}, {tipb::ScalarFuncSig::IfNullString, "ifNull"},
-    {tipb::ScalarFuncSig::IfNullDecimal, "ifNull"}, {tipb::ScalarFuncSig::IfNullTime, "ifNull"},
-    {tipb::ScalarFuncSig::IfNullDuration, "ifNull"}, {tipb::ScalarFuncSig::IfNullJson, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullInt, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullReal, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullString, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullDecimal, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullTime, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullDuration, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullJson, "ifNull"},
 
     /// Do not use If because ClickHouse's implementation is not compatible with TiDB
     /// ClickHouse: If(null, a, b) returns null
     /// TiDB: If(null, a, b) returns b
-    {tipb::ScalarFuncSig::IfInt, "multiIf"}, {tipb::ScalarFuncSig::IfReal, "multiIf"}, {tipb::ScalarFuncSig::IfString, "multiIf"},
-    {tipb::ScalarFuncSig::IfDecimal, "multiIf"}, {tipb::ScalarFuncSig::IfTime, "multiIf"}, {tipb::ScalarFuncSig::IfDuration, "multiIf"},
+    {tipb::ScalarFuncSig::IfInt, "multiIf"},
+    {tipb::ScalarFuncSig::IfReal, "multiIf"},
+    {tipb::ScalarFuncSig::IfString, "multiIf"},
+    {tipb::ScalarFuncSig::IfDecimal, "multiIf"},
+    {tipb::ScalarFuncSig::IfTime, "multiIf"},
+    {tipb::ScalarFuncSig::IfDuration, "multiIf"},
     {tipb::ScalarFuncSig::IfJson, "multiIf"},
 
-    {tipb::ScalarFuncSig::CaseWhenInt, "multiIf"}, {tipb::ScalarFuncSig::CaseWhenReal, "multiIf"},
-    {tipb::ScalarFuncSig::CaseWhenString, "multiIf"}, {tipb::ScalarFuncSig::CaseWhenDecimal, "multiIf"},
-    {tipb::ScalarFuncSig::CaseWhenTime, "multiIf"}, {tipb::ScalarFuncSig::CaseWhenDuration, "multiIf"},
+    {tipb::ScalarFuncSig::CaseWhenInt, "multiIf"},
+    {tipb::ScalarFuncSig::CaseWhenReal, "multiIf"},
+    {tipb::ScalarFuncSig::CaseWhenString, "multiIf"},
+    {tipb::ScalarFuncSig::CaseWhenDecimal, "multiIf"},
+    {tipb::ScalarFuncSig::CaseWhenTime, "multiIf"},
+    {tipb::ScalarFuncSig::CaseWhenDuration, "multiIf"},
     {tipb::ScalarFuncSig::CaseWhenJson, "multiIf"},
 
     //{tipb::ScalarFuncSig::AesDecrypt, "cast"},
@@ -755,10 +887,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::RealAnyValue, "cast"},
     //{tipb::ScalarFuncSig::StringAnyValue, "cast"},
     //{tipb::ScalarFuncSig::TimeAnyValue, "cast"},
-    //{tipb::ScalarFuncSig::InetAton, "cast"},
-    //{tipb::ScalarFuncSig::InetNtoa, "cast"},
-    //{tipb::ScalarFuncSig::Inet6Aton, "cast"},
-    //{tipb::ScalarFuncSig::Inet6Ntoa, "cast"},
+    {tipb::ScalarFuncSig::InetAton, "tiDBIPv4StringToNum"},
+    {tipb::ScalarFuncSig::InetNtoa, "IPv4NumToString"},
+    {tipb::ScalarFuncSig::Inet6Aton, "tiDBIPv6StringToNum"},
+    {tipb::ScalarFuncSig::Inet6Ntoa, "tiDBIPv6NumToString"},
     //{tipb::ScalarFuncSig::IsIPv4, "cast"},
     //{tipb::ScalarFuncSig::IsIPv4Compat, "cast"},
     //{tipb::ScalarFuncSig::IsIPv4Mapped, "cast"},
@@ -816,7 +948,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateDurationInt, "cast"},
     //{tipb::ScalarFuncSig::SubDateDatetimeReal, "cast"},
     //{tipb::ScalarFuncSig::SubDateDatetimeDecimal, "cast"},
-    //{tipb::ScalarFuncSig::AddDateStringReal, "cast"},
+    {tipb::ScalarFuncSig::AddDateStringReal, "date_add"},
     //{tipb::ScalarFuncSig::AddDateIntReal, "cast"},
     //{tipb::ScalarFuncSig::AddDateIntDecimal, "cast"},
     //{tipb::ScalarFuncSig::AddDateDatetimeReal, "cast"},
@@ -826,7 +958,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::AddDateDurationInt, "cast"},
     //{tipb::ScalarFuncSig::AddDateDurationDecimal, "cast"},
 
-    //{tipb::ScalarFuncSig::Date, "cast"},
+    {tipb::ScalarFuncSig::Date, "toMyDate"},
     //{tipb::ScalarFuncSig::Hour, "cast"},
     //{tipb::ScalarFuncSig::Minute, "cast"},
     //{tipb::ScalarFuncSig::Second, "cast"},
@@ -888,7 +1020,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateAndString, "cast"},
 
     //{tipb::ScalarFuncSig::UnixTimestampCurrent, "cast"},
-    {tipb::ScalarFuncSig::UnixTimestampInt, "tidbUnixTimeStampInt"}, {tipb::ScalarFuncSig::UnixTimestampDec, "tidbUnixTimeStampDec"},
+    {tipb::ScalarFuncSig::UnixTimestampInt, "tidbUnixTimeStampInt"},
+    {tipb::ScalarFuncSig::UnixTimestampDec, "tidbUnixTimeStampDec"},
 
     //{tipb::ScalarFuncSig::ConvertTz, "cast"},
     //{tipb::ScalarFuncSig::MakeDate, "cast"},
@@ -912,7 +1045,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::StrToDateDate, "strToDateDate"},
     {tipb::ScalarFuncSig::StrToDateDatetime, "strToDateDatetime"},
     // {tipb::ScalarFuncSig::StrToDateDuration, "cast"},
-    {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"}, {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
+    {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"},
+    {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
     {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDateTime"},
     //{tipb::ScalarFuncSig::ExtractDuration, "cast"},
 
@@ -938,9 +1072,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     //{tipb::ScalarFuncSig::BitLength, "cast"},
     //{tipb::ScalarFuncSig::Bin, "cast"},
-    //{tipb::ScalarFuncSig::ASCII, "cast"},
+    {tipb::ScalarFuncSig::ASCII, "ascii"},
     //{tipb::ScalarFuncSig::Char, "cast"},
-    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"}, {tipb::ScalarFuncSig::Concat, "tidbConcat"},
+    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"},
+    {tipb::ScalarFuncSig::Concat, "tidbConcat"},
     {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
     //{tipb::ScalarFuncSig::Convert, "cast"},
     //{tipb::ScalarFuncSig::Elt, "cast"},
@@ -962,12 +1097,13 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::InstrUTF8, "cast"},
     //{tipb::ScalarFuncSig::Instr, "cast"},
 
-    {tipb::ScalarFuncSig::LTrim, "ltrim"}, {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
+    {tipb::ScalarFuncSig::LTrim, "ltrim"},
+    {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
     //{tipb::ScalarFuncSig::Left, "cast"},
     {tipb::ScalarFuncSig::Length, "length"},
-    //{tipb::ScalarFuncSig::Locate2ArgsUTF8, "cast"},
+    {tipb::ScalarFuncSig::Locate2ArgsUTF8, "position"},
     //{tipb::ScalarFuncSig::Locate3ArgsUTF8, "cast"},
-    //{tipb::ScalarFuncSig::Locate2Args, "cast"},
+    {tipb::ScalarFuncSig::Locate2Args, "position"},
     //{tipb::ScalarFuncSig::Locate3Args, "cast"},
 
     {tipb::ScalarFuncSig::Lower, "lower"},
@@ -989,13 +1125,14 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Rpad, "cast"},
     //{tipb::ScalarFuncSig::Space, "cast"},
     //{tipb::ScalarFuncSig::Strcmp, "cast"},
-    {tipb::ScalarFuncSig::Substring2ArgsUTF8, "substringUTF8"}, {tipb::ScalarFuncSig::Substring3ArgsUTF8, "substringUTF8"},
+    {tipb::ScalarFuncSig::Substring2ArgsUTF8, "substringUTF8"},
+    {tipb::ScalarFuncSig::Substring3ArgsUTF8, "substringUTF8"},
     //{tipb::ScalarFuncSig::Substring2Args, "cast"},
     //{tipb::ScalarFuncSig::Substring3Args, "cast"},
     //{tipb::ScalarFuncSig::SubstringIndex, "cast"},
 
     //{tipb::ScalarFuncSig::ToBase64, "cast"},
-    //{tipb::ScalarFuncSig::Trim1Arg, "cast"},
+    {tipb::ScalarFuncSig::Trim1Arg, "trim"},
     //{tipb::ScalarFuncSig::Trim2Args, "cast"},
     //{tipb::ScalarFuncSig::Trim3Args, "cast"},
     //{tipb::ScalarFuncSig::UnHex, "cast"},

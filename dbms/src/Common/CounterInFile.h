@@ -1,22 +1,19 @@
 #pragma once
 
+#include <Common/Exception.h>
+#include <IO/ReadBufferFromFileDescriptor.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+#include <IO/WriteHelpers.h>
+#include <Poco/Exception.h>
+#include <Poco/File.h>
+#include <common/types.h>
 #include <fcntl.h>
 #include <sys/file.h>
 
-#include <string>
 #include <iostream>
-
-#include <Poco/File.h>
-#include <Poco/Exception.h>
 #include <mutex>
-
-#include <Common/Exception.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
-#include <common/types.h>
+#include <string>
 
 #define SMALL_READ_WRITE_BUFFER_SIZE 16
 
@@ -28,7 +25,9 @@ class CounterInFile
 {
 public:
     /// path - the name of the file, including the path
-    CounterInFile(const std::string & path_) : path(path_) {}
+    CounterInFile(const std::string & path_)
+        : path(path_)
+    {}
 
     /** Add `delta` to the number in the file and return the new value.
      * If the `create_if_need` parameter is not set to true, then
@@ -51,7 +50,7 @@ public:
         if (file_doesnt_exists && !create_if_need)
         {
             throw Poco::Exception("File " + path + " does not exist. "
-            "You must create it manulally with appropriate value or 0 for first start.");
+                                                   "You must create it manulally with appropriate value or 0 for first start.");
         }
 
         int fd = open(path.c_str(), O_RDWR | O_CREAT, 0666);
@@ -109,7 +108,10 @@ public:
 
     Int64 add(Int64 delta, bool create_if_need = false)
     {
-        return add(delta, [](UInt64){}, create_if_need);
+        return add(
+            delta,
+            [](UInt64) {},
+            create_if_need);
     }
 
     const std::string & getPath() const

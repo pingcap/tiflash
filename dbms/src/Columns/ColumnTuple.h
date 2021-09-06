@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Column, that is just group of few another columns.
   *
   * For constant Tuples, see ColumnConst.
@@ -33,7 +32,10 @@ public:
     static Ptr create(const Columns & columns);
 
     template <typename Arg, typename = typename std::enable_if<std::is_rvalue_reference<Arg &&>::value>::type>
-    static MutablePtr create(Arg && arg) { return Base::create(std::forward<Arg>(arg)); }
+    static MutablePtr create(Arg && arg)
+    {
+        return Base::create(std::forward<Arg>(arg));
+    }
 
     std::string getName() const override;
     const char * getFamilyName() const override { return "Tuple"; }
@@ -54,11 +56,11 @@ public:
     void insertFrom(const IColumn & src_, size_t n) override;
     void insertDefault() override;
     void popBack(size_t n) override;
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
-    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
-    void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
-    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
-    void updateWeakHash32(WeakHash32 & hash) const override;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+    void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
@@ -85,4 +87,4 @@ public:
 };
 
 
-}
+} // namespace DB

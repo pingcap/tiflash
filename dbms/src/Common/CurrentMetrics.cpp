@@ -17,8 +17,6 @@
     M(InterserverConnection)                    \
     M(OpenFileForRead)                          \
     M(OpenFileForWrite)                         \
-    M(Read)                                     \
-    M(Write)                                    \
     M(SendExternalTables)                       \
     M(QueryThread)                              \
     M(ReadonlyReplica)                          \
@@ -28,9 +26,6 @@
     M(MemoryTrackingForMerges)                  \
     M(LeaderElection)                           \
     M(EphemeralNode)                            \
-    M(ZooKeeperSession)                         \
-    M(ZooKeeperWatch)                           \
-    M(ZooKeeperRequest)                         \
     M(DelayedInserts)                           \
     M(ContextLockWait)                          \
     M(StorageBufferRows)                        \
@@ -64,8 +59,11 @@
     M(DT_SnapshotOfSegmentMerge)                \
     M(DT_SnapshotOfDeltaMerge)                  \
     M(DT_SnapshotOfDeltaCompact)                \
-    M(DT_SnapshotOfPlaceIndex)
-
+    M(DT_SnapshotOfPlaceIndex)                  \
+    M(IOLimiterPendingBgWriteReq)               \
+    M(IOLimiterPendingFgWriteReq)               \
+    M(IOLimiterPendingBgReadReq)                \
+    M(IOLimiterPendingFgReadReq)
 
 namespace CurrentMetrics
 {
@@ -87,7 +85,10 @@ const char * getDescription(Metric event)
     return descriptions[event];
 }
 
-Metric end() { return END; }
+Metric end()
+{
+    return END;
+}
 } // namespace CurrentMetrics
 
 #undef APPLY_FOR_METRICS

@@ -30,7 +30,7 @@ private:
     BlockInputStreamPtr input;
     const size_t version_column_index;
     const UInt64 filter_greater_version;
-    Logger * log = &Logger::get("VersionFilterBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("VersionFilterBlockInputStream");
 };
 
 } // namespace DB

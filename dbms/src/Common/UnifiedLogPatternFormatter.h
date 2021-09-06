@@ -7,7 +7,6 @@
 
 namespace DB
 {
-
 class WriteBuffer;
 
 class UnifiedLogPatternFormatter : public Poco::PatternFormatter

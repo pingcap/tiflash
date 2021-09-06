@@ -10,52 +10,54 @@
 
 namespace DB
 {
-
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
-/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_response_bytes).Increment(1);
-/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_batch).Set(1);
+/// GET_METRIC(tiflash_coprocessor_response_bytes).Increment(1);
+/// GET_METRIC(tiflash_coprocessor_request_count, type_batch).Set(1);
 /// Maintenance notes:
-/// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/tmt/raft/etc.).
+/// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/storage/raft/etc.).
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
+// clang-format off
 #define APPLY_FOR_METRICS(M, F)                                                                                                           \
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                            \
         F(type_batch_cop, {"type", "batch_cop"}), F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
         F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}),                       \
         F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}), F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),             \
-        F(type_cancel_mpp_task, {"type", "mpp_establish_conn"}))                                                                          \
+        F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}), F(type_run_mpp_task, {"type", "run_mpp_task"}))                             \
     M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_batch, {"type", "batch"}),                  \
         F(type_batch_cop, {"type", "batch_cop"}), F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
         F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}),                       \
         F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}), F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),             \
-        F(type_cancel_mpp_task, {"type", "mpp_establish_conn"}))                                                                          \
+        F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}), F(type_run_mpp_task, {"type", "run_mpp_task"}))                             \
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),           \
         F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}))                             \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                  \
-        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}),         \
-        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
-        F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 30}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 30}),         \
+        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 30}),                                                        \
+        F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.0005, 2, 30}),                                            \
         F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.0005, 2, 30}),                                          \
-        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                \
+        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}),                                                \
+        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                      \
     M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                  \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                   \
         F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                   \
-        F(type_dispatch_mpp_task, {{"type", "mpp_dispatch_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 16}))                                   \
+        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{1024 * 1024, 2, 16}))                                                 \
     M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),          \
         F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),             \
         F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),                 \
         F(reason_other_error, {"reason", "other_error"}))                                                                                 \
     M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                             \
-        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}),         \
-        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
-        F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 30}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 30}),         \
+        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 30}),                                                        \
+        F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.0005, 2, 30}),                                            \
         F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.0005, 2, 30}),                                          \
-        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                \
+        F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}),                                                \
+        F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                      \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                        \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                             \
@@ -123,9 +125,12 @@ namespace DB
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
-        F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                     \
-    M(tiflash_storage_rate_limiter_total_request_bytes, "RateLimiter total requested bytes", Counter)                                     \
-    M(tiflash_storage_rate_limiter_total_alloc_bytes, "RateLimiter total allocated bytes", Counter)                                       \
+        F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
+    M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
+        F(type_fg_read_alloc_bytes, {"type", "fg_read_alloc_bytes"}), F(type_bg_read_req_bytes, {"type", "bg_read_req_bytes"}),           \
+        F(type_bg_read_alloc_bytes, {"type", "bg_read_alloc_bytes"}), F(type_fg_write_req_bytes, {"type", "fg_write_req_bytes"}),         \
+        F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}), F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),       \
+        F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                                   \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \
@@ -134,12 +139,14 @@ namespace DB
     M(tiflash_raft_process_keys, "Total number of keys processed in some types of Raft commands", Counter,                                \
         F(type_apply_snapshot, {"type", "apply_snapshot"}), F(type_ingest_sst, {"type", "ingest_sst"}))                                   \
     M(tiflash_raft_apply_write_command_duration_seconds, "Bucketed histogram of applying write command Raft logs", Histogram,             \
-        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                    \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}), F(type_admin, {{"type", "admin"}}, ExpBuckets{0.0005, 2, 20}))     \
+    M(tiflash_raft_upstream_latency, "The latency that tikv sends raft log to tiflash.", Histogram,                                       \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 30}))                                                                     \
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
-
+// clang-format on
 
 struct ExpBuckets
 {
@@ -215,7 +222,10 @@ struct MetricFamily
     using MetricArgType = typename MetricTrait::ArgType;
 
     MetricFamily(
-        prometheus::Registry & registry, const std::string & name, const std::string & help, std::initializer_list<MetricArgType> args)
+        prometheus::Registry & registry,
+        const std::string & name,
+        const std::string & help,
+        std::initializer_list<MetricArgType> args)
     {
         auto & family = MetricTrait::build().Name(name).Help(help).Register(registry);
         metrics.reserve(args.size() ? args.size() : 1);
@@ -244,9 +254,11 @@ private:
 class TiFlashMetrics
 {
 public:
-    TiFlashMetrics();
+    static TiFlashMetrics & instance();
 
 private:
+    TiFlashMetrics();
+
     static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
     static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
@@ -266,6 +278,12 @@ public:
     }
     APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 
+    TiFlashMetrics(const TiFlashMetrics &) = delete;
+    TiFlashMetrics & operator=(const TiFlashMetrics &) = delete;
+
+    TiFlashMetrics(TiFlashMetrics &&) = delete;
+    TiFlashMetrics & operator=(TiFlashMetrics &&) = delete;
+
     friend class MetricsPrometheus;
 };
 
@@ -282,9 +300,16 @@ public:
 APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 #undef APPLY_FOR_METRICS
 
-#define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
-#define __GET_METRIC_0(ptr, family) (ptr)->family.get()
-#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.get(family##_metrics::metric)
-#define GET_METRIC(...) __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0)(__VA_ARGS__)
+#define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
+#ifndef GTEST_TIFLASH_METRICS
+#define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
+#define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
+#else
+#define __GET_METRIC_0(family) TestMetrics::instance().family.get()
+#define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
+#endif
+#define GET_METRIC(...)                                             \
+    __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0) \
+    (__VA_ARGS__)
 
 } // namespace DB

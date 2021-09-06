@@ -1,3 +1,5 @@
+#include <Common/FailPoint.h>
+#include <Common/ThreadFactory.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -11,6 +13,10 @@
 namespace DB
 {
 
+namespace FailPoints
+{
+extern const char exception_in_creating_set_input_stream[];
+}
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
@@ -18,15 +24,17 @@ extern const int SET_SIZE_LIMIT_EXCEEDED;
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
     std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-    const SizeLimits & network_transfer_limits, Int64 mpp_task_id_)
-    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_)
+    const SizeLimits & network_transfer_limits, Int64 mpp_task_id_,
+    const std::shared_ptr<LogWithPrefix> & log_)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_),
+    log(getLogWithPrefix(log_, "CreatingSetsBlockInputStream", mpp_task_id))
 {
     init(input);
 }
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
-    const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets, const SizeLimits & network_transfer_limits)
-    : network_transfer_limits(network_transfer_limits)
+    const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets, const SizeLimits & network_transfer_limits, const std::shared_ptr<LogWithPrefix> & log_)
+    : network_transfer_limits(network_transfer_limits), log(getLogWithPrefix(log_, "CreatingSetsBlockInputStream", mpp_task_id))
 {
     subqueries_for_sets_list.push_back(subqueries_for_sets);
     init(input);
@@ -99,8 +107,8 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
+                    workers.emplace_back(ThreadFactory().newThread([this, &subquery = elem.second]{ createOne(subquery); }));
+                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
@@ -116,13 +124,11 @@ void CreatingSetsBlockInputStream::createAll()
     }
 }
 
-void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker)
+void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
     try
     {
-
-        current_memory_tracker = memory_tracker;
-        LOG_TRACE(log,
+        LOG_DEBUG(log,
             (subquery.set ? "Creating set. " : "")
                 << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
                 << std::to_string(mpp_task_id));
@@ -222,8 +228,11 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
 
             msg << "In " << watch.elapsedSeconds() << " sec. ";
             msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
-            msg << "for task " << std::to_string(mpp_task_id) << ".";
-            LOG_DEBUG(log, msg.rdbuf());
+
+            if (log != nullptr)
+                LOG_DEBUG(log, msg.rdbuf());    
+            else
+                LOG_DEBUG(log, msg.rdbuf());
         }
         else
         {

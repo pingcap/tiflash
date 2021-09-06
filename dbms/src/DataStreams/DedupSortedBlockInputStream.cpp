@@ -2,6 +2,7 @@
 
 #include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/ThreadFactory.h>
 
 // #define DEDUP_TRACER
 #ifndef DEDUP_TRACER
@@ -28,7 +29,7 @@ DedupSortedBlockInputStream::DedupSortedBlockInputStream(BlockInputStreams & inp
     : description(description_), queue_max(1), source_blocks(inputs_.size(), queue_max),
         output_block(inputs_.size() * queue_max), readers(inputs_.size())
 {
-    log = &Logger::get("DedupSorted");
+    log = &Poco::Logger::get("DedupSorted");
 
     children.insert(children.end(), inputs_.begin(), inputs_.end());
 
@@ -36,7 +37,7 @@ DedupSortedBlockInputStream::DedupSortedBlockInputStream(BlockInputStreams & inp
         readers.schedule(std::bind(&DedupSortedBlockInputStream::asynFetch, this, i));
 
     LOG_DEBUG(log, "Start deduping in single thread, using priority-queue");
-    dedup_thread = std::make_unique<std::thread>([this] { asynDedupByQueue(); });
+    dedup_thread = std::make_unique<std::thread>(ThreadFactory().newThread([this] { asyncDedupByQueue(); }));
 }
 
 
@@ -105,7 +106,7 @@ void DedupSortedBlockInputStream::readFromSource(DedupCursors & output, BoundQue
 }
 
 
-void DedupSortedBlockInputStream::asynDedupByQueue()
+void DedupSortedBlockInputStream::asyncDedupByQueue()
 {
     BoundQueue bounds;
     DedupCursors cursors(source_blocks.size());

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <Core/ColumnWithTypeAndName.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
@@ -10,6 +13,8 @@
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
+#include <TestUtils/TiFlashTestException.h>
+#include <fmt/core.h>
 
 #if !__clang__
 #pragma GCC diagnostic push
@@ -32,32 +37,38 @@ namespace DB
 {
 namespace tests
 {
-
-#define CATCH                                                                                      \
-    catch (const Exception & e)                                                                    \
-    {                                                                                              \
-        std::string text = e.displayText();                                                        \
-                                                                                                   \
-        auto embedded_stack_trace_pos = text.find("Stack trace");                                  \
-        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;               \
-        if (std::string::npos == embedded_stack_trace_pos)                                         \
-            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl; \
-                                                                                                   \
-        throw;                                                                                     \
+#define CATCH                                                                        \
+    catch (const DB::tests::TiFlashTestException & e)                                \
+    {                                                                                \
+        std::string text = e.displayText();                                          \
+                                                                                     \
+        text += "\n\n";                                                              \
+        if (text.find("Stack trace") == std::string::npos)                           \
+            text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString()); \
+                                                                                     \
+        FAIL() << text;                                                              \
+    }                                                                                \
+    catch (const DB::Exception & e)                                                  \
+    {                                                                                \
+        std::string text = e.displayText();                                          \
+                                                                                     \
+        auto embedded_stack_trace_pos = text.find("Stack trace");                    \
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl               \
+                  << std::endl;                                                      \
+        if (std::string::npos == embedded_stack_trace_pos)                           \
+            std::cerr << "Stack trace:" << std::endl                                 \
+                      << e.getStackTrace().toString() << std::endl;                  \
+                                                                                     \
+        throw;                                                                       \
     }
 
 /// helper functions for comparing DataType
-inline ::testing::AssertionResult DataTypeCompare( //
+::testing::AssertionResult DataTypeCompare( //
     const char * lhs_expr,
     const char * rhs_expr,
     const DataTypePtr & lhs,
-    const DataTypePtr & rhs)
-{
-    if (lhs->equals(*rhs))
-        return ::testing::AssertionSuccess();
-    else
-        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs->getName(), rhs->getName(), false);
-}
+    const DataTypePtr & rhs);
+
 #define ASSERT_DATATYPE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
 #define EXPECT_DATATYPE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
 
@@ -82,7 +93,14 @@ inline DataTypes typesFromString(const String & str)
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath() { return Poco::Path("./tmp/").absolute().toString(); }
+    static String getTemporaryPath(const char * test_case = nullptr)
+    {
+        String path = "./tmp/";
+        if (test_case)
+            path += std::string(test_case);
+
+        return Poco::Path(path).absolute().toString();
+    }
 
     static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})
     {
@@ -101,8 +119,8 @@ public:
         Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
         formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-        Logger::root().setChannel(formatting_channel);
-        Logger::root().setLevel(level);
+        Poco::Logger::root().setChannel(formatting_channel);
+        Poco::Logger::root().setLevel(level);
     }
 
     // If you want to run these tests, you should set this envrionment variablle
@@ -141,13 +159,13 @@ private:
     TiFlashTestEnv() = delete;
 };
 
-#define CHECK_TESTS_WITH_DATA_ENABLED                                                                        \
-    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                           \
-    {                                                                                                        \
-        LOG_INFO(&Logger::get("GTEST"),                                                                      \
-            "Test: " << ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() << "."     \
-                     << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
-        return;                                                                                              \
+#define CHECK_TESTS_WITH_DATA_ENABLED                                                                             \
+    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                                \
+    {                                                                                                             \
+        LOG_INFO(&Poco::Logger::get("GTEST"),                                                                     \
+                 "Test: " << ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() << "."     \
+                          << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
+        return;                                                                                                   \
     }
 
 } // namespace tests

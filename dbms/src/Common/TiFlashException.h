@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 /// A central place for defining your error class and error code.
 /// C(error_class, error...)
 /// E(error_code, description, workaround, message_template)
@@ -23,6 +22,7 @@ namespace DB
 ///   - Use clang-format to format your code
 ///   - Use semicolon(;) to split errors
 ///   - After adding an error, please execute `tiflash errgen <tics-dir>/errors.toml`
+// clang-format off
 #define ERROR_CLASS_LIST                                                                                                             \
     C(PageStorage,                                                                                                                   \
         E(FileSizeNotMatch, "Some files' size don't match their metadata.",                                                          \
@@ -55,6 +55,9 @@ namespace DB
         E(Internal, "TiFlash DDL internal error.",                                                                                   \
             "Please contact with developer, \n"                                                                                      \
             "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        E(StaleSchema, "Schema is stale and need to reload all schema.",                                                             \
+            "This error will be recover by reload all schema automatically.",                                                        \
             "");)                                                                                                                    \
     C(Coprocessor,                                                                                                                   \
         E(BadRequest, "Bad TiDB coprocessor request.",                                                                               \
@@ -115,7 +118,25 @@ namespace DB
             "better providing information about your cluster(log, topology information etc.).",                                      \
             "");)                                                                                                                    \
     C(Types, E(Truncated, "Data is truncated during conversion.", "", ""); E(WrongValue, "Input value is in wrong format", "", "");) \
-    C(Expression, E(DivisionByZero, "Division by 0.", "", "");)
+    C(Expression, E(DivisionByZero, "Division by 0.", "", "");)                                                                      \
+    C(Checksum,                                                                                                                      \
+        E(Missing, "Checksum info for disk I/O checksum was expected but not found.",                                                \
+            "This may be caused by a failure during data file format upgrade or file lost; \n"                                       \
+            "please contact with developer if you don't know what is going on.",                                                     \
+            "");                                                                                                                     \
+        E(DataCorruption, "Checksum hash mismatch was detected.",                                                                    \
+            "This usually indicates a disk failure happened at a TiFlash node, \n"                                                   \
+            "you may need to examine the health of your servers.",                                                                   \
+            "");                                                                                                                     \
+        E(IOFailure, "There are failed IO operations during checksum loading or writing.",                                           \
+            "Please check the permission of your data directories, \n"                                                               \
+            "if the problem persists, please contact the developer.",                                                                \
+            "");                                                                                                                     \
+        E(Internal, "Checksum internal error.",                                                                                      \
+            "Please contact with developer, \n"                                                                                      \
+            "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");)
+// clang-format on
 
 /// TiFlashError is core struct of standard error,
 /// which contains all information about an error except message.
@@ -206,11 +227,9 @@ protected:
     TiFlashErrorRegistry() { initialize(); }
 
 private:
-    void registerError(const std::string & error_class, const std::string & error_code, const std::string & description,
-        const std::string & workaround, const std::string & message_template = "");
+    void registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template = "");
 
-    void registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description,
-        const std::string & workaround, const std::string & message_template = "");
+    void registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description, const std::string & workaround, const std::string & message_template = "");
 
     void initialize();
 
@@ -223,7 +242,10 @@ private:
 class TiFlashException : public Exception
 {
 public:
-    TiFlashException(const std::string & _msg, const TiFlashError & _error) : Exception(_msg), error(_error) {}
+    TiFlashException(const std::string & _msg, const TiFlashError & _error)
+        : Exception(_msg)
+        , error(_error)
+    {}
 
     const char * name() const throw() override { return "DB::TiFlashException"; }
     const char * className() const throw() override { return "DB::TiFlashException"; }

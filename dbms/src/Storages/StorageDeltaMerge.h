@@ -12,11 +12,10 @@
 namespace Poco
 {
 class Logger;
-}
+} // namespace Poco
 
 namespace DB
 {
-
 namespace DM
 {
 struct RowKeyRange;
@@ -24,7 +23,8 @@ class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 } // namespace DM
 
-class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>, public IManageableStorage
+class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>
+    , public IManageableStorage
 {
 public:
     ~StorageDeltaMerge() override;
@@ -37,7 +37,8 @@ public:
 
     void drop() override;
 
-    BlockInputStreams read(const Names & column_names,
+    BlockInputStreams read(
+        const Names & column_names,
         const SelectQueryInfo & query_info,
         const Context & context,
         QueryProcessingStage::Enum & processed_stage,
@@ -58,34 +59,40 @@ public:
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
     void ingestFiles(
-        const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, bool clear_data_in_range, const Settings & settings);
+        const DM::RowKeyRange & range,
+        const std::vector<UInt64> & file_ids,
+        bool clear_data_in_range,
+        const Settings & settings);
 
     UInt64 onSyncGc(Int64) override;
 
-    void rename(const String & new_path_to_db,
+    void rename(
+        const String & new_path_to_db,
         const String & new_database_name,
         const String & new_table_name,
         const String & new_display_table_name) override;
 
     void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 
-    void alter(const TableLockHolder &,
+    void alter(
+        const TableLockHolder &,
         const AlterCommands & commands,
         const String & database_name,
         const String & table_name,
         const Context & context) override;
 
-    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
-
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    void alterFromTiDB(const TableLockHolder &, //
-        const AlterCommands & commands,         //
-        const String & database_name,           //
-        const TiDB::TableInfo & table_info,     //
-        const SchemaNameMapper & name_mapper,   //
+    void alterFromTiDB(
+        const TableLockHolder &,
+        const AlterCommands & commands,
+        const String & database_name,
+        const TiDB::TableInfo & table_info,
+        const SchemaNameMapper & name_mapper,
         const Context & context) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
+
+    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
 
     const TiDB::TableInfo & getTableInfo() const override { return tidb_table_info; }
 
@@ -106,7 +113,7 @@ public:
 
     const DM::DeltaMergeStorePtr & getStore()
     {
-         return getAndMaybeInitStore();
+        return getAndMaybeInitStore();
     }
 
     bool isCommonHandle() const override { return is_common_handle; }
@@ -119,7 +126,7 @@ public:
 protected:
 #endif
 
-    StorageDeltaMerge( //
+    StorageDeltaMerge(
         const String & db_engine,
         const String & db_name_,
         const String & name_,
@@ -135,7 +142,8 @@ protected:
 private:
 #endif
 
-    void alterImpl(const AlterCommands & commands,
+    void alterImpl(
+        const AlterCommands & commands,
         const String & database_name,
         const String & table_name,
         const DB::DM::OptionTableInfoConstRef table_info_,
@@ -143,8 +151,8 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
-    DM::DeltaMergeStorePtr& getAndMaybeInitStore();
-    bool storeInited() const { return store_inited.load(); }
+    DM::DeltaMergeStorePtr & getAndMaybeInitStore();
+    bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
@@ -155,8 +163,12 @@ private:
 
     struct TableColumnInfo
     {
-        TableColumnInfo(const String& db, const String& table, const ASTPtr& pk)
-            : db_name(db), table_name(table), pk_expr_ast(pk) {}
+        TableColumnInfo(const String & db, const String & table, const ASTPtr & pk)
+            : db_name(db)
+            , table_name(table)
+            , pk_expr_ast(pk)
+        {}
+
         String db_name;
         String table_name;
         ASTPtr pk_expr_ast;
@@ -165,9 +177,9 @@ private:
     };
     const bool data_path_contains_database_name = false;
 
-    std::mutex store_mutex;
+    mutable std::mutex store_mutex;
 
-    std::unique_ptr<TableColumnInfo> table_column_info;  // After create DeltaMergeStore object, it is deprecated.
+    std::unique_ptr<TableColumnInfo> table_column_info; // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
     DM::DeltaMergeStorePtr _store;
 
@@ -188,7 +200,8 @@ private:
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 
     Context & global_context;
-    Logger * log;
+
+    Poco::Logger * log;
 };
 
 

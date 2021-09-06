@@ -9,7 +9,6 @@ namespace DM
 {
 namespace tests
 {
-
 TEST(PKSquash_test, WithExtraSort)
 {
     BlocksList blocks;
@@ -27,14 +26,14 @@ TEST(PKSquash_test, WithExtraSort)
 
         {
             Block mix_pks_block = DMTestEnv::prepareBlockWithTso(5, 10000, 10000 + rows_per_block, true);
-            Block b2            = DMTestEnv::prepareBlockWithTso(6, 10000 + rows_per_block, 10000 + rows_per_block * 2, true);
+            Block b2 = DMTestEnv::prepareBlockWithTso(6, 10000 + rows_per_block, 10000 + rows_per_block * 2, true);
             concat(mix_pks_block, b2);
             blocks.push_back(mix_pks_block);
             num_rows_write += blocks.back().rows();
         }
         {
             Block mix_pks_block = DMTestEnv::prepareBlockWithTso(6, 10000, 10000 + rows_per_block, true);
-            Block b2            = DMTestEnv::prepareBlockWithTso(7, 10000 + rows_per_block, 10000 + rows_per_block * 2, true);
+            Block b2 = DMTestEnv::prepareBlockWithTso(7, 10000 + rows_per_block, 10000 + rows_per_block * 2, true);
             concat(mix_pks_block, b2);
             blocks.push_back(mix_pks_block);
             num_rows_write += blocks.back().rows();
@@ -44,16 +43,18 @@ TEST(PKSquash_test, WithExtraSort)
     }
 
     // Sorted by pk, tso asc
-    SortDescription sort  //
+    SortDescription sort //
         = SortDescription{//
                           SortColumnDescription{EXTRA_HANDLE_COLUMN_NAME, 1, 0},
                           SortColumnDescription{VERSION_COLUMN_NAME, 1, 0}};
 
     {
         auto in = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort*/ true>>(
-            std::make_shared<BlocksListBlockInputStream>(blocks.begin(), blocks.end()), TiDBPkColumnID, false);
+            std::make_shared<BlocksListBlockInputStream>(blocks.begin(), blocks.end()),
+            TiDBPkColumnID,
+            false);
         size_t num_blocks_read = 0;
-        size_t num_rows_read   = 0;
+        size_t num_rows_read = 0;
         in->readPrefix();
         Block block;
         while (true)

@@ -1,44 +1,45 @@
 #pragma once
 
-#include <thread>
-
 #include <Common/ConcurrentBoundedQueue.h>
-#include <common/logger_useful.h>
+#include <Common/LogWithPrefix.h>
+#include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
-
 #include <DataStreams/IProfilingBlockInputStream.h>
+
+#include <thread>
 
 namespace DB
 {
-
-/**
- * This block input stream is used by SharedQuery.
- * It enable multiple threads read from one stream.
+/** This block input stream is used by SharedQuery.
+  * It enable multiple threads read from one stream.
  */
 class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_)
-        : queue(clients), log(&Logger::get("SharedQueryBlockInputStream")), in(in_)
+    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_ = nullptr)
+        : queue(clients)
+        , log(getLogWithPrefix(log_))
+        , in(in_)
     {
         children.push_back(in);
     }
 
     ~SharedQueryBlockInputStream()
     {
-        cancel(false);
-        readSuffix();
+        try
+        {
+            cancel(false);
+            readSuffix();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
     }
 
-    String getName() const override
-    {
-        return "SharedQuery";
-    }
+    String getName() const override { return "SharedQuery"; }
 
-    Block getHeader() const override
-    {
-        return children.back()->getHeader();
-    }
+    Block getHeader() const override { return children.back()->getHeader(); }
 
     void readPrefix() override
     {
@@ -49,7 +50,7 @@ public:
         read_prefixed = true;
 
         /// Start reading thread.
-        thread = std::thread(&SharedQueryBlockInputStream::fetchBlocks, this);
+        thread = ThreadFactory().newThread([this] { fetchBlocks(); });
     }
 
     void readSuffix() override
@@ -60,9 +61,10 @@ public:
             return;
         read_suffixed = true;
 
-        thread.join();
-        if (exception)
-            std::rethrow_exception(exception);
+        if (thread.joinable())
+            thread.join();
+        if (!exception_msg.empty())
+            throw Exception(exception_msg);
     }
 
 protected:
@@ -76,8 +78,10 @@ protected:
         Block block;
         do
         {
-            if (exception)
-                std::rethrow_exception(exception);
+            if (!exception_msg.empty())
+            {
+                throw Exception(exception_msg);
+            }
             if (isCancelled() || read_suffixed)
                 return {};
         } while (!queue.tryPop(block, try_action_millisecionds));
@@ -92,7 +96,7 @@ protected:
             in->readPrefix();
             while (!isCancelled())
             {
-                Block block;
+                Block block = in->read();
                 do
                 {
                     if (isCancelled() || read_suffixed)
@@ -101,16 +105,24 @@ protected:
                         queue.tryEmplace(0);
                         break;
                     }
-                } while (!queue.tryPush(block = in->read(), try_action_millisecionds));
+                } while (!queue.tryPush(block, try_action_millisecionds));
 
                 if (!block)
                     break;
             }
             in->readSuffix();
         }
+        catch (Exception & e)
+        {
+            exception_msg = e.message();
+        }
+        catch (std::exception & e)
+        {
+            exception_msg = e.what();
+        }
         catch (...)
         {
-            exception = std::current_exception();
+            exception_msg = "other error";
         }
     }
 
@@ -123,11 +135,11 @@ private:
     bool read_suffixed = false;
 
     std::thread thread;
-    std::mutex  mutex;
+    std::mutex mutex;
 
-    std::exception_ptr exception;
+    std::string exception_msg;
 
-    Logger * log;
+    LogWithPrefixPtr log;
     BlockInputStreamPtr in;
 };
-}
+} // namespace DB

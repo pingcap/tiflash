@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -28,26 +27,17 @@ extern const Event FileOpen;
 extern const Event FileOpenFailed;
 extern const Event Seek;
 extern const Event PSMWritePages;
-extern const Event PSMWriteCalls;
 extern const Event PSMWriteIOCalls;
 extern const Event PSMWriteBytes;
 extern const Event PSMReadPages;
-extern const Event PSMReadCalls;
 extern const Event PSMReadIOCalls;
 extern const Event PSMReadBytes;
 extern const Event PSMWriteFailed;
 extern const Event PSMReadFailed;
 } // namespace ProfileEvents
 
-namespace CurrentMetrics
-{
-extern const Metric Write;
-extern const Metric Read;
-} // namespace CurrentMetrics
-
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_FORMAT_VERSION;
@@ -63,7 +53,6 @@ extern const int FILE_SIZE_NOT_MATCH;
 
 namespace stable
 {
-
 namespace PageUtil
 {
 // =========================================================

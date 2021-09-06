@@ -1,12 +1,13 @@
 #pragma once
 #include <Storages/Page/PageStorage.h>
-#include <Interpreters/Context.h>
+
 #include <boost/core/noncopyable.hpp>
 #include <map>
 #include <tuple>
 
 namespace DB
 {
+using WritingFilesSnapshot = PageStorage::WritingFilesSnapshot;
 
 template <typename SnapshotPtr>
 class DataCompactor : private boost::noncopyable
@@ -19,15 +20,15 @@ public:
 
     struct Result
     {
-        bool   do_compaction     = false;
-        size_t candidate_size    = 0;
+        bool do_compaction = false;
+        size_t candidate_size = 0;
         size_t num_migrate_pages = 0;
-        size_t bytes_migrate     = 0; // only contain migrate data part
-        size_t bytes_written     = 0; // written bytes of migrate file
+        size_t bytes_migrate = 0; // only contain migrate data part
+        size_t bytes_written = 0; // written bytes of migrate file
     };
 
 public:
-    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const Context& global_ctx);
+    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & write_limiter_, const ReadLimiterPtr & read_limiter_);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
@@ -38,12 +39,12 @@ public:
      * WriteBatches. No matter we merge valid page(s) from that WriteBatch or not.
      *
      * Note that all types of PageFile in `page_files` should be `Formal`.
-     * Those PageFile whose id in `writing_file_ids`, theirs data will not be migrate.
-     *
+     * Those PageFile whose id in `writing_files`, theirs data will not be migrate.
+     * 
      * Return DataCompactor::Result and entries edit should be applied to PageStorage's entries.
      */
     std::tuple<Result, PageEntriesEdit>
-    tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const std::set<PageFileIdAndLevel> & writing_file_ids);
+    tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const WritingFilesSnapshot & writing_files);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -58,24 +59,25 @@ private:
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
-    std::tuple<PageFileSet, size_t, size_t> selectCandidateFiles( // keep readable indent
-        const PageFileSet &                  page_files,
-        const ValidPages &                   files_valid_pages,
-        const std::set<PageFileIdAndLevel> & writing_file_ids) const;
+    std::tuple<PageFileSet, PageFileSet, size_t, size_t> //
+    selectCandidateFiles(const PageFileSet & page_files,
+                         const ValidPages & files_valid_pages,
+                         const WritingFilesSnapshot & writing_files) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     migratePages(const SnapshotPtr & snapshot,
-                 const ValidPages &  files_valid_pages,
+                 const ValidPages & files_valid_pages,
                  const PageFileSet & candidates,
-                 const size_t        migrate_page_count) const;
+                 const PageFileSet & files_without_valid_pages,
+                 const size_t migrate_page_count) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     mergeValidPages(PageStorage::OpenReadFiles && data_readers,
-                    const ValidPages &            files_valid_pages,
-                    const SnapshotPtr &           snapshot,
-                    const WriteBatch::SequenceID  compact_sequence,
-                    PageFile &                    gc_file,
-                    MigrateInfos &                migrate_infos) const;
+                    const ValidPages & files_valid_pages,
+                    const SnapshotPtr & snapshot,
+                    const WriteBatch::SequenceID compact_sequence,
+                    PageFile & gc_file,
+                    MigrateInfos & migrate_infos) const;
 
     static PageIdAndEntries collectValidEntries(const PageIdSet & valid_pages, const SnapshotPtr & snap);
 
@@ -88,14 +90,15 @@ private:
     const String & storage_name;
 
     PSDiskDelegatorPtr delegator;
-    FileProviderPtr    file_provider;
+    FileProviderPtr file_provider;
 
     const PageStorage::Config config;
 
     Poco::Logger * log;
     Poco::Logger * page_file_log;
 
-    const Context& global_context;
+    const WriteLimiterPtr write_limiter;
+    const ReadLimiterPtr read_limiter;
 };
 
 } // namespace DB

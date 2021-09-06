@@ -22,12 +22,12 @@
 
 namespace DB
 {
-
 class MetricHandler : public Poco::Net::HTTPRequestHandler
 {
-
 public:
-    MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_) : collectable(collectable_) {}
+    MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_)
+        : collectable(collectable_)
+    {}
 
     ~MetricHandler() {}
 
@@ -49,7 +49,9 @@ private:
         {
             auto && metrics = collect->Collect();
             collected_metrics.insert(
-                collected_metrics.end(), std::make_move_iterator(metrics.begin()), std::make_move_iterator(metrics.end()));
+                collected_metrics.end(),
+                std::make_move_iterator(metrics.begin()),
+                std::make_move_iterator(metrics.end()));
         }
         return collected_metrics;
     }
@@ -59,9 +61,10 @@ private:
 
 class MetricHandlerFactory : public Poco::Net::HTTPRequestHandlerFactory
 {
-
 public:
-    MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_) : collectable(collectable_) {}
+    MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_)
+        : collectable(collectable_)
+    {}
 
     ~MetricHandlerFactory() {}
 
@@ -83,10 +86,11 @@ private:
 };
 
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
-    const TiFlashSecurityConfig & security_config, const std::weak_ptr<prometheus::Collectable> & collectable, const String & metrics_port)
+    const TiFlashSecurityConfig & security_config,
+    const std::weak_ptr<prometheus::Collectable> & collectable,
+    const String & metrics_port)
 {
-    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path,
-        security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         if (security_config.allowed_common_names.empty())
@@ -113,9 +117,14 @@ constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
 
 MetricsPrometheus::MetricsPrometheus(
-    Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & security_config)
-    : timer("Prometheus"), tiflash_metrics(context.getTiFlashMetrics()), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
+    Context & context,
+    const AsynchronousMetrics & async_metrics_,
+    const TiFlashSecurityConfig & security_config)
+    : timer("Prometheus")
+    , async_metrics(async_metrics_)
+    , log(&Poco::Logger::get("Prometheus"))
 {
+    auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
 
     metrics_interval = conf.getInt(status_metrics_interval, 15);
@@ -159,7 +168,7 @@ MetricsPrometheus::MetricsPrometheus(
             ::gethostname(hostname, sizeof(hostname));
 
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
-            gateway->RegisterCollectable(tiflash_metrics->registry);
+            gateway->RegisterCollectable(tiflash_metrics.registry);
 
             LOG_INFO(log, "Enable prometheus push mode; interval =" << metrics_interval << "; addr = " << metrics_addr);
         }
@@ -170,14 +179,14 @@ MetricsPrometheus::MetricsPrometheus(
         auto metrics_port = conf.getString(status_metrics_port);
         if (security_config.has_tls_config)
         {
-            server = getHTTPServer(security_config, tiflash_metrics->registry, metrics_port);
+            server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
             server->start();
             LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = " << metrics_port);
         }
         else
         {
             exposer = std::make_shared<prometheus::Exposer>(metrics_port);
-            exposer->RegisterCollectable(tiflash_metrics->registry);
+            exposer->RegisterCollectable(tiflash_metrics.registry);
             LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
         }
     }
@@ -187,23 +196,29 @@ MetricsPrometheus::MetricsPrometheus(
     }
 
     timer.scheduleAtFixedRate(
-        FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)), INIT_DELAY * MILLISECOND, metrics_interval * MILLISECOND);
+        FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)),
+        INIT_DELAY * MILLISECOND,
+        metrics_interval * MILLISECOND);
 }
 
-MetricsPrometheus::~MetricsPrometheus() { timer.cancel(true); }
+MetricsPrometheus::~MetricsPrometheus()
+{
+    timer.cancel(true);
+}
 
 void MetricsPrometheus::run()
 {
+    auto & tiflash_metrics = TiFlashMetrics::instance();
     for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
     {
         const auto value = ProfileEvents::counters[event].load(std::memory_order_relaxed);
-        tiflash_metrics->registered_profile_events[event]->Set(value);
+        tiflash_metrics.registered_profile_events[event]->Set(value);
     }
 
     for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
     {
         const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
-        tiflash_metrics->registered_current_metrics[metric]->Set(value);
+        tiflash_metrics.registered_current_metrics[metric]->Set(value);
     }
 
     auto async_metric_values = async_metrics.getValues();
@@ -211,7 +226,7 @@ void MetricsPrometheus::run()
     {
         const auto & origin_name = metric.first;
         const auto & value = metric.second;
-        if (!tiflash_metrics->registered_async_metrics.count(origin_name))
+        if (!tiflash_metrics.registered_async_metrics.count(origin_name))
         {
             // Register this async metric into registry on flight, as async metrics are not accumulated at once.
             auto prometheus_name = TiFlashMetrics::async_metrics_prefix + metric.first;
@@ -220,11 +235,11 @@ void MetricsPrometheus::run()
             auto & family = prometheus::BuildGauge()
                                 .Name(prometheus_name)
                                 .Help("System asynchronous metric " + prometheus_name)
-                                .Register(*tiflash_metrics->registry);
+                                .Register(*(tiflash_metrics.registry));
             // Use original name as key for the sake of further accesses.
-            tiflash_metrics->registered_async_metrics.emplace(origin_name, &family.Add({}));
+            tiflash_metrics.registered_async_metrics.emplace(origin_name, &family.Add({}));
         }
-        tiflash_metrics->registered_async_metrics[origin_name]->Set(value);
+        tiflash_metrics.registered_async_metrics[origin_name]->Set(value);
     }
 
     if (gateway != nullptr)

@@ -1,12 +1,10 @@
-#include <Storages/MergeTree/MergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
+#include <Storages/MergeTree/MergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
 
 
 namespace DB
 {
-
-
 MergeTreeThreadBlockInputStream::MergeTreeThreadBlockInputStream(
     const size_t thread,
     const MergeTreeReadPoolPtr & pool,
@@ -20,18 +18,15 @@ MergeTreeThreadBlockInputStream::MergeTreeThreadBlockInputStream(
     const String & prewhere_column,
     const Settings & settings,
     const Names & virt_column_names)
-    :
-    MergeTreeBaseBlockInputStream{storage, prewhere_actions, prewhere_column, max_block_size_rows,
-        preferred_block_size_bytes, preferred_max_column_in_block_size_bytes, settings.min_bytes_to_use_direct_io,
-        settings.max_read_buffer_size, use_uncompressed_cache, true, true, virt_column_names},
-    thread{thread},
-    pool{pool}
+    : MergeTreeBaseBlockInputStream{storage, prewhere_actions, prewhere_column, max_block_size_rows, preferred_block_size_bytes, preferred_max_column_in_block_size_bytes, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, use_uncompressed_cache, true, true, virt_column_names}
+    , thread{thread}
+    , pool{pool}
 {
     /// round min_marks_to_read up to nearest multiple of block_size expressed in marks
     if (max_block_size_rows)
     {
         min_marks_to_read = (min_marks_to_read_ * storage.index_granularity + max_block_size_rows - 1)
-                            / max_block_size_rows * max_block_size_rows / storage.index_granularity;
+            / max_block_size_rows * max_block_size_rows / storage.index_granularity;
     }
     else
         min_marks_to_read = min_marks_to_read_;
@@ -65,7 +60,9 @@ bool MergeTreeThreadBlockInputStream::getNewTask()
     const std::string path = task->data_part->getFullPath();
 
     /// Allows pool to reduce number of threads in case of too slow reads.
-    auto profile_callback = [this](ReadBufferFromFileBase::ProfileInfo info) { pool->profileFeedback(info); };
+    auto profile_callback = [this](ReadBufferFromFileBase::ProfileInfo info) {
+        pool->profileFeedback(info);
+    };
 
     if (!reader)
     {
@@ -77,16 +74,37 @@ bool MergeTreeThreadBlockInputStream::getNewTask()
         auto persisted_cache = storage.context.getPersistedCache();
 
         reader = std::make_unique<MergeTreeReader>(
-            path, task->data_part, task->columns, persisted_cache.get(), update_persisted_cache,
-            owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
-            storage, task->mark_ranges, min_bytes_to_use_direct_io, max_read_buffer_size, MergeTreeReader::ValueSizeMap{}, profile_callback);
+            path,
+            task->data_part,
+            task->columns,
+            persisted_cache.get(),
+            update_persisted_cache,
+            owned_uncompressed_cache.get(),
+            owned_mark_cache.get(),
+            save_marks_in_cache,
+            storage,
+            task->mark_ranges,
+            min_bytes_to_use_direct_io,
+            max_read_buffer_size,
+            MergeTreeReader::ValueSizeMap{},
+            profile_callback);
 
         if (prewhere_actions)
             pre_reader = std::make_unique<MergeTreeReader>(
-                path, task->data_part, task->pre_columns, persisted_cache.get(), update_persisted_cache,
-                owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
-                storage, task->mark_ranges, min_bytes_to_use_direct_io,
-                max_read_buffer_size, MergeTreeReader::ValueSizeMap{}, profile_callback);
+                path,
+                task->data_part,
+                task->pre_columns,
+                persisted_cache.get(),
+                update_persisted_cache,
+                owned_uncompressed_cache.get(),
+                owned_mark_cache.get(),
+                save_marks_in_cache,
+                storage,
+                task->mark_ranges,
+                min_bytes_to_use_direct_io,
+                max_read_buffer_size,
+                MergeTreeReader::ValueSizeMap{},
+                profile_callback);
     }
     else
     {
@@ -94,17 +112,37 @@ bool MergeTreeThreadBlockInputStream::getNewTask()
 
         /// retain avg_value_size_hints
         reader = std::make_unique<MergeTreeReader>(
-            path, task->data_part, task->columns, persisted_cache.get(), update_persisted_cache,
-            owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
-            storage, task->mark_ranges, min_bytes_to_use_direct_io, max_read_buffer_size,
-            reader->getAvgValueSizeHints(), profile_callback);
+            path,
+            task->data_part,
+            task->columns,
+            persisted_cache.get(),
+            update_persisted_cache,
+            owned_uncompressed_cache.get(),
+            owned_mark_cache.get(),
+            save_marks_in_cache,
+            storage,
+            task->mark_ranges,
+            min_bytes_to_use_direct_io,
+            max_read_buffer_size,
+            reader->getAvgValueSizeHints(),
+            profile_callback);
 
         if (prewhere_actions)
             pre_reader = std::make_unique<MergeTreeReader>(
-                path, task->data_part, task->pre_columns, persisted_cache.get(), update_persisted_cache,
-                owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
-                storage, task->mark_ranges, min_bytes_to_use_direct_io,
-                max_read_buffer_size, pre_reader->getAvgValueSizeHints(), profile_callback);
+                path,
+                task->data_part,
+                task->pre_columns,
+                persisted_cache.get(),
+                update_persisted_cache,
+                owned_uncompressed_cache.get(),
+                owned_mark_cache.get(),
+                save_marks_in_cache,
+                storage,
+                task->mark_ranges,
+                min_bytes_to_use_direct_io,
+                max_read_buffer_size,
+                pre_reader->getAvgValueSizeHints(),
+                profile_callback);
     }
 
     return true;
@@ -113,4 +151,4 @@ bool MergeTreeThreadBlockInputStream::getNewTask()
 
 MergeTreeThreadBlockInputStream::~MergeTreeThreadBlockInputStream() = default;
 
-}
+} // namespace DB

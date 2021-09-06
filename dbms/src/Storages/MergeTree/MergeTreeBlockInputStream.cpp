@@ -1,18 +1,17 @@
-#include <Storages/MergeTree/MergeTreeBlockInputStream.h>
-#include <Storages/MergeTree/MergeTreeBaseBlockInputStream.h>
-#include <Storages/MergeTree/MergeTreeReader.h>
 #include <Core/Defines.h>
+#include <Storages/MergeTree/MergeTreeBaseBlockInputStream.h>
+#include <Storages/MergeTree/MergeTreeBlockInputStream.h>
+#include <Storages/MergeTree/MergeTreeReader.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
-    extern const int MEMORY_LIMIT_EXCEEDED;
-    extern const int NOT_IMPLEMENTED;
-}
+extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
+extern const int MEMORY_LIMIT_EXCEEDED;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
 
 MergeTreeBlockInputStream::MergeTreeBlockInputStream(
@@ -34,17 +33,14 @@ MergeTreeBlockInputStream::MergeTreeBlockInputStream(
     const Names & virt_column_names,
     size_t part_index_in_query_,
     bool quiet)
-    :
-    MergeTreeBaseBlockInputStream{storage_, prewhere_actions_, prewhere_column_, max_block_size_rows_,
-        preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_, min_bytes_to_use_direct_io_,
-        max_read_buffer_size_, use_uncompressed_cache_, save_marks_in_cache_, update_persisted_cache_, virt_column_names},
-    ordered_names{column_names},
-    data_part{owned_data_part_},
-    part_columns_lock(data_part->columns_lock),
-    all_mark_ranges(mark_ranges_),
-    part_index_in_query(part_index_in_query_),
-    check_columns(check_columns),
-    path(data_part->getFullPath())
+    : MergeTreeBaseBlockInputStream{storage_, prewhere_actions_, prewhere_column_, max_block_size_rows_, preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_, min_bytes_to_use_direct_io_, max_read_buffer_size_, use_uncompressed_cache_, save_marks_in_cache_, update_persisted_cache_, virt_column_names}
+    , ordered_names{column_names}
+    , data_part{owned_data_part_}
+    , part_columns_lock(data_part->columns_lock)
+    , all_mark_ranges(mark_ranges_)
+    , part_index_in_query(part_index_in_query_)
+    , check_columns(check_columns)
+    , path(data_part->getFullPath())
 {
     /// Let's estimate total number of rows for progress bar.
     for (const auto & range : all_mark_ranges)
@@ -53,12 +49,7 @@ MergeTreeBlockInputStream::MergeTreeBlockInputStream(
     size_t total_rows = total_marks_count * storage.index_granularity;
 
     if (!quiet)
-        LOG_TRACE(log, "Reading " << all_mark_ranges.size() << " ranges from part " << data_part->name
-        << ", approx. " << total_rows
-        << (all_mark_ranges.size() > 1
-        ? ", up to " + toString((all_mark_ranges.back().end - all_mark_ranges.front().begin) * storage.index_granularity)
-        : "")
-        << " rows starting from " << all_mark_ranges.front().begin * storage.index_granularity);
+        LOG_TRACE(log, "Reading " << all_mark_ranges.size() << " ranges from part " << data_part->name << ", approx. " << total_rows << (all_mark_ranges.size() > 1 ? ", up to " + toString((all_mark_ranges.back().end - all_mark_ranges.front().begin) * storage.index_granularity) : "") << " rows starting from " << all_mark_ranges.front().begin * storage.index_granularity);
 
     addTotalRowsApprox(total_rows);
 
@@ -158,11 +149,9 @@ try
     std::reverse(remaining_mark_ranges.begin(), remaining_mark_ranges.end());
 
     auto size_predictor = (preferred_block_size_bytes == 0) ? nullptr
-                          : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, data_part->storage.getSampleBlock());
+                                                            : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, data_part->storage.getSampleBlock());
 
-    task = std::make_unique<MergeTreeReadTask>(data_part, remaining_mark_ranges, part_index_in_query, ordered_names,
-                                               column_name_set, columns, pre_columns, remove_prewhere_column, should_reorder,
-                                               std::move(size_predictor));
+    task = std::make_unique<MergeTreeReadTask>(data_part, remaining_mark_ranges, part_index_in_query, ordered_names, column_name_set, columns, pre_columns, remove_prewhere_column, should_reorder, std::move(size_predictor));
 
     if (!reader)
     {
@@ -174,15 +163,33 @@ try
         auto persisted_cache = storage.context.getPersistedCache();
 
         reader = std::make_unique<MergeTreeReader>(
-            path, data_part, columns, persisted_cache.get(), update_persisted_cache, owned_uncompressed_cache.get(),
-            owned_mark_cache.get(), save_marks_in_cache, storage,
-            all_mark_ranges, min_bytes_to_use_direct_io, max_read_buffer_size);
+            path,
+            data_part,
+            columns,
+            persisted_cache.get(),
+            update_persisted_cache,
+            owned_uncompressed_cache.get(),
+            owned_mark_cache.get(),
+            save_marks_in_cache,
+            storage,
+            all_mark_ranges,
+            min_bytes_to_use_direct_io,
+            max_read_buffer_size);
 
         if (prewhere_actions)
             pre_reader = std::make_unique<MergeTreeReader>(
-                path, data_part, pre_columns, persisted_cache.get(), update_persisted_cache, owned_uncompressed_cache.get(),
-                owned_mark_cache.get(), save_marks_in_cache, storage,
-                all_mark_ranges, min_bytes_to_use_direct_io, max_read_buffer_size);
+                path,
+                data_part,
+                pre_columns,
+                persisted_cache.get(),
+                update_persisted_cache,
+                owned_uncompressed_cache.get(),
+                owned_mark_cache.get(),
+                save_marks_in_cache,
+                storage,
+                all_mark_ranges,
+                min_bytes_to_use_direct_io,
+                max_read_buffer_size);
     }
 
     return true;
@@ -212,4 +219,4 @@ void MergeTreeBlockInputStream::finish()
 MergeTreeBlockInputStream::~MergeTreeBlockInputStream() = default;
 
 
-}
+} // namespace DB

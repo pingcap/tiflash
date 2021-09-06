@@ -1,36 +1,33 @@
+#include <Common/HashTable/HashMap.h>
+#include <Common/escapeForFileName.h>
+#include <IO/HashingWriteBuffer.h>
+#include <Interpreters/AggregationCommon.h>
+#include <Poco/File.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/TMTDataPartProperty.h>
-#include <Common/escapeForFileName.h>
-#include <Common/HashTable/HashMap.h>
-#include <Interpreters/AggregationCommon.h>
-#include <IO/HashingWriteBuffer.h>
-#include <Poco/File.h>
-
 #include <Storages/MutableSupport.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event MergeTreeDataWriterBlocks;
-    extern const Event MergeTreeDataWriterBlocksAlreadySorted;
-    extern const Event MergeTreeDataWriterRows;
-    extern const Event MergeTreeDataWriterUncompressedBytes;
-    extern const Event MergeTreeDataWriterCompressedBytes;
-}
+extern const Event MergeTreeDataWriterBlocks;
+extern const Event MergeTreeDataWriterBlocksAlreadySorted;
+extern const Event MergeTreeDataWriterRows;
+extern const Event MergeTreeDataWriterUncompressedBytes;
+extern const Event MergeTreeDataWriterCompressedBytes;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace
 {
-
 void buildScatterSelector(
-        const ColumnRawPtrs & columns,
-        const size_t partition_mod,
-        PODArray<size_t> & partition_num_to_first_row,
-        PODArray<UInt128> & partition_num_to_key,
-        IColumn::Selector & selector)
+    const ColumnRawPtrs & columns,
+    const size_t partition_mod,
+    PODArray<size_t> & partition_num_to_first_row,
+    PODArray<UInt128> & partition_num_to_key,
+    IColumn::Selector & selector)
 {
     /// Use generic hashed variant since partitioning is unlikely to be a bottleneck.
     using Data = HashMap<UInt128, size_t, TrivialHash>;
@@ -44,7 +41,7 @@ void buildScatterSelector(
         // TODO: Better mod calculating.
         key = UInt128(key.low % partition_mod);
 
-        typename Data::iterator it;
+        typename Data::LookupResult it;
         bool inserted;
         partitions_map.emplace(key, it, inserted);
 
@@ -53,7 +50,7 @@ void buildScatterSelector(
             partition_num_to_first_row.push_back(i);
             partition_num_to_key.push_back(key);
 
-            it->second = partitions_count;
+            it->getMapped() = partitions_count;
 
             ++partitions_count;
 
@@ -66,11 +63,11 @@ void buildScatterSelector(
         }
 
         if (partitions_count > 1)
-            selector[i] = it->second;
+            selector[i] = it->getMapped();
     }
 }
 
-}
+} // namespace
 
 BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(const Block & block)
 {
@@ -116,8 +113,7 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(const Block & block
     size_t partitions_count = partition_num_to_first_row.size();
     result.reserve(partitions_count);
 
-    auto get_partition = [&](size_t num)
-    {
+    auto get_partition = [&](size_t num) {
         if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable || data.merging_params.mode == MergeTreeData::MergingParams::Txn)
         {
             Row partition(1);
@@ -261,4 +257,4 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
     return new_data_part;
 }
 
-}
+} // namespace DB

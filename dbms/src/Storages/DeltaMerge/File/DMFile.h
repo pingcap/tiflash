@@ -20,7 +20,7 @@ namespace DM
 {
 class DMFile;
 using DMFilePtr = std::shared_ptr<DMFile>;
-using DMFiles   = std::vector<DMFilePtr>;
+using DMFiles = std::vector<DMFilePtr>;
 
 class DMFile : private boost::noncopyable
 {
@@ -61,19 +61,65 @@ public:
         }
     }
 
+    struct ReadMetaMode
+    {
+    private:
+        static constexpr size_t READ_NONE = 0x00;
+        static constexpr size_t READ_COLUMN_STAT = 0x01;
+        static constexpr size_t READ_PACK_STAT = 0x02;
+        static constexpr size_t READ_PACK_PROPERTY = 0x04;
+
+        size_t value;
+
+    public:
+        ReadMetaMode(size_t value_)
+            : value(value_)
+        {}
+
+        static ReadMetaMode all()
+        {
+            return ReadMetaMode(READ_COLUMN_STAT | READ_PACK_STAT | READ_PACK_PROPERTY);
+        }
+        static ReadMetaMode none()
+        {
+            return ReadMetaMode(READ_NONE);
+        }
+        // after restore with mode, you can call `getBytesOnDisk` to get disk size of this DMFile
+        static ReadMetaMode diskSizeOnly()
+        {
+            return ReadMetaMode(READ_COLUMN_STAT);
+        }
+        // after restore with mode, you can call `getRows`, `getBytes` to get memory size of this DMFile,
+        // and call `getBytesOnDisk` to get disk size of this DMFile
+        static ReadMetaMode memoryAndDiskSize()
+        {
+            return ReadMetaMode(READ_COLUMN_STAT | READ_PACK_STAT);
+        }
+
+        inline bool needColumnStat() const { return value & READ_COLUMN_STAT; }
+        inline bool needPackStat() const { return value & READ_PACK_STAT; }
+        inline bool needPackProperty() const { return value & READ_PACK_PROPERTY; }
+
+        inline bool isNone() const { return value == READ_NONE; }
+        inline bool isAll() const { return needColumnStat() && needPackStat() && needPackProperty(); }
+    };
+
     struct PackStat
     {
         UInt32 rows;
         UInt32 not_clean;
         UInt64 first_version;
         UInt64 bytes;
-        UInt8  first_tag;
+        UInt8 first_tag;
     };
 
     struct SubFileStat
     {
         SubFileStat() = default;
-        SubFileStat(UInt64 offset_, UInt64 size_) : offset{offset_}, size{size_} {}
+        SubFileStat(UInt64 offset_, UInt64 size_)
+            : offset{offset_}
+            , size{size_}
+        {}
         UInt64 offset;
         UInt64 size;
     };
@@ -83,32 +129,35 @@ public:
     {
         UInt64 pack_property_offset;
         UInt64 pack_property_size;
-        UInt64 meta_offset;
-        UInt64 meta_size;
+        UInt64 column_stat_offset;
+        UInt64 column_stat_size;
         UInt64 pack_stat_offset;
         UInt64 pack_stat_size;
 
         MetaPackInfo()
-            : pack_property_offset(0), pack_property_size(0), meta_offset(0), meta_size(0), pack_stat_offset(0), pack_stat_size(0)
-        {
-        }
+            : pack_property_offset(0)
+            , pack_property_size(0)
+            , column_stat_offset(0)
+            , column_stat_size(0)
+            , pack_stat_offset(0)
+            , pack_stat_size(0)
+        {}
     };
 
     struct Footer
     {
         MetaPackInfo meta_pack_info;
-        UInt64       sub_file_stat_offset;
-        UInt32       sub_file_num;
+        UInt64 sub_file_stat_offset;
+        UInt32 sub_file_num;
 
         DMSingleFileFormatVersion file_format_version;
 
         Footer()
-            : meta_pack_info(),
-              sub_file_stat_offset(0),
-              sub_file_num(0),
-              file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
-        {
-        }
+            : meta_pack_info()
+            , sub_file_stat_offset(0)
+            , sub_file_num(0)
+            , file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
+        {}
     };
 
     using PackStats = PaddedPODArray<PackStat>;
@@ -117,8 +166,12 @@ public:
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
 
-    static DMFilePtr
-    restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
+    static DMFilePtr restore(
+        const FileProviderPtr & file_provider,
+        UInt64 file_id,
+        UInt64 ref_id,
+        const String & parent_path,
+        const ReadMetaMode & read_meta_mode);
 
     struct ListOptions
     {
@@ -170,9 +223,9 @@ public:
         return bytes;
     }
 
-    size_t            getPacks() const { return pack_stats.size(); }
+    size_t getPacks() const { return pack_stats.size(); }
     const PackStats & getPackStats() const { return pack_stats; }
-    PackProperties &  getPackProperties() { return pack_properties; }
+    PackProperties & getPackProperties() { return pack_properties; }
 
     const ColumnStat & getColumnStat(ColId col_id) const
     {
@@ -192,10 +245,15 @@ public:
     }
 
 private:
-    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Logger * log_)
-        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(mode_), status(status_), log(log_)
-    {
-    }
+    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Poco::Logger * log_)
+        : file_id(file_id_)
+        , ref_id(ref_id_)
+        , parent_path(parent_path_)
+        , column_indices()
+        , mode(mode_)
+        , status(status_)
+        , log(log_)
+    {}
 
     bool isFolderMode() const { return mode == Mode::FOLDER; }
 
@@ -221,7 +279,7 @@ private:
 
     bool isColIndexExist(const ColId & col_id) const;
 
-    const String         encryptionBasePath() const;
+    const String encryptionBasePath() const;
     const EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
     const EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
     const EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
@@ -238,76 +296,81 @@ private:
     static String packStatFileName() { return "pack"; }
     static String packPropertyFileName() { return "property"; }
 
-    static String colDataFileName(const FileNameBase & file_name_base) { return file_name_base + ".dat"; }
-    static String colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + ".idx"; }
-    static String colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + ".mrk"; }
+    static String colDataFileName(const FileNameBase & file_name_base);
+    static String colIndexFileName(const FileNameBase & file_name_base);
+    static String colMarkFileName(const FileNameBase & file_name_base);
 
     using OffsetAndSize = std::tuple<size_t, size_t>;
     OffsetAndSize writeMetaToBuffer(WriteBuffer & buffer);
     OffsetAndSize writePackStatToBuffer(WriteBuffer & buffer);
     OffsetAndSize writePackPropertyToBuffer(WriteBuffer & buffer);
 
-    void writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
-    void writePackProperty(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
-    void readMeta(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
+    void writeMeta(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
+    void writePackProperty(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
+    void readColumnStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackStat(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
     void readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info);
 
-    void writeMetadata(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
-    void readMetadata(const FileProviderPtr & file_provider);
+    void writeMetadata(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
+    void readMetadata(const FileProviderPtr & file_provider, const ReadMetaMode & read_meta_mode);
 
     void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
 
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
 
     Status getStatus() const { return status; }
-    void   setStatus(Status status_) { status = status_; }
+    void setStatus(Status status_) { status = status_; }
 
-    void finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
+    void finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
     void finalizeForSingleFileMode(WriteBuffer & buffer);
 
     void addSubFileStat(const String & name, UInt64 offset, UInt64 size) { sub_file_stats.emplace(name, SubFileStat{offset, size}); }
-
-    const SubFileStat & getSubFileStat(const String & name) const { return sub_file_stats.at(name); }
 
     bool isSubFileExists(const String & name) const { return sub_file_stats.find(name) != sub_file_stats.end(); }
 
     const String subFilePath(const String & file_name) const { return isSingleFileMode() ? path() : path() + "/" + file_name; }
 
-    size_t subFileOffset(const String & file_name) const { return isSingleFileMode() ? getSubFileStat(file_name).offset : 0; }
+    size_t subFileOffset(const String & file_name) const { return isSingleFileMode() ? sub_file_stats.at(file_name).offset : 0; }
 
-    size_t subFileSize(const String & file_name) const
-    {
-        return isSingleFileMode() ? getSubFileStat(file_name).size : Poco::File(subFilePath(file_name)).getSize();
-    }
+    size_t subFileSize(const String & file_name) const { return sub_file_stats.at(file_name).size; }
+
+    void initializeSubFileStatsForFolderMode();
+
+    void initializeIndices();
 
 private:
     UInt64 file_id;
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    PackStats      pack_stats;
+    PackStats pack_stats;
     PackProperties pack_properties;
-    ColumnStats    column_stats;
+    ColumnStats column_stats;
+    std::unordered_set<ColId> column_indices;
 
-    Mode   mode;
+    Mode mode;
     Status status;
 
-    mutable std::mutex mutex;
-    SubFileStats       sub_file_stats;
+    SubFileStats sub_file_stats;
 
-    Logger * log;
+    Poco::Logger * log;
 
     friend class DMFileWriter;
     friend class DMFileReader;
     friend class DMFilePackFilter;
 };
 
-inline ReadBufferFromFileProvider
-openForRead(const FileProviderPtr & file_provider, const String & path, const EncryptionPath & encryption_path, const size_t & file_size)
+inline ReadBufferFromFileProvider openForRead(
+    const FileProviderPtr & file_provider,
+    const String & path,
+    const EncryptionPath & encryption_path,
+    const size_t & file_size)
 {
     return ReadBufferFromFileProvider(
-        file_provider, path, encryption_path, std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));
+        file_provider,
+        path,
+        encryption_path,
+        std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));
 }
 
 } // namespace DM

@@ -1,12 +1,11 @@
 #pragma once
 #include <Core/Block.h>
-#include <common/logger_useful.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
-
 template <typename T>
 class ColumnVector;
 using ColumnUInt8 = ColumnVector<UInt8>;
@@ -19,10 +18,7 @@ class MergeTreeReader;
 class MergeTreeRangeReader
 {
 public:
-    MergeTreeRangeReader(MergeTreeReader * merge_tree_reader, size_t index_granularity,
-                         MergeTreeRangeReader * prev_reader, ExpressionActionsPtr prewhere_actions,
-                         const String * prewhere_column_name, const Names * ordered_names,
-                         bool always_reorder, bool remove_prewhere_column, bool last_reader_in_chain);
+    MergeTreeRangeReader(MergeTreeReader * merge_tree_reader, size_t index_granularity, MergeTreeRangeReader * prev_reader, ExpressionActionsPtr prewhere_actions, const String * prewhere_column_name, const Names * ordered_names, bool always_reorder, bool remove_prewhere_column, bool last_reader_in_chain);
 
     MergeTreeRangeReader() = default;
 
@@ -163,7 +159,6 @@ public:
     ReadResult read(size_t max_rows, MarkRanges & ranges);
 
 private:
-
     ReadResult startReadingChain(size_t max_rows, MarkRanges & ranges);
     Block continueReadingChain(ReadResult & result);
     void executePrewhereActionsAndFilterColumns(ReadResult & result);
@@ -185,5 +180,4 @@ private:
     bool is_initialized = false;
 };
 
-}
-
+} // namespace DB

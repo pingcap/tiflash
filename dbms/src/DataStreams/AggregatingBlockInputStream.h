@@ -1,16 +1,15 @@
 #pragma once
 
-#include <Interpreters/Aggregator.h>
+#include <Common/LogWithPrefix.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Interpreters/Aggregator.h>
 
 
 namespace DB
 {
-
-
 /** Aggregates the stream of blocks using the specified key columns and aggregate functions.
   * Columns with aggregate functions adds to the end of the block.
   * If final = false, the aggregate functions are not finalized, that is, they are not replaced by their value, but contain an intermediate state of calculations.
@@ -23,8 +22,12 @@ public:
       * Aggregate functions are searched everywhere in the expression.
       * Columns corresponding to keys and arguments of aggregate functions must already be computed.
       */
-    AggregatingBlockInputStream(const BlockInputStreamPtr & input, const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_)
-        : params(params_), aggregator(params), file_provider{file_provider_}, final(final_)
+    AggregatingBlockInputStream(const BlockInputStreamPtr & input, const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, const LogWithPrefixPtr & log_ = nullptr)
+        : params(params_)
+        , aggregator(params)
+        , file_provider{file_provider_}
+        , final(final_)
+        , log(getLogWithPrefix(log_))
     {
         children.push_back(input);
     }
@@ -48,7 +51,7 @@ protected:
     {
         FileProviderPtr file_provider;
         ReadBufferFromFileProvider file_in;
-        CompressedReadBuffer compressed_in;
+        CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
         TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_);
@@ -56,10 +59,10 @@ protected:
     };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 
-     /** From here we will get the completed blocks after the aggregation. */
+    /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;
 
-    Logger * log = &Logger::get("AggregatingBlockInputStream");
+    LogWithPrefixPtr log;
 };
 
-}
+} // namespace DB

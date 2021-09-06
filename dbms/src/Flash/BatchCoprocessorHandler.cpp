@@ -11,83 +11,86 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 }
 
 BatchCoprocessorHandler::BatchCoprocessorHandler(CoprocessorContext & cop_context_,
-    const coprocessor::BatchRequest * cop_request_,
-    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
-    : CoprocessorHandler(cop_context_, nullptr, nullptr), cop_request(cop_request_), writer(writer_)
+                                                 const coprocessor::BatchRequest * cop_request_,
+                                                 ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
+    : CoprocessorHandler(cop_context_, nullptr, nullptr)
+    , cop_request(cop_request_)
+    , writer(writer_)
 {
-    log = (&Logger::get("BatchCoprocessorHandler"));
+    log = (&Poco::Logger::get("BatchCoprocessorHandler"));
 }
 
 grpc::Status BatchCoprocessorHandler::execute()
 {
     Stopwatch watch;
-    SCOPE_EXIT(
-        { GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_request_handle_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
 
     try
     {
         switch (cop_request->tp())
         {
-            case COP_REQ_TYPE_DAG:
+        case COP_REQ_TYPE_DAG:
+        {
+            GET_METRIC(tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
+            SCOPE_EXIT(
+                { GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
+
+            const auto dag_request = ({
+                tipb::DAGRequest dag_req;
+                dag_req.ParseFromString(cop_request->data());
+                std::move(dag_req);
+            });
+            RegionInfoMap regions;
+            RegionInfoList retry_regions;
+            for (auto & r : cop_request->regions())
             {
-                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
-                GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
-                SCOPE_EXIT(
-                    { GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
-
-                const auto dag_request = ({
-                    tipb::DAGRequest dag_req;
-                    dag_req.ParseFromString(cop_request->data());
-                    std::move(dag_req);
-                });
-                RegionInfoMap regions;
-                RegionInfoList retry_regions;
-                for (auto & r : cop_request->regions())
+                auto res = regions.emplace(r.region_id(),
+                                           RegionInfo(
+                                               r.region_id(),
+                                               r.region_epoch().version(),
+                                               r.region_epoch().conf_ver(),
+                                               GenCopKeyRange(r.ranges()),
+                                               nullptr));
+                if (!res.second)
                 {
-                    auto res = regions.emplace(r.region_id(),
-                        RegionInfo(
-                            r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges()), nullptr));
-                    if (!res.second)
-                    {
-                        retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
-                            CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
-                    }
+                    retry_regions.emplace_back(RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
                 }
-                LOG_DEBUG(log,
-                    __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
-
-                DAGDriver<true> driver(cop_context.db_context, dag_request, regions, retry_regions,
-                    cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
-                    writer);
-                // batch execution;
-                driver.execute();
-                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
-                break;
             }
-            case COP_REQ_TYPE_ANALYZE:
-            case COP_REQ_TYPE_CHECKSUM:
-            default:
-                throw TiFlashException("Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
-                    Errors::Coprocessor::Unimplemented);
+            LOG_DEBUG(log,
+                      __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
+
+            DAGDriver<true> driver(cop_context.db_context, dag_request, regions, retry_regions, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
+            // batch execution;
+            driver.execute();
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
+            break;
+        }
+        case COP_REQ_TYPE_ANALYZE:
+        case COP_REQ_TYPE_CHECKSUM:
+        default:
+            throw TiFlashException("Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
+                                   Errors::Coprocessor::Unimplemented);
         }
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
     {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": TiFlash Exception: " << e.displayText() << "\n" << e.getStackTrace().toString());
-        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": TiFlash Exception: " << e.displayText() << "\n"
+                                           << e.getStackTrace().toString());
+        GET_METRIC(tiflash_coprocessor_request_error, reason_internal_error).Increment();
         return recordError(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n"
+                                           << e.getStackTrace().toString());
         return recordError(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)

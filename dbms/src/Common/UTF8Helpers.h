@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Core/Types.h>
 #include <Common/BitHelpers.h>
+#include <Core/Types.h>
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -10,11 +10,8 @@
 
 namespace DB
 {
-
-
 namespace UTF8
 {
-
 static const UInt8 CONTINUATION_OCTET_MASK = 0b11000000u;
 static const UInt8 CONTINUATION_OCTET = 0b10000000u;
 
@@ -25,14 +22,14 @@ inline bool isContinuationOctet(const UInt8 octet)
 }
 
 /// moves `s` backward until either first non-continuation octet or begin
-inline void syncBackward(const UInt8 * & s, const UInt8 * const begin)
+inline void syncBackward(const UInt8 *& s, const UInt8 * const begin)
 {
     while (isContinuationOctet(*s) && s > begin)
         --s;
 }
 
 /// moves `s` forward until either first non-continuation octet or string end is met
-inline void syncForward(const UInt8 * & s, const UInt8 * const end)
+inline void syncForward(const UInt8 *& s, const UInt8 * const end)
 {
     while (s < end && isContinuationOctet(*s))
         ++s;
@@ -72,7 +69,7 @@ inline size_t countCodePoints(const UInt8 * data, size_t size)
     return res;
 }
 
-}
+} // namespace UTF8
 
 
-}
+} // namespace DB

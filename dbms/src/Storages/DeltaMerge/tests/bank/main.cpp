@@ -1,15 +1,16 @@
+#include <Common/FailPoint.h>
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <TestUtils/TiFlashTestBasic.h>
-
 #include <Storages/DeltaMerge/tests/bank/DeltaMergeStoreProxy.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <iostream>
 #include <memory>
 #include <thread>
+
 #include "SimpleLockManager.h"
 
 
@@ -41,11 +42,11 @@ void moveMoney(DeltaMergeStoreProxy & proxy, UInt64 from, UInt64 to, UInt64 amou
               << std::endl;
 }
 void work(DeltaMergeStoreProxy & proxy,
-          SimpleLockManager &    manager,
-          IDGenerator &          tso_gen,
-          IDGenerator &          trans_id_gen,
-          UInt64                 max_id,
-          UInt64                 try_num)
+          SimpleLockManager & manager,
+          IDGenerator & tso_gen,
+          IDGenerator & trans_id_gen,
+          UInt64 max_id,
+          UInt64 try_num)
 {
     for (size_t i = 0; i < try_num; i++)
     {
@@ -70,8 +71,8 @@ void work(DeltaMergeStoreProxy & proxy,
             manager.writeUnlock(s_id, tid);
             return;
         }
-        UInt64 amount    = std::rand() % 100;
-        int    direction = std::rand() % 2;
+        UInt64 amount = std::rand() % 100;
+        int direction = std::rand() % 2;
         if (direction == 0)
         {
             moveMoney(proxy, s_id, b_id, amount, tso);
@@ -86,12 +87,12 @@ void work(DeltaMergeStoreProxy & proxy,
 }
 
 void verify(DeltaMergeStoreProxy & proxy,
-            SimpleLockManager &    manager,
-            IDGenerator &          tso_gen,
-            IDGenerator &          trans_id_gen,
-            UInt64                 max_id,
-            UInt64                 total,
-            UInt64                 try_num)
+            SimpleLockManager & manager,
+            IDGenerator & tso_gen,
+            IDGenerator & trans_id_gen,
+            UInt64 max_id,
+            UInt64 total,
+            UInt64 try_num)
 {
     for (size_t i = 0; i < try_num; i++)
     {
@@ -122,12 +123,12 @@ void verify(DeltaMergeStoreProxy & proxy,
 void run_bank(UInt64 account, UInt64 initial_balance, UInt64 worker_count, UInt64 try_num)
 {
     DeltaMergeStoreProxy proxy;
-    SimpleLockManager    manager;
-    IDGenerator          tso_gen;
-    IDGenerator          trans_id_gen;
+    SimpleLockManager manager;
+    IDGenerator tso_gen;
+    IDGenerator trans_id_gen;
 
     UInt64 start = 0;
-    UInt64 end   = account;
+    UInt64 end = account;
     UInt64 total = (end - start) * initial_balance;
 
     for (UInt64 id = start; id < end; id++)
@@ -168,10 +169,16 @@ int main(int argc, char * argv[])
         std::cout << "Usage: <cmd> account balance worker try_num" << std::endl;
         return 1;
     }
+    DB::tests::TiFlashTestEnv::setupLogger();
+    DB::tests::TiFlashTestEnv::initializeGlobalContext();
+#ifdef FIU_ENABLE
+    fiu_init(0); // init failpoint
+#endif
     UInt64 account = std::stoul(argv[1]);
     UInt64 balance = std::stoul(argv[2]);
-    UInt64 worker  = std::stoul(argv[3]);
+    UInt64 worker = std::stoul(argv[3]);
     UInt64 try_num = std::stoul(argv[4]);
     DB::DM::tests::run_bank(account, balance, worker, try_num);
+    DB::tests::TiFlashTestEnv::shutdown();
     return 0;
 }

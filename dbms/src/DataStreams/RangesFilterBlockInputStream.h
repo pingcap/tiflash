@@ -35,7 +35,7 @@ private:
     BlockInputStreamPtr input;
     const HandleRange<HandleType> ranges;
     const size_t handle_column_index;
-    Logger * log = &Logger::get("RangesFilterBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("RangesFilterBlockInputStream");
 };
 
 } // namespace DB

@@ -1,19 +1,16 @@
-#include <common/JSON.h>
-#include <Poco/Path.h>
-#include <IO/WriteBufferFromFile.h>
+#include <Common/FileChecker.h>
+#include <Common/escapeForFileName.h>
 #include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-#include <Common/escapeForFileName.h>
-
-#include <Common/FileChecker.h>
+#include <Poco/Path.h>
+#include <common/JSON.h>
 
 
 namespace DB
 {
-
-
 FileChecker::FileChecker(const std::string & file_info_path_)
 {
     setPath(file_info_path_);
@@ -150,4 +147,4 @@ void FileChecker::load(Map & map) const
         map[unescapeForFileName(name_value.getName())] = name_value.getValue()["size"].toUInt();
 }
 
-}
+} // namespace DB

@@ -15,7 +15,6 @@ class Logger;
 
 namespace DB
 {
-
 class TMTContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -24,12 +23,13 @@ struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
 struct SSTReader;
 class StorageDeltaMerge;
+using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
+struct DecodingStorageSchemaSnapshot;
 
 namespace DM
 {
-
 struct ColumnDefine;
-using ColumnDefines    = std::vector<ColumnDefine>;
+using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 
 class DMFile;
@@ -48,11 +48,12 @@ enum class FileConvertJobType
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
-    using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
     SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
-                                  TiDB::SnapshotApplyMethod            method_,
-                                  FileConvertJobType                   job_type_,
-                                  TMTContext &                         tmt_);
+                                  StorageDeltaMergePtr storage_,
+                                  const DecodingStorageSchemaSnapshot & schema_snap_,
+                                  TiDB::SnapshotApplyMethod method_,
+                                  FileConvertJobType job_type_,
+                                  TMTContext & tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
@@ -65,7 +66,6 @@ public:
     void cancel();
 
 private:
-
     bool newDTFileStream();
 
     // Stop the process for decoding committed data into DTFiles
@@ -73,17 +73,19 @@ private:
 
 private:
     BoundedSSTFilesToBlockInputStreamPtr child;
-    const TiDB::SnapshotApplyMethod      method;
-    const FileConvertJobType             job_type;
-    TMTContext &                         tmt;
-    Poco::Logger *                       log;
+    StorageDeltaMergePtr storage;
+    const DecodingStorageSchemaSnapshot & schema_snap;
+    const TiDB::SnapshotApplyMethod method;
+    const FileConvertJobType job_type;
+    TMTContext & tmt;
+    Poco::Logger * log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 
     std::vector<DMFilePtr> ingest_files;
 
-    size_t    schema_sync_trigger_count = 0;
-    size_t    commit_rows               = 0;
+    size_t schema_sync_trigger_count = 0;
+    size_t commit_rows = 0;
     Stopwatch watch;
 };
 

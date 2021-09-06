@@ -1,10 +1,9 @@
 #pragma once
 
-#include <Common/ZooKeeper/Common.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <time.h>
 
 #include <condition_variable>
+#include <functional>
 #include <list>
 #include <mutex>
 #include <set>
@@ -21,7 +20,6 @@ class Logger;
 
 namespace DB
 {
-
 class Context;
 
 /** Every two seconds checks configuration files for update.
@@ -71,7 +69,7 @@ protected:
 private:
     static constexpr auto reload_interval = std::chrono::seconds(2);
 
-    Poco::Logger * log = &Logger::get(name);
+    Poco::Logger * log = &Poco::Logger::get(name);
 
     std::string path;
     FilesChangesTracker files;

@@ -6,9 +6,8 @@ services:
     image: hub.pingcap.net/tiflash/tiflash-ci-base
     volumes:
       - ./config/tics_tmt.toml:/config.toml:ro
-      - ./config/users.toml:/users.toml:ro
-      - ./data/tics_tmt:/tmp/tiflash/data
-      - ./log/tics_tmt:/tmp/tiflash/log
+      - ./data/tiflash:/tmp/tiflash/data
+      - ./log/tiflash:/tmp/tiflash/log
       - ..:/tests
       - ../docker/_env.sh:/tests/_env.sh
       - ../.build/tiflash:/tiflash

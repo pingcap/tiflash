@@ -9,15 +9,16 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7 AND NOT CMAKE_VERSION VERSION_LESS 2.8.9)
         message (FATAL_ERROR "GCC version must be at least 7! For example, if GCC 7 is available under gcc-7, g++-7 names, do the following: export CC=gcc-7 CXX=g++-7; rm -rf CMakeCache.txt CMakeFiles; and re run cmake or ./release.")
     endif ()
+    set(MOST_DEBUGGABLE_LEVEL -Og)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # Require at least clang 5
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5)
         message (FATAL_ERROR "Clang version must be at least 5!")
     endif ()
+    set(MOST_DEBUGGABLE_LEVEL -O0)
 else ()
     message (WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang 5+ and GCC 7+.")
 endif ()
-
 
 # Write compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -38,6 +39,32 @@ message (STATUS "CMAKE_BUILD_TYPE: " ${CMAKE_BUILD_TYPE} )
 set (CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Debug;Release;MinSizeRel;ASan;UBSan" CACHE STRING "" FORCE)
 
 include (cmake/arch.cmake)
+
+if (ARCH_AMD64)
+    option(TIFLASH_ENABLE_AVX_SUPPORT "enable AVX and AVX2 support" ON)
+    option(TIFLASH_ENABLE_AVX512_SUPPORT "enable AVX512 support" ON)
+endif ()
+
+if (ARCH_AARCH64)
+    option(TIFLASH_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" ON)
+    option(TIFLASH_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
+endif ()
+
+if (TIFLASH_ENABLE_AVX_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_AVX_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_AVX512_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_AVX512_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_ASIMD_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_ASIMD_SUPPORT=1)
+endif ()
+
+if (TIFLASH_ENABLE_SVE_SUPPORT)
+    add_definitions(-DTIFLASH_ENABLE_SVE_SUPPORT=1)
+endif ()
 
 if (NOT MSVC)
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wall")    # -Werror is also added inside directories with our own code.
@@ -162,11 +189,11 @@ endif ()
 set (CMAKE_BUILD_COLOR_MAKEFILE          ON)
 set (CMAKE_CXX_FLAGS                     "${CMAKE_CXX_FLAGS} ${COMPILER_FLAGS} ${PLATFORM_EXTRA_CXX_FLAG} -fno-omit-frame-pointer ${COMMON_WARNING_FLAGS} ${CXX_WARNING_FLAGS} ${GLIBC_COMPATIBILITY_COMPILE_FLAGS}")
 set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CMAKE_CXX_FLAGS_ADD}")
-set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} -O0 -fno-inline ${CMAKE_CXX_FLAGS_ADD}")
+set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_CXX_FLAGS_ADD}")
 
 set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fno-omit-frame-pointer ${COMMON_WARNING_FLAGS} ${GLIBC_COMPATIBILITY_COMPILE_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
-set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 -fno-inline ${CMAKE_C_FLAGS_ADD}")
+set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
 if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND ARCH_FREEBSD))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
@@ -280,7 +307,7 @@ include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
 include (cmake/find_prometheus.cmake)
 include (cmake/find_raftstore_proxy.cmake)
-
+include (cmake/find_xxhash.cmake)
 
 include (cmake/find_contrib_lib.cmake)
 find_contrib_lib(cityhash)
@@ -297,6 +324,9 @@ include (libs/libcommon/cmake/find_cctz.cmake)
 if (ENABLE_MYSQL_STORAGE)
     include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
 endif()
+
+option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
+
 include (libs/libdaemon/cmake/find_unwind.cmake)
 
 include (cmake/print_flags.cmake)
@@ -331,7 +361,20 @@ if (ENABLE_TESTS)
     enable_testing()
 endif ()
 
+if (ARCH_AMD64)
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-mvpclmulqdq -Werror -Wall -Wextra" TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+    if(TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
+        add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=1)
+    else()
+        add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+    endif()
+else()
+    add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+endif()
+
 add_subdirectory (libs)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
+

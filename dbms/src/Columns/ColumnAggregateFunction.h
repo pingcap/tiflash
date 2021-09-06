@@ -1,13 +1,9 @@
 #pragma once
 
-#include <Common/Arena.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
-
 #include <Columns/IColumn.h>
-
+#include <Common/Arena.h>
 #include <Core/Field.h>
-
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
@@ -15,8 +11,6 @@
 
 namespace DB
 {
-
-
 /** Column of states of aggregate functions.
   * Presented as an array of pointers to the states of aggregate functions (data).
   * The states themselves are stored in one of the pools (arenas).
@@ -78,12 +72,16 @@ private:
     }
 
     ColumnAggregateFunction(const AggregateFunctionPtr & func_, const Arenas & arenas_)
-        : arenas(arenas_), func(func_)
+        : arenas(arenas_)
+        , func(func_)
     {
     }
 
     ColumnAggregateFunction(const ColumnAggregateFunction & src_)
-        : arenas(src_.arenas), func(src_.func), src(src_.getPtr()), data(src_.data.begin(), src_.data.end())
+        : arenas(src_.arenas)
+        , func(src_.func)
+        , src(src_.getPtr())
+        , data(src_.data.begin(), src_.data.end())
     {
     }
 
@@ -138,15 +136,15 @@ public:
 
     void insertDefault() override;
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    void updateWeakHash32(WeakHash32 & hash) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
     size_t byteSize() const override;
 
@@ -188,4 +186,4 @@ public:
 };
 
 
-}
+} // namespace DB

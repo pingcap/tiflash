@@ -1,13 +1,12 @@
 #pragma once
 
-#include <cstddef>
-
 #include <common/likely.h>
+
+#include <cstddef>
 
 
 namespace DB
 {
-
 /** An array of (almost) unchangable size:
   *  the size is specified in the constructor;
   *  `resize` method removes old data, and necessary only for
@@ -82,7 +81,7 @@ public:
         src.setEmpty();
     }
 
-    AutoArray & operator= (AutoArray && src)
+    AutoArray & operator=(AutoArray && src)
     {
         if (this == &src)
             return *this;
@@ -166,7 +165,7 @@ public:
     const_iterator begin() const { return &elem(0); }
     const_iterator end() const { return &elem(size()); }
 
-    bool operator== (const AutoArray<T> & rhs) const
+    bool operator==(const AutoArray<T> & rhs) const
     {
         size_t s = size();
 
@@ -180,12 +179,12 @@ public:
         return true;
     }
 
-    bool operator!= (const AutoArray<T> & rhs) const
+    bool operator!=(const AutoArray<T> & rhs) const
     {
         return !(*this == rhs);
     }
 
-    bool operator< (const AutoArray<T> & rhs) const
+    bool operator<(const AutoArray<T> & rhs) const
     {
         size_t s = size();
         size_t rhs_s = rhs.size();
@@ -266,4 +265,4 @@ private:
     }
 };
 
-}
+} // namespace DB
