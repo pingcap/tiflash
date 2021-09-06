@@ -26,7 +26,7 @@ MPPTunnel::MPPTunnel(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_num(input_num_)
     , send_thr(nullptr)
-    , send_queue(input_num_*5) /// TODO(fzh) set a reasonable parameter
+    , send_queue(input_num_ * 5) /// TODO(fzh) set a reasonable parameter
     , log(&Poco::Logger::get(tunnel_id))
 {
 }
@@ -37,7 +37,7 @@ MPPTunnel::~MPPTunnel()
     {
         if (!finished)
             writeDone();
-        if(nullptr != send_thr)
+        if (nullptr != send_thr)
         {
             send_thr->join();
         }
@@ -153,7 +153,7 @@ void MPPTunnel::connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
         writer = writer_;
         cv_for_connected.notify_all();
     }
-    send_thr = std::make_unique<std::thread>([this]{ send();});
+    send_thr = std::make_unique<std::thread>([this] { send(); });
 }
 
 

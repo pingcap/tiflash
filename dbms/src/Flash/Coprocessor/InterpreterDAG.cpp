@@ -88,7 +88,7 @@ BlockIO InterpreterDAG::execute()
     pipeline.streams = streams;
 
     /// only run in MPP
-    if(context.getDAGContext()->tunnel_set != nullptr)
+    if (context.getDAGContext()->tunnel_set != nullptr)
     {
         /// add exchange sender on the top of operators
         const auto & exchangeSender = dag.getDAGRequest().root_executor().exchange_sender();
@@ -101,9 +101,9 @@ BlockIO InterpreterDAG::execute()
         if (has_collator_info && part_keys.size() != exchangeSender.types_size())
         {
             throw TiFlashException(std::string(__PRETTY_FUNCTION__)
-            + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
-              "enabled",
-              Errors::Coprocessor::BadRequest);
+                                       + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
+                                         "enabled",
+                                   Errors::Coprocessor::BadRequest);
         }
         for (int i = 0; i < part_keys.size(); i++)
         {
@@ -123,8 +123,14 @@ BlockIO InterpreterDAG::execute()
         pipeline.transform([&](auto & stream) {
             // construct writer
             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
-                context.getDAGContext()->tunnel_set, partition_col_id,collators, exchangeSender.tp(), context.getSettings().dag_records_per_chunk,
-                dag.getEncodeType(), dag.getResultFieldTypes(), dag.getDAGContext());
+                context.getDAGContext()->tunnel_set,
+                partition_col_id,
+                collators,
+                exchangeSender.tp(),
+                context.getSettings().dag_records_per_chunk,
+                dag.getEncodeType(),
+                dag.getResultFieldTypes(),
+                dag.getDAGContext());
             stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer));
         });
     }

@@ -78,7 +78,7 @@ private:
 
     std::unique_ptr<std::thread> send_thr;
 
-    ConcurrentBoundedQueue<std::shared_ptr<mpp::MPPDataPacket>>send_queue;
+    ConcurrentBoundedQueue<std::shared_ptr<mpp::MPPDataPacket>> send_queue;
 
     Poco::Logger * log;
 };

@@ -9,7 +9,9 @@ namespace DB
 class ExchangeSender : public IProfilingBlockInputStream
 {
 public:
-    ExchangeSender(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer): writer(std::move(writer)), log(&Poco::Logger::get("ExchangeSender"))
+    ExchangeSender(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer)
+        : writer(std::move(writer))
+        , log(&Poco::Logger::get("ExchangeSender"))
     {
         children.push_back(input);
     }
