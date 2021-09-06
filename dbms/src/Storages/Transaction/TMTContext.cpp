@@ -16,6 +16,8 @@ namespace DB
 {
 // default batch-read-index timeout is 10_000ms.
 extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
+// default wait-index timeout is 5 * 60_000ms.
+extern const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
@@ -145,6 +147,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
     static constexpr const char * REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
+    static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
@@ -155,6 +158,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     {
         replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
         batch_read_index_timeout_ms = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
+        wait_index_timeout_ms = config.getUInt64(WAIT_INDEX_TIMEOUT_MS, DEFAULT_WAIT_INDEX_TIMEOUT_MS);
         wait_region_ready_timeout_sec = ({
             int64_t t = config.getInt64(WAIT_REGION_READY_TIMEOUT_SEC, /*20min*/ 20 * 60);
             t = t >= 0 ? t : std::numeric_limits<int64_t>::max(); // set -1 to wait infinitely
@@ -164,6 +168,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     {
         LOG_INFO(&Poco::Logger::get(__FUNCTION__),
                  "read-index max thread num: " << replicaReadMaxThread() << ", timeout: " << batchReadIndexTimeout() << "ms;"
+                                               << " wait-index timeout: " << waitIndexTimeout() << "ms;"
                                                << " wait-region-ready timeout: " << waitRegionReadyTimeout() << "s");
     }
 }
@@ -200,6 +205,10 @@ UInt64 TMTContext::replicaReadMaxThread() const
 UInt64 TMTContext::batchReadIndexTimeout() const
 {
     return batch_read_index_timeout_ms.load(std::memory_order_relaxed);
+}
+UInt64 TMTContext::waitIndexTimeout() const
+{
+    return wait_index_timeout_ms.load(std::memory_order_relaxed);
 }
 Int64 TMTContext::waitRegionReadyTimeout() const
 {
