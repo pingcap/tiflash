@@ -1,12 +1,9 @@
-#include <port/unistd.h>
-#include <errno.h>
-
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
-#include <Common/CurrentMetrics.h>
-
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/WriteHelpers.h>
+#include <errno.h>
+#include <port/unistd.h>
 
 
 namespace ProfileEvents
@@ -15,23 +12,17 @@ extern const Event FileFSync;
 extern const Event WriteBufferFromFileDescriptorWrite;
 extern const Event WriteBufferFromFileDescriptorWriteFailed;
 extern const Event WriteBufferFromFileDescriptorWriteBytes;
-}
-
-namespace CurrentMetrics
-{
-    extern const Metric Write;
-}
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
-    extern const int CANNOT_FSYNC;
-    extern const int CANNOT_SEEK_THROUGH_FILE;
-    extern const int CANNOT_TRUNCATE_FILE;
-}
+extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
+extern const int CANNOT_FSYNC;
+extern const int CANNOT_SEEK_THROUGH_FILE;
+extern const int CANNOT_TRUNCATE_FILE;
+} // namespace ErrorCodes
 
 
 void WriteBufferFromFileDescriptor::nextImpl()
@@ -46,7 +37,6 @@ void WriteBufferFromFileDescriptor::nextImpl()
 
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
             res = ::write(fd, working_buffer.begin() + bytes_written, offset() - bytes_written);
         }
 
@@ -76,7 +66,9 @@ WriteBufferFromFileDescriptor::WriteBufferFromFileDescriptor(
     size_t buf_size,
     char * existing_memory,
     size_t alignment)
-    : WriteBufferFromFileBase(buf_size, existing_memory, alignment), fd(fd_) {}
+    : WriteBufferFromFileBase(buf_size, existing_memory, alignment)
+    , fd(fd_)
+{}
 
 
 WriteBufferFromFileDescriptor::~WriteBufferFromFileDescriptor()
@@ -128,4 +120,4 @@ void WriteBufferFromFileDescriptor::doTruncate(off_t length)
         throwFromErrno("Cannot truncate file " + getFileName(), ErrorCodes::CANNOT_TRUNCATE_FILE);
 }
 
-}
+} // namespace DB
