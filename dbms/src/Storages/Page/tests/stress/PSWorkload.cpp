@@ -1,4 +1,4 @@
-#include "PSWorkload.h"
+#include <PSWorkload.h>
 
 
 void StressWorkload::result()
@@ -132,10 +132,11 @@ void StressWorkloadManger::runWorkload()
             auto & func = it.second.second;
             auto workload = std::shared_ptr<StressWorkload>(func());
             workload->init(options);
-            LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", it.second.first, workload->desc()));
+            LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
             workload->run();
-            if (workload->verify())
+            if (!workload->verify())
             {
+                LOG_WARNING(StressEnv::logger, fmt::format("work load : {} failed.", name));
                 workload->failed();
                 break;
             }

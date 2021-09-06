@@ -29,14 +29,11 @@ list (APPEND page_stress_testing_sources
     stress/workload/HeavyMemoryCostInGC.cpp
 )
 
-list (APPEND page_stress_testing_header
-    stress/PSStressEnv.h
-    stress/PSBackground.h
-    stress/PSRunnable.h
-)
-
-add_executable(page_stress_testing EXCLUDE_FROM_ALL ${page_stress_testing_sources} )
+add_headers_and_sources(page_stress_testing stress)
+add_headers_and_sources(page_stress_testing_worload stress/workload)
+add_executable(page_stress_testing EXCLUDE_FROM_ALL ${page_stress_testing_sources} ${page_stress_testing_worload_sources} )
 target_link_libraries(page_stress_testing page_storage)
+target_include_directories(page_stress_testing PRIVATE stress)
 target_compile_options(page_stress_testing PRIVATE -Wno-format -lc++) # turn off printf format check
 
 # FIXME: mock disk full by FailPoint, and move this test into a unittest case.

@@ -1,4 +1,4 @@
-#include "../PSWorkload.h"
+#include <PSWorkload.h>
 
 class NormalWorkload : public StressWorkload
     , public StressWorkloadFunc<NormalWorkload>

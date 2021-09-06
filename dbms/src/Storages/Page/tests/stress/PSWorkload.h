@@ -3,16 +3,15 @@
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Encryption/MockKeyManager.h>
+#include <PSBackground.h>
+#include <PSRunnable.h>
+#include <PSStressEnv.h>
 #include <Poco/Logger.h>
 #include <Poco/ThreadPool.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <fmt/format.h>
-
-#include "PSBackground.h"
-#include "PSRunnable.h"
-#include "PSStressEnv.h"
 
 #define NORMAL_WORKLOAD 0
 
@@ -171,4 +170,4 @@ private:
                                                 []() -> WORKLOAD * {                    \
                                                     return new WORKLOAD();              \
                                                 });                                     \
-    }\
+    }

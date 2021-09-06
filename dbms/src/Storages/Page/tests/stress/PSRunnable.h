@@ -1,7 +1,6 @@
 #pragma once
+#include <PSStressEnv.h>
 #include <Poco/Runnable.h>
-
-#include "PSStressEnv.h"
 
 const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
 

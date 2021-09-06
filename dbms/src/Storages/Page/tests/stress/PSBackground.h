@@ -1,7 +1,7 @@
 #pragma once
+#include <Common/Stopwatch.h>
+#include <PSStressEnv.h>
 #include <Poco/Timer.h>
-
-#include "PSStressEnv.h"
 
 class PSMetricsDumper
 {
@@ -25,6 +25,11 @@ public:
     }
 
     void start();
+
+    UInt32 getMemoryPeak()
+    {
+        return memory_biggest;
+    }
 
 private:
     size_t status_interval = 0;
@@ -56,8 +61,14 @@ public:
 
     void start();
 
+    UInt64 getElapsedMilliseconds()
+    {
+        return gc_stop_watch.elapsedMilliseconds();
+    }
+
 private:
     Poco::Timer gc_timer;
+    Stopwatch gc_stop_watch;
 };
 using PSGcPtr = std::shared_ptr<PSGc>;
 

@@ -1,4 +1,4 @@
-#include "../PSWorkload.h"
+#include <PSWorkload.h>
 
 class HighValidBigFileGCWorkload : public StressWorkload
     , public StressWorkloadFunc<HighValidBigFileGCWorkload>
@@ -17,7 +17,7 @@ public:
 private:
     String desc() override
     {
-        return fmt::format(" Some of options will be ignored"
+        return fmt::format("Some of options will be ignored"
                            "`paths` will only used first one. which is {}. Data will store in {}"
                            "Please cleanup folder after this test."
                            "The current workload will generate 9G data, and GC will be performed at the end.",
@@ -76,11 +76,9 @@ private:
             result();
         }
 
-        // TBD : maybe change back , invoke gc ?
-
         gc = std::make_shared<PSGc>(ps);
         gc->doGcOnce();
-
+        gc_time_ms = gc->getElapsedMilliseconds();
         {
             stop_watch.start();
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
@@ -100,13 +98,16 @@ private:
 
     bool verify() override
     {
-        if ()
-            return true;
+        return (gc_time_ms < 1 * 1000);
     };
 
-    void failed() override{
-        // TBD
+    void failed() override
+    {
+        LOG_WARNING(StressEnv::logger, fmt::format("GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000));
     };
+
+private:
+    UInt64 gc_time_ms = 0;
 };
 
 REGISTER_WORKLOAD(HighValidBigFileGCWorkload)

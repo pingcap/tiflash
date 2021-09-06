@@ -1,8 +1,7 @@
-#include "PSRunnable.h"
-
 #include <Common/MemoryTracker.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/ReadBufferFromMemory.h>
+#include <PSRunnable.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -10,17 +9,16 @@
 
 #include <random>
 
-
 void PSRunnable::run()
 {
-    MemoryTracker tarcker;
-    current_memory_tracker = &tarcker;
+    MemoryTracker tracker;
+    current_memory_tracker = &tracker;
     // If runImpl() return false, means it need break itself
     while (StressEnvStatus::getInstance().stat() && runImpl())
     {
         /*Just for no warming*/
     }
-    tarcker.setDescription(description().c_str());
+    tracker.setDescription(description().c_str());
     current_memory_tracker = nullptr;
     LOG_INFO(StressEnv::logger, description() + " exit");
 }

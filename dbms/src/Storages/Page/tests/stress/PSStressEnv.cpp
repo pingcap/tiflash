@@ -4,6 +4,7 @@
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <PSWorkload.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -12,8 +13,6 @@
 #include <signal.h>
 
 #include <boost/program_options.hpp>
-
-#include "PSWorkload.h"
 
 int StressEnvStatus::statrc()
 {

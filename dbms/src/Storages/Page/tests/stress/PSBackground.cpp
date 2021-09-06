@@ -1,6 +1,5 @@
-#include "PSBackground.h"
-
 #include <Common/MemoryTracker.h>
+#include <PSBackground.h>
 #include <Poco/Logger.h>
 #include <Poco/Timer.h>
 #include <fmt/format.h>
@@ -27,11 +26,12 @@ void PSMetricsDumper::start()
 
 void PSGc::doGcOnce()
 {
+    gc_stop_watch.start();
     try
     {
-        MemoryTracker tarcker;
-        tarcker.setDescription("(Stress Test GC)");
-        current_memory_tracker = &tarcker;
+        MemoryTracker tracker;
+        tracker.setDescription("(Stress Test GC)");
+        current_memory_tracker = &tracker;
         ps->gc();
         current_memory_tracker = nullptr;
     }
@@ -41,6 +41,7 @@ void PSGc::doGcOnce()
         DB::tryLogCurrentException(__PRETTY_FUNCTION__);
         throw;
     }
+    gc_stop_watch.stop();
 }
 
 void PSGc::start()

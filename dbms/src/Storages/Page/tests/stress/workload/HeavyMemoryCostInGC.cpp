@@ -1,4 +1,4 @@
-#include "../PSWorkload.h"
+#include <PSWorkload.h>
 
 class HeavyMemoryCostInGC : public StressWorkload
     , public StressWorkloadFunc<HeavyMemoryCostInGC>
@@ -48,17 +48,17 @@ private:
 
         gc = std::make_shared<PSGc>(ps);
         gc->doGcOnce();
-        result();
     }
 
     bool verify() override
     {
-        // TBD
-        return true;
+        return (metrics_dumper->getMemoryPeak() < 5UL * 1024 * 1024);
     };
 
-    void failed() override{
-        // TBD
+    void failed() override
+    {
+        LOG_WARNING(StressEnv::logger,
+                    fmt::format("Memory Peak is {} , it should not bigger than {} ", metrics_dumper->getMemoryPeak(), 5 * 1024 * 1024));
     };
 };
 

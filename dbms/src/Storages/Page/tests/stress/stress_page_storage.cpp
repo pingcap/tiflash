@@ -1,7 +1,7 @@
-#include "PSBackground.h"
-#include "PSRunnable.h"
-#include "PSStressEnv.h"
-#include "PSWorkload.h"
+#include <PSBackground.h>
+#include <PSRunnable.h>
+#include <PSStressEnv.h>
+#include <PSWorkload.h>
 
 namespace DB
 {
