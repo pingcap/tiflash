@@ -36,6 +36,23 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
+{
+    if (block.columns() != result_field_types.size())
+        throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
+    size_t rows = block.rows();
+    rows_in_blocks += rows;
+    if (rows > 0)
+    {
+        blocks.push_back(block);
+    }
+    if ((Int64)rows_in_blocks > (records_per_chunk == -1 ? 4096 : records_per_chunk))
+    {
+        BatchWrite<false>();
+    }
+}
+
+template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::EncodeThenWriteBlock(
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
@@ -131,9 +148,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
     }
     if (input_blocks.empty())
     {
-        for (auto part_id = 0; part_id < partition_num; ++part_id)
+        if constexpr (for_last_response)
         {
-            writer->write(responses[part_id], part_id);
+            for (auto part_id = 0; part_id < partition_num; ++part_id)
+            {
+                writer->write(responses[part_id], part_id);
+            }
         }
         return;
     }
@@ -217,6 +237,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
         }
     }
 }
+
 template <class StreamWriterPtr>
 template <bool collect_execution_info>
 void StreamingDAGResponseWriter<StreamWriterPtr>::BatchWrite()
