@@ -66,13 +66,12 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             grpc::ClientContext client_context;
             auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
             reader->WaitForInitialMetadata();
-            mpp::MPPDataPacket packet;
+            std::shared_ptr<ReceivedPacket> packet;
             String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
             bool has_data = false;
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                std::shared_ptr<ReceivedPacket> packet;
                 empty_packets.pop(packet);
                 packet->req_info = req_info;
                 packet->source_index = source_index;
@@ -148,9 +147,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     Int32 live_conn_copy = live_connections;
 
     if (meet_error && state == NORMAL)
-    {
         state = ERROR;
-    }
     if (meet_error && err_msg.empty())
         err_msg = local_err_msg;
     if (live_connections == 0)
@@ -193,7 +190,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
         else if (state == CLOSED)
             msg = "ExchangeReceiver closed";
         else
-            msg = err.message();
+            msg = err_msg;
         result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
     }
     else if (full_packets.size()==0 && live_connections==0)
@@ -210,7 +207,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
             else if (state == CLOSED)
                 msg = "ExchangeReceiver closed";
             else
-                msg = err.message();
+                msg = err_msg;
             result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
         else
@@ -235,7 +232,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
                 }
                 else if (packet->packet->has_error())
                 {
-                    result = {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
+                    result = {nullptr, 0, "ExchangeReceiver", true, err_msg, false};
                 }
                 else
                 {
