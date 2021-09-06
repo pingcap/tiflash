@@ -201,6 +201,9 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
     }
     else
     {
+        std::shared_ptr<ReceivedPacket> packet;
+        full_packets.pop(packet);
+        /// the pop() would take some time, so recheck the state again as follows
         if (state != NORMAL)
         {
             String msg;
@@ -216,8 +219,6 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
         }
         else
         {
-            std::shared_ptr<ReceivedPacket> packet;
-            full_packets.pop(packet);
             if (packet != nullptr)
             {
                 if (packet->packet != nullptr)
@@ -236,7 +237,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
                 }
                 else if (packet->packet->has_error())
                 {
-                    result = {nullptr, 0, "ExchangeReceiver", true, err_msg, false};
+                    result = {nullptr, 0, "ExchangeReceiver", true, packet->packet->error().msg(), false};
                 }
                 else
                 {
