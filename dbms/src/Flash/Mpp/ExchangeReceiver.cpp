@@ -189,8 +189,10 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
             msg = "query canceled";
         else if (state == CLOSED)
             msg = "ExchangeReceiver closed";
-        else
+        else if (!err_msg.empty())
             msg = err_msg;
+        else
+            msg = "Unknown error";
         result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
     }
     else if (full_packets.size() == 0 && live_connections == 0)
@@ -206,8 +208,10 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
                 msg = "query canceled";
             else if (state == CLOSED)
                 msg = "ExchangeReceiver closed";
-            else
+            else if (!err_msg.empty())
                 msg = err_msg;
+            else
+                msg = "Unknown error";
             result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
         else
