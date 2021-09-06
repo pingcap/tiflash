@@ -1,0 +1,108 @@
+mysql> drop table if exists test.t
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2
+mysql> create table if not exists test.t(a datetime(5))
+mysql> create table if not exists test.t1(a date)
+mysql> create table if not exists test.t2(a date, b datetime(5))
+mysql> insert into test.t values('1991-09-05 11:11:11'), ('1991-09-05 11:11:11.123'), ('1991-01-01 11:11:11'), ('1992-01-01 11:11:11')
+mysql> insert into test.t1 values('1991-09-05'), ('1991-01-05'), ('1991-02-01')
+mysql> insert into test.t2 values('1991-09-05 11:11:11', '1992-01-01')
+mysql> alter table test.t set tiflash replica 1
+mysql> alter table test.t1 set tiflash replica 1
+mysql> alter table test.t2 set tiflash replica 1
+
+func> wait_table test t
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a < '1992-01-01';
++---------------------------+
+| a                         |
++---------------------------+
+| 1991-09-05 11:11:11.00000 |
+| 1991-09-05 11:11:11.12300 |
+| 1991-01-01 11:11:11.00000 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t where '1992-01-01' > a;
++---------------------------+
+| a                         |
++---------------------------+
+| 1991-09-05 11:11:11.00000 |
+| 1991-09-05 11:11:11.12300 |
+| 1991-01-01 11:11:11.00000 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a >= '1991-01-02';
++---------------------------+
+| a                         |
++---------------------------+
+| 1991-09-05 11:11:11.00000 |
+| 1991-09-05 11:11:11.12300 |
+| 1992-01-01 11:11:11.00000 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a < '1991-09-05 11:11:11';
++---------------------------+
+| a                         |
++---------------------------+
+| 1991-01-01 11:11:11.00000 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t where '1991-09-05 11:11:11' > a;
++---------------------------+
+| a                         |
++---------------------------+
+| 1991-01-01 11:11:11.00000 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a <= '1991-09-05 11:11:11';
++---------------------------+
+| a                         |
++---------------------------+
+| 1991-09-05 11:11:11.00000 |
+| 1991-01-01 11:11:11.00000 |
++---------------------------+
+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a < '1991-09-05 11:11:11.124';
++---------------------------+
+| a                         |
++---------------------------+
+| 1991-09-05 11:11:11.00000 |
+| 1991-09-05 11:11:11.12300 |
+| 1991-01-01 11:11:11.00000 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a <= '1991-09-05 11:11:11.122';
++---------------------------+
+| a                         |
++---------------------------+
+| 1991-09-05 11:11:11.00000 |
+| 1991-01-01 11:11:11.00000 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t1 where a <= '1991-09-05 11:11:11.122';
++------------+
+| a          |
++------------+
+| 1991-09-05 |
+| 1991-01-05 |
+| 1991-02-01 |
++------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t1 where a >= '1991-09-05';
++------------+
+| a          |
++------------+
+| 1991-09-05 |
++------------+
+
+mysql> set tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select * from test.t2 where a < b;
++------------+---------------------------+
+| a          | b                         |
++------------+---------------------------+
+| 1991-09-05 | 1992-01-01 00:00:00.00000 |
++------------+---------------------------+
+
+mysql> drop table if exists test.t
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2

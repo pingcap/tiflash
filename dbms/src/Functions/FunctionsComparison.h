@@ -123,6 +123,8 @@ struct TimeComparisonImpl
 
         while (a_pos < a_end)
         {
+            MyDateTime aaa(*a_pos);
+            MyDateTime bbb(b);
             *c_pos = Op::apply((*a_pos & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK), b & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK);
             ++a_pos;
             ++c_pos;
@@ -1676,7 +1678,7 @@ public:
 
                     ColumnUInt8::Container & vec_res = col_res->getData();
                     vec_res.resize(col_left->size());
-                    NumComparisonImpl<UInt64, UInt64, Op<UInt64, UInt64>>::constant_vector(col_left->template getValue<UInt64>(), col_right->getData(), vec_res);
+                    TimeComparisonImpl<UInt64, UInt64, Op<UInt64, UInt64>>::constant_vector(col_left->template getValue<UInt64>(), col_right->getData(), vec_res);
 
                     block.getByPosition(result).column = std::move(col_res);
                     return true;
@@ -1684,7 +1686,7 @@ public:
                 else if (auto col_right = checkAndGetColumnConst<ColumnVector<UInt64>>(col_right_untyped))
                 {
                     UInt8 res = 0;
-                    NumComparisonImpl<UInt64, UInt64, Op<UInt64, UInt64>>::constant_constant(col_left->template getValue<UInt64>(), col_right->template getValue<UInt64>(), res);
+                    TimeComparisonImpl<UInt64, UInt64, Op<UInt64, UInt64>>::constant_constant(col_left->template getValue<UInt64>(), col_right->template getValue<UInt64>(), res);
 
                     block.getByPosition(result).column = DataTypeUInt8().createColumnConst(col_left->size(), toField(res));
                     return true;
