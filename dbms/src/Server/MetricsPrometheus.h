@@ -9,11 +9,8 @@
 
 namespace DB
 {
-
 class AsynchronousMetrics;
 class Context;
-class TiFlashMetrics;
-using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 /**    Automatically sends
   * - difference of ProfileEvents;
@@ -35,9 +32,8 @@ private:
     void run();
 
     Timer timer;
-    TiFlashMetricsPtr tiflash_metrics;
     const AsynchronousMetrics & async_metrics;
-    Logger * log;
+    Poco::Logger * log;
 
     int metrics_interval;
     std::shared_ptr<prometheus::Gateway> gateway;

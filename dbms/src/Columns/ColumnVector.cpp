@@ -1,38 +1,33 @@
-#include <cstring>
-#include <cmath>
-
+#include <Columns/ColumnVector.h>
 #include <Common/Arena.h>
 #include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
-#include <Common/SipHash.h>
 #include <Common/NaNUtils.h>
-
+#include <Common/SipHash.h>
+#include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 
-#include <Columns/ColumnVector.h>
-
-#include <DataStreams/ColumnGathererStream.h>
-
+#include <cmath>
+#include <cstring>
 #include <ext/bit_cast.h>
 
 #if __SSE2__
-    #include <emmintrin.h>
+#include <emmintrin.h>
 #endif
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int PARAMETER_OUT_OF_BOUND;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-}
+extern const int PARAMETER_OUT_OF_BOUND;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 template <typename T>
-StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
+StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto pos = arena.allocContinue(sizeof(T), begin);
     memcpy(pos, &data[n], sizeof(T));
@@ -40,20 +35,20 @@ StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char
 }
 
 template <typename T>
-const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>)
+const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &)
 {
     data.push_back(*reinterpret_cast<const T *>(pos));
     return pos + sizeof(T);
 }
 
 template <typename T>
-void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
+void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     hash.update(data[n]);
 }
 
 template <typename T>
-void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
 {
     for (size_t i = 0, sz = size(); i < sz; ++i)
     {
@@ -62,13 +57,12 @@ void ColumnVector<T>::updateHashWithValues(IColumn::HashValues & hash_values, co
 }
 
 template <typename T>
-void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash) const
+void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto s = data.size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
-                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     const T * begin = data.data();
     const T * end = begin + s;
@@ -91,7 +85,10 @@ struct ColumnVector<T>::less
 {
     const Self & parent;
     int nan_direction_hint;
-    less(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    less(const Self & parent_, int nan_direction_hint_)
+        : parent(parent_)
+        , nan_direction_hint(nan_direction_hint_)
+    {}
     bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::less(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
 };
 
@@ -100,7 +97,10 @@ struct ColumnVector<T>::greater
 {
     const Self & parent;
     int nan_direction_hint;
-    greater(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    greater(const Self & parent_, int nan_direction_hint_)
+        : parent(parent_)
+        , nan_direction_hint(nan_direction_hint_)
+    {}
     bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::greater(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
 };
 
@@ -182,10 +182,11 @@ void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t 
 
     if (start + length > src_vec.data.size())
         throw Exception("Parameters start = "
-            + toString(start) + ", length = "
-            + toString(length) + " are out of bound in ColumnVector<T>::insertRangeFrom method"
-            " (data.size() = " + toString(src_vec.data.size()) + ").",
-            ErrorCodes::PARAMETER_OUT_OF_BOUND);
+                            + toString(start) + ", length = "
+                            + toString(length) + " are out of bound in ColumnVector<T>::insertRangeFrom method"
+                                                 " (data.size() = "
+                            + toString(src_vec.data.size()) + ").",
+                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t old_size = data.size();
     data.resize(old_size + length);
@@ -368,4 +369,4 @@ template class ColumnVector<Int32>;
 template class ColumnVector<Int64>;
 template class ColumnVector<Float32>;
 template class ColumnVector<Float64>;
-}
+} // namespace DB

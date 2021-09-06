@@ -6,17 +6,20 @@ namespace DB
 {
 namespace tests
 {
-
 class PageEntryMap_test : public ::testing::Test
 {
 public:
-    PageEntryMap_test() : map(nullptr), log(&Poco::Logger::get("PageEntryMap_test")), versions("entries_map_test", config_, log) {}
+    PageEntryMap_test()
+        : map(nullptr)
+        , log(&Poco::Logger::get("PageEntryMap_test"))
+        , versions("entries_map_test", config_, log)
+    {}
 
 protected:
     void SetUp() override
     {
         // Generate an empty PageEntries for each test
-        auto               snapshot = versions.getSnapshot();
+        auto snapshot = versions.getSnapshot();
         PageEntriesBuilder builder(snapshot->version());
         map = builder.build();
     }
@@ -27,8 +30,8 @@ protected:
 
 private:
     ::DB::MVCC::VersionSetConfig config_;
-    Poco::Logger *               log;
-    PageEntriesVersionSet        versions;
+    Poco::Logger * log;
+    PageEntriesVersionSet versions;
 };
 
 TEST_F(PageEntryMap_test, Empty)
@@ -44,8 +47,8 @@ TEST_F(PageEntryMap_test, Empty)
 
     // add some Pages, RefPages
     PageEntry p0entry;
-    p0entry.file_id  = 1;
-    p0entry.level    = 0;
+    p0entry.file_id = 1;
+    p0entry.level = 0;
     p0entry.checksum = 0x123;
     map->put(0, p0entry);
     map->ref(1, 0);
@@ -70,7 +73,7 @@ TEST_F(PageEntryMap_test, Empty)
 TEST_F(PageEntryMap_test, UpdatePageEntry)
 {
     const PageId page_id = 0;
-    PageEntry    entry0;
+    PageEntry entry0;
     entry0.checksum = 0x123;
     map->put(page_id, entry0);
     ASSERT_EQ(map->at(page_id).checksum, entry0.checksum);
@@ -87,8 +90,8 @@ TEST_F(PageEntryMap_test, UpdatePageEntry)
 TEST_F(PageEntryMap_test, PutDel)
 {
     PageEntry p0entry;
-    p0entry.file_id  = 1;
-    p0entry.level    = 0;
+    p0entry.file_id = 1;
+    p0entry.level = 0;
     p0entry.checksum = 0x123;
     map->put(0, p0entry);
     {
@@ -130,7 +133,7 @@ TEST_F(PageEntryMap_test, PutDel)
 TEST_F(PageEntryMap_test, IdempotentDel)
 {
     PageEntry p0entry;
-    p0entry.file_id  = 1;
+    p0entry.file_id = 1;
     p0entry.checksum = 0x123;
     map->put(0, p0entry);
     {
@@ -179,8 +182,8 @@ TEST_F(PageEntryMap_test, IdempotentDel)
 TEST_F(PageEntryMap_test, UpdateRefPageEntry)
 {
     const PageId page_id = 0;
-    const PageId ref_id  = 1; // RefPage1 -> Page0
-    PageEntry    entry0;
+    const PageId ref_id = 1; // RefPage1 -> Page0
+    PageEntry entry0;
     entry0.checksum = 0x123;
     map->put(page_id, entry0);
     ASSERT_NE(map->find(page_id), std::nullopt);
@@ -264,8 +267,8 @@ TEST_F(PageEntryMap_test, PutDuplicateRef)
 TEST_F(PageEntryMap_test, PutRefOnRef)
 {
     PageEntry p0entry;
-    p0entry.file_id  = 1;
-    p0entry.level    = 0;
+    p0entry.file_id = 1;
+    p0entry.level = 0;
     p0entry.checksum = 0x123;
     // put Page0
     map->put(0, p0entry);
@@ -327,12 +330,12 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
 TEST_F(PageEntryMap_test, ReBindRef)
 {
     PageEntry entry0;
-    entry0.file_id  = 1;
-    entry0.level    = 0;
+    entry0.file_id = 1;
+    entry0.level = 0;
     entry0.checksum = 0x123;
     PageEntry entry1;
-    entry1.file_id  = 1;
-    entry1.level    = 0;
+    entry1.file_id = 1;
+    entry1.level = 0;
     entry1.checksum = 0x123;
     // put Page0, Page1
     map->put(0, entry0);
@@ -352,12 +355,12 @@ TEST_F(PageEntryMap_test, ReBindRef)
 TEST_F(PageEntryMap_test, Scan)
 {
     PageEntry p0entry;
-    p0entry.file_id  = 1;
-    p0entry.level    = 0;
+    p0entry.file_id = 1;
+    p0entry.level = 0;
     p0entry.checksum = 0x123;
     PageEntry p1entry;
-    p1entry.file_id  = 1;
-    p1entry.level    = 0;
+    p1entry.file_id = 1;
+    p1entry.level = 0;
     p1entry.checksum = 0x456;
     map->put(0, p0entry);
     map->put(1, p1entry);

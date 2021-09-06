@@ -3,6 +3,8 @@
 
 #include <Storages/Page/Page.h>
 
+#include <vector>
+
 namespace DB::tests
 {
 class MockEntries
@@ -30,16 +32,29 @@ public:
     }
 };
 
+class MockSnapshot;
+using MockSnapshotPtr = std::shared_ptr<MockSnapshot>;
 class MockSnapshot
 {
 private:
     std::shared_ptr<MockEntries> entries;
 
 public:
-    MockSnapshot() : entries(std::make_shared<MockEntries>()) {}
+    MockSnapshot()
+        : entries(std::make_shared<MockEntries>())
+    {}
     std::shared_ptr<MockEntries> version() { return entries; }
+
+    static MockSnapshotPtr createFrom(std::vector<std::pair<PageId, PageEntry>> && entries)
+    {
+        auto snap = std::make_shared<MockSnapshot>();
+        for (const auto & [pid, entry] : entries)
+        {
+            snap->entries->put(pid, entry);
+        }
+        return snap;
+    }
 };
-using MockSnapshotPtr = std::shared_ptr<MockSnapshot>;
 
 } // namespace DB::tests
 

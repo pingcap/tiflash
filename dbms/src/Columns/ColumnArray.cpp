@@ -1,37 +1,34 @@
-#include <string.h> // memcpy
-
 #include <Columns/ColumnArray.h>
-#include <Columns/ColumnsNumber.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
-#include <Columns/ColumnNullable.h>
-#include <Columns/ColumnConst.h>
 #include <Columns/ColumnsCommon.h>
-
-#include <DataStreams/ColumnGathererStream.h>
-
+#include <Columns/ColumnsNumber.h>
 #include <Common/Arena.h>
 #include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/ColumnGathererStream.h>
+#include <string.h> // memcpy
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_COLUMN;
-    extern const int NOT_IMPLEMENTED;
-    extern const int BAD_ARGUMENTS;
-    extern const int PARAMETER_OUT_OF_BOUND;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-    extern const int LOGICAL_ERROR;
-}
+extern const int ILLEGAL_COLUMN;
+extern const int NOT_IMPLEMENTED;
+extern const int BAD_ARGUMENTS;
+extern const int PARAMETER_OUT_OF_BOUND;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 ColumnArray::ColumnArray(MutableColumnPtr && nested_column, MutableColumnPtr && offsets_column)
-    : data(std::move(nested_column)), offsets(std::move(offsets_column))
+    : data(std::move(nested_column))
+    , offsets(std::move(offsets_column))
 {
     if (!typeid_cast<const ColumnOffsets *>(offsets.get()))
         throw Exception("offsets_column must be a ColumnUInt64", ErrorCodes::ILLEGAL_COLUMN);
@@ -52,7 +49,10 @@ ColumnArray::ColumnArray(MutableColumnPtr && nested_column)
 }
 
 
-std::string ColumnArray::getName() const { return "Array(" + getData().getName() + ")"; }
+std::string ColumnArray::getName() const
+{
+    return "Array(" + getData().getName() + ")";
+}
 
 
 MutableColumnPtr ColumnArray::cloneResized(size_t to_size) const
@@ -167,7 +167,7 @@ void ColumnArray::insertData(const char * pos, size_t length)
 }
 
 
-StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
@@ -183,7 +183,7 @@ StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char con
 }
 
 
-const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator)
+const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator)
 {
     size_t array_size = *reinterpret_cast<const size_t *>(pos);
     pos += sizeof(array_size);
@@ -196,7 +196,7 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, std::s
 }
 
 
-void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
+void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
@@ -206,7 +206,7 @@ void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<
         getData().updateHashWithValue(offset + i, hash, collator, sort_key_container);
 }
 
-void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> & collator, String & sort_key_container) const
+void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     for (size_t i = 0, sz = size(); i < sz; ++i)
     {
@@ -222,15 +222,14 @@ void ColumnArray::updateHashWithValues(IColumn::HashValues & hash_values, const 
     }
 }
 
-void ColumnArray::updateWeakHash32(WeakHash32 & hash) const
+void ColumnArray::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     auto s = offsets->size();
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
-                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 internal_hash(data->size());
-    data->updateWeakHash32(internal_hash);
+    data->updateWeakHash32(internal_hash, collator, sort_key_container);
 
     Offset prev_offset = 0;
     const auto & offsets_data = getOffsets();
@@ -305,37 +304,39 @@ int ColumnArray::compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_dir
     return lhs_size < rhs_size
         ? -1
         : (lhs_size == rhs_size
-            ? 0
-            : 1);
+               ? 0
+               : 1);
 }
 
 
 namespace
 {
-    template <bool positive>
-    struct less
+template <bool positive>
+struct less
+{
+    const ColumnArray & parent;
+    int nan_direction_hint;
+
+    less(const ColumnArray & parent_, int nan_direction_hint_)
+        : parent(parent_)
+        , nan_direction_hint(nan_direction_hint_)
+    {}
+
+    bool operator()(size_t lhs, size_t rhs) const
     {
-        const ColumnArray & parent;
-        int nan_direction_hint;
-
-        less(const ColumnArray & parent_, int nan_direction_hint_)
-            : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
-
-        bool operator()(size_t lhs, size_t rhs) const
-        {
-            if (positive)
-                return parent.compareAt(lhs, rhs, parent, nan_direction_hint) < 0;
-            else
-                return parent.compareAt(lhs, rhs, parent, nan_direction_hint) > 0;
-        }
-    };
-}
+        if (positive)
+            return parent.compareAt(lhs, rhs, parent, nan_direction_hint) < 0;
+        else
+            return parent.compareAt(lhs, rhs, parent, nan_direction_hint) > 0;
+    }
+};
+} // namespace
 
 
 void ColumnArray::reserve(size_t n)
 {
     getOffsets().reserve(n);
-    getData().reserve(n);        /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
+    getData().reserve(n); /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
 }
 
 
@@ -414,7 +415,7 @@ void ColumnArray::insertRangeFrom(const IColumn & src, size_t start, size_t leng
 
     if (start + length > src_concrete.getOffsets().size())
         throw Exception("Parameter out of bound in ColumnArray::insertRangeFrom method.",
-            ErrorCodes::PARAMETER_OUT_OF_BOUND);
+                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t nested_offset = src_concrete.offsetAt(start);
     size_t nested_length = src_concrete.getOffsets()[start + length - 1] - nested_offset;
@@ -442,19 +443,32 @@ void ColumnArray::insertRangeFrom(const IColumn & src, size_t start, size_t leng
 
 ColumnPtr ColumnArray::filter(const Filter & filt, ssize_t result_size_hint) const
 {
-    if (typeid_cast<const ColumnUInt8 *>(data.get()))      return filterNumber<UInt8>(filt, result_size_hint);
-    if (typeid_cast<const ColumnUInt16 *>(data.get()))     return filterNumber<UInt16>(filt, result_size_hint);
-    if (typeid_cast<const ColumnUInt32 *>(data.get()))     return filterNumber<UInt32>(filt, result_size_hint);
-    if (typeid_cast<const ColumnUInt64 *>(data.get()))     return filterNumber<UInt64>(filt, result_size_hint);
-    if (typeid_cast<const ColumnInt8 *>(data.get()))       return filterNumber<Int8>(filt, result_size_hint);
-    if (typeid_cast<const ColumnInt16 *>(data.get()))      return filterNumber<Int16>(filt, result_size_hint);
-    if (typeid_cast<const ColumnInt32 *>(data.get()))      return filterNumber<Int32>(filt, result_size_hint);
-    if (typeid_cast<const ColumnInt64 *>(data.get()))      return filterNumber<Int64>(filt, result_size_hint);
-    if (typeid_cast<const ColumnFloat32 *>(data.get()))    return filterNumber<Float32>(filt, result_size_hint);
-    if (typeid_cast<const ColumnFloat64 *>(data.get()))    return filterNumber<Float64>(filt, result_size_hint);
-    if (typeid_cast<const ColumnString *>(data.get()))     return filterString(filt, result_size_hint);
-    if (typeid_cast<const ColumnTuple *>(data.get()))      return filterTuple(filt, result_size_hint);
-    if (typeid_cast<const ColumnNullable *>(data.get()))   return filterNullable(filt, result_size_hint);
+    if (typeid_cast<const ColumnUInt8 *>(data.get()))
+        return filterNumber<UInt8>(filt, result_size_hint);
+    if (typeid_cast<const ColumnUInt16 *>(data.get()))
+        return filterNumber<UInt16>(filt, result_size_hint);
+    if (typeid_cast<const ColumnUInt32 *>(data.get()))
+        return filterNumber<UInt32>(filt, result_size_hint);
+    if (typeid_cast<const ColumnUInt64 *>(data.get()))
+        return filterNumber<UInt64>(filt, result_size_hint);
+    if (typeid_cast<const ColumnInt8 *>(data.get()))
+        return filterNumber<Int8>(filt, result_size_hint);
+    if (typeid_cast<const ColumnInt16 *>(data.get()))
+        return filterNumber<Int16>(filt, result_size_hint);
+    if (typeid_cast<const ColumnInt32 *>(data.get()))
+        return filterNumber<Int32>(filt, result_size_hint);
+    if (typeid_cast<const ColumnInt64 *>(data.get()))
+        return filterNumber<Int64>(filt, result_size_hint);
+    if (typeid_cast<const ColumnFloat32 *>(data.get()))
+        return filterNumber<Float32>(filt, result_size_hint);
+    if (typeid_cast<const ColumnFloat64 *>(data.get()))
+        return filterNumber<Float64>(filt, result_size_hint);
+    if (typeid_cast<const ColumnString *>(data.get()))
+        return filterString(filt, result_size_hint);
+    if (typeid_cast<const ColumnTuple *>(data.get()))
+        return filterTuple(filt, result_size_hint);
+    if (typeid_cast<const ColumnNullable *>(data.get()))
+        return filterNullable(filt, result_size_hint);
     return filterGeneric(filt, result_size_hint);
 }
 
@@ -493,7 +507,7 @@ ColumnPtr ColumnArray::filterString(const Filter & filt, ssize_t result_size_hin
     Offsets & res_string_offsets = typeid_cast<ColumnString &>(res->getData()).getOffsets();
     Offsets & res_offsets = res->getOffsets();
 
-    if (result_size_hint < 0)    /// Other cases are not considered.
+    if (result_size_hint < 0) /// Other cases are not considered.
     {
         res_chars.reserve(src_chars.size());
         res_string_offsets.reserve(src_string_offsets.size());
@@ -564,8 +578,8 @@ ColumnPtr ColumnArray::filterGeneric(const Filter & filt, ssize_t result_size_hi
     ssize_t nested_result_size_hint = 0;
     if (result_size_hint < 0)
         nested_result_size_hint = result_size_hint;
-    else if (result_size_hint && result_size_hint < 1000000000 && data->size() < 1000000000)    /// Avoid overflow.
-         nested_result_size_hint = result_size_hint * data->size() / size;
+    else if (result_size_hint && result_size_hint < 1000000000 && data->size() < 1000000000) /// Avoid overflow.
+        nested_result_size_hint = result_size_hint * data->size() / size;
 
     res->data = data->filter(nested_filt, nested_result_size_hint);
 
@@ -626,7 +640,7 @@ ColumnPtr ColumnArray::filterTuple(const Filter & filt, ssize_t result_size_hint
     Columns temporary_arrays(tuple_size);
     for (size_t i = 0; i < tuple_size; ++i)
         temporary_arrays[i] = ColumnArray(tuple.getColumns()[i]->assumeMutable(), getOffsetsPtr()->assumeMutable())
-                .filter(filt, result_size_hint);
+                                  .filter(filt, result_size_hint);
 
     Columns tuple_columns(tuple_size);
     for (size_t i = 0; i < tuple_size; ++i)
@@ -704,20 +718,34 @@ void ColumnArray::getPermutation(bool reverse, size_t limit, int nan_direction_h
 
 ColumnPtr ColumnArray::replicate(const Offsets & replicate_offsets) const
 {
-    if (typeid_cast<const ColumnUInt8 *>(data.get()))     return replicateNumber<UInt8>(replicate_offsets);
-    if (typeid_cast<const ColumnUInt16 *>(data.get()))    return replicateNumber<UInt16>(replicate_offsets);
-    if (typeid_cast<const ColumnUInt32 *>(data.get()))    return replicateNumber<UInt32>(replicate_offsets);
-    if (typeid_cast<const ColumnUInt64 *>(data.get()))    return replicateNumber<UInt64>(replicate_offsets);
-    if (typeid_cast<const ColumnInt8 *>(data.get()))      return replicateNumber<Int8>(replicate_offsets);
-    if (typeid_cast<const ColumnInt16 *>(data.get()))     return replicateNumber<Int16>(replicate_offsets);
-    if (typeid_cast<const ColumnInt32 *>(data.get()))     return replicateNumber<Int32>(replicate_offsets);
-    if (typeid_cast<const ColumnInt64 *>(data.get()))     return replicateNumber<Int64>(replicate_offsets);
-    if (typeid_cast<const ColumnFloat32 *>(data.get()))   return replicateNumber<Float32>(replicate_offsets);
-    if (typeid_cast<const ColumnFloat64 *>(data.get()))   return replicateNumber<Float64>(replicate_offsets);
-    if (typeid_cast<const ColumnString *>(data.get()))    return replicateString(replicate_offsets);
-    if (typeid_cast<const ColumnConst *>(data.get()))     return replicateConst(replicate_offsets);
-    if (typeid_cast<const ColumnNullable *>(data.get()))  return replicateNullable(replicate_offsets);
-    if (typeid_cast<const ColumnTuple *>(data.get()))     return replicateTuple(replicate_offsets);
+    if (typeid_cast<const ColumnUInt8 *>(data.get()))
+        return replicateNumber<UInt8>(replicate_offsets);
+    if (typeid_cast<const ColumnUInt16 *>(data.get()))
+        return replicateNumber<UInt16>(replicate_offsets);
+    if (typeid_cast<const ColumnUInt32 *>(data.get()))
+        return replicateNumber<UInt32>(replicate_offsets);
+    if (typeid_cast<const ColumnUInt64 *>(data.get()))
+        return replicateNumber<UInt64>(replicate_offsets);
+    if (typeid_cast<const ColumnInt8 *>(data.get()))
+        return replicateNumber<Int8>(replicate_offsets);
+    if (typeid_cast<const ColumnInt16 *>(data.get()))
+        return replicateNumber<Int16>(replicate_offsets);
+    if (typeid_cast<const ColumnInt32 *>(data.get()))
+        return replicateNumber<Int32>(replicate_offsets);
+    if (typeid_cast<const ColumnInt64 *>(data.get()))
+        return replicateNumber<Int64>(replicate_offsets);
+    if (typeid_cast<const ColumnFloat32 *>(data.get()))
+        return replicateNumber<Float32>(replicate_offsets);
+    if (typeid_cast<const ColumnFloat64 *>(data.get()))
+        return replicateNumber<Float64>(replicate_offsets);
+    if (typeid_cast<const ColumnString *>(data.get()))
+        return replicateString(replicate_offsets);
+    if (typeid_cast<const ColumnConst *>(data.get()))
+        return replicateConst(replicate_offsets);
+    if (typeid_cast<const ColumnNullable *>(data.get()))
+        return replicateNullable(replicate_offsets);
+    if (typeid_cast<const ColumnTuple *>(data.get()))
+        return replicateTuple(replicate_offsets);
     return replicateGeneric(replicate_offsets);
 }
 
@@ -834,7 +862,9 @@ ColumnPtr ColumnArray::replicateString(const Offsets & replicate_offsets) const
             /// Copies the characters of the array of rows.
             res_chars.resize(res_chars.size() + sum_chars_size);
             memcpySmallAllowReadWriteOverflow15(
-                &res_chars[res_chars.size() - sum_chars_size], &src_chars[prev_src_string_offset], sum_chars_size);
+                &res_chars[res_chars.size() - sum_chars_size],
+                &src_chars[prev_src_string_offset],
+                sum_chars_size);
         }
 
         prev_replicate_offset = replicate_offsets[i];
@@ -918,9 +948,9 @@ ColumnPtr ColumnArray::replicateNullable(const Offsets & replicate_offsets) cons
     /// NOTE Offsets are calculated twice and it is redundant.
 
     auto array_of_nested = ColumnArray(nullable.getNestedColumnPtr()->assumeMutable(), getOffsetsPtr()->assumeMutable())
-            .replicate(replicate_offsets);
+                               .replicate(replicate_offsets);
     auto array_of_null_map = ColumnArray(nullable.getNullMapColumnPtr()->assumeMutable(), getOffsetsPtr()->assumeMutable())
-            .replicate(replicate_offsets);
+                                 .replicate(replicate_offsets);
 
     return ColumnArray::create(
         ColumnNullable::create(
@@ -944,7 +974,7 @@ ColumnPtr ColumnArray::replicateTuple(const Offsets & replicate_offsets) const
     Columns temporary_arrays(tuple_size);
     for (size_t i = 0; i < tuple_size; ++i)
         temporary_arrays[i] = ColumnArray(tuple.getColumns()[i]->assumeMutable(), getOffsetsPtr()->assumeMutable())
-                .replicate(replicate_offsets);
+                                  .replicate(replicate_offsets);
 
     Columns tuple_columns(tuple_size);
     for (size_t i = 0; i < tuple_size; ++i)
@@ -961,4 +991,4 @@ void ColumnArray::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
-}
+} // namespace DB

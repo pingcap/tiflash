@@ -6,6 +6,10 @@
 # vscode clangd cache
 .cache
 
+# JSON Compilation Database Format Specification
+# https://clang.llvm.org/docs/JSONCompilationDatabase.html
+compile_commands.json
+
 # git patch reject report
 *.rej
 
@@ -251,6 +255,7 @@ website/presentations
 build_docker
 docker/builder/tics
 release-centos7/tiflash
+release-centos7/tiflash-*
 release-centos7/build-release
 release-darwin/tiflash
 release-darwin/build-release

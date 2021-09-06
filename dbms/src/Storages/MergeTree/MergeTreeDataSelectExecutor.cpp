@@ -13,7 +13,7 @@ struct numeric_limits<__uint128_t>
     static constexpr bool is_integer = true;
     static constexpr int radix = 2;
     static constexpr int digits = 128;
-    static constexpr __uint128_t min() { return 0; }               // used in boost 1.65.1+
+    static constexpr __uint128_t min() { return 0; } // used in boost 1.65.1+
     static constexpr __uint128_t max() { return __uint128_t(-1); } // used in boost 1.65.1+
 };
 } // namespace std
@@ -80,7 +80,6 @@ extern const Event SelectedMarks;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int INDEX_NOT_USED;
@@ -94,7 +93,8 @@ extern const int REGION_MISS;
 
 
 MergeTreeDataSelectExecutor::MergeTreeDataSelectExecutor(MergeTreeData & data_)
-    : data(data_), log(&Logger::get(data.getLogName() + " (SelectExecutor)"))
+    : data(data_)
+    , log(&Poco::Logger::get(data.getLogName() + " (SelectExecutor)"))
 {}
 
 
@@ -111,7 +111,9 @@ static Block getBlockWithPartColumn(const MergeTreeData::DataPartsVector & parts
 
 
 size_t MergeTreeDataSelectExecutor::getApproximateTotalRowsToRead(
-    const MergeTreeData::DataPartsVector & parts, const KeyCondition & key_condition, const Settings & settings) const
+    const MergeTreeData::DataPartsVector & parts,
+    const KeyCondition & key_condition,
+    const Settings & settings) const
 {
     size_t full_marks_count = 0;
 
@@ -179,7 +181,8 @@ struct RegionExecutorData
 
     RegionExecutorData() = default;
     RegionExecutorData(const RegionQueryInfo & info_, HandleRange<HandleID> && handle_range_)
-        : info(info_), handle_range(std::move(handle_range_))
+        : info(info_)
+        , handle_range(std::move(handle_range_))
     {}
     RegionExecutorData & operator=(RegionExecutorData && data)
     {
@@ -193,20 +196,20 @@ struct RegionExecutorData
     }
     RegionExecutorData(const RegionExecutorData &) = delete;
     RegionExecutorData(RegionExecutorData && data)
-        : info(std::move(data.info)),
-          handle_range(std::move(data.handle_range)),
-          block(std::move(data.block)),
-          range_scan_filter(std::move(data.range_scan_filter))
+        : info(std::move(data.info))
+        , handle_range(std::move(data.handle_range))
+        , block(std::move(data.block))
+        , range_scan_filter(std::move(data.range_scan_filter))
     {}
     bool operator<(const RegionExecutorData & o) const { return info < o.info; }
 };
 
 template <typename HandleType>
 bool isFullRegionScan(
-    std::vector<HandleRange<HandleType>> & dag_required_handle_ranges, std::vector<HandleRange<HandleType>> & region_ranges)
+    std::vector<HandleRange<HandleType>> & dag_required_handle_ranges,
+    std::vector<HandleRange<HandleType>> & region_ranges)
 {
-    std::sort(dag_required_handle_ranges.begin(), dag_required_handle_ranges.end(),
-        [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first; });
+    std::sort(dag_required_handle_ranges.begin(), dag_required_handle_ranges.end(), [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first; });
     bool need_merge = false;
     for (size_t i = 0; i < dag_required_handle_ranges.size() - 1; i++)
         need_merge |= dag_required_handle_ranges[i].second >= dag_required_handle_ranges[i + 1].first;
@@ -307,12 +310,12 @@ void checkAndSetRangeScanFilter(TMTPKType pk_type, std::vector<RegionExecutorDat
 }
 
 BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_to_return,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t max_block_size,
-    const unsigned num_streams,
-    Int64 max_block_number_to_read) const
+                                                    const SelectQueryInfo & query_info,
+                                                    const Context & context,
+                                                    QueryProcessingStage::Enum & processed_stage,
+                                                    const size_t max_block_size,
+                                                    const unsigned num_streams,
+                                                    Int64 max_block_number_to_read) const
 {
     RangesInDataParts parts_with_ranges;
 
@@ -475,30 +478,30 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     if (region->getMappedTableID() != data.table_info->id)
                         throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match, expect "
-                                + std::to_string(region->getMappedTableID()) + ", got " + std::to_string(data.table_info->id),
-                            ErrorCodes::LOGICAL_ERROR);
+                                            + std::to_string(region->getMappedTableID()) + ", got " + std::to_string(data.table_info->id),
+                                        ErrorCodes::LOGICAL_ERROR);
 
-                    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_count).Increment();
+                    GET_METRIC(tiflash_raft_read_index_count).Increment();
                     Stopwatch read_index_watch;
 
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
                     auto read_index_result = region->learnerRead(mvcc_query_info.read_tso);
-                    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds)
+                    GET_METRIC(tiflash_raft_read_index_duration_seconds)
                         .Observe(read_index_watch.elapsedSeconds());
 
                     switch (read_index_result.status)
                     {
-                        case RegionException::RegionReadStatus::NOT_FOUND:
-                        case RegionException::RegionReadStatus::EPOCH_NOT_MATCH:
-                        {
-                            region_status = read_index_result.status;
-                            continue;
-                        }
-                        case RegionException::RegionReadStatus::OK:
-                        {
-                            break;
-                        }
+                    case RegionException::RegionReadStatus::NOT_FOUND:
+                    case RegionException::RegionReadStatus::EPOCH_NOT_MATCH:
+                    {
+                        region_status = read_index_result.status;
+                        continue;
+                    }
+                    case RegionException::RegionReadStatus::OK:
+                    {
+                        break;
+                    }
                     }
 
                     if (read_index_result.lock_info)
@@ -514,14 +517,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             region_status = RegionException::RegionReadStatus::NOT_FOUND;
                             continue;
                         }
-                        GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds)
+                        GET_METRIC(tiflash_raft_wait_index_duration_seconds)
                             .Observe(wait_index_watch.elapsedSeconds());
                     }
 
-                    auto block_status = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
-                        kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
-                        mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.bypass_lock_ts,
-                        regions_executor_data[region_index].range_scan_filter);
+                    auto block_status = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read, kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.bypass_lock_ts, regions_executor_data[region_index].range_scan_filter);
 
                     std::visit(variant_op::overloaded{
                                    [&](Block & block) {
@@ -531,15 +531,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                    [&](RegionException::RegionReadStatus & status) {
                                        assert(status != RegionException::RegionReadStatus::OK);
                                        LOG_WARNING(log,
-                                           "Check memory cache, region " << region_query_info.region_id << ", version "
-                                                                         << region_query_info.version << ", handle range ["
-                                                                         << handle_range.first.toString() << ", "
-                                                                         << handle_range.second.toString() << ") , status "
-                                                                         << RegionException::RegionReadStatusString(status));
+                                                   "Check memory cache, region " << region_query_info.region_id << ", version "
+                                                                                 << region_query_info.version << ", handle range ["
+                                                                                 << handle_range.first.toString() << ", "
+                                                                                 << handle_range.second.toString() << ") , status "
+                                                                                 << RegionException::RegionReadStatusString(status));
                                        region_status = status;
                                    },
                                },
-                        block_status);
+                               block_status);
                 }
             };
 
@@ -561,8 +561,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             auto end_time = Clock::now();
             LOG_DEBUG(log,
-                "[Learner Read] wait and get data from memory cost "
-                    << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
+                      "[Learner Read] wait and get data from memory cost "
+                          << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
         }
 
         { // check all regions
@@ -608,9 +608,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     {
                         // move this region to end.
                         LOG_DEBUG(log,
-                            "Store special region " << regions_executor_data[i].info.region_id << " first"
-                                                    << ", handle range [" << regions_executor_data[i].handle_range.first.toString() << ", "
-                                                    << regions_executor_data[i].handle_range.second.toString() << ")");
+                                  "Store special region " << regions_executor_data[i].info.region_id << " first"
+                                                          << ", handle range [" << regions_executor_data[i].handle_range.first.toString() << ", "
+                                                          << regions_executor_data[i].handle_range.second.toString() << ")");
 
                         // move to end directly, the order of ranges under uint64 will be resorted.
                         std::swap(regions_executor_data[i], regions_executor_data.back());
@@ -676,7 +676,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     if (data.minmax_idx_expr)
     {
         minmax_idx_condition.emplace(
-            query_info, context, available_real_and_virtual_columns, data.minmax_idx_sort_descr, data.minmax_idx_expr);
+            query_info,
+            context,
+            available_real_and_virtual_columns,
+            data.minmax_idx_sort_descr,
+            data.minmax_idx_expr);
 
         if (settings.force_index_by_date && minmax_idx_condition->alwaysUnknownOrTrue())
         {
@@ -711,8 +715,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 continue;
 
             if (minmax_idx_condition
-                && !minmax_idx_condition->mayBeTrueInRange(data.minmax_idx_columns.size(), &part->minmax_idx.min_values[0],
-                    &part->minmax_idx.max_values[0], data.minmax_idx_column_types))
+                && !minmax_idx_condition->mayBeTrueInRange(data.minmax_idx_columns.size(), &part->minmax_idx.min_values[0], &part->minmax_idx.max_values[0], data.minmax_idx_column_types))
                 continue;
 
             if (max_block_number_to_read && part->info.max_block > max_block_number_to_read)
@@ -736,7 +739,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     if (select_sample_size)
     {
         relative_sample_size.assign(typeid_cast<const ASTSampleRatio &>(*select_sample_size).ratio.numerator,
-            typeid_cast<const ASTSampleRatio &>(*select_sample_size).ratio.denominator);
+                                    typeid_cast<const ASTSampleRatio &>(*select_sample_size).ratio.denominator);
 
         if (relative_sample_size < 0)
             throw Exception("Negative sample size", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -744,7 +747,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         relative_sample_offset = 0;
         if (select_sample_offset)
             relative_sample_offset.assign(typeid_cast<const ASTSampleRatio &>(*select_sample_offset).ratio.numerator,
-                typeid_cast<const ASTSampleRatio &>(*select_sample_offset).ratio.denominator);
+                                          typeid_cast<const ASTSampleRatio &>(*select_sample_offset).ratio.denominator);
 
         if (relative_sample_offset < 0)
             throw Exception("Negative sample offset", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -831,7 +834,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             size_of_universum = RelativeSize(std::numeric_limits<UInt8>::max()) + RelativeSize(1);
         else
             throw Exception("Invalid sampling column type in storage parameters: " + type->getName() + ". Must be unsigned integer type.",
-                ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+                            ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
 
         if (settings.parallel_replicas_count > 1)
         {
@@ -964,8 +967,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
           * They are done before the execution of the pipeline; they can not be interrupted; during the computation, packets of progress are not sent.
           */
         if (!prewhere_subqueries.empty())
-            CreatingSetsBlockInputStream(std::make_shared<NullBlockInputStream>(Block()), prewhere_subqueries,
-                SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode))
+            CreatingSetsBlockInputStream(std::make_shared<NullBlockInputStream>(Block()), prewhere_subqueries, SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode))
                 .read();
     }
 
@@ -1001,8 +1003,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     if (!is_txn_engine || select.raw_for_mutable)
         LOG_DEBUG(log,
-            "Selected " << parts.size() << " parts, " << parts_with_ranges.size() << " parts by key, " << sum_marks
-                        << " marks to read from " << sum_ranges << " ranges");
+                  "Selected " << parts.size() << " parts, " << parts_with_ranges.size() << " parts by key, " << sum_marks
+                              << " marks to read from " << sum_ranges << " ranges");
     else
     {
         TMTContext & tmt = context.getTMTContext();
@@ -1010,8 +1012,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient());
         if (mvcc_query_info.read_tso < safe_point)
             throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
-                    + " is smaller than tidb gc safe point: " + toString(safe_point),
-                ErrorCodes::LOGICAL_ERROR);
+                                + " is smaller than tidb gc safe point: " + toString(safe_point),
+                            ErrorCodes::LOGICAL_ERROR);
 
         const size_t min_marks_for_seek = computeMinMarksForSeek(settings, data);
 
@@ -1033,21 +1035,20 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     // ABA problem may cause because one region is removed and inserted back.
                     // if the version of region is changed, the part may has less data because of compaction.
                     LOG_WARNING(log,
-                        "Check after getDataPartsVector, region "
-                            << region_query_info.region_id << ", version " << region_query_info.version << ", handle range ["
-                            << handle_range.first.toString() << ", " << handle_range.second.toString() << ") , status "
-                            << RegionException::RegionReadStatusString(status));
+                                "Check after getDataPartsVector, region "
+                                    << region_query_info.region_id << ", version " << region_query_info.version << ", handle range ["
+                                    << handle_range.first.toString() << ", " << handle_range.second.toString() << ") , status "
+                                    << RegionException::RegionReadStatusString(status));
                     // throw exception and exit.
                     func_throw_retry_region(status);
                 }
             }
         }
 
-        for (size_t batch_size = region_cnt / concurrent_num, rest = region_cnt % concurrent_num, thread_idx = 0, region_begin = 0,
-                    thread_region_size;
-             thread_idx < concurrent_num; ++thread_idx, region_begin += thread_region_size)
+        for (size_t batch_size = region_cnt / concurrent_num, rest = region_cnt % concurrent_num, thread_idx = 0, region_begin = 0, thread_region_size;
+             thread_idx < concurrent_num;
+             ++thread_idx, region_begin += thread_region_size)
         {
-
             size_t region_sum_marks = 0;
             size_t region_sum_ranges = 0;
 
@@ -1085,18 +1086,17 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 }
 
                 // the order of uint64 is different with int64.
-                std::sort(handle_ranges.begin(), handle_ranges.end(),
-                    [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
+                std::sort(handle_ranges.begin(), handle_ranges.end(), [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
 
                 computeHandleRanges<UInt64>(region_group_read_groups[thread_idx],
-                    handle_ranges,
-                    region_group_range_parts[thread_idx],
-                    region_group_u64_handle_ranges[thread_idx],
-                    parts_with_ranges,
-                    region_sum_marks,
-                    region_sum_ranges,
-                    settings,
-                    min_marks_for_seek);
+                                            handle_ranges,
+                                            region_group_range_parts[thread_idx],
+                                            region_group_u64_handle_ranges[thread_idx],
+                                            parts_with_ranges,
+                                            region_sum_marks,
+                                            region_sum_ranges,
+                                            settings,
+                                            min_marks_for_seek);
             }
             else
             {
@@ -1120,27 +1120,27 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 // handle_ranges is sorted.
 
                 computeHandleRanges<Int64>(region_group_read_groups[thread_idx],
-                    handle_ranges,
-                    region_group_range_parts[thread_idx],
-                    region_group_handle_ranges[thread_idx],
-                    parts_with_ranges,
-                    region_sum_marks,
-                    region_sum_ranges,
-                    settings,
-                    min_marks_for_seek);
+                                           handle_ranges,
+                                           region_group_range_parts[thread_idx],
+                                           region_group_handle_ranges[thread_idx],
+                                           parts_with_ranges,
+                                           region_sum_marks,
+                                           region_sum_ranges,
+                                           settings,
+                                           min_marks_for_seek);
             }
 
             LOG_DEBUG(log,
-                "Stream " << thread_idx << ", read " << thread_region_size << " regions, selected "
-                          << region_group_range_parts[thread_idx].size() << " handle ranges, " << region_sum_marks << " marks to read from "
-                          << region_sum_ranges << " ranges, read " << mem_rows << " rows from memory");
+                      "Stream " << thread_idx << ", read " << thread_region_size << " regions, selected "
+                                << region_group_range_parts[thread_idx].size() << " handle ranges, " << region_sum_marks << " marks to read from "
+                                << region_sum_ranges << " ranges, read " << mem_rows << " rows from memory");
         }
     }
 
     if (parts_with_ranges.empty() && !is_txn_engine)
         return {};
 
-    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_tmt_read_parts_count).Increment(parts_with_ranges.size());
+    GET_METRIC(tiflash_tmt_read_parts_count).Increment(parts_with_ranges.size());
 
     ProfileEvents::increment(ProfileEvents::SelectedParts, parts_with_ranges.size());
     ProfileEvents::increment(ProfileEvents::SelectedRanges, sum_ranges);
@@ -1157,14 +1157,14 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         if (select.raw_for_mutable)
         {
             res = spreadMarkRangesAmongStreams(std::move(parts_with_ranges),
-                num_streams,
-                tmt_column_names_to_read,
-                max_block_size,
-                use_uncompressed_cache,
-                prewhere_actions,
-                prewhere_column,
-                virt_column_names,
-                settings);
+                                               num_streams,
+                                               tmt_column_names_to_read,
+                                               max_block_size,
+                                               use_uncompressed_cache,
+                                               prewhere_actions,
+                                               prewhere_column,
+                                               virt_column_names,
+                                               settings);
 
             { // read all data from memory
                 BlocksList blocks;
@@ -1181,10 +1181,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         else if (!select.no_kvstore)
         {
             const auto func_make_merge_tree_input = [&](const RangesInDataPart & part, const MarkRanges & mark_ranges) {
-                return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, tmt_column_names_to_read,
-                    mark_ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
-                    settings.max_read_buffer_size, true, true, virt_column_names, part.part_index_in_query);
+                return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, tmt_column_names_to_read, mark_ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_column_names, part.part_index_in_query);
             };
 
             const auto func_make_version_filter_input = [&](const BlockInputStreamPtr & source_stream) {
@@ -1204,19 +1201,23 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             auto func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::UNSPECIFIED>;
             switch (pk_type)
             {
-                case TMTPKType::UINT64:
-                    func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::UINT64>;
-                    break;
-                case TMTPKType::INT64:
-                    func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::INT64>;
-                    break;
-                default:
-                    break;
+            case TMTPKType::UINT64:
+                func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::UINT64>;
+                break;
+            case TMTPKType::INT64:
+                func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::INT64>;
+                break;
+            default:
+                break;
             }
 
             const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) -> BlockInputStreamPtr {
                 return func_make_multi_way_merge_sort_input_impl(
-                    merging, data.getPrimarySortDescription(), version_column_index, delmark_column_index, DEFAULT_MERGE_BLOCK_SIZE);
+                    merging,
+                    data.getPrimarySortDescription(),
+                    version_column_index,
+                    delmark_column_index,
+                    DEFAULT_MERGE_BLOCK_SIZE);
             };
 
             for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)
@@ -1240,7 +1241,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                             if (pk_type == TMTPKType::UINT64)
                                 source_stream = func_make_uint64_range_filter_input(
-                                    source_stream, region_group_u64_handle_ranges[thread_idx][range_idx]);
+                                    source_stream,
+                                    region_group_u64_handle_ranges[thread_idx][range_idx]);
                             else
                                 source_stream
                                     = func_make_range_filter_input(source_stream, region_group_handle_ranges[thread_idx][range_idx]);
@@ -1297,8 +1299,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                         for (const RangesInDataPart & part : parts_with_ranges)
                         {
-                            MarkRanges mark_ranges = markRangesFromRegionRange<UInt64>(*part.data_part, handle_range.first,
-                                handle_range.second, part.ranges, computeMinMarksForSeek(settings, data), settings);
+                            MarkRanges mark_ranges = markRangesFromRegionRange<UInt64>(*part.data_part, handle_range.first, handle_range.second, part.ranges, computeMinMarksForSeek(settings, data), settings);
 
                             if (mark_ranges.empty())
                                 continue;
@@ -1330,10 +1331,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             ss << ") ";
                         }
                         LOG_DEBUG(log,
-                            "[PK_IS_UINT64] special region "
-                                << special_region_info.info.region_id << ", split range into " << ranges.size() << ": " << ss.str() << ", "
-                                << region_sum_marks << " marks to read from " << region_sum_ranges << " ranges, read "
-                                << regions_executor_data[special_region_index].block.rows() << " rows from memory");
+                                  "[PK_IS_UINT64] special region "
+                                      << special_region_info.info.region_id << ", split range into " << ranges.size() << ": " << ss.str() << ", "
+                                      << region_sum_marks << " marks to read from " << region_sum_ranges << " ranges, read "
+                                      << regions_executor_data[special_region_index].block.rows() << " rows from memory");
                     }
 
                     {
@@ -1368,14 +1369,14 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         extendMutableEngineColumnNames(column_names_to_read, data);
 
         res = spreadMarkRangesAmongStreamsOnMutableEngine(parts_with_ranges,
-            column_names_to_read,
-            max_block_size,
-            num_streams,
-            settings.use_uncompressed_cache,
-            prewhere_actions,
-            prewhere_column,
-            virt_column_names,
-            settings);
+                                                          column_names_to_read,
+                                                          max_block_size,
+                                                          num_streams,
+                                                          settings.use_uncompressed_cache,
+                                                          prewhere_actions,
+                                                          prewhere_column,
+                                                          virt_column_names,
+                                                          settings);
     }
     else if (select.final())
     {
@@ -1392,25 +1393,25 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         column_names_to_read.erase(std::unique(column_names_to_read.begin(), column_names_to_read.end()), column_names_to_read.end());
 
         res = spreadMarkRangesAmongStreamsFinal(std::move(parts_with_ranges),
-            column_names_to_read,
-            max_block_size,
-            settings.use_uncompressed_cache,
-            prewhere_actions,
-            prewhere_column,
-            virt_column_names,
-            settings);
+                                                column_names_to_read,
+                                                max_block_size,
+                                                settings.use_uncompressed_cache,
+                                                prewhere_actions,
+                                                prewhere_column,
+                                                virt_column_names,
+                                                settings);
     }
     else
     {
         res = spreadMarkRangesAmongStreams(std::move(parts_with_ranges),
-            num_streams,
-            column_names_to_read,
-            max_block_size,
-            settings.use_uncompressed_cache,
-            prewhere_actions,
-            prewhere_column,
-            virt_column_names,
-            settings);
+                                           num_streams,
+                                           column_names_to_read,
+                                           max_block_size,
+                                           settings.use_uncompressed_cache,
+                                           prewhere_actions,
+                                           prewhere_column,
+                                           virt_column_names,
+                                           settings);
     }
 
     if (use_sampling)
@@ -1421,21 +1422,24 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     if (sample_factor_column_queried)
         for (auto & stream : res)
             stream = std::make_shared<AddingConstColumnBlockInputStream<Float64>>(
-                stream, std::make_shared<DataTypeFloat64>(), used_sample_factor, "_sample_factor");
+                stream,
+                std::make_shared<DataTypeFloat64>(),
+                used_sample_factor,
+                "_sample_factor");
 
     return res;
 }
 
 
 BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreams(RangesInDataParts && parts,
-    size_t num_streams,
-    const Names & column_names,
-    size_t max_block_size,
-    bool use_uncompressed_cache,
-    ExpressionActionsPtr prewhere_actions,
-    const String & prewhere_column,
-    const Names & virt_columns,
-    const Settings & settings) const
+                                                                            size_t num_streams,
+                                                                            const Names & column_names,
+                                                                            size_t max_block_size,
+                                                                            bool use_uncompressed_cache,
+                                                                            ExpressionActionsPtr prewhere_actions,
+                                                                            const String & prewhere_column,
+                                                                            const Names & virt_columns,
+                                                                            const Settings & settings) const
 {
     const size_t min_marks_for_concurrent_read
         = (settings.merge_tree_min_rows_for_concurrent_read + data.index_granularity - 1) / data.index_granularity;
@@ -1466,9 +1470,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreams(Rang
         if (sum_marks < num_streams * min_marks_for_concurrent_read && parts.size() < num_streams)
             num_streams = std::max((sum_marks + min_marks_for_concurrent_read - 1) / min_marks_for_concurrent_read, parts.size());
 
-        MergeTreeReadPoolPtr pool = std::make_shared<MergeTreeReadPool>(num_streams, sum_marks, min_marks_for_concurrent_read, parts, data,
-            prewhere_actions, prewhere_column, true, column_names, MergeTreeReadPool::BackoffSettings(settings),
-            settings.preferred_block_size_bytes, false);
+        MergeTreeReadPoolPtr pool = std::make_shared<MergeTreeReadPool>(num_streams, sum_marks, min_marks_for_concurrent_read, parts, data, prewhere_actions, prewhere_column, true, column_names, MergeTreeReadPool::BackoffSettings(settings), settings.preferred_block_size_bytes, false);
 
         /// Let's estimate total number of rows for progress bar.
         const size_t total_rows = data.index_granularity * sum_marks;
@@ -1476,9 +1478,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreams(Rang
 
         for (size_t i = 0; i < num_streams; ++i)
         {
-            res.emplace_back(std::make_shared<MergeTreeThreadBlockInputStream>(i, pool, min_marks_for_concurrent_read, max_block_size,
-                settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, data, use_uncompressed_cache,
-                prewhere_actions, prewhere_column, settings, virt_columns));
+            res.emplace_back(std::make_shared<MergeTreeThreadBlockInputStream>(i, pool, min_marks_for_concurrent_read, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, data, use_uncompressed_cache, prewhere_actions, prewhere_column, settings, virt_columns));
 
             if (i == 0)
             {
@@ -1547,10 +1547,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreams(Rang
                     }
                 }
 
-                BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names,
-                    ranges_to_get_from_part, use_uncompressed_cache, prewhere_actions, prewhere_column, true,
-                    settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
+                BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, ranges_to_get_from_part, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
 
                 res.push_back(source_stream);
             }
@@ -1564,13 +1561,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreams(Rang
 }
 
 BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsFinal(RangesInDataParts && parts,
-    const Names & column_names,
-    size_t max_block_size,
-    bool use_uncompressed_cache,
-    ExpressionActionsPtr prewhere_actions,
-    const String & prewhere_column,
-    const Names & virt_columns,
-    const Settings & settings) const
+                                                                                 const Names & column_names,
+                                                                                 size_t max_block_size,
+                                                                                 bool use_uncompressed_cache,
+                                                                                 ExpressionActionsPtr prewhere_actions,
+                                                                                 const String & prewhere_column,
+                                                                                 const Names & virt_columns,
+                                                                                 const Settings & settings) const
 {
     const size_t max_marks_to_use_cache = (settings.merge_tree_max_rows_to_use_cache + data.index_granularity - 1) / data.index_granularity;
 
@@ -1590,10 +1587,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsFinal
     {
         RangesInDataPart & part = parts[part_index];
 
-        BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-            settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges,
-            use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
-            settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
+        BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
 
         to_merge.emplace_back(std::make_shared<ExpressionBlockInputStream>(source_stream, data.getPrimaryExpression()));
     }
@@ -1602,40 +1596,50 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsFinal
 
     switch (data.merging_params.mode)
     {
-        case MergeTreeData::MergingParams::Ordinary:
-            merged = std::make_shared<MergingSortedBlockInputStream>(to_merge, data.getSortDescription(), max_block_size);
-            break;
+    case MergeTreeData::MergingParams::Ordinary:
+        merged = std::make_shared<MergingSortedBlockInputStream>(to_merge, data.getSortDescription(), max_block_size);
+        break;
 
-        case MergeTreeData::MergingParams::Collapsing:
-            merged
-                = std::make_shared<CollapsingFinalBlockInputStream>(to_merge, data.getSortDescription(), data.merging_params.sign_column);
-            break;
+    case MergeTreeData::MergingParams::Collapsing:
+        merged
+            = std::make_shared<CollapsingFinalBlockInputStream>(to_merge, data.getSortDescription(), data.merging_params.sign_column);
+        break;
 
-        case MergeTreeData::MergingParams::Summing:
-            merged = std::make_shared<SummingSortedBlockInputStream>(
-                to_merge, data.getSortDescription(), data.merging_params.columns_to_sum, max_block_size);
-            break;
+    case MergeTreeData::MergingParams::Summing:
+        merged = std::make_shared<SummingSortedBlockInputStream>(
+            to_merge,
+            data.getSortDescription(),
+            data.merging_params.columns_to_sum,
+            max_block_size);
+        break;
 
-        case MergeTreeData::MergingParams::Aggregating:
-            merged = std::make_shared<AggregatingSortedBlockInputStream>(to_merge, data.getSortDescription(), max_block_size);
-            break;
+    case MergeTreeData::MergingParams::Aggregating:
+        merged = std::make_shared<AggregatingSortedBlockInputStream>(to_merge, data.getSortDescription(), max_block_size);
+        break;
 
-        case MergeTreeData::MergingParams::Replacing: /// TODO Make ReplacingFinalBlockInputStream
-            merged = std::make_shared<ReplacingSortedBlockInputStream>(
-                to_merge, data.getSortDescription(), data.merging_params.version_column, max_block_size);
-            break;
+    case MergeTreeData::MergingParams::Replacing: /// TODO Make ReplacingFinalBlockInputStream
+        merged = std::make_shared<ReplacingSortedBlockInputStream>(
+            to_merge,
+            data.getSortDescription(),
+            data.merging_params.version_column,
+            max_block_size);
+        break;
 
-        case MergeTreeData::MergingParams::VersionedCollapsing: /// TODO Make VersionedCollapsingFinalBlockInputStream
-            merged = std::make_shared<VersionedCollapsingSortedBlockInputStream>(
-                to_merge, data.getSortDescription(), data.merging_params.sign_column, max_block_size, true);
-            break;
+    case MergeTreeData::MergingParams::VersionedCollapsing: /// TODO Make VersionedCollapsingFinalBlockInputStream
+        merged = std::make_shared<VersionedCollapsingSortedBlockInputStream>(
+            to_merge,
+            data.getSortDescription(),
+            data.merging_params.sign_column,
+            max_block_size,
+            true);
+        break;
 
-        case MergeTreeData::MergingParams::Graphite:
-            throw Exception("GraphiteMergeTree doesn't support FINAL", ErrorCodes::LOGICAL_ERROR);
+    case MergeTreeData::MergingParams::Graphite:
+        throw Exception("GraphiteMergeTree doesn't support FINAL", ErrorCodes::LOGICAL_ERROR);
 
-        case MergeTreeData::MergingParams::Mutable:
-        case MergeTreeData::MergingParams::Txn:
-            throw Exception("MutableMergeTree doesn't handle here", ErrorCodes::LOGICAL_ERROR);
+    case MergeTreeData::MergingParams::Mutable:
+    case MergeTreeData::MergingParams::Txn:
+        throw Exception("MutableMergeTree doesn't handle here", ErrorCodes::LOGICAL_ERROR);
     }
 
     return {merged};
@@ -1643,7 +1647,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsFinal
 
 
 void MergeTreeDataSelectExecutor::createPositiveSignCondition(
-    ExpressionActionsPtr & out_expression, String & out_column, const Context & context) const
+    ExpressionActionsPtr & out_expression,
+    String & out_column,
+    const Context & context) const
 {
     auto function = std::make_shared<ASTFunction>();
     auto arguments = std::make_shared<ASTExpressionList>();
@@ -1665,7 +1671,9 @@ void MergeTreeDataSelectExecutor::createPositiveSignCondition(
 /// Calculates a set of mark ranges, that could possibly contain keys, required by condition.
 /// In other words, it removes subranges from whole range, that definitely could not contain required keys.
 MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
-    const MergeTreeData::DataPart::Index & index, const KeyCondition & key_condition, const Settings & settings) const
+    const MergeTreeData::DataPart::Index & index,
+    const KeyCondition & key_condition,
+    const Settings & settings) const
 {
     MarkRanges res;
 
@@ -1749,14 +1757,14 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 }
 
 BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsOnMutableEngine(const RangesInDataParts & parts_with_ranges,
-    const Names & column_names,
-    size_t max_block_size,
-    unsigned num_streams,
-    bool use_uncompressed_cache,
-    ExpressionActionsPtr prewhere_actions,
-    const String & prewhere_column,
-    const Names & virt_columns,
-    const Settings & settings) const
+                                                                                           const Names & column_names,
+                                                                                           size_t max_block_size,
+                                                                                           unsigned num_streams,
+                                                                                           bool use_uncompressed_cache,
+                                                                                           ExpressionActionsPtr prewhere_actions,
+                                                                                           const String & prewhere_column,
+                                                                                           const Names & virt_columns,
+                                                                                           const Settings & settings) const
 {
     LOG_DEBUG(log, "Number of streams: " << num_streams);
 
@@ -1787,10 +1795,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsOnMut
         for (auto it = parts_with_ranges.begin(); it != parts_with_ranges.end(); ++it)
         {
             const RangesInDataPart & part = *it;
-            BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges,
-                use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
-                settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
+            BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
             // source_stream = std::make_shared<DebugPrintBlockInputStream>(source_stream);
             source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream, data.getPrimaryExpression());
             res.emplace_back(source_stream);
@@ -1802,16 +1807,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsOnMut
         for (auto it = parts_with_ranges.begin(); it != parts_with_ranges.end(); ++it)
         {
             const RangesInDataPart & part = *it;
-            BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges,
-                use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
-                settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
+            BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
             // source_stream = std::make_shared<DebugPrintBlockInputStream>(source_stream);
             source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream, data.getPrimaryExpression());
             merging.emplace_back(source_stream);
         }
-        res.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getSortDescription(),
-            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr, false));
+        res.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getSortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr, false));
     }
     else if (type == MutableSupport::DeduperReplacingUnity)
     {
@@ -1823,17 +1824,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsOnMut
             for (size_t i = 0; i < parts.size(); ++i)
             {
                 const RangesInDataPart & part = parts[i];
-                BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges,
-                    use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
-                    settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
+                BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
                 // source_stream = std::make_shared<DebugPrintBlockInputStream>(source_stream);
                 source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream, data.getPrimaryExpression());
                 merging.emplace_back(source_stream);
             }
         }
-        res.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getSortDescription(),
-            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr, false));
+        res.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getSortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr, false));
     }
     else if (type == MutableSupport::DeduperReplacingPartitioning || type == MutableSupport::DeduperReplacingPartitioningOpt)
     {
@@ -1847,10 +1844,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsOnMut
             {
                 const RangesInDataPart & part = parts[i];
 
-                BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges,
-                    use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
-                    settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
+                BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
                 // source_stream = std::make_shared<DebugPrintBlockInputStream>(source_stream,
                 //     "partition-" + part.data_part->partition.getID(data) + ".part-" + part.data_part->name);
                 source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream, data.getPrimaryExpression());
@@ -1859,9 +1853,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsOnMut
             }
 
             // TODO: Optimization: if (merging.size() == 1)
-            BlockInputStreamPtr merged = std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getSortDescription(),
-                MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr,
-                type == MutableSupport::DeduperReplacingPartitioningOpt);
+            BlockInputStreamPtr merged = std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getSortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr, type == MutableSupport::DeduperReplacingPartitioningOpt);
 
             // merged = std::make_shared<DebugPrintBlockInputStream>(merged, "partition-" + parts[0].data_part->partition.getID(data));
             // merged = std::make_shared<AsynchronousBlockInputStream>(merged);
@@ -1899,10 +1891,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::spreadMarkRangesAmongStreamsOnMut
             {
                 const RangesInDataPart & part = parts[i];
 
-                BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges,
-                    use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
-                    settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
+                BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names, part.ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_columns, part.part_index_in_query);
                 // source_stream = std::make_shared<DebugPrintBlockInputStream>(source_stream,
                 //     "partition-" + part.data_part->partition.getID(data) + ".part-" + part.data_part->name);
                 source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream, data.getPrimaryExpression());

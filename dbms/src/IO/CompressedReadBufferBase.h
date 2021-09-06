@@ -5,12 +5,12 @@
 
 namespace DB
 {
-
 class ReadBuffer;
 
 /** Basic functionality for implementation of
   *  CompressedReadBuffer, CompressedReadBufferFromFile and CachedCompressedReadBuffer.
   */
+template <bool has_checksum = true>
 class CompressedReadBufferBase
 {
 protected:
@@ -22,7 +22,7 @@ protected:
     char * compressed_buffer = nullptr;
 
     /// Don't checksum on decompressing.
-    bool disable_checksum = false;
+    bool disable_checksum[has_checksum]{};
 
 
     /// Read compressed data into compressed_buffer. Get size of decompressed data from block header. Checksum if need.
@@ -42,8 +42,12 @@ public:
       */
     void disableChecksumming()
     {
-        disable_checksum = true;
+        if constexpr (has_checksum)
+        {
+            disable_checksum[0] = true;
+        }
     }
 };
 
-}
+
+} // namespace DB

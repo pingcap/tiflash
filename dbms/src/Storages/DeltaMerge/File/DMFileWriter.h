@@ -7,6 +7,7 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
+#include <IO/WriteBufferProxy.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
@@ -14,7 +15,6 @@ namespace DB
 {
 namespace DM
 {
-
 class DMFileWriter
 {
 public:
@@ -22,37 +22,41 @@ public:
 
     struct Stream
     {
-        Stream(const DMFilePtr &      dmfile,
-               const String &         file_base_name,
-               const DataTypePtr &    type,
-               CompressionSettings    compression_settings,
-               size_t                 max_compress_block_size,
-               FileProviderPtr &      file_provider,
-               const RateLimiterPtr & rate_limiter_,
-               bool                   do_index)
+        Stream(const DMFilePtr & dmfile,
+               const String & file_base_name,
+               const DataTypePtr & type,
+               CompressionSettings compression_settings,
+               size_t max_compress_block_size,
+               FileProviderPtr & file_provider,
+               const WriteLimiterPtr & write_limiter_,
+               bool do_index)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                      dmfile->colDataPath(file_base_name),
                                                                      dmfile->encryptionDataPath(file_base_name),
                                                                      false,
-                                                                     rate_limiter_,
+                                                                     write_limiter_,
                                                                      0,
                                                                      0,
-                                                                     max_compress_block_size)),
-              plain_hashing(*plain_file),
-              compressed_buf(plain_hashing, compression_settings),
-              original_hashing(compressed_buf),
-              minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(
-                  file_provider, dmfile->colMarkPath(file_base_name), dmfile->encryptionMarkPath(file_base_name), false, rate_limiter_)
+                                                                     max_compress_block_size))
+            , plain_layer(*plain_file)
+            , compressed_buf(plain_layer, compression_settings)
+            , original_layer(compressed_buf)
+            , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
+            , mark_file(
+                  file_provider,
+                  dmfile->colMarkPath(file_base_name),
+                  dmfile->encryptionMarkPath(file_base_name),
+                  false,
+                  write_limiter_)
         {
         }
 
         void flush()
         {
             // Note that this method won't flush minmaxes.
-            original_hashing.next();
+            original_layer.next();
             compressed_buf.next();
-            plain_hashing.next();
+            plain_layer.next();
             plain_file->next();
 
             plain_file->sync();
@@ -66,46 +70,46 @@ public:
 
         /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
         WriteBufferFromFileBasePtr plain_file;
-        HashingWriteBuffer         plain_hashing;
-        CompressedWriteBuffer      compressed_buf;
-        HashingWriteBuffer         original_hashing;
+        WriteBufferProxy plain_layer;
+        CompressedWriteBuffer<> compressed_buf;
+        WriteBufferProxy original_layer;
 
-        MinMaxIndexPtr              minmaxes;
+        MinMaxIndexPtr minmaxes;
         WriteBufferFromFileProvider mark_file;
     };
-    using StreamPtr     = std::unique_ptr<Stream>;
+    using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
 
     struct SingleFileStream
     {
-        SingleFileStream(const DMFilePtr &       dmfile,
-                         CompressionSettings     compression_settings,
-                         size_t                  max_compress_block_size,
+        SingleFileStream(const DMFilePtr & dmfile,
+                         CompressionSettings compression_settings,
+                         size_t max_compress_block_size,
                          const FileProviderPtr & file_provider,
-                         const RateLimiterPtr &  rate_limiter_)
+                         const WriteLimiterPtr & write_limiter_)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                      dmfile->path(),
                                                                      EncryptionPath(dmfile->encryptionBasePath(), ""),
                                                                      true,
-                                                                     rate_limiter_,
+                                                                     write_limiter_,
                                                                      0,
                                                                      0,
-                                                                     max_compress_block_size)),
-              plain_hashing(*plain_file),
-              compressed_buf(plain_hashing, compression_settings),
-              original_hashing(compressed_buf)
+                                                                     max_compress_block_size))
+            , plain_layer(*plain_file)
+            , compressed_buf(plain_layer, compression_settings)
+            , original_layer(compressed_buf)
         {
         }
 
         void flushCompressedData()
         {
-            original_hashing.next();
+            original_layer.next();
             compressed_buf.next();
         }
 
         void flush()
         {
-            plain_hashing.next();
+            plain_layer.next();
             plain_file->next();
 
             plain_file->sync();
@@ -117,15 +121,15 @@ public:
         using ColumnDataSizes = std::unordered_map<String, size_t>;
         ColumnDataSizes column_data_sizes;
 
-        using MarkWithSizes       = std::vector<MarkWithSizeInCompressedFile>;
+        using MarkWithSizes = std::vector<MarkWithSizeInCompressedFile>;
         using ColumnMarkWithSizes = std::unordered_map<String, MarkWithSizes>;
         ColumnMarkWithSizes column_mark_with_sizes;
 
-        /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
+        /// original_layer -> compressed_buf -> plain_layer -> plain_file
         WriteBufferFromFileBasePtr plain_file;
-        HashingWriteBuffer         plain_hashing;
-        CompressedWriteBuffer      compressed_buf;
-        HashingWriteBuffer         original_hashing;
+        HashingWriteBuffer plain_layer;
+        CompressedWriteBuffer<> compressed_buf;
+        HashingWriteBuffer original_layer;
     };
     using SingleFileStreamPtr = std::shared_ptr<SingleFileStream>;
 
@@ -139,12 +143,14 @@ public:
     struct Flags
     {
     private:
-        static constexpr size_t IS_SINGLE_FILE         = 0x01;
+        static constexpr size_t IS_SINGLE_FILE = 0x01;
 
         size_t value;
 
     public:
-        Flags() : value(0x0) {}
+        Flags()
+            : value(0x0)
+        {}
 
         inline void setSingleFile(bool v) { value = (v ? (value | IS_SINGLE_FILE) : (value & ~IS_SINGLE_FILE)); }
         inline bool isSingleFile() const { return (value & IS_SINGLE_FILE); }
@@ -153,25 +159,25 @@ public:
     struct Options
     {
         CompressionSettings compression_settings;
-        size_t              min_compress_block_size;
-        size_t              max_compress_block_size;
-        Flags               flags;
+        size_t min_compress_block_size;
+        size_t max_compress_block_size;
+        Flags flags;
 
         Options() = default;
 
         Options(CompressionSettings compression_settings_, size_t min_compress_block_size_, size_t max_compress_block_size_, Flags flags_)
-            : compression_settings(compression_settings_),
-              min_compress_block_size(min_compress_block_size_),
-              max_compress_block_size(max_compress_block_size_),
-              flags(flags_)
+            : compression_settings(compression_settings_)
+            , min_compress_block_size(min_compress_block_size_)
+            , max_compress_block_size(max_compress_block_size_)
+            , flags(flags_)
         {
         }
 
         Options(const Options & from, const DMFilePtr & file)
-            : compression_settings(from.compression_settings),
-              min_compress_block_size(from.min_compress_block_size),
-              max_compress_block_size(from.max_compress_block_size),
-              flags(from.flags)
+            : compression_settings(from.compression_settings)
+            , min_compress_block_size(from.min_compress_block_size)
+            , max_compress_block_size(from.max_compress_block_size)
+            , flags(from.flags)
         {
             flags.setSingleFile(file->isSingleFileMode());
         }
@@ -179,11 +185,11 @@ public:
 
 
 public:
-    DMFileWriter(const DMFilePtr &       dmfile_,
-                 const ColumnDefines &   write_columns_,
+    DMFileWriter(const DMFilePtr & dmfile_,
+                 const ColumnDefines & write_columns_,
                  const FileProviderPtr & file_provider_,
-                 const RateLimiterPtr &  rate_limiter_,
-                 const Options &         options_);
+                 const WriteLimiterPtr & write_limiter_,
+                 const Options & options_);
 
     void write(const Block & block, const BlockProperty & block_property);
     void finalize();
@@ -200,9 +206,9 @@ private:
     void addStreams(ColId col_id, DataTypePtr type, bool do_index);
 
 private:
-    DMFilePtr     dmfile;
+    DMFilePtr dmfile;
     ColumnDefines write_columns;
-    Options       options;
+    Options options;
 
     ColumnStreams column_streams;
 
@@ -211,7 +217,7 @@ private:
     SingleFileStreamPtr single_file_stream;
 
     FileProviderPtr file_provider;
-    RateLimiterPtr  rate_limiter;
+    WriteLimiterPtr write_limiter;
 };
 
 } // namespace DM

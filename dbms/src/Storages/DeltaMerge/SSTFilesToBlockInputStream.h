@@ -3,6 +3,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/Transaction/PartitionStreams.h>
 
 #include <memory>
 #include <string_view>
@@ -14,7 +15,6 @@ class Logger;
 
 namespace DB
 {
-
 class TMTContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -26,9 +26,8 @@ class StorageDeltaMerge;
 
 namespace DM
 {
-
 struct ColumnDefine;
-using ColumnDefines    = std::vector<ColumnDefine>;
+using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 
 // forward declaration
@@ -40,61 +39,61 @@ using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBl
 class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
-    using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
-    SSTFilesToBlockInputStream(RegionPtr                      region_,
-                               const SSTViewVec &             snaps_,
+    SSTFilesToBlockInputStream(RegionPtr region_,
+                               const SSTViewVec & snaps_,
                                const TiFlashRaftProxyHelper * proxy_helper_,
-                               StorageDeltaMergePtr           ingest_storage_,
-                               DM::ColumnDefinesPtr           schema_snap_,
-                               Timestamp                      gc_safepoint_,
-                               bool                           force_decode_,
-                               TMTContext &                   tmt_,
-                               size_t                         expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
+                               const DecodingStorageSchemaSnapshot & schema_snap_,
+                               Timestamp gc_safepoint_,
+                               bool force_decode_,
+                               TMTContext & tmt_,
+                               size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToBlockInputStream();
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 
-    Block getHeader() const override { return toEmptyBlock(*schema_snap); }
+    Block getHeader() const override { return toEmptyBlock(*(schema_snap.column_defines)); }
 
-    void  readPrefix() override;
-    void  readSuffix() override;
+    void readPrefix() override;
+    void readSuffix() override;
     Block read() override;
 
 public:
     struct ProcessKeys
     {
-        size_t default_cf;
-        size_t write_cf;
-        size_t lock_cf;
+        size_t default_cf = 0;
+        size_t write_cf = 0;
+        size_t lock_cf = 0;
 
         inline size_t total() const { return default_cf + write_cf + lock_cf; }
     };
 
 private:
-    void scanCF(ColumnFamilyType cf, const std::string_view until = std::string_view{});
+    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_need_include);
 
     Block readCommitedBlock();
 
 private:
-    RegionPtr                      region;
-    const SSTViewVec &             snaps;
+    RegionPtr region;
+    const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    const StorageDeltaMergePtr     ingest_storage;
-    const DM::ColumnDefinesPtr     schema_snap;
-    TMTContext &                   tmt;
-    const Timestamp                gc_safepoint;
-    size_t                         expected_size;
-    Poco::Logger *                 log;
+    const DecodingStorageSchemaSnapshot & schema_snap;
+    TMTContext & tmt;
+    const Timestamp gc_safepoint;
+    size_t expected_size;
+    Poco::Logger * log;
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
     SSTReaderPtr write_cf_reader;
     SSTReaderPtr default_cf_reader;
     SSTReaderPtr lock_cf_reader;
 
+    DecodedTiKVKey default_last_loaded_rowkey;
+    DecodedTiKVKey lock_last_loaded_rowkey;
+
     friend class BoundedSSTFilesToBlockInputStream;
 
     const bool force_decode;
-    bool       is_decode_cancelled = false;
+    bool is_decode_cancelled = false;
 
     ProcessKeys process_keys;
 };
@@ -104,7 +103,9 @@ private:
 class BoundedSSTFilesToBlockInputStream final
 {
 public:
-    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, const ColId pk_column_id_, const bool is_common_handle_);
+    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
+                                      const ColId pk_column_id_,
+                                      const DecodingStorageSchemaSnapshot & schema_snap);
 
     String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
 
@@ -113,8 +114,6 @@ public:
     void readSuffix();
 
     Block read();
-
-    std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> ingestingInfo() const;
 
     SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const;
 
@@ -125,11 +124,10 @@ public:
 
 private:
     const ColId pk_column_id;
-    const bool  is_common_handle;
 
     // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
     // read from `mvcc_compact_stream`
-    const SSTFilesToBlockInputStreamPtr                                              _raw_child;
+    const SSTFilesToBlockInputStreamPtr _raw_child;
     std::unique_ptr<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>> mvcc_compact_stream;
 };
 

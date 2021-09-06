@@ -1,14 +1,12 @@
 #pragma once
 
-#include <string.h> // memcpy
-
-#include <Common/PODArray.h>
 #include <Columns/IColumn.h>
+#include <Common/PODArray.h>
+#include <string.h> // memcpy
 
 
 namespace DB
 {
-
 /** A column of values of "fixed-length string" type.
   * If you insert a smaller string, it will be padded with zero bytes.
   */
@@ -32,9 +30,13 @@ private:
     struct less;
 
     /** Create an empty column of strings of fixed-length `n` */
-    ColumnFixedString(size_t n_) : n(n_) {}
+    ColumnFixedString(size_t n_)
+        : n(n_)
+    {}
 
-    ColumnFixedString(const ColumnFixedString & src) : chars(src.chars.begin(), src.chars.end()), n(src.n) {};
+    ColumnFixedString(const ColumnFixedString & src)
+        : chars(src.chars.begin(), src.chars.end())
+        , n(src.n){};
 
 public:
     std::string getName() const override { return "FixedString(" + std::to_string(n) + ")"; }
@@ -93,15 +95,15 @@ public:
         chars.resize_assume_reserved(chars.size() - n * elems);
     }
 
-    StringRef serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    StringRef serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
+    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void updateHashWithValue(size_t index, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    void updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    void updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const override;
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    void updateWeakHash32(WeakHash32 & hash) const override;
+    void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
     int compareAt(size_t p1, size_t p2, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
@@ -149,4 +151,4 @@ public:
 };
 
 
-}
+} // namespace DB

@@ -1,12 +1,12 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <common/logger_useful.h>
 
 #include <chrono>
 #include <mutex>
@@ -24,7 +24,6 @@
 
 namespace DB
 {
-
 struct ExchangeReceiverResult
 {
     std::shared_ptr<tipb::SelectResponse> resp;
@@ -33,11 +32,17 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "",
-        bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
-        : resp(resp_), call_index(call_index_), req_info(req_info_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "", bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
+        : resp(resp_)
+        , call_index(call_index_)
+        , req_info(req_info_)
+        , meet_error(meet_error_)
+        , error_msg(error_msg_)
+        , eof(eof_)
     {}
-    ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
+    ExchangeReceiverResult()
+        : ExchangeReceiverResult(nullptr, 0)
+    {}
 };
 
 enum State
@@ -69,8 +74,9 @@ private:
     std::queue<ExchangeReceiverResult> result_buffer;
     Int32 live_connections;
     State state;
-    Exception err;
-    Logger * log;
+    String err_msg;
+
+    std::shared_ptr<LogWithPrefix> log;
 
     void setUpConnection();
 
@@ -103,22 +109,24 @@ private:
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
-        : cluster(context_.getTMTContext().getKVCluster()),
-          pb_exchange_receiver(exc),
-          source_num(pb_exchange_receiver.encoded_task_meta_size()),
-          task_meta(meta),
-          max_buffer_size(max_buffer_size_),
-          live_connections(0),
-          state(NORMAL),
-          log(&Logger::get("exchange_receiver"))
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+        : cluster(context_.getTMTContext().getKVCluster())
+        , pb_exchange_receiver(exc)
+        , source_num(pb_exchange_receiver.encoded_task_meta_size())
+        , task_meta(meta)
+        , max_buffer_size(max_buffer_size_)
+        , live_connections(pb_exchange_receiver.encoded_task_meta_size())
+        , state(NORMAL)
     {
+        log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
+
         for (int i = 0; i < exc.field_types_size(); i++)
         {
             String name = "exchange_receiver_" + std::to_string(i);
             ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
+
         setUpConnection();
     }
 
@@ -153,11 +161,13 @@ public:
         {
             String msg;
             if (state == CANCELED)
-                msg = "query canceled";
+                msg = "Query canceled";
             else if (state == CLOSED)
                 msg = "ExchangeReceiver closed";
+            else if (!err_msg.empty())
+                msg = err_msg;
             else
-                msg = err.message();
+                msg = "Unknown error";
             result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
         else if (result_buffer.empty())

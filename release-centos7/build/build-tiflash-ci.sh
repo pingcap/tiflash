@@ -9,10 +9,29 @@ else
   echo "ccache has been installed"
 fi
 
+command -v clang-format > /dev/null 2>&1
+if [[ $? != 0 ]]; then
+  curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format-12
+  chmod +x "/usr/local/bin/clang-format"
+else
+  echo "clang-format has been installed"
+fi
+clang-format --version
+
 set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
+
+CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
+BUILD_BRANCH=${BUILD_BRANCH:-master}
+ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
+
+if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
+  python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/${BUILD_BRANCH} HEAD` --dump_diff_files_to "/tmp/tiflash-diff-files.json"
+  export ENABLE_FORMAT_CHECK=false
+fi
+
 CI_CCACHE_USED_SRCPATH="/build/tics"
 export INSTALL_DIR=${INSTALL_DIR:-"$SRCPATH/release-centos7/tiflash"}
 
@@ -27,9 +46,7 @@ fi
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_TEST=${ENABLE_TEST:-1}
 ENABLE_EMBEDDED_COMPILER="FALSE"
-CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
-BUILD_BRANCH=${BUILD_BRANCH:-master}
 BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
 CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}.tar"
 CCACHE_REMOTE_TAR=$(echo "${CCACHE_REMOTE_TAR}" | tr 'A-Z' 'a-z')
@@ -98,9 +115,9 @@ fi
 
 chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
 
-build_dir="$SRCPATH/release-centos7/build-release"
-rm -rf ${build_dir}
-mkdir -p $build_dir && cd $build_dir
+BUILD_DIR="$SRCPATH/release-centos7/build-release"
+rm -rf ${BUILD_DIR}
+mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 cmake "$SRCPATH" \
     -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
     -DENABLE_TESTS=$ENABLE_TEST \
@@ -108,14 +125,14 @@ cmake "$SRCPATH" \
     -DUSE_CCACHE=${USE_CCACHE} \
     -DDEBUG_WITHOUT_DEBUG_INFO=ON
 
-make -j $NPROC tiflash
+make -j ${NPROC} tiflash
 
 # copy gtest binary under Debug mode
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
-    #ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
-    make -j ${NPROC} gtests_dbms gtests_libcommon
-    cp -f "$build_dir/dbms/gtests_dbms" "${INSTALL_DIR}/"
-    cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
+    make -j ${NPROC} page_ctl
+    make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing
+    cp -f "${BUILD_DIR}/dbms/gtests_dbms" "${INSTALL_DIR}/"
+    cp -f "${BUILD_DIR}/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
 fi
 
 ccache -s
@@ -128,9 +145,9 @@ if [[ ${UPDATE_CCACHE} == "true" ]]; then
 fi
 
 # Reduce binary size by compressing.
-objcopy --compress-debug-sections=zlib-gnu "$build_dir/dbms/src/Server/tiflash"
+objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash"
 cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}"/flash_cluster_manager
-cp -f "$build_dir/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
+cp -f "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 ldd "${INSTALL_DIR}/tiflash"
 cd "${INSTALL_DIR}"

@@ -14,4 +14,5 @@ else ()
     set (USE_RE2_ST 1)
 endif ()
 
-message (STATUS "Using re2: ${RE2_INCLUDE_DIR} : ${RE2_LIBRARY}; ${RE2_ST_INCLUDE_DIR} : ${RE2_ST_LIBRARY}")
+message (STATUS "Using re2: ${RE2_INCLUDE_DIR} : ${RE2_LIBRARY}")
+message (STATUS "Using re2_st: ${USE_RE2_ST}; ${RE2_ST_INCLUDE_DIR}; ${RE2_ST_LIBRARY}")

@@ -1,26 +1,25 @@
 #pragma once
 
-#include <map>
-#include <shared_mutex>
-#include <ext/shared_ptr_helper.h>
-
-#include <Poco/File.h>
-
-#include <Storages/IStorage.h>
 #include <Common/FileChecker.h>
 #include <Common/escapeForFileName.h>
+#include <Poco/File.h>
+#include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
+#include <map>
+#include <shared_mutex>
 
 
 namespace DB
 {
-
 /** Implements simple table engine without support of indices.
   * The data is stored in a compressed form.
   */
-class StorageLog : public ext::shared_ptr_helper<StorageLog>, public IStorage
+class StorageLog : public ext::shared_ptr_helper<StorageLog>
+    , public IStorage
 {
-friend class LogBlockInputStream;
-friend class LogBlockOutputStream;
+    friend class LogBlockInputStream;
+    friend class LogBlockOutputStream;
 
 public:
     std::string getName() const override { return "Log"; }
@@ -40,7 +39,7 @@ public:
 
     bool checkData() const override;
 
-    std::string full_path() const { return path + escapeForFileName(name) + '/';}
+    std::string full_path() const { return path + escapeForFileName(name) + '/'; }
 
     String getDataPath() const override { return full_path(); }
 
@@ -66,8 +65,8 @@ private:
       */
     struct Mark
     {
-        size_t rows;    /// How many rows are before this offset including the block at this offset.
-        size_t offset;  /// The offset in compressed file.
+        size_t rows; /// How many rows are before this offset including the block at this offset.
+        size_t offset; /// The offset in compressed file.
     };
 
     using Marks = std::vector<Mark>;
@@ -120,4 +119,4 @@ private:
     std::string getFullPath() const { return path + escapeForFileName(name) + '/'; }
 };
 
-}
+} // namespace DB

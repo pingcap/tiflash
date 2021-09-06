@@ -96,10 +96,14 @@ protected:
     private:
         using Base = IntrusivePtr<T>;
 
-        template <typename> friend class COWPtr;
-        template <typename, typename> friend class COWPtrHelper;
+        template <typename>
+        friend class COWPtr;
+        template <typename, typename>
+        friend class COWPtrHelper;
 
-        explicit mutable_ptr(T * ptr) : Base(ptr) {}
+        explicit mutable_ptr(T * ptr)
+            : Base(ptr)
+        {}
 
     public:
         /// Copy: not possible.
@@ -111,7 +115,9 @@ protected:
 
         /// Initializing from temporary of compatible type.
         template <typename U>
-        mutable_ptr(mutable_ptr<U> && other) : Base(std::move(other)) {}
+        mutable_ptr(mutable_ptr<U> && other)
+            : Base(std::move(other))
+        {}
 
         mutable_ptr() = default;
 
@@ -128,10 +134,14 @@ protected:
     private:
         using Base = IntrusivePtr<const T>;
 
-        template <typename> friend class COWPtr;
-        template <typename, typename> friend class COWPtrHelper;
+        template <typename>
+        friend class COWPtr;
+        template <typename, typename>
+        friend class COWPtrHelper;
 
-        explicit immutable_ptr(const T * ptr) : Base(ptr) {}
+        explicit immutable_ptr(const T * ptr)
+            : Base(ptr)
+        {}
 
     public:
         /// Copy from immutable ptr: ok.
@@ -139,7 +149,9 @@ protected:
         immutable_ptr & operator=(const immutable_ptr &) = default;
 
         template <typename U>
-        immutable_ptr(const immutable_ptr<U> & other) : Base(other) {}
+        immutable_ptr(const immutable_ptr<U> & other)
+            : Base(other)
+        {}
 
         /// Move: ok.
         immutable_ptr(immutable_ptr &&) = default;
@@ -147,11 +159,15 @@ protected:
 
         /// Initializing from temporary of compatible type.
         template <typename U>
-        immutable_ptr(immutable_ptr<U> && other) : Base(std::move(other)) {}
+        immutable_ptr(immutable_ptr<U> && other)
+            : Base(std::move(other))
+        {}
 
         /// Move from mutable ptr: ok.
         template <typename U>
-        immutable_ptr(mutable_ptr<U> && other) : Base(std::move(other)) {}
+        immutable_ptr(mutable_ptr<U> && other)
+            : Base(std::move(other))
+        {}
 
         /// Copy from mutable ptr: not possible.
         template <typename U>
@@ -166,10 +182,16 @@ public:
     using Ptr = immutable_ptr<Derived>;
 
     template <typename... Args>
-    static MutablePtr create(Args &&... args) { return MutablePtr(new Derived(std::forward<Args>(args)...)); }
+    static MutablePtr create(Args &&... args)
+    {
+        return MutablePtr(new Derived(std::forward<Args>(args)...));
+    }
 
     template <typename T>
-    static MutablePtr create(std::initializer_list<T> && arg) { return create(std::forward<std::initializer_list<T>>(arg)); }
+    static MutablePtr create(std::initializer_list<T> && arg)
+    {
+        return create(std::forward<std::initializer_list<T>>(arg));
+    }
 
 public:
     Ptr getPtr() const { return static_cast<Ptr>(derived()); }
@@ -185,7 +207,7 @@ public:
 
     MutablePtr assumeMutable() const
     {
-        return const_cast<COWPtr*>(this)->getPtr();
+        return const_cast<COWPtr *>(this)->getPtr();
     }
 
     Derived & assumeMutableRef() const
@@ -230,10 +252,16 @@ public:
     using MutablePtr = typename Base::template mutable_ptr<Derived>;
 
     template <typename... Args>
-    static MutablePtr create(Args &&... args) { return MutablePtr(new Derived(std::forward<Args>(args)...)); }
+    static MutablePtr create(Args &&... args)
+    {
+        return MutablePtr(new Derived(std::forward<Args>(args)...));
+    }
 
     template <typename T>
-    static MutablePtr create(std::initializer_list<T> && arg) { return create(std::forward<std::initializer_list<T>>(arg)); }
+    static MutablePtr create(std::initializer_list<T> && arg)
+    {
+        return create(std::forward<std::initializer_list<T>>(arg));
+    }
 
     typename Base::MutablePtr clone() const override { return typename Base::MutablePtr(new Derived(*derived())); }
 };

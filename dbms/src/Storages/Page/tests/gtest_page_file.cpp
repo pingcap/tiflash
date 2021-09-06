@@ -3,13 +3,10 @@
 #include <Storages/Page/PageFile.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include "gtest/gtest.h"
-
 namespace DB
 {
 namespace tests
 {
-
 TEST(PageFile_test, Compare)
 {
     // clean up
@@ -22,23 +19,23 @@ TEST(PageFile_test, Compare)
         }
     }
 
-    const auto     file_provider = TiFlashTestEnv::getContext().getFileProvider();
-    Poco::Logger * log           = &Poco::Logger::get("PageFile");
+    const auto file_provider = TiFlashTestEnv::getContext().getFileProvider();
+    Poco::Logger * log = &Poco::Logger::get("PageFile");
 
     {
         // Create files for tests
         PageFile checkpoint_pf = PageFile::newPageFile(55, 0, path, file_provider, PageFile::Type::Temp, log);
-        auto     writer        = checkpoint_pf.createWriter(false, true);
+        auto writer = checkpoint_pf.createWriter(false, true);
         checkpoint_pf.setCheckpoint();
         PageFile pf0 = PageFile::newPageFile(2, 0, path, file_provider, PageFile::Type::Formal, log);
-        writer       = pf0.createWriter(false, true);
+        writer = pf0.createWriter(false, true);
         PageFile pf1 = PageFile::newPageFile(55, 1, path, file_provider, PageFile::Type::Formal, log);
-        writer       = pf1.createWriter(false, true);
+        writer = pf1.createWriter(false, true);
     }
 
     PageFile checkpoint_pf = PageFile::openPageFileForRead(55, 0, path, file_provider, PageFile::Type::Checkpoint, log);
-    PageFile pf0           = PageFile::openPageFileForRead(2, 0, path, file_provider, PageFile::Type::Formal, log);
-    PageFile pf1           = PageFile::openPageFileForRead(55, 1, path, file_provider, PageFile::Type::Formal, log);
+    PageFile pf0 = PageFile::openPageFileForRead(2, 0, path, file_provider, PageFile::Type::Formal, log);
+    PageFile pf1 = PageFile::openPageFileForRead(55, 1, path, file_provider, PageFile::Type::Formal, log);
 
     PageFile::Comparator comp;
     ASSERT_EQ(comp(pf0, pf1), true);
@@ -75,7 +72,7 @@ TEST(PageFile_test, Compare)
 TEST(Page_test, GetField)
 {
     const size_t buf_sz = 1024;
-    char         c_buff[buf_sz];
+    char c_buff[buf_sz];
     for (size_t i = 0; i < buf_sz; ++i)
         c_buff[i] = i % 0xff;
 
@@ -95,7 +92,7 @@ TEST(Page_test, GetField)
     {
         auto field_offset = fields.find(2)->offset;
         EXPECT_EQ(*(data.begin() + i), static_cast<char>((field_offset + i) % 0xff)) //
-            << "field index: 2, offset: " << i                                       //
+            << "field index: 2, offset: " << i //
             << ", offset inside page: " << field_offset + i;
     }
 
@@ -105,7 +102,7 @@ TEST(Page_test, GetField)
     {
         auto field_offset = fields.find(3)->offset;
         EXPECT_EQ(*(data.begin() + i), static_cast<char>((field_offset + i) % 0xff)) //
-            << "field index: 3, offset: " << i                                       //
+            << "field index: 3, offset: " << i //
             << ", offset inside page: " << field_offset + i;
     }
 
@@ -115,7 +112,7 @@ TEST(Page_test, GetField)
     {
         auto field_offset = fields.find(9)->offset;
         EXPECT_EQ(*(data.begin() + i), static_cast<char>((field_offset + i) % 0xff)) //
-            << "field index: 9, offset: " << i                                       //
+            << "field index: 9, offset: " << i //
             << ", offset inside page: " << field_offset + i;
     }
 
@@ -125,7 +122,7 @@ TEST(Page_test, GetField)
     {
         auto field_offset = fields.find(10086)->offset;
         EXPECT_EQ(*(data.begin() + i), static_cast<char>((field_offset + i) % 0xff)) //
-            << "field index: 10086, offset: " << i                                   //
+            << "field index: 10086, offset: " << i //
             << ", offset inside page: " << field_offset + i;
     }
 
@@ -134,9 +131,9 @@ TEST(Page_test, GetField)
 
 TEST(PageEntry_test, GetFieldInfo)
 {
-    PageEntry                entry;
+    PageEntry entry;
     PageFieldOffsetChecksums field_offsets{{0, 0}, {20, 0}, {64, 0}, {99, 0}, {1024, 0}};
-    entry.size          = 40000;
+    entry.size = 40000;
     entry.field_offsets = field_offsets;
 
     size_t beg, end;

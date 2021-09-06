@@ -18,7 +18,6 @@ class Logger;
 
 namespace DB
 {
-
 /// A light-weight object which can be created and copied cheaply.
 /// Use createWriter()/createReader() to open write/read system file.
 class PageFile : public Allocator<false>
@@ -33,10 +32,10 @@ public:
         Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
         ~Writer();
 
-        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter = nullptr);
-        void                 tryCloseIdleFd(const Seconds & max_idle_time);
+        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
+        void tryCloseIdleFd(const Seconds & max_idle_time);
 
-        const String &     parentPath() const;
+        const String & parentPath() const;
         PageFileIdAndLevel fileIdLevel() const;
 
     private:
@@ -44,16 +43,17 @@ public:
 
     private:
         PageFile & page_file;
-        bool       sync_on_write;
+        bool sync_on_write;
 
         WritableFilePtr data_file;
         WritableFilePtr meta_file;
 
-        Clock::time_point last_write_time;
+        Clock::time_point last_write_time; // use to free idle writers
     };
 
     /// Reader is safe to used by multi threads.
-    class Reader : private boost::noncopyable, private Allocator<false>
+    class Reader : private boost::noncopyable
+        , private Allocator<false>
     {
         friend class PageFile;
 
@@ -63,20 +63,24 @@ public:
 
         /// Read pages from files.
         /// After return, the items in to_read could be reordered, but won't be removed or added.
-        PageMap read(PageIdAndEntries & to_read);
+        PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
-        void read(PageIdAndEntries & to_read, const PageHandler & handler);
+        void read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
 
         struct FieldReadInfo
         {
-            PageId              page_id;
-            PageEntry           entry;
+            PageId page_id;
+            PageEntry entry;
             std::vector<size_t> fields;
 
-            FieldReadInfo(PageId id_, PageEntry entry_, std::vector<size_t> fields_) : page_id(id_), entry(entry_), fields(fields_) {}
+            FieldReadInfo(PageId id_, PageEntry entry_, std::vector<size_t> fields_)
+                : page_id(id_)
+                , entry(entry_)
+                , fields(fields_)
+            {}
         };
         using FieldReadInfos = std::vector<FieldReadInfo>;
-        PageMap read(FieldReadInfos & to_read);
+        PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
         bool isIdle(const Seconds & max_idle_time);
 
@@ -107,10 +111,16 @@ public:
         }
     };
 
+    class MetaMergingReader;
+    using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
+
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter = nullptr);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter = nullptr);
+
+        MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
 
         ~MetaMergingReader();
 
@@ -137,8 +147,8 @@ public:
         }
 
         WriteBatch::SequenceID writeBatchSequence() const { return curr_write_batch_sequence; }
-        PageFileIdAndLevel     fileIdLevel() const { return page_file.fileIdLevel(); }
-        PageFile &             belongingPageFile() { return page_file; }
+        PageFileIdAndLevel fileIdLevel() const { return page_file.fileIdLevel(); }
+        PageFile & belongingPageFile() { return page_file; }
 
         static bool compare(const MetaMergingReader & lhs, const MetaMergingReader & rhs)
         {
@@ -157,7 +167,7 @@ public:
         }
 
     private:
-        void initialize();
+        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
 
     private:
         PageFile & page_file;
@@ -165,17 +175,16 @@ public:
         Status status = Status::Uninitialized;
 
         WriteBatch::SequenceID curr_write_batch_sequence = 0;
-        PageEntriesEdit        curr_edit;
+        PageEntriesEdit curr_edit;
 
         // The whole buffer and size of metadata, should be initlized in method `initlize()`.
         char * meta_buffer = nullptr;
-        size_t meta_size   = 0;
+        size_t meta_size = 0;
 
         // Current parsed offsets.
         size_t meta_file_offset = 0;
         size_t data_file_offset = 0;
     };
-    using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
 
     struct MergingPtrComparator
     {
@@ -191,8 +200,8 @@ public:
     {
         Invalid = 0,
         Formal,
-        Temp,       // written by GC thread
-        Legacy,     // the data is obsoleted and has been removed, only meta left
+        Temp, // written by GC thread
+        Legacy, // the data is obsoleted and has been removed, only meta left
         Checkpoint, // for recovery, only meta left
     };
 
@@ -221,22 +230,26 @@ public:
     static std::pair<PageFile, Type>
     recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log);
     /// Create a new page file.
-    static PageFile newPageFile(PageFileId              file_id,
-                                UInt32                  level,
-                                const String &          parent_path,
+    static PageFile newPageFile(PageFileId file_id,
+                                UInt32 level,
+                                const String & parent_path,
                                 const FileProviderPtr & file_provider_,
-                                Type                    type,
-                                Poco::Logger *          log);
+                                Type type,
+                                Poco::Logger * log);
     /// Open an existing page file for read.
-    static PageFile openPageFileForRead(PageFileId              file_id,
-                                        UInt32                  level,
-                                        const String &          parent_path,
+    static PageFile openPageFileForRead(PageFileId file_id,
+                                        UInt32 level,
+                                        const String & parent_path,
                                         const FileProviderPtr & file_provider_,
-                                        Type                    type,
-                                        Poco::Logger *          log);
+                                        Type type,
+                                        Poco::Logger * log);
     /// If page file is exist.
     static bool isPageFileExist(
-        PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log);
+        PageFileIdAndLevel file_id,
+        const String & parent_path,
+        const FileProviderPtr & file_provider_,
+        Type type,
+        Poco::Logger * log);
 
     /// Rename this page file into formal style.
     void setFormal();
@@ -247,7 +260,6 @@ public:
     /// Destroy underlying system files.
     void destroy() const;
 
-    MetaMergingReaderPtr createMetaMergingReader() { return std::make_unique<MetaMergingReader>(*this); }
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
@@ -267,14 +279,14 @@ public:
         return std::make_shared<Reader>(*this);
     }
 
-    UInt64             getFileId() const { return file_id; }
-    UInt32             getLevel() const { return level; }
+    UInt64 getFileId() const { return file_id; }
+    UInt32 getLevel() const { return level; }
     PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
-    bool               isValid() const { return file_id; }
-    bool               isExist() const;
-    Type               getType() const { return type; }
+    bool isValid() const { return file_id; }
+    bool isExist() const;
+    Type getType() const { return type; }
 
-    void   setFileAppendPos(size_t meta_pos, size_t data_pos);
+    void setFileAppendPos(size_t meta_pos, size_t data_pos);
     UInt64 getDataFileAppendPos() const { return data_file_pos; }
     UInt64 getMetaFileAppendPos() const { return meta_file_pos; }
 
@@ -307,7 +319,7 @@ public:
         if (level != 0 || type != PageFile::Type::Formal)
             return false;
         // Encryption can be turned on / turned off for existing cluster, we should take care of it when trying to reuse PageFile.
-        auto file_encrypted     = file_provider->isFileEncrypted(dataEncryptionPath());
+        auto file_encrypted = file_provider->isFileEncrypted(dataEncryptionPath());
         auto encryption_enabled = file_provider->isEncryptionEnabled();
         return (file_encrypted && encryption_enabled) || (!file_encrypted && !encryption_enabled);
     }
@@ -316,13 +328,13 @@ public:
 
 private:
     /// Create a new page file.
-    PageFile(PageFileId              file_id_,
-             UInt32                  level_,
-             const String &          parent_path,
+    PageFile(PageFileId file_id_,
+             UInt32 level_,
+             const String & parent_path,
              const FileProviderPtr & file_provider_,
-             Type                    type_,
-             bool                    is_create,
-             Poco::Logger *          log);
+             Type type_,
+             bool is_create,
+             Poco::Logger * log);
 
     String dataPath() const { return folderPath() + "/page"; }
     String metaPath() const { return folderPath() + "/meta"; }
@@ -330,17 +342,17 @@ private:
     EncryptionPath dataEncryptionPath() const { return EncryptionPath(dataPath(), ""); }
     EncryptionPath metaEncryptionPath() const { return EncryptionPath(metaPath(), ""); }
 
-    constexpr static const char * folder_prefix_formal     = "page";
-    constexpr static const char * folder_prefix_temp       = ".temp.page";
-    constexpr static const char * folder_prefix_legacy     = "legacy.page";
+    constexpr static const char * folder_prefix_formal = "page";
+    constexpr static const char * folder_prefix_temp = ".temp.page";
+    constexpr static const char * folder_prefix_legacy = "legacy.page";
     constexpr static const char * folder_prefix_checkpoint = "checkpoint.page";
 
     size_t removeDataIfExists() const;
 
 private:
     UInt64 file_id = 0; // Valid id start from 1.
-    UInt32 level   = 0; // 0: normal, >= 1: generated by GC.
-    Type   type    = Type::Formal;
+    UInt32 level = 0; // 0: normal, >= 1: generated by GC.
+    Type type = Type::Formal;
     String parent_path{}; // The parent folder of this page file.
 
     FileProviderPtr file_provider;

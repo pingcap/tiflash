@@ -1,7 +1,7 @@
 #include <future>
 #include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/MemoryTracker.h>
+#include <Common/ThreadFactory.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 
 
@@ -175,14 +175,12 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
         {
             auto & child = children[i];
 
-            auto memory_tracker = current_memory_tracker;
-            reading_pool->schedule([&child, memory_tracker]
-            {
-                current_memory_tracker = memory_tracker;
-                setThreadName("MergeAggReadThr");
-                CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
-                child->readPrefix();
-            });
+            reading_pool->schedule(
+                ThreadFactory(true, "MergeAggReadThr").newJob([&child]
+                {
+                    CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
+                    child->readPrefix();
+                }));
         }
 
         reading_pool->wait();
@@ -196,8 +194,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
           */
 
         for (size_t i = 0; i < merging_threads; ++i)
-            pool.schedule(std::bind(&MergingAggregatedMemoryEfficientBlockInputStream::mergeThread,
-                this, current_memory_tracker));
+            pool.schedule(ThreadFactory(true, "MergeAggMergThr").newJob([this] { mergeThread(); }));
     }
 }
 
@@ -293,10 +290,8 @@ void MergingAggregatedMemoryEfficientBlockInputStream::finalize()
 }
 
 
-void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread(MemoryTracker * memory_tracker)
+void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
 {
-    setThreadName("MergeAggMergThr");
-    current_memory_tracker = memory_tracker;
     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
 
     try
@@ -480,14 +475,11 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
         {
             if (need_that_input(input))
             {
-                auto memory_tracker = current_memory_tracker;
-                reading_pool->schedule([&input, &read_from_input, memory_tracker]
+                reading_pool->schedule(ThreadFactory(true, "MergeAggReadThr").newJob([&input, &read_from_input]
                 {
-                    current_memory_tracker = memory_tracker;
-                    setThreadName("MergeAggReadThr");
                     CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     read_from_input(input);
-                });
+                }));
             }
         }
 
@@ -537,7 +529,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
                 /// Not yet partitioned (splitted to buckets) block. Will partition it and place result to 'splitted_blocks'.
                 if (input.block.info.bucket_num == -1 && input.block && input.splitted_blocks.empty())
                 {
-                    LOG_TRACE(&Logger::get("MergingAggregatedMemoryEfficient"), "Having block without bucket: will split.");
+                    LOG_TRACE(&Poco::Logger::get("MergingAggregatedMemoryEfficient"), "Having block without bucket: will split.");
 
                     input.splitted_blocks = aggregator.convertBlockToTwoLevel(input.block);
                     input.block = Block();

@@ -22,11 +22,20 @@ class CreatingSetsBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     CreatingSetsBlockInputStream(
-        const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets_, const SizeLimits & network_transfer_limits);
+        const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets_, const SizeLimits & network_transfer_limits, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
 
     CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-        const SizeLimits & network_transfer_limits, Int64 mpp_task_id_);
+        const SizeLimits & network_transfer_limits, Int64 mpp_task_id_,
+        const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
+    ~CreatingSetsBlockInputStream()
+    {
+        for (auto & worker : workers)
+        {
+            if (worker.joinable())
+                worker.join();
+        }
+    }
 
     String getName() const override { return "CreatingSets"; }
 
@@ -55,11 +64,10 @@ private:
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
-    using Logger = Poco::Logger;
-    Logger * log = &Logger::get("CreatingSetsBlockInputStream");
+    const std::shared_ptr<LogWithPrefix> log;
 
     void createAll();
-    void createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker);
+    void createOne(SubqueryForSet & subquery);
 };
 
 } // namespace DB

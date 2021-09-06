@@ -16,8 +16,7 @@ namespace DM
 {
 namespace tests
 {
-
-static const ColId  DEFAULT_COL_ID   = 0;
+static const ColId DEFAULT_COL_ID = 0;
 static const String DEFAULT_COL_NAME = "2020-09-26";
 
 class DMMinMaxIndex_test : public ::testing::Test
@@ -41,10 +40,10 @@ Attr attr(String type)
     return Attr{DEFAULT_COL_NAME, DEFAULT_COL_ID, DataTypeFactory::instance().get(type)};
 }
 
-bool checkMatch(const String &        test_case, //
-                Context &             context,
-                const String &        type,
-                const CSVTuples       block_tuples,
+bool checkMatch(const String & test_case, //
+                Context & context,
+                const String & type,
+                const CSVTuples block_tuples,
                 const RSOperatorPtr & filter)
 {
     String name = "DMMinMaxIndex_test#" + test_case;
@@ -73,10 +72,17 @@ bool checkMatch(const String &        test_case, //
     table_columns.push_back(cd);
 
     Block header = toEmptyBlock(table_columns);
-    Block block  = genBlock(header, block_tuples);
+    Block block = genBlock(header, block_tuples);
 
     DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
-        context, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine(false), false, 1);
+        context,
+        false,
+        "test_database",
+        "test_table",
+        table_columns,
+        getExtraHandleColumnDefine(false),
+        false,
+        1);
 
     store->write(context, context.getSettingsRef(), std::move(block));
     store->flushCache(context, all_range);

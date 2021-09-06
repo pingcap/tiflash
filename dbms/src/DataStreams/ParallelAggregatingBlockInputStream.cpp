@@ -17,11 +17,12 @@ namespace DB
 ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     const BlockInputStreams & inputs, const BlockInputStreamPtr & additional_input_at_end,
     const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, size_t max_threads_,
-    size_t temporary_data_merge_threads_)
+    size_t temporary_data_merge_threads_, const LogWithPrefixPtr & log_)
     : params(params_), aggregator(params), file_provider(file_provider_),
     final(final_), max_threads(std::min(inputs.size(), max_threads_)), temporary_data_merge_threads(temporary_data_merge_threads_),
     keys_size(params.keys_size), aggregates_size(params.aggregates_size),
-    handler(*this), processor(inputs, additional_input_at_end, max_threads, handler)
+    handler(*this), processor(inputs, additional_input_at_end, max_threads, handler),
+    log(getLogWithPrefix(log_))
 {
     children = inputs;
     if (additional_input_at_end)
@@ -115,7 +116,7 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
 {
     parent.aggregator.executeOnBlock(block, *parent.many_data[thread_num], parent.file_provider,
         parent.threads_data[thread_num].key_columns, parent.threads_data[thread_num].aggregate_columns,
-        parent.threads_data[thread_num].key, parent.no_more_keys);
+        parent.no_more_keys);
 
     parent.threads_data[thread_num].src_rows += block.rows();
     parent.threads_data[thread_num].src_bytes += block.bytes();
@@ -209,8 +210,7 @@ void ParallelAggregatingBlockInputStream::execute()
     /// To do this, we pass a block with zero rows to aggregate.
     if (total_src_rows == 0 && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
         aggregator.executeOnBlock(children.at(0)->getHeader(), *many_data[0], file_provider,
-            threads_data[0].key_columns, threads_data[0].aggregate_columns,
-            threads_data[0].key, no_more_keys);
+            threads_data[0].key_columns, threads_data[0].aggregate_columns, no_more_keys);
 }
 
 }

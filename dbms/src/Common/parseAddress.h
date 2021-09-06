@@ -1,13 +1,13 @@
 #pragma once
 
-#include <string>
-#include <map>
 #include <common/types.h>
+
+#include <map>
+#include <string>
 
 
 namespace DB
 {
-
 /** Parse address from string, that can contain host with or without port.
   * If port was not specified and default_port is not zero, default_port is used.
   * Otherwise, an exception is thrown.
@@ -19,4 +19,4 @@ namespace DB
   */
 std::pair<std::string, UInt16> parseAddress(const std::string & str, UInt16 default_port);
 
-}
+} // namespace DB

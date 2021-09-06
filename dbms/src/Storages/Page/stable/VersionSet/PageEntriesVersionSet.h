@@ -12,7 +12,6 @@
 
 namespace DB::stable
 {
-
 class PageEntriesVersionSet : public DB::stable::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>
 {
 public:

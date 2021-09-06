@@ -76,20 +76,32 @@ public:
 
     size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
-        raft_cmdpb::AdminResponse && response,
+                                           raft_cmdpb::AdminResponse && response,
+                                           UInt64 region_id,
+                                           UInt64 index,
+                                           UInt64 term,
+                                           TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(
+        raft_cmdpb::RaftCmdRequest && request,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
-    EngineStoreApplyRes handleWriteRaftCmd(
-        raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
     RegionPreDecodeBlockDataPtr preHandleSnapshotToBlock(
-        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+        RegionPtr new_region,
+        const SSTViewVec,
+        uint64_t index,
+        uint64_t term,
+        TMTContext & tmt);
     std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
-        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+        RegionPtr new_region,
+        const SSTViewVec,
+        uint64_t index,
+        uint64_t term,
+        TMTContext & tmt);
     template <typename RegionPtrWrap>
     void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
@@ -100,6 +112,9 @@ public:
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
     TiDB::SnapshotApplyMethod applyMethod() const { return snapshot_apply_method; }
+
+    void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
+    Int64 getReadIndexEvent() const { return read_index_event_flag; }
 
 private:
     friend class MockTiDB;
@@ -113,7 +128,12 @@ private:
 
 
     std::vector<UInt64> preHandleSSTsToDTFiles(
-        RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, DM::FileConvertJobType, TMTContext & tmt);
+        RegionPtr new_region,
+        const SSTViewVec,
+        uint64_t index,
+        uint64_t term,
+        DM::FileConvertJobType,
+        TMTContext & tmt);
 
     template <typename RegionPtrWrap>
     void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
@@ -126,10 +146,10 @@ private:
     // If region is destroy or moved to another node(change peer),
     // set `remove_data` true to remove obsolete data from storage.
     void removeRegion(const RegionID region_id,
-        bool remove_data,
-        RegionTable & region_table,
-        const KVStoreTaskLock & task_lock,
-        const RegionTaskLock & region_lock);
+                      bool remove_data,
+                      RegionTable & region_table,
+                      const KVStoreTaskLock & task_lock,
+                      const RegionTaskLock & region_lock);
     void mockRemoveRegion(const RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 
@@ -139,7 +159,11 @@ private:
     RegionMap & regionsMut();
     const RegionMap & regions() const;
     EngineStoreApplyRes handleUselessAdminRaftCmd(
-        raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+        raft_cmdpb::AdminCmdType cmd_type,
+        UInt64 curr_region_id,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 
@@ -160,7 +184,7 @@ private:
 
     TiDB::SnapshotApplyMethod snapshot_apply_method;
 
-    Logger * log;
+    Poco::Logger * log;
 
     std::atomic<UInt64> REGION_COMPACT_LOG_PERIOD;
     std::atomic<UInt64> REGION_COMPACT_LOG_MIN_ROWS;
@@ -170,14 +194,19 @@ private:
     std::list<RegionDataReadInfoList> bg_gc_region_data;
 
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
+    std::atomic_int64_t read_index_event_flag{0};
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore
 class KVStoreTaskLock : private boost::noncopyable
 {
     friend class KVStore;
-    KVStoreTaskLock(std::mutex & mutex_) : lock(mutex_) {}
+    KVStoreTaskLock(std::mutex & mutex_)
+        : lock(mutex_)
+    {}
     std::lock_guard<std::mutex> lock;
 };
+
+void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t & terminate_signals_counter);
 
 } // namespace DB

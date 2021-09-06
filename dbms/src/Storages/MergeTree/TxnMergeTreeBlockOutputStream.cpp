@@ -5,8 +5,10 @@
 
 namespace DB
 {
-
-Block TxnMergeTreeBlockOutputStream::getHeader() const { return storage.getSampleBlock(); }
+Block TxnMergeTreeBlockOutputStream::getHeader() const
+{
+    return storage.getSampleBlock();
+}
 
 void TxnMergeTreeBlockOutputStream::write(Block && block)
 {
@@ -21,8 +23,8 @@ void TxnMergeTreeBlockOutputStream::write(Block && block)
     MergeTreeData::MutableDataPartPtr part = storage.writer.writeTempPart(part_block);
     storage.data.renameTempPartAndAdd(part, &storage.increment);
 
-    GET_METRIC(storage.context.getTiFlashMetrics(), tiflash_tmt_write_parts_count).Increment();
-    GET_METRIC(storage.context.getTiFlashMetrics(), tiflash_tmt_write_parts_duration_seconds).Observe(watch.elapsedSeconds());
+    GET_METRIC(tiflash_tmt_write_parts_count).Increment();
+    GET_METRIC(tiflash_tmt_write_parts_duration_seconds).Observe(watch.elapsedSeconds());
     PartLog::addNewPartToTheLog(storage.context, *part, watch.elapsed());
 
     storage.merge_task_handle->wake();

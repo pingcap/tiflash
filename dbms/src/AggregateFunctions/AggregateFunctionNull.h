@@ -1,13 +1,26 @@
 #pragma once
 
 #include <array>
+#include <map>
+#include <common/mem_utils.h>
+
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsHigherOrder.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-
+#include <Interpreters/sortBlock.h>
+#include <Interpreters/SetVariants.h>
 
 namespace DB
 {
@@ -84,9 +97,9 @@ public:
         return nested_function->getName();
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator) override
+    void setCollators(TiDB::TiDBCollators & collators) override
     {
-        nested_function->setCollator(collator);
+        nested_function->setCollators(collators);
     }
 
     DataTypePtr getReturnType() const override
@@ -245,9 +258,9 @@ public:
         return nested_function->getName();
     }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator) override
+    void setCollators(TiDB::TiDBCollators & collators) override
     {
-        nested_function->setCollator(collator);
+        nested_function->setCollators(collators);
     }
 
     DataTypePtr getReturnType() const override
@@ -433,7 +446,7 @@ public:
                 batch_size, this->nestedPlace(place), &nested_column, null_map, arena, if_argument_pos);
 
             if constexpr (result_is_nullable)
-                if (!memoryIsByte(null_map, batch_size, 1))
+                if (!mem_utils::memoryIsByte(null_map, batch_size, std::byte{1}))
                     this->setFlag(place);
         }
         else

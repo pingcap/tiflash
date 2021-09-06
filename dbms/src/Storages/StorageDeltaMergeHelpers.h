@@ -11,14 +11,12 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
 
-inline DM::RowKeyRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions, TableID table_id, bool is_common_handle,
-    size_t rowkey_column_size, size_t expected_ranges_count = 1, Logger * log = nullptr)
+inline DM::RowKeyRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions, TableID table_id, bool is_common_handle, size_t rowkey_column_size, size_t expected_ranges_count = 1, Poco::Logger * log = nullptr)
 {
     // todo check table id in DecodedTiKVKey???
     DM::RowKeyRanges ranges;

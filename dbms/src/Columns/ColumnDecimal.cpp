@@ -1,28 +1,25 @@
+#include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnsCommon.h>
 #include <Common/Arena.h>
 #include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
-
+#include <DataStreams/ColumnGathererStream.h>
+#include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
 
-#include <IO/WriteHelpers.h>
 
-#include <Columns/ColumnsCommon.h>
-#include <Columns/ColumnDecimal.h>
-#include <DataStreams/ColumnGathererStream.h>
-
-
-template <typename T> bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
+template <typename T>
+bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int PARAMETER_OUT_OF_BOUND;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-    extern const int NOT_IMPLEMENTED;
-}
+extern const int PARAMETER_OUT_OF_BOUND;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
 template <typename T>
 int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) const
@@ -35,7 +32,7 @@ int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) c
 }
 
 template <typename T>
-StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
+StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
     if constexpr (is_Decimal256)
     {
@@ -69,7 +66,7 @@ StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, cha
 }
 
 template <typename T>
-const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>)
+const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &)
 {
     if constexpr (is_Decimal256)
     {
@@ -84,9 +81,9 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, s
         size_t limb_count = unalignedLoad<size_t>(pos + offset);
         offset += sizeof(size_t);
 
-        val.resize(limb_count,limb_count);
+        val.resize(limb_count, limb_count);
         memcpy(val.limbs(), pos + offset, limb_count * sizeof(boost::multiprecision::limb_type));
-        if(s != val.sign())
+        if (s != val.sign())
             val.negate();
         val.normalize();
         data.push_back(value);
@@ -109,13 +106,13 @@ UInt64 ColumnDecimal<T>::get64(size_t n) const
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
+void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     hash.update(data[n]);
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
 {
     for (size_t i = 0; i < data.size(); ++i)
     {
@@ -124,13 +121,12 @@ void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, c
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash) const
+void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto s = data.size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
-                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     const T * begin = data.data();
     const T * end = begin + s;
@@ -146,7 +142,7 @@ void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash) const
 }
 
 template <typename T>
-void ColumnDecimal<T>::getPermutation(bool reverse, size_t limit, int , IColumn::Permutation & res) const
+void ColumnDecimal<T>::getPermutation(bool reverse, size_t limit, int, IColumn::Permutation & res) const
 {
 #if 1 /// TODO: perf test
     if (data.size() <= std::numeric_limits<UInt32>::max())
@@ -222,9 +218,8 @@ void ColumnDecimal<T>::insertRangeFrom(const IColumn & src, size_t start, size_t
     const ColumnDecimal & src_vec = static_cast<const ColumnDecimal &>(src);
 
     if (start + length > src_vec.data.size())
-        throw Exception("Parameters start = " + toString(start) + ", length = " + toString(length) +
-            " are out of bound in ColumnDecimal<T>::insertRangeFrom method (data.size() = " + toString(src_vec.data.size()) + ").",
-            ErrorCodes::PARAMETER_OUT_OF_BOUND);
+        throw Exception("Parameters start = " + toString(start) + ", length = " + toString(length) + " are out of bound in ColumnDecimal<T>::insertRangeFrom method (data.size() = " + toString(src_vec.data.size()) + ").",
+                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t old_size = data.size();
     data.resize(old_size + length);
@@ -325,4 +320,4 @@ template class ColumnDecimal<Decimal64>;
 template class ColumnDecimal<Decimal128>;
 template class ColumnDecimal<Decimal256>;
 
-}
+} // namespace DB

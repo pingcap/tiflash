@@ -4,11 +4,11 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Interpreters/AggregationCommon.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNSUPPORTED_PARAMETER;
@@ -16,14 +16,15 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 template <class StreamWriterPtr>
-StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_,
-    tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
-    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_),
-      exchange_type(exchange_type_),
-      writer(writer_),
-      partition_col_ids(std::move(partition_col_ids_))
+StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, TiDB::TiDBCollators collators_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, const std::shared_ptr<LogWithPrefix> & log_)
+    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
+    , exchange_type(exchange_type_)
+    , writer(writer_)
+    , partition_col_ids(std::move(partition_col_ids_))
+    , collators(std::move(collators_))
 {
+    log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), "");
+
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
 }
@@ -35,46 +36,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
-ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
-    std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
-{
-    /// todo find a way to avoid copying input_blocks
-    return [this, input_blocks, response]() mutable {
-       EncodeThenWriteBlock(input_blocks,response);
-    };
-}
-
-template <class StreamWriterPtr>
-ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionTask(
-    std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
-{
-    /// todo find a way to avoid copying input_blocks
-    return [this, input_blocks, response]() mutable {
-        PartitionAndEncodeThenWriteBlock(input_blocks,response);
-    };
-}
-
-
-template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
-{
-    if (block.columns() != result_field_types.size())
-        throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
-    size_t rows = block.rows();
-    rows_in_blocks += rows;
-    if (rows > 0)
-    {
-        blocks.push_back(block);
-    }
-    /// limit rows for shuffle data among tiflash, except for tidb
-    if ((Int64)rows_in_blocks > (records_per_chunk== -1? 2048:records_per_chunk))
-    {
-        BatchWrite<false>();
-    }
-}
-template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::EncodeThenWriteBlock(
-    std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
+    std::vector<Block> & input_blocks,
+    tipb::SelectResponse & response) const
 {
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
     if (encode_type == tipb::EncodeType::TypeDefault)
@@ -140,11 +104,14 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::EncodeThenWriteBlock(
 }
 
 template <class StreamWriterPtr>
+template <bool for_last_response>
 void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlock(
-    std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
+    std::vector<Block> & input_blocks,
+    tipb::SelectResponse & response) const
 {
     std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
     std::vector<tipb::SelectResponse> responses(partition_num);
+    std::vector<size_t> responses_row_count(partition_num);
     for (auto i = 0; i < partition_num; ++i)
     {
         if (encode_type == tipb::EncodeType::TypeDefault)
@@ -175,6 +142,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
     // 1) compute partition id
     // 2) partition each row
     // 3) encode each chunk and send it
+    std::vector<String> partition_key_containers(collators.size());
     for (auto & block : input_blocks)
     {
         std::vector<Block> dest_blocks(partition_num);
@@ -198,9 +166,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
         WeakHash32 hash(rows);
 
         // get hash values by all partition key columns
-        for (auto i : partition_col_ids)
+        for (size_t i = 0; i < partition_col_ids.size(); i++)
         {
-            block.getByPosition(i).column->updateWeakHash32(hash);
+            block.getByPosition(partition_col_ids[i]).column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
         }
         const auto & hash_data = hash.getData();
 
@@ -211,7 +179,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
             /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
             selector[row] = hash_data[row]; /// [0, 2^32)
             selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
-            selector[row] >>= 32u;          /// [0, partition_num)
+            selector[row] >>= 32u; /// [0, partition_num)
         }
 
         for (size_t col_id = 0; col_id < block.columns(); ++col_id)
@@ -228,6 +196,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
         for (auto part_id = 0; part_id < partition_num; ++part_id)
         {
             dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
+            responses_row_count[part_id] += dest_blocks[part_id].rows();
             chunk_codec_stream[part_id]->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
             auto dag_chunk = responses[part_id].add_chunks();
             dag_chunk->set_rows_data(chunk_codec_stream[part_id]->getString());
@@ -237,7 +206,15 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
 
     for (auto part_id = 0; part_id < partition_num; ++part_id)
     {
-        writer->write(responses[part_id], part_id);
+        if constexpr (for_last_response)
+        {
+            writer->write(responses[part_id], part_id);
+        }
+        else
+        {
+            if (responses_row_count[part_id] > 0)
+                writer->write(responses[part_id], part_id);
+        }
     }
 }
 template <class StreamWriterPtr>
@@ -249,7 +226,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::BatchWrite()
         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
-        PartitionAndEncodeThenWriteBlock(blocks,response);
+        PartitionAndEncodeThenWriteBlock<collect_execution_info>(blocks, response);
     }
     else
     {

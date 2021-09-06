@@ -16,7 +16,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_TABLE;
@@ -27,12 +26,12 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 
-InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
-    : context(context_),
-      dag(dag_),
-      keep_session_timezone_info(
-          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
-      log(&Logger::get("InterpreterDAG"))
+InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const std::shared_ptr<LogWithPrefix> & log_)
+    : context(context_)
+    , dag(dag_)
+    , keep_session_timezone_info(
+          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
+    , log(log_)
 {
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())
@@ -53,8 +52,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
         input_streams_vec.push_back(child_streams);
     }
-    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info,
-        dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
+    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag, subqueriesForSets, mpp_exchange_receiver_maps, log);
     return query_block_interpreter.execute();
 }
 
@@ -68,7 +66,10 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     {
         /// use max_streams * 5 as the default receiver buffer size, maybe make it more configurable
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            context, dag_query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta(), max_streams * 5);
+            context,
+            dag_query_block.source->exchange_receiver(),
+            dag.getDAGContext().getMPPTaskMeta(),
+            max_streams * 5);
     }
 }
 
@@ -94,29 +95,46 @@ BlockIO InterpreterDAG::execute()
         // get partition column ids
         auto part_keys = exchangeSender.partition_keys();
         std::vector<Int64> partition_col_id;
-        for (const auto & expr : part_keys)
+        TiDB::TiDBCollators collators;
+        /// in case TiDB is an old version, it has not collation info
+        bool has_collator_info = exchangeSender.types_size() != 0;
+        if (has_collator_info && part_keys.size() != exchangeSender.types_size())
         {
+            throw TiFlashException(std::string(__PRETTY_FUNCTION__)
+            + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
+              "enabled",
+              Errors::Coprocessor::BadRequest);
+        }
+        for (int i = 0; i < part_keys.size(); i++)
+        {
+            const auto & expr = part_keys[i];
             assert(isColumnExpr(expr));
             auto column_index = decodeDAGInt64(expr.val());
             partition_col_id.emplace_back(column_index);
+            if (has_collator_info && getDataTypeByFieldType(expr.field_type())->isString())
+            {
+                collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
+            }
+            else
+            {
+                collators.emplace_back(nullptr);
+            }
         }
         pipeline.transform([&](auto & stream) {
             // construct writer
             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
-                context.getDAGContext()->tunnel_set, partition_col_id, exchangeSender.tp(), context.getSettings().dag_records_per_chunk,
+                context.getDAGContext()->tunnel_set, partition_col_id,collators, exchangeSender.tp(), context.getSettings().dag_records_per_chunk,
                 dag.getEncodeType(), dag.getResultFieldTypes(), dag.getDAGContext());
             stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer));
         });
     }
 
     /// add union to run in parallel if needed
-    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
+    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
     if (!subqueriesForSets.empty())
     {
         const Settings & settings = context.getSettingsRef();
-        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), std::move(subqueriesForSets),
-            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            dag.getDAGContext().getMPPTaskId());
+        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), std::move(subqueriesForSets), SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode), dag.getDAGContext().getMPPTaskId());
     }
 
     BlockIO res;

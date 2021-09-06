@@ -15,7 +15,7 @@ namespace DB
 {
 
 class Context;
-struct MPPTunnelSet;
+class MPPTunnelSet;
 
 struct ProfileStreamsInfo
 {
@@ -35,8 +35,9 @@ public:
           tunnel_set(nullptr),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
-          _warnings(std::numeric_limits<int>::max()){};
-    explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
+          warnings(std::numeric_limits<int>::max()) {}
+
+    DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
           return_executor_id(true),
           is_mpp_task(true),
@@ -44,7 +45,7 @@ public:
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           mpp_task_meta(meta_),
-          _warnings(std::numeric_limits<int>::max())
+          warnings(std::numeric_limits<int>::max())
     {
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
         const auto & exchangeSender = dag_request.root_executor().exchange_sender();
@@ -58,7 +59,8 @@ public:
             task_meta.ParseFromString(exchangeSender.encoded_task_meta(0));
             is_root_mpp_task = task_meta.task_id() == -1;
         }
-    };
+    }
+
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
@@ -72,19 +74,19 @@ public:
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
     {
-        if (!_warnings.tryPush(warning))
+        if (!warnings.tryPush(warning))
             throw TiFlashException("Too many warnings, exceeds limit of 2147483647", Errors::Coprocessor::Internal);
     }
     /// Consume all warnings. Once this method called, every warning will be cleared.
     /// This method is not thread-safe.
-    void consumeWarnings(std::vector<tipb::Error> & warnings)
+    void consumeWarnings(std::vector<tipb::Error> & warnings_)
     {
-        warnings.reserve(_warnings.size());
-        for (size_t i = 0; i < _warnings.size(); i++)
+        warnings_.reserve(warnings.size());
+        for (size_t i = 0; i < warnings.size(); i++)
         {
             tipb::Error error;
-            _warnings.pop(error);
-            warnings.push_back(error);
+            warnings.pop(error);
+            warnings_.push_back(error);
         }
     }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
@@ -129,8 +131,7 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
-
-    ConcurrentBoundedQueue<tipb::Error> _warnings;
+    ConcurrentBoundedQueue<tipb::Error> warnings;
 };
 
 } // namespace DB

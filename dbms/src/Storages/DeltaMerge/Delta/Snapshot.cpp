@@ -7,13 +7,11 @@
 
 namespace DB::DM
 {
-
-
 std::pair<size_t, size_t> findPack(const DeltaPacks & packs, size_t rows_offset, size_t deletes_offset)
 {
-    size_t rows_count    = 0;
+    size_t rows_count = 0;
     size_t deletes_count = 0;
-    size_t pack_index    = 0;
+    size_t pack_index = 0;
     for (; pack_index < packs.size(); ++pack_index)
     {
         if (rows_count == rows_offset && deletes_count == deletes_offset)
@@ -69,13 +67,13 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap          = std::make_shared<DeltaValueSnapshot>(type);
-    snap->is_update    = for_update;
-    snap->_delta       = this->shared_from_this();
-    snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);
-    snap->rows         = rows;
-    snap->bytes        = bytes;
-    snap->deletes      = deletes;
+    auto snap = std::make_shared<DeltaValueSnapshot>(type);
+    snap->is_update = for_update;
+    snap->_delta = this->shared_from_this();
+    snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), true);
+    snap->rows = rows;
+    snap->bytes = bytes;
+    snap->deletes = deletes;
     snap->packs.reserve(packs.size());
 
     snap->shared_delta_index = delta_index;
@@ -87,9 +85,9 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
         snap->deletes -= unsaved_deletes;
     }
 
-    size_t check_rows    = 0;
+    size_t check_rows = 0;
     size_t check_deletes = 0;
-    size_t total_rows    = 0;
+    size_t total_rows = 0;
     size_t total_deletes = 0;
     for (const auto & pack : packs)
     {
@@ -122,16 +120,30 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     return snap;
 }
 
+RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
+{
+    RowKeyRange squashed_delete_range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
+    for (auto iter = packs.cbegin(); iter != packs.cend(); ++iter)
+    {
+        const auto & pack = *iter;
+        if (auto dp_delete = pack->tryToDeleteRange(); dp_delete)
+            squashed_delete_range = squashed_delete_range.merge(dp_delete->getDeleteRange());
+    }
+    return squashed_delete_range;
+}
+
 // ================================================
 // DeltaValueReader
 // ================================================
 
-
-DeltaValueReader::DeltaValueReader(const DMContext &        context,
-                                   const DeltaSnapshotPtr & delta_snap_,
-                                   const ColumnDefinesPtr & col_defs_,
-                                   const RowKeyRange &      segment_range_)
-    : delta_snap(delta_snap_), col_defs(col_defs_), segment_range(segment_range_)
+DeltaValueReader::DeltaValueReader(
+    const DMContext & context,
+    const DeltaSnapshotPtr & delta_snap_,
+    const ColumnDefinesPtr & col_defs_,
+    const RowKeyRange & segment_range_)
+    : delta_snap(delta_snap_)
+    , col_defs(col_defs_)
+    , segment_range(segment_range_)
 {
     size_t total_rows = 0;
     for (auto & p : delta_snap->getPacks())
@@ -145,13 +157,13 @@ DeltaValueReader::DeltaValueReader(const DMContext &        context,
 
 DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
-    auto new_reader                    = new DeltaValueReader();
-    new_reader->delta_snap             = delta_snap;
+    auto new_reader = new DeltaValueReader();
+    new_reader->delta_snap = delta_snap;
     new_reader->_compacted_delta_index = _compacted_delta_index;
-    new_reader->col_defs               = new_col_defs;
-    new_reader->segment_range          = segment_range;
-    new_reader->pack_rows              = pack_rows;
-    new_reader->pack_rows_end          = pack_rows_end;
+    new_reader->col_defs = new_col_defs;
+    new_reader->segment_range = segment_range;
+    new_reader->pack_rows = pack_rows;
+    new_reader->pack_rows_end = pack_rows_end;
 
     for (auto & pr : pack_readers)
         new_reader->pack_readers.push_back(pr->createNewReader(new_col_defs));
@@ -175,18 +187,18 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
     auto total_delta_rows = delta_snap->getRows();
 
     auto start = std::min(offset, total_delta_rows);
-    auto end   = std::min(offset + limit, total_delta_rows);
+    auto end = std::min(offset + limit, total_delta_rows);
     if (end == start)
         return 0;
 
     auto [start_pack_index, rows_start_in_start_pack] = locatePosByAccumulation(pack_rows_end, start);
-    auto [end_pack_index, rows_end_in_end_pack]       = locatePosByAccumulation(pack_rows_end, end);
+    auto [end_pack_index, rows_end_in_end_pack] = locatePosByAccumulation(pack_rows_end, end);
 
     size_t actual_read = 0;
     for (size_t pack_index = start_pack_index; pack_index <= end_pack_index; ++pack_index)
     {
         size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
-        size_t rows_end_in_pack   = pack_index == end_pack_index ? rows_end_in_end_pack : pack_rows[pack_index];
+        size_t rows_end_in_pack = pack_index == end_pack_index ? rows_end_in_end_pack : pack_rows[pack_index];
         size_t rows_in_pack_limit = rows_end_in_pack - rows_start_in_pack;
 
         // Nothing to read.
@@ -224,10 +236,10 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
     auto & packs = delta_snap->getPacks();
 
     auto [start_pack_index, rows_start_in_start_pack] = findPack(packs, rows_begin, deletes_begin);
-    auto [end_pack_index, rows_end_in_end_pack]       = findPack(packs, rows_end, deletes_end);
+    auto [end_pack_index, rows_end_in_end_pack] = findPack(packs, rows_end, deletes_end);
 
     size_t block_rows_start = rows_begin;
-    size_t block_rows_end   = rows_begin;
+    size_t block_rows_end = rows_begin;
 
     for (size_t pack_index = start_pack_index; pack_index < packs.size() && pack_index <= end_pack_index; ++pack_index)
     {
@@ -260,7 +272,7 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
         {
             // It is a DeltaPackBlock.
             size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
-            size_t rows_end_in_pack   = pack_index == end_pack_index ? rows_end_in_end_pack : pack.getRows();
+            size_t rows_end_in_pack = pack_index == end_pack_index ? rows_end_in_end_pack : pack.getRows();
 
             block_rows_end += rows_end_in_pack - rows_start_in_pack;
 
@@ -280,20 +292,20 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
     return res;
 }
 
-bool DeltaValueReader::shouldPlace(const DMContext &   context,
-                                   DeltaIndexPtr       my_delta_index,
+bool DeltaValueReader::shouldPlace(const DMContext & context,
+                                   DeltaIndexPtr my_delta_index,
                                    const RowKeyRange & segment_range,
                                    const RowKeyRange & relevant_range,
-                                   UInt64              max_version)
+                                   UInt64 max_version)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
-    auto & packs                             = delta_snap->getPacks();
+    auto & packs = delta_snap->getPacks();
 
     // Already placed.
     if (placed_rows >= delta_snap->getRows() && placed_delete_ranges == delta_snap->getDeletes())
         return false;
 
-    if (relevant_range.all() || relevant_range == segment_range                 //
+    if (relevant_range.all() || relevant_range == segment_range //
         || delta_snap->getRows() - placed_rows > context.delta_cache_limit_rows //
         || placed_delete_ranges != delta_snap->getDeletes())
         return true;
@@ -311,14 +323,14 @@ bool DeltaValueReader::shouldPlace(const DMContext &   context,
             throw Exception("pack is delete range", ErrorCodes::LOGICAL_ERROR);
 
         size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
-        size_t rows_end_in_pack   = pack_rows[pack_index];
+        size_t rows_end_in_pack = pack_rows[pack_index];
 
-        auto & pack_reader    = pack_readers[pack_index];
-        auto & dpb_reader     = typeid_cast<DPBlockReader &>(*pack_reader);
-        auto   pk_column      = dpb_reader.getPKColumn();
-        auto   version_column = dpb_reader.getVersionColumn();
+        auto & pack_reader = pack_readers[pack_index];
+        auto & dpb_reader = typeid_cast<DPBlockReader &>(*pack_reader);
+        auto pk_column = dpb_reader.getPKColumn();
+        auto version_column = dpb_reader.getVersionColumn();
 
-        auto   rkcc             = RowKeyColumnContainer(pk_column, context.is_common_handle);
+        auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
         auto & version_col_data = toColumnVectorData<UInt64>(version_column);
 
         for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)

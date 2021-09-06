@@ -25,7 +25,6 @@
 
 namespace DB
 {
-
 struct CoprocessorReaderResult
 {
     std::shared_ptr<tipb::SelectResponse> resp;
@@ -34,8 +33,14 @@ struct CoprocessorReaderResult
     bool eof;
     String req_info = "cop request";
     CoprocessorReaderResult(
-        std::shared_ptr<tipb::SelectResponse> resp_, bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
-        : resp(resp_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+        std::shared_ptr<tipb::SelectResponse> resp_,
+        bool meet_error_ = false,
+        const String & error_msg_ = "",
+        bool eof_ = false)
+        : resp(resp_)
+        , meet_error(meet_error_)
+        , error_msg(error_msg_)
+        , eof(eof_)
     {}
 };
 
@@ -47,19 +52,26 @@ public:
 
 private:
     DAGSchema schema;
+    bool has_enforce_encode_type;
     pingcap::coprocessor::ResponseIter resp_iter;
 
 public:
     CoprocessorReader(
-        const DAGSchema & schema_, pingcap::kv::Cluster * cluster, std::vector<pingcap::coprocessor::copTask> tasks, int concurrency)
-        : schema(schema_), resp_iter(std::move(tasks), cluster, concurrency, &Logger::get("pingcap/coprocessor"))
+        const DAGSchema & schema_,
+        pingcap::kv::Cluster * cluster,
+        std::vector<pingcap::coprocessor::copTask> tasks,
+        bool has_enforce_encode_type_,
+        int concurrency)
+        : schema(schema_)
+        , has_enforce_encode_type(has_enforce_encode_type_)
+        , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
     {
         resp_iter.open();
     }
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    void cancel() {}
+    void cancel() { resp_iter.cancel(); }
 
     CoprocessorReaderResult nextResult()
     {
@@ -76,6 +88,10 @@ public:
         std::shared_ptr<tipb::SelectResponse> resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(data))
         {
+            if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock)
+                return {nullptr, true, "Encode type of coprocessor response is not CHBlock, "
+                                       "maybe the version of some TiFlash node in the cluster is not match with this one",
+                        false};
             return {resp, false, "", false};
         }
         else

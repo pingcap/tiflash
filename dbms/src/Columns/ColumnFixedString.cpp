@@ -1,29 +1,25 @@
 #include <Columns/ColumnFixedString.h>
-
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
-
 #include <DataStreams/ColumnGathererStream.h>
-
 #include <IO/WriteHelpers.h>
 
 #if __SSE2__
-    #include <emmintrin.h>
+#include <emmintrin.h>
 #endif
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_LARGE_STRING_SIZE;
-    extern const int SIZE_OF_FIXED_STRING_DOESNT_MATCH;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-    extern const int PARAMETER_OUT_OF_BOUND;
-}
+extern const int TOO_LARGE_STRING_SIZE;
+extern const int SIZE_OF_FIXED_STRING_DOESNT_MATCH;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+extern const int PARAMETER_OUT_OF_BOUND;
+} // namespace ErrorCodes
 
 
 MutableColumnPtr ColumnFixedString::cloneResized(size_t size) const
@@ -79,14 +75,14 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
     memcpy(&chars[old_size], pos, length);
 }
 
-StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
+StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto pos = arena.allocContinue(n, begin);
     memcpy(pos, &chars[n * index], n);
     return StringRef(pos, n);
 }
 
-const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>)
+const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &)
 {
     size_t old_size = chars.size();
     chars.resize(old_size + n);
@@ -94,12 +90,12 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
     return pos + n;
 }
 
-void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
+void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     hash.update(reinterpret_cast<const char *>(&chars[n * index]), n);
 }
 
-void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
 {
     for (size_t i = 0, sz = chars.size() / n; i < sz; ++i)
     {
@@ -107,13 +103,12 @@ void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, 
     }
 }
 
-void ColumnFixedString::updateWeakHash32(WeakHash32 & hash) const
+void ColumnFixedString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto s = size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
-                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     const UInt8 * pos = chars.data();
     UInt32 * hash_data = hash.getData().data();
@@ -132,7 +127,9 @@ template <bool positive>
 struct ColumnFixedString::less
 {
     const ColumnFixedString & parent;
-    explicit less(const ColumnFixedString & parent_) : parent(parent_) {}
+    explicit less(const ColumnFixedString & parent_)
+        : parent(parent_)
+    {}
     bool operator()(size_t lhs, size_t rhs) const
     {
         /// TODO: memcmp slows down.
@@ -173,10 +170,11 @@ void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_
 
     if (start + length > src_concrete.size())
         throw Exception("Parameters start = "
-            + toString(start) + ", length = "
-            + toString(length) + " are out of bound in ColumnFixedString::insertRangeFrom method"
-            " (size() = " + toString(src_concrete.size()) + ").",
-            ErrorCodes::PARAMETER_OUT_OF_BOUND);
+                            + toString(start) + ", length = "
+                            + toString(length) + " are out of bound in ColumnFixedString::insertRangeFrom method"
+                                                 " (size() = "
+                            + toString(src_concrete.size()) + ").",
+                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t old_size = chars.size();
     chars.resize(old_size + length * n);
@@ -342,4 +340,4 @@ void ColumnFixedString::getExtremes(Field & min, Field & max) const
     get(max_idx, max);
 }
 
-}
+} // namespace DB

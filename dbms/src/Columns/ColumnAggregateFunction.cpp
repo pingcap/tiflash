@@ -1,18 +1,18 @@
-#include <Columns/ColumnAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionState.h>
-#include <DataStreams/ColumnGathererStream.h>
-#include <IO/WriteBufferFromArena.h>
+#include <Columns/ColumnAggregateFunction.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/ColumnGathererStream.h>
+#include <IO/WriteBufferFromArena.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int PARAMETER_OUT_OF_BOUND;
-    extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
-}
+extern const int PARAMETER_OUT_OF_BOUND;
+extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 ColumnAggregateFunction::~ColumnAggregateFunction()
@@ -85,11 +85,11 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
 
     if (start + length > from_concrete.getData().size())
         throw Exception("Parameters start = " + toString(start) + ", length = " + toString(length)
-                + " are out of bound in ColumnAggregateFunction::insertRangeFrom method"
-                  " (data.size() = "
-                + toString(from_concrete.getData().size())
-                + ").",
-            ErrorCodes::PARAMETER_OUT_OF_BOUND);
+                            + " are out of bound in ColumnAggregateFunction::insertRangeFrom method"
+                              " (data.size() = "
+                            + toString(from_concrete.getData().size())
+                            + ").",
+                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     if (!empty() && src.get() != &from_concrete)
     {
@@ -163,14 +163,14 @@ ColumnPtr ColumnAggregateFunction::permute(const Permutation & perm, size_t limi
 }
 
 /// Is required to support operations with Set
-void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
+void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     WriteBufferFromOwnString wbuf;
     func->serialize(getData()[n], wbuf);
     hash.update(wbuf.str().c_str(), wbuf.str().size());
 }
 
-void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_values, const std::shared_ptr<TiDB::ITiDBCollator> &, String &) const
+void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const
 {
     for (size_t i = 0, size = getData().size(); i < size; ++i)
     {
@@ -180,12 +180,11 @@ void ColumnAggregateFunction::updateHashWithValues(IColumn::HashValues & hash_va
     }
 }
 
-void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash) const
+void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     auto s = data.size();
     if (hash.getData().size() != data.size())
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
-                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     auto & hash_data = hash.getData();
 
@@ -310,7 +309,7 @@ void ColumnAggregateFunction::insertDefault()
     function->create(getData().back());
 }
 
-StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
+StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
     IAggregateFunction * function = func.get();
     WriteBufferFromArena out(dst, begin);
@@ -318,7 +317,7 @@ StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst
     return out.finish();
 }
 
-const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena, std::shared_ptr<TiDB::ITiDBCollator>)
+const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena, const TiDB::TiDBCollatorPtr &)
 {
     IAggregateFunction * function = func.get();
 
@@ -443,4 +442,4 @@ void ColumnAggregateFunction::getExtremes(Field & min, Field & max) const
     max = serialized;
 }
 
-}
+} // namespace DB

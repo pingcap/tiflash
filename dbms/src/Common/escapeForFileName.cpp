@@ -1,15 +1,15 @@
-#include <Common/hex.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
+#include <Common/hex.h>
+#include <common/StringRef.h>
 
 namespace DB
 {
-
-std::string escapeForFileName(const std::string & s)
+std::string escapeForFileName(const StringRef & s)
 {
     std::string res;
-    const char * pos = s.data();
-    const char * end = pos + s.size();
+    const char * pos = s.data;
+    const char * end = pos + s.size;
 
     while (pos != end)
     {
@@ -30,11 +30,11 @@ std::string escapeForFileName(const std::string & s)
     return res;
 }
 
-std::string unescapeForFileName(const std::string & s)
+std::string unescapeForFileName(const StringRef & s)
 {
     std::string res;
-    const char * pos = s.data();
-    const char * end = pos + s.size();
+    const char * pos = s.data;
+    const char * end = pos + s.size;
 
     while (pos != end)
     {
@@ -53,4 +53,4 @@ std::string unescapeForFileName(const std::string & s)
     return res;
 }
 
-}
+} // namespace DB

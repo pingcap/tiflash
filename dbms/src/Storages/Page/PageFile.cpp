@@ -48,10 +48,10 @@ namespace PageMetaFormat
 {
 using WBSize = UInt32;
 // TODO we should align these alias with type in PageCache
-using PageTag    = UInt64;
-using IsPut      = std::underlying_type<WriteBatch::WriteType>::type;
+using PageTag = UInt64;
+using IsPut = std::underlying_type<WriteBatch::WriteType>::type;
 using PageOffset = UInt64;
-using Checksum   = UInt64;
+using Checksum = UInt64;
 
 struct PageFlags
 {
@@ -69,8 +69,8 @@ static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageFileId) + sizeo
 
 /// Return <data to write into meta file, data to write into data file>.
 std::pair<ByteBuffer, ByteBuffer> genWriteData( //
-    WriteBatch &      wb,
-    PageFile &        page_file,
+    WriteBatch & wb,
+    PageFile & page_file,
     PageEntriesEdit & edit)
 {
     WBSize meta_write_bytes = 0;
@@ -121,21 +121,22 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
-            PageFlags  flags;
-            Checksum   page_checksum = 0;
-            PageOffset page_offset   = 0;
+        case WriteBatch::WriteType::UPSERT:
+        {
+            PageFlags flags;
+            Checksum page_checksum = 0;
+            PageOffset page_offset = 0;
             if (write.read_buffer)
             {
                 write.read_buffer->readStrict(data_pos, write.size);
                 page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
-                page_offset   = page_data_file_off;
+                page_offset = page_data_file_off;
                 // In this case, checksum of each fields (inside `write.offsets[i].second`)
                 // is simply 0, we need to calulate the checksums of each fields
                 for (size_t i = 0; i < write.offsets.size(); ++i)
                 {
-                    const auto field_beg    = write.offsets[i].first;
-                    const auto field_end    = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
+                    const auto field_beg = write.offsets[i].first;
+                    const auto field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
                     write.offsets[i].second = CityHash_v1_0_2::CityHash64(data_pos + field_beg, field_end - field_beg);
                 }
 
@@ -150,18 +151,18 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
                 // get page_checksum from write when read_buffer is nullptr
                 flags.setIsDetachPage();
                 page_checksum = write.page_checksum;
-                page_offset   = write.page_offset;
+                page_offset = write.page_offset;
                 // `entry.field_offsets`(and checksum) just simply copy `write.offsets`
                 // page_data_file_off += 0;
             }
 
             // UPSERT may point to another PageFile
             PageEntry entry;
-            entry.file_id  = (write.type == WriteBatch::WriteType::PUT ? page_file.getFileId() : write.target_file_id.first);
-            entry.level    = (write.type == WriteBatch::WriteType::PUT ? page_file.getLevel() : write.target_file_id.second);
-            entry.tag      = write.tag;
-            entry.size     = write.size;
-            entry.offset   = page_offset;
+            entry.file_id = (write.type == WriteBatch::WriteType::PUT ? page_file.getFileId() : write.target_file_id.first);
+            entry.level = (write.type == WriteBatch::WriteType::PUT ? page_file.getLevel() : write.target_file_id.second);
+            entry.tag = write.tag;
+            entry.size = write.size;
+            entry.offset = page_offset;
             entry.checksum = page_checksum;
 
             // entry.field_offsets = write.offsets;
@@ -219,15 +220,33 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 // PageFile::MetaMergingReader
 // =========================================================
 
+PageFile::MetaMergingReader::MetaMergingReader(PageFile & page_file_)
+    : page_file(page_file_)
+{}
+
 PageFile::MetaMergingReader::~MetaMergingReader()
 {
     page_file.free(meta_buffer, meta_size);
 }
 
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter)
+{
+    auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
+    reader->initialize(max_meta_offset, read_limiter);
+    return reader;
+}
+
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter)
+{
+    auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
+    reader->initialize(std::nullopt, read_limiter);
+    return reader;
+}
+
 // Try to initiallize access to meta, read the whole metadata to memory.
 // Status -> Finished if metadata size is zero.
 //        -> Opened if metadata successfully load from disk.
-void PageFile::MetaMergingReader::initialize()
+void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter)
 {
     if (status == Status::Opened)
         return;
@@ -239,7 +258,17 @@ void PageFile::MetaMergingReader::initialize()
     if (unlikely(!file.exists()))
         throw Exception("Try to read meta of " + page_file.toString() + ", but not exists. Path: " + path, ErrorCodes::LOGICAL_ERROR);
 
-    meta_size = file.getSize();
+    // If caller have not set the meta offset limit, we need to
+    // initialize `meta_size` with the file size.
+    if (!max_meta_offset)
+    {
+        meta_size = file.getSize();
+    }
+    else
+    {
+        meta_size = *max_meta_offset;
+    }
+
     if (meta_size == 0) // Empty file
     {
         status = Status::Finished;
@@ -252,13 +281,13 @@ void PageFile::MetaMergingReader::initialize()
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
     SCOPE_EXIT({ underlying_file->close(); });
     meta_buffer = (char *)page_file.alloc(meta_size);
-    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter);
     status = Status::Opened;
 }
 
 bool PageFile::MetaMergingReader::hasNext() const
 {
-    return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);
+    return status == Status::Opened && meta_file_offset < meta_size;
 }
 
 void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
@@ -266,14 +295,11 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     curr_edit.clear();
     curr_write_batch_sequence = 0;
 
-    if (status == Status::Uninitialized)
-        initialize();
-    // Note that we need to check if status is finished after initialize.
     if (status == Status::Finished)
         return;
 
     char * meta_data_end = meta_buffer + meta_size;
-    char * pos           = meta_buffer + meta_file_offset;
+    char * pos = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
         LOG_WARNING(page_file.log,
@@ -283,7 +309,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         return;
     }
     const char * wb_start_pos = pos;
-    const auto   wb_bytes     = PageUtil::get<PageMetaFormat::WBSize>(pos);
+    const auto wb_bytes = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
         LOG_WARNING(page_file.log,
@@ -293,8 +319,8 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         return;
     }
 
-    WriteBatch::SequenceID wb_sequence    = 0;
-    const auto             binary_version = PageUtil::get<PageFormat::Version>(pos);
+    WriteBatch::SequenceID wb_sequence = 0;
+    const auto binary_version = PageUtil::get<PageFormat::Version>(pos);
     switch (binary_version)
     {
     case PageFormat::V1:
@@ -315,8 +341,8 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 
     // check the checksum of WriteBatch
     const auto wb_bytes_without_checksum = wb_bytes - sizeof(PageMetaFormat::Checksum);
-    const auto wb_checksum               = PageUtil::get<PageMetaFormat::Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
-    const auto checksum_calc             = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
+    const auto wb_checksum = PageUtil::get<PageMetaFormat::Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
+    const auto checksum_calc = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
     if (wb_checksum != checksum_calc)
     {
         std::stringstream ss;
@@ -334,22 +360,25 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
+        case WriteBatch::WriteType::UPSERT:
+        {
             PageMetaFormat::PageFlags flags;
 
-            auto      page_id = PageUtil::get<PageId>(pos);
+            auto page_id = PageUtil::get<PageId>(pos);
             PageEntry entry;
             switch (binary_version)
             {
-            case PageFormat::V1: {
+            case PageFormat::V1:
+            {
                 entry.file_id = page_file.getFileId();
-                entry.level   = page_file.getLevel();
+                entry.level = page_file.getLevel();
                 break;
             }
-            case PageFormat::V2: {
+            case PageFormat::V2:
+            {
                 entry.file_id = PageUtil::get<PageFileId>(pos);
-                entry.level   = PageUtil::get<PageFileLevel>(pos);
-                flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
+                entry.level = PageUtil::get<PageFileLevel>(pos);
+                flags = PageUtil::get<PageMetaFormat::PageFlags>(pos);
                 break;
             }
             default:
@@ -358,9 +387,9 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                                 ErrorCodes::LOGICAL_ERROR);
             }
 
-            entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
-            entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
-            entry.size     = PageUtil::get<PageSize>(pos);
+            entry.tag = PageUtil::get<PageMetaFormat::PageTag>(pos);
+            entry.offset = PageUtil::get<PageMetaFormat::PageOffset>(pos);
+            entry.size = PageUtil::get<PageSize>(pos);
             entry.checksum = PageUtil::get<PageMetaFormat::Checksum>(pos);
 
             if (binary_version == PageFormat::V2)
@@ -369,7 +398,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
-                    auto field_offset   = PageUtil::get<UInt64>(pos);
+                    auto field_offset = PageUtil::get<UInt64>(pos);
                     auto field_checksum = PageUtil::get<UInt64>(pos);
                     entry.field_offsets.emplace_back(field_offset, field_checksum);
                 }
@@ -388,13 +417,15 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL: {
+        case WriteBatch::WriteType::DEL:
+        {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF: {
-            const auto ref_id  = PageUtil::get<PageId>(pos);
+        case WriteBatch::WriteType::REF:
+        {
+            const auto ref_id = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.ref(ref_id, page_id);
             break;
@@ -410,7 +441,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                         ErrorCodes::LOGICAL_ERROR);
 
     curr_write_batch_sequence = wb_sequence;
-    meta_file_offset          = pos - meta_buffer;
+    meta_file_offset = pos - meta_buffer;
     data_file_offset += curr_wb_data_offset;
 }
 
@@ -419,13 +450,23 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 // =========================================================
 
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool truncate_if_exists)
-    : page_file(page_file_), sync_on_write(sync_on_write_), data_file{nullptr}, meta_file{nullptr}, last_write_time(Clock::now())
+    : page_file(page_file_)
+    , sync_on_write(sync_on_write_)
+    , data_file{nullptr}
+    , meta_file{nullptr}
+    , last_write_time(Clock::now())
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
     data_file = page_file.file_provider->newWritableFile(
-        page_file.dataPath(), page_file.dataEncryptionPath(), truncate_if_exists, /*create_new_encryption_info_*/ truncate_if_exists);
+        page_file.dataPath(),
+        page_file.dataEncryptionPath(),
+        truncate_if_exists,
+        /*create_new_encryption_info_*/ truncate_if_exists);
     meta_file = page_file.file_provider->newWritableFile(
-        page_file.metaPath(), page_file.metaEncryptionPath(), truncate_if_exists, /*create_new_encryption_info_*/ truncate_if_exists);
+        page_file.metaPath(),
+        page_file.metaEncryptionPath(),
+        truncate_if_exists,
+        /*create_new_encryption_info_*/ truncate_if_exists);
     data_file->close();
     meta_file->close();
 }
@@ -443,7 +484,7 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter)
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -462,7 +503,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
 
 #ifndef NDEBUG
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter, enable_failpoint);
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, enable_failpoint);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
@@ -470,7 +511,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
     write_buf(meta_file, page_file.meta_file_pos, meta_buf, true);
 #else
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter);
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
@@ -480,7 +521,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
 
     fiu_do_on(FailPoints::exception_before_page_file_write_sync,
               { // Mock that writing page file meta is not completed
-                  auto f    = Poco::File(meta_file->getFileName());
+                  auto f = Poco::File(meta_file->getFileName());
                   auto size = f.getSize();
                   f.setSize(size - 2);
                   auto size_after = f.getSize();
@@ -494,12 +535,16 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Ra
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
 
+    // Caller should ensure there are no writing to this Writer while
+    // calling `tryCloseIdleFd`, so don't need to protect `last_write_time` now.
     last_write_time = Clock::now();
 
     // return how may bytes written
     return data_buf.size() + meta_buf.size();
 }
 
+// Caller should ensure there are no writing to this Writer while
+// calling `tryCloseIdleFd`
 void PageFile::Writer::tryCloseIdleFd(const Seconds & max_idle_time)
 {
     if (max_idle_time.count() == 0 || data_file->isClosed())
@@ -531,9 +576,9 @@ void PageFile::Writer::closeFd()
 // =========================================================
 
 PageFile::Reader::Reader(PageFile & page_file)
-    : data_file_path(page_file.dataPath()),
-      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())},
-      last_read_time(Clock::now())
+    : data_file_path(page_file.dataPath())
+    , data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}
+    , last_read_time(Clock::now())
 {
 }
 
@@ -542,7 +587,7 @@ PageFile::Reader::~Reader()
     data_file->close();
 }
 
-PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
+PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
@@ -562,14 +607,14 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     // 2. Pages with small gaps between them can also read together.
     // 3. Refactor this function to support iterator mode, and then use hint to do data pre-read.
 
-    char *    data_buf   = (char *)alloc(buf_size);
+    char * data_buf = (char *)alloc(buf_size);
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
-    char *  pos = data_buf;
+    char * pos = data_buf;
     PageMap page_map;
     for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(data_file, entry.offset, pos, entry.size);
+        PageUtil::readFile(data_file, entry.offset, pos, entry.size, read_limiter);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -584,8 +629,8 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
         }
 
         Page page;
-        page.page_id    = page_id;
-        page.data       = ByteBuffer(pos, pos + entry.size);
+        page.page_id = page_id;
+        page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
         page_map.emplace(page_id, page);
 
@@ -600,7 +645,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     return page_map;
 }
 
-void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & handler)
+void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
@@ -613,7 +658,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     for (const auto & p : to_read)
         buf_size = std::max(buf_size, p.second.size);
 
-    char *    data_buf   = (char *)alloc(buf_size);
+    char * data_buf = (char *)alloc(buf_size);
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
 
@@ -622,7 +667,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     {
         auto && [page_id, entry] = *it;
 
-        PageUtil::readFile(data_file, entry.offset, data_buf, entry.size);
+        PageUtil::readFile(data_file, entry.offset, data_buf, entry.size, read_limiter);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -637,8 +682,8 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
         }
 
         Page page;
-        page.page_id    = page_id;
-        page.data       = ByteBuffer(data_buf, data_buf + entry.size);
+        page.page_id = page_id;
+        page.data = ByteBuffer(data_buf, data_buf + entry.size);
         page.mem_holder = mem_holder;
 
         ++it;
@@ -657,13 +702,15 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     last_read_time = Clock::now();
 }
 
-PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
+PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
     // Sort in ascending order by offset in file.
     std::sort(
-        to_read.begin(), to_read.end(), [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry.offset < b.entry.offset; });
+        to_read.begin(),
+        to_read.end(),
+        [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry.offset < b.entry.offset; });
 
     // allocate data_buf that can hold all pages with specify fields
     size_t buf_size = 0;
@@ -683,30 +730,30 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
     // 2. Pages with small gaps between them can also read together.
     // 3. Refactor this function to support iterator mode, and then use hint to do data pre-read.
 
-    char *    data_buf   = (char *)alloc(buf_size);
+    char * data_buf = (char *)alloc(buf_size);
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
     std::set<Page::FieldOffset> fields_offset_in_page;
 
-    char *  pos = data_buf;
+    char * pos = data_buf;
     PageMap page_map;
     for (const auto & [page_id, entry, fields] : to_read)
     {
         size_t read_size_this_entry = 0;
-        char * write_offset         = pos;
+        char * write_offset = pos;
 
         for (const auto field_index : fields)
         {
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
-            const auto size_to_read             = end_offset - beg_offset;
-            PageUtil::readFile(data_file, entry.offset + beg_offset, write_offset, size_to_read);
+            const auto size_to_read = end_offset - beg_offset;
+            PageUtil::readFile(data_file, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (PAGE_CHECKSUM_ON_READ)
             {
                 auto expect_checksum = entry.field_offsets[field_index].second;
-                auto field_checksum  = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
+                auto field_checksum = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
                 if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
                 {
                     std::stringstream ss;
@@ -722,8 +769,8 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
         }
 
         Page page;
-        page.page_id    = page_id;
-        page.data       = ByteBuffer(pos, write_offset);
+        page.page_id = page_id;
+        page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
@@ -752,21 +799,21 @@ bool PageFile::Reader::isIdle(const Seconds & max_idle_time)
 // PageFile
 // =========================================================
 
-PageFile::PageFile(PageFileId              file_id_,
-                   UInt32                  level_,
-                   const std::string &     parent_path,
+PageFile::PageFile(PageFileId file_id_,
+                   UInt32 level_,
+                   const std::string & parent_path,
                    const FileProviderPtr & file_provider_,
-                   PageFile::Type          type_,
-                   bool                    is_create,
-                   Logger *                log_)
-    : file_id(file_id_),
-      level(level_),
-      type(type_),
-      parent_path(parent_path),
-      file_provider{file_provider_},
-      data_file_pos(0),
-      meta_file_pos(0),
-      log(log_)
+                   PageFile::Type type_,
+                   bool is_create,
+                   Poco::Logger * log_)
+    : file_id(file_id_)
+    , level(level_)
+    , type(type_)
+    , parent_path(parent_path)
+    , file_provider{file_provider_}
+    , data_file_pos(0)
+    , meta_file_pos(0)
+    , log(log_)
 {
     if (is_create)
     {
@@ -781,9 +828,8 @@ PageFile::PageFile(PageFileId              file_id_,
 }
 
 std::pair<PageFile, PageFile::Type>
-PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Logger * log)
+PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log)
 {
-
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
         && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
     {
@@ -799,8 +845,8 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     }
 
     PageFileId file_id = std::stoull(ss[1]);
-    UInt32     level   = std::stoi(ss[2]);
-    PageFile   pf(file_id, level, parent_path, file_provider_, Type::Formal, /* is_create */ false, log);
+    UInt32 level = std::stoi(ss[2]);
+    PageFile pf(file_id, level, parent_path, file_provider_, Type::Formal, /* is_create */ false, log);
     if (ss[0] == folder_prefix_temp)
     {
         LOG_INFO(log, "Temporary page file, ignored: " + page_file_name);
@@ -852,12 +898,12 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId              file_id,
-                               UInt32                  level,
-                               const std::string &     parent_path,
+PageFile PageFile::newPageFile(PageFileId file_id,
+                               UInt32 level,
+                               const std::string & parent_path,
                                const FileProviderPtr & file_provider_,
-                               PageFile::Type          type,
-                               Logger *                log)
+                               PageFile::Type type,
+                               Poco::Logger * log)
 {
 #ifndef NDEBUG
     // PageStorage may create a "Formal" PageFile for writing,
@@ -868,18 +914,22 @@ PageFile PageFile::newPageFile(PageFileId              file_id,
     return PageFile(file_id, level, parent_path, file_provider_, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId              file_id,
-                                       UInt32                  level,
-                                       const std::string &     parent_path,
+PageFile PageFile::openPageFileForRead(PageFileId file_id,
+                                       UInt32 level,
+                                       const std::string & parent_path,
                                        const FileProviderPtr & file_provider_,
-                                       PageFile::Type          type,
-                                       Logger *                log)
+                                       PageFile::Type type,
+                                       Poco::Logger * log)
 {
     return PageFile(file_id, level, parent_path, file_provider_, type, false, log);
 }
 
 bool PageFile::isPageFileExist(
-    PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log)
+    PageFileIdAndLevel file_id,
+    const String & parent_path,
+    const FileProviderPtr & file_provider_,
+    Type type,
+    Poco::Logger * log)
 {
     PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, file_provider_, type, log);
     return pf.isExist();
@@ -909,8 +959,8 @@ void PageFile::setFormal()
 {
     if (type != Type::Temp)
         return;
-    auto       old_meta_encryption_path = metaEncryptionPath();
-    auto       old_data_encryption_path = dataEncryptionPath();
+    auto old_meta_encryption_path = metaEncryptionPath();
+    auto old_data_encryption_path = dataEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Formal;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
@@ -933,8 +983,8 @@ size_t PageFile::setLegacy()
         return 0;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
-    auto       old_meta_encryption_path = metaEncryptionPath();
-    auto       old_data_encryption_path = dataEncryptionPath();
+    auto old_meta_encryption_path = metaEncryptionPath();
+    auto old_data_encryption_path = dataEncryptionPath();
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
@@ -966,7 +1016,7 @@ size_t PageFile::setCheckpoint()
                             ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto       old_meta_encryption_path = metaEncryptionPath();
+    auto old_meta_encryption_path = metaEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Checkpoint;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());

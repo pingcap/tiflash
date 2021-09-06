@@ -4,7 +4,6 @@
 
 namespace detail
 {
-
 bool startsWith(const char * s, size_t size, const char * prefix, size_t prefix_size)
 {
     return size >= prefix_size && 0 == memcmp(s, prefix, prefix_size);

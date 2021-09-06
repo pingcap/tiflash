@@ -30,11 +30,9 @@ extern const Event FileOpen;
 extern const Event FileOpenFailed;
 extern const Event Seek;
 extern const Event PSMWritePages;
-extern const Event PSMWriteCalls;
 extern const Event PSMWriteIOCalls;
 extern const Event PSMWriteBytes;
 extern const Event PSMReadPages;
-extern const Event PSMReadCalls;
 extern const Event PSMReadIOCalls;
 extern const Event PSMReadBytes;
 extern const Event PSMWriteFailed;
@@ -43,7 +41,6 @@ extern const Event PSMReadFailed;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_FORMAT_VERSION;
@@ -97,7 +94,7 @@ int openFile(const std::string & path)
 
 inline void touchFile(const std::string & path)
 {
-    auto                      fd = openFile<false>(path);
+    auto fd = openFile<false>(path);
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
     if (fd > 0)
         ::close(fd);
@@ -109,12 +106,17 @@ void syncFile(WritableFilePtr & file);
 
 #ifndef NDEBUG
 void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter, bool enable_failpoint);
+    WritableFilePtr & file,
+    UInt64 offset,
+    char * data,
+    size_t to_write,
+    const WriteLimiterPtr & write_limiter,
+    bool enable_failpoint);
 #else
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter);
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter);
 #endif
 
-void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes);
+void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const ReadLimiterPtr & read_limiter);
 
 /// Write and advance sizeof(T) bytes.
 template <typename T>

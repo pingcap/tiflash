@@ -10,6 +10,7 @@
 #include <Core/Block.h>
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
+#include <Core/SortDescription.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -17,7 +18,6 @@
 
 namespace DB
 {
-
 bool isLiteralExpr(const tipb::Expr & expr);
 Field decodeLiteral(const tipb::Expr & expr);
 bool isFunctionExpr(const tipb::Expr & expr);
@@ -34,6 +34,7 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value);
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value);
 void constructNULLLiteralTiExpr(tipb::Expr & expr);
 DataTypePtr inferDataType4Literal(const tipb::Expr & expr);
+SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns, const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items);
 
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;
 extern std::unordered_map<tipb::ExprType, String> distinct_agg_func_map;
@@ -42,8 +43,8 @@ extern const Int8 VAR_SIZE;
 
 UInt8 getFieldLengthForArrowEncode(Int32 tp);
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type);
-std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr);
-std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromFieldType(const tipb::FieldType & field_type);
+TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr);
+TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type);
 bool hasUnsignedFlag(const tipb::FieldType & tp);
 grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code);
 void assertBlockSchema(const DataTypes & expected_types, const Block & block, const std::string & context_description);

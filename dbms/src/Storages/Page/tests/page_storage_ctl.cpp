@@ -1,7 +1,4 @@
 #include <Encryption/MockKeyManager.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/PathPool.h>
-#include <Storages/Page/gc/DataCompactor.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -9,9 +6,23 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/gc/DataCompactor.h>
+#include <Storages/PathPool.h>
+#include <TestUtils/MockDiskDelegator.h>
 
 
+/* some exported global vars */
 DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
+namespace DB
+{
+#if __APPLE__ && __clang__
+__thread bool is_background_thread = false;
+#else
+thread_local bool is_background_thread = false;
+#endif
+} // namespace DB
+/* some exported global vars */
 
 void Usage(const char * prog)
 {
@@ -32,35 +43,6 @@ Usage: %s <path> <mode>
             prog);
 }
 
-// TODO: support multi-disk
-class MockDiskDelegator : public DB::PSDiskDelegator
-{
-public:
-    MockDiskDelegator(DB::String path_) : path(std::move(path_)) {}
-
-    size_t      numPaths() const { return 1; }
-    DB::String  defaultPath() const { return path; }
-    DB::String  getPageFilePath(const DB::PageFileIdAndLevel & /*id_lvl*/) const { return path; }
-    void        removePageFile(const DB::PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/) {}
-    DB::Strings listPaths() const
-    {
-        DB::Strings paths;
-        paths.emplace_back(path);
-        return paths;
-    }
-    DB::String choosePath(const DB::PageFileIdAndLevel & /*id_lvl*/) { return path; }
-    size_t     addPageFileUsedSize(const DB::PageFileIdAndLevel & /*id_lvl*/,
-                                   size_t /*size_to_add*/,
-                                   const DB::String & /*pf_parent_path*/,
-                                   bool /*need_insert_location*/)
-    {
-        return 0;
-    }
-
-private:
-    std::string path;
-};
-
 void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
     printf("\tpid:%9lld\t\t"
@@ -76,11 +58,11 @@ void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 
 enum DebugMode
 {
-    DUMP_ALL_ENTRIES    = 1,
-    DUMP_VALID_ENTRIES  = 2,
+    DUMP_ALL_ENTRIES = 1,
+    DUMP_VALID_ENTRIES = 2,
     CHECK_DATA_CHECKSUM = 3,
-    LIST_ALL_CAPACITY   = 4,
-    LIST_ALL_PAGE_FILE  = 5,
+    LIST_ALL_CAPACITY = 4,
+    LIST_ALL_PAGE_FILE = 5,
 
     RUN_GC = 1000,
 };
@@ -93,21 +75,21 @@ DB::PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logge
     DB::PageStorage::Config config;
     if (argc > 4)
     {
-        size_t num          = strtoull(argv[4], nullptr, 10);
-        num                 = std::max(1UL, num);
+        size_t num = strtoull(argv[4], nullptr, 10);
+        num = std::max(1UL, num);
         config.gc_min_files = num;
     }
     if (argc > 5)
     {
-        size_t num          = strtoull(argv[5], nullptr, 10);
-        num                 = std::max(1UL, num);
+        size_t num = strtoull(argv[5], nullptr, 10);
+        num = std::max(1UL, num);
         config.gc_min_bytes = num;
     }
     if (argc > 6)
     {
         // range from [0.01, 1.0]
-        DB::Float64 n            = std::stod(argv[6]);
-        n                        = std::min(1.0, std::max(0.01, n));
+        DB::Float64 n = std::stod(argv[6]);
+        n = std::min(1.0, std::max(0.01, n));
         config.gc_max_valid_rate = n;
     }
 
@@ -130,16 +112,16 @@ try
         return 1;
     }
 
-    Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
+    Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
     Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
     formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel("trace");
 
-    DB::String path     = argv[1];
+    DB::String path = argv[1];
     DB::String mode_str = argv[2];
-    int32_t    mode     = strtol(mode_str.c_str(), nullptr, 10);
+    int32_t mode = strtol(mode_str.c_str(), nullptr, 10);
 
     Poco::Logger * logger = &Poco::Logger::get("root");
 
@@ -163,16 +145,16 @@ try
         debugging_recover_stop_sequence = strtoull(argv[3], nullptr, 10);
         LOG_TRACE(logger, "debug early stop sequence set to: " << debugging_recover_stop_sequence);
     }
-    DB::KeyManagerPtr      key_manager   = std::make_shared<DB::MockKeyManager>(false);
-    DB::FileProviderPtr    file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
-    DB::PSDiskDelegatorPtr delegator     = std::make_shared<MockDiskDelegator>(path);
+    DB::KeyManagerPtr key_manager = std::make_shared<DB::MockKeyManager>(false);
+    DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
+    DB::PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
 
     // Do not remove any files.
     DB::PageStorage::ListPageFilesOption options;
-    options.remove_tmp_files  = false;
-    options.ignore_legacy     = false;
+    options.remove_tmp_files = false;
+    options.ignore_legacy = false;
     options.ignore_checkpoint = false;
-    auto page_files           = DB::PageStorage::listAllPageFiles(file_provider, delegator, logger, options);
+    auto page_files = DB::PageStorage::listAllPageFiles(file_provider, delegator, logger, options);
     switch (mode)
     {
     case DUMP_ALL_ENTRIES:
@@ -188,11 +170,12 @@ try
     }
 
     DB::PageStorage::Config config = parse_storage_config(argc, argv, logger);
-    DB::PageStorage         storage("PageCtl", delegator, config, file_provider);
+    DB::PageStorage storage("PageCtl", delegator, config, file_provider);
     storage.restore();
     switch (mode)
     {
-    case DUMP_VALID_ENTRIES: {
+    case DUMP_VALID_ENTRIES:
+    {
         auto snapshot = storage.getSnapshot();
         auto page_ids = snapshot->version()->validPageIds();
         for (auto page_id : page_ids)
@@ -205,7 +188,8 @@ try
     case LIST_ALL_CAPACITY:
         list_all_capacity(page_files, storage, config);
         break;
-    case RUN_GC: {
+    case RUN_GC:
+    {
         Int64 num_gc = 1;
         if (argc > 3)
         {
@@ -230,9 +214,11 @@ catch (const DB::Exception & e)
     std::string text = e.displayText();
 
     auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl
+              << std::endl;
     if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+        std::cerr << "Stack trace:" << std::endl
+                  << e.getStackTrace().toString() << std::endl;
 
     return -1;
 }
@@ -241,15 +227,15 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
 {
     for (auto & page_file : page_files)
     {
-        DB::PageEntriesEdit  edit;
+        DB::PageEntriesEdit edit;
         DB::PageIdAndEntries id_and_caches;
 
-        auto reader = const_cast<DB::PageFile &>(page_file).createMetaMergingReader();
+        auto reader = DB::PageFile::MetaMergingReader::createFrom(const_cast<DB::PageFile &>(page_file));
 
         while (reader->hasNext())
         {
             reader->moveNext();
-            edit          = reader->getEdits();
+            edit = reader->getEdits();
             auto sequence = reader->writeBatchSequence();
             for (const auto & record : edit.getRecords())
             {
@@ -309,11 +295,11 @@ void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & sto
 
     DB::DataCompactor<DB::PageStorage::SnapshotPtr>::ValidPages file_valid_pages;
     {
-        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage, config);
+        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage, config, nullptr, nullptr);
         file_valid_pages = compactor.collectValidPagesInPageFile(snapshot);
     }
 
-    size_t global_total_size       = 0;
+    size_t global_total_size = 0;
     size_t global_total_valid_size = 0;
 
     printf("PageFileId\tPageFileLevel\tPageFileSize\tValidSize\tValidPercent\tNumValidPages\n");
@@ -325,12 +311,12 @@ void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & sto
             continue;
         }
 
-        const size_t  total_size = page_file.getDataFileSize();
-        size_t        valid_size = 0;
+        const size_t total_size = page_file.getDataFileSize();
+        size_t valid_size = 0;
         DB::PageIdSet valid_pages;
         if (auto iter = file_valid_pages.find(page_file.fileIdLevel()); iter != file_valid_pages.end())
         {
-            valid_size  = iter->second.first;
+            valid_size = iter->second.first;
             valid_pages = iter->second.second;
         }
         global_total_size += total_size;

@@ -7,8 +7,6 @@
 #include <condition_variable>
 
 
-class MemoryTracker;
-
 namespace DB
 {
 
@@ -97,7 +95,7 @@ private:
     std::atomic<bool> has_overflows {false};
     int current_bucket_num = -1;
 
-    Logger * log = &Logger::get("MergingAggregatedMemoryEfficientBlockInputStream");
+    Poco::Logger * log = &Poco::Logger::get("MergingAggregatedMemoryEfficientBlockInputStream");
 
 
     struct Input
@@ -151,7 +149,7 @@ private:
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;
 
-    void mergeThread(MemoryTracker * memory_tracker);
+    void mergeThread();
 
     void finalize();
 };

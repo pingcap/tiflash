@@ -15,31 +15,30 @@
 
 namespace DB
 {
-
 /// Serializes the stream of blocks in TiDB DAG response format.
 template <class StreamWriterPtr>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
 public:
-    StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, tipb::ExchangeType exchange_type_,
-        Int64 records_per_chunk_, tipb::EncodeType encodeType_, std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_);
+    StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, TiDB::TiDBCollators collators_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encodeType_, std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
     void write(const Block & block) override;
     void finishWrite() override;
 
 private:
     template <bool collect_execution_info>
     void BatchWrite();
-    ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
-    ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     void EncodeThenWriteBlock(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    template <bool for_last_response>
     void PartitionAndEncodeThenWriteBlock(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     tipb::ExchangeType exchange_type;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
+    TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
+    std::shared_ptr<LogWithPrefix> log;
 };
 
 } // namespace DB
