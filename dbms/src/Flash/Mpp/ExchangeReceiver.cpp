@@ -64,7 +64,6 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             packet->req_info = req_info;
             packet->source_index = source_index;
             bool success = reader->Read(packet->packet.get());
-            LOG_WARNING(log,"succ = " + std::to_string(success) + " err = "+ packet->packet->error().msg());
             if (!success)
                 break;
             if (packet->packet->has_error())
@@ -105,7 +104,6 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     {
         state = ERROR;
     }
-    LOG_WARNING(log, "succ state = " + std::to_string(state) + err.message());
     if (live_connections == 0)
     {
         if (state == NORMAL)
@@ -151,8 +149,6 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
     }
     else
     {
-        std::shared_ptr<ReceivedPacket> packet;
-        full_packets.pop(packet);
         if (state != NORMAL)
         {
             String msg;
@@ -166,6 +162,8 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
         }
         else
         {
+            std::shared_ptr<ReceivedPacket> packet;
+            full_packets.pop(packet);
             if (packet != nullptr)
             {
                 if (packet->packet != nullptr)
@@ -186,8 +184,12 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
                 {
                     result = {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
                 }
+                else
+                {
+                    result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
+                }
             }
-            else if (packet == nullptr)
+            else
             {
                 if (live_connections > 0)
                     result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};

@@ -56,7 +56,7 @@ struct ReceivedPacket
         packet = std::make_shared<mpp::MPPDataPacket>();
     }
     std::shared_ptr<mpp::MPPDataPacket> packet;
-    size_t source_index;
+    size_t source_index=0;
     String req_info;
 };
 
@@ -97,7 +97,7 @@ public:
           source_num(pb_exchange_receiver.encoded_task_meta_size()),
           task_meta(meta),
           max_streams(max_streams_),
-          max_buffer_size(max_streams_*10),
+          max_buffer_size(max_streams_*2),
           empty_packets(max_buffer_size),
           full_packets(max_buffer_size),
           live_connections(0),
@@ -127,7 +127,7 @@ public:
             state = CLOSED;
             cv.notify_all();
         }
-        /// the full full_packets would block the read thread in abnormal cases.
+        /// the full full_packets would block the read thread to exit in abnormal cases.
         while (full_packets.size() > 0) {
             std::shared_ptr<ReceivedPacket> packet;
             full_packets.pop(packet);
