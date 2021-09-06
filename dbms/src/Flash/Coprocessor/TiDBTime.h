@@ -18,17 +18,15 @@ public:
     {
         time_type = field_type.tp();
         fsp = field_type.decimal();
-        fsp_tt_date = packed & MyTimeBase::FSPTT_BIT_FIELD_MASK;
     }
     MyDateTime my_date_time;
     UInt8 time_type;
     Int8 fsp;
-    UInt8 fsp_tt_date;
     UInt64 toChunkTime() const
     {
         UInt64 ret = 0;
         ret |= (my_date_time.toCoreTime() & MyTimeBase::CORE_TIME_BIT_FIELD_MASK);
-        if (time_type == TiDB::TypeDate || fsp_tt_date == MyTimeBase::FSPTT_FOR_DATE)
+        if (time_type == TiDB::TypeDate || my_date_time.is_date)
         {
             ret |= MyTimeBase::FSPTT_FOR_DATE;
             return ret;

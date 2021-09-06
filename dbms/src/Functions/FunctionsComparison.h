@@ -107,7 +107,7 @@ struct TimeComparisonImpl
 
         while (a_pos < a_end)
         {
-            *c_pos = Op::apply((*a_pos & MyTimeBase::CORE_TIME_BIT_FIELD_MASK), (*b_pos & MyTimeBase::CORE_TIME_BIT_FIELD_MASK));
+            *c_pos = Op::apply((*a_pos & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK), (*b_pos & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK));
             ++a_pos;
             ++b_pos;
             ++c_pos;
@@ -123,7 +123,7 @@ struct TimeComparisonImpl
 
         while (a_pos < a_end)
         {
-            *c_pos = Op::apply((*a_pos & MyTimeBase::CORE_TIME_BIT_FIELD_MASK), b);
+            *c_pos = Op::apply((*a_pos & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK), b & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK);
             ++a_pos;
             ++c_pos;
         }
@@ -136,7 +136,7 @@ struct TimeComparisonImpl
 
     static void constant_constant(A a, B b, UInt8 & c)
     {
-        c = Op::apply((a & MyTimeBase::CORE_TIME_BIT_FIELD_MASK), (b & MyTimeBase::CORE_TIME_BIT_FIELD_MASK));
+        c = Op::apply((a & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK), (b & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK));
     }
 };
 

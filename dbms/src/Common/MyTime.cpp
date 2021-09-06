@@ -260,7 +260,8 @@ std::tuple<std::vector<String>, String, bool, String, String, String, String> sp
 
 MyTimeBase::MyTimeBase(UInt64 packed)
 {
-    UInt64 ymdhms = packed >> 24;
+    is_date = (packed & MyTimeBase::PACKED_ISDATE_BIT_FIELD_MASK) != 0;
+    UInt64 ymdhms = (packed & MyTimeBase::PACKED_TIME_BIT_FIELD_MASK) >> 24;
     UInt64 ymd = ymdhms >> 17;
     day = UInt8(ymd & ((1 << 5) - 1));
     UInt64 ym = ymd >> 5;
@@ -272,7 +273,7 @@ MyTimeBase::MyTimeBase(UInt64 packed)
     minute = UInt8((hms >> 6) & ((1 << 6) - 1));
     hour = UInt16(hms >> 12);
 
-    micro_second = (packed & MyTimeBase::MICROSECOND_BIT_FIELD_MASK) >> MyTimeBase::MICROSECOND_BIT_FIELD_OFFSET;
+    micro_second = packed % (1 << 24);
 }
 
 MyTimeBase::MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
@@ -285,11 +286,16 @@ MyTimeBase::MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UIn
     , micro_second(micro_second_)
 {}
 
-UInt64 MyTimeBase::toPackedUInt() const
+UInt64 MyTimeBase::toPackedUInt(bool is_date) const
 {
     UInt64 ymd = ((year * 13 + month) << 5) | day;
     UInt64 hms = (hour << 12) | (minute << 6) | second;
-    return (ymd << 17 | hms) << 24 | (micro_second << 4);
+    auto packed = (ymd << 17 | hms) << 24 | micro_second;
+    if (is_date)
+    {
+        packed |= MyTimeBase::PACKED_ISDATE_BIT_FIELD_MASK;
+    }
+    return packed;
 }
 
 // TODO this function will be revised once we changed MyTime to CoreTime in TiFlash.
@@ -800,7 +806,7 @@ Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckValid)
 
     if (is_date)
     {
-        packet |= MyTimeBase::FSPTT_FOR_DATE;
+        packet |= MyTimeBase::PACKED_ISDATE_BIT_FIELD_MASK;
     }
     return packet;
 }

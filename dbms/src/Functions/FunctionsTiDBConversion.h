@@ -1260,9 +1260,9 @@ struct TiDBConvertToTime
                 {
                     Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
                     UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
-                    MyDateTime datetime(packed_uint);
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
+                        MyDateTime datetime(packed_uint);
                         MyDate date(datetime.year, datetime.month, datetime.day);
                         vec_to[i] = date.toPackedUInt();
                     }

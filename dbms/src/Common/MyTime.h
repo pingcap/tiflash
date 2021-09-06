@@ -40,6 +40,10 @@ struct MyTimeBase
     static const UInt64 FSP_BIT_FIELD_MASK = 0b1110;
     static const UInt64 CORE_TIME_BIT_FIELD_MASK = ~FSPTT_BIT_FIELD_MASK;
 
+    static const UInt64 PACKED_ISDATE_BIT_FIELD_OFFSET = 63, PACKED_ISDATE_BIT_FIELD_WIDTH = 1;
+    static const UInt64 PACKED_ISDATE_BIT_FIELD_MASK = ((1ull << PACKED_ISDATE_BIT_FIELD_WIDTH) - 1) << PACKED_ISDATE_BIT_FIELD_OFFSET;
+    static const UInt64 PACKED_TIME_BIT_FIELD_MASK = ((1ull << PACKED_ISDATE_BIT_FIELD_OFFSET) - 1);
+
     static const UInt64 YMD_MASK = ~((1ull << 41) - 1);
 
     // weekBehaviourMondayFirst set Monday as first day of week; otherwise Sunday is first day of week
@@ -67,12 +71,13 @@ struct MyTimeBase
     UInt8 minute;
     UInt8 second;
     UInt32 micro_second; // ms second <= 999999
+    bool is_date;
 
     MyTimeBase() = default;
     MyTimeBase(UInt64 packed);
     MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_);
 
-    UInt64 toPackedUInt() const;
+    UInt64 toPackedUInt(bool is_date = false) const;
     UInt64 toCoreTime() const;
 
     // DateFormat returns a textual representation of the time value formatted

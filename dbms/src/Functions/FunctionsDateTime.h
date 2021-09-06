@@ -977,10 +977,9 @@ struct AddSecondsImpl
         my_time.second = current_second % 60;
 
         auto packet = my_time.toPackedUInt();
-        if ((t & MyTimeBase::FSPTT_BIT_FIELD_MASK) == MyTimeBase::FSPTT_FOR_DATE)
-        {
-            packet &= MyTimeBase::CORE_TIME_BIT_FIELD_MASK;
-        }
+
+        packet &= MyTimeBase::PACKED_TIME_BIT_FIELD_MASK;
+
         return packet;
     }
 };
@@ -1046,12 +1045,8 @@ struct AddDaysImpl
         }
         MyDateTime my_time(t);
         addDays(my_time, delta);
-        auto packet = my_time.toPackedUInt();
-        if ((t & MyTimeBase::FSPTT_BIT_FIELD_MASK) == MyTimeBase::FSPTT_FOR_DATE)
-        {
-            packet |= MyTimeBase::FSPTT_FOR_DATE;
-        }
-        return packet;
+
+        return my_time.toPackedUInt(my_time.is_date);
     }
 };
 
@@ -1097,12 +1092,8 @@ struct AddMonthsImpl
         }
         MyDateTime my_time(t);
         addMonths(my_time, delta);
-        auto packet = my_time.toPackedUInt();
-        if ((t & MyTimeBase::FSPTT_BIT_FIELD_MASK) == MyTimeBase::FSPTT_FOR_DATE)
-        {
-            packet |= MyTimeBase::FSPTT_FOR_DATE;
-        }
-        return packet;
+
+        return my_time.toPackedUInt(my_time.is_date);
     }
 };
 
