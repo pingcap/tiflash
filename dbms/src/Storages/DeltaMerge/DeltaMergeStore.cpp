@@ -271,8 +271,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                 if (dmfile->canGC())
                 {
                     auto file_size = dmfile->getBytesOnDisk();
+                    LOG_DEBUG(log, path << " DTFile " << dmfile->fileId() << " remove " << file_size << " bytes");
                     delegate.removeDTFile(dmfile->fileId());
-                    LOG_DEBUG(log, root_path << " DTFile " << file_id << " remove " << file_size << " bytes");
                     dmfile->remove(global_context.getFileProvider());
                 }
 
