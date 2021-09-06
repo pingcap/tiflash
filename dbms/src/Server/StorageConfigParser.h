@@ -99,9 +99,11 @@ public:
     static std::tuple<size_t, TiFlashStorageConfig> parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
 
 private:
-    void parse(const String & storage_section, Poco::Logger * log);
+    void parseStoragePath(const String & storage_section, Poco::Logger * log);
 
     bool parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+
+    void parseMisc(const String & config, Poco::Logger * log);
 };
 
 

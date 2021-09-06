@@ -44,7 +44,7 @@ static std::string getCanonicalPath(std::string path)
 
 static String getNormalizedPath(const String & s) { return getCanonicalPath(Poco::Path{s}.toString()); }
 
-void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
+void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger * log)
 {
     std::istringstream ss(storage);
     cpptoml::parser p(ss);
@@ -130,16 +130,25 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
         kvstore_data_path[i] = getNormalizedPath(kvstore_data_path[i]);
         LOG_INFO(log, "Raft data candidate path: " << kvstore_data_path[i]);
     }
+}
 
-    // rate limiter
-    if (auto rate_limit = table->get_qualified_as<UInt64>("bg_task_io_rate_limit"); rate_limit)
-        bg_task_io_rate_limit = *rate_limit;
+void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logger * log)
+{
+    std::istringstream ss(storage_section);
+    cpptoml::parser p(ss);
+    auto table = p.parse();
 
     if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
+    {
         format_version = *version;
+    }
 
     if (auto lazily_init = table->get_qualified_as<Int32>("lazily_init_store"); lazily_init)
+    {
         lazily_init_store = (*lazily_init != 0);
+    }
+
+    LOG_INFO(log, fmt::format("format_version {} lazily_init_store {}", format_version, lazily_init_store));
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const
@@ -231,9 +240,15 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
     size_t global_capacity_quota = 0; // "0" by default, means no quota, use the whole disk capacity.
     TiFlashStorageConfig storage_config;
 
+    // Always try to parse storage miscellaneous configuration when [storage] section exist.
     if (config.has("storage"))
     {
-        storage_config.parse(config.getString("storage"), log);
+        storage_config.parseMisc(config.getString("storage"), log);
+    }
+
+    if (config.has("storage.main"))
+    {
+        storage_config.parseStoragePath(config.getString("storage"), log);
 
         if (config.has("path"))
             LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");

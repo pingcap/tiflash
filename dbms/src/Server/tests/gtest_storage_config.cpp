@@ -392,6 +392,61 @@ dt_enable_rough_set_filter = false
 }
 CATCH
 
+TEST_F(StorageConfig_test, CompatibilityWithIORateLimitConfig)
+try
+{
+    Strings tests = {
+R"(
+path = "/tmp/tiflash/data/db0/,/tmp/tiflash/data/db1/"
+[storage]
+format_version = 123
+lazily_init_store = 1
+)",
+R"(
+path = "/tmp/tiflash/data/db0/,/tmp/tiflash/data/db1/"
+[storage]
+format_version = 123
+lazily_init_store = 1
+[storage.main]
+dir = [ "/data0/tiflash/", "/data1/tiflash/" ]
+)",
+R"(
+path = "/data0/tiflash/,/data1/tiflash/"
+[storage]
+format_version = 123
+lazily_init_store = 1
+[storage.io_rate_limit]
+max_bytes_per_sec=1024000
+)",
+    };
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        std::ignore = global_capacity_quota;
+        Strings paths;
+        if (i == 0)
+        {
+            paths = Strings{"/tmp/tiflash/data/db0/", "/tmp/tiflash/data/db1/"};
+        }
+        else if (i == 1)
+        {
+            paths = Strings{"/data0/tiflash/", "/data1/tiflash/"};
+        }
+        else if (i == 2)
+        {
+            paths = Strings{"/data0/tiflash/", "/data1/tiflash/"};
+        }
+        ASSERT_EQ(storage.main_data_paths, paths);
+        ASSERT_EQ(storage.format_version, 123);
+        ASSERT_EQ(storage.lazily_init_store, 1);
+    }
+}
+CATCH
+
 TEST(StorageIORateLimitConfig_test, StorageIORateLimitConfig)
 try
 {
