@@ -42,7 +42,10 @@ static std::string getCanonicalPath(std::string path)
     return path;
 }
 
-static String getNormalizedPath(const String & s) { return getCanonicalPath(Poco::Path{s}.toString()); }
+static String getNormalizedPath(const String & s)
+{
+    return getCanonicalPath(Poco::Path{s}.toString());
+}
 
 void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger * log)
 {
@@ -178,7 +181,8 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
     Poco::trimInPlace(paths);
     if (paths.empty())
         throw Exception(
-            "The configuration \"path\" is empty! [path=" + config.getString("path") + "]", ErrorCodes::INVALID_CONFIG_PARAMETER);
+            "The configuration \"path\" is empty! [path=" + config.getString("path") + "]",
+            ErrorCodes::INVALID_CONFIG_PARAMETER);
     Strings all_normal_path;
     Poco::StringTokenizer string_tokens(paths, ",");
     for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
@@ -267,8 +271,8 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
                 for (size_t i = 0; i < kvstore_paths.size(); ++i)
                 {
                     LOG_WARNING(log,
-                        "Raft data candidate path: "
-                            << kvstore_paths[i] << ". The path is overwritten by deprecated configuration for backward compatibility.");
+                                "Raft data candidate path: "
+                                    << kvstore_paths[i] << ". The path is overwritten by deprecated configuration for backward compatibility.");
                 }
             }
         }
@@ -330,7 +334,7 @@ void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, Poco:
     readConfig("foreground_write_weight", fg_write_weight);
     readConfig("background_write_weight", bg_write_weight);
     readConfig("foreground_read_weight", fg_read_weight);
-    readConfig("background_read_weight", bg_read_weight);    
+    readConfig("background_read_weight", bg_read_weight);
     readConfig("emergency_pct", emergency_pct);
     readConfig("high_pct", high_pct);
     readConfig("medium_pct", medium_pct);
@@ -350,16 +354,40 @@ std::string StorageIORateLimitConfig::toString() const
         "fg_write_weight {} bg_write_weight {} fg_read_weight {} bg_read_weight {} fg_write_max_bytes_per_sec {} "
         "bg_write_max_bytes_per_sec {} fg_read_max_bytes_per_sec {} bg_read_max_bytes_per_sec {} emergency_pct {} high_pct {} "
         "medium_pct {} tune_base {} min_bytes_per_sec {} auto_tune_sec {}",
-        max_bytes_per_sec, max_read_bytes_per_sec, max_write_bytes_per_sec, use_max_bytes_per_sec, fg_write_weight, bg_write_weight,
-        fg_read_weight, bg_read_weight, getFgWriteMaxBytesPerSec(), getBgWriteMaxBytesPerSec(), getFgReadMaxBytesPerSec(),
-        getBgReadMaxBytesPerSec(), emergency_pct, high_pct, medium_pct, tune_base, min_bytes_per_sec, auto_tune_sec);
+        max_bytes_per_sec,
+        max_read_bytes_per_sec,
+        max_write_bytes_per_sec,
+        use_max_bytes_per_sec,
+        fg_write_weight,
+        bg_write_weight,
+        fg_read_weight,
+        bg_read_weight,
+        getFgWriteMaxBytesPerSec(),
+        getBgWriteMaxBytesPerSec(),
+        getFgReadMaxBytesPerSec(),
+        getBgReadMaxBytesPerSec(),
+        emergency_pct,
+        high_pct,
+        medium_pct,
+        tune_base,
+        min_bytes_per_sec,
+        auto_tune_sec);
 }
 
-UInt64 StorageIORateLimitConfig::readWeight() const { return fg_read_weight + bg_read_weight; }
+UInt64 StorageIORateLimitConfig::readWeight() const
+{
+    return fg_read_weight + bg_read_weight;
+}
 
-UInt64 StorageIORateLimitConfig::writeWeight() const { return fg_write_weight + bg_write_weight; }
+UInt64 StorageIORateLimitConfig::writeWeight() const
+{
+    return fg_write_weight + bg_write_weight;
+}
 
-UInt64 StorageIORateLimitConfig::totalWeight() const { return readWeight() + writeWeight(); }
+UInt64 StorageIORateLimitConfig::totalWeight() const
+{
+    return readWeight() + writeWeight();
+}
 
 UInt64 StorageIORateLimitConfig::getFgWriteMaxBytesPerSec() const
 {
@@ -401,9 +429,15 @@ UInt64 StorageIORateLimitConfig::getBgReadMaxBytesPerSec() const
                                  : max_read_bytes_per_sec / readWeight() * bg_read_weight;
 }
 
-UInt64 StorageIORateLimitConfig::getWriteMaxBytesPerSec() const { return getBgWriteMaxBytesPerSec() + getFgWriteMaxBytesPerSec(); }
+UInt64 StorageIORateLimitConfig::getWriteMaxBytesPerSec() const
+{
+    return getBgWriteMaxBytesPerSec() + getFgWriteMaxBytesPerSec();
+}
 
-UInt64 StorageIORateLimitConfig::getReadMaxBytesPerSec() const { return getBgReadMaxBytesPerSec() + getFgReadMaxBytesPerSec(); }
+UInt64 StorageIORateLimitConfig::getReadMaxBytesPerSec() const
+{
+    return getBgReadMaxBytesPerSec() + getFgReadMaxBytesPerSec();
+}
 
 bool StorageIORateLimitConfig::operator==(const StorageIORateLimitConfig & config) const
 {
