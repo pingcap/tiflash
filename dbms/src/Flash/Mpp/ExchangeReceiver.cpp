@@ -163,11 +163,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         else
         {
             /// in error case, prevent a stream from being blocked when pop a packet
-            if ( full_packets.size() < max_streams)
+            if (full_packets.size() < max_streams)
             {
                 int num = max_streams - full_packets.size();
                 while (num--)
-                full_packets.push(nullptr);
+                    full_packets.push(nullptr);
             }
         }
     }
@@ -193,7 +193,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
             msg = err_msg;
         result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
     }
-    else if (full_packets.size()==0 && live_connections==0)
+    else if (full_packets.size() == 0 && live_connections == 0)
     {
         result = {nullptr, 0, "ExchangeReceiver", false, "", true};
     }

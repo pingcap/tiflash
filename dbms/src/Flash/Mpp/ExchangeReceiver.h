@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -33,11 +33,17 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "",
-        bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
-        : resp(resp_), call_index(call_index_), req_info(req_info_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "", bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
+        : resp(resp_)
+        , call_index(call_index_)
+        , req_info(req_info_)
+        , meet_error(meet_error_)
+        , error_msg(error_msg_)
+        , eof(eof_)
     {}
-    ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
+    ExchangeReceiverResult()
+        : ExchangeReceiverResult(nullptr, 0)
+    {}
 };
 
 enum State
@@ -55,11 +61,11 @@ struct ReceivedPacket
         packet = std::make_shared<mpp::MPPDataPacket>();
     }
     std::shared_ptr<mpp::MPPDataPacket> packet;
-    size_t source_index=0;
+    size_t source_index = 0;
     String req_info;
 };
 
-using PacketsPool =  ConcurrentBoundedQueue<std::shared_ptr<ReceivedPacket>>;
+using PacketsPool = ConcurrentBoundedQueue<std::shared_ptr<ReceivedPacket>>;
 
 class ExchangeReceiver
 {
@@ -92,16 +98,16 @@ private:
 
 public:
     ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_streams_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
-        : cluster(context_.getTMTContext().getKVCluster()),
-          pb_exchange_receiver(exc),
-          source_num(pb_exchange_receiver.encoded_task_meta_size()),
-          task_meta(meta),
-          max_streams(max_streams_),
-          max_buffer_size(max_streams_*2),
-          empty_packets(max_buffer_size),
-          full_packets(max_buffer_size),
-          live_connections(pb_exchange_receiver.encoded_task_meta_size()),
-          state(NORMAL)
+        : cluster(context_.getTMTContext().getKVCluster())
+        , pb_exchange_receiver(exc)
+        , source_num(pb_exchange_receiver.encoded_task_meta_size())
+        , task_meta(meta)
+        , max_streams(max_streams_)
+        , max_buffer_size(max_streams_ * 2)
+        , empty_packets(max_buffer_size)
+        , full_packets(max_buffer_size)
+        , live_connections(pb_exchange_receiver.encoded_task_meta_size())
+        , state(NORMAL)
     {
         log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
 
@@ -113,7 +119,7 @@ public:
         }
 
         /// init empty packets
-        for (size_t i=0;i< max_buffer_size;++i)
+        for (size_t i = 0; i < max_buffer_size; ++i)
         {
             auto packet = std::make_shared<ReceivedPacket>();
             empty_packets.push(packet);
@@ -129,7 +135,8 @@ public:
             cv.notify_all();
         }
         /// the full full_packets would block the read thread to exit in abnormal cases.
-        while (full_packets.size() > 0) {
+        while (full_packets.size() > 0)
+        {
             std::shared_ptr<ReceivedPacket> packet;
             full_packets.pop(packet);
         }
