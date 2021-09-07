@@ -4,7 +4,6 @@ namespace DB
 {
 namespace DM
 {
-
 DeltaPackReaderPtr DeltaPackDeleteRange::getReader(const DMContext & /*context*/,
                                                    const StorageSnapshotPtr & /*storage_snap*/,
                                                    const ColumnDefinesPtr & /*col_defs*/) const

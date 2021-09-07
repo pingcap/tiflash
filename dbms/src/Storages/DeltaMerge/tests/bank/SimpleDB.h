@@ -17,7 +17,7 @@ public:
     void upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
     {
         std::lock_guard<std::mutex> guard{mutex};
-        std::pair<UInt64, UInt64>   value = std::make_pair(tso, balance);
+        std::pair<UInt64, UInt64> value = std::make_pair(tso, balance);
         if (data.find(id) == data.end())
         {
             std::vector<std::pair<UInt64, UInt64>> values{value};
@@ -38,14 +38,14 @@ public:
     UInt64 selectBalance(UInt64 id, UInt64 tso)
     {
         std::lock_guard<std::mutex> guard{mutex};
-        UInt64                      current_tso = 0;
-        UInt64                      result      = 0;
+        UInt64 current_tso = 0;
+        UInt64 result = 0;
         for (auto & p : data[id])
         {
             if (p.first <= tso && p.first >= current_tso)
             {
                 current_tso = p.first;
-                result      = p.second;
+                result = p.second;
             }
         }
         return result;
@@ -63,7 +63,7 @@ public:
 
 private:
     std::unordered_map<UInt64, std::vector<std::pair<UInt64, UInt64>>> data;
-    std::mutex                                                         mutex;
+    std::mutex mutex;
 };
 } // namespace tests
 } // namespace DM

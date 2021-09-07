@@ -4,17 +4,17 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class NotIn : public RSOperator
 {
-    Attr   attr;
+    Attr attr;
     Fields values;
 
 public:
-    NotIn(const Attr & attr_, const Fields & values_) : attr(attr_), values(values_)
+    NotIn(const Attr & attr_, const Fields & values_)
+        : attr(attr_)
+        , values(values_)
     {
         if (unlikely(values.empty()))
             throw Exception("Unexpected empty values");

@@ -41,11 +41,11 @@ void moveMoney(DeltaMergeStoreProxy & proxy, UInt64 from, UInt64 to, UInt64 amou
               << std::endl;
 }
 void work(DeltaMergeStoreProxy & proxy,
-          SimpleLockManager &    manager,
-          IDGenerator &          tso_gen,
-          IDGenerator &          trans_id_gen,
-          UInt64                 max_id,
-          UInt64                 try_num)
+          SimpleLockManager & manager,
+          IDGenerator & tso_gen,
+          IDGenerator & trans_id_gen,
+          UInt64 max_id,
+          UInt64 try_num)
 {
     for (size_t i = 0; i < try_num; i++)
     {
@@ -70,8 +70,8 @@ void work(DeltaMergeStoreProxy & proxy,
             manager.writeUnlock(s_id, tid);
             return;
         }
-        UInt64 amount    = std::rand() % 100;
-        int    direction = std::rand() % 2;
+        UInt64 amount = std::rand() % 100;
+        int direction = std::rand() % 2;
         if (direction == 0)
         {
             moveMoney(proxy, s_id, b_id, amount, tso);
@@ -86,12 +86,12 @@ void work(DeltaMergeStoreProxy & proxy,
 }
 
 void verify(DeltaMergeStoreProxy & proxy,
-            SimpleLockManager &    manager,
-            IDGenerator &          tso_gen,
-            IDGenerator &          trans_id_gen,
-            UInt64                 max_id,
-            UInt64                 total,
-            UInt64                 try_num)
+            SimpleLockManager & manager,
+            IDGenerator & tso_gen,
+            IDGenerator & trans_id_gen,
+            UInt64 max_id,
+            UInt64 total,
+            UInt64 try_num)
 {
     for (size_t i = 0; i < try_num; i++)
     {
@@ -122,12 +122,12 @@ void verify(DeltaMergeStoreProxy & proxy,
 void run_bank(UInt64 account, UInt64 initial_balance, UInt64 worker_count, UInt64 try_num)
 {
     DeltaMergeStoreProxy proxy;
-    SimpleLockManager    manager;
-    IDGenerator          tso_gen;
-    IDGenerator          trans_id_gen;
+    SimpleLockManager manager;
+    IDGenerator tso_gen;
+    IDGenerator trans_id_gen;
 
     UInt64 start = 0;
-    UInt64 end   = account;
+    UInt64 end = account;
     UInt64 total = (end - start) * initial_balance;
 
     for (UInt64 id = start; id < end; id++)
@@ -170,7 +170,7 @@ int main(int argc, char * argv[])
     }
     UInt64 account = std::stoul(argv[1]);
     UInt64 balance = std::stoul(argv[2]);
-    UInt64 worker  = std::stoul(argv[3]);
+    UInt64 worker = std::stoul(argv[3]);
     UInt64 try_num = std::stoul(argv[4]);
     DB::DM::tests::run_bank(account, balance, worker, try_num);
     return 0;

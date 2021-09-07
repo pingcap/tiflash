@@ -16,15 +16,14 @@ namespace DM
 {
 namespace tests
 {
-
 #define GET_REGION_RANGE(start, end, table_id) RowKeyRange::fromHandleRange(::DB::DM::HandleRange((start), (end))).toRegionRange((table_id))
 
 // Add this so that we can call typeFromString under namespace DB::DM::tests
 using DB::tests::typeFromString;
 
 /// helper functions for comparing HandleRange
-inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_expr,
-                                                     const char *        rhs_expr, //
+inline ::testing::AssertionResult HandleRangeCompare(const char * lhs_expr,
+                                                     const char * rhs_expr, //
                                                      const HandleRange & lhs,
                                                      const HandleRange & rhs)
 {
@@ -33,8 +32,8 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
     return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toDebugString(), rhs.toDebugString(), false);
 }
 /// helper functions for comparing HandleRange
-inline ::testing::AssertionResult RowKeyRangeCompare(const char *        lhs_expr,
-                                                     const char *        rhs_expr, //
+inline ::testing::AssertionResult RowKeyRangeCompare(const char * lhs_expr,
+                                                     const char * rhs_expr, //
                                                      const RowKeyRange & lhs,
                                                      const RowKeyRange & rhs)
 {
@@ -125,29 +124,29 @@ public:
      * @param reversed  increasing/decreasing insert `pk`'s value
      * @return
      */
-    static Block prepareSimpleWriteBlock(size_t         beg,
-                                         size_t         end,
-                                         bool           reversed,
-                                         UInt64         tso                = 2,
-                                         const String & pk_name_           = pk_name,
-                                         ColumnID       pk_col_id          = EXTRA_HANDLE_COLUMN_ID,
-                                         DataTypePtr    pk_type            = EXTRA_HANDLE_COLUMN_INT_TYPE,
-                                         bool           is_common_handle   = false,
-                                         size_t         rowkey_column_size = 1)
+    static Block prepareSimpleWriteBlock(size_t beg,
+                                         size_t end,
+                                         bool reversed,
+                                         UInt64 tso = 2,
+                                         const String & pk_name_ = pk_name,
+                                         ColumnID pk_col_id = EXTRA_HANDLE_COLUMN_ID,
+                                         DataTypePtr pk_type = EXTRA_HANDLE_COLUMN_INT_TYPE,
+                                         bool is_common_handle = false,
+                                         size_t rowkey_column_size = 1)
     {
-        Block        block;
+        Block block;
         const size_t num_rows = (end - beg);
         {
             {
                 ColumnWithTypeAndName col1({}, pk_type, pk_name_, pk_col_id);
-                IColumn::MutablePtr   m_col = col1.type->createColumn();
+                IColumn::MutablePtr m_col = col1.type->createColumn();
                 // insert form large to small
                 for (size_t i = 0; i < num_rows; i++)
                 {
                     Field field;
                     if (is_common_handle)
                     {
-                        Int64             value = reversed ? end - 1 - i : beg + i;
+                        Int64 value = reversed ? end - 1 - i : beg + i;
                         std::stringstream ss;
                         for (size_t index = 0; index < rowkey_column_size; index++)
                         {
@@ -168,7 +167,7 @@ public:
 
             {
                 ColumnWithTypeAndName version_col({}, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID);
-                IColumn::MutablePtr   m_col = version_col.type->createColumn();
+                IColumn::MutablePtr m_col = version_col.type->createColumn();
                 for (size_t i = 0; i < num_rows; ++i)
                 {
                     Field field = tso;
@@ -180,8 +179,8 @@ public:
 
             {
                 ColumnWithTypeAndName tag_col({}, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
-                IColumn::MutablePtr   m_col       = tag_col.type->createColumn();
-                auto &                column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
+                IColumn::MutablePtr m_col = tag_col.type->createColumn();
+                auto & column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
                 column_data.resize(num_rows);
                 for (size_t i = 0; i < num_rows; ++i)
                 {
@@ -205,7 +204,7 @@ public:
      */
     static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false)
     {
-        Block        block;
+        Block block;
         const size_t num_rows = (ts_end - ts_beg);
         {
             ColumnWithTypeAndName col1(nullptr, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID);
@@ -235,8 +234,8 @@ public:
 
             ColumnWithTypeAndName tag_col(nullptr, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
             {
-                IColumn::MutablePtr m_col       = tag_col.type->createColumn();
-                auto &              column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
+                IColumn::MutablePtr m_col = tag_col.type->createColumn();
+                auto & column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
                 column_data.resize(num_rows);
                 for (size_t i = 0; i < num_rows; ++i)
                 {
@@ -252,9 +251,15 @@ public:
     /// prepare a row like this:
     /// {"pk":pk, "version":tso, "delete_mark":mark, "colname":value}
     static Block prepareOneRowBlock(
-        Int64 pk, UInt64 tso, UInt8 mark, const String & colname, const String & value, bool is_common_handle, size_t rowkey_column_size)
+        Int64 pk,
+        UInt64 tso,
+        UInt8 mark,
+        const String & colname,
+        const String & value,
+        bool is_common_handle,
+        size_t rowkey_column_size)
     {
-        Block        block;
+        Block block;
         const size_t num_rows = 1;
         {
             ColumnWithTypeAndName col1(nullptr,
@@ -266,7 +271,7 @@ public:
                 // insert form large to small
                 if (is_common_handle)
                 {
-                    Field             field;
+                    Field field;
                     std::stringstream ss;
                     for (size_t index = 0; index < rowkey_column_size; index++)
                     {
@@ -292,8 +297,8 @@ public:
 
             ColumnWithTypeAndName tag_col(nullptr, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
             {
-                IColumn::MutablePtr m_col       = tag_col.type->createColumn();
-                auto &              column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
+                IColumn::MutablePtr m_col = tag_col.type->createColumn();
+                auto & column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
                 column_data.resize(num_rows);
                 column_data[0] = mark;
                 tag_col.column = std::move(m_col);
@@ -314,7 +319,7 @@ public:
     static void verifyClusteredIndexValue(const String & value, Int64 ans, size_t rowkey_column_size)
     {
         size_t cursor = 0;
-        size_t k      = 0;
+        size_t k = 0;
         for (; cursor < value.size() && k < rowkey_column_size; k++)
         {
             cursor++;
@@ -350,7 +355,7 @@ public:
         {
             {
                 auto & col_def = getExtraHandleColumnDefine(false);
-                auto   col     = col_def.type->createColumn();
+                auto col = col_def.type->createColumn();
                 for (size_t i = 0; i < rows; ++i)
                     col->insert((Int64)(start_pk + i));
                 block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));
@@ -358,7 +363,7 @@ public:
 
             {
                 auto & col_def = getVersionColumnDefine();
-                auto   col     = col_def.type->createColumn();
+                auto col = col_def.type->createColumn();
                 for (size_t i = 0; i < rows; ++i)
                     col->insert((UInt64)(start_ts + i));
                 block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));
@@ -366,7 +371,7 @@ public:
 
             {
                 auto & col_def = getTagColumnDefine();
-                auto   col     = col_def.type->createColumn();
+                auto col = col_def.type->createColumn();
                 for (size_t i = 0; i < rows; ++i)
                     col->insert((UInt64)0);
                 block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));

@@ -22,7 +22,6 @@ extern const Event DMWriteBytes;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ILLFORMAT_RAFT_ROW;
@@ -30,21 +29,21 @@ extern const int ILLFORMAT_RAFT_ROW;
 
 namespace DM
 {
-
 SSTFilesToDTFilesOutputStream::SSTFilesToDTFilesOutputStream( //
-    BoundedSSTFilesToBlockInputStreamPtr  child_,
-    StorageDeltaMergePtr                  storage_,
+    BoundedSSTFilesToBlockInputStreamPtr child_,
+    StorageDeltaMergePtr storage_,
     const DecodingStorageSchemaSnapshot & schema_snap_,
-    TiDB::SnapshotApplyMethod             method_,
-    FileConvertJobType                    job_type_,
-    TMTContext &                          tmt_)
-    : child(std::move(child_)), //
-      storage(std::move(storage_)),
-      schema_snap(schema_snap_),
-      method(method_),
-      job_type(job_type_),
-      tmt(tmt_),
-      log(&Poco::Logger::get("SSTFilesToDTFilesOutputStream"))
+    TiDB::SnapshotApplyMethod method_,
+    FileConvertJobType job_type_,
+    TMTContext & tmt_)
+    : child(std::move(child_))
+    , //
+    storage(std::move(storage_))
+    , schema_snap(schema_snap_)
+    , method(method_)
+    , job_type(job_type_)
+    , tmt(tmt_)
+    , log(&Poco::Logger::get("SSTFilesToDTFilesOutputStream"))
 {
 }
 
@@ -77,8 +76,8 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
         dt_stream.reset();
     }
 
-    auto &     ctx          = tmt.getContext();
-    auto       metrics      = ctx.getTiFlashMetrics();
+    auto & ctx = tmt.getContext();
+    auto metrics = ctx.getTiFlashMetrics();
     const auto process_keys = child->getProcessKeys();
     if (job_type == FileConvertJobType::ApplySnapshot)
     {
@@ -134,12 +133,11 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
 void SSTFilesToDTFilesOutputStream::write()
 {
     size_t last_effective_num_rows = 0;
-    size_t last_not_clean_rows     = 0;
-    size_t cur_effective_num_rows  = 0;
-    size_t cur_not_clean_rows      = 0;
+    size_t last_not_clean_rows = 0;
+    size_t cur_effective_num_rows = 0;
+    size_t cur_not_clean_rows = 0;
     while (true)
     {
-
         Block block = child->read();
         if (!block)
             break;
@@ -167,10 +165,10 @@ void SSTFilesToDTFilesOutputStream::write()
                     = "The block decoded from SSTFile is not sorted by primary key and version " + child->getRegion()->toString(true);
                 LOG_ERROR(log, error_msg);
                 FieldVisitorToString visitor;
-                const size_t         nrows = block.rows();
+                const size_t nrows = block.rows();
                 for (size_t i = 0; i < nrows; ++i)
                 {
-                    const auto & pk_col  = block.getByName(MutableSupport::tidb_pk_column_name);
+                    const auto & pk_col = block.getByName(MutableSupport::tidb_pk_column_name);
                     const auto & ver_col = block.getByName(MutableSupport::version_column_name);
                     LOG_ERROR(log,
                               "[Row=" << i << "/" << nrows << "] [pk=" << applyVisitor(visitor, (*pk_col.column)[i])
@@ -185,12 +183,12 @@ void SSTFilesToDTFilesOutputStream::write()
         std::tie(cur_effective_num_rows, cur_not_clean_rows, property.gc_hint_version) //
             = child->getMvccStatistics();
         property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
-        property.not_clean_rows     = cur_not_clean_rows - last_not_clean_rows;
+        property.not_clean_rows = cur_not_clean_rows - last_not_clean_rows;
         dt_stream->write(block, property);
 
         commit_rows += block.rows();
         last_effective_num_rows = cur_effective_num_rows;
-        last_not_clean_rows     = cur_not_clean_rows;
+        last_not_clean_rows = cur_not_clean_rows;
     }
 }
 
