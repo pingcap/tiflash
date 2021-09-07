@@ -72,7 +72,22 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                empty_packets.pop(packet);
+                {
+                    std::unique_lock<std::mutex> lock(mu);
+                    cv.wait(lock, [&] { return !empty_packets.isEmpty() || state != NORMAL; });
+                    if (state == NORMAL)
+                    {
+                        empty_packets.pop(packet);
+                        cv.notify_one();
+                    }
+                    else
+                    {
+                        meet_error = true;
+                        local_err_msg = "Decode packet meet error";
+                        LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                        break;
+                    }
+                }
                 packet->req_info = req_info;
                 packet->source_index = source_index;
                 bool success = reader->Read(packet->packet.get());
@@ -84,21 +99,21 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                 {
                     throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
                 }
-
-                std::unique_lock<std::mutex> lock(mu);
-                cv.wait(lock, [&] { return !full_packets.isFull() || state != NORMAL; });
-
-                if (state == NORMAL)
                 {
-                    full_packets.push(packet);
-                    cv.notify_all();
-                }
-                else
-                {
-                    meet_error = true;
-                    local_err_msg = "Decode packet meet error";
-                    LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
-                    break;
+                    std::unique_lock<std::mutex> lock(mu);
+                    cv.wait(lock, [&] { return !full_packets.isFull() || state != NORMAL; });
+                    if (state == NORMAL)
+                    {
+                        full_packets.push(packet);
+                        cv.notify_one();
+                    }
+                    else
+                    {
+                        meet_error = true;
+                        local_err_msg = "Decode packet meet error";
+                        LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                        break;
+                    }
                 }
             }
             // if meet error, such as decode packect fails, it will not retry.
@@ -145,30 +160,32 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         meet_error = true;
         local_err_msg = "fatal error";
     }
-    std::lock_guard<std::mutex> lock(mu);
+    std::unique_lock<std::mutex> lock(mu);
     live_connections--;
-
-    // avoid concurrent conflict
-    Int32 live_conn_copy = live_connections;
-
     if (meet_error && state == NORMAL)
         state = ERROR;
     if (meet_error && err_msg.empty())
         err_msg = local_err_msg;
+    auto copy_live_conn = live_connections;
     cv.notify_all();
+    lock.unlock();
 
-    LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, live_conn_copy));
+    LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
 
-    if (live_conn_copy == 0)
+    if (copy_live_conn == 0)
         LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
+    else if (copy_live_conn < 0)
+        throw Exception("live_connections should not be less than 0!");
 }
 
 ExchangeReceiverResult ExchangeReceiver::nextResult()
 {
+    std::shared_ptr<ReceivedPacket> packet;
+    ExchangeReceiverResult result;
+    Int32 copy_live_conn = live_connections;
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return !full_packets.isEmpty() || live_connections == 0 || state != NORMAL; });
 
-    ExchangeReceiverResult result;
     if (state != NORMAL)
     {
         String msg;
@@ -181,51 +198,53 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
         else
             msg = "Unknown error";
         result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
+        lock.unlock();
+        return result;
     }
     else if (!full_packets.isEmpty())
     {
-        std::shared_ptr<ReceivedPacket> packet;
         full_packets.pop(packet);
+        cv.notify_one();
+    }
+    copy_live_conn = live_connections;
+    lock.unlock();
 
-        if (packet != nullptr)
+    if (packet != nullptr)
+    {
+        if (packet->packet->has_error())
         {
-            if (packet->packet->has_error())
+            result = {nullptr, 0, "ExchangeReceiver", true, packet->packet->error().msg(), false};
+        }
+        else if (packet->packet != nullptr)
+        {
+            auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+            if (!resp_ptr->ParseFromString(packet->packet->data()))
             {
-                result = {nullptr, 0, "ExchangeReceiver", true, packet->packet->error().msg(), false};
-            }
-            else if (packet->packet != nullptr)
-            {
-                auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-                if (!resp_ptr->ParseFromString(packet->packet->data()))
-                {
-                    result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
-                }
-                else
-                {
-                    result = {resp_ptr, packet->source_index, packet->req_info};
-                    packet->packet->Clear();
-                    empty_packets.push(std::move(packet));
-                }
+                result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
             }
             else
             {
-                result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
+                result = {resp_ptr, packet->source_index, packet->req_info};
+                packet->packet->Clear();
             }
+            lock.lock();
+            empty_packets.push(std::move(packet));
+            cv.notify_one();
+            lock.unlock();
         }
         else
         {
-            result = {nullptr, 0, "ExchangeReceiver", true, "packet is null", false};
+            result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
         }
     }
     else
     {
-        if (live_connections > 0)
+        if (copy_live_conn > 0)
             result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
         else
             result = {nullptr, 0, "ExchangeReceiver", false, "", true};
     }
 
-    cv.notify_all();
     return result;
 }
 

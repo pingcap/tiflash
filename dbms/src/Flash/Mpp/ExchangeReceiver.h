@@ -67,36 +67,32 @@ struct ReceivedPacket
 template <typename T>
 struct CVBoundedQueue
 {
-    CVBoundedQueue(size_t limit)
+    explicit CVBoundedQueue(size_t limit)
         : capacity(limit)
     {
     }
-    bool isEmpty()
+    bool isEmpty() const
     {
         return q.size() == 0;
     }
-    bool isFull()
+    bool isFull() const
     {
         return q.size() == capacity;
     }
     void push(T & t)
     {
-        q.push(t);
+        q.push(std::move(t));
     }
     void push(T && t)
     {
-        q.push(t);
-    }
-    void pop()
-    {
-        q.pop();
+        q.push(std::move(t));
     }
     void pop(T & t)
     {
         t = q.front();
         q.pop();
     }
-    size_t size()
+    size_t size() const
     {
         return q.size();
     }
@@ -173,11 +169,6 @@ public:
             std::unique_lock<std::mutex> lk(mu);
             state = CLOSED;
             cv.notify_all();
-        }
-        /// the full full_packets would block the read thread to exit in abnormal cases.
-        while (full_packets.size() > 0)
-        {
-            full_packets.pop();
         }
 
         for (auto & worker : workers)
