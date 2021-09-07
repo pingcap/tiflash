@@ -58,7 +58,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
 
 void TiFlashTestEnv::shutdown()
 {
-    global_context->getTMTContext().setTerminated();
+    global_context->getTMTContext().checkTerminated();
     global_context->shutdown();
     global_context.reset();
 }
