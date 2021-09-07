@@ -4,6 +4,8 @@
 #include <common/types.h>
 #ifdef __x86_64__
 #include <immintrin.h>
+#else
+#include <arm_neon.h>
 #endif
 /*
  * The following code is largely inspired by
@@ -51,7 +53,8 @@
 
 namespace DB::TargetSpecific
 {
-#define TIFLASH_DECLARE_GENERIC_FUNCTION(RETURN, NAME, ...)               \
+#define TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ...)       \
+    TPARMS                                                                \
     struct _TiflashGenericTarget_##NAME                                   \
     {                                                                     \
         using ReturnType = RETURN;                                        \
@@ -65,17 +68,18 @@ namespace DB::TargetSpecific
     __attribute__((noinline)) RETURN TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE)::invoke __VA_ARGS__
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(RETURN, NAME, ...)      \
-    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                   \
-    struct _TiflashAVXTarget_##NAME                                   \
-    {                                                                 \
-        using ReturnType = RETURN;                                    \
-        using Checker = ::DB::TargetSpecific::AVXChecker;             \
-        static constexpr size_t WORD_SIZE = 32;                       \
-        using SimdWord = ::DB::TargetSpecific::Detail::AVX::Word<32>; \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                             \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__    \
-    };                                                                \
+#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
+    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                      \
+    TPARMS                                                               \
+    struct _TiflashAVXTarget_##NAME                                      \
+    {                                                                    \
+        using ReturnType = RETURN;                                       \
+        using Checker = ::DB::TargetSpecific::AVXChecker;                \
+        static constexpr size_t WORD_SIZE = 32;                          \
+        using SimdWord = ::DB::TargetSpecific::Detail::AVX::Word<32>;    \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                \
+        static __attribute__((noinline)) RETURN invoke __VA_ARGS__       \
+    };                                                                   \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 
 #define TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE) _TiflashAVXTarget_##NAME
@@ -98,17 +102,18 @@ struct AVXChecker
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(RETURN, NAME, ...)      \
-    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                                   \
-    struct _TiflashAVX512Target_##NAME                                   \
-    {                                                                    \
-        using ReturnType = RETURN;                                       \
-        using Checker = ::DB::TargetSpecific::AVX512Checker;             \
-        static constexpr size_t WORD_SIZE = 64;                          \
-        using SimdWord = ::DB::TargetSpecific::Detail::AVX512::Word<64>; \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__       \
-    };                                                                   \
+#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
+    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                                      \
+    TPARMS                                                                  \
+    struct _TiflashAVX512Target_##NAME                                      \
+    {                                                                       \
+        using ReturnType = RETURN;                                          \
+        using Checker = ::DB::TargetSpecific::AVX512Checker;                \
+        static constexpr size_t WORD_SIZE = 64;                             \
+        using SimdWord = ::DB::TargetSpecific::Detail::AVX512::Word<64>;    \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                   \
+        static __attribute__((noinline)) RETURN invoke __VA_ARGS__          \
+    };                                                                      \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE) _TiflashAVX512Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(RETURN, NAME, ...)                           \
@@ -135,17 +140,18 @@ struct AVX512Checker
 #endif
 
 #ifdef __x86_64__
-#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(RETURN, NAME, ...)      \
-    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                                   \
-    struct _TiflashSSE4Target_##NAME                                   \
-    {                                                                  \
-        using ReturnType = RETURN;                                     \
-        using Checker = ::DB::TargetSpecific::SSE4Checker;             \
-        static constexpr size_t WORD_SIZE = 16;                        \
-        using SimdWord = ::DB::TargetSpecific::Detail::SSE4::Word<16>; \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                              \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__     \
-    };                                                                 \
+#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
+    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                                      \
+    TPARMS                                                                \
+    struct _TiflashSSE4Target_##NAME                                      \
+    {                                                                     \
+        using ReturnType = RETURN;                                        \
+        using Checker = ::DB::TargetSpecific::SSE4Checker;                \
+        static constexpr size_t WORD_SIZE = 16;                           \
+        using SimdWord = ::DB::TargetSpecific::Detail::SSE4::Word<16>;    \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                 \
+        static __attribute__((noinline)) RETURN invoke __VA_ARGS__        \
+    };                                                                    \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE) _TiflashSSE4Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(RETURN, NAME, ...)                           \
@@ -217,6 +223,15 @@ struct Dispatch<Last>
                                               TIFLASH_GENERIC_DISPATCH_UNIT(NAME, RETURN)>::invoke ARG_NAMES; \
     }
 
+#define TIFLASH_MULTITARGET_ENTRANCE_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)          \
+    TPARMS RETURN NAME ARG_LIST                                                                    \
+    {                                                                                              \
+        return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN) < TARGS>, \
+               TIFLASH_AVX_DISPATCH_UNIT(NAME, RETURN)<TARGS>,                                     \
+               TIFLASH_SSE4_DISPATCH_UNIT(NAME, RETURN)<TARGS>,                                    \
+               TIFLASH_GENERIC_DISPATCH_UNIT(NAME, RETURN)<TARGS> > ::invoke ARG_NAMES;            \
+    }
+
 /// TIFLASH_DECLARE_MULTITARGET_FUNCTION
 /// \example
 /// One can use the macro in the following way:
@@ -235,17 +250,17 @@ struct Dispatch<Last>
 /// int plus(int a, int b);
 /// \endcode
 #define TIFLASH_DECLARE_MULTITARGET_FUNCTION(RETURN, NAME, ARG_NAMES, ARG_LIST, ...) \
-    TIFLASH_DECLARE_GENERIC_FUNCTION(RETURN, NAME, ARG_LIST __VA_ARGS__)             \
-    TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST __VA_ARGS__)       \
-    TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST __VA_ARGS__)        \
-    TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST __VA_ARGS__)     \
+    TIFLASH_DECLARE_GENERIC_FUNCTION(, RETURN, NAME, ARG_LIST __VA_ARGS__)           \
+    TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST __VA_ARGS__)     \
+    TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST __VA_ARGS__)      \
+    TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST __VA_ARGS__)   \
     TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)
 
 #define TIFLASH_DECLARE_MULTITARGET_FUNCTION_ALONE(RETURN, NAME, ARG_LIST) \
-    TIFLASH_DECLARE_GENERIC_FUNCTION(RETURN, NAME, ARG_LIST;)              \
-    TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST;)        \
-    TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST;)         \
-    TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(RETURN, NAME, ARG_LIST;)      \
+    TIFLASH_DECLARE_GENERIC_FUNCTION(, RETURN, NAME, ARG_LIST;)            \
+    TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST;)      \
+    TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST;)       \
+    TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST;)    \
     RETURN NAME ARG_LIST;
 
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION(RETURN, NAME, ARG_NAMES, ARG_LIST, ...) \
@@ -255,43 +270,141 @@ struct Dispatch<Last>
     TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ARG_LIST __VA_ARGS__) \
     TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)
 
+#define TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST, ...) \
+    TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)                       \
+    TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)                 \
+    TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)                  \
+    TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)               \
+    TIFLASH_MULTITARGET_ENTRANCE_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)
+
 namespace Detail
 {
 template <size_t LENGTH>
-struct MarkChecker;
+struct SimdImpl;
 
 #ifdef __x86_64__
 template <>
-struct MarkChecker<64>
+struct SimdImpl<64>
 {
-    template <class T>
-    __attribute__((always_inline, target("avx512bw"))) static bool isByteAllMarked(T val)
+    using InternalType = __m512i;
+    using AddressType = __m512i *;
+    using ConstAddressType = __m512i const *;
+
+    __attribute__((always_inline, target("avx512bw"))) static bool isByteAllMarked(InternalType val)
     {
-        return _mm512_movepi8_mask(reinterpret_cast<__m512i &>(val.as_int8)) == 0xFFFF'FFFF'FFFF'FFFFu;
+        return _mm512_movepi8_mask(val) == 0xFFFF'FFFF'FFFF'FFFFu;
+    }
+
+    __attribute__((always_inline, target("avx512f"))) static InternalType fromAligned(const void * val)
+    {
+        return _mm512_load_si512(reinterpret_cast<ConstAddressType>(val));
+    }
+
+    __attribute__((always_inline, target("avx512f"))) static InternalType fromUnaligned(const void * val)
+    {
+        return _mm512_loadu_si512(reinterpret_cast<ConstAddressType>(val));
+    }
+
+    __attribute__((always_inline, target("avx512f"))) static void toAligned(InternalType x, void * val)
+    {
+        _mm512_store_si512(reinterpret_cast<AddressType>(val), x);
+    }
+
+    __attribute__((always_inline, target("avx512f"))) static void toUnaligned(InternalType x, void * val)
+    {
+        _mm512_storeu_si512(reinterpret_cast<AddressType>(val), x);
     }
 };
 
 template <>
-struct MarkChecker<32>
+struct SimdImpl<32>
 {
-    template <class T>
-    __attribute__((always_inline, target("avx2"))) static bool isByteAllMarked(T val)
+    using InternalType = __m256i;
+    using AddressType = __m256i *;
+    using ConstAddressType = __m256i const *;
+
+    __attribute__((always_inline, target("avx2"))) static bool isByteAllMarked(InternalType val)
     {
-        return _mm256_movemask_epi8(reinterpret_cast<__m256i &>(val.as_int8)) == -1; //0xFFFF'FFFF
+        return static_cast<unsigned>(_mm256_movemask_epi8(val)) == 0xFFFF'FFFF; //0xFFFF'FFFF
+    }
+
+    __attribute__((always_inline, target("avx2"))) static InternalType fromAligned(const void * val)
+    {
+        return _mm256_load_si256(reinterpret_cast<ConstAddressType>(val));
+    }
+
+    __attribute__((always_inline, target("avx2"))) static InternalType fromUnaligned(const void * val)
+    {
+        return _mm256_loadu_si256(reinterpret_cast<ConstAddressType>(val));
+    }
+
+    __attribute__((always_inline, target("avx2"))) static void toAligned(InternalType x, void * val)
+    {
+        _mm256_store_si256(reinterpret_cast<AddressType>(val), x);
+    }
+
+    __attribute__((always_inline, target("avx2"))) static void toUnaligned(InternalType x, void * val)
+    {
+        _mm256_storeu_si256(reinterpret_cast<AddressType>(val), x);
     }
 };
 #endif
 
 template <>
-struct MarkChecker<16>
+struct SimdImpl<16>
 {
-    template <class T>
-    __attribute__((always_inline)) static bool isByteAllMarked(T val)
+#ifdef __x86_64__
+    using InternalType = __m128i;
+    using AddressType = __m128i *;
+    using ConstAddressType = __m128i const *;
+#else
+    using InternalType = uint8x16_t;
+    using AddressType = uint8_t *;
+    using ConstAddressType = uint8_t const *;
+#endif
+    __attribute__((always_inline)) static bool isByteAllMarked(InternalType val)
     {
 #ifdef __x86_64__
-        return _mm_movemask_epi8(reinterpret_cast<__m128i &>(val.as_int8)) == 0xFFFF;
+        return _mm_movemask_epi8(val) == 0xFFFF;
 #else
-        return (val.as_uint64[0] & val.as_uint64[1]) == 0xFFFF'FFFF'FFFF'FFFFu;
+        return (val[0] & val[1]) == 0xFFFF'FFFF'FFFF'FFFFu;
+#endif
+    }
+
+    template <class T>
+    __attribute__((always_inline)) static InternalType fromAligned(const void * val)
+    {
+#ifdef __x86_64__
+        return _mm_load_si128(reinterpret_cast<ConstAddressType>(val));
+#else
+        return vld1q_u8(reinterpret_cast<ConstAddressType>(val));
+#endif
+    }
+
+    __attribute__((always_inline)) static InternalType fromUnaligned(const void * val)
+    {
+#ifdef __x86_64__
+        return _mm_loadu_si128(reinterpret_cast<ConstAddressType>(val));
+#else
+        return vld1q_u8(reinterpret_cast<ConstAddressType>(val));
+#endif
+    }
+
+    __attribute__((always_inline)) static void toAligned(InternalType x, void * val)
+    {
+#ifdef __x86_64__
+        _mm_store_si128(reinterpret_cast<AddressType>(val), x);
+#else
+        vst1q_u8(reinterpret_cast<AddressType>(val), x);
+#endif
+    }
+
+    __attribute__((always_inline)) static void toUnaligned(InternalType x, void * val)
+    {
+#ifdef __x86_64__
+        _mm_storeu_si128(reinterpret_cast<AddressType>(val), x);
+#else
+        vst1q_u8(reinterpret_cast<AddressType>(val), x);
 #endif
     }
 };
@@ -360,6 +473,8 @@ struct MarkChecker<16>
         return as_##TYPE_PREFIX;                      \
     }
 
+/// inlining function requires the scope must be within target options, therefore, we need to declare Word
+/// within pragma scope
 TIFLASH_TARGET_SPECIFIC_NAMESPACE(
     template <size_t LENGTH>
     struct Word {
@@ -374,6 +489,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
 
         union
         {
+            typename Detail::SimdImpl<LENGTH>::InternalType as_internal;
             ENUM_TYPE(int8);
             ENUM_TYPE(int16);
             ENUM_TYPE(int32);
@@ -414,37 +530,35 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
 
         [[nodiscard]] __attribute__((always_inline)) bool isByteAllMarked() const
         {
-            return Detail::MarkChecker<LENGTH>::isByteAllMarked(*this);
+            return Detail::SimdImpl<LENGTH>::isByteAllMarked(as_internal);
         }
 
-        __attribute__((always_inline)) static Word from_aligned(const void * src)
+        __attribute__((always_inline)) static Word fromAligned(const void * src)
         {
             Word result{};
-            const auto * address = __builtin_assume_aligned(src, LENGTH);
-            __builtin_memcpy(&result, address, LENGTH);
+            result.as_internal = Detail::SimdImpl<LENGTH>::fromAligned(src);
             return result;
         }
 
-        __attribute__((always_inline)) static Word from_unaligned(const void * src)
+        __attribute__((always_inline)) static Word fromUnaligned(const void * src)
         {
             Word result{};
-            __builtin_memcpy(&result, src, LENGTH);
+            result.as_internal = Detail::SimdImpl<LENGTH>::fromUnaligned(src);
             return result;
         }
 
-        __attribute__((always_inline)) void to_aligned(void * dst)
+        __attribute__((always_inline)) void toAligned(void * dst)
         {
-            const auto * address = __builtin_assume_aligned(dst, LENGTH);
-            __builtin_memcpy(dst, this, LENGTH);
+            return Detail::SimdImpl<LENGTH>::toAligned(as_internal, dst);
         }
 
-        __attribute__((always_inline)) void to_unaligned(void * dst)
+        __attribute__((always_inline)) void toUnaligned(void * dst)
         {
-            __builtin_memcpy(dst, this, LENGTH);
+            return Detail::SimdImpl<LENGTH>::toUnaligned(as_internal, dst);
         }
 
         template <class T>
-        __attribute__((always_inline)) static Word from_single(T val)
+        __attribute__((always_inline)) static Word fromSingle(T val)
         {
             Word result{};
             for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
@@ -455,7 +569,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         }
 
         template <class T>
-        __attribute__((always_inline)) static Word from_array(const std::array<T, LENGTH / sizeof(T)> & arr)
+        __attribute__((always_inline)) static Word fromArray(const std::array<T, LENGTH / sizeof(T)> & arr)
         {
             Word result{};
             for (size_t i = 0; i < LENGTH / sizeof(T); ++i)
