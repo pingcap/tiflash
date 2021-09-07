@@ -270,6 +270,19 @@ struct Dispatch<Last>
     TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ARG_LIST __VA_ARGS__) \
     TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)
 
+/// \example
+/// \code{.cpp}
+/// TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+///    TIFLASH_TEMPLATE(char flip_case_mask),
+///    TIFLASH_MACRO_ARGS(flip_case_mask),
+///    void,
+///    upperCaseUtf8Array,
+///    (src, src_end, dst),
+///    (const UInt8 * src, const UInt8 * src_end, UInt8 * dst),
+///    { .... }
+/// )
+/// \endcode
+
 #define TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST, ...) \
     TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)                       \
     TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)                 \
