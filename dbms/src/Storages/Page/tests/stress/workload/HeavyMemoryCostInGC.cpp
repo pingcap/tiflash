@@ -11,7 +11,7 @@ public:
 
     static UInt64 mask()
     {
-        return 0x2;
+        return 1 << 1;
     }
 
 private:

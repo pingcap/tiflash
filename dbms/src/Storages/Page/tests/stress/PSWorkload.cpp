@@ -4,7 +4,7 @@
 void StressWorkload::result()
 {
     UInt64 timeInterval = stop_watch.elapsedMilliseconds();
-    fmt::print(stderr, "result in {}ms\n", timeInterval);
+    fmt::print(stdout, "result in {}ms\n", timeInterval);
     double seconds_run = 1.0 * timeInterval / 1000;
 
     size_t total_pages_written = 0;
@@ -25,12 +25,12 @@ void StressWorkload::result()
         total_bytes_read += reader->bytes_used;
     }
 
-    fmt::print(stderr,
+    fmt::print(stdout,
                "W: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
                total_pages_written,
                (double)total_bytes_written / DB::GB,
                (double)total_bytes_written / DB::GB / seconds_run);
-    fmt::print(stderr,
+    fmt::print(stdout,
                "R: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
                total_pages_read,
                (double)total_bytes_read / DB::GB,
@@ -38,7 +38,7 @@ void StressWorkload::result()
 
     if (options.status_interval != 0)
     {
-        fmt::print(stderr, metrics_dumper->toString());
+        fmt::print(stdout, metrics_dumper->toString());
     }
 }
 
@@ -94,16 +94,6 @@ void StressWorkload::startBackgroundTimer()
         stress_time->start();
     }
 }
-void StressWorkload::startReader(size_t nums_readers)
-{
-    readers.clear();
-    for (size_t i = 0; i < nums_readers; ++i)
-    {
-        auto reader = std::make_shared<PSReader>(ps, i, options.read_delay_ms);
-        readers.insert(readers.end(), reader);
-        pool.start(*reader, "reader" + DB::toString(i));
-    }
-}
 
 void StressWorkloadManger::runWorkload()
 {
@@ -122,7 +112,7 @@ void StressWorkloadManger::runWorkload()
 
     // skip NORMAL_WORKLOAD
     funcs.erase(funcs.find(NORMAL_WORKLOAD));
-    std::cout << toWorkloadSelctedString() << std::endl;
+    fmt::print(stdout, toWorkloadSelctedString());
 
     for (auto & it : funcs)
     {

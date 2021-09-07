@@ -14,7 +14,7 @@
 
 #include <boost/program_options.hpp>
 
-int StressEnvStatus::statrc()
+int StressEnvStatus::isSuccess()
 {
     return status > 0 ? 0 : (int)status;
 }

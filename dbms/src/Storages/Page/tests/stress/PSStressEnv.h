@@ -44,7 +44,7 @@ public:
     }
 
     std::atomic<StressEnvStat> status = STATUS_LOOP;
-    int statrc();
+    int isSuccess();
 
     bool stat();
 
@@ -74,8 +74,8 @@ struct StressEnv
     {
         return fmt::format("{{ num_writers: {}, num_readers: {}, clean_before_run: {}" //
                            ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
-                           ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}] }}"
-                           ", status_interval: {}, situation_mask : {}",
+                           ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}]"
+                           ", status_interval: {}, situation_mask : {} }}",
                            num_writers,
                            num_readers,
                            clean_before_run,

@@ -64,11 +64,11 @@ public:
         : PSWriter(ps_, index_)
     {}
 
-    void updatedRandomData();
+    virtual void updatedRandomData();
 
     String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
 
-    bool runImpl() override;
+    virtual bool runImpl() override;
 
     void setBatchBufferNums(size_t numbers);
 
@@ -78,25 +78,26 @@ public:
 
     void setBatchBufferPageRange(size_t max_page_id_);
 
+    void setBatchBufferRange(size_t min, size_t max);
+
 protected:
+    std::vector<DB::ReadBufferPtr> buffPtrs;
     size_t batch_buffer_nums = 100;
     size_t batch_buffer_size = 1 * DB::MB;
     size_t batch_buffer_limit = 0;
 
-    virtual DB::PageId genRandomPageId() override;
+    size_t buffer_size_min = 0;
+    size_t buffer_size_max = 0;
 
-private:
-    std::vector<DB::ReadBufferPtr> buffPtrs;
+    virtual DB::PageId genRandomPageId() override;
+    virtual size_t genBufferSize();
 };
 
 class PSReader : public PSRunnable
 {
-    const size_t heavy_read_delay_ms;
-
 public:
-    PSReader(const PSPtr & ps_, DB::UInt32 index_, size_t delay_ms)
+    PSReader(const PSPtr & ps_, DB::UInt32 index_)
         : PSRunnable()
-        , heavy_read_delay_ms(delay_ms)
         , ps(ps_)
         , index(index_)
     {}
@@ -105,8 +106,16 @@ public:
 
     bool runImpl() override;
 
+    void setReadDelay(size_t delay_ms);
+
+    void setReadPageRange(size_t max_page_id);
+
+    void setReadPageNums(size_t page_read_once);
+
 protected:
     PSPtr ps;
+    size_t heavy_read_delay_ms = 0;
+    size_t page_read_once = 5;
     DB::UInt32 index = 0;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
 };

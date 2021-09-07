@@ -11,7 +11,7 @@ public:
 
     static UInt64 mask()
     {
-        return 0x1;
+        return 1 << 0;
     }
 
 private:
@@ -55,7 +55,7 @@ private:
             result();
         }
 
-        LOG_INFO(StressEnv::logger, "Already generator A 8G page file");
+        LOG_INFO(StressEnv::logger, "Already generator an 8G page file");
 
         // Generate normal data in the same Pagefile
         {

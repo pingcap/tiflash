@@ -6,7 +6,7 @@ class NormalWorkload : public StressWorkload
 public:
     static String name()
     {
-        return "Normal workload(The Origin one)";
+        return "Normal workload";
     }
 
     static UInt64 mask()
@@ -43,7 +43,10 @@ private:
         stop_watch.start();
 
         startWriter<PSWriter>(options.num_writers);
-        startReader(options.num_readers);
+        const size_t read_delay_ms = options.read_delay_ms;
+        startReader<PSReader>(options.num_readers, [read_delay_ms](std::shared_ptr<PSReader> reader) -> void {
+            reader->setReadDelay(read_delay_ms);
+        });
         startBackgroundTimer();
 
         pool.joinAll();

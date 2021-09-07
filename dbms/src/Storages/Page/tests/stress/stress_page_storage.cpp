@@ -23,7 +23,7 @@ try
     mamager.setEnv(env);
     mamager.runWorkload();
 
-    return StressEnvStatus::getInstance().statrc();
+    return StressEnvStatus::getInstance().isSuccess();
 }
 catch (...)
 {

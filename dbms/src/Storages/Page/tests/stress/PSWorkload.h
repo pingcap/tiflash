@@ -70,7 +70,21 @@ protected:
         }
     }
 
-    void startReader(size_t nums_readers);
+    template <typename T>
+    void startReader(size_t nums_readers, std::function<void(std::shared_ptr<T>)> reader_configure = nullptr)
+    {
+        readers.clear();
+        for (size_t i = 0; i < nums_readers; ++i)
+        {
+            auto reader = std::make_shared<T>(ps, i);
+            if (reader_configure)
+            {
+                reader_configure(reader);
+            }
+            readers.insert(readers.end(), reader);
+            pool.start(*reader, "reader" + DB::toString(i));
+        }
+    }
 
 protected:
     StressEnv options;
@@ -118,6 +132,7 @@ public:
     {
         if (mask_ & mask)
         {
+            fmt::print(stderr, "Current mask is {}, you can not regster mask {}.\n", mask, mask_);
             assert(false);
         }
         mask |= mask_;

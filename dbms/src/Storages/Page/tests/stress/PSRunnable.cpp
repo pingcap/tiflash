@@ -93,6 +93,7 @@ DB::PageId PSWriter::genRandomPageId()
 void PSCommonWriter::updatedRandomData()
 {
     buffPtrs.clear();
+    batch_buffer_size = genBufferSize();
     for (size_t i = 0; i < batch_buffer_nums; ++i)
     {
         char * buff = (char *)malloc(batch_buffer_size);
@@ -145,16 +146,31 @@ DB::PageId PSCommonWriter::genRandomPageId()
     return static_cast<DB::PageId>(rand() % max_page_id);
 }
 
+void PSCommonWriter::setBatchBufferRange(size_t min, size_t max)
+{
+    if (max > min && min > 0)
+    {
+        buffer_size_min = min;
+        buffer_size_max = max;
+    }
+}
+
+size_t PSCommonWriter::genBufferSize()
+{
+    // If set min/max size set, use the range. Otherwise , use batch_buffer_size.
+    if (buffer_size_min <= buffer_size_max && buffer_size_max > 0)
+    {
+        return (rand() % (buffer_size_max - buffer_size_min) + buffer_size_min);
+    }
+    return batch_buffer_size;
+}
+
 bool PSReader::runImpl()
 {
     assert(ps != nullptr);
-    {
-        // sleep [0~10) ms
-        const uint32_t micro_seconds_to_sleep = random() % 10;
-        usleep(micro_seconds_to_sleep * 1000);
-    }
+
     std::vector<DB::PageId> pageIds;
-    for (size_t i = 0; i < 5; ++i)
+    for (size_t i = 0; i < page_read_once; ++i)
     {
         pageIds.emplace_back(random() % max_page_id);
     }
@@ -172,4 +188,19 @@ bool PSReader::runImpl()
     };
     ps->read(pageIds, handler);
     return true;
+}
+
+void PSReader::setReadDelay(size_t delay_ms)
+{
+    heavy_read_delay_ms = delay_ms;
+}
+
+void PSReader::setReadPageRange(size_t max_page_id_)
+{
+    max_page_id = max_page_id_;
+}
+
+void PSReader::setReadPageNums(size_t page_read_once_)
+{
+    page_read_once = page_read_once_;
 }

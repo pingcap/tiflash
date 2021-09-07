@@ -18,7 +18,7 @@ public:
     String toString()
     {
         return fmt::format(
-            "Memory lastest used : {} , avg used : {} , top used {}. \n",
+            "Memory lastest used : {} , avg used : {} , top used {}.",
             lastest_memory,
             loop_times == 0 ? 0 : (memory_summary / loop_times),
             memory_biggest);
