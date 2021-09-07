@@ -141,6 +141,11 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
     cpptoml::parser p(ss);
     auto table = p.parse();
 
+    if (auto rate_limit = table->get_qualified_as<UInt64>("bg_task_io_rate_limit"); rate_limit)
+    {
+        LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
+    }
+
     if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
     {
         format_version = *version;
