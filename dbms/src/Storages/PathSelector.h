@@ -21,10 +21,10 @@ using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 
 class PathSelector
 {
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#else
+#ifdef DBMS_PUBLIC_GTEST
 public:
+#else
+private:
 #endif
     // Only export for testing
     template <typename T>
