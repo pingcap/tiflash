@@ -8,7 +8,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
-#include <Storages/DeltaMerge/Index/MinMax.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
 
 namespace DB
 {

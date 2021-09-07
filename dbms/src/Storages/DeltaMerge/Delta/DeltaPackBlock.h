@@ -41,12 +41,11 @@ private:
 
     void fillColumns(const PageReader & page_reader, const ColumnDefines & col_defs, size_t col_count, Columns & result) const;
 
-    std::pair<DataTypePtr, MutableColumnPtr> getDataTypeAndEmptyColumn(ColId column_id) const
+    const DataTypePtr & getDataType(ColId column_id) const
     {
         // Note that column_id must exist
         auto index = colid_to_offset.at(column_id);
-        auto col_type = schema->getByPosition(index).type;
-        return {col_type, col_type->createColumn()};
+        return schema->getByPosition(index).type;
     }
 
 public:

@@ -16,10 +16,13 @@
 
 namespace DB
 {
-
 using TOMLBasePtr = std::shared_ptr<cpptoml::base>;
 
-TOMLConfiguration::TOMLConfiguration(TOMLTablePtr toml_doc) : root(toml_doc) { poco_check_ptr(toml_doc); }
+TOMLConfiguration::TOMLConfiguration(TOMLTablePtr toml_doc)
+    : root(toml_doc)
+{
+    poco_check_ptr(toml_doc);
+}
 
 bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) const
 {

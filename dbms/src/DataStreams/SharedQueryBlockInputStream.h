@@ -1,25 +1,24 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <common/logger_useful.h>
 
 #include <thread>
 
 namespace DB
 {
-/**
- * This block input stream is used by SharedQuery.
- * It enable multiple threads read from one stream.
+/** This block input stream is used by SharedQuery.
+  * It enable multiple threads read from one stream.
  */
 class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_)
+    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_ = nullptr)
         : queue(clients)
-        , log(&Poco::Logger::get("SharedQueryBlockInputStream"))
+        , log(getLogWithPrefix(log_))
         , in(in_)
     {
         children.push_back(in);
@@ -140,7 +139,7 @@ private:
 
     std::string exception_msg;
 
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
     BlockInputStreamPtr in;
 };
 } // namespace DB

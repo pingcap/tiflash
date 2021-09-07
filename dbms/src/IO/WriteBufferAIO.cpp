@@ -1,52 +1,45 @@
 #if !(defined(__FreeBSD__) || defined(__APPLE__) || defined(_MSC_VER))
 
-#include <IO/WriteBufferAIO.h>
 #include <Common/ProfileEvents.h>
+#include <IO/WriteBufferAIO.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <limits>
-#include <sys/types.h>
-#include <sys/stat.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event FileOpen;
-    extern const Event FileOpenFailed;
-    extern const Event FileFSync;
-    extern const Event WriteBufferAIOWrite;
-    extern const Event WriteBufferAIOWriteBytes;
-}
-
-namespace CurrentMetrics
-{
-    extern const Metric Write;
-}
+extern const Event FileOpen;
+extern const Event FileOpenFailed;
+extern const Event FileFSync;
+extern const Event WriteBufferAIOWrite;
+extern const Event WriteBufferAIOWriteBytes;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int FILE_DOESNT_EXIST;
-    extern const int CANNOT_OPEN_FILE;
-    extern const int LOGICAL_ERROR;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int AIO_READ_ERROR;
-    extern const int AIO_SUBMIT_ERROR;
-    extern const int AIO_WRITE_ERROR;
-    extern const int AIO_COMPLETION_ERROR;
-    extern const int CANNOT_TRUNCATE_FILE;
-    extern const int CANNOT_FSYNC;
-}
+extern const int FILE_DOESNT_EXIST;
+extern const int CANNOT_OPEN_FILE;
+extern const int LOGICAL_ERROR;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int AIO_READ_ERROR;
+extern const int AIO_SUBMIT_ERROR;
+extern const int AIO_WRITE_ERROR;
+extern const int AIO_COMPLETION_ERROR;
+extern const int CANNOT_TRUNCATE_FILE;
+extern const int CANNOT_FSYNC;
+} // namespace ErrorCodes
 
 
 /// Note: an additional page is allocated that will contain data that
 /// do not fit into the main buffer.
-WriteBufferAIO::WriteBufferAIO(const std::string & filename_, size_t buffer_size_, int flags_, mode_t mode_,
-    char * existing_memory_)
-    : WriteBufferFromFileBase(buffer_size_ + DEFAULT_AIO_FILE_BLOCK_SIZE, existing_memory_, DEFAULT_AIO_FILE_BLOCK_SIZE),
-    flush_buffer(BufferWithOwnMemory<WriteBuffer>(this->memory.size(), nullptr, DEFAULT_AIO_FILE_BLOCK_SIZE)),
-    filename(filename_)
+WriteBufferAIO::WriteBufferAIO(const std::string & filename_, size_t buffer_size_, int flags_, mode_t mode_, char * existing_memory_)
+    : WriteBufferFromFileBase(buffer_size_ + DEFAULT_AIO_FILE_BLOCK_SIZE, existing_memory_, DEFAULT_AIO_FILE_BLOCK_SIZE)
+    , flush_buffer(BufferWithOwnMemory<WriteBuffer>(this->memory.size(), nullptr, DEFAULT_AIO_FILE_BLOCK_SIZE))
+    , filename(filename_)
 {
     /// Correct the buffer size information so that additional pages do not touch the base class `BufferBase`.
     this->buffer().resize(this->buffer().size() - DEFAULT_AIO_FILE_BLOCK_SIZE);
@@ -124,7 +117,7 @@ void WriteBufferAIO::nextImpl()
     {
         if (errno != EINTR)
         {
-            aio_failed =  true;
+            aio_failed = true;
             throw Exception("Cannot submit request for asynchronous IO on file " + filename, ErrorCodes::AIO_SUBMIT_ERROR);
         }
     }
@@ -182,8 +175,6 @@ bool WriteBufferAIO::waitForAIOCompletion()
 {
     if (!is_pending_write)
         return false;
-
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
 
     while (io_getevents(aio_context.ctx, events.size(), events.size(), events.data(), nullptr) < 0)
     {
@@ -265,8 +256,7 @@ void WriteBufferAIO::prepare()
     /// Region of the disk in which we want to write data.
     const off_t region_begin = pos_in_file;
 
-    if ((flush_buffer.offset() > std::numeric_limits<off_t>::max()) ||
-        (pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(flush_buffer.offset()))))
+    if ((flush_buffer.offset() > std::numeric_limits<off_t>::max()) || (pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(flush_buffer.offset()))))
         throw Exception("An overflow occurred during file operation", ErrorCodes::LOGICAL_ERROR);
 
     const off_t region_end = pos_in_file + flush_buffer.offset();
@@ -347,7 +337,7 @@ void WriteBufferAIO::prepare()
 
     if ((region_left_padding > 0) || (region_right_padding > 0))
     {
-        char memory_page[DEFAULT_AIO_FILE_BLOCK_SIZE] __attribute__ ((aligned (DEFAULT_AIO_FILE_BLOCK_SIZE)));
+        char memory_page[DEFAULT_AIO_FILE_BLOCK_SIZE] __attribute__((aligned(DEFAULT_AIO_FILE_BLOCK_SIZE)));
 
         if (region_left_padding > 0)
         {
@@ -416,6 +406,6 @@ void WriteBufferAIO::finalize()
     }
 }
 
-}
+} // namespace DB
 
 #endif

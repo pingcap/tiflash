@@ -6,10 +6,8 @@
 struct StringRef;
 namespace DB
 {
-
 struct MyTimeBase
 {
-
     // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
     // Core time bit fields.
     static const UInt64 YEAR_BIT_FIELD_OFFSET = 50, YEAR_BIT_FIELD_WIDTH = 14;
@@ -63,7 +61,7 @@ struct MyTimeBase
 
     UInt16 year; // year <= 9999
     UInt8 month; // month <= 12
-    UInt8 day;   // day <= 31
+    UInt8 day; // day <= 31
     // When it's type is Time, HH:MM:SS may be 839:59:59 to -839:59:59, so use int16 to avoid overflow
     Int16 hour;
     UInt8 minute;
@@ -98,7 +96,9 @@ struct MyTimeBase
 
 struct MyDateTime : public MyTimeBase
 {
-    MyDateTime(UInt64 packed) : MyTimeBase(packed) {}
+    MyDateTime(UInt64 packed)
+        : MyTimeBase(packed)
+    {}
 
     MyDateTime(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
         : MyTimeBase(year_, month_, day_, hour_, minute_, second_, micro_second_)
@@ -109,9 +109,13 @@ struct MyDateTime : public MyTimeBase
 
 struct MyDate : public MyTimeBase
 {
-    MyDate(UInt64 packed) : MyTimeBase(packed) {}
+    MyDate(UInt64 packed)
+        : MyTimeBase(packed)
+    {}
 
-    MyDate(UInt16 year_, UInt8 month_, UInt8 day_) : MyTimeBase(year_, month_, day_, 0, 0, 0, 0) {}
+    MyDate(UInt16 year_, UInt8 month_, UInt8 day_)
+        : MyTimeBase(year_, month_, day_, 0, 0, 0, 0)
+    {}
 
     String toString() const
     {
@@ -163,7 +167,10 @@ int calcDayNum(int year, int month, int day);
 size_t maxFormattedDateTimeStringLength(const String & format);
 
 
-inline bool supportedByDateLUT(const MyDateTime & my_time) { return my_time.year >= 1970; }
+inline bool supportedByDateLUT(const MyDateTime & my_time)
+{
+    return my_time.year >= 1970;
+}
 
 /// DateLUT only support time from year 1970, in some corner cases, the input date may be
 /// 1969-12-31, need extra logical to handle it
@@ -189,7 +196,6 @@ bool isValidSeperator(char c, int previous_parts);
 
 // Build CoreTime value with checking overflow of internal bit fields, return true if input is invalid.
 // Note that this function will not check if the input is logically a valid datetime value.
-bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
-                     const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
+bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute, const UInt64 & second, const UInt64 & microsecond, MyDateTime & result);
 
 } // namespace DB

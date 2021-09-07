@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -23,23 +22,23 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value)
 {
     switch (cf)
     {
-        case ColumnFamilyType::Write:
-        {
-            cf_data_size += write_cf.insert(std::move(key), std::move(value));
-            return;
-        }
-        case ColumnFamilyType::Default:
-        {
-            cf_data_size += default_cf.insert(std::move(key), std::move(value));
-            return;
-        }
-        case ColumnFamilyType::Lock:
-        {
-            lock_cf.insert(std::move(key), std::move(value));
-            return;
-        }
-        default:
-            throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
+    case ColumnFamilyType::Write:
+    {
+        cf_data_size += write_cf.insert(std::move(key), std::move(value));
+        return;
+    }
+    case ColumnFamilyType::Default:
+    {
+        cf_data_size += default_cf.insert(std::move(key), std::move(value));
+        return;
+    }
+    case ColumnFamilyType::Lock:
+    {
+        lock_cf.insert(std::move(key), std::move(value));
+        return;
+    }
+    default:
+        throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -47,31 +46,31 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
 {
     switch (cf)
     {
-        case ColumnFamilyType::Write:
-        {
-            auto raw_key = RecordKVFormat::decodeTiKVKey(key);
-            auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
-            Timestamp ts = RecordKVFormat::getTs(key);
-            // removed by gc, may not exist.
-            cf_data_size -= write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
-            return;
-        }
-        case ColumnFamilyType::Default:
-        {
-            auto raw_key = RecordKVFormat::decodeTiKVKey(key);
-            auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
-            Timestamp ts = RecordKVFormat::getTs(key);
-            // removed by gc, may not exist.
-            cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
-            return;
-        }
-        case ColumnFamilyType::Lock:
-        {
-            lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
-            return;
-        }
-        default:
-            throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
+    case ColumnFamilyType::Write:
+    {
+        auto raw_key = RecordKVFormat::decodeTiKVKey(key);
+        auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
+        Timestamp ts = RecordKVFormat::getTs(key);
+        // removed by gc, may not exist.
+        cf_data_size -= write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
+        return;
+    }
+    case ColumnFamilyType::Default:
+    {
+        auto raw_key = RecordKVFormat::decodeTiKVKey(key);
+        auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
+        Timestamp ts = RecordKVFormat::getTs(key);
+        // removed by gc, may not exist.
+        cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
+        return;
+    }
+    case ColumnFamilyType::Lock:
+    {
+        lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        return;
+    }
+    default:
+        throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -121,8 +120,8 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
             return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
             throw Exception("Raw TiDB PK: " + (pk.toDebugString()) + ", Prewrite ts: " + std::to_string(decoded_val.prewrite_ts)
-                    + " can not found in default cf for key: " + key->toDebugString(),
-                ErrorCodes::ILLFORMAT_RAFT_ROW);
+                                + " can not found in default cf for key: " + key->toDebugString(),
+                            ErrorCodes::ILLFORMAT_RAFT_ROW);
     }
 
     return std::make_tuple(pk, decoded_val.write_type, ts, decoded_val.short_value);
@@ -171,7 +170,10 @@ void RegionData::mergeFrom(const RegionData & ori_region_data)
     cf_data_size += size_changed;
 }
 
-size_t RegionData::dataSize() const { return cf_data_size; }
+size_t RegionData::dataSize() const
+{
+    return cf_data_size;
+}
 
 void RegionData::assignRegionData(RegionData && new_region_data)
 {
@@ -203,12 +205,27 @@ void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
     region_data.cf_data_size += total_size;
 }
 
-RegionWriteCFData & RegionData::writeCF() { return write_cf; }
-RegionDefaultCFData & RegionData::defaultCF() { return default_cf; }
+RegionWriteCFData & RegionData::writeCF()
+{
+    return write_cf;
+}
+RegionDefaultCFData & RegionData::defaultCF()
+{
+    return default_cf;
+}
 
-const RegionWriteCFData & RegionData::writeCF() const { return write_cf; }
-const RegionDefaultCFData & RegionData::defaultCF() const { return default_cf; }
-const RegionLockCFData & RegionData::lockCF() const { return lock_cf; }
+const RegionWriteCFData & RegionData::writeCF() const
+{
+    return write_cf;
+}
+const RegionDefaultCFData & RegionData::defaultCF() const
+{
+    return default_cf;
+}
+const RegionLockCFData & RegionData::lockCF() const
+{
+    return lock_cf;
+}
 
 bool RegionData::isEqual(const RegionData & r2) const
 {
@@ -216,10 +233,10 @@ bool RegionData::isEqual(const RegionData & r2) const
 }
 
 RegionData::RegionData(RegionData && data)
-    : write_cf(std::move(data.write_cf)),
-      default_cf(std::move(data.default_cf)),
-      lock_cf(std::move(data.lock_cf)),
-      cf_data_size(data.cf_data_size.load())
+    : write_cf(std::move(data.write_cf))
+    , default_cf(std::move(data.default_cf))
+    , lock_cf(std::move(data.lock_cf))
+    , cf_data_size(data.cf_data_size.load())
 {}
 
 RegionData & RegionData::operator=(RegionData && rhs)
@@ -232,7 +249,10 @@ RegionData & RegionData::operator=(RegionData && rhs)
 }
 
 
-UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
+UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it)
+{
+    return RegionWriteCFDataTrait::getWriteType(write_it->second);
+}
 
 const RegionDefaultCFDataTrait::Map & RegionData::getDefaultCFMap(RegionWriteCFData * write)
 {
@@ -240,5 +260,4 @@ const RegionDefaultCFDataTrait::Map & RegionData::getDefaultCFMap(RegionWriteCFD
     RegionData * data_ptr = reinterpret_cast<RegionData *>((char *)write - offset);
     return data_ptr->defaultCF().getData();
 }
-
 } // namespace DB

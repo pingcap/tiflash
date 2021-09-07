@@ -1,10 +1,12 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
@@ -23,10 +25,7 @@ struct MPPTaskId
     uint64_t start_ts;
     int64_t task_id;
 
-    bool operator<(const MPPTaskId & rhs) const
-    {
-        return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id);
-    }
+    bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
 
     String toString() const;
 };
@@ -65,12 +64,16 @@ public:
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
+    void preprocess();
+
     void run();
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
+
+    std::shared_ptr<LogWithPrefix> getMPPTaskLog() const { return log; }
 
     ~MPPTask();
 
@@ -80,6 +83,9 @@ private:
     void runImpl();
 
     Context context;
+
+    RegionInfoMap local_regions;
+    RegionInfoList remote_regions;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;
@@ -94,13 +100,14 @@ private:
     std::atomic<Int32> status{INITIALIZING};
 
     mpp::TaskMeta meta;
+    MPPTunnelSetPtr tunnel_set;
 
     // which targeted task we should send data by which tunnel.
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
     MPPTaskManager * manager = nullptr;
 
-    Poco::Logger * log;
+    const std::shared_ptr<LogWithPrefix> log;
 
     Exception err;
 

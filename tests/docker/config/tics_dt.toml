@@ -11,13 +11,13 @@ minmax_index_cache_size = 5368709120
 tcp_port = 9000
 http_port = 8123
 [logger]
-	count = 10
-	errorlog = "/tmp/tiflash/log/error.log"
-	size = "1000M"
-	log = "/tmp/tiflash/log/server.log"
-	level = "trace"
+count = 10
+errorlog = "/tmp/tiflash/log/error.log"
+size = "1000M"
+log = "/tmp/tiflash/log/server.log"
+level = "trace"
 [application]
-	runAsDaemon = true
+runAsDaemon = true
 [raft]
-	# specify which storage engine we use. tmt or dt
-	storage_engine = "dt"
+# specify which storage engine we use. tmt or dt
+storage_engine = "dt"
