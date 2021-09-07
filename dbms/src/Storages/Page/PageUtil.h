@@ -106,17 +106,17 @@ inline void touchFile(const std::string & path)
 
 void syncFile(WritableFilePtr & file);
 
-#ifndef NDEBUG
+// #ifndef NDEBUG
 void writeFile(
     WritableFilePtr & file,
     UInt64 offset,
     char * data,
     size_t to_write,
     const WriteLimiterPtr & write_limiter,
-    bool enable_failpoint);
-#else
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter);
-#endif
+    bool enable_failpoint = false);
+// #else
+// void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter);
+// #endif
 
 void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const ReadLimiterPtr & read_limiter);
 

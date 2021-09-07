@@ -59,7 +59,7 @@ void syncFile(WritableFilePtr & file)
         DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
 }
 
-#ifndef NDEBUG
+// #ifndef NDEBUG
 void writeFile(
     WritableFilePtr & file,
     UInt64 offset,
@@ -67,9 +67,9 @@ void writeFile(
     size_t to_write,
     const WriteLimiterPtr & write_limiter,
     [[maybe_unused]] bool enable_failpoint)
-#else
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
-#endif
+// #else
+// void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const WriteLimiterPtr & write_limiter)
+// #endif
 {
     ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
