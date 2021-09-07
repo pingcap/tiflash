@@ -301,10 +301,11 @@ template <char not_case_lower_bound,
           char not_case_upper_bound,
           int to_case(int),
           void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::vector(const ColumnString::Chars_t & data,
-                                                                                                       const IColumn::Offsets & offsets,
-                                                                                                       ColumnString::Chars_t & res_data,
-                                                                                                       IColumn::Offsets & res_offsets)
+void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::vector(
+    const ColumnString::Chars_t & data,
+    const IColumn::Offsets & offsets,
+    ColumnString::Chars_t & res_data,
+    IColumn::Offsets & res_offsets)
 {
     res_data.resize(data.size());
     res_offsets.assign(offsets);
@@ -2228,10 +2229,11 @@ private:
         auto c_res = ColumnString::create();
 
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
-            pad<is_left, StringSource, ConstSource<StringSource>, StringSink>(StringSource(*col),
-                                                                              ConstSource<StringSource>(*column_padding_const),
-                                                                              StringSink(*c_res, col->size()),
-                                                                              length_value);
+            pad<is_left, StringSource, ConstSource<StringSource>, StringSink>(
+                StringSource(*col),
+                ConstSource<StringSource>(*column_padding_const),
+                StringSink(*c_res, col->size()),
+                length_value);
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_string.get()))
             pad<is_left, FixedStringSource, ConstSource<StringSource>, StringSink>(
                 FixedStringSource(*col),
