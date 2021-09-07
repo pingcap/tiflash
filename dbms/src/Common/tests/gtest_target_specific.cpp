@@ -11,12 +11,6 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION(
         {
             dst[i] = src[i] + 1;
         }
-        for (size_t i = 0; i < length; ++i)
-        {
-            auto x = dst[i] - 1;
-            TIFLASH_NO_OPTIMIZE(x);
-            ASSERT_EQ(static_cast<int>(x), static_cast<int>(src[i]));
-        }
     })
 
 TEST(TargetSpecific, byteAddition)
@@ -29,25 +23,33 @@ TEST(TargetSpecific, byteAddition)
         i = rand() % 26 + 'a';
     }
     byteAddition(data.data(), result.data(), 512);
+    for (size_t i = 0; i < result.size(); ++i)
+    {
+        auto x = result[i] - 1;
+        TIFLASH_NO_OPTIMIZE(x);
+        EXPECT_EQ(static_cast<int>(x), static_cast<int>(data[i]));
+    }
 }
 
-TIFLASH_DECLARE_MULTITARGET_FUNCTION_ALONE(void, sumIntFromZero, (const int * __restrict src, size_t length))
-TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION(void, sumIntFromZero, (src, length), (const int * __restrict src, size_t length), {
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_ALONE(int, sumIntFromZero, (const int * __restrict src, size_t length))
+TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION(int, sumIntFromZero, (src, length), (const int * __restrict src, size_t length), {
     int acc = 0;
     for (size_t i = 0; i < length; ++i)
     {
         acc += src[i];
     }
-    TIFLASH_NO_OPTIMIZE(acc);
-    ASSERT_EQ(static_cast<size_t>(acc), length * (length + 1) / 2);
+    return acc;
 })
 
 TEST(TargetSpecific, sumIntFromZero)
 {
-    std::vector<int> data(512);
-    for (int i = 1; i <= 512; ++i)
+    size_t count = 512;
+    std::vector<int> data(count);
+    for (size_t i = 1; i <= count; ++i)
     {
         data[i - 1] = i;
     }
-    sumIntFromZero(data.data(), 512);
+    auto res = sumIntFromZero(data.data(), 512);
+    TIFLASH_NO_OPTIMIZE(res);
+    EXPECT_EQ(static_cast<size_t>(res), count * (count + 1) / 2);
 }
