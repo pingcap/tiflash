@@ -1,5 +1,4 @@
 #pragma once
-
 /// __has_feature supported only by clang.
 ///
 /// But libcxx/libcxxabi overrides it to 0,
@@ -127,3 +126,12 @@ constexpr void UNUSED(Args &&... args [[maybe_unused]])
     template <__VA_ARGS__>
 
 #define TIFLASH_MACRO_ARGS(...) __VA_ARGS__
+
+template <typename T>
+static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
+{
+    asm volatile(""
+                 :
+                 : "r,m"(var)
+                 : "memory");
+}

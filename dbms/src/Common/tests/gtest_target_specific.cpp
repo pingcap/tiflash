@@ -14,10 +14,7 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION(
         for (size_t i = 0; i < length; ++i)
         {
             auto x = dst[i] - 1;
-            asm volatile(""
-                         :
-                         : "r,m"(x)
-                         : "memory");
+            TIFLASH_NO_OPTIMIZE(x);
             ASSERT_EQ(static_cast<int>(x), static_cast<int>(src[i]));
         }
     })
@@ -41,10 +38,7 @@ TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION(void, sumIntFromZero, (src, length), (con
     {
         acc += src[i];
     }
-    asm volatile(""
-                 :
-                 : "r,m"(acc)
-                 : "memory");
+    TIFLASH_NO_OPTIMIZE(acc);
     ASSERT_EQ(static_cast<size_t>(acc), length * (length + 1) / 2);
 })
 
