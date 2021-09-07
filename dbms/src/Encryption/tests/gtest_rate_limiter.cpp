@@ -72,15 +72,8 @@ TEST(WriteLimiter_test, LimiterStat_NotLimit)
         ASSERT_EQ(e.code(), ErrorCodes::LOGICAL_ERROR);
     }
 
-<<<<<<< HEAD
     auto noop = []() { return 0; };
     ReadLimiter read_limiter(noop, nullptr, 0, LimiterType::UNKNOW, 100);
-=======
-    auto noop = []() {
-        return 0;
-    };
-    ReadLimiter read_limiter(noop, 0, LimiterType::UNKNOW, 100);
->>>>>>> e8ffefc64 (Fix unstable unit test (#2799))
     try
     {
         read_limiter.getStat();
@@ -94,12 +87,8 @@ TEST(WriteLimiter_test, LimiterStat_NotLimit)
 
 TEST(WriteLimiter_test, LimiterStat)
 {
-<<<<<<< HEAD
 
     WriteLimiter write_limiter(nullptr, 1000, LimiterType::UNKNOW, 100);
-=======
-    WriteLimiter write_limiter(1000, LimiterType::UNKNOW, 100);
->>>>>>> e8ffefc64 (Fix unstable unit test (#2799))
     try
     {
         write_limiter.getStat();

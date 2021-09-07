@@ -19,12 +19,9 @@ class AbstractConfiguration;
 }
 namespace DB
 {
-<<<<<<< HEAD
 
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
-=======
->>>>>>> e8ffefc64 (Fix unstable unit test (#2799))
 class LimiterStat;
 class IOLimitTuner;
 
@@ -149,12 +146,8 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter final : public WriteLimiter
 {
 public:
-<<<<<<< HEAD
     ReadLimiter(std::function<Int64()> getIOStatistic_, TiFlashMetricsPtr metrics_, Int64 rate_limit_per_sec_, LimiterType type_,
         Int64 get_io_stat_period_us = 2000, UInt64 refill_period_ms_ = 100);
-=======
-    ReadLimiter(std::function<Int64()> getIOStatistic_, Int64 rate_limit_per_sec_, LimiterType type_, Int64 get_io_stat_period_us = 2000, UInt64 refill_period_ms_ = 100);
->>>>>>> e8ffefc64 (Fix unstable unit test (#2799))
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
