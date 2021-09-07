@@ -4,14 +4,14 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class Equal : public ColCmpVal
 {
 public:
-    Equal(const Attr & attr_, const Field & value_) : ColCmpVal(attr_, value_, 0) {}
+    Equal(const Attr & attr_, const Field & value_)
+        : ColCmpVal(attr_, value_, 0)
+    {}
 
     String name() override { return "equal"; }
 

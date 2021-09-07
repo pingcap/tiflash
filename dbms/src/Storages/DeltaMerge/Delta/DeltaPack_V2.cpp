@@ -7,19 +7,18 @@ namespace DB
 {
 namespace DM
 {
-
 struct Pack_V2
 {
-    UInt64      rows  = 0;
-    UInt64      bytes = 0;
-    BlockPtr    schema;
+    UInt64 rows = 0;
+    UInt64 bytes = 0;
+    BlockPtr schema;
     RowKeyRange delete_range;
-    PageId      data_page_id = 0;
+    PageId data_page_id = 0;
 
     bool isDeleteRange() const { return !delete_range.none(); }
 };
 using Pack_V2Ptr = std::shared_ptr<Pack_V2>;
-using Packs_V2   = std::vector<Pack_V2Ptr>;
+using Packs_V2 = std::vector<Pack_V2Ptr>;
 
 inline DeltaPacks transform_V2_to_V3(const Packs_V2 & packs_v2)
 {
@@ -49,9 +48,9 @@ inline Packs_V2 transformSaved_V3_to_V2(const DeltaPacks & packs_v3)
         }
         else if (auto dp_block = p->tryToBlock(); dp_block)
         {
-            p_v2->rows         = dp_block->getRows();
-            p_v2->bytes        = dp_block->getBytes();
-            p_v2->schema       = dp_block->getSchema();
+            p_v2->rows = dp_block->getRows();
+            p_v2->bytes = dp_block->getBytes();
+            p_v2->schema = dp_block->getSchema();
             p_v2->data_page_id = dp_block->getDataPageId();
         }
         else
@@ -124,7 +123,8 @@ inline Pack_V2Ptr deserializePack_V2(ReadBuffer & buf, UInt64 version)
     readIntBinary(pack->bytes, buf);
     switch (version)
     {
-    case DeltaFormat::V1: {
+    case DeltaFormat::V1:
+    {
         HandleRange range;
         readPODBinary(range, buf);
         pack->delete_range = RowKeyRange::fromHandleRange(range);

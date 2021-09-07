@@ -52,16 +52,16 @@ struct EmptyValueSpace
     void removeFromInsert(UInt64) {}
 };
 
-using EntryIterator    = DTEntryIterator<DT_M, DT_F, DT_S>;
+using EntryIterator = DTEntryIterator<DT_M, DT_F, DT_S>;
 using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
-using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
-using BlockPtr         = std::shared_ptr<Block>;
+using DeltaTreePtr = std::shared_ptr<DefaultDeltaTree>;
+using BlockPtr = std::shared_ptr<Block>;
 
-using RowId  = UInt64;
-using ColId  = DB::ColumnID;
+using RowId = UInt64;
+using ColId = DB::ColumnID;
 using Handle = DB::HandleID;
 
-using ColIds     = std::vector<ColId>;
+using ColIds = std::vector<ColId>;
 using HandlePair = std::pair<Handle, Handle>;
 
 using RowsAndBytes = std::pair<size_t, size_t>;
@@ -70,24 +70,27 @@ using OptionTableInfoConstRef = std::optional<std::reference_wrapper<const TiDB:
 
 struct ColumnDefine
 {
-    ColId       id;
-    String      name;
+    ColId id;
+    String name;
     DataTypePtr type;
-    Field       default_value;
+    Field default_value;
 
     explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr, Field default_value_ = Field{})
-        : id(id_), name(std::move(name_)), type(std::move(type_)), default_value(std::move(default_value_))
+        : id(id_)
+        , name(std::move(name_))
+        , type(std::move(type_))
+        , default_value(std::move(default_value_))
     {
     }
 };
 
-using ColumnDefines    = std::vector<ColumnDefine>;
+using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-using ColumnDefineMap  = std::unordered_map<ColId, ColumnDefine>;
+using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
 
-using ColumnMap        = std::unordered_map<ColId, ColumnPtr>;
+using ColumnMap = std::unordered_map<ColId, ColumnPtr>;
 using MutableColumnMap = std::unordered_map<ColId, MutableColumnPtr>;
-using LockGuard        = std::lock_guard<std::mutex>;
+using LockGuard = std::lock_guard<std::mutex>;
 
 inline static const UInt64 INITIAL_EPOCH = 0;
 

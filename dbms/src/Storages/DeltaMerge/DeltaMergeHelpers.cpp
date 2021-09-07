@@ -5,7 +5,6 @@ namespace DB
 {
 namespace DM
 {
-
 void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const Context & context)
 {
     const IDataType * to_type_ptr = to_type.get();
@@ -33,7 +32,7 @@ void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const
 void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_column, const DataTypePtr & type, const ColumnPtr & data)
 {
     auto * type_ptr = &(*type);
-    size_t size     = handle_column.size();
+    size_t size = handle_column.size();
 
 #define APPEND(SHIFT, MARK, DATA_VECTOR)           \
     for (size_t i = 0; i < size; ++i)              \

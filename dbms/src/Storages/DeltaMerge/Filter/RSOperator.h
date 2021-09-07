@@ -7,14 +7,12 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
-using RSOperators   = std::vector<RSOperatorPtr>;
-using Fields        = std::vector<Field>;
+using RSOperators = std::vector<RSOperatorPtr>;
+using Fields = std::vector<Field>;
 
 inline static const RSOperatorPtr EMPTY_FILTER{};
 
@@ -30,12 +28,14 @@ protected:
     RSOperators children;
 
     RSOperator() = default;
-    explicit RSOperator(const RSOperators & children_) : children(children_) {}
+    explicit RSOperator(const RSOperators & children_)
+        : children(children_)
+    {}
 
 public:
     virtual ~RSOperator() = default;
 
-    virtual String name()          = 0;
+    virtual String name() = 0;
     virtual String toDebugString() = 0;
 
     // TODO: implement a batch check version
@@ -52,12 +52,15 @@ public:
 class ColCmpVal : public RSOperator
 {
 protected:
-    Attr  attr;
+    Attr attr;
     Field value;
-    int   null_direction;
+    int null_direction;
 
 public:
-    ColCmpVal(const Attr & attr_, const Field & value_, int null_direction_) : attr(attr_), value(value_), null_direction(null_direction_)
+    ColCmpVal(const Attr & attr_, const Field & value_, int null_direction_)
+        : attr(attr_)
+        , value(value_)
+        , null_direction(null_direction_)
     {
     }
 
@@ -65,7 +68,7 @@ public:
 
     String toDebugString() override
     {
-        return R"({"op":")" + name() +       //
+        return R"({"op":")" + name() + //
             R"(","col":")" + attr.col_name + //
             R"(","value":")" + applyVisitor(FieldVisitorToDebugString(), value) + "\"}";
     }
@@ -75,7 +78,9 @@ public:
 class LogicalOp : public RSOperator
 {
 public:
-    explicit LogicalOp(const RSOperators & children_) : RSOperator(children_) {}
+    explicit LogicalOp(const RSOperators & children_)
+        : RSOperator(children_)
+    {}
 
     Attrs getAttrs() override
     {

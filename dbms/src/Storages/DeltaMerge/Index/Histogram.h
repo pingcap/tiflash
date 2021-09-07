@@ -4,8 +4,6 @@ namespace DB
 {
 namespace DM
 {
-
-
 class RSIndexNumber
 {
 };

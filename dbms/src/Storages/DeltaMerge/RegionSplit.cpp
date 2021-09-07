@@ -11,13 +11,12 @@ namespace DB
 {
 namespace DM
 {
-
 constexpr double APPROX_DELTA_THRESHOLD = 0.1;
 
-RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_context,
+RowsAndBytes Segment::getRowsAndBytesInRange(DMContext & dm_context,
                                              const SegmentSnapshotPtr & segment_snap,
-                                             const RowKeyRange &        check_range,
-                                             bool                       is_exact)
+                                             const RowKeyRange & check_range,
+                                             bool is_exact)
 {
     RowKeyRange real_range = rowkey_range.shrink(check_range);
     // If there are no delete ranges overlap with check_range, and delta is small
@@ -45,9 +44,9 @@ RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_conte
     Float64 avg_row_bytes = (segment_snap->delta->getBytes() + segment_snap->stable->getBytes())
         / (segment_snap->delta->getRows() + segment_snap->stable->getRows());
 
-    auto & handle    = getExtraHandleColumnDefine(is_common_handle);
-    auto & version   = getVersionColumnDefine();
-    auto   read_info = getReadInfo(dm_context, {handle, version}, segment_snap, {real_range});
+    auto & handle = getExtraHandleColumnDefine(is_common_handle);
+    auto & version = getVersionColumnDefine();
+    auto read_info = getReadInfo(dm_context, {handle, version}, segment_snap, {real_range});
 
     auto storage_snap = std::make_shared<StorageSnapshot>(dm_context.storage_pool);
     auto pk_ver_col_defs
@@ -68,7 +67,10 @@ RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_conte
 
         data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, rowkey_range, 0);
         data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            data_stream, *read_info.read_columns, dm_context.min_version, is_common_handle);
+            data_stream,
+            *read_info.read_columns,
+            dm_context.min_version,
+            is_common_handle);
 
         data_stream->readPrefix();
         Block block;
@@ -90,7 +92,7 @@ RowsAndBytes DeltaMergeStore::getRowsAndBytesInRange(DMContext & dm_context, con
 {
     auto tasks = getReadTasksByRanges(dm_context, {check_range});
 
-    size_t rows  = 0;
+    size_t rows = 0;
     size_t bytes = 0;
     while (!tasks.empty())
     {
@@ -128,12 +130,12 @@ DeltaMergeStore::getRegionSplitPoint(DMContext & dm_context, const RowKeyRange &
     std::vector<RowKeyValue> check_points;
     check_points.reserve(dm_context.region_split_check_points);
 
-    size_t exact_rows  = 0;
+    size_t exact_rows = 0;
     size_t exact_bytes = 0;
     {
         auto tasks = getReadTasksByRanges(dm_context, {check_range});
 
-        size_t total_rows  = 0;
+        size_t total_rows = 0;
         size_t total_bytes = 0;
         for (auto & task : tasks)
         {
@@ -160,7 +162,7 @@ DeltaMergeStore::getRegionSplitPoint(DMContext & dm_context, const RowKeyRange &
             if (!block)
                 break;
 
-            auto                  block_rows = block.rows();
+            auto block_rows = block.rows();
             RowKeyColumnContainer rkc(block.getByPosition(0).column, is_common_handle);
             while (next_index < block_rows)
             {

@@ -14,7 +14,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
@@ -23,16 +22,15 @@ extern const char exception_before_dmfile_remove_from_disk[];
 
 namespace DM
 {
-
 namespace details
 {
-inline constexpr static const char * NGC_FILE_NAME          = "NGC";
+inline constexpr static const char * NGC_FILE_NAME = "NGC";
 inline constexpr static const char * FOLDER_PREFIX_WRITABLE = ".tmp.dmf_";
 inline constexpr static const char * FOLDER_PREFIX_READABLE = "dmf_";
-inline constexpr static const char * FOLDER_PREFIX_DROPPED  = ".del.dmf_";
-inline constexpr static const char * DATA_FILE_SUFFIX       = ".dat";
-inline constexpr static const char * INDEX_FILE_SUFFIX      = ".idx";
-inline constexpr static const char * MARK_FILE_SUFFIX       = ".mrk";
+inline constexpr static const char * FOLDER_PREFIX_DROPPED = ".del.dmf_";
+inline constexpr static const char * DATA_FILE_SUFFIX = ".dat";
+inline constexpr static const char * INDEX_FILE_SUFFIX = ".idx";
+inline constexpr static const char * MARK_FILE_SUFFIX = ".mrk";
 
 inline String getNGCPath(const String & prefix, bool is_single_mode)
 {
@@ -86,7 +84,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     DMFilePtr new_dmfile(
         new DMFile(file_id, file_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::WRITABLE, log));
 
-    auto       path = new_dmfile->path();
+    auto path = new_dmfile->path();
     Poco::File file(path);
     if (file.exists())
     {
@@ -116,12 +114,21 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
 }
 
 DMFilePtr DMFile::restore(
-    const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, const ReadMetaMode & read_meta_mode)
+    const FileProviderPtr & file_provider,
+    UInt64 file_id,
+    UInt64 ref_id,
+    const String & parent_path,
+    const ReadMetaMode & read_meta_mode)
 {
-    String    path             = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
-    bool      single_file_mode = Poco::File(path).isFile();
+    String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
+    bool single_file_mode = Poco::File(path).isFile();
     DMFilePtr dmfile(new DMFile(
-        file_id, ref_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::READABLE, &Poco::Logger::get("DMFile")));
+        file_id,
+        ref_id,
+        parent_path,
+        single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
+        Status::READABLE,
+        &Poco::Logger::get("DMFile")));
     if (!read_meta_mode.isNone())
         dmfile->readMetadata(file_provider, read_meta_mode);
     return dmfile;
@@ -247,7 +254,7 @@ DMFile::OffsetAndSize DMFile::writePackPropertyToBuffer(WriteBuffer & buffer)
 
 void DMFile::writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
 {
-    String meta_path     = metaPath();
+    String meta_path = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
 
     {
@@ -260,7 +267,7 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const RateLimiterP
 
 void DMFile::writePackProperty(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
 {
-    String property_path     = packPropertyPath();
+    String property_path = packPropertyPath();
     String tmp_property_path = property_path + ".tmp";
     {
         WriteBufferFromFileProvider buf(file_provider, tmp_property_path, encryptionPackPropertyPath(), false, rate_limiter, 4096);
@@ -287,12 +294,12 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileForm
         // Update ColumnStat.serialized_bytes
         for (auto && c : column_stats)
         {
-            auto   col_id = c.first;
-            auto & stat   = c.second;
+            auto col_id = c.first;
+            auto & stat = c.second;
             c.second.type->enumerateStreams(
                 [col_id, &stat, this](const IDataType::SubstreamPath & substream) {
                     String stream_name = DMFile::getFileNameBase(col_id, substream);
-                    String data_file   = colDataPath(stream_name);
+                    String data_file = colDataPath(stream_name);
                     if (Poco::File f(data_file); f.exists())
                         stat.serialized_bytes += f.getSize();
                     String mark_file = colDataPath(stream_name);
@@ -338,7 +345,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
 void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
     String tmp_buf;
-    auto   buf = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
+    auto buf = openForRead(file_provider, packPropertyPath(), encryptionPackPropertyPath(), meta_pack_info.pack_property_size);
     buf.seek(meta_pack_info.pack_property_offset);
     readStringBinary(tmp_buf, buf);
     pack_properties.ParseFromString(tmp_buf);
@@ -351,7 +358,7 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
     {
         // Read the `Footer` part from disk and init `sub_file_stat`
         /// TODO: Redesign the file format for single file mode (https://github.com/pingcap/tics/issues/1798)
-        Poco::File                 file(path());
+        Poco::File file(path());
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
 
         buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
@@ -429,11 +436,11 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 {
     Footer footer;
     std::tie(footer.meta_pack_info.pack_property_offset, footer.meta_pack_info.pack_property_size) = writePackPropertyToBuffer(buffer);
-    std::tie(footer.meta_pack_info.column_stat_offset, footer.meta_pack_info.column_stat_size)     = writeMetaToBuffer(buffer);
-    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size)         = writePackStatToBuffer(buffer);
+    std::tie(footer.meta_pack_info.column_stat_offset, footer.meta_pack_info.column_stat_size) = writeMetaToBuffer(buffer);
+    std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePackStatToBuffer(buffer);
 
     footer.sub_file_stat_offset = buffer.count();
-    footer.sub_file_num         = sub_file_stats.size();
+    footer.sub_file_num = sub_file_stats.size();
     for (auto & iter : sub_file_stats)
     {
         writeStringBinary(iter.first, buffer);
@@ -457,7 +464,7 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 
     setStatus(Status::READABLE);
 
-    auto       new_path = path();
+    auto new_path = path();
     Poco::File file(new_path);
     if (file.exists())
         file.remove();
@@ -476,7 +483,7 @@ DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & pare
     std::vector<std::string> file_names;
     folder.list(file_names);
     std::set<UInt64> file_ids;
-    Logger *         log = &Logger::get("DMFile");
+    Logger * log = &Logger::get("DMFile");
 
     auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
         std::vector<std::string> ss;
@@ -484,7 +491,7 @@ DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & pare
         if (ss.size() != 2)
             return std::nullopt;
         size_t pos;
-        auto   id = std::stoull(ss[1], &pos);
+        auto id = std::stoull(ss[1], &pos);
         // pos < ss[1].size() means that ss[1] is not an invalid integer
         return pos < ss[1].size() ? std::nullopt : std::make_optional(id);
     };
@@ -545,7 +552,7 @@ DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & pare
             // Only return the ID if the file is able to be GC-ed.
             const auto file_path = parent_path + "/" + name;
             Poco::File file(file_path);
-            String     ngc_path = details::getNGCPath(file_path, file.isFile());
+            String ngc_path = details::getNGCPath(file_path, file.isFile());
             Poco::File ngc_file(ngc_path);
             if (!ngc_file.exists())
                 file_ids.insert(file_id);
@@ -602,7 +609,7 @@ void DMFile::initializeSubFileStatsForFolderMode()
     if (isSingleFileMode())
         return;
 
-    Poco::File               directory{path()};
+    Poco::File directory{path()};
     std::vector<std::string> sub_files{};
     directory.list(sub_files);
     for (const auto & name : sub_files)
@@ -637,7 +644,7 @@ void DMFile::initializeIndices()
     if (isSingleFileMode())
         return;
 
-    Poco::File               directory{path()};
+    Poco::File directory{path()};
     std::vector<std::string> sub_files{};
 
     directory.list(sub_files);

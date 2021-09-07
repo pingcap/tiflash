@@ -17,10 +17,8 @@
 
 namespace DB
 {
-
 namespace DM
 {
-
 template <typename T>
 std::string compareTypeToString(const T & v)
 {
@@ -36,11 +34,11 @@ template <template <typename, typename> class Op>
 struct ValueComparision
 {
     // Used to check operation type
-    using OpInt              = Op<int, int>;
-    using EqualsInt          = EqualsOp<int, int>;
-    using LessInt            = LessOp<int, int>;
-    using LessOrEqualsInt    = LessOrEqualsOp<int, int>;
-    using GreaterInt         = GreaterOp<int, int>;
+    using OpInt = Op<int, int>;
+    using EqualsInt = EqualsOp<int, int>;
+    using LessInt = LessOp<int, int>;
+    using LessOrEqualsInt = LessOrEqualsOp<int, int>;
+    using GreaterInt = GreaterOp<int, int>;
     using GreaterOrEqualsInt = GreaterOrEqualsOp<int, int>;
 
     /// 1: true, -1: false, 0: cannot compare.
@@ -211,8 +209,8 @@ private:
         if constexpr (LeftGroupType != Decimal && RightGroupType != Decimal)
             return false;
 
-        auto & left        = left_field.safeGet<Left>();
-        UInt32 left_scale  = 1;
+        auto & left = left_field.safeGet<Left>();
+        UInt32 left_scale = 1;
         UInt32 right_scale = 1;
 
         if constexpr (LeftGroupType == Decimal)
@@ -250,11 +248,11 @@ private:
     {
         const IDataType * number_type = right_type.get();
 
-        bool is_date      = false;
+        bool is_date = false;
         bool is_date_time = false;
-        bool is_uuid      = false;
-        bool is_enum8     = false;
-        bool is_enum16    = false;
+        bool is_uuid = false;
+        bool is_enum8 = false;
+        bool is_enum16 = false;
 
         const auto legal_types = (is_date = checkAndGetDataType<DataTypeDate>(number_type))
             || (is_date_time = checkAndGetDataType<DataTypeDateTime>(number_type))
@@ -269,7 +267,7 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeDate::FieldType, Right>)
             {
-                DayNum_t             date;
+                DayNum_t date;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readDateText(date, in);
                 if (!in.eof())
@@ -282,7 +280,7 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeDateTime::FieldType, Right>)
             {
-                time_t               date_time;
+                time_t date_time;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readDateTimeText(date_time, in);
                 if (!in.eof())
@@ -295,7 +293,7 @@ private:
         {
             if constexpr (std::is_same_v<UUID, Right>)
             {
-                UUID                 uuid;
+                UUID uuid;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readText(uuid, in);
                 if (!in.eof())
@@ -308,9 +306,9 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeEnum8::FieldType, Right>)
             {
-                auto type            = static_cast<const DataTypeEnum8 *>(right_type.get());
+                auto type = static_cast<const DataTypeEnum8 *>(right_type.get());
                 auto left_enum_value = type->getValue(left);
-                res                  = Op<Int8, Right>::apply(left_enum_value, right);
+                res = Op<Int8, Right>::apply(left_enum_value, right);
                 return true;
             }
         }
@@ -318,9 +316,9 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeEnum16::FieldType, Right>)
             {
-                auto type            = static_cast<const DataTypeEnum16 *>(right_type.get());
+                auto type = static_cast<const DataTypeEnum16 *>(right_type.get());
                 auto left_enum_value = type->getValue(left);
-                res                  = Op<Int16, Right>::apply(left_enum_value, right);
+                res = Op<Int16, Right>::apply(left_enum_value, right);
                 return true;
             }
         }

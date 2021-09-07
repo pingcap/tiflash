@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -18,10 +17,9 @@ extern const int LOGICAL_ERROR;
 
 namespace DM
 {
-
 void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context)
 {
-    UInt64 rows  = 0;
+    UInt64 rows = 0;
     UInt64 bytes = 0;
 
     if (range.all())
@@ -35,20 +33,26 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     else
     {
         auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache();
-        auto hash_salt   = dm_context->hash_salt;
+        auto hash_salt = dm_context->hash_salt;
         for (auto & file : files_)
         {
             auto pack_filter = DMFilePackFilter::loadFrom(
-                file, index_cache, hash_salt, range, EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
+                file,
+                index_cache,
+                hash_salt,
+                range,
+                EMPTY_FILTER,
+                {},
+                dm_context->db_context.getFileProvider());
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
         }
     }
 
-    this->valid_rows  = rows;
+    this->valid_rows = rows;
     this->valid_bytes = bytes;
-    this->files       = files_;
+    this->files = files_;
 }
 
 void StableValueSpace::saveMeta(WriteBatch & meta_wb)
@@ -69,9 +73,9 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 {
     auto stable = std::make_shared<StableValueSpace>(id);
 
-    Page                 page = context.storage_pool.meta().read(id);
+    Page page = context.storage_pool.meta().read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    UInt64               version, valid_rows, valid_bytes, size;
+    UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, buf);
     if (version != StableFormat::V1)
         throw Exception("Unexpected version: " + DB::toString(version));
@@ -84,14 +88,14 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
     {
         readIntBinary(ref_id, buf);
 
-        auto file_id          = context.storage_pool.data().getNormalPageId(ref_id);
+        auto file_id = context.storage_pool.data().getNormalPageId(ref_id);
         auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
         auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
         stable->files.push_back(dmfile);
     }
 
-    stable->valid_rows  = valid_rows;
+    stable->valid_rows = valid_rows;
     stable->valid_bytes = valid_bytes;
 
     return stable;
@@ -154,13 +158,13 @@ void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
 void StableValueSpace::calculateStableProperty(const DMContext & context, const RowKeyRange & rowkey_range, bool is_common_handle)
 {
     property.gc_hint_version = std::numeric_limits<UInt64>::max();
-    property.num_versions    = 0;
-    property.num_puts        = 0;
-    property.num_rows        = 0;
+    property.num_versions = 0;
+    property.num_puts = 0;
+    property.num_rows = 0;
     for (size_t i = 0; i < files.size(); i++)
     {
-        auto & file            = files[i];
-        auto & pack_stats      = file->getPackStats();
+        auto & file = files[i];
+        auto & pack_stats = file->getPackStats();
         auto & pack_properties = file->getPackProperties();
         if (pack_stats.empty())
             continue;
@@ -199,7 +203,10 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                                            UINT64_MAX, // because we just read one pack at a time
                                                            true);
             auto mvcc_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-                data_stream, read_columns, 0, is_common_handle);
+                data_stream,
+                read_columns,
+                0,
+                is_common_handle);
             mvcc_stream->readPrefix();
             while (true)
             {
@@ -212,23 +219,23 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                     continue;
 
                 size_t cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
-                size_t gc_hint_version        = mvcc_stream->getGCHintVersion();
-                auto * pack_property          = new_pack_properties.add_property();
+                size_t gc_hint_version = mvcc_stream->getGCHintVersion();
+                auto * pack_property = new_pack_properties.add_property();
                 pack_property->set_num_rows(cur_effective_num_rows - last_effective_num_rows);
                 pack_property->set_gc_hint_version(gc_hint_version);
             }
             mvcc_stream->readSuffix();
         }
-        auto   pack_filter               = DMFilePackFilter::loadFrom(file,
+        auto pack_filter = DMFilePackFilter::loadFrom(file,
                                                       context.db_context.getGlobalContext().getMinMaxIndexCache(),
                                                       context.hash_salt,
                                                       rowkey_range,
                                                       EMPTY_FILTER,
                                                       {},
                                                       context.db_context.getFileProvider());
-        auto & use_packs                 = pack_filter.getUsePacks();
+        auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
-        bool   use_new_pack_properties   = pack_properties.property_size() == 0;
+        bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
         {
             size_t use_packs_count = 0;
@@ -273,16 +280,16 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
 // StableValueSpace::Snapshot
 // ================================================
 
-using Snapshot    = StableValueSpace::Snapshot;
+using Snapshot = StableValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap         = std::make_shared<Snapshot>();
-    snap->id          = id;
-    snap->valid_rows  = valid_rows;
+    auto snap = std::make_shared<Snapshot>();
+    snap->id = id;
+    snap->valid_rows = valid_rows;
     snap->valid_bytes = valid_bytes;
-    snap->stable      = this->shared_from_this();
+    snap->stable = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {
@@ -301,13 +308,13 @@ void StableValueSpace::drop(const FileProviderPtr & file_provider)
     }
 }
 
-SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext &     context, //
+SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext & context, //
                                                                         const ColumnDefines & read_columns,
-                                                                        const RowKeyRange &   rowkey_range,
+                                                                        const RowKeyRange & rowkey_range,
                                                                         const RSOperatorPtr & filter,
-                                                                        UInt64                max_data_version,
-                                                                        size_t                expected_block_size,
-                                                                        bool                  enable_clean_read)
+                                                                        UInt64 max_data_version,
+                                                                        size_t expected_block_size,
+                                                                        bool enable_clean_read)
 {
     LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
     SkippableBlockInputStreams streams;
@@ -334,12 +341,12 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
 {
     if (valid_rows == 0)
         return {0, 0};
-    size_t match_packs       = 0;
-    size_t total_match_rows  = 0;
+    size_t match_packs = 0;
+    size_t total_match_rows = 0;
     size_t total_match_bytes = 0;
     for (auto & f : stable->files)
     {
-        auto   filter     = DMFilePackFilter::loadFrom(f,
+        auto filter = DMFilePackFilter::loadFrom(f,
                                                  context.db_context.getGlobalContext().getMinMaxIndexCache(),
                                                  context.hash_salt,
                                                  range,
@@ -347,7 +354,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
                                                  IdSetPtr{},
                                                  context.db_context.getFileProvider());
         auto & pack_stats = f->getPackStats();
-        auto & use_packs  = filter.getUsePacks();
+        auto & use_packs = filter.getUsePacks();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (use_packs[i])
@@ -360,11 +367,11 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     }
     if (!total_match_rows || !match_packs)
         return {0, 0};
-    Float64 avg_pack_rows  = total_match_rows / match_packs;
+    Float64 avg_pack_rows = total_match_rows / match_packs;
     Float64 avg_pack_bytes = total_match_bytes / match_packs;
     // By average, the first and last pack are only half covered by the range.
     // And if this range only covers one pack, then return the pack's stat.
-    size_t approx_rows  = std::max(avg_pack_rows, total_match_rows - avg_pack_rows / 2);
+    size_t approx_rows = std::max(avg_pack_rows, total_match_rows - avg_pack_rows / 2);
     size_t approx_bytes = std::max(avg_pack_bytes, total_match_bytes - avg_pack_bytes / 2);
     return {approx_rows, approx_bytes};
 }

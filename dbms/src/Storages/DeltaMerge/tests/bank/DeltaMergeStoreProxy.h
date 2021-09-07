@@ -23,19 +23,29 @@ namespace tests
 class DeltaMergeStoreProxy
 {
 public:
-    DeltaMergeStoreProxy() : name{"bank"}, col_balance_define{2, "balance", std::make_shared<DataTypeUInt64>()}
+    DeltaMergeStoreProxy()
+        : name{"bank"}
+        , col_balance_define{2, "balance", std::make_shared<DataTypeUInt64>()}
     {
         // construct DeltaMergeStore
-        String     path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
+        String path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
         Poco::File file(path);
         if (file.exists())
             file.remove(true);
-        context                   = std::make_unique<Context>(DMTestEnv::getContext());
+        context = std::make_unique<Context>(DMTestEnv::getContext());
         auto table_column_defines = DMTestEnv::getDefaultColumns();
         table_column_defines->emplace_back(col_balance_define);
         ColumnDefine handle_column_define = (*table_column_defines)[0];
-        store                             = std::make_shared<DeltaMergeStore>(
-            *context, true, "test", name, *table_column_defines, handle_column_define, false, 1, DeltaMergeStore::Settings());
+        store = std::make_shared<DeltaMergeStore>(
+            *context,
+            true,
+            "test",
+            name,
+            *table_column_defines,
+            handle_column_define,
+            false,
+            1,
+            DeltaMergeStore::Settings());
     }
     void upsertRow(UInt64 id, UInt64 balance, UInt64 tso);
 
@@ -60,10 +70,10 @@ public:
     void moveMoney(UInt64 from, UInt64 to, UInt64 num, UInt64 tso);
 
 private:
-    String                   name;
+    String name;
     std::unique_ptr<Context> context;
-    const ColumnDefine       col_balance_define;
-    DeltaMergeStorePtr       store;
+    const ColumnDefine col_balance_define;
+    DeltaMergeStorePtr store;
 
     SimpleDB db;
 
