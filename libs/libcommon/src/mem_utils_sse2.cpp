@@ -53,8 +53,8 @@ __attribute__((pure)) bool memoryIsByteSSE2(const void * data, size_t size, std:
     static constexpr size_t group_size = vector_length * 4;
     size_t remaining = size;
     auto filled_vector = _mm_set1_epi8(static_cast<char>(target));
-    auto current_address = reinterpret_cast<const VectorType *>(data);
-    auto byte_address = reinterpret_cast<const uint8_t *>(data);
+    const auto *current_address = reinterpret_cast<const VectorType *>(data);
+    const auto *byte_address = reinterpret_cast<const uint8_t *>(data);
 
     if (!compareArraySSE2<1>({_mm_loadu_si128(current_address)}, filled_vector))
     {
