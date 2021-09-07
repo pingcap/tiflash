@@ -329,9 +329,12 @@ CATCH
 class MockPathCapacityMetrics : public PathCapacityMetrics
 {
 public:
-    MockPathCapacityMetrics(const size_t capacity_quota_, const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
-                            const Strings & latest_paths_,
-                            const std::vector<size_t> latest_capacity_quota_)
+    MockPathCapacityMetrics(
+        const size_t capacity_quota_,
+        const Strings & main_paths_,
+        const std::vector<size_t> main_capacity_quota_,
+        const Strings & latest_paths_,
+        const std::vector<size_t> latest_capacity_quota_)
         : PathCapacityMetrics(capacity_quota_, main_paths_, main_capacity_quota_, latest_paths_, latest_capacity_quota_)
     {}
 
@@ -487,21 +490,6 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
 }
 
-class FakePathCapacityMetrics
-{
-public:
-    template <typename T>
-    DisksCapacity getDiskStatsForPaths(const std::vector<T> & /*paths*/)
-    {
-        return disks_cap;
-    }
-
-    void setDiskStats(DisksCapacity & disks_cap_) { disks_cap = disks_cap_; }
-
-private:
-    DisksCapacity disks_cap;
-};
-
 struct TestPathInfo
 {
     String path;
@@ -511,9 +499,6 @@ using TestPathInfos = std::vector<TestPathInfo>;
 
 String callChoosePath(const Strings & main_paths_, DisksCapacity & disks_cap)
 {
-    auto capacity_ptr = std::make_shared<FakePathCapacityMetrics>();
-    capacity_ptr->setDiskStats(disks_cap);
-
     TestPathInfos infos;
     for (auto & path : main_paths_)
     {
@@ -524,7 +509,7 @@ String callChoosePath(const Strings & main_paths_, DisksCapacity & disks_cap)
         return path;
     };
 
-    return PathSelector::choose(infos, capacity_ptr, path_generator, &Poco::Logger::get("PathPool_test"), "");
+    return PathSelector::chooseFromDisksCapacity(infos, disks_cap, path_generator, &Poco::Logger::get("PathPool_test"), "");
 }
 
 TEST_F(PathCapcatity, ChoosePath)
@@ -548,7 +533,9 @@ TEST_F(PathCapcatity, ChoosePath)
         fake_vfs.f_frsize = 1;
         disks_capacity.insert(fake_vfs, {.used_size = 100, .avail_size = 0, .capacity_size = 200, .ok = 1}, main_data_path);
 
-        auto path = callChoosePath({main_data_path}, disks_capacity);
+        auto path = callChoosePath(
+            {main_data_path},
+            disks_capacity);
         ASSERT_EQ(path, main_data_path);
     }
 
@@ -561,7 +548,9 @@ TEST_F(PathCapcatity, ChoosePath)
         fake_vfs.f_frsize = 1;
         disks_capacity.insert(fake_vfs, {.used_size = 420, .avail_size = 500, .capacity_size = 5000, .ok = 1}, main_data_path1);
 
-        auto path = callChoosePath({main_data_path, main_data_path1}, disks_capacity);
+        auto path = callChoosePath(
+            {main_data_path, main_data_path1},
+            disks_capacity);
         ASSERT_EQ(path, main_data_path1);
     }
 
@@ -574,7 +563,9 @@ TEST_F(PathCapcatity, ChoosePath)
         fake_vfs.f_frsize = 1;
         disks_capacity.insert(fake_vfs, {.used_size = 200, .avail_size = 300, .capacity_size = 500, .ok = 1}, main_data_path2);
 
-        auto path = callChoosePath({main_data_path, main_data_path1, main_data_path2}, disks_capacity);
+        auto path = callChoosePath(
+            {main_data_path, main_data_path1, main_data_path2},
+            disks_capacity);
         ASSERT_EQ(path, main_data_path1);
     }
 
@@ -587,12 +578,15 @@ TEST_F(PathCapcatity, ChoosePath)
         fake_vfs.f_frsize = 1;
         disks_capacity.insert(fake_vfs, {.used_size = 250, .avail_size = 500, .capacity_size = 2000, .ok = 1}, main_data_path3);
 
-        auto path = callChoosePath({main_data_path, main_data_path1, main_data_path2, main_data_path3}, disks_capacity);
+        auto path = callChoosePath(
+            {main_data_path, main_data_path1, main_data_path2, main_data_path3},
+            disks_capacity);
         // Should return main_data_path1 or main_data_path3
         ASSERT_TRUE(path == main_data_path1 || path == main_data_path3);
     }
 
-    { // Add a new path in disk4
+    // Add a new path in disk4
+    {
         struct statvfs fake_vfs = {};
         fake_vfs.f_fsid = 103;
         fake_vfs.f_blocks = 1000;
@@ -600,7 +594,9 @@ TEST_F(PathCapcatity, ChoosePath)
         fake_vfs.f_frsize = 1;
         disks_capacity.insert(fake_vfs, {.used_size = 888, .avail_size = 9000, .capacity_size = 2000, .ok = 1}, main_data_path4);
 
-        auto path = callChoosePath({main_data_path, main_data_path1, main_data_path2, main_data_path3, main_data_path4}, disks_capacity);
+        auto path = callChoosePath(
+            {main_data_path, main_data_path1, main_data_path2, main_data_path3, main_data_path4},
+            disks_capacity);
         ASSERT_EQ(path, main_data_path4);
     }
 
