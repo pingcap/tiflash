@@ -252,6 +252,11 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
 
     if (config.has("storage.main"))
     {
+        if (config.has("path"))
+            LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
+        if (config.has("capacity"))
+            LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
+
         storage_config.parseStoragePath(config.getString("storage"), log);
 
         if (config.has("path"))
