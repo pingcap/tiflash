@@ -1,61 +1,63 @@
 ---
 BasedOnStyle:  Google
 Language:        Cpp
-AlignAfterOpenBracket: false
-BreakBeforeBraces: Custom
-BraceWrapping: {
-    AfterCaseLabel: 'true'
-    AfterClass: 'true'
-    AfterControlStatement: 'true'
-    AfterEnum : 'true'
-    AfterFunction : 'true'
-    AfterNamespace : 'true'
-    AfterStruct : 'true'
-    AfterUnion : 'true'
-    BeforeCatch : 'true'
-    BeforeElse : 'true'
-    IndentBraces : 'false'
-    SplitEmptyFunction: 'false'
-}
-
-BreakConstructorInitializersBeforeComma: false
-Cpp11BracedListStyle: true
-ColumnLimit:     140
-ConstructorInitializerAllOnOneLineOrOnePerLine: true
-ExperimentalAutoDetectBinPacking: true
-UseTab: Never
-TabWidth: 4
-IndentWidth: 4
-Standard: Cpp11
-PointerAlignment: Middle
-MaxEmptyLinesToKeep: 2
-KeepEmptyLinesAtTheStartOfBlocks: true
-#AllowShortFunctionsOnASingleLine: Inline
-AllowShortFunctionsOnASingleLine: All
+AlignAfterOpenBracket: Align
+AlignEscapedNewlines: Left
+AlignTrailingComments: false
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: Always
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: Inline
+AlwaysBreakAfterReturnType: None
 AlwaysBreakTemplateDeclarations: true
-IndentCaseLabels: true
-#SpaceAfterTemplateKeyword: true
-#SortIncludes: true
+BinPackArguments: false
+BinPackParameters: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+    AfterCaseLabel: true
+    AfterClass: true
+    AfterControlStatement: true
+    AfterEnum : true
+    AfterFunction : true
+    AfterNamespace : true
+    AfterStruct : true
+    AfterUnion : true
+    BeforeCatch : true
+    BeforeElse : true
+    IndentBraces : false
+    SplitEmptyFunction: false
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList : BeforeComma
+ColumnLimit: 0
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+Cpp11BracedListStyle: true
+EmptyLineBeforeAccessModifier: LogicalBlock
+ExperimentalAutoDetectBinPacking: true
 FixNamespaceComments: true
-
+IndentCaseLabels: false
+IndentWidth: 4
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 2
+#PPIndentWidth: 2  # clang-format version 12.0.0 doesn't support yet
+PointerAlignment: Middle
 ReflowComments: false
-AlignEscapedNewlinesLeft: true
+SortIncludes: true
+SpaceAfterTemplateKeyword: true
+Standard: Cpp11
+TabWidth: 4
+UseTab: Never
 
 # Not changed:
 AccessModifierOffset: -4
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
 AlignOperands:   false
-AlignTrailingComments: true
-AllowAllParametersOfDeclarationOnNextLine: true
-AllowShortBlocksOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
-BinPackArguments: true
-BinPackParameters: true
 BreakBeforeBinaryOperators: All
 BreakBeforeTernaryOperators: true
 CommentPragmas:  '^ IWYU pragma:'
