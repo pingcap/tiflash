@@ -120,6 +120,9 @@
 
 #define TIFLASH_TEMPLATE(...) template <__VA_ARGS__>
 #define TIFLASH_MACRO_ARGS(...) __VA_ARGS__
+
+#define TIFLASH_MACRO_CONCAT_IMPL(X, Y) X ## Y
+#define TIFLASH_MACRO_CONCAT(X, Y) TIFLASH_MACRO_CONCAT_IMPL(X, Y)
 // clang-format on
 
 /// A template function for suppressing warnings about unused variables or function results.

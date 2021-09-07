@@ -46,7 +46,7 @@
 /* Clang shows warning when there aren't any objects to apply pragma.
  * To prevent this warning we define this function inside every macros with pragmas.
  */
-#   define TIFLASH_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void __dummy_function_definition();
+#   define TIFLASH_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void TIFLASH_MACRO_CONCAT(__dummy_function_definition_, __LINE__)();
 #else
 #   define TIFLASH_BEGIN_AVX512_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
