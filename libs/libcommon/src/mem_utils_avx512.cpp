@@ -37,13 +37,13 @@ namespace
 
 __attribute__((pure, always_inline)) inline bool memoryEqualAVX512x4(const char * p1, const char * p2)
 {
-    auto p1_ = reinterpret_cast<const VectorType *>(p1);
-    auto p2_ = reinterpret_cast<const VectorType *>(p2);
+    const auto *v1 = reinterpret_cast<const VectorType *>(p1);
+    const auto *v2 = reinterpret_cast<const VectorType *>(p2);
     return 0xFFFFFFFFFFFFFFFF
-        == (_mm512_cmpeq_epi8_mask(_mm512_loadu_si512(p1_), _mm512_loadu_si512(p2_))
-            & _mm512_cmpeq_epi8_mask(_mm512_loadu_si512(p1_ + 1), _mm512_loadu_si512(p2_ + 1))
-            & _mm512_cmpeq_epi8_mask(_mm512_loadu_si512(p1_ + 2), _mm512_loadu_si512((p2_ + 2)))
-            & _mm512_cmpeq_epi8_mask(_mm512_loadu_si512(p1_ + 3), _mm512_loadu_si512(p2_ + 3)));
+        == (_mm512_cmpeq_epi8_mask(_mm512_loadu_si512(v1), _mm512_loadu_si512(v2))
+            & _mm512_cmpeq_epi8_mask(_mm512_loadu_si512(v1 + 1), _mm512_loadu_si512(v2 + 1))
+            & _mm512_cmpeq_epi8_mask(_mm512_loadu_si512(v1 + 2), _mm512_loadu_si512((v2 + 2)))
+            & _mm512_cmpeq_epi8_mask(_mm512_loadu_si512(v1 + 3), _mm512_loadu_si512(v2 + 3)));
 }
 
 } // namespace
@@ -108,8 +108,8 @@ __attribute__((pure)) bool memoryIsByteAVX512(const void * data, size_t size, st
     static constexpr size_t group_size = vector_length * 4;
     size_t remaining = size;
     auto filled_vector = _mm512_set1_epi8(static_cast<char>(target));
-    auto current_address = reinterpret_cast<const VectorType *>(data);
-    auto byte_address = reinterpret_cast<const uint8_t *>(data);
+    const auto *current_address = reinterpret_cast<const VectorType *>(data);
+    const auto *byte_address = reinterpret_cast<const uint8_t *>(data);
 
     if (!compareArrayAVX512<1>({_mm512_loadu_si512(current_address)}, filled_vector))
     {
