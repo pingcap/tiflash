@@ -522,7 +522,7 @@ struct SimdImpl<Generic::WORD_SIZE>
 
 
 #define DECLARE_TYPE(TYPE_PREFIX) \
-    typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH))) TYPE_PREFIX##vec_t;
+    typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) TYPE_PREFIX##vec_t;
 
 #define ENUM_TYPE(TYPE_PREFIX) \
     TYPE_PREFIX##vec_t as_##TYPE_PREFIX;
