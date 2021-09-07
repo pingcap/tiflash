@@ -1,23 +1,22 @@
 #pragma once
 
-#include <Poco/UTF8Encoding.h>
-#include <Poco/Unicode.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeString.h>
-#include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+#include <Poco/UTF8Encoding.h>
+#include <Poco/Unicode.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_COLUMN;
+extern const int ILLEGAL_COLUMN;
 }
 
 /** String functions
@@ -103,15 +102,15 @@ inline void UTF8CyrillicToCase(const UInt8 *& src, UInt8 *& dst)
   * Otherwise, the behavior is undefined.
   */
 template <char not_case_lower_bound,
-    char not_case_upper_bound,
-    int to_case(int),
-    void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
+          char not_case_upper_bound,
+          int to_case(int),
+          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
 struct LowerUpperUTF8Impl
 {
     static void vector(const ColumnString::Chars_t & data,
-        const ColumnString::Offsets & offsets,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets);
+                       const ColumnString::Offsets & offsets,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets);
 
     static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
 
@@ -158,7 +157,8 @@ public:
     {
         if (!arguments[0]->isStringOrFixedString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0];
     }
@@ -200,4 +200,4 @@ struct NameUpperUTF8
 using FunctionLowerUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;
 using FunctionUpperUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;
 
-}
+} // namespace DB
