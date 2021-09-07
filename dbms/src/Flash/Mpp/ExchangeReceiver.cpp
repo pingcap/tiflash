@@ -195,7 +195,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
             }
             else if (packet->packet != nullptr)
             {
-                std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
+                auto resp_ptr = std::make_shared<tipb::SelectResponse>();
                 if (!resp_ptr->ParseFromString(packet->packet->data()))
                 {
                     result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
