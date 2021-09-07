@@ -84,9 +84,14 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                 {
                     throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
                 }
+
+                std::unique_lock<std::mutex> lock(mu);
+                cv.wait(lock, [&] { return !full_packets.isFull() || state != NORMAL; });
+
                 if (state == NORMAL)
                 {
                     full_packets.push(packet);
+                    cv.notify_all();
                 }
                 else
                 {
@@ -150,27 +155,6 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         state = ERROR;
     if (meet_error && err_msg.empty())
         err_msg = local_err_msg;
-    if (live_connections == 0)
-    {
-        if (state == NORMAL)
-        {
-            /// in normal case, notify each stream to stop by sending it a nullptr
-            for (size_t i = 0; i < max_streams; ++i)
-            {
-                full_packets.push(nullptr);
-            }
-        }
-        else
-        {
-            /// in error case, prevent a stream from being blocked when pop a packet
-            if (full_packets.size() < max_streams)
-            {
-                int num = max_streams - full_packets.size();
-                while (num--)
-                    full_packets.push(nullptr);
-            }
-        }
-    }
     cv.notify_all();
 
     LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, live_conn_copy));
@@ -181,6 +165,9 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 
 ExchangeReceiverResult ExchangeReceiver::nextResult()
 {
+    std::unique_lock<std::mutex> lock(mu);
+    cv.wait(lock, [&] { return !full_packets.isEmpty() || live_connections == 0 || state != NORMAL; });
+
     ExchangeReceiverResult result;
     if (state != NORMAL)
     {
@@ -195,64 +182,50 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
             msg = "Unknown error";
         result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
     }
-    else if (full_packets.size() == 0 && live_connections == 0)
-    {
-        result = {nullptr, 0, "ExchangeReceiver", false, "", true};
-    }
-    else
+    else if (!full_packets.isEmpty())
     {
         std::shared_ptr<ReceivedPacket> packet;
         full_packets.pop(packet);
-        /// the pop() would take some time, so recheck the state again as follows
-        if (state != NORMAL)
+
+        if (packet != nullptr)
         {
-            String msg;
-            if (state == CANCELED)
-                msg = "query canceled";
-            else if (state == CLOSED)
-                msg = "ExchangeReceiver closed";
-            else if (!err_msg.empty())
-                msg = err_msg;
+            if (packet->packet->has_error())
+            {
+                result = {nullptr, 0, "ExchangeReceiver", true, packet->packet->error().msg(), false};
+            }
+            else if (packet->packet != nullptr)
+            {
+                std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
+                if (!resp_ptr->ParseFromString(packet->packet->data()))
+                {
+                    result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
+                }
+                else
+                {
+                    result = {resp_ptr, packet->source_index, packet->req_info};
+                    packet->packet->Clear();
+                    empty_packets.push(std::move(packet));
+                }
+            }
             else
-                msg = "Unknown error";
-            result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
+            {
+                result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
+            }
         }
         else
         {
-            if (packet != nullptr)
-            {
-                if (packet->packet != nullptr)
-                {
-                    std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
-                    if (!resp_ptr->ParseFromString(packet->packet->data()))
-                    {
-                        result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
-                    }
-                    else
-                    {
-                        result = {resp_ptr, packet->source_index, packet->req_info};
-                        packet->packet->Clear();
-                        empty_packets.push(std::move(packet));
-                    }
-                }
-                else if (packet->packet->has_error())
-                {
-                    result = {nullptr, 0, "ExchangeReceiver", true, packet->packet->error().msg(), false};
-                }
-                else
-                {
-                    result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
-                }
-            }
-            else
-            {
-                if (live_connections > 0)
-                    result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
-                else
-                    result = {nullptr, 0, "ExchangeReceiver", false, "", true};
-            }
+            result = {nullptr, 0, "ExchangeReceiver", true, "packet is null", false};
         }
     }
+    else
+    {
+        if (live_connections > 0)
+            result = {nullptr, 0, "ExchangeReceiver", true, "unknown errors", false};
+        else
+            result = {nullptr, 0, "ExchangeReceiver", false, "", true};
+    }
+
+    cv.notify_all();
     return result;
 }
 

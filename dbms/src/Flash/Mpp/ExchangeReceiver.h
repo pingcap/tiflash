@@ -65,7 +65,52 @@ struct ReceivedPacket
     String req_info;
 };
 
-using PacketsPool = ConcurrentBoundedQueue<std::shared_ptr<ReceivedPacket>>;
+template <typename T>
+struct CVBoundedQueue
+{
+    CVBoundedQueue(size_t limit)
+        : capacity(limit)
+    {
+    }
+    bool isEmpty()
+    {
+        return q.size() == 0;
+    }
+    bool isFull()
+    {
+        return q.size() == capacity;
+    }
+    size_t getCapacity()
+    {
+        return capacity;
+    }
+    void push(T & t)
+    {
+        q.push(t);
+    }
+    void push(T && t)
+    {
+        q.push(t);
+    }
+    void pop()
+    {
+        q.pop();
+    }
+    void pop(T & t)
+    {
+        t = q.front();
+        q.pop();
+    }
+    size_t size()
+    {
+        return q.size();
+    }
+
+    std::queue<T> q;
+    size_t capacity;
+};
+
+using PacketsPool = CVBoundedQueue<std::shared_ptr<ReceivedPacket>>;
 
 class ExchangeReceiver
 {
@@ -137,8 +182,7 @@ public:
         /// the full full_packets would block the read thread to exit in abnormal cases.
         while (full_packets.size() > 0)
         {
-            std::shared_ptr<ReceivedPacket> packet;
-            full_packets.pop(packet);
+            full_packets.pop();
         }
 
         for (auto & worker : workers)
