@@ -15,7 +15,6 @@ struct TableInfo;
 
 namespace DB
 {
-
 struct SchemaNameMapper;
 class ASTStorage;
 class Region;
@@ -41,8 +40,14 @@ public:
     };
 
 public:
-    explicit IManageableStorage(Timestamp tombstone_) : IStorage(), tombstone(tombstone_) {}
-    explicit IManageableStorage(const ColumnsDescription & columns_, Timestamp tombstone_) : IStorage(columns_), tombstone(tombstone_) {}
+    explicit IManageableStorage(Timestamp tombstone_)
+        : IStorage()
+        , tombstone(tombstone_)
+    {}
+    explicit IManageableStorage(const ColumnsDescription & columns_, Timestamp tombstone_)
+        : IStorage(columns_)
+        , tombstone(tombstone_)
+    {}
     ~IManageableStorage() override = default;
 
     virtual void flushCache(const Context & /*context*/) {}
@@ -57,7 +62,7 @@ public:
 
     // `limit` is the max number of segments to gc, return value is the number of segments gced
     virtual UInt64 onSyncGc(Int64 /*limit*/) { throw Exception("Unsupported"); }
-    
+
     // Return true is data dir exist
     virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
 
@@ -80,8 +85,13 @@ public:
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     // Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
-    virtual void alterFromTiDB(const TableLockHolder &, const AlterCommands & commands, const String & database_name,
-        const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context)
+    virtual void alterFromTiDB(
+        const TableLockHolder &,
+        const AlterCommands & commands,
+        const String & database_name,
+        const TiDB::TableInfo & table_info,
+        const SchemaNameMapper & name_mapper,
+        const Context & context)
         = 0;
 
     /** Rename the table.
@@ -94,7 +104,10 @@ public:
       * Called when the table structure is locked for write.
       * TODO: For TiFlash, we can rename without any lock on data?
       */
-    virtual void rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name,
+    virtual void rename(
+        const String & new_path_to_db,
+        const String & new_database_name,
+        const String & new_table_name,
         const String & new_display_table_name)
         = 0;
 

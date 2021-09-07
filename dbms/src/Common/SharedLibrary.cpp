@@ -1,16 +1,19 @@
 #include "SharedLibrary.h"
-#include <string>
+
 #include <dlfcn.h>
+
 #include <boost/core/noncopyable.hpp>
+#include <string>
+
 #include "Exception.h"
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int CANNOT_DLOPEN;
-    extern const int CANNOT_DLSYM;
-}
+extern const int CANNOT_DLOPEN;
+extern const int CANNOT_DLSYM;
+} // namespace ErrorCodes
 
 SharedLibrary::SharedLibrary(const std::string & path)
 {
@@ -40,4 +43,4 @@ void * SharedLibrary::getImpl(const std::string & name, bool no_throw)
 
     return res;
 }
-}
+} // namespace DB

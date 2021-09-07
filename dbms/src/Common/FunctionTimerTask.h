@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Poco/Util/TimerTask.h>
+
 #include <functional>
 
 namespace DB
@@ -10,7 +11,9 @@ class FunctionTimerTask : public Poco::Util::TimerTask
 public:
     using Task = std::function<void()>;
 
-    FunctionTimerTask(Task task_) : task(task_) {}
+    FunctionTimerTask(Task task_)
+        : task(task_)
+    {}
 
     void run() override
     {
@@ -25,4 +28,4 @@ public:
 private:
     Task task;
 };
-}
+} // namespace DB

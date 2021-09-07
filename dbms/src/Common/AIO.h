@@ -3,18 +3,19 @@
 #if !(defined(__FreeBSD__) || defined(__APPLE__) || defined(_MSC_VER))
 
 #include <Common/Exception.h>
-#include <common/logger_useful.h>
-#include <ext/singleton.h>
 #include <Poco/Logger.h>
-#include <boost/range/iterator_range.hpp>
-#include <boost/noncopyable.hpp>
-#include <condition_variable>
-#include <future>
-#include <mutex>
-#include <map>
+#include <common/logger_useful.h>
 #include <linux/aio_abi.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+
+#include <boost/noncopyable.hpp>
+#include <boost/range/iterator_range.hpp>
+#include <condition_variable>
+#include <ext/singleton.h>
+#include <future>
+#include <map>
+#include <mutex>
 
 
 /** Small wrappers for asynchronous I/O.
@@ -37,7 +38,7 @@ inline int io_submit(aio_context_t ctx, long nr, struct iocb * iocbpp[])
     return syscall(__NR_io_submit, ctx, nr, iocbpp);
 }
 
-inline int io_getevents(aio_context_t ctx, long min_nr, long max_nr, io_event *events, struct timespec * timeout)
+inline int io_getevents(aio_context_t ctx, long min_nr, long max_nr, io_event * events, struct timespec * timeout)
 {
     return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
 }
@@ -63,12 +64,11 @@ struct AIOContext : private boost::noncopyable
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int AIO_COMPLETION_ERROR;
-    extern const int AIO_SUBMIT_ERROR;
-}
+extern const int AIO_COMPLETION_ERROR;
+extern const int AIO_SUBMIT_ERROR;
+} // namespace ErrorCodes
 
 
 class AIOContextPool : public ext::singleton<AIOContextPool>
@@ -138,7 +138,8 @@ class AIOContextPool : public ext::singleton<AIOContextPool>
         while ((num_events = io_getevents(aio_context.ctx, 1, max_events, events, &timeout)) < 0)
             if (errno != EINTR)
                 throwFromErrno("io_getevents: Failed to wait for asynchronous IO completion",
-                    ErrorCodes::AIO_COMPLETION_ERROR, errno);
+                               ErrorCodes::AIO_COMPLETION_ERROR,
+                               errno);
 
         return num_events;
     }
@@ -203,7 +204,7 @@ public:
         iocb.aio_data = request_id;
 
         auto num_requests = 0;
-        struct iocb * requests[] { &iocb };
+        struct iocb * requests[]{&iocb};
 
         /// submit a request
         while ((num_requests = io_submit(aio_context.ctx, 1, requests)) < 0)
@@ -213,7 +214,8 @@ public:
                 have_resources.wait(lock);
             else if (errno != EINTR)
                 throwFromErrno("io_submit: Failed to submit a request for asynchronous IO",
-                    ErrorCodes::AIO_SUBMIT_ERROR, errno);
+                               ErrorCodes::AIO_SUBMIT_ERROR,
+                               errno);
         }
 
         return promises[request_id].get_future();
@@ -221,6 +223,6 @@ public:
 };
 
 
-}
+} // namespace DB
 
 #endif

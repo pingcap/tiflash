@@ -1,8 +1,9 @@
 #pragma once
 
-#include <time.h>
-#include <atomic>
 #include <common/types.h>
+#include <time.h>
+
+#include <atomic>
 
 #ifdef __APPLE__
 #include <common/apple_rt.h>
@@ -11,13 +12,13 @@
 
 namespace StopWatchDetail
 {
-    inline UInt64 nanoseconds(clockid_t clock_type)
-    {
-        struct timespec ts;
-        clock_gettime(clock_type, &ts);
-        return ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-    }
+inline UInt64 nanoseconds(clockid_t clock_type)
+{
+    struct timespec ts;
+    clock_gettime(clock_type, &ts);
+    return ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 }
+} // namespace StopWatchDetail
 
 
 /** Differs from Poco::Stopwatch only by using 'clock_gettime' instead of 'gettimeofday',
@@ -29,15 +30,32 @@ public:
     /** CLOCK_MONOTONIC works relatively efficient (~15 million calls/sec) and doesn't lead to syscall.
       * Pass CLOCK_MONOTONIC_COARSE, if you need better performance with acceptable cost of several milliseconds of inaccuracy.
       */
-    Stopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC) : clock_type(clock_type_) { start(); }
+    Stopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC)
+        : clock_type(clock_type_)
+    {
+        start();
+    }
 
-    void start()                        { start_ns = nanoseconds(); is_running = true; }
-    void stop()                         { stop_ns = nanoseconds(); is_running = false; }
-    void reset()                        { start_ns = 0; stop_ns = 0; is_running = false; }
-    void restart()                      { start(); }
-    UInt64 elapsed() const              { return is_running ? nanoseconds() - start_ns : stop_ns - start_ns; }
-    UInt64 elapsedMilliseconds() const  { return elapsed() / 1000000UL; }
-    double elapsedSeconds() const       { return static_cast<double>(elapsed()) / 1000000000ULL; }
+    void start()
+    {
+        start_ns = nanoseconds();
+        is_running = true;
+    }
+    void stop()
+    {
+        stop_ns = nanoseconds();
+        is_running = false;
+    }
+    void reset()
+    {
+        start_ns = 0;
+        stop_ns = 0;
+        is_running = false;
+    }
+    void restart() { start(); }
+    UInt64 elapsed() const { return is_running ? nanoseconds() - start_ns : stop_ns - start_ns; }
+    UInt64 elapsedMilliseconds() const { return elapsed() / 1000000UL; }
+    double elapsedSeconds() const { return static_cast<double>(elapsed()) / 1000000000ULL; }
 
 private:
     UInt64 start_ns = 0;
@@ -52,12 +70,16 @@ private:
 class AtomicStopwatch
 {
 public:
-    AtomicStopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC) : clock_type(clock_type_) { restart(); }
+    AtomicStopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC)
+        : clock_type(clock_type_)
+    {
+        restart();
+    }
 
-    void restart()                      { start_ns = nanoseconds(); }
-    UInt64 elapsed() const              { return nanoseconds() - start_ns; }
-    UInt64 elapsedMilliseconds() const  { return elapsed() / 1000000UL; }
-    double elapsedSeconds() const       { return static_cast<double>(elapsed()) / 1000000000ULL; }
+    void restart() { start_ns = nanoseconds(); }
+    UInt64 elapsed() const { return nanoseconds() - start_ns; }
+    UInt64 elapsedMilliseconds() const { return elapsed() / 1000000UL; }
+    double elapsedSeconds() const { return static_cast<double>(elapsed()) / 1000000000ULL; }
 
     /** If specified amount of time has passed, then restarts timer and returns true.
       * Otherwise returns false.
@@ -87,7 +109,9 @@ public:
 
         operator bool() const { return parent != nullptr; }
 
-        Lock(AtomicStopwatch * parent) : parent(parent) {}
+        Lock(AtomicStopwatch * parent)
+            : parent(parent)
+        {}
 
         Lock(Lock &&) = default;
 
@@ -128,7 +152,7 @@ public:
 
 private:
     std::atomic<UInt64> start_ns;
-    std::atomic<bool> lock {false};
+    std::atomic<bool> lock{false};
     clockid_t clock_type;
 
     /// Most significant bit is a lock. When it is set, compareAndRestartDeferred method will return false.

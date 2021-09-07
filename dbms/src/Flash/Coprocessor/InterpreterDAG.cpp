@@ -21,12 +21,12 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
+InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const std::shared_ptr<LogWithPrefix> & log_)
     : context(context_)
     , dag(dag_)
     , keep_session_timezone_info(
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
-    , log(&Poco::Logger::get("InterpreterDAG"))
+    , log(log_)
 {
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())
@@ -47,7 +47,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
         input_streams_vec.push_back(child_streams);
     }
-    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
+    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag, subqueriesForSets, mpp_exchange_receiver_maps, log);
     return query_block_interpreter.execute();
 }
 
@@ -83,7 +83,7 @@ BlockIO InterpreterDAG::execute()
     DAGPipeline pipeline;
     pipeline.streams = streams;
 
-    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
+    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
     if (!subqueriesForSets.empty())
     {
         const Settings & settings = context.getSettingsRef();

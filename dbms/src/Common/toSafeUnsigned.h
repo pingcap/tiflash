@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 // toSafeUnsigned evaluates absolute value of argument `value` and cast it to unsigned type of `To`.
 // it guarantees that no undefined behavior will occur and exact result can be represented by unsigned `To`.
 template <typename To, typename From>

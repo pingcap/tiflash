@@ -17,6 +17,8 @@
 
 #endif
 
+#define USE_PROXY_ENV_INFO
+
 namespace DB
 {
 using diagnosticspb::LogLevel;
@@ -966,8 +968,7 @@ try
 {
     (void)context;
 
-#if true
-    //defined(__APPLE__)
+#if defined(USE_PROXY_ENV_INFO)
     const TiFlashRaftProxyHelper * helper = server.context().getTMTContext().getKVStore()->getProxyHelper();
     if (helper)
     {
@@ -1087,9 +1088,9 @@ catch (const std::exception & e)
         patterns.push_back(pattern);
     }
 
-    auto in_ptr = std::make_shared<std::ifstream>(log_file.path());
+    auto in_ptr = std::make_unique<std::ifstream>(log_file.path());
 
-    LogIterator log_itr(start_time, end_time, levels, patterns, in_ptr);
+    LogIterator log_itr(start_time, end_time, levels, patterns, std::move(in_ptr));
 
     static constexpr size_t LOG_BATCH_SIZE = 256;
 
@@ -1098,14 +1099,13 @@ catch (const std::exception & e)
     {
         size_t i = 0;
         auto resp = SearchLogResponse::default_instance();
-        while (auto log_msg = log_itr.next())
+        for (; i < LOG_BATCH_SIZE;)
         {
-            i++;
-            auto added_msg = resp.add_messages();
-            *added_msg = *log_msg;
-
-            if (i == LOG_BATCH_SIZE - 1)
+            ::diagnosticspb::LogMessage tmp_msg;
+            if (!log_itr.next(tmp_msg))
                 break;
+            i++;
+            resp.mutable_messages()->Add(std::move(tmp_msg));
         }
 
         if (i == 0)

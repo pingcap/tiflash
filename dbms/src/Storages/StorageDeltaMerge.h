@@ -12,7 +12,7 @@
 namespace Poco
 {
 class Logger;
-}
+} // namespace Poco
 
 namespace DB
 {
@@ -37,12 +37,13 @@ public:
 
     void drop() override;
 
-    BlockInputStreams read(const Names & column_names,
-                           const SelectQueryInfo & query_info,
-                           const Context & context,
-                           QueryProcessingStage::Enum & processed_stage,
-                           size_t max_block_size,
-                           unsigned num_streams) override;
+    BlockInputStreams read(
+        const Names & column_names,
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        QueryProcessingStage::Enum & processed_stage,
+        size_t max_block_size,
+        unsigned num_streams) override;
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
@@ -65,30 +66,33 @@ public:
 
     UInt64 onSyncGc(Int64) override;
 
-    void rename(const String & new_path_to_db,
-                const String & new_database_name,
-                const String & new_table_name,
-                const String & new_display_table_name) override;
+    void rename(
+        const String & new_path_to_db,
+        const String & new_database_name,
+        const String & new_table_name,
+        const String & new_display_table_name) override;
 
     void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 
-    void alter(const TableLockHolder &,
-               const AlterCommands & commands,
-               const String & database_name,
-               const String & table_name,
-               const Context & context) override;
-
-    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
+    void alter(
+        const TableLockHolder &,
+        const AlterCommands & commands,
+        const String & database_name,
+        const String & table_name,
+        const Context & context) override;
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    void alterFromTiDB(const TableLockHolder &, //
-                       const AlterCommands & commands, //
-                       const String & database_name, //
-                       const TiDB::TableInfo & table_info, //
-                       const SchemaNameMapper & name_mapper, //
-                       const Context & context) override;
+    void alterFromTiDB(
+        const TableLockHolder &,
+        const AlterCommands & commands,
+        const String & database_name,
+        const TiDB::TableInfo & table_info,
+        const SchemaNameMapper & name_mapper,
+        const Context & context) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
+
+    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
 
     const TiDB::TableInfo & getTableInfo() const override { return tidb_table_info; }
 
@@ -122,7 +126,7 @@ public:
 protected:
 #endif
 
-    StorageDeltaMerge( //
+    StorageDeltaMerge(
         const String & db_engine,
         const String & db_name_,
         const String & name_,
@@ -138,11 +142,12 @@ protected:
 private:
 #endif
 
-    void alterImpl(const AlterCommands & commands,
-                   const String & database_name,
-                   const String & table_name,
-                   const DB::DM::OptionTableInfoConstRef table_info_,
-                   const Context & context);
+    void alterImpl(
+        const AlterCommands & commands,
+        const String & database_name,
+        const String & table_name,
+        const DB::DM::OptionTableInfoConstRef table_info_,
+        const Context & context);
 
     DataTypePtr getPKTypeImpl() const override;
 
@@ -163,6 +168,7 @@ private:
             , table_name(table)
             , pk_expr_ast(pk)
         {}
+
         String db_name;
         String table_name;
         ASTPtr pk_expr_ast;
@@ -194,6 +200,7 @@ private:
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 
     Context & global_context;
+
     Poco::Logger * log;
 };
 

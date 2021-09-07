@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 class Context;
 
 class KVStore;
@@ -94,6 +93,8 @@ public:
 
     UInt64 replicaReadMaxThread() const;
     UInt64 batchReadIndexTimeout() const;
+    // timeout for wait index (ms). "0" means wait infinitely
+    UInt64 waitIndexTimeout() const;
     Int64 waitRegionReadyTimeout() const;
 
 private:
@@ -120,6 +121,7 @@ private:
 
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
+    std::atomic_uint64_t wait_index_timeout_ms;
     std::atomic_int64_t wait_region_ready_timeout_sec;
 };
 

@@ -5,14 +5,38 @@
 
 namespace TiFlashBuildInfo
 {
-std::string getName() { return TIFLASH_NAME; }
-std::string getVersion() { return TIFLASH_VERSION; }
-std::string getReleaseVersion() { return TIFLASH_RELEASE_VERSION; }
-std::string getEdition() { return TIFLASH_EDITION; }
-std::string getGitHash() { return TIFLASH_GIT_HASH; }
-std::string getGitBranch() { return TIFLASH_GIT_BRANCH; }
-std::string getUTCBuildTime() { return TIFLASH_UTC_BUILD_TIME; }
-std::string getProfile() { return TIFLASH_PROFILE; }
+std::string getName()
+{
+    return TIFLASH_NAME;
+}
+std::string getVersion()
+{
+    return TIFLASH_VERSION;
+}
+std::string getReleaseVersion()
+{
+    return TIFLASH_RELEASE_VERSION;
+}
+std::string getEdition()
+{
+    return TIFLASH_EDITION;
+}
+std::string getGitHash()
+{
+    return TIFLASH_GIT_HASH;
+}
+std::string getGitBranch()
+{
+    return TIFLASH_GIT_BRANCH;
+}
+std::string getUTCBuildTime()
+{
+    return TIFLASH_UTC_BUILD_TIME;
+}
+std::string getProfile()
+{
+    return TIFLASH_PROFILE;
+}
 
 void outputDetail(std::ostream & os)
 {

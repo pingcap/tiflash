@@ -1,29 +1,34 @@
 #include <Common/Decimal.h>
 #include <Core/Field.h>
 
-namespace DB {
-
-template<typename T>
+namespace DB
+{
+template <typename T>
 String Decimal<T>::toString(ScaleType scale) const
 {
     PrecType precision = maxDecimalPrecision<Decimal<T>>();
     char str[decimal_max_prec + 5];
     size_t len = precision;
-    if (value < 0) { // extra space for sign
-        len ++;
+    if (value < 0)
+    { // extra space for sign
+        len++;
     }
-    if (scale > 0) { // for factional point
-        len ++;
+    if (scale > 0)
+    { // for factional point
+        len++;
     }
-    if (scale == precision) { // for leading zero
-        len ++;
+    if (scale == precision)
+    { // for leading zero
+        len++;
     }
     size_t end_point = len;
     Int256 cur_v = value;
-    if (value < 0) {
+    if (value < 0)
+    {
         cur_v = -cur_v;
     }
-    if (scale > 0) {
+    if (scale > 0)
+    {
         for (size_t i = 0; i < scale; i++)
         {
             int d = static_cast<int>(cur_v % 10);
@@ -32,12 +37,14 @@ String Decimal<T>::toString(ScaleType scale) const
         }
         str[--len] = '.';
     }
-    do {
+    do
+    {
         int d = static_cast<int>(cur_v % 10);
         cur_v = cur_v / 10;
         str[--len] = d + '0';
-    } while(cur_v > 0);
-    if (value < 0) {
+    } while (cur_v > 0);
+    if (value < 0)
+    {
         str[--len] = '-';
     }
     return std::string(str + len, end_point - len);
@@ -137,4 +144,4 @@ template struct Decimal<Int128>;
 template struct Decimal<Int256>;
 
 // end namespace
-}
+} // namespace DB
