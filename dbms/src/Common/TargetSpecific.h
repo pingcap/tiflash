@@ -65,33 +65,33 @@
 
 namespace DB::TargetSpecific
 {
-#define TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ...)              \
-    TPARMS                                                                       \
-    struct _TiflashGenericTarget_##NAME                                          \
-    {                                                                            \
-        using ReturnType = RETURN;                                               \
-        static constexpr size_t WORD_SIZE = 16;                                  \
-        using SimdWord = ::DB::TargetSpecific::Detail::Generic::Word<WORD_SIZE>; \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                        \
-        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__           \
+#define TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ...)                           \
+    TPARMS                                                                                    \
+    struct _TiflashGenericTarget_##NAME                                                       \
+    {                                                                                         \
+        using ReturnType = RETURN;                                                            \
+        static constexpr size_t WORD_SIZE = ::DB::TargetSpecific::Detail::Generic::WORD_SIZE; \
+        using SimdWord = ::DB::TargetSpecific::Detail::Generic::Word<WORD_SIZE>;              \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                                     \
+        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__                        \
     };
 #define TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE) _TiflashGenericTarget_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ...) \
     __attribute__((noinline)) RETURN TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE)::invoke __VA_ARGS__
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)     \
-    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                          \
-    TPARMS                                                                   \
-    struct _TiflashAVXTarget_##NAME                                          \
-    {                                                                        \
-        using ReturnType = RETURN;                                           \
-        using Checker = ::DB::TargetSpecific::AVXChecker;                    \
-        static constexpr size_t WORD_SIZE = 32;                              \
-        using SimdWord = ::DB::TargetSpecific::Detail::AVX::Word<WORD_SIZE>; \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                    \
-        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__       \
-    };                                                                       \
+#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)                  \
+    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                                       \
+    TPARMS                                                                                \
+    struct _TiflashAVXTarget_##NAME                                                       \
+    {                                                                                     \
+        using ReturnType = RETURN;                                                        \
+        using Checker = ::DB::TargetSpecific::AVXChecker;                                 \
+        static constexpr size_t WORD_SIZE = ::DB::TargetSpecific::Detail::AVX::WORD_SIZE; \
+        using SimdWord = ::DB::TargetSpecific::Detail::AVX::Word<WORD_SIZE>;              \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                                 \
+        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__                    \
+    };                                                                                    \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 
 #define TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE) _TiflashAVXTarget_##NAME
@@ -114,18 +114,19 @@ struct AVXChecker
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)     \
-    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                                          \
-    TPARMS                                                                      \
-    struct _TiflashAVX512Target_##NAME                                          \
-    {                                                                           \
-        using ReturnType = RETURN;                                              \
-        using Checker = ::DB::TargetSpecific::AVX512Checker;                    \
-        static constexpr size_t WORD_SIZE = 64;                                 \
-        using SimdWord = ::DB::TargetSpecific::Detail::AVX512::Word<WORD_SIZE>; \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                       \
-        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__          \
-    };                                                                          \
+#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)                  \
+    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                                                       \
+    TPARMS                                                                                   \
+    struct _TiflashAVX512Target_##NAME                                                       \
+    {                                                                                        \
+        using ReturnType = RETURN;                                                           \
+        using Checker = ::DB::TargetSpecific::AVX512Checker;                                 \
+        static constexpr size_t WORD_SIZE = ::DB::TargetSpecific::Detail::AVX512::WORD_SIZE; \
+        ;                                                                                    \
+        using SimdWord = ::DB::TargetSpecific::Detail::AVX512::Word<WORD_SIZE>;              \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                                    \
+        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__                       \
+    };                                                                                       \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE) _TiflashAVX512Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(RETURN, NAME, ...)                           \
@@ -152,18 +153,18 @@ struct AVX512Checker
 #endif
 
 #ifdef __x86_64__
-#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)     \
-    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                                          \
-    TPARMS                                                                    \
-    struct _TiflashSSE4Target_##NAME                                          \
-    {                                                                         \
-        using ReturnType = RETURN;                                            \
-        using Checker = ::DB::TargetSpecific::SSE4Checker;                    \
-        static constexpr size_t WORD_SIZE = 16;                               \
-        using SimdWord = ::DB::TargetSpecific::Detail::SSE4::Word<WORD_SIZE>; \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                     \
-        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__        \
-    };                                                                        \
+#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)                  \
+    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                                                       \
+    TPARMS                                                                                 \
+    struct _TiflashSSE4Target_##NAME                                                       \
+    {                                                                                      \
+        using ReturnType = RETURN;                                                         \
+        using Checker = ::DB::TargetSpecific::SSE4Checker;                                 \
+        static constexpr size_t WORD_SIZE = ::DB::TargetSpecific::Detail::SSE4::WORD_SIZE; \
+        using SimdWord = ::DB::TargetSpecific::Detail::SSE4::Word<WORD_SIZE>;              \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                                  \
+        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__                     \
+    };                                                                                     \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE) _TiflashSSE4Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(RETURN, NAME, ...)                           \
@@ -238,7 +239,7 @@ struct Dispatch<Last>
 #define TIFLASH_MULTITARGET_DISPATCH_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)          \
     TPARMS RETURN NAME ARG_LIST                                                                    \
     {                                                                                              \
-        return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN) <TARGS>, \
+        return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN) < TARGS>, \
                TIFLASH_AVX_DISPATCH_UNIT(NAME, RETURN)<TARGS>,                                     \
                TIFLASH_SSE4_DISPATCH_UNIT(NAME, RETURN)<TARGS>,                                    \
                TIFLASH_GENERIC_DISPATCH_UNIT(NAME, RETURN)<TARGS> > ::invoke ARG_NAMES;            \
@@ -307,13 +308,52 @@ namespace Detail
 template <size_t LENGTH>
 struct SimdImpl;
 
-#ifdef __x86_64__
-template <>
-struct SimdImpl<64>
+namespace Generic
 {
-    using InternalType = __m512i;
-    using AddressType = __m512i *;
-    using ConstAddressType = __m512i const *;
+#ifdef __x86_64__
+using InternalType = __m128i;
+using AddressType = InternalType *;
+using ConstAddressType = InternalType const *;
+#else
+using InternalType = uint8x16_t;
+using AddressType = uint8_t *;
+using ConstAddressType = uint8_t const *;
+#endif
+static inline constexpr size_t WORD_SIZE = sizeof(InternalType);
+} // namespace Generic
+
+#ifdef __x86_64__
+
+namespace AVX
+{
+using InternalType = __m256i;
+using AddressType = InternalType *;
+using ConstAddressType = InternalType const *;
+static inline constexpr size_t WORD_SIZE = sizeof(InternalType);
+} // namespace AVX
+
+namespace AVX512
+{
+using InternalType = __m512i;
+using AddressType = InternalType *;
+using ConstAddressType = InternalType const *;
+static inline constexpr size_t WORD_SIZE = sizeof(InternalType);
+} // namespace AVX512
+
+namespace SSE4
+{
+using InternalType = Generic::InternalType;
+using AddressType = InternalType *;
+using ConstAddressType = InternalType const *;
+static inline constexpr size_t WORD_SIZE = sizeof(InternalType);
+} // namespace SSE4
+
+template <>
+struct SimdImpl<AVX512::WORD_SIZE>
+{
+    using InternalType = AVX512::InternalType;
+    using AddressType = AVX512::AddressType;
+    using ConstAddressType = AVX512::ConstAddressType;
 
     __attribute__((always_inline, target("avx512bw"))) static bool isByteAllMarked(InternalType val)
     {
@@ -342,11 +382,11 @@ struct SimdImpl<64>
 };
 
 template <>
-struct SimdImpl<32>
+struct SimdImpl<AVX::WORD_SIZE>
 {
-    using InternalType = __m256i;
-    using AddressType = __m256i *;
-    using ConstAddressType = __m256i const *;
+    using InternalType = AVX::InternalType;
+    using AddressType = AVX::AddressType;
+    using ConstAddressType = AVX::ConstAddressType;
 
     __attribute__((always_inline, target("avx2"))) static bool isByteAllMarked(InternalType val)
     {
@@ -376,17 +416,12 @@ struct SimdImpl<32>
 #endif
 
 template <>
-struct SimdImpl<16>
+struct SimdImpl<Generic::WORD_SIZE>
 {
-#ifdef __x86_64__
-    using InternalType = __m128i;
-    using AddressType = __m128i *;
-    using ConstAddressType = __m128i const *;
-#else
-    using InternalType = uint8x16_t;
-    using AddressType = uint8_t *;
-    using ConstAddressType = uint8_t const *;
-#endif
+    using InternalType = Generic::InternalType;
+    using AddressType = Generic::AddressType;
+    using ConstAddressType = Generic::ConstAddressType;
+
     __attribute__((always_inline)) static bool isByteAllMarked(InternalType val)
     {
 #ifdef __x86_64__
