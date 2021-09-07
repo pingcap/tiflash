@@ -209,7 +209,7 @@ bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
     size_t offset = 0;
     size_t limit = rows;
 
-    // Only filter out irrelevant rows if relevant_place is true. Otherwise, range should always be true.
+    // Only filter out irrelevant rows if relevant_place is true. Otherwise, range should always be ALL.
     if (relevant_place)
     {
         std::tie(offset, limit) = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
