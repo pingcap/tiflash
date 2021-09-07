@@ -28,6 +28,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -379,7 +380,7 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
     }
 }
 
-void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
+void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, int id)
 {
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
@@ -519,7 +520,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         is_tiflash_right_join,
         swap_join_side ? join.right_conditions() : join.left_conditions(),
         left_filter_column_name);
-
     prepareJoin(
         swap_join_side ? join.left_join_keys() : join.right_join_keys(),
         join_key_types,
@@ -550,6 +550,48 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
+    LOG_DEBUG(
+        log,
+        fmt::format(
+            "Join ctor #{}: "
+            "key_names_left = [{}], "
+            "key_names_right = [{}], "
+            "[max_rows, max_bytes, overflow_mode] = ({}, {}, {}), "
+            "kind = {}, "
+            "strictness = {}, "
+            "build_concurrency = {}, "
+            "collators = {}, "
+            "left_filter_column = {}, "
+            "right_filter_column = {}, "
+            "other_filter_column = {}, "
+            "other_eq_filter_from_in_column = {}, "
+            "other_condition_ptr = {}, "
+            "max_block_size = {}, "
+            "tipb_join_type = {}, "
+            "num_left_columns = {}, "
+            "num_right_columns = {}, "
+            "{}",
+            id,
+            fmt::join(left_key_names, ", "),
+            fmt::join(right_key_names, ", "),
+            settings.max_rows_in_join,
+            settings.max_bytes_in_join,
+            static_cast<int>(settings.join_overflow_mode.value),
+            kind,
+            strictness,
+            join_build_concurrency,
+            collators.empty() || collators[0].get() != nullptr,
+            left_filter_column_name,
+            right_filter_column_name,
+            other_filter_column_name,
+            other_eq_filter_from_in_column_name,
+            other_condition_expr.get() != nullptr,
+            max_block_size_for_cross_join,
+            join.join_type(),
+            left_pipeline.firstStream()->getHeader().columns(),
+            right_pipeline.firstStream()->getHeader().columns(),
+            join.ShortDebugString()));
+
     JoinPtr joinPtr = std::make_shared<Join>(
         left_key_names,
         right_key_names,
@@ -564,7 +606,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         other_filter_column_name,
         other_eq_filter_from_in_column_name,
         other_condition_expr,
-        max_block_size_for_cross_join);
+        max_block_size_for_cross_join,
+        id);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
@@ -968,7 +1011,17 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     SubqueryForSet right_query;
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
-        executeJoin(query_block.source->join(), pipeline, right_query);
+        static std::atomic<int> id_count;
+        int id = id_count.fetch_add(1);
+        LOG_DEBUG(
+            log,
+            fmt::format(
+                "Join ctor #{}: '{}' '{}'",
+                id,
+                query_block.source_name,
+                query_block.source->executor_id()));
+
+        executeJoin(query_block.source->join(), pipeline, right_query, id);
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)

@@ -2,6 +2,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Join.h>
 #include <Poco/Glob.h>
+#include <Poco/JSON/Parser.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <chrono>
@@ -19,13 +20,32 @@ public:
     using BlockStream = std::vector<Block>;
     using BlockStreams = std::vector<BlockStream>;
     using Workers = std::vector<std::thread>;
-    using ResultMap = std::unordered_map<Int64, size_t>;
+    using JSONObjectPtr = Poco::JSON::Object::Ptr;
+    using JSONArrayPtr = Poco::JSON::Array::Ptr;
+    using JoinPtr = std::shared_ptr<Join>;
 
-    struct Result
+    static size_t getNumRows(const BlockStreams & streams)
     {
         size_t count = 0;
-        ResultMap map;
-    };
+        for (const auto & stream : streams)
+        {
+            for (const auto & block : stream)
+                count += block.rows();
+        }
+
+        return count;
+    }
+
+    static Block getSampleBlock(const BlockStreams & streams)
+    {
+        for (const auto & stream : streams)
+        {
+            if (!stream.empty())
+                return stream.front().cloneEmpty();
+        }
+
+        throw TiFlashTestException("Can't provide sample block because all block streams are empty");
+    }
 
     class Reader
     {
@@ -59,16 +79,20 @@ public:
         TestDataSet(String folder_)
             : folder(folder_)
         {
+            config = readConfig(fmt::format("{}/config.json", folder));
+
+            auto build_file_prefix = config->getValue<String>("build_file_prefix");
+            auto probe_file_prefix = config->getValue<String>("probe_file_prefix");
+
             std::set<String> build_files, probe_files;
-            Poco::Glob::glob(fmt::format("{}/build-*.data", folder), build_files);
-            Poco::Glob::glob(fmt::format("{}/probe-*.data", folder), probe_files);
+            Poco::Glob::glob(fmt::format("{}/{}-*.data", folder, build_file_prefix), build_files);
+            Poco::Glob::glob(fmt::format("{}/{}-*.data", folder, probe_file_prefix), probe_files);
 
             num_build_threads = build_files.size();
             num_probe_threads = probe_files.size();
 
             build_streams = readBlockStreams(build_files);
             probe_streams = readBlockStreams(probe_files);
-            answer = readResult(fmt::format("{}/result.csv", folder));
         }
 
         size_t getNumBuildThreads() const
@@ -83,13 +107,12 @@ public:
 
         Block getBuildSampleBlock() const
         {
-            for (const auto & stream : build_streams)
-            {
-                if (!stream.empty())
-                    return stream.front().cloneEmpty();
-            }
+            return getSampleBlock(build_streams);
+        }
 
-            throw TiFlashTestException("Can't provide sample block because test data set is empty");
+        Block getProbeSampleBlock() const
+        {
+            return getSampleBlock(probe_streams);
         }
 
         const BlockStream & getBuildStream(size_t i) const
@@ -113,13 +136,53 @@ public:
             return probe_streams;
         }
 
-        const Result & getAnswer() const
+        size_t getNumBuildRows() const
         {
-            return answer;
+            return getNumRows(build_streams);
+        }
+
+        size_t getNumProbeRows() const
+        {
+            return getNumRows(probe_streams);
+        }
+
+        size_t getNumResultRows() const
+        {
+            return config->getValue<size_t>("num_result_rows");
+        }
+
+        size_t getNumRepeat() const
+        {
+            return config->getValue<size_t>("num_repeat");
+        }
+
+        JoinPtr createJoin() const
+        {
+            auto limits = config->getObject("limits");
+
+            // TODO: support for other & other_eq filters.
+            return std::make_shared<Join>(
+                toStrings(config->getArray("left_keys")),
+                toStrings(config->getArray("right_keys")),
+                true,
+                SizeLimits(
+                    limits->getValue<UInt64>("max_rows"),
+                    limits->getValue<UInt64>("max_bytes"),
+                    static_cast<OverflowMode>(limits->getValue<Int64>("overflow_mode"))),
+                static_cast<ASTTableJoin::Kind>(config->getValue<Int64>("kind")),
+                static_cast<ASTTableJoin::Strictness>(config->getValue<Int64>("strictness")),
+                config->getValue<size_t>("join_build_concurrency"),
+                TiDB::TiDBCollators{nullptr},
+                config->getValue<String>("left_filter_column"),
+                config->getValue<String>("right_filter_column"),
+                config->getValue<String>("other_filter_column"),
+                config->getValue<String>("other_eq_filter_column"),
+                nullptr,
+                config->getValue<size_t>("max_block_size"));
         }
 
     private:
-        BlockStream readBlockStream(const String & path)
+        BlockStream readBlockStream(const String & path) const
         {
             Reader reader(path);
 
@@ -137,7 +200,7 @@ public:
             return stream;
         }
 
-        BlockStreams readBlockStreams(const std::set<String> & paths)
+        BlockStreams readBlockStreams(const std::set<String> & paths) const
         {
             BlockStreams streams;
             streams.resize(paths.size());
@@ -152,50 +215,62 @@ public:
             return streams;
         }
 
-        Result readResult(const String & path)
+        JSONObjectPtr readConfig(const String & path) const
         {
-            Result result;
-            result.count = 0;
-
             std::ifstream file(path);
-            if (file.fail())
-                throw TiFlashTestException(fmt::format("Failed to read file '{}'", path));
+            Poco::JSON::Parser parser;
+            auto config = parser.parse(file).extract<JSONObjectPtr>();
+            if (!config)
+                throw TiFlashTestException(fmt::format("Failed to load config file: {}", path));
 
-            Int64 key;
-            size_t count;
-            while (file >> key >> count)
+            return config;
+        }
+
+        Strings toStrings(const JSONArrayPtr & array) const
+        {
+            Strings vec;
+            vec.reserve(array->size());
+            for (auto it = array->begin(); it != array->end(); ++it)
             {
-                result.count += count;
-                result.map[key] += count;
+                vec.emplace_back(it->toString());
             }
 
-            return result;
+            return vec;
         }
 
         String folder;
         size_t num_build_threads, num_probe_threads;
         BlockStreams build_streams, probe_streams;
-        Result answer;
+        JSONObjectPtr config;
     };
 };
 
-TEST_P(JoinBenchmark, InnerJoin1)
+TEST_P(JoinBenchmark, Run)
 {
-    // select l_partkey + c_nationkey as result, count(*) from lineitem, customer where l_partkey = c_nationkey group by result order by result
-
-    constexpr size_t n_repeat = 30;
-    constexpr bool no_check = false;
-    constexpr bool only_check_total_rows = true;
-
     // test data are outside tics repo.
     String data_folder = GetParam();
     TestDataSet dataset(data_folder);
 
+    size_t num_repeat = dataset.getNumRepeat();
     size_t num_build_threads = dataset.getNumBuildThreads();
     size_t num_probe_threads = dataset.getNumProbeThreads();
-    LOG_DEBUG(logger, fmt::format("num_build_threads = {}, num_probe_threads = {}", num_build_threads, num_probe_threads));
+    LOG_DEBUG(
+        logger,
+        fmt::format(
+            "{}: "
+            "num_repeat = {}, "
+            "build = [threads = {}, rows = {}, columns = {}], "
+            "probe = [threads = {}, rows = {}, columns = {}]",
+            data_folder,
+            num_repeat,
+            num_build_threads,
+            dataset.getNumBuildRows(),
+            dataset.getBuildSampleBlock().columns(),
+            num_probe_threads,
+            dataset.getNumProbeRows(),
+            dataset.getProbeSampleBlock().columns()));
 
-    for (size_t round = 0; round < n_repeat; ++round)
+    for (size_t round = 0; round < num_repeat; ++round)
     {
         // join.joinBlock is done in-place, so we have to clone test data blocks first.
         auto probe_streams = dataset.cloneProbeStreams();
@@ -203,72 +278,8 @@ TEST_P(JoinBenchmark, InnerJoin1)
         using clock = std::chrono::steady_clock;
         auto begin_time = clock::now();
 
-        // * thread #153, name = 'TiFlashMain', stop reason = breakpoint 1.1
-        //     frame #0: 0x000000001763cfd5 tiflash`DB::DAGQueryBlockInterpreter::executeJoin(this=0x00007ff7ec8fb8e8, join=0x00007ff866a67600, pipeline=0x00007ff7ec8fb840, right_query=0x00007ff7ec8fb690) at DAGQueryBlockInterpreter.cpp:522:23
-        //    519 	    size_t max_block_size_for_cross_join = settings.max_block_size;
-        //    520 	    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
-        //    521
-        // -> 522 	    JoinPtr joinPtr = std::make_shared<Join>(left_key_names,
-        //    523 	        right_key_names,
-        //    524 	        true,
-        //    525 	        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
-        // (lldb) p left_key_names
-        // (DB::Names) $0 = size=1 {
-        //   [0] = "__QB_7_l_partkey"
-        // }
-        // (lldb) p right_key_names
-        // (DB::Names) $1 = size=1 {
-        //   [0] = "_r_k___QB_6_exchange_receiver_0"
-        // }
-        // (lldb) p settings.max_rows_in_join
-        // (const DB::SettingUInt64) $2 = (value = 0, changed = false)
-        // (lldb) p settings.max_bytes_in_join
-        // (const DB::SettingUInt64) $3 = (value = 0, changed = false)
-        // (lldb) p settings.join_overflow_mode
-        // (const DB::SettingOverflowMode<false>) $4 = (value = THROW, changed = false)
-        // (lldb) p kind
-        // (DB::ASTTableJoin::Kind) $5 = Inner
-        // (lldb) p strictness
-        // (DB::ASTTableJoin::Strictness) $6 = All
-        // (lldb) p join_build_concurrency
-        // (size_t) $7 = 4
-        // (lldb) p collators
-        // (TiDB::TiDBCollators) $8 = size=1 {
-        //   [0] = nullptr {
-        //     __ptr_ = nullptr
-        //   }
-        // }
-        // (lldb) p left_filter_column_name
-        // (DB::String) $9 = ""
-        // (lldb) p right_filter_column_name
-        // (DB::String) $10 = ""
-        // (lldb) p other_filter_column_name
-        // (DB::String) $11 = ""
-        // (lldb) p other_eq_filter_from_in_column_name
-        // (DB::String) $12 = ""
-        // (lldb) p other_condition_expr
-        // (DB::ExpressionActionsPtr) $13 = nullptr {
-        //   __ptr_ = nullptr
-        // }
-        // (lldb) p max_block_size_for_cross_join
-        // (size_t) $14 = 65536
-        Join join(
-            {"__QB_7_l_partkey"},
-            {"_r_k___QB_6_exchange_receiver_0"},
-            true,
-            SizeLimits(0, 0, OverflowMode::THROW),
-            ASTTableJoin::Kind::Inner,
-            ASTTableJoin::Strictness::All,
-            4,
-            {nullptr},
-            "",
-            "",
-            "",
-            "",
-            nullptr,
-            65536);
-
-        join.setSampleBlock(dataset.getBuildSampleBlock());
+        auto join = dataset.createJoin();
+        join->setSampleBlock(dataset.getBuildSampleBlock());
 
         Workers build_workers;
         build_workers.reserve(num_build_threads);
@@ -277,14 +288,14 @@ TEST_P(JoinBenchmark, InnerJoin1)
         {
             build_workers.emplace_back([&, i] {
                 for (const auto & block : dataset.getBuildStream(i))
-                    join.insertFromBlock(block, i);
+                    join->insertFromBlock(block, i);
             });
         }
 
         for (size_t i = 0; i < num_build_threads; ++i)
             build_workers[i].join();
 
-        join.setFinishBuildTable(true);
+        join->setFinishBuildTable(true);
 
         Workers probe_workers;
         probe_workers.reserve(num_probe_threads);
@@ -293,7 +304,7 @@ TEST_P(JoinBenchmark, InnerJoin1)
         {
             probe_workers.emplace_back([&, i] {
                 for (auto & block : probe_streams[i])
-                    join.joinBlock(block);
+                    join->joinBlock(block);
             });
         }
 
@@ -306,49 +317,83 @@ TEST_P(JoinBenchmark, InnerJoin1)
 
         // check result.
 
-        if (!no_check)
+        size_t expected = dataset.getNumResultRows();
+        size_t actual = getNumRows(probe_streams);
+        ASSERT_EQ(expected, actual);
+    }
+}
+
+TEST_P(JoinBenchmark, BuildOnly)
+{
+    String data_folder = GetParam();
+    TestDataSet dataset(data_folder);
+    size_t num_repeat = dataset.getNumRepeat();
+    size_t num_build_threads = dataset.getNumBuildThreads();
+    LOG_DEBUG(
+        logger,
+        fmt::format(
+            "{}: "
+            "num_repeat = {}, "
+            "build = [threads = {}, rows = {}, columns = {}]",
+            data_folder,
+            num_repeat,
+            num_build_threads,
+            dataset.getNumBuildRows(),
+            dataset.getBuildSampleBlock().columns()));
+
+    for (size_t round = 0; round < num_repeat; ++round)
+    {
+        using clock = std::chrono::steady_clock;
+        auto begin_time = clock::now();
+
+        auto join = dataset.createJoin();
+        join->setSampleBlock(dataset.getBuildSampleBlock());
+
+        Workers build_workers;
+        build_workers.reserve(num_build_threads);
+
+        for (size_t i = 0; i < num_build_threads; ++i)
         {
-            size_t count = 0;
-            for (size_t i = 0; i < num_probe_threads; ++i)
-            {
-                for (const Block & block : probe_streams[i])
-                    count += block.rows();
-            }
-
-            ASSERT_EQ(dataset.getAnswer().count, count);
-
-            if constexpr (!only_check_total_rows)
-            {
-                // std::cout << probe_streams[0][10].dumpStructure() << std::endl;
-                String l_partkey_name = "__QB_7_l_partkey";
-                String c_nationkey_name = "__QB_6_exchange_receiver_0";
-
-                std::unordered_map<Int64, size_t> map;
-                for (size_t i = 0; i < num_probe_threads; ++i)
-                {
-                    for (const auto & block : probe_streams[i])
-                    {
-                        auto l_partkey = block.getByName(l_partkey_name).column;
-                        auto c_nationkey = block.getByName(c_nationkey_name).column;
-
-                        for (size_t j = 0; j < block.rows(); ++j)
-                        {
-                            Int64 key = l_partkey->getInt(j) + c_nationkey->getInt(j);
-                            ++map[key];
-                        }
-                    }
-                }
-
-                ASSERT_EQ(dataset.getAnswer().map, map);
-            }
+            build_workers.emplace_back([&, i] {
+                for (const auto & block : dataset.getBuildStream(i))
+                    join->insertFromBlock(block, i);
+            });
         }
+
+        for (size_t i = 0; i < num_build_threads; ++i)
+            build_workers[i].join();
+
+        join->setFinishBuildTable(true);
+
+        auto end_time = clock::now();
+        auto time_used_in_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - begin_time).count();
+        LOG_INFO(
+            logger,
+            fmt::format(
+                "round {}: {}ms, total_bytes = {}, total_rows = {}",
+                round,
+                time_used_in_ms,
+                join->getTotalByteCount(),
+                join->getTotalRowCount()));
+
+        ASSERT_EQ(dataset.getNumBuildRows(), join->getTotalRowCount());
     }
 }
 
 INSTANTIATE_TEST_CASE_P(
-    Generated,
+    Simple,
     JoinBenchmark,
     ::testing::Values("/pingcap/data/small-inner-join-1", "/pingcap/data/large-inner-join-1"));
+
+INSTANTIATE_TEST_CASE_P(
+    SF20_Q9,
+    JoinBenchmark,
+    ::testing::Values(
+        "/pingcap/data/SF20-Q9-HashJoin_50",
+        "/pingcap/data/SF20-Q9-HashJoin_51",
+        "/pingcap/data/SF20-Q9-HashJoin_52",
+        "/pingcap/data/SF20-Q9-HashJoin_53",
+        "/pingcap/data/SF20-Q9-HashJoin_180"));
 
 } // namespace tests
 

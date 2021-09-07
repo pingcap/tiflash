@@ -78,20 +78,24 @@ namespace DB
 class Join
 {
 public:
-    Join(const Names & key_names_left_,
-         const Names & key_names_right_,
-         bool use_nulls_,
-         const SizeLimits & limits,
-         ASTTableJoin::Kind kind_,
-         ASTTableJoin::Strictness strictness_,
-         size_t build_concurrency = 1,
-         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-         const String & left_filter_column = "",
-         const String & right_filter_column = "",
-         const String & other_filter_column = "",
-         const String & other_eq_filter_from_in_column = "",
-         ExpressionActionsPtr other_condition_ptr = nullptr,
-         size_t max_block_size = 0);
+    Join(
+        const Names & key_names_left_,
+        const Names & key_names_right_,
+        bool use_nulls_,
+        const SizeLimits & limits,
+        ASTTableJoin::Kind kind_,
+        ASTTableJoin::Strictness strictness_,
+        size_t build_concurrency = 1,
+        const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
+        const String & left_filter_column = "",
+        const String & right_filter_column = "",
+        const String & other_filter_column = "",
+        const String & other_eq_filter_from_in_column = "",
+        ExpressionActionsPtr other_condition_ptr = nullptr,
+        size_t max_block_size = 0,
+        int id_ = 0);
+
+    int id;
 
     bool empty() { return type == Type::EMPTY; }
 

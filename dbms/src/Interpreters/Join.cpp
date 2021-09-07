@@ -13,9 +13,11 @@
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
 
 #include "executeQuery.h"
 
+// #define ENABLE_TRACKER
 
 namespace DB
 {
@@ -70,7 +72,8 @@ Join::Join(
     const String & other_filter_column_,
     const String & other_eq_filter_from_in_column_,
     ExpressionActionsPtr other_condition_ptr_,
-    size_t max_block_size_)
+    size_t max_block_size_,
+    int id_)
     : kind(kind_)
     , strictness(strictness_)
     , key_names_left(key_names_left_)
@@ -89,6 +92,8 @@ Join::Join(
     , log(&Poco::Logger::get("Join"))
     , limits(limits)
 {
+    id = id_;
+
     build_set_exceeded.store(false);
     for (size_t i = 0; i < build_concurrency; i++)
         pools.emplace_back(std::make_shared<Arena>());
@@ -755,8 +760,10 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
     if (build_set_exceeded.load())
         return;
 
-    // thread_local BlockTracker tracker("build");
-    // tracker.track(block);
+#ifdef ENABLE_TRACKER
+    auto & tracker = BlockTrackerManager::getTracker(fmt::format("{}-build", id));
+    tracker.track(block);
+#endif
 
     if (!insertFromBlockInternal(stored_block, stream_index))
     {
@@ -1644,8 +1651,10 @@ void Join::joinBlock(Block & block) const
         build_table_cv.wait(lk, [&]() { return have_finish_build; });
     }
 
-    // thread_local BlockTracker tracker("probe");
-    // tracker.track(block);
+#ifdef ENABLE_TRACKER
+    auto & tracker = BlockTrackerManager::getTracker(fmt::format("{}-probe", id));
+    tracker.track(block);
+#endif
 
     std::shared_lock lock(rwlock);
 
