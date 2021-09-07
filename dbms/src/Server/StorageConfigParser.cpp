@@ -141,7 +141,7 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
     cpptoml::parser p(ss);
     auto table = p.parse();
 
-    if (auto rate_limit = table->get_qualified_as<UInt64>("bg_task_io_rate_limit"); rate_limit)
+    if (table->contains("bg_task_io_rate_limit"))
     {
         LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
     }
@@ -263,11 +263,6 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
             LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
 
         storage_config.parseStoragePath(config.getString("storage"), log);
-
-        if (config.has("path"))
-            LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
-        if (config.has("capacity"))
-            LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
 
         if (config.has("raft.kvstore_path"))
         {
