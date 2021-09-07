@@ -8,6 +8,7 @@
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <IO/WriteHelpers.h>
 
+#include <boost/algorithm/string.hpp>
 #include <ext/range.h>
 #include <thread>
 
@@ -3022,6 +3023,154 @@ private:
     const Context & context;
 };
 
+class FunctionSubStringIndex : public IFunction
+{
+public:
+    static constexpr auto name = "substring_index";
+    FunctionSubStringIndex(const Context & context)
+        : context(context)
+    {}
+
+    static FunctionPtr create(const Context & context)
+    {
+        return std::make_shared<FunctionSubStringIndex>(context);
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 3; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 3)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                                + ", should be 3.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
+        if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
+        {
+            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+
+        const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
+        const ColumnConst * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
+        const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1_col);
+        const ColumnFixedString * c1_fixed_string = checkAndGetColumn<ColumnFixedString>(c1_col);
+        if (c1_const == nullptr && c1_string == nullptr && c1_fixed_string == nullptr)
+        {
+            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+
+        if (executeSubString<UInt8>(block, arguments, result, c0_col, c1_col)
+            || executeSubString<UInt16>(block, arguments, result, c0_col, c1_col)
+            || executeSubString<UInt32>(block, arguments, result, c0_col, c1_col)
+            || executeSubString<UInt64>(block, arguments, result, c0_col, c1_col)
+            || executeSubString<Int8>(block, arguments, result, c0_col, c1_col)
+            || executeSubString<Int16>(block, arguments, result, c0_col, c1_col)
+            || executeSubString<Int32>(block, arguments, result, c0_col, c1_col)
+            || executeSubString<Int64>(block, arguments, result, c0_col, c1_col))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    const Context & context;
+
+    template <typename IntType>
+    bool executeSubString(Block & block, const ColumnNumbers & arguments, const size_t result, const IColumn * c0_col, const IColumn * c1_col)
+    {
+        const auto int_arg = block.getByPosition(arguments[2]).column.get();
+        const auto c2_col = checkAndGetColumn<ColumnVector<IntType>>(int_arg);
+        const auto c2_const = checkAndGetColumn<ColumnConst>(int_arg);
+        if (c2_col == nullptr && c2_const == nullptr)
+        {
+            return false;
+        }
+
+        Field c0_field, c1_field, c2_field;
+        auto col_res = ColumnString::create();
+        int val_num = c0_col->size();
+        col_res->reserve(val_num);
+
+        for (int i = 0; i < val_num; i++)
+        {
+            c0_col->get(i, c0_field);
+            c1_col->get(i, c1_field);
+            int_arg->get(i, c2_field);
+
+            String str = c0_field.get<String>();
+            String delim = c1_field.get<String>();
+            Int64 count = c2_field.get<Int64>();
+
+            if (delim.empty())
+            {
+                col_res->insert(String(""));
+                continue;
+            }
+            std::vector<String> strs;
+            split(str, strs, delim);
+
+            Int64 start = 0;
+            Int64 end = strs.size();
+            if (count > 0)
+            {
+                if (count < end)
+                {
+                    end = count;
+                }
+            }
+            else
+            {
+                count = -count;
+                if (count < 0)
+                {
+                    col_res->insert(String(""));
+                    continue;
+                }
+                if (count < end)
+                {
+                    start = end - count;
+                }
+            }
+            strs.assign(strs.begin() + start, strs.begin() + end);
+            auto substrs = boost::join(strs, delim);
+            col_res->insert(substrs);
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+        return true;
+    }
+
+    void split(const std::string & str,
+               std::vector<std::string> & tokens,
+               const std::string delim)
+    {
+        tokens.clear();
+
+        std::string::size_type last = 0;
+        std::string::size_type next = 0;
+        while ((next = str.find(delim, last)) != std::string::npos)
+        {
+            tokens.emplace_back(str.substr(last, next - last));
+            last = next + delim.size();
+        }
+        tokens.emplace_back(str.substr(last));
+    }
+};
+
 
 struct NameEmpty
 {
@@ -3144,5 +3293,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionRightUTF8>();
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
+    factory.registerFunction<FunctionSubStringIndex>();
 }
 } // namespace DB
