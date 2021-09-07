@@ -238,7 +238,7 @@ struct Dispatch<Last>
 #define TIFLASH_MULTITARGET_DISPATCH_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)          \
     TPARMS RETURN NAME ARG_LIST                                                                    \
     {                                                                                              \
-        return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN) < TARGS>, \
+        return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN) <TARGS>, \
                TIFLASH_AVX_DISPATCH_UNIT(NAME, RETURN)<TARGS>,                                     \
                TIFLASH_SSE4_DISPATCH_UNIT(NAME, RETURN)<TARGS>,                                    \
                TIFLASH_GENERIC_DISPATCH_UNIT(NAME, RETURN)<TARGS> > ::invoke ARG_NAMES;            \
