@@ -32,8 +32,9 @@ public:
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     void insertDefault() override;
     void popBack(size_t n) override;
-    std::vector<MutableColumnPtr> scatter(IColumn::ColumnIndex num_columns,
-                                          const IColumn::Selector & selector) const override;
+    std::vector<MutableColumnPtr> scatter(
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector) const override;
 
     void getExtremes(Field &, Field &) const override {}
 
@@ -64,14 +65,12 @@ public:
         throw Exception("Cannot get insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertRangeFrom(const IColumn &, size_t, size_t)
-        override
+    void insertRangeFrom(const IColumn &, size_t, size_t) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertData(const char *, size_t)
-        override
+    void insertData(const char *, size_t) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
