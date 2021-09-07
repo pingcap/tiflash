@@ -15,14 +15,13 @@ extern const Metric DT_SnapshotOfDeltaCompact;
 
 namespace DB::DM
 {
-
 struct CompackTask
 {
     CompackTask() {}
 
     DeltaPacks to_compact;
-    size_t     total_rows  = 0;
-    size_t     total_bytes = 0;
+    size_t total_rows = 0;
+    size_t total_bytes = 0;
 
     DeltaPackPtr result;
 
@@ -53,8 +52,8 @@ bool DeltaValueSpace::compact(DMContext & context)
             throw Exception(simpleInfo() + " is expected to be updating", ErrorCodes::LOGICAL_ERROR);
     });
 
-    CompackTasks              tasks;
-    PageStorage::SnapshotPtr  log_storage_snap;
+    CompackTasks tasks;
+    PageStorage::SnapshotPtr log_storage_snap;
     CurrentMetrics::Increment snapshot_metrics{CurrentMetrics::DT_SnapshotOfDeltaCompact, 0};
 
     {
@@ -96,7 +95,7 @@ bool DeltaValueSpace::compact(DMContext & context)
                     throw Exception("Saved DeltaPackBlock does not have data_page_id", ErrorCodes::LOGICAL_ERROR);
 
                 bool cur_task_full = cur_task.total_rows >= context.delta_limit_rows || cur_task.total_bytes >= context.delta_limit_bytes;
-                bool small_pack    = pack->getRows() < context.delta_small_pack_rows && pack->getBytes() < context.delta_small_pack_bytes;
+                bool small_pack = pack->getRows() < context.delta_small_pack_rows && pack->getBytes() < context.delta_small_pack_bytes;
                 bool schema_ok
                     = cur_task.to_compact.empty() || dp_block->getSchema() == cur_task.to_compact.back()->tryToBlock()->getSchema();
 
@@ -130,14 +129,14 @@ bool DeltaValueSpace::compact(DMContext & context)
     /// Write generated compact packs' data.
 
     size_t total_compact_packs = 0;
-    size_t total_compact_rows  = 0;
+    size_t total_compact_rows = 0;
 
     WriteBatches wbs(context.storage_pool);
-    PageReader   reader(context.storage_pool.log(), std::move(log_storage_snap));
+    PageReader reader(context.storage_pool.log(), std::move(log_storage_snap));
     for (auto & task : tasks)
     {
-        auto & schema          = *(task.to_compact[0]->tryToBlock()->getSchema());
-        auto   compact_columns = schema.cloneEmptyColumns();
+        auto & schema = *(task.to_compact[0]->tryToBlock()->getSchema());
+        auto compact_columns = schema.cloneEmptyColumns();
 
         // Read data from old packs
         for (auto & pack : task.to_compact)
@@ -147,7 +146,7 @@ bool DeltaValueSpace::compact(DMContext & context)
                 throw Exception("The compact candidate is not a DeltaPackBlock", ErrorCodes::LOGICAL_ERROR);
 
             // We ensure schema of all packs are the same
-            Block  block      = dp_block->isCached() ? dp_block->readFromCache() : dp_block->readFromDisk(reader);
+            Block block = dp_block->isCached() ? dp_block->readFromCache() : dp_block->readFromDisk(reader);
             size_t block_rows = block.rows();
             for (size_t i = 0; i < schema.columns(); ++i)
             {
@@ -158,7 +157,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
 
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
-        auto  compact_rows  = compact_block.rows();
+        auto compact_rows = compact_block.rows();
 
         // Note that after compact, caches are no longer exist.
 
@@ -186,10 +185,10 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
 
         DeltaPacks new_packs;
-        auto       old_packs_offset = packs.begin();
+        auto old_packs_offset = packs.begin();
         for (auto & task : tasks)
         {
-            auto old_it    = old_packs_offset;
+            auto old_it = old_packs_offset;
             auto locate_it = [&](const DeltaPackPtr & pack) {
                 for (; old_it != packs.end(); ++old_it)
                 {
@@ -200,7 +199,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             };
 
             auto start_it = locate_it(task.to_compact.front());
-            auto end_it   = locate_it(task.to_compact.back());
+            auto end_it = locate_it(task.to_compact.back());
 
             if (unlikely(start_it == packs.end() || end_it == packs.end()))
             {

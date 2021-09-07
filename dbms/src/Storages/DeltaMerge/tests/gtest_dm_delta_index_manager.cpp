@@ -8,13 +8,12 @@ namespace DM
 {
 namespace tests
 {
-
 class DeltaIndexManager_test : public ::testing::Test
 {
 public:
     DeltaIndexManager_test()
-        : parent_path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_delta_index_manager"),
-          one_node_size(DefaultDeltaTree().getBytes())
+        : parent_path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_delta_index_manager")
+        , one_node_size(DefaultDeltaTree().getBytes())
     {
     }
 

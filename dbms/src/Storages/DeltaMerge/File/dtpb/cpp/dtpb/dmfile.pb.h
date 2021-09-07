@@ -45,12 +45,12 @@ PROTOBUF_NAMESPACE_CLOSE
 // Internal implementation detail -- do not use these members.
 struct TableStruct_dmfile_2eproto
 {
-    static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTableField          entries[] PROTOBUF_SECTION_VARIABLE(protodesc_cold);
+    static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTableField entries[] PROTOBUF_SECTION_VARIABLE(protodesc_cold);
     static const ::PROTOBUF_NAMESPACE_ID::internal::AuxillaryParseTableField aux[] PROTOBUF_SECTION_VARIABLE(protodesc_cold);
-    static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable               schema[2] PROTOBUF_SECTION_VARIABLE(protodesc_cold);
-    static const ::PROTOBUF_NAMESPACE_ID::internal::FieldMetadata            field_metadata[];
-    static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable       serialization_table[];
-    static const ::PROTOBUF_NAMESPACE_ID::uint32                             offsets[];
+    static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[2] PROTOBUF_SECTION_VARIABLE(protodesc_cold);
+    static const ::PROTOBUF_NAMESPACE_ID::internal::FieldMetadata field_metadata[];
+    static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable serialization_table[];
+    static const ::PROTOBUF_NAMESPACE_ID::uint32 offsets[];
 };
 extern const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_dmfile_2eproto;
 namespace dtpb
@@ -70,7 +70,6 @@ template <>
 PROTOBUF_NAMESPACE_CLOSE
 namespace dtpb
 {
-
 // ===================================================================
 
 class PackProperty : public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:dtpb.PackProperty) */
@@ -80,7 +79,11 @@ public:
     virtual ~PackProperty();
 
     PackProperty(const PackProperty & from);
-    PackProperty(PackProperty && from) noexcept : PackProperty() { *this = ::std::move(from); }
+    PackProperty(PackProperty && from) noexcept
+        : PackProperty()
+    {
+        *this = ::std::move(from);
+    }
 
     inline PackProperty & operator=(const PackProperty & from)
     {
@@ -107,16 +110,16 @@ public:
     static const ::PROTOBUF_NAMESPACE_ID::Descriptor * descriptor() { return GetDescriptor(); }
     static const ::PROTOBUF_NAMESPACE_ID::Descriptor * GetDescriptor() { return GetMetadataStatic().descriptor; }
     static const ::PROTOBUF_NAMESPACE_ID::Reflection * GetReflection() { return GetMetadataStatic().reflection; }
-    static const PackProperty &                        default_instance();
+    static const PackProperty & default_instance();
 
-    static void                        InitAsDefaultInstance(); // FOR INTERNAL USE ONLY
+    static void InitAsDefaultInstance(); // FOR INTERNAL USE ONLY
     static inline const PackProperty * internal_default_instance()
     {
         return reinterpret_cast<const PackProperty *>(&_PackProperty_default_instance_);
     }
     static constexpr int kIndexInFileMessages = 0;
 
-    void        Swap(PackProperty * other);
+    void Swap(PackProperty * other);
     friend void swap(PackProperty & a, PackProperty & b) { a.Swap(&b); }
 
     // implements Message ----------------------------------------------
@@ -124,12 +127,12 @@ public:
     inline PackProperty * New() const final { return CreateMaybeMessage<PackProperty>(nullptr); }
 
     PackProperty * New(::PROTOBUF_NAMESPACE_ID::Arena * arena) const final { return CreateMaybeMessage<PackProperty>(arena); }
-    void           CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message & from) final;
-    void           MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message & from) final;
-    void           CopyFrom(const PackProperty & from);
-    void           MergeFrom(const PackProperty & from);
+    void CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message & from) final;
+    void MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message & from) final;
+    void CopyFrom(const PackProperty & from);
+    void MergeFrom(const PackProperty & from);
     PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-    bool                                  IsInitialized() const final;
+    bool IsInitialized() const final;
 
     size_t ByteSizeLong() const final;
 #if GOOGLE_PROTOBUF_ENABLE_EXPERIMENTAL_PARSER
@@ -137,21 +140,21 @@ public:
 #else
     bool MergePartialFromCodedStream(::PROTOBUF_NAMESPACE_ID::io::CodedInputStream * input) final;
 #endif // GOOGLE_PROTOBUF_ENABLE_EXPERIMENTAL_PARSER
-    void                             SerializeWithCachedSizes(::PROTOBUF_NAMESPACE_ID::io::CodedOutputStream * output) const final;
+    void SerializeWithCachedSizes(::PROTOBUF_NAMESPACE_ID::io::CodedOutputStream * output) const final;
     ::PROTOBUF_NAMESPACE_ID::uint8 * InternalSerializeWithCachedSizesToArray(::PROTOBUF_NAMESPACE_ID::uint8 * target) const final;
-    int                              GetCachedSize() const final { return _cached_size_.Get(); }
+    int GetCachedSize() const final { return _cached_size_.Get(); }
 
 private:
     inline void SharedCtor();
     inline void SharedDtor();
-    void        SetCachedSize(int size) const final;
-    void        InternalSwap(PackProperty * other);
+    void SetCachedSize(int size) const final;
+    void InternalSwap(PackProperty * other);
     friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
     static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() { return "dtpb.PackProperty"; }
 
 private:
     inline ::PROTOBUF_NAMESPACE_ID::Arena * GetArenaNoVirtual() const { return nullptr; }
-    inline void *                           MaybeArenaPtr() const { return nullptr; }
+    inline void * MaybeArenaPtr() const { return nullptr; }
 
 public:
     ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
@@ -169,18 +172,18 @@ public:
     // accessors -------------------------------------------------------
 
     // required uint64 gc_hint_version = 1;
-    bool                            has_gc_hint_version() const;
-    void                            clear_gc_hint_version();
-    static const int                kGcHintVersionFieldNumber = 1;
+    bool has_gc_hint_version() const;
+    void clear_gc_hint_version();
+    static const int kGcHintVersionFieldNumber = 1;
     ::PROTOBUF_NAMESPACE_ID::uint64 gc_hint_version() const;
-    void                            set_gc_hint_version(::PROTOBUF_NAMESPACE_ID::uint64 value);
+    void set_gc_hint_version(::PROTOBUF_NAMESPACE_ID::uint64 value);
 
     // required uint64 num_rows = 2;
-    bool                            has_num_rows() const;
-    void                            clear_num_rows();
-    static const int                kNumRowsFieldNumber = 2;
+    bool has_num_rows() const;
+    void clear_num_rows();
+    static const int kNumRowsFieldNumber = 2;
     ::PROTOBUF_NAMESPACE_ID::uint64 num_rows() const;
-    void                            set_num_rows(::PROTOBUF_NAMESPACE_ID::uint64 value);
+    void set_num_rows(::PROTOBUF_NAMESPACE_ID::uint64 value);
 
     // @@protoc_insertion_point(class_scope:dtpb.PackProperty)
 private:
@@ -190,10 +193,10 @@ private:
     size_t RequiredFieldsByteSizeFallback() const;
 
     ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
-    ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1>                _has_bits_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize        _cached_size_;
-    ::PROTOBUF_NAMESPACE_ID::uint64                              gc_hint_version_;
-    ::PROTOBUF_NAMESPACE_ID::uint64                              num_rows_;
+    ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1> _has_bits_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+    ::PROTOBUF_NAMESPACE_ID::uint64 gc_hint_version_;
+    ::PROTOBUF_NAMESPACE_ID::uint64 num_rows_;
     friend struct ::TableStruct_dmfile_2eproto;
 };
 // -------------------------------------------------------------------
@@ -205,7 +208,11 @@ public:
     virtual ~PackProperties();
 
     PackProperties(const PackProperties & from);
-    PackProperties(PackProperties && from) noexcept : PackProperties() { *this = ::std::move(from); }
+    PackProperties(PackProperties && from) noexcept
+        : PackProperties()
+    {
+        *this = ::std::move(from);
+    }
 
     inline PackProperties & operator=(const PackProperties & from)
     {
@@ -232,16 +239,16 @@ public:
     static const ::PROTOBUF_NAMESPACE_ID::Descriptor * descriptor() { return GetDescriptor(); }
     static const ::PROTOBUF_NAMESPACE_ID::Descriptor * GetDescriptor() { return GetMetadataStatic().descriptor; }
     static const ::PROTOBUF_NAMESPACE_ID::Reflection * GetReflection() { return GetMetadataStatic().reflection; }
-    static const PackProperties &                      default_instance();
+    static const PackProperties & default_instance();
 
-    static void                          InitAsDefaultInstance(); // FOR INTERNAL USE ONLY
+    static void InitAsDefaultInstance(); // FOR INTERNAL USE ONLY
     static inline const PackProperties * internal_default_instance()
     {
         return reinterpret_cast<const PackProperties *>(&_PackProperties_default_instance_);
     }
     static constexpr int kIndexInFileMessages = 1;
 
-    void        Swap(PackProperties * other);
+    void Swap(PackProperties * other);
     friend void swap(PackProperties & a, PackProperties & b) { a.Swap(&b); }
 
     // implements Message ----------------------------------------------
@@ -249,12 +256,12 @@ public:
     inline PackProperties * New() const final { return CreateMaybeMessage<PackProperties>(nullptr); }
 
     PackProperties * New(::PROTOBUF_NAMESPACE_ID::Arena * arena) const final { return CreateMaybeMessage<PackProperties>(arena); }
-    void             CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message & from) final;
-    void             MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message & from) final;
-    void             CopyFrom(const PackProperties & from);
-    void             MergeFrom(const PackProperties & from);
+    void CopyFrom(const ::PROTOBUF_NAMESPACE_ID::Message & from) final;
+    void MergeFrom(const ::PROTOBUF_NAMESPACE_ID::Message & from) final;
+    void CopyFrom(const PackProperties & from);
+    void MergeFrom(const PackProperties & from);
     PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-    bool                                  IsInitialized() const final;
+    bool IsInitialized() const final;
 
     size_t ByteSizeLong() const final;
 #if GOOGLE_PROTOBUF_ENABLE_EXPERIMENTAL_PARSER
@@ -262,21 +269,21 @@ public:
 #else
     bool MergePartialFromCodedStream(::PROTOBUF_NAMESPACE_ID::io::CodedInputStream * input) final;
 #endif // GOOGLE_PROTOBUF_ENABLE_EXPERIMENTAL_PARSER
-    void                             SerializeWithCachedSizes(::PROTOBUF_NAMESPACE_ID::io::CodedOutputStream * output) const final;
+    void SerializeWithCachedSizes(::PROTOBUF_NAMESPACE_ID::io::CodedOutputStream * output) const final;
     ::PROTOBUF_NAMESPACE_ID::uint8 * InternalSerializeWithCachedSizesToArray(::PROTOBUF_NAMESPACE_ID::uint8 * target) const final;
-    int                              GetCachedSize() const final { return _cached_size_.Get(); }
+    int GetCachedSize() const final { return _cached_size_.Get(); }
 
 private:
     inline void SharedCtor();
     inline void SharedDtor();
-    void        SetCachedSize(int size) const final;
-    void        InternalSwap(PackProperties * other);
+    void SetCachedSize(int size) const final;
+    void InternalSwap(PackProperties * other);
     friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
     static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() { return "dtpb.PackProperties"; }
 
 private:
     inline ::PROTOBUF_NAMESPACE_ID::Arena * GetArenaNoVirtual() const { return nullptr; }
-    inline void *                           MaybeArenaPtr() const { return nullptr; }
+    inline void * MaybeArenaPtr() const { return nullptr; }
 
 public:
     ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
@@ -294,22 +301,22 @@ public:
     // accessors -------------------------------------------------------
 
     // repeated .dtpb.PackProperty property = 1;
-    int                                                                     property_size() const;
-    void                                                                    clear_property();
-    static const int                                                        kPropertyFieldNumber = 1;
-    ::dtpb::PackProperty *                                                  mutable_property(int index);
-    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<::dtpb::PackProperty> *       mutable_property();
-    const ::dtpb::PackProperty &                                            property(int index) const;
-    ::dtpb::PackProperty *                                                  add_property();
+    int property_size() const;
+    void clear_property();
+    static const int kPropertyFieldNumber = 1;
+    ::dtpb::PackProperty * mutable_property(int index);
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<::dtpb::PackProperty> * mutable_property();
+    const ::dtpb::PackProperty & property(int index) const;
+    ::dtpb::PackProperty * add_property();
     const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<::dtpb::PackProperty> & property() const;
 
     // @@protoc_insertion_point(class_scope:dtpb.PackProperties)
 private:
     class HasBitSetters;
 
-    ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena    _internal_metadata_;
-    ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1>                   _has_bits_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize           _cached_size_;
+    ::PROTOBUF_NAMESPACE_ID::internal::InternalMetadataWithArena _internal_metadata_;
+    ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1> _has_bits_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<::dtpb::PackProperty> property_;
     friend struct ::TableStruct_dmfile_2eproto;
 };

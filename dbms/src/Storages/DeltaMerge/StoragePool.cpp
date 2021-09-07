@@ -16,7 +16,7 @@ namespace DM
 {
 enum class StorageType
 {
-    Log  = 1,
+    Log = 1,
     Data = 2,
     Meta = 3,
 };
@@ -24,9 +24,9 @@ enum class StorageType
 PageStorage::Config extractConfig(const Settings & settings, StorageType subtype)
 {
 #define SET_CONFIG(NAME)                                                            \
-    config.num_write_slots   = settings.dt_storage_pool_##NAME##_write_slots;       \
-    config.gc_min_files      = settings.dt_storage_pool_##NAME##_gc_min_file_num;   \
-    config.gc_min_bytes      = settings.dt_storage_pool_##NAME##_gc_min_bytes;      \
+    config.num_write_slots = settings.dt_storage_pool_##NAME##_write_slots;         \
+    config.gc_min_files = settings.dt_storage_pool_##NAME##_gc_min_file_num;        \
+    config.gc_min_bytes = settings.dt_storage_pool_##NAME##_gc_min_bytes;           \
     config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
     config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;
 
@@ -53,27 +53,29 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
 
 StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
     : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-      log_storage(name + ".log",
-                  path_pool.getPSDiskDelegatorMulti("log"),
-                  extractConfig(settings, StorageType::Log),
-                  global_ctx.getFileProvider(),
-                  global_ctx.getTiFlashMetrics()),
-      // The iops in data_storage is low, only use the first disk for storing data
-      data_storage(name + ".data",
-                   path_pool.getPSDiskDelegatorSingle("data"),
-                   extractConfig(settings, StorageType::Data),
-                   global_ctx.getFileProvider(),
-                   global_ctx.getTiFlashMetrics()),
-      // The iops in meta_storage is relatively high, use multi-disks if possible
-      meta_storage(name + ".meta",
-                   path_pool.getPSDiskDelegatorMulti("meta"),
-                   extractConfig(settings, StorageType::Meta),
-                   global_ctx.getFileProvider(),
-                   global_ctx.getTiFlashMetrics()),
-      max_log_page_id(0),
-      max_data_page_id(0),
-      max_meta_page_id(0),
-      global_context(global_ctx)
+    log_storage(name + ".log",
+                path_pool.getPSDiskDelegatorMulti("log"),
+                extractConfig(settings, StorageType::Log),
+                global_ctx.getFileProvider(),
+                global_ctx.getTiFlashMetrics())
+    ,
+    // The iops in data_storage is low, only use the first disk for storing data
+    data_storage(name + ".data",
+                 path_pool.getPSDiskDelegatorSingle("data"),
+                 extractConfig(settings, StorageType::Data),
+                 global_ctx.getFileProvider(),
+                 global_ctx.getTiFlashMetrics())
+    ,
+    // The iops in meta_storage is relatively high, use multi-disks if possible
+    meta_storage(name + ".meta",
+                 path_pool.getPSDiskDelegatorMulti("meta"),
+                 extractConfig(settings, StorageType::Meta),
+                 global_ctx.getFileProvider(),
+                 global_ctx.getTiFlashMetrics())
+    , max_log_page_id(0)
+    , max_data_page_id(0)
+    , max_meta_page_id(0)
+    , global_context(global_ctx)
 {
 }
 
@@ -83,7 +85,7 @@ void StoragePool::restore()
     data_storage.restore();
     meta_storage.restore();
 
-    max_log_page_id  = log_storage.getMaxId();
+    max_log_page_id = log_storage.getMaxId();
     max_data_page_id = data_storage.getMaxId();
     max_meta_page_id = meta_storage.getMaxId();
 }

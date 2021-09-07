@@ -14,7 +14,6 @@ namespace DB
 {
 namespace DM
 {
-
 struct DTMutation;
 template <size_t M, size_t F, size_t S>
 struct DTLeaf;
@@ -39,8 +38,8 @@ inline std::string addrToHex(const void * addr)
 
 
 using DT_TypeCount = UInt32;
-using DT_Id        = UInt32;
-using DT_Delta     = Int32;
+using DT_Id = UInt32;
+using DT_Delta = Int32;
 
 inline UInt64 checkId(UInt64 id)
 {
@@ -58,7 +57,6 @@ inline Int64 checkDelta(Int64 delta)
 
 namespace DTType
 {
-
 static constexpr DT_TypeCount TYPE_MASK = 1;
 
 inline std::string DTTypeString(bool is_insert)
@@ -97,7 +95,10 @@ inline DT_TypeCount updateCount(DT_TypeCount type_count, UInt32 count)
 struct DTMutation
 {
     DTMutation() = default;
-    DTMutation(bool is_insert, UInt32 count, UInt64 value_) : type_count(DTType::getTypeCount(is_insert, count)), value(value_) {}
+    DTMutation(bool is_insert, UInt32 count, UInt64 value_)
+        : type_count(DTType::getTypeCount(is_insert, count))
+        , value(value_)
+    {}
 
     /// The lowest bit of type_count indicates whether this is a insert or not (delete).
     /// And the rest bits represent the inserted or deleted rows.
@@ -105,10 +106,10 @@ struct DTMutation
     /// For DT_INS, "value" is the value index (tuple_id) in value space;
     DT_Id value = 0;
 
-    bool   isInsert() const { return DTType::isInsert(type_count); }
-    bool   isDelete() const { return DTType::isDelete(type_count); }
+    bool isInsert() const { return DTType::isInsert(type_count); }
+    bool isDelete() const { return DTType::isDelete(type_count); }
     UInt32 count() const { return DTType::getCount(type_count); }
-    void   setCount(UInt32 v) { type_count = DTType::updateCount(type_count, v); }
+    void setCount(UInt32 v) { type_count = DTType::updateCount(type_count, v); }
 };
 
 /// Note that we allocate one more slot for entries in DTIntern and DTLeaf, to simplify entry insert operation.
@@ -116,22 +117,22 @@ struct DTMutation
 template <size_t M, size_t F, size_t S>
 struct DTLeaf
 {
-    using NodePtr   = void *;
-    using Leaf      = DTLeaf<M, F, S>;
-    using Intern    = DTIntern<M, F, S>;
-    using LeafPtr   = Leaf *;
+    using NodePtr = void *;
+    using Leaf = DTLeaf<M, F, S>;
+    using Intern = DTIntern<M, F, S>;
+    using LeafPtr = Leaf *;
     using InternPtr = Intern *;
 
     DTLeaf() = default;
 
     const size_t mark = 1; // <-- This mark MUST be declared at first place!
 
-    DT_Id      sids[M * S + 1];
+    DT_Id sids[M * S + 1];
     DTMutation mutations[M * S + 1];
-    size_t     count = 0; // mutations count
+    size_t count = 0; // mutations count
 
-    LeafPtr   prev   = nullptr;
-    LeafPtr   next   = nullptr;
+    LeafPtr prev = nullptr;
+    LeafPtr next = nullptr;
     InternPtr parent = nullptr;
 
     DTLeaf(const Leaf & o) = default;
@@ -150,7 +151,7 @@ struct DTLeaf
 
     static inline bool overflow(size_t count) { return count > M * S; }
     static inline bool underflow(size_t count) { return count < M; }
-    inline bool        legal() { return !overflow(count) && !underflow(count); }
+    inline bool legal() { return !overflow(count) && !underflow(count); }
     inline std::string state() { return overflow(count) ? "overflow" : (underflow(count) ? "underflow" : "legal"); }
 
     /// shift entries from pos with n steps.
@@ -232,8 +233,8 @@ struct DTLeaf
     {
         size_t split = M * S / 2;
 
-        right_n->prev   = this;
-        right_n->next   = this->next;
+        right_n->prev = this;
+        right_n->next = this->next;
         right_n->parent = this->parent;
 
         if (this->next)
@@ -244,7 +245,7 @@ struct DTLeaf
         std::move(std::begin(this->mutations) + split, std::begin(this->mutations) + this->count, std::begin(right_n->mutations));
 
         right_n->count = this->count - split;
-        this->count    = split;
+        this->count = split;
 
         return right_n->sids[0];
     }
@@ -279,7 +280,9 @@ struct DTLeaf
             auto sibling_cut = sibling->count - adopt_count;
             std::move(std::begin(sibling->sids) + sibling_cut, std::begin(sibling->sids) + sibling->count, std::begin(this->sids));
             std::move(
-                std::begin(sibling->mutations) + sibling_cut, std::begin(sibling->mutations) + sibling->count, std::begin(this->mutations));
+                std::begin(sibling->mutations) + sibling_cut,
+                std::begin(sibling->mutations) + sibling->count,
+                std::begin(this->mutations));
 
             sibling->count -= adopt_count;
             this->count += adopt_count;
@@ -290,7 +293,9 @@ struct DTLeaf
         {
             std::move(std::begin(sibling->sids), std::begin(sibling->sids) + adopt_count, std::begin(this->sids) + this->count);
             std::move(
-                std::begin(sibling->mutations), std::begin(sibling->mutations) + adopt_count, std::begin(this->mutations) + this->count);
+                std::begin(sibling->mutations),
+                std::begin(sibling->mutations) + adopt_count,
+                std::begin(this->mutations) + this->count);
 
             sibling->shiftEntries(adopt_count, -adopt_count);
 
@@ -305,20 +310,20 @@ struct DTLeaf
 template <size_t M, size_t F, size_t S>
 struct DTIntern
 {
-    using NodePtr   = void *;
-    using Leaf      = DTLeaf<M, F, S>;
-    using Intern    = DTIntern<M, F, S>;
-    using LeafPtr   = Leaf *;
+    using NodePtr = void *;
+    using Leaf = DTLeaf<M, F, S>;
+    using Intern = DTIntern<M, F, S>;
+    using LeafPtr = Leaf *;
     using InternPtr = Intern *;
 
     DTIntern() = default;
 
     const size_t mark = 0; // <-- This mark MUST be declared at first place!
 
-    DT_Id    sids[F * S + 1];
+    DT_Id sids[F * S + 1];
     DT_Delta deltas[F * S + 1];
-    NodePtr  children[F * S + 1];
-    size_t   count = 0; // deltas / children count, and the number of sids is "count - 1"
+    NodePtr children[F * S + 1];
+    size_t count = 0; // deltas / children count, and the number of sids is "count - 1"
 
     InternPtr parent = nullptr;
 
@@ -331,7 +336,7 @@ struct DTIntern
 
     static inline bool overflow(size_t count) { return count > F * S; }
     static inline bool underflow(size_t count) { return count < F; }
-    inline bool        legal() { return !overflow(count) && !underflow(count); }
+    inline bool legal() { return !overflow(count) && !underflow(count); }
     inline std::string state() { return overflow(count) ? "overflow" : (underflow(count) ? "underflow" : "legal"); }
 
     /// shift entries from pos with n steps.
@@ -414,7 +419,7 @@ struct DTIntern
         std::move(std::begin(this->children) + split, std::begin(this->children) + this->count, std::begin(right_n->children));
 
         right_n->count = this->count - split;
-        this->count    = split;
+        this->count = split;
 
         this->refreshChildParent();
         right_n->refreshChildParent();
@@ -442,7 +447,9 @@ struct DTIntern
             std::move(std::begin(sibling->sids) + sibling_cut, std::begin(sibling->sids) + sibling->count - 1, std::begin(this->sids));
             std::move(std::begin(sibling->deltas) + sibling_cut, std::begin(sibling->deltas) + sibling->count, std::begin(this->deltas));
             std::move(
-                std::begin(sibling->children) + sibling_cut, std::begin(sibling->children) + sibling->count, std::begin(this->children));
+                std::begin(sibling->children) + sibling_cut,
+                std::begin(sibling->children) + sibling->count,
+                std::begin(this->children));
 
             this->sids[adopt_count - 1] = parent->sids[node_pos - 1];
 
@@ -481,12 +488,16 @@ class DTEntryIterator
     using LeafPtr = DTLeaf<M, F, S> *;
 
     LeafPtr leaf;
-    size_t  pos;
-    Int64   delta;
+    size_t pos;
+    Int64 delta;
 
 public:
     DTEntryIterator() = default;
-    DTEntryIterator(LeafPtr leaf_, size_t pos_, Int64 delta_) : leaf(leaf_), pos(pos_), delta(delta_) {}
+    DTEntryIterator(LeafPtr leaf_, size_t pos_, Int64 delta_)
+        : leaf(leaf_)
+        , pos(pos_)
+        , delta(delta_)
+    {}
 
     std::string toString() { return "{leaf:" + addrToHex(leaf) + ",pos:" + DB::toString(pos) + ",delta:" + DB::toString(delta) + "}"; }
 
@@ -506,7 +517,7 @@ public:
         if (++pos >= leaf->count && leaf->next)
         {
             leaf = leaf->next;
-            pos  = 0;
+            pos = 0;
         }
 
         return *this;
@@ -521,7 +532,7 @@ public:
         else
         {
             leaf = leaf->prev;
-            pos  = leaf->count - 1;
+            pos = leaf->count - 1;
         }
 
         if (leaf->isInsert(pos))
@@ -533,15 +544,15 @@ public:
     }
 
     DTMutation getMutation() const { return leaf->mutations[pos]; }
-    LeafPtr    getLeaf() const { return leaf; }
-    size_t     getPos() const { return pos; }
-    Int64      getDelta() const { return delta; }
-    bool       isInsert() const { return leaf->mutations[pos].isInsert(); }
-    bool       isDelete() const { return leaf->mutations[pos].isDelete(); }
-    UInt32     getCount() const { return leaf->mutations[pos].count(); }
-    UInt64     getValue() const { return leaf->mutations[pos].value; }
-    UInt64     getSid() const { return leaf->sids[pos]; }
-    UInt64     getRid() const { return leaf->sids[pos] + delta; }
+    LeafPtr getLeaf() const { return leaf; }
+    size_t getPos() const { return pos; }
+    Int64 getDelta() const { return delta; }
+    bool isInsert() const { return leaf->mutations[pos].isInsert(); }
+    bool isDelete() const { return leaf->mutations[pos].isDelete(); }
+    UInt32 getCount() const { return leaf->mutations[pos].count(); }
+    UInt64 getValue() const { return leaf->mutations[pos].value; }
+    UInt64 getSid() const { return leaf->sids[pos]; }
+    UInt64 getRid() const { return leaf->sids[pos] + delta; }
 
     void setValue(UInt64 value) { leaf->mutations[pos].value = checkId(value); }
 };
@@ -551,17 +562,17 @@ class DTEntriesCopy : Allocator
 {
     using LeafPtr = DTLeaf<M, F, S> *;
 
-    const size_t       entry_count;
-    const Int64        delta;
-    UInt64 * const     sids;
+    const size_t entry_count;
+    const Int64 delta;
+    UInt64 * const sids;
     DTMutation * const mutations;
 
 public:
     DTEntriesCopy(LeafPtr left_leaf, size_t entry_count_, Int64 delta_)
-        : entry_count(entry_count_),
-          delta(delta_),
-          sids(reinterpret_cast<UInt64 *>(this->alloc(sizeof(UInt64) * entry_count))),
-          mutations(reinterpret_cast<DTMutation *>(this->alloc(sizeof(DTMutation) * entry_count)))
+        : entry_count(entry_count_)
+        , delta(delta_)
+        , sids(reinterpret_cast<UInt64 *>(this->alloc(sizeof(UInt64) * entry_count)))
+        , mutations(reinterpret_cast<DTMutation *>(this->alloc(sizeof(DTMutation) * entry_count)))
     {
         size_t offset = 0;
         while (left_leaf)
@@ -586,14 +597,17 @@ public:
     {
     private:
         std::shared_ptr<DTEntriesCopy> entries_holder; // Holds a reference, stop being freed.
-        DTEntriesCopy *                entries;
+        DTEntriesCopy * entries;
 
         size_t index = 0;
-        Int64  delta;
+        Int64 delta;
 
     public:
         Iterator(const std::shared_ptr<DTEntriesCopy> & entries_, size_t index_, Int64 delta_)
-            : entries_holder(entries_), entries(entries_.get()), index(index_), delta(delta_)
+            : entries_holder(entries_)
+            , entries(entries_.get())
+            , index(index_)
+            , delta(delta_)
         {
         }
 
@@ -624,9 +638,9 @@ public:
             return *this;
         }
 
-        Int64  getDelta() const { return delta; }
-        bool   isInsert() const { return entries->mutations[index].isInsert(); }
-        bool   isDelete() const { return entries->mutations[index].isDelete(); }
+        Int64 getDelta() const { return delta; }
+        bool isInsert() const { return entries->mutations[index].isInsert(); }
+        bool isDelete() const { return entries->mutations[index].isDelete(); }
         UInt32 getCount() const { return entries->mutations[index].count(); }
         UInt64 getValue() const { return entries->mutations[index].value; }
         UInt64 getSid() const { return entries->sids[index]; }
@@ -647,7 +661,7 @@ public:
     struct Entry
     {
         UInt64 sid;
-        bool   is_insert;
+        bool is_insert;
         UInt32 count;
         UInt64 value;
     };
@@ -657,9 +671,11 @@ public:
     {
         typename Entries::iterator it;
 
-        Iterator(typename Entries::iterator it_) : it(it_) {}
-        bool       operator==(const Iterator & rhs) const { return it == rhs.it; }
-        bool       operator!=(const Iterator & rhs) const { return it != rhs.it; }
+        Iterator(typename Entries::iterator it_)
+            : it(it_)
+        {}
+        bool operator==(const Iterator & rhs) const { return it == rhs.it; }
+        bool operator!=(const Iterator & rhs) const { return it != rhs.it; }
         Iterator & operator++()
         {
             ++it;
@@ -667,8 +683,8 @@ public:
         }
 
         UInt64 getSid() const { return it->sid; }
-        bool   isInsert() const { return it->is_insert; }
-        bool   isDelete() const { return !it->is_insert; }
+        bool isInsert() const { return it->is_insert; }
+        bool isDelete() const { return !it->is_insert; }
         UInt32 getCount() const { return it->count; }
         UInt64 getValue() const { return it->value; }
     };
@@ -686,7 +702,7 @@ public:
             if (!entries.empty() && it.isInsert())
             {
                 auto & prev_index = entries.back();
-                if (prev_index.is_insert             //
+                if (prev_index.is_insert //
                     && prev_index.sid == it.getSid() //
                     && prev_index.value + prev_index.count == it.getValue())
                 {
@@ -708,16 +724,16 @@ template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
 class DeltaTree
 {
 public:
-    using Self          = DeltaTree<ValueSpace, M, F, S, Allocator>;
-    using NodePtr       = void *;
-    using Leaf          = DTLeaf<M, F, S>;
-    using Intern        = DTIntern<M, F, S>;
-    using LeafPtr       = Leaf *;
-    using InternPtr     = Intern *;
+    using Self = DeltaTree<ValueSpace, M, F, S, Allocator>;
+    using NodePtr = void *;
+    using Leaf = DTLeaf<M, F, S>;
+    using Intern = DTIntern<M, F, S>;
+    using LeafPtr = Leaf *;
+    using InternPtr = Intern *;
     using EntryIterator = DTEntryIterator<M, F, S>;
     using ValueSpacePtr = std::shared_ptr<ValueSpace>;
 
-    using CompactedEntries    = DTCompactedEntries<M, F, S>;
+    using CompactedEntries = DTCompactedEntries<M, F, S>;
     using CompactedEntriesPtr = std::shared_ptr<CompactedEntries>;
 
     static_assert(M >= 2);
@@ -730,14 +746,14 @@ public:
 private:
     NodePtr root;
     LeafPtr left_leaf, right_leaf;
-    size_t  height = 1;
+    size_t height = 1;
 
     size_t num_inserts = 0;
     size_t num_deletes = 0;
     size_t num_entries = 0;
 
     Allocator * allocator;
-    size_t      bytes = 0;
+    size_t bytes = 0;
 
     Logger * log;
 
@@ -783,7 +799,7 @@ private:
             return;
 
         InternPtr next;
-        UInt64    subtree_min_sid       = 0;
+        UInt64 subtree_min_sid = 0;
         std::tie(next, subtree_min_sid) = submitMinSid(leaf, subtree_min_sid);
         while (next)
         {
@@ -844,7 +860,7 @@ private:
 
         insert_value_space = insert_value_space_;
 
-        root      = createNode<Leaf>();
+        root = createNode<Leaf>();
         left_leaf = right_leaf = as(Leaf, root);
 
         LOG_TRACE(log, "create");
@@ -901,8 +917,8 @@ public:
 
     void checkAll() const
     {
-        LeafPtr p     = left_leaf;
-        size_t  count = 0;
+        LeafPtr p = left_leaf;
+        size_t count = 0;
         for (; p != right_leaf; p = p->next)
         {
             count += p->count;
@@ -916,7 +932,7 @@ public:
 
     size_t getBytes() { return bytes; }
 
-    size_t        getHeight() const { return height; }
+    size_t getHeight() const { return height; }
     EntryIterator begin() const { return EntryIterator(left_leaf, 0, 0); }
     EntryIterator end() const
     {
@@ -948,12 +964,12 @@ public:
 
 DT_TEMPLATE
 DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
-    : height(o.height),
-      num_inserts(o.num_inserts),
-      num_deletes(o.num_deletes),
-      num_entries(o.num_entries),
-      allocator(new Allocator()),
-      log(&Logger::get("DeltaTree"))
+    : height(o.height)
+    , num_inserts(o.num_inserts)
+    , num_deletes(o.num_deletes)
+    , num_entries(o.num_entries)
+    , allocator(new Allocator())
+    , log(&Logger::get("DeltaTree"))
 {
     NodePtr my_root;
     if (isLeaf(o.root))
@@ -965,7 +981,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     nodes.push(my_root);
 
     LeafPtr first_leaf = nullptr;
-    LeafPtr last_leaf  = nullptr;
+    LeafPtr last_leaf = nullptr;
     while (!nodes.empty())
     {
         auto node = nodes.front();
@@ -1013,8 +1029,8 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
         }
     }
 
-    this->root       = my_root;
-    this->left_leaf  = first_leaf;
+    this->root = my_root;
+    this->left_leaf = first_leaf;
     this->right_leaf = last_leaf;
 }
 
@@ -1075,7 +1091,7 @@ void DT_CLASS::addDelete(const UInt64 rid)
     checkId(rid);
 
     EntryIterator leaf_end(this->end());
-    auto          it = findRightLeaf<true>(rid);
+    auto it = findRightLeaf<true>(rid);
     searchLeftId<true>(it, rid);
 
     bool has_delete = false;
@@ -1093,8 +1109,8 @@ void DT_CLASS::addDelete(const UInt64 rid)
         --num_entries;
         --num_inserts;
 
-        auto leaf  = it.getLeaf();
-        auto pos   = it.getPos();
+        auto leaf = it.getLeaf();
+        auto pos = it.getPos();
         auto value = it.getValue();
 
         insert_value_space->removeFromInsert(value);
@@ -1110,7 +1126,7 @@ void DT_CLASS::addDelete(const UInt64 rid)
         --it; // <-- Go to last delete entry.
 
         auto leaf = it.getLeaf();
-        auto pos  = it.getPos();
+        auto pos = it.getPos();
 
         leaf->mutations[pos].setCount(leaf->mutations[pos].count() + 1);
     }
@@ -1120,12 +1136,12 @@ void DT_CLASS::addDelete(const UInt64 rid)
         ++num_deletes;
         ++num_entries;
 
-        auto leaf  = it.getLeaf();
-        auto pos   = it.getPos();
+        auto leaf = it.getLeaf();
+        auto pos = it.getPos();
         auto delta = it.getDelta();
 
         leaf->shiftEntries(pos, 1);
-        leaf->sids[pos]      = checkId(rid - delta);
+        leaf->sids[pos] = checkId(rid - delta);
         leaf->mutations[pos] = DTMutation(/* is_insert */ false, /*count*/ 1, /*value*/ 0);
         ++(leaf->count);
     }
@@ -1143,7 +1159,7 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
     checkId(tuple_id);
 
     EntryIterator leaf_end(this->end());
-    auto          it = findRightLeaf<true>(rid);
+    auto it = findRightLeaf<true>(rid);
     searchLeftId<true>(it, rid);
 
     /// Skip DT_DEL entries.
@@ -1155,10 +1171,10 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
     ++num_inserts;
     ++num_entries;
 
-    auto leaf  = it.getLeaf();
-    auto pos   = it.getPos();
+    auto leaf = it.getLeaf();
+    auto pos = it.getPos();
     auto delta = it.getDelta();
-    auto sid   = checkId(rid - delta);
+    auto sid = checkId(rid - delta);
 
 #ifndef NDEBUG
     if (it != leaf_end && sid > it.getSid())
@@ -1166,7 +1182,7 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 #endif
 
     leaf->shiftEntries(pos, 1);
-    leaf->sids[pos]      = sid;
+    leaf->sids[pos] = sid;
     leaf->mutations[pos] = DTMutation(/* is_insert */ true, /*count*/ 1, tuple_id);
     ++(leaf->count);
 
@@ -1206,12 +1222,12 @@ DT_TEMPLATE
 template <bool is_rid, bool is_left>
 typename DT_CLASS::EntryIterator DT_CLASS::findLeaf(const UInt64 id) const
 {
-    NodePtr node  = root;
-    Int64   delta = 0;
+    NodePtr node = root;
+    Int64 delta = 0;
     while (!isLeaf(node))
     {
         InternPtr intern = as(Intern, node);
-        size_t    i      = 0;
+        size_t i = 0;
         for (; i < intern->count - 1; ++i)
         {
             delta += intern->deltas[i];
@@ -1340,7 +1356,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         return {};
     }
 
-    auto parent         = node->parent;
+    auto parent = node->parent;
     bool parent_updated = false;
 
     if (T::overflow(node->count)) // split
@@ -1349,9 +1365,9 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         {
             /// Increase tree height.
             parent = createNode<Intern>();
-            root   = asNode(parent);
+            root = asNode(parent);
 
-            parent->deltas[0]   = checkDelta(node->getDelta());
+            parent->deltas[0] = checkDelta(node->getDelta());
             parent->children[0] = asNode(node);
             ++(parent->count);
             parent->refreshChildParent();
@@ -1372,8 +1388,8 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         // for current node
         parent->deltas[pos] = checkDelta(node->getDelta());
         // for next node
-        parent->sids[pos]         = sep_sid;
-        parent->deltas[pos + 1]   = checkDelta(next_n->getDelta());
+        parent->sids[pos] = sep_sid;
+        parent->deltas[pos + 1] = checkDelta(next_n->getDelta());
         parent->children[pos + 1] = asNode(next_n);
 
         ++(parent->count);
@@ -1393,9 +1409,9 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         auto pos = parent->searchChild(asNode(node));
 
         // currently we always adopt from the right one if possible
-        bool   is_sibling_left;
+        bool is_sibling_left;
         size_t sibling_pos;
-        T *    sibling;
+        T * sibling;
 
         if (unlikely(parent->count <= 1))
             throw Exception("Unexpected parent entry count: " + DB::toString(parent->count));
@@ -1403,14 +1419,14 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         if (pos == parent->count - 1)
         {
             is_sibling_left = true;
-            sibling_pos     = pos - 1;
-            sibling         = as(T, parent->children[sibling_pos]);
+            sibling_pos = pos - 1;
+            sibling = as(T, parent->children[sibling_pos]);
         }
         else
         {
             is_sibling_left = false;
-            sibling_pos     = pos + 1;
-            sibling         = as(T, parent->children[sibling_pos]);
+            sibling_pos = pos + 1;
+            sibling = as(T, parent->children[sibling_pos]);
         }
 
         if (unlikely(sibling->parent != node->parent))
@@ -1425,8 +1441,8 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             node->merge(sibling, is_sibling_left, pos);
             freeNode<T>(sibling);
 
-            pos                   = std::min(pos, sibling_pos);
-            parent->deltas[pos]   = checkDelta(node->getDelta());
+            pos = std::min(pos, sibling_pos);
+            parent->deltas[pos] = checkDelta(node->getDelta());
             parent->children[pos] = asNode(node);
             parent->shiftEntries(pos + 2, -1);
 
@@ -1449,8 +1465,8 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             auto new_sep_sid = node->adopt(sibling, is_sibling_left, adopt_count, pos);
 
             parent->sids[std::min(pos, sibling_pos)] = new_sep_sid;
-            parent->deltas[pos]                      = checkDelta(node->getDelta());
-            parent->deltas[sibling_pos]              = checkDelta(sibling->getDelta());
+            parent->deltas[pos] = checkDelta(node->getDelta());
+            parent->deltas[sibling_pos] = checkDelta(sibling->getDelta());
 
             // LOG_TRACE(log, nodeName(node) << " adoption");
         }
@@ -1459,9 +1475,9 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
     }
     else if (parent)
     {
-        auto pos            = parent->searchChild(asNode(node));
-        auto delta          = node->getDelta();
-        parent_updated      = parent->deltas[pos] != delta;
+        auto pos = parent->searchChild(asNode(node));
+        auto delta = node->getDelta();
+        parent_updated = parent->deltas[pos] != delta;
         parent->deltas[pos] = checkDelta(delta);
     }
 
