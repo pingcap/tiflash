@@ -29,7 +29,7 @@ using RegionPtr = std::shared_ptr<Region>;
 class InterpreterDAG : public IInterpreter
 {
 public:
-    InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
+    InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const std::shared_ptr<LogWithPrefix> & log_);
 
     ~InterpreterDAG() = default;
 
