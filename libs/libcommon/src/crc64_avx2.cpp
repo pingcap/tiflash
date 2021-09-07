@@ -28,7 +28,10 @@ uint64_t update_vpclmulqdq_avx2(uint64_t state, const void * src, size_t length)
     x[0] = _mm256_xor_si256(x[0], _mm256_set_epi64x(0, 0, 0, static_cast<int64_t>(state)));
 
     auto coeff = _mm256_set_epi64x(
-        static_cast<int64_t>(K_1023), static_cast<int64_t>(K_1087), static_cast<int64_t>(K_1023), static_cast<int64_t>(K_1087));
+        static_cast<int64_t>(K_1023),
+        static_cast<int64_t>(K_1087),
+        static_cast<int64_t>(K_1023),
+        static_cast<int64_t>(K_1087));
 
     auto fold = [](avx256_t a, avx256_t b) -> avx256_t {
         auto h = _mm256_clmulepi64_epi128(a, b, 0x11);
@@ -103,7 +106,7 @@ uint64_t update_vpclmulqdq_avx2(uint64_t state, const void * src, size_t length)
         SIMD{K_511, K_575}, // fold by distance of 64 bytes
         SIMD{K_383, K_447}, // fold by distance of 48 bytes
         SIMD{K_255, K_319}, // fold by distance of 32 bytes
-        SIMD{K_127, K_191}  // fold by distance of 16 bytes
+        SIMD{K_127, K_191} // fold by distance of 16 bytes
     };
 
     auto acc = y[7];

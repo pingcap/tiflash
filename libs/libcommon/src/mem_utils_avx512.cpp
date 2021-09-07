@@ -5,12 +5,10 @@
 #include <cassert>
 namespace mem_utils::_detail
 {
-
 using VectorType = __m512i;
 
 namespace
 {
-
 // As its name indicates, this function compares the memory 256 bytes starting immediately from p1 and p2.
 // AVX512 technology is utilized: this function loads 4 vectors from p1 and 4 vectors from p2 and use issue a
 // vectorized cmpeq which yields the result as a 64bit mask for every two vectors.
@@ -37,8 +35,8 @@ namespace
 
 __attribute__((pure, always_inline)) inline bool memoryEqualAVX512x4(const char * p1, const char * p2)
 {
-    const auto *v1 = reinterpret_cast<const VectorType *>(p1);
-    const auto *v2 = reinterpret_cast<const VectorType *>(p2);
+    const auto * v1 = reinterpret_cast<const VectorType *>(p1);
+    const auto * v2 = reinterpret_cast<const VectorType *>(p2);
     return 0xFFFFFFFFFFFFFFFF
         == (_mm512_cmpeq_epi8_mask(_mm512_loadu_si512(v1), _mm512_loadu_si512(v2))
             & _mm512_cmpeq_epi8_mask(_mm512_loadu_si512(v1 + 1), _mm512_loadu_si512(v2 + 1))
@@ -108,8 +106,8 @@ __attribute__((pure)) bool memoryIsByteAVX512(const void * data, size_t size, st
     static constexpr size_t group_size = vector_length * 4;
     size_t remaining = size;
     auto filled_vector = _mm512_set1_epi8(static_cast<char>(target));
-    const auto *current_address = reinterpret_cast<const VectorType *>(data);
-    const auto *byte_address = reinterpret_cast<const uint8_t *>(data);
+    const auto * current_address = reinterpret_cast<const VectorType *>(data);
+    const auto * byte_address = reinterpret_cast<const uint8_t *>(data);
 
     if (!compareArrayAVX512<1>({_mm512_loadu_si512(current_address)}, filled_vector))
     {
@@ -146,21 +144,21 @@ __attribute__((pure)) bool memoryIsByteAVX512(const void * data, size_t size, st
     bool result = true;
     switch (remaining / vector_length)
     {
-        case 3:
-            result = compareArrayAVX512<4>({_mm512_load_si512(current_address + 0), _mm512_load_si512(current_address + 1),
-                                               _mm512_load_si512(current_address + 2), tail},
-                filled_vector);
-            break;
-        case 2:
-            result = compareArrayAVX512<3>(
-                {_mm512_load_si512(current_address + 0), _mm512_load_si512(current_address + 1), tail}, filled_vector);
-            break;
-        case 1:
-            result = compareArrayAVX512<2>({_mm512_load_si512(current_address + 0), tail}, filled_vector);
-            break;
-        case 0:
-            result = compareArrayAVX512<1>({tail}, filled_vector);
-            break;
+    case 3:
+        result = compareArrayAVX512<4>({_mm512_load_si512(current_address + 0), _mm512_load_si512(current_address + 1), _mm512_load_si512(current_address + 2), tail},
+                                       filled_vector);
+        break;
+    case 2:
+        result = compareArrayAVX512<3>(
+            {_mm512_load_si512(current_address + 0), _mm512_load_si512(current_address + 1), tail},
+            filled_vector);
+        break;
+    case 1:
+        result = compareArrayAVX512<2>({_mm512_load_si512(current_address + 0), tail}, filled_vector);
+        break;
+    case 0:
+        result = compareArrayAVX512<1>({tail}, filled_vector);
+        break;
     }
     return result;
 }

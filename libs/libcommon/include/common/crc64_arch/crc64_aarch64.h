@@ -7,7 +7,6 @@
 
 namespace crc64::_detail
 {
-
 using simd_t = uint8x16_t;
 
 class SIMD
@@ -15,7 +14,8 @@ class SIMD
 public:
     using Poly64Pair = std::pair<poly64_t, poly64_t>;
 
-    SIMD(uint64_t high, uint64_t low) noexcept;
+    SIMD(uint64_t high, uint64_t low)
+    noexcept;
 
     [[nodiscard]] SIMD fold16(SIMD coeff) const noexcept;
 
@@ -47,9 +47,15 @@ private:
     [[nodiscard]] poly64_t low64() const noexcept;
 };
 
-inline SIMD::SIMD(uint64_t high, uint64_t low) noexcept { _inner = vcombine_u8(vcreate_u8(low), vcreate_u8(high)); }
+inline SIMD::SIMD(uint64_t high, uint64_t low) noexcept
+{
+    _inner = vcombine_u8(vcreate_u8(low), vcreate_u8(high));
+}
 
-inline SIMD SIMD::bitxor(SIMD that) const noexcept { return SIMD{veorq_u8(_inner, that._inner)}; }
+inline SIMD SIMD::bitxor(SIMD that) const noexcept
+{
+    return SIMD{veorq_u8(_inner, that._inner)};
+}
 
 inline SIMD SIMD::fold8(uint64_t coeff) const noexcept
 {
@@ -89,7 +95,9 @@ inline uint64_t SIMD::barrett(uint64_t poly, uint64_t mu) const noexcept
     return reduced ^ static_cast<uint64_t>(t1);
 }
 
-inline SIMD::SIMD(simd_t inner) noexcept : _inner(inner) {}
+inline SIMD::SIMD(simd_t inner) noexcept
+    : _inner(inner)
+{}
 
 inline SIMD & SIMD::operator^=(const SIMD & that) noexcept
 {
@@ -97,11 +105,20 @@ inline SIMD & SIMD::operator^=(const SIMD & that) noexcept
     return *this;
 }
 
-inline SIMD SIMD::operator^(const SIMD & that) const noexcept { return bitxor(that); }
+inline SIMD SIMD::operator^(const SIMD & that) const noexcept
+{
+    return bitxor(that);
+}
 
-inline bool SIMD::operator==(const SIMD & that) const noexcept { return ::memcmp(&_inner, &that._inner, 16) == 0; }
+inline bool SIMD::operator==(const SIMD & that) const noexcept
+{
+    return ::memcmp(&_inner, &that._inner, 16) == 0;
+}
 
-inline SIMD SIMD::aligned(const void * address) noexcept { return SIMD{vld1q_u8(reinterpret_cast<const uint8_t *>(address))}; }
+inline SIMD SIMD::aligned(const void * address) noexcept
+{
+    return SIMD{vld1q_u8(reinterpret_cast<const uint8_t *>(address))};
+}
 
 inline SIMD SIMD::from_mul(poly64_t a, poly64_t b) noexcept
 {

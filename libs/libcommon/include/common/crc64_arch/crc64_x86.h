@@ -1,18 +1,19 @@
 #pragma once
 #ifdef __x86_64__
 #include <immintrin.h>
-#include <cstdint>
+
 #include <cstddef>
+#include <cstdint>
 namespace crc64::_detail
 {
-
 using simd_t = __m128i;
 
 
 class SIMD
 {
 public:
-    SIMD(uint64_t high, uint64_t low) noexcept;
+    SIMD(uint64_t high, uint64_t low)
+    noexcept;
 
     [[nodiscard]] SIMD fold16(SIMD coeff) const noexcept;
 
@@ -36,9 +37,15 @@ private:
     simd_t inner{};
 };
 
-inline SIMD::SIMD(uint64_t high, uint64_t low) noexcept { inner = _mm_set_epi64x(static_cast<int64_t>(high), static_cast<int64_t>(low)); }
+inline SIMD::SIMD(uint64_t high, uint64_t low) noexcept
+{
+    inner = _mm_set_epi64x(static_cast<int64_t>(high), static_cast<int64_t>(low));
+}
 
-inline SIMD SIMD::bitxor(SIMD that) const noexcept { return SIMD{_mm_xor_si128(inner, that.inner)}; }
+inline SIMD SIMD::bitxor(SIMD that) const noexcept
+{
+    return SIMD{_mm_xor_si128(inner, that.inner)};
+}
 
 inline SIMD SIMD::fold8(uint64_t coeff) const noexcept
 {
@@ -65,7 +72,9 @@ inline uint64_t SIMD::barrett(uint64_t poly, uint64_t mu) const noexcept
     return static_cast<uint64_t>(_mm_extract_epi64(reduced.inner, 1));
 }
 
-inline SIMD::SIMD(simd_t val) noexcept : inner(val) {}
+inline SIMD::SIMD(simd_t val) noexcept
+    : inner(val)
+{}
 
 inline SIMD & SIMD::operator^=(const SIMD & that) noexcept
 {
@@ -73,7 +82,10 @@ inline SIMD & SIMD::operator^=(const SIMD & that) noexcept
     return *this;
 }
 
-inline SIMD SIMD::operator^(const SIMD & that) const noexcept { return bitxor(that); }
+inline SIMD SIMD::operator^(const SIMD & that) const noexcept
+{
+    return bitxor(that);
+}
 
 inline bool SIMD::operator==(const SIMD & that) const noexcept
 {
@@ -82,7 +94,10 @@ inline bool SIMD::operator==(const SIMD & that) const noexcept
     return mask == 0xFFFF;
 }
 
-inline SIMD SIMD::aligned(const void * address) noexcept { return SIMD{_mm_load_si128(reinterpret_cast<const __m128i *>(address))}; }
+inline SIMD SIMD::aligned(const void * address) noexcept
+{
+    return SIMD{_mm_load_si128(reinterpret_cast<const __m128i *>(address))};
+}
 
 } // namespace crc64::_detail
 #endif

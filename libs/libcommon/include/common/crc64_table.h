@@ -1484,7 +1484,10 @@ static inline const uint64_t TABLE_15[256] = {
 
 // clang-format on
 
-static inline uint64_t update1(uint64_t state, uint8_t x) { return (state >> 8) ^ TABLE_0[x ^ (static_cast<uint8_t>(state))]; }
+static inline uint64_t update1(uint64_t state, uint8_t x)
+{
+    return (state >> 8) ^ TABLE_0[x ^ (static_cast<uint8_t>(state))];
+}
 
 static inline uint64_t update16(uint64_t state, const std::array<uint8_t, 16> & slice)
 {
@@ -1509,7 +1512,7 @@ static inline uint64_t update16(uint64_t state, const std::array<uint8_t, 16> & 
 static inline uint64_t update_table(uint64_t state, const void * src, size_t length)
 {
     auto address = reinterpret_cast<uintptr_t>(src);
-    const auto *ptr = reinterpret_cast<const uint8_t *>(src);
+    const auto * ptr = reinterpret_cast<const uint8_t *>(src);
     auto prefix = (-address) & 15;
     if (prefix >= length)
     {
@@ -1527,7 +1530,7 @@ static inline uint64_t update_table(uint64_t state, const void * src, size_t len
     };
     for (size_t i = 0; i < middle; i += 16, ptr += 16)
     {
-        const auto *aligned = reinterpret_cast<const uint8_t *>(__builtin_assume_aligned(ptr, 16));
+        const auto * aligned = reinterpret_cast<const uint8_t *>(__builtin_assume_aligned(ptr, 16));
         std::array<uint8_t, 16> slice{
             aligned[0],
             aligned[1],
