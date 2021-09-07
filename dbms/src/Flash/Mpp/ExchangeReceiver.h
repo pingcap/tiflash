@@ -21,6 +21,35 @@
 
 #pragma GCC diagnostic pop
 
+namespace pingcap
+{
+namespace kv
+{
+template <>
+struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
+{
+    using RequestType = ::mpp::EstablishMPPConnectionRequest;
+    using ResultType = ::mpp::MPPDataPacket;
+    static std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> doRPCCall(
+        grpc::ClientContext * context,
+        std::shared_ptr<KvConnClient> client,
+        const RequestType & req)
+    {
+        return client->stub->EstablishMPPConnection(context, req);
+    }
+    static std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> doAsyncRPCCall(
+        grpc::ClientContext * context,
+        std::shared_ptr<KvConnClient> client,
+        const RequestType & req,
+        grpc::CompletionQueue & cq,
+        void * call)
+    {
+        return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call);
+    }
+};
+
+} // namespace kv
+} // namespace pingcap
 
 namespace DB
 {
@@ -53,18 +82,97 @@ enum State
     CLOSED,
 };
 
-class ExchangeReceiver
+struct GRPCContextForRecevier
+{
+    using StatusType = ::grpc::Status;
+
+    struct Request
+    {
+        Int64 send_task_id = -1;
+        std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
+
+        String DebugString() const
+        {
+            return req->DebugString();
+        }
+    };
+
+    struct Reader
+    {
+        pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call;
+        grpc::ClientContext client_context;
+        std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
+
+        explicit Reader(const Request & req)
+            : call(req.req)
+        {}
+
+        void initialize() const
+        {
+            reader->WaitForInitialMetadata();
+        }
+
+        bool read(mpp::MPPDataPacket * packet) const
+        {
+            return reader->Read(packet);
+        }
+
+        StatusType finish() const
+        {
+            return reader->Finish();
+        }
+    };
+
+    pingcap::kv::Cluster * cluster;
+
+    explicit GRPCContextForRecevier(pingcap::kv::Cluster * cluster_)
+        : cluster(cluster_)
+    {}
+
+    Request makeRequest(
+        int index,
+        const tipb::ExchangeReceiver & pb_exchange_receiver,
+        const ::mpp::TaskMeta & task_meta) const
+    {
+        const auto & meta_raw = pb_exchange_receiver.encoded_task_meta(index);
+        auto sender_task = std::make_unique<mpp::TaskMeta>();
+        sender_task->ParseFromString(meta_raw);
+        Request req;
+        req.send_task_id = sender_task->task_id();
+        req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
+        req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
+        req.req->set_allocated_sender_meta(sender_task.release());
+        return req;
+    }
+
+    std::shared_ptr<Reader> makeReader(const Request & request) const
+    {
+        auto reader = std::make_shared<Reader>(request);
+        reader->reader = cluster->rpc_client->sendStreamRequest(
+            request.req->sender_meta().address(),
+            &reader->client_context,
+            reader->call);
+        return reader;
+    }
+
+    static StatusType getStatusOK()
+    {
+        return ::grpc::Status::OK;
+    }
+};
+
+template <typename RPCContext>
+class ExchangeReceiverBase
 {
 public:
     static constexpr bool is_streaming_reader = true;
 
 private:
-    pingcap::kv::Cluster * cluster;
-
-    tipb::ExchangeReceiver pb_exchange_receiver;
-    size_t source_num;
-    ::mpp::TaskMeta task_meta;
-    size_t max_buffer_size;
+    std::shared_ptr<RPCContext> rpc_context;
+    const tipb::ExchangeReceiver pb_exchange_receiver;
+    const size_t source_num;
+    const ::mpp::TaskMeta task_meta;
+    const size_t max_buffer_size;
     std::vector<std::thread> workers;
     DAGSchema schema;
 
@@ -78,9 +186,118 @@ private:
 
     std::shared_ptr<LogWithPrefix> log;
 
-    void setUpConnection();
+    void setUpConnection()
+    {
+        for (size_t index = 0; index < source_num; ++index)
+        {
+            std::thread t(&ExchangeReceiverBase::ReadLoop, this, index);
+            workers.push_back(std::move(t));
+        }
+    }
 
-    void ReadLoop(const String & meta_raw, size_t source_index);
+    void ReadLoop(size_t source_index)
+    {
+        bool meet_error = false;
+        String local_err_msg;
+
+        Int64 send_task_id = -1;
+        Int64 recv_task_id = task_meta.task_id();
+
+        try
+        {
+            auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
+            send_task_id = req.send_task_id;
+            String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
+            LOG_DEBUG(log, "begin start and read : " << req.DebugString());
+            auto status = RPCContext::getStatusOK();
+            for (int i = 0; i < 10; i++)
+            {
+                auto reader = rpc_context->makeReader(req);
+                reader->initialize();
+                mpp::MPPDataPacket packet;
+                bool has_data = false;
+                for (;;)
+                {
+                    LOG_TRACE(log, "begin next ");
+                    bool success = reader->read(&packet);
+                    if (!success)
+                        break;
+                    else
+                        has_data = true;
+                    if (packet.has_error())
+                    {
+                        throw Exception("Exchange receiver meet error : " + packet.error().msg());
+                    }
+                    if (!decodePacket(packet, source_index, req_info))
+                    {
+                        meet_error = true;
+                        local_err_msg = "Decode packet meet error";
+                        LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                        break;
+                    }
+                }
+                // if meet error, such as decode packect fails, it will not retry.
+                if (meet_error)
+                {
+                    break;
+                }
+                status = reader->finish();
+                if (status.ok())
+                {
+                    LOG_DEBUG(log, "finish read : " << req.DebugString());
+                    break;
+                }
+                else
+                {
+                    LOG_WARNING(
+                        log,
+                        "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                    // if we have received some data, we should not retry.
+                    if (has_data)
+                        break;
+
+                    using namespace std::chrono_literals;
+                    std::this_thread::sleep_for(1s);
+                }
+            }
+            if (!status.ok())
+            {
+                meet_error = true;
+                local_err_msg = status.error_message();
+            }
+        }
+        catch (Exception & e)
+        {
+            meet_error = true;
+            local_err_msg = e.message();
+        }
+        catch (std::exception & e)
+        {
+            meet_error = true;
+            local_err_msg = e.what();
+        }
+        catch (...)
+        {
+            meet_error = true;
+            local_err_msg = "fatal error";
+        }
+        std::lock_guard<std::mutex> lock(mu);
+        live_connections--;
+
+        // avoid concurrent conflict
+        Int32 live_conn_copy = live_connections;
+
+        if (meet_error && state == NORMAL)
+            state = ERROR;
+        if (meet_error && err_msg.empty())
+            err_msg = local_err_msg;
+        cv.notify_all();
+
+        LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, live_conn_copy));
+
+        if (live_conn_copy == 0)
+            LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
+    }
 
     bool decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
     {
@@ -109,13 +326,18 @@ private:
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
-        : cluster(context_.getTMTContext().getKVCluster())
+    ExchangeReceiverBase(
+        std::shared_ptr<RPCContext> rpc_context_,
+        const ::tipb::ExchangeReceiver & exc,
+        const ::mpp::TaskMeta & meta,
+        size_t max_buffer_size_,
+        const LogWithPrefixPtr & log_ = nullptr)
+        : rpc_context(std::move(rpc_context_))
         , pb_exchange_receiver(exc)
         , source_num(pb_exchange_receiver.encoded_task_meta_size())
         , task_meta(meta)
         , max_buffer_size(max_buffer_size_)
-        , live_connections(pb_exchange_receiver.encoded_task_meta_size())
+        , live_connections(source_num)
         , state(NORMAL)
     {
         log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
@@ -130,7 +352,7 @@ public:
         setUpConnection();
     }
 
-    ~ExchangeReceiver()
+    ~ExchangeReceiverBase()
     {
         {
             std::unique_lock<std::mutex> lk(mu);
@@ -186,4 +408,12 @@ public:
     size_t getSourceNum() { return source_num; }
     String getName() { return "ExchangeReceiver"; }
 };
+
+class ExchangeReceiver : public ExchangeReceiverBase<GRPCContextForRecevier>
+{
+public:
+    using Base = ExchangeReceiverBase<GRPCContextForRecevier>;
+    using Base::Base;
+};
+
 } // namespace DB

@@ -169,7 +169,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
 public:
     explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
-        : remote_reader(remote_reader_)
+        : remote_reader(std::move(remote_reader_))
         , source_num(remote_reader->getSourceNum())
         , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
         , execution_summaries_inited(source_num)
