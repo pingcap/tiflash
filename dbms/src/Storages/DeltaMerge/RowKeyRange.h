@@ -52,6 +52,7 @@ struct RowKeyValue
 {
     RowKeyValue() = default;
     RowKeyValue(bool is_common_handle_, HandleValuePtr value_, Int64 int_value_)
+
         : is_common_handle(is_common_handle_), value(value_), int_value(int_value_)
     {
     }
@@ -275,22 +276,25 @@ struct RowKeyColumnContainer
     RowKeyColumnContainer(const ColumnPtr & column_, bool is_common_handle_)
         : column(column_), is_common_handle(is_common_handle_), is_constant_column(column->isColumnConst())
     {
-        ColumnPtr non_const_column_ptr = column;
+        const IColumn * non_const_column_ptr = column.get();
         if (unlikely(is_constant_column))
         {
-            non_const_column_ptr = checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr();
+            non_const_column_ptr = checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr().get();
         }
+
+
         if (is_common_handle)
         {
-            const auto & column_string = *checkAndGetColumn<ColumnString>(non_const_column_ptr.get());
+            const auto & column_string = *checkAndGetColumn<ColumnString>(non_const_column_ptr);
             string_data                = &column_string.getChars();
             string_offsets             = &column_string.getOffsets();
         }
         else
         {
-            int_data = &toColumnVectorData<Int64>(non_const_column_ptr);
+            int_data = &toColumnVectorData<Int64>(*non_const_column_ptr);
         }
     }
+
     RowKeyValueRef getRowKeyValue(size_t index) const
     {
         // todo check index out of bound error
@@ -665,9 +669,11 @@ struct RowKeyRange
                     end_value = RowKeyValue::INT_HANDLE_MAX_KEY;
             }
             else
+            {
                 end_value
                     = RowKeyValue(is_common_handle,
                                   std::make_shared<std::string>(end_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, end_key.end()));
+            }
             return RowKeyRange(start_value, end_value, is_common_handle, rowkey_column_size);
         }
         else
