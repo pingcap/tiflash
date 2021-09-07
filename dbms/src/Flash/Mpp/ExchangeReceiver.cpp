@@ -53,8 +53,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
     try
     {
         auto sender_task = new mpp::TaskMeta();
+        if (!sender_task->ParseFromString(meta_raw))
+        {
+            throw Exception("parse task meta error!");
+        }
         send_task_id = sender_task->task_id();
-        sender_task->ParseFromString(meta_raw);
         auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
         req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
         req->set_allocated_sender_meta(sender_task);
