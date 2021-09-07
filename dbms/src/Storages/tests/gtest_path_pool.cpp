@@ -347,7 +347,7 @@ private:
 };
 
 
-class PathCapcatity : public DB::base::TiFlashStorageTestBasic
+class PathCapcatity_test : public DB::base::TiFlashStorageTestBasic
 {
     void SetUp() override
     {
@@ -377,7 +377,7 @@ protected:
     std::string lastest_data_path;
 };
 
-TEST_F(PathCapcatity, SingleDiskSinglePathTest)
+TEST_F(PathCapcatity_test, SingleDiskSinglePathTest)
 {
     size_t capactity = 100;
     size_t used = 10;
@@ -429,7 +429,7 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
     }
 }
 
-TEST_F(PathCapcatity, MultiDiskMultiPathTest)
+TEST_F(PathCapcatity_test, MultiDiskMultiPathTest)
 {
     MockPathCapacityMetrics capacity = MockPathCapacityMetrics(0, {main_data_path}, {100}, {lastest_data_path}, {100});
 
@@ -497,7 +497,7 @@ struct TestPathInfo
 
 using TestPathInfos = std::vector<TestPathInfo>;
 
-String callChoosePath(const Strings & main_paths_, DisksCapacity & disks_cap)
+String callChoosePath(const Strings & main_paths_, const DisksCapacity & disks_cap)
 {
     TestPathInfos infos;
     for (auto & path : main_paths_)
@@ -512,7 +512,7 @@ String callChoosePath(const Strings & main_paths_, DisksCapacity & disks_cap)
     return PathSelector::chooseFromDisksCapacity(infos, disks_cap, path_generator, &Poco::Logger::get("PathPool_test"), "");
 }
 
-TEST_F(PathCapcatity, ChoosePath)
+TEST_F(PathCapcatity_test, ChoosePath)
 {
     const auto & main_data_path1 = getTemporaryPath() + "/main1";
     const auto & main_data_path2 = getTemporaryPath() + "/main2";
