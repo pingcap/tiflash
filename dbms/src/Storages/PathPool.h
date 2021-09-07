@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Storages/Page/PageDefines.h>
 
+#include <mutex>
 #include <unordered_map>
 
 namespace Poco
@@ -39,12 +40,12 @@ public:
     PathPool() = default;
 
     // Constructor to be used during initialization
-    PathPool( //
+    PathPool(
         const Strings & main_data_paths,
-        const Strings & latest_data_paths, //
-        const Strings & kvstore_paths, //
+        const Strings & latest_data_paths,
+        const Strings & kvstore_paths,
         PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider_, //
+        FileProviderPtr file_provider_,
         bool enable_raft_compatible_mode_ = false);
 
     // Constructor to create PathPool for one Storage
@@ -242,12 +243,14 @@ class StoragePathPool
 public:
     static constexpr const char * STABLE_FOLDER_NAME = "stable";
 
-    StoragePathPool(const Strings & main_data_paths, const Strings & latest_data_paths, //
-                    String database_,
-                    String table_,
-                    bool path_need_database_name_, //
-                    PathCapacityMetricsPtr global_capacity_,
-                    FileProviderPtr file_provider_);
+    StoragePathPool(
+        const Strings & main_data_paths,
+        const Strings & latest_data_paths,
+        String database_,
+        String table_,
+        bool path_need_database_name_,
+        PathCapacityMetricsPtr global_capacity_,
+        FileProviderPtr file_provider_);
 
     StoragePathPool(const StoragePathPool & rhs);
     StoragePathPool & operator=(const StoragePathPool & rhs);
