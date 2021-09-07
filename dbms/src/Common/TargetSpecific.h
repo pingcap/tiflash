@@ -16,8 +16,20 @@
  *
  * Notice that we do not dispatch functions for aarch64 targets.
  * The reason is that by default, GCC will enable `lse` and `simd` flags
- * on default. However, for aarch64, modern GCC is more favored since the SIMD
- * optimization is much better with more recent compilers.
+ * So we do not need to dispatch them in specific pragma scopes.
+ *
+ * P.S. aarch64
+ * vectorization quality is largely affected by the compiler version. For instance,
+ * GCC-7 may not do some good vectorization where GCC-11 can do good job.
+ * Please check the generated code with
+ * target compilers and consider writing the code with `SimdWord` to hint the compiler
+ * more eagerly if aarch64 performance is important for your piece of code.
+ *
+ * One should consider use one of the following macros in the header:
+ * 1. TIFLASH_DECLARE_MULTITARGET_FUNCTION: declare and implement the functions in one shot.
+ * 2. TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP: declare and implement the functions in one shot (with template parameters).
+ * 3. TIFLASH_DECLARE_MULTITARGET_FUNCTION_ALONE: declare the function without template parameter
+ * 4. TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION: implement the function body
  */
 
 // clang-format off
@@ -53,33 +65,33 @@
 
 namespace DB::TargetSpecific
 {
-#define TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ...)       \
-    TPARMS                                                                \
-    struct _TiflashGenericTarget_##NAME                                   \
-    {                                                                     \
-        using ReturnType = RETURN;                                        \
-        static constexpr size_t WORD_SIZE = 16;                           \
-        using SimdWord = ::DB::TargetSpecific::Detail::Generic::Word<16>; \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                 \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__        \
+#define TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ...)              \
+    TPARMS                                                                       \
+    struct _TiflashGenericTarget_##NAME                                          \
+    {                                                                            \
+        using ReturnType = RETURN;                                               \
+        static constexpr size_t WORD_SIZE = 16;                                  \
+        using SimdWord = ::DB::TargetSpecific::Detail::Generic::Word<WORD_SIZE>; \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                        \
+        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__           \
     };
 #define TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE) _TiflashGenericTarget_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ...) \
     __attribute__((noinline)) RETURN TIFLASH_GENERIC_DISPATCH_UNIT(NAME, TYPE)::invoke __VA_ARGS__
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
-    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                      \
-    TPARMS                                                               \
-    struct _TiflashAVXTarget_##NAME                                      \
-    {                                                                    \
-        using ReturnType = RETURN;                                       \
-        using Checker = ::DB::TargetSpecific::AVXChecker;                \
-        static constexpr size_t WORD_SIZE = 32;                          \
-        using SimdWord = ::DB::TargetSpecific::Detail::AVX::Word<32>;    \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__       \
-    };                                                                   \
+#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)     \
+    TIFLASH_BEGIN_AVX_SPECIFIC_CODE                                          \
+    TPARMS                                                                   \
+    struct _TiflashAVXTarget_##NAME                                          \
+    {                                                                        \
+        using ReturnType = RETURN;                                           \
+        using Checker = ::DB::TargetSpecific::AVXChecker;                    \
+        static constexpr size_t WORD_SIZE = 32;                              \
+        using SimdWord = ::DB::TargetSpecific::Detail::AVX::Word<WORD_SIZE>; \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                    \
+        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__       \
+    };                                                                       \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 
 #define TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE) _TiflashAVXTarget_##NAME
@@ -102,18 +114,18 @@ struct AVXChecker
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
-    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                                      \
-    TPARMS                                                                  \
-    struct _TiflashAVX512Target_##NAME                                      \
-    {                                                                       \
-        using ReturnType = RETURN;                                          \
-        using Checker = ::DB::TargetSpecific::AVX512Checker;                \
-        static constexpr size_t WORD_SIZE = 64;                             \
-        using SimdWord = ::DB::TargetSpecific::Detail::AVX512::Word<64>;    \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                   \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__          \
-    };                                                                      \
+#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)     \
+    TIFLASH_BEGIN_AVX512_SPECIFIC_CODE                                          \
+    TPARMS                                                                      \
+    struct _TiflashAVX512Target_##NAME                                          \
+    {                                                                           \
+        using ReturnType = RETURN;                                              \
+        using Checker = ::DB::TargetSpecific::AVX512Checker;                    \
+        static constexpr size_t WORD_SIZE = 64;                                 \
+        using SimdWord = ::DB::TargetSpecific::Detail::AVX512::Word<WORD_SIZE>; \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                       \
+        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__          \
+    };                                                                          \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE) _TiflashAVX512Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(RETURN, NAME, ...)                           \
@@ -140,18 +152,18 @@ struct AVX512Checker
 #endif
 
 #ifdef __x86_64__
-#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
-    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                                      \
-    TPARMS                                                                \
-    struct _TiflashSSE4Target_##NAME                                      \
-    {                                                                     \
-        using ReturnType = RETURN;                                        \
-        using Checker = ::DB::TargetSpecific::SSE4Checker;                \
-        static constexpr size_t WORD_SIZE = 16;                           \
-        using SimdWord = ::DB::TargetSpecific::Detail::SSE4::Word<16>;    \
-        TIFLASH_DUMMY_FUNCTION_DEFINITION                                 \
-        static __attribute__((noinline)) RETURN invoke __VA_ARGS__        \
-    };                                                                    \
+#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...)     \
+    TIFLASH_BEGIN_SSE4_SPECIFIC_CODE                                          \
+    TPARMS                                                                    \
+    struct _TiflashSSE4Target_##NAME                                          \
+    {                                                                         \
+        using ReturnType = RETURN;                                            \
+        using Checker = ::DB::TargetSpecific::SSE4Checker;                    \
+        static constexpr size_t WORD_SIZE = 16;                               \
+        using SimdWord = ::DB::TargetSpecific::Detail::SSE4::Word<WORD_SIZE>; \
+        TIFLASH_DUMMY_FUNCTION_DEFINITION                                     \
+        static __attribute__((noinline)) ReturnType invoke __VA_ARGS__        \
+    };                                                                        \
     TIFLASH_END_TARGET_SPECIFIC_CODE
 #define TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE) _TiflashSSE4Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(RETURN, NAME, ...)                           \
@@ -214,7 +226,7 @@ struct Dispatch<Last>
     }
 };
 
-#define TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)                                       \
+#define TIFLASH_MULTITARGET_DISPATCH(RETURN, NAME, ARG_NAMES, ARG_LIST)                                       \
     RETURN NAME ARG_LIST                                                                                      \
     {                                                                                                         \
         return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN),                     \
@@ -223,7 +235,7 @@ struct Dispatch<Last>
                                               TIFLASH_GENERIC_DISPATCH_UNIT(NAME, RETURN)>::invoke ARG_NAMES; \
     }
 
-#define TIFLASH_MULTITARGET_ENTRANCE_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)          \
+#define TIFLASH_MULTITARGET_DISPATCH_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)          \
     TPARMS RETURN NAME ARG_LIST                                                                    \
     {                                                                                              \
         return ::DB::TargetSpecific::Dispatch<TIFLASH_AVX512_DISPATCH_UNIT(NAME, RETURN) < TARGS>, \
@@ -254,7 +266,7 @@ struct Dispatch<Last>
     TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST __VA_ARGS__)     \
     TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST __VA_ARGS__)      \
     TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(, RETURN, NAME, ARG_LIST __VA_ARGS__)   \
-    TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)
+    TIFLASH_MULTITARGET_DISPATCH(RETURN, NAME, ARG_NAMES, ARG_LIST)
 
 #define TIFLASH_DECLARE_MULTITARGET_FUNCTION_ALONE(RETURN, NAME, ARG_LIST) \
     TIFLASH_DECLARE_GENERIC_FUNCTION(, RETURN, NAME, ARG_LIST;)            \
@@ -268,7 +280,7 @@ struct Dispatch<Last>
     TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(RETURN, NAME, ARG_LIST __VA_ARGS__)  \
     TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(RETURN, NAME, ARG_LIST __VA_ARGS__)    \
     TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_GENERIC(RETURN, NAME, ARG_LIST __VA_ARGS__) \
-    TIFLASH_MULTITARGET_ENTRANCE(RETURN, NAME, ARG_NAMES, ARG_LIST)
+    TIFLASH_MULTITARGET_DISPATCH(RETURN, NAME, ARG_NAMES, ARG_LIST)
 
 /// \example
 /// \code{.cpp}
@@ -288,7 +300,7 @@ struct Dispatch<Last>
     TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)                 \
     TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)                  \
     TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ARG_LIST __VA_ARGS__)               \
-    TIFLASH_MULTITARGET_ENTRANCE_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)
+    TIFLASH_MULTITARGET_DISPATCH_TP(TPARMS, TARGS, RETURN, NAME, ARG_NAMES, ARG_LIST)
 
 namespace Detail
 {
