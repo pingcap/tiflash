@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
@@ -79,10 +78,6 @@ struct CVBoundedQueue
     bool isFull()
     {
         return q.size() == capacity;
-    }
-    size_t getCapacity()
-    {
-        return capacity;
     }
     void push(T & t)
     {
