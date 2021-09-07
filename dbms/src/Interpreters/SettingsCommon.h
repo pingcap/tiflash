@@ -41,7 +41,7 @@ public:
     SettingInt(IntType x = 0)
         : value(x)
     {}
-    SettingInt(const SettingInt & setting) { value = setting.value.load(); }
+    SettingInt(const SettingInt & setting) { value.store(setting.value.load()); }
 
     operator IntType() const { return value.load(); }
     SettingInt & operator=(IntType x)
@@ -83,7 +83,7 @@ public:
         set(x);
     }
 
-    IntType get()
+    IntType get() const
     {
         return value.load();
     }
@@ -183,7 +183,7 @@ public:
         return getNumberOfPhysicalCPUCores();
     }
 
-    UInt64 get()
+    UInt64 get() const
     {
         return value;
     }
@@ -249,7 +249,7 @@ public:
         writeVarUInt(value.totalSeconds(), buf);
     }
 
-    Poco::Timespan get()
+    Poco::Timespan get() const
     {
         return value;
     }
@@ -315,7 +315,7 @@ public:
         writeVarUInt(value.totalMilliseconds(), buf);
     }
 
-    Poco::Timespan get()
+    Poco::Timespan get() const
     {
         return value;
     }
@@ -392,7 +392,7 @@ public:
         writeBinary(toString(), buf);
     }
 
-    float get()
+    float get() const
     {
         return value.load();
     }
@@ -478,7 +478,7 @@ public:
         writeBinary(toString(), buf);
     }
 
-    LoadBalancing get()
+    LoadBalancing get() const
     {
         return value;
     }
@@ -491,13 +491,17 @@ private:
 /// Which rows should be included in TOTALS.
 enum class TotalsMode
 {
-    BEFORE_HAVING = 0, /// Count HAVING for all read rows;
-        ///  including those not in max_rows_to_group_by
-        ///  and have not passed HAVING after grouping.
-    AFTER_HAVING_INCLUSIVE = 1, /// Count on all rows except those that have not passed HAVING;
-        ///  that is, to include in TOTALS all the rows that did not pass max_rows_to_group_by.
-    AFTER_HAVING_EXCLUSIVE = 2, /// Include only the rows that passed and max_rows_to_group_by, and HAVING.
-    AFTER_HAVING_AUTO = 3, /// Automatically select between INCLUSIVE and EXCLUSIVE,
+    /// Count HAVING for all read rows;
+    ///  including those not in max_rows_to_group_by
+    ///  and have not passed HAVING after grouping.
+    BEFORE_HAVING = 0,
+    /// Count on all rows except those that have not passed HAVING;
+    ///  that is, to include in TOTALS all the rows that did not pass max_rows_to_group_by.
+    AFTER_HAVING_INCLUSIVE = 1,
+    /// Include only the rows that passed and max_rows_to_group_by, and HAVING.
+    AFTER_HAVING_EXCLUSIVE = 2,
+    /// Automatically select between INCLUSIVE and EXCLUSIVE,
+    AFTER_HAVING_AUTO = 3,
 };
 
 struct SettingTotalsMode
@@ -576,7 +580,7 @@ public:
         writeBinary(toString(), buf);
     }
 
-    TotalsMode get()
+    TotalsMode get() const
     {
         return value;
     }
@@ -663,7 +667,7 @@ public:
         writeBinary(toString(), buf);
     }
 
-    OverflowMode get()
+    OverflowMode get() const
     {
         return value;
     }
@@ -738,7 +742,7 @@ public:
         writeBinary(toString(), buf);
     }
 
-    CompressionMethod get()
+    CompressionMethod get() const
     {
         return value;
     }
@@ -823,7 +827,7 @@ public:
         writeBinary(toString(), buf);
     }
 
-    DistributedProductMode get()
+    DistributedProductMode get() const
     {
         return value;
     }
@@ -877,7 +881,7 @@ public:
         writeBinary(value, buf);
     }
 
-    String get()
+    String get() const
     {
         return value;
     }

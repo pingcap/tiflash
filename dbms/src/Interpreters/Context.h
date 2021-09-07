@@ -132,9 +132,9 @@ private:
     using ProgressCallback = std::function<void(const Progress & progress)>;
     ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
     ProcessListElement * process_list_elem = nullptr; /// For tracking total resource usage for query.
-
-    String default_format; /// Format, used when server formats data by itself and if query does not have FORMAT specification.
-        /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
+    /// Format, used when server formats data by itself and if query does not have FORMAT specification.
+    /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
+    String default_format;
     TableAndCreateASTs external_tables; /// Temporary tables.
     Tables table_function_results; /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
     Context * query_context = nullptr;
@@ -396,10 +396,10 @@ public:
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePathCapacityMetric( //
-        size_t global_capacity_quota, //
+    void initializePathCapacityMetric(
+        size_t global_capacity_quota,
         const Strings & main_data_paths,
-        const std::vector<size_t> & main_capacity_quota, //
+        const std::vector<size_t> & main_capacity_quota,
         const Strings & latest_data_paths,
         const std::vector<size_t> & latest_capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
@@ -482,7 +482,7 @@ public:
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;
 
-    void reloadDtConfig(const Poco::Util::AbstractConfiguration & config);
+    void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
 
 private:
     /** Check if the current client has access to the specified database.

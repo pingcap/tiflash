@@ -1142,7 +1142,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
-            global_context->reloadDtConfig(*config);
+            global_context->reloadDeltaTreeConfig(*config);
         },
         /* already_loaded = */ true);
 

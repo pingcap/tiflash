@@ -840,8 +840,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             if (relative_sample_size == RelativeSize(0))
                 relative_sample_size = 1;
 
-            relative_sample_size /= static_cast<UInt64>(settings.parallel_replicas_count);
-            relative_sample_offset += relative_sample_size * RelativeSize(static_cast<UInt64>(settings.parallel_replica_offset));
+            relative_sample_size /= settings.parallel_replicas_count.get();
+            relative_sample_offset += relative_sample_size * RelativeSize(settings.parallel_replica_offset.get());
         }
 
         if (relative_sample_offset >= RelativeSize(1))
