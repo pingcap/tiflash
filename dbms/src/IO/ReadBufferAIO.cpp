@@ -1,40 +1,33 @@
 #if !(defined(__FreeBSD__) || defined(__APPLE__) || defined(_MSC_VER))
 
-#include <IO/ReadBufferAIO.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Core/Defines.h>
-
-#include <sys/types.h>
+#include <IO/ReadBufferAIO.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include <optional>
 
 
 namespace ProfileEvents
 {
-    extern const Event FileOpen;
-    extern const Event FileOpenFailed;
-    extern const Event ReadBufferAIORead;
-    extern const Event ReadBufferAIOReadBytes;
-}
-
-namespace CurrentMetrics
-{
-    extern const Metric Read;
-}
+extern const Event FileOpen;
+extern const Event FileOpenFailed;
+extern const Event ReadBufferAIORead;
+extern const Event ReadBufferAIOReadBytes;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int FILE_DOESNT_EXIST;
-    extern const int CANNOT_OPEN_FILE;
-    extern const int LOGICAL_ERROR;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int AIO_READ_ERROR;
-}
+extern const int FILE_DOESNT_EXIST;
+extern const int CANNOT_OPEN_FILE;
+extern const int LOGICAL_ERROR;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int AIO_READ_ERROR;
+} // namespace ErrorCodes
 
 
 /// Note: an additional page is allocated that will contain the data that
@@ -64,7 +57,7 @@ ReadBufferAIO::~ReadBufferAIO()
     {
         try
         {
-            (void) waitForAIOCompletion();
+            (void)waitForAIOCompletion();
         }
         catch (...)
         {
@@ -85,8 +78,8 @@ void ReadBufferAIO::setMaxBytes(size_t max_bytes_read_)
 
 bool ReadBufferAIO::nextImpl()
 {
- /// If the end of the file has already been reached by calling this function,
- /// then the current call is wrong.
+    /// If the end of the file has already been reached by calling this function,
+    /// then the current call is wrong.
     if (is_eof)
         return false;
 
@@ -189,8 +182,6 @@ off_t ReadBufferAIO::doSeek(off_t off, int whence)
 
 void ReadBufferAIO::synchronousRead()
 {
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
-
     prepare();
     bytes_read = ::pread(fd, buffer_begin, region_aligned_size, region_aligned_begin);
 
@@ -215,7 +206,7 @@ void ReadBufferAIO::skip()
     is_aio = false;
 
     /// @todo I presume this assignment is redundant since waitForAIOCompletion() performs a similar one
-//    bytes_read = future_bytes_read.get();
+    //    bytes_read = future_bytes_read.get();
     if ((bytes_read < 0) || (static_cast<size_t>(bytes_read) < region_left_padding))
         throw Exception("Asynchronous read error on file " + filename, ErrorCodes::AIO_READ_ERROR);
 }
@@ -224,8 +215,6 @@ bool ReadBufferAIO::waitForAIOCompletion()
 {
     if (is_eof || !is_pending_read)
         return false;
-
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
 
     bytes_read = future_bytes_read.get();
     is_pending_read = false;
@@ -243,15 +232,16 @@ void ReadBufferAIO::prepare()
     /// Region of the disk from which we want to read data.
     const off_t region_begin = first_unread_pos_in_file;
 
-    if ((requested_byte_count > std::numeric_limits<off_t>::max()) ||
-        (first_unread_pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(requested_byte_count))))
+    if ((requested_byte_count > std::numeric_limits<off_t>::max())
+        || (first_unread_pos_in_file > (std::numeric_limits<off_t>::max() - static_cast<off_t>(requested_byte_count))))
         throw Exception("An overflow occurred during file operation", ErrorCodes::LOGICAL_ERROR);
 
     const off_t region_end = first_unread_pos_in_file + requested_byte_count;
 
     /// The aligned region of the disk from which we will read the data.
     region_left_padding = region_begin % DEFAULT_AIO_FILE_BLOCK_SIZE;
-    const size_t region_right_padding = (DEFAULT_AIO_FILE_BLOCK_SIZE - (region_end % DEFAULT_AIO_FILE_BLOCK_SIZE)) % DEFAULT_AIO_FILE_BLOCK_SIZE;
+    const size_t region_right_padding
+        = (DEFAULT_AIO_FILE_BLOCK_SIZE - (region_end % DEFAULT_AIO_FILE_BLOCK_SIZE)) % DEFAULT_AIO_FILE_BLOCK_SIZE;
 
     region_aligned_begin = region_begin - region_left_padding;
 
@@ -296,6 +286,6 @@ void ReadBufferAIO::finalize()
     std::swap(position(), fill_buffer.position());
 }
 
-}
+} // namespace DB
 
 #endif

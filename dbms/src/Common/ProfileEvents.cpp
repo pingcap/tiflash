@@ -152,11 +152,9 @@
     M(RWLockWritersWaitMilliseconds) \
     \
     M(PSMWritePages) \
-    M(PSMWriteCalls) \
     M(PSMWriteIOCalls) \
     M(PSMWriteBytes) \
     M(PSMReadPages) \
-    M(PSMReadCalls) \
     M(PSMReadIOCalls) \
     M(PSMReadBytes) \
     M(PSMWriteFailed) \
@@ -207,7 +205,6 @@
     M(DMFileFilterNoFilter) \
     M(DMFileFilterAftPKAndPackSet) \
     M(DMFileFilterAftRoughSet)
-
 
 namespace ProfileEvents
 {

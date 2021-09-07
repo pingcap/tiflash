@@ -1,24 +1,16 @@
 #include <Common/ProfileEvents.h>
-#include <Common/CurrentMetrics.h>
-
 #include <Encryption/ReadBufferFromFileProvider.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event ReadBufferFromFileDescriptorRead;
-    extern const Event ReadBufferFromFileDescriptorReadFailed;
-    extern const Event ReadBufferFromFileDescriptorReadBytes;
-}
-
-namespace CurrentMetrics
-{
-    extern const Metric Read;
-}
+extern const Event ReadBufferFromFileDescriptorRead;
+extern const Event ReadBufferFromFileDescriptorReadFailed;
+extern const Event ReadBufferFromFileDescriptorReadBytes;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
@@ -27,8 +19,13 @@ extern const int CANNOT_SEEK_THROUGH_FILE;
 extern const int CANNOT_SELECT;
 } // namespace ErrorCodes
 
-ReadBufferFromFileProvider::ReadBufferFromFileProvider(const FileProviderPtr & file_provider_, const std::string & file_name_,
-    const EncryptionPath & encryption_path_, size_t buf_size, int flags, char * existing_memory, size_t alignment)
+ReadBufferFromFileProvider::ReadBufferFromFileProvider(const FileProviderPtr & file_provider_,
+    const std::string & file_name_,
+    const EncryptionPath & encryption_path_,
+    size_t buf_size,
+    int flags,
+    char * existing_memory,
+    size_t alignment)
     : ReadBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment),
       file(file_provider_->newRandomAccessFile(file_name_, encryption_path_, flags))
 {
@@ -46,7 +43,6 @@ bool ReadBufferFromFileProvider::nextImpl()
 
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
             res = file->read(internal_buffer.begin(), internal_buffer.size());
         }
         if (!res)
