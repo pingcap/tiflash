@@ -29,19 +29,19 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_DIVISION;
-    extern const int ILLEGAL_COLUMN;
-    extern const int LOGICAL_ERROR;
-    extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
-    extern const int DECIMAL_OVERFLOW;
-}
+extern const int ILLEGAL_DIVISION;
+extern const int ILLEGAL_COLUMN;
+extern const int LOGICAL_ERROR;
+extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
+extern const int DECIMAL_OVERFLOW;
+} // namespace ErrorCodes
 
 //
 /// this one is just for convenience
-template <bool B, typename T1, typename T2> using If = std::conditional_t<B, T1, T2>;
+template <bool B, typename T1, typename T2>
+using If = std::conditional_t<B, T1, T2>;
 
 /** Arithmetic operations: +, -, *, /, %,
   * intDiv (integer division).
@@ -72,8 +72,7 @@ struct BinaryOperationImplBase
                 c[i] = Op::template apply<ResultType>(a[i], b[i]);
     }
 
-    static void NO_INLINE vector_vector_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap,
-        PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
+    static void NO_INLINE vector_vector_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
         size_t size = a.size();
         if (a_nullmap != nullptr && b_nullmap != nullptr)
@@ -106,14 +105,13 @@ struct BinaryOperationImplBase
     {
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
-            if constexpr(IsDecimal<A>)
+            if constexpr (IsDecimal<A>)
                 c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b);
             else
                 c[i] = Op::template apply<ResultType>(a[i], b);
     }
 
-    static void NO_INLINE vector_constant_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, typename NearestFieldType<B>::Type b,
-        PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
+    static void NO_INLINE vector_constant_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, typename NearestFieldType<B>::Type b, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
         size_t size = a.size();
         if (a_nullmap != nullptr)
@@ -123,7 +121,7 @@ struct BinaryOperationImplBase
                 res_null[i] = nullmap_data[i];
         }
         for (size_t i = 0; i < size; ++i)
-            if constexpr(IsDecimal<A>)
+            if constexpr (IsDecimal<A>)
                 c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b, res_null[i]);
             else
                 c[i] = Op::template apply<ResultType>(a[i], b, res_null[i]);
@@ -132,16 +130,16 @@ struct BinaryOperationImplBase
     static void NO_INLINE constant_vector(typename NearestFieldType<A>::Type a, const ArrayB & b, PaddedPODArray<ResultType> & c)
     {
         size_t size = b.size();
-        for (size_t i = 0; i < size; ++i) {
-            if constexpr(IsDecimal<B>)
+        for (size_t i = 0; i < size; ++i)
+        {
+            if constexpr (IsDecimal<B>)
                 c[i] = Op::template apply<ResultType>(a, DecimalField<B>(b[i], b.getScale()));
             else
                 c[i] = Op::template apply<ResultType>(a, b[i]);
         }
     }
 
-    static void NO_INLINE constant_vector_nullable(typename NearestFieldType<A>::Type a, const ArrayB & b, const ColumnUInt8 * b_nullmap,
-        PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
+    static void NO_INLINE constant_vector_nullable(typename NearestFieldType<A>::Type a, const ArrayB & b, const ColumnUInt8 * b_nullmap, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
         size_t size = b.size();
         if (b_nullmap != nullptr)
@@ -150,8 +148,9 @@ struct BinaryOperationImplBase
             for (size_t i = 0; i < size; i++)
                 res_null[i] = nullmap_data[i];
         }
-        for (size_t i = 0; i < size; ++i) {
-            if constexpr(IsDecimal<B>)
+        for (size_t i = 0; i < size; ++i)
+        {
+            if constexpr (IsDecimal<B>)
                 c[i] = Op::template apply<ResultType>(a, DecimalField<B>(b[i], b.getScale()), res_null[i]);
             else
                 c[i] = Op::template apply<ResultType>(a, b[i], res_null[i]);
@@ -173,9 +172,10 @@ struct BinaryOperationImpl : BinaryOperationImplBase<A, B, Op, ResultType>
 {
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct PlusImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct PlusImpl;
 template <typename A, typename B>
-struct PlusImpl<A,B,false>
+struct PlusImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfAdditionMultiplication<A, B>::Type;
 
@@ -186,14 +186,14 @@ struct PlusImpl<A,B,false>
         return static_cast<Result>(a) + b;
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct PlusImpl<A,B,true>
+struct PlusImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
@@ -204,16 +204,17 @@ struct PlusImpl<A,B,true>
         return static_cast<Result>(a) + static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct MultiplyImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct MultiplyImpl;
 
 template <typename A, typename B>
-struct MultiplyImpl<A,B,false>
+struct MultiplyImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfAdditionMultiplication<A, B>::Type;
 
@@ -223,14 +224,14 @@ struct MultiplyImpl<A,B,false>
         return static_cast<Result>(a) * b;
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct MultiplyImpl<A,B,true>
+struct MultiplyImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
 
@@ -241,16 +242,17 @@ struct MultiplyImpl<A,B,true>
         return static_cast<Result>(a) * static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct MinusImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct MinusImpl;
 
 template <typename A, typename B>
-struct MinusImpl<A,B,false>
+struct MinusImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfSubtraction<A, B>::Type;
 
@@ -260,14 +262,14 @@ struct MinusImpl<A,B,false>
         return static_cast<Result>(a) - b;
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct MinusImpl<A,B,true>
+struct MinusImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
@@ -278,15 +280,16 @@ struct MinusImpl<A,B,true>
         return static_cast<Result>(a) - static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct DivideFloatingImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct DivideFloatingImpl;
 template <typename A, typename B>
-struct DivideFloatingImpl<A,B,false>
+struct DivideFloatingImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfFloatingPointDivision<A, B>::Type;
 
@@ -297,14 +300,14 @@ struct DivideFloatingImpl<A,B,false>
     }
 
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct DivideFloatingImpl<A,B,true>
+struct DivideFloatingImpl<A, B, true>
 {
     using ResultPrecInferer = DivDecimalInferer;
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
@@ -316,15 +319,16 @@ struct DivideFloatingImpl<A,B,true>
     }
 
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct TiDBDivideFloatingImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct TiDBDivideFloatingImpl;
 template <typename A, typename B>
-struct TiDBDivideFloatingImpl<A,B,false>
+struct TiDBDivideFloatingImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfFloatingPointDivision<A, B>::Type;
 
@@ -349,7 +353,7 @@ struct TiDBDivideFloatingImpl<A,B,false>
 };
 
 template <typename A, typename B>
-struct TiDBDivideFloatingImpl<A,B,true>
+struct TiDBDivideFloatingImpl<A, B, true>
 {
     using ResultPrecInferer = DivDecimalInferer;
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
@@ -407,7 +411,8 @@ inline bool divisionLeadsToFPE(A a, B b)
 #pragma GCC diagnostic pop
 
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct DivideIntegralImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct DivideIntegralImpl;
 template <typename A, typename B>
 struct DivideIntegralImpl<A, B, false>
 {
@@ -420,14 +425,14 @@ struct DivideIntegralImpl<A, B, false>
         return static_cast<Result>(a) / static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct DivideIntegralImpl<A,B,true>
+struct DivideIntegralImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -435,29 +440,36 @@ struct DivideIntegralImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         throwIfDivisionLeadsToFPE(x, y);
         return x / y;
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct DivideIntegralOrZeroImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct DivideIntegralOrZeroImpl;
 template <typename A, typename B>
-struct DivideIntegralOrZeroImpl<A,B,false>
+struct DivideIntegralOrZeroImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfIntegerDivision<A, B>::Type;
 
@@ -467,14 +479,14 @@ struct DivideIntegralOrZeroImpl<A,B,false>
         return static_cast<Result>(unlikely(divisionLeadsToFPE(a, b)) ? 0 : static_cast<Result>(a) / static_cast<Result>(b));
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct DivideIntegralOrZeroImpl<A,B,true>
+struct DivideIntegralOrZeroImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -482,27 +494,34 @@ struct DivideIntegralOrZeroImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         throwIfDivisionLeadsToFPE(x, y);
         return unlikely(divisionLeadsToFPE(x, y)) ? 0 : x / y;
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>> struct ModuloImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct ModuloImpl;
 template <typename A, typename B>
 struct ModuloImpl<A, B, false>
 {
@@ -596,9 +615,10 @@ struct ModuloImpl<A, B, true>
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct BitAndImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct BitAndImpl;
 template <typename A, typename B>
-struct BitAndImpl<A,B,false>
+struct BitAndImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
 
@@ -609,14 +629,14 @@ struct BitAndImpl<A,B,false>
             & static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct BitAndImpl<A,B,true>
+struct BitAndImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -624,28 +644,35 @@ struct BitAndImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         return BitAndImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct BitOrImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct BitOrImpl;
 template <typename A, typename B>
-struct BitOrImpl<A,B,false>
+struct BitOrImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
 
@@ -656,14 +683,14 @@ struct BitOrImpl<A,B,false>
             | static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct BitOrImpl<A,B,true>
+struct BitOrImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -671,28 +698,35 @@ struct BitOrImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         return BitOrImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct BitXorImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct BitXorImpl;
 template <typename A, typename B>
-struct BitXorImpl<A,B,false>
+struct BitXorImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
 
@@ -703,14 +737,14 @@ struct BitXorImpl<A,B,false>
             ^ static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct BitXorImpl<A,B,true>
+struct BitXorImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -718,28 +752,35 @@ struct BitXorImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         return BitXorImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct BitShiftLeftImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct BitShiftLeftImpl;
 template <typename A, typename B>
-struct BitShiftLeftImpl<A,B,false>
+struct BitShiftLeftImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
 
@@ -750,14 +791,14 @@ struct BitShiftLeftImpl<A,B,false>
             << static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct BitShiftLeftImpl<A,B,true>
+struct BitShiftLeftImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -765,28 +806,35 @@ struct BitShiftLeftImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         return BitShiftLeftImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct BitShiftRightImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct BitShiftRightImpl;
 template <typename A, typename B>
-struct BitShiftRightImpl<A,B,false>
+struct BitShiftRightImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
 
@@ -797,14 +845,14 @@ struct BitShiftRightImpl<A,B,false>
             >> static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct BitShiftRightImpl<A,B,true>
+struct BitShiftRightImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -812,28 +860,35 @@ struct BitShiftRightImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         return BitShiftRightImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct BitRotateLeftImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct BitRotateLeftImpl;
 template <typename A, typename B>
-struct BitRotateLeftImpl<A,B,false>
+struct BitRotateLeftImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
 
@@ -844,14 +899,14 @@ struct BitRotateLeftImpl<A,B,false>
             | (static_cast<Result>(a) >> ((sizeof(Result) * 8) - static_cast<Result>(b)));
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct BitRotateLeftImpl<A,B,true>
+struct BitRotateLeftImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -859,28 +914,35 @@ struct BitRotateLeftImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         return BitRotateLeftImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct BitRotateRightImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct BitRotateRightImpl;
 template <typename A, typename B>
-struct BitRotateRightImpl<A,B,false>
+struct BitRotateRightImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
 
@@ -891,14 +953,14 @@ struct BitRotateRightImpl<A,B,false>
             | (static_cast<Result>(a) << ((sizeof(Result) * 8) - static_cast<Result>(b)));
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct BitRotateRightImpl<A,B,true>
+struct BitRotateRightImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -906,58 +968,76 @@ struct BitRotateRightImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
-        } else {
+        }
+        else
+        {
             x = static_cast<Result>(a);
         }
-        if constexpr (IsDecimal<B>) {
+        if constexpr (IsDecimal<B>)
+        {
             y = static_cast<Result>(b.value);
-        } else {
+        }
+        else
+        {
             y = static_cast<Result>(b);
         }
         return BitRotateRightImpl<Result, Result>::apply(x, y);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename T>
-std::enable_if_t<std::is_integral_v<T> || std::is_same_v<T, Int128> || std::is_same_v<T, Int256>, T> toInteger(T x) { return x; }
-
-template <typename T>
-std::enable_if_t<std::is_floating_point_v<T>, Int64> toInteger(T x) { return Int64(x); }
-
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct BitTestImpl;
-template <typename A, typename B>
-struct BitTestImpl<A,B,false>
+std::enable_if_t<std::is_integral_v<T> || std::is_same_v<T, Int128> || std::is_same_v<T, Int256>, T> toInteger(T x)
 {
-    using ResultType = UInt8;
+    return x;
+}
 
-    template <typename Result = ResultType>
-    static inline Result apply(A a, B b) { return static_cast<Result>( (toInteger(a) >> static_cast<int64_t>(toInteger(b))) & 1 ); };
-    template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
-    {
-        throw Exception("Should not reach here");
-    }
-};
+template <typename T>
+std::enable_if_t<std::is_floating_point_v<T>, Int64> toInteger(T x)
+{
+    return Int64(x);
+}
 
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct BitTestImpl;
 template <typename A, typename B>
-struct BitTestImpl<A,B,true>
+struct BitTestImpl<A, B, false>
 {
     using ResultType = UInt8;
 
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        if constexpr(!IsDecimal<B>) {
+        return static_cast<Result>((toInteger(a) >> static_cast<int64_t>(toInteger(b))) & 1);
+    };
+    template <typename Result = ResultType>
+    static inline Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
+
+template <typename A, typename B>
+struct BitTestImpl<A, B, true>
+{
+    using ResultType = UInt8;
+
+    template <typename Result = ResultType>
+    static inline Result apply(A a, B b)
+    {
+        if constexpr (!IsDecimal<B>)
+        {
             return BitTestImpl<Result, Result>::apply(static_cast<int64_t>(a.value), b);
         }
-        else if constexpr(!IsDecimal<A>) {
+        else if constexpr (!IsDecimal<A>)
+        {
             return BitTestImpl<Result, Result>::apply(a, static_cast<int64_t>(b.value));
         }
         else
@@ -965,15 +1045,16 @@ struct BitTestImpl<A,B,true>
         return {};
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct LeastBaseImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct LeastBaseImpl;
 template <typename A, typename B>
-struct LeastBaseImpl<A,B,false>
+struct LeastBaseImpl<A, B, false>
 {
     using ResultType = NumberTraits::ResultOfLeast<A, B>;
 
@@ -984,14 +1065,14 @@ struct LeastBaseImpl<A,B,false>
         return static_cast<Result>(a) < static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template<typename A, typename B>
-struct LeastBaseImpl<A,B,true>
+template <typename A, typename B>
+struct LeastBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
@@ -1002,7 +1083,7 @@ struct LeastBaseImpl<A,B,true>
         return static_cast<Result>(a) < static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
@@ -1020,7 +1101,7 @@ struct LeastSpecialImpl
         return accurate::lessOp(a, b) ? static_cast<Result>(a) : static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
@@ -1030,9 +1111,10 @@ template <typename A, typename B>
 using LeastImpl = std::conditional_t<!NumberTraits::LeastGreatestSpecialCase<A, B>, LeastBaseImpl<A, B>, LeastSpecialImpl<A, B>>;
 
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct GreatestBaseImpl;
-template<typename A, typename B>
-struct GreatestBaseImpl<A,B,false>
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct GreatestBaseImpl;
+template <typename A, typename B>
+struct GreatestBaseImpl<A, B, false>
 {
     using ResultType = NumberTraits::ResultOfGreatest<A, B>;
 
@@ -1042,14 +1124,14 @@ struct GreatestBaseImpl<A,B,false>
         return static_cast<Result>(a) > static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template<typename A, typename B>
-struct GreatestBaseImpl<A,B,true>
+template <typename A, typename B>
+struct GreatestBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
@@ -1060,7 +1142,7 @@ struct GreatestBaseImpl<A,B,true>
         return static_cast<Result>(a) > static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
@@ -1078,7 +1160,7 @@ struct GreatestSpecialImpl
         return accurate::greaterOp(a, b) ? static_cast<Result>(a) : static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
@@ -1088,7 +1170,8 @@ template <typename A, typename B>
 using GreatestImpl = std::conditional_t<!NumberTraits::LeastGreatestSpecialCase<A, B>, GreatestBaseImpl<A, B>, GreatestSpecialImpl<A, B>>;
 
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct GCDImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct GCDImpl;
 template <typename A, typename B>
 struct GCDImpl<A, B, false>
 {
@@ -1104,14 +1187,14 @@ struct GCDImpl<A, B, false>
             typename NumberTraits::ToInteger<Result>::Type(b));
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct GCDImpl<A,B,true>
+struct GCDImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -1121,15 +1204,16 @@ struct GCDImpl<A,B,true>
         return GCDImpl<Result, Result>::apply(static_cast<Result>(a), static_cast<Result>(b));
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
-template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B> > struct LCMImpl;
+template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
+struct LCMImpl;
 template <typename A, typename B>
-struct LCMImpl<A,B,false>
+struct LCMImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfAdditionMultiplication<A, B>::Type;
 
@@ -1143,14 +1227,14 @@ struct LCMImpl<A,B,false>
             typename NumberTraits::ToInteger<Result>::Type(b));
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 template <typename A, typename B>
-struct LCMImpl<A,B,true>
+struct LCMImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
@@ -1160,15 +1244,17 @@ struct LCMImpl<A,B,true>
         return LCMImpl<Result, Result>::apply(static_cast<Result>(a), static_cast<Result>(b));
     }
     template <typename Result = ResultType>
-    static inline Result apply(A , B , UInt8 &)
+    static inline Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
 };
 
 /// these ones for better semantics
-template <typename T> using Then = T;
-template <typename T> using Else = T;
+template <typename T>
+using Then = T;
+template <typename T>
+using Else = T;
 
 /// Binary operations for Decimals need scale args
 /// +|- scale one of args (which scale factor is not 1). ScaleR = oneof(Scale1, Scale2);
@@ -1181,21 +1267,17 @@ struct DecimalBinaryOperation
     //static_assert(IsDecimal<A> || std::is_integral_v<A>);
     //static_assert(IsDecimal<B> || std::is_integral_v<B>);
 
-    static constexpr bool is_plus_minus =   std::is_same_v<Operation<Int32, Int32>, PlusImpl<Int32, Int32>> ||
-                                            std::is_same_v<Operation<Int32, Int32>, MinusImpl<Int32, Int32>>;
-    static constexpr bool is_multiply =     std::is_same_v<Operation<Int32, Int32>, MultiplyImpl<Int32, Int32>>;
-    static constexpr bool is_modulo =     std::is_same_v<Operation<Int32, Int32>, ModuloImpl<Int32, Int32>>;
-    static constexpr bool is_float_division = std::is_same_v<Operation<Int32, Int32>, DivideFloatingImpl<Int32, Int32>> ||
-                                              std::is_same_v<Operation<Int32, Int32>, TiDBDivideFloatingImpl<Int32, Int32>>;
-    static constexpr bool is_int_division = std::is_same_v<Operation<Int32, Int32>, DivideIntegralImpl<Int32, Int32>> ||
-                                            std::is_same_v<Operation<Int32, Int32>, DivideIntegralOrZeroImpl<Int32, Int32>>;
+    static constexpr bool is_plus_minus = std::is_same_v<Operation<Int32, Int32>, PlusImpl<Int32, Int32>> || std::is_same_v<Operation<Int32, Int32>, MinusImpl<Int32, Int32>>;
+    static constexpr bool is_multiply = std::is_same_v<Operation<Int32, Int32>, MultiplyImpl<Int32, Int32>>;
+    static constexpr bool is_modulo = std::is_same_v<Operation<Int32, Int32>, ModuloImpl<Int32, Int32>>;
+    static constexpr bool is_float_division = std::is_same_v<Operation<Int32, Int32>, DivideFloatingImpl<Int32, Int32>> || std::is_same_v<Operation<Int32, Int32>, TiDBDivideFloatingImpl<Int32, Int32>>;
+    static constexpr bool is_int_division = std::is_same_v<Operation<Int32, Int32>, DivideIntegralImpl<Int32, Int32>> || std::is_same_v<Operation<Int32, Int32>, DivideIntegralOrZeroImpl<Int32, Int32>>;
     static constexpr bool is_division = is_float_division || is_int_division;
-    static constexpr bool is_compare =      std::is_same_v<Operation<Int32, Int32>, LeastBaseImpl<Int32, Int32>> ||
-                                            std::is_same_v<Operation<Int32, Int32>, GreatestBaseImpl<Int32, Int32>>;
+    static constexpr bool is_compare = std::is_same_v<Operation<Int32, Int32>, LeastBaseImpl<Int32, Int32>> || std::is_same_v<Operation<Int32, Int32>, GreatestBaseImpl<Int32, Int32>>;
     static constexpr bool is_plus_minus_compare = is_plus_minus || is_compare;
     static constexpr bool can_overflow = is_plus_minus || is_multiply;
 
-    static constexpr bool need_promote_type = (std::is_same_v<ResultType_, A> || std::is_same_v<ResultType_, B>) && (is_plus_minus_compare || is_division || is_multiply || is_modulo) ; // And is multiple / division / modulo
+    static constexpr bool need_promote_type = (std::is_same_v<ResultType_, A> || std::is_same_v<ResultType_, B>)&&(is_plus_minus_compare || is_division || is_multiply || is_modulo); // And is multiple / division / modulo
     static constexpr bool check_overflow = need_promote_type && std::is_same_v<ResultType_, Decimal256>; // Check if exceeds 10 * 66;
 
     using ResultType = ResultType_;
@@ -1226,8 +1308,7 @@ struct DecimalBinaryOperation
         }
     }
 
-    static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, ArrayC & c,
-                                        NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
         if constexpr (is_plus_minus_compare)
@@ -1263,8 +1344,7 @@ struct DecimalBinaryOperation
             c[i] = apply(a[i], b[i]);
     }
 
-    static void NO_INLINE vector_vector_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap,
-        ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE vector_vector_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
 
@@ -1295,8 +1375,7 @@ struct DecimalBinaryOperation
         throw Exception("Should not reach here");
     }
 
-    static void NO_INLINE vector_constant(const ArrayA & a, B b, ArrayC & c,
-                                        NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE vector_constant(const ArrayA & a, B b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
         if constexpr (is_plus_minus_compare)
@@ -1332,8 +1411,7 @@ struct DecimalBinaryOperation
             c[i] = apply(a[i], b);
     }
 
-    static void NO_INLINE vector_constant_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, B b, ArrayC & c, typename ColumnUInt8::Container & res_null,
-                                          NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE vector_constant_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, B b, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
 
@@ -1364,8 +1442,7 @@ struct DecimalBinaryOperation
         throw Exception("Should not reach here");
     }
 
-    static void NO_INLINE constant_vector(A a, const ArrayB & b, ArrayC & c,
-                                        NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE constant_vector(A a, const ArrayB & b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = b.size();
         if constexpr (is_plus_minus_compare)
@@ -1383,7 +1460,8 @@ struct DecimalBinaryOperation
                 return;
             }
         }
-        else if constexpr (is_multiply) {
+        else if constexpr (is_multiply)
+        {
             for (size_t i = 0; i < size; ++i)
                 c[i] = applyScaledMul(a, b[i], scale_result);
             return;
@@ -1400,8 +1478,7 @@ struct DecimalBinaryOperation
             c[i] = apply(a, b[i]);
     }
 
-    static void NO_INLINE constant_vector_nullable(A a, const ArrayB & b, const ColumnUInt8 * b_nullmap, ArrayC & c, typename ColumnUInt8::Container & res_null,
-                                          NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE constant_vector_nullable(A a, const ArrayB & b, const ColumnUInt8 * b_nullmap, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = b.size();
 
@@ -1441,7 +1518,8 @@ struct DecimalBinaryOperation
             else if (scale_b != 1)
                 return applyScaled<false>(a, b, scale_b);
         }
-        else if constexpr (is_multiply) {
+        else if constexpr (is_multiply)
+        {
             return applyScaledMul(a, b, scale_result);
         }
         else if constexpr (is_division)
@@ -1450,8 +1528,7 @@ struct DecimalBinaryOperation
         return apply(a, b);
     }
 
-    static ResultType constant_constant_nullable(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]],
-        NativeResultType scale_result [[maybe_unused]], UInt8 & res_null)
+    static ResultType constant_constant_nullable(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]], UInt8 & res_null)
     {
         if constexpr (is_division)
         {
@@ -1469,18 +1546,25 @@ struct DecimalBinaryOperation
     }
 
 private:
-    static NativeResultType applyScaledMul(NativeResultType a, NativeResultType b, NativeResultType scale) {
-        if constexpr (is_multiply) {
-            if constexpr (need_promote_type) {
+    static NativeResultType applyScaledMul(NativeResultType a, NativeResultType b, NativeResultType scale)
+    {
+        if constexpr (is_multiply)
+        {
+            if constexpr (need_promote_type)
+            {
                 PromoteResultType res = Op::template apply<PromoteResultType>(a, b);
                 res = res / scale;
-                if constexpr (check_overflow){
-                    if (res > DecimalMaxValue::MaxValue()) {
+                if constexpr (check_overflow)
+                {
+                    if (res > DecimalMaxValue::MaxValue())
+                    {
                         throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
                     }
                 }
                 return static_cast<NativeResultType>(res);
-            } else {
+            }
+            else
+            {
                 NativeResultType res = Op::template apply<NativeResultType>(a, b);
                 res = res / scale;
                 return res;
@@ -1494,8 +1578,10 @@ private:
         if constexpr (need_promote_type)
         {
             auto res = Op::template apply<PromoteResultType>(a, b);
-            if constexpr (check_overflow){
-                if (res > DecimalMaxValue::MaxValue()) {
+            if constexpr (check_overflow)
+            {
+                if (res > DecimalMaxValue::MaxValue())
+                {
                     throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
                 }
             }
@@ -1521,8 +1607,10 @@ private:
 
             res = Op::template apply<InputType>(a, b);
 
-            if constexpr (check_overflow) {
-                if (res > DecimalMaxValue::MaxValue()) {
+            if constexpr (check_overflow)
+            {
+                if (res > DecimalMaxValue::MaxValue())
+                {
                     throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
                 }
             }
@@ -1545,8 +1633,10 @@ private:
 
             res = Op::template apply<InputType>(a, b, res_null);
 
-            if constexpr (check_overflow) {
-                if (res > DecimalMaxValue::MaxValue()) {
+            if constexpr (check_overflow)
+            {
+                if (res > DecimalMaxValue::MaxValue())
+                {
                     throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
                 }
             }
@@ -1557,19 +1647,31 @@ private:
     }
 };
 
-template <typename DataType> constexpr bool IsIntegral = false;
-template <> inline constexpr bool IsIntegral<DataTypeUInt8> = true;
-template <> inline constexpr bool IsIntegral<DataTypeUInt16> = true;
-template <> inline constexpr bool IsIntegral<DataTypeUInt32> = true;
-template <> inline constexpr bool IsIntegral<DataTypeUInt64> = true;
-template <> inline constexpr bool IsIntegral<DataTypeInt8> = true;
-template <> inline constexpr bool IsIntegral<DataTypeInt16> = true;
-template <> inline constexpr bool IsIntegral<DataTypeInt32> = true;
-template <> inline constexpr bool IsIntegral<DataTypeInt64> = true;
+template <typename DataType>
+constexpr bool IsIntegral = false;
+template <>
+inline constexpr bool IsIntegral<DataTypeUInt8> = true;
+template <>
+inline constexpr bool IsIntegral<DataTypeUInt16> = true;
+template <>
+inline constexpr bool IsIntegral<DataTypeUInt32> = true;
+template <>
+inline constexpr bool IsIntegral<DataTypeUInt64> = true;
+template <>
+inline constexpr bool IsIntegral<DataTypeInt8> = true;
+template <>
+inline constexpr bool IsIntegral<DataTypeInt16> = true;
+template <>
+inline constexpr bool IsIntegral<DataTypeInt32> = true;
+template <>
+inline constexpr bool IsIntegral<DataTypeInt64> = true;
 
-template <typename DataType> constexpr bool IsDateOrDateTime = false;
-template <> inline constexpr bool IsDateOrDateTime<DataTypeDate> = true;
-template <> inline constexpr bool IsDateOrDateTime<DataTypeDateTime> = true;
+template <typename DataType>
+constexpr bool IsDateOrDateTime = false;
+template <>
+inline constexpr bool IsDateOrDateTime<DataTypeDate> = true;
+template <>
+inline constexpr bool IsDateOrDateTime<DataTypeDateTime> = true;
 
 /** Returns appropriate result type for binary operator on dates (or datetimes):
  *  Date + Integral -> Date
@@ -1588,32 +1690,30 @@ struct DateBinaryOperationTraits
     using T1 = typename RightDataType::FieldType;
     using Op = Operation<T0, T1>;
 
-    using ResultDataType =
-        If<std::is_same_v<Op, PlusImpl<T0, T1>>,
-            Then<
-                If<IsDateOrDateTime<LeftDataType> && IsIntegral<RightDataType>,
-                    Then<LeftDataType>,
-                    Else<
-                        If<IsIntegral<LeftDataType> && IsDateOrDateTime<RightDataType>,
-                            Then<RightDataType>,
-                            Else<InvalidType>>>>>,
-            Else<
-                If<std::is_same_v<Op, MinusImpl<T0, T1>>,
-                    Then<
-                        If<IsDateOrDateTime<LeftDataType>,
-                            Then<
-                                If<std::is_same_v<LeftDataType, RightDataType>,
-                                    Then<DataTypeInt32>,
-                                    Else<
-                                        If<IsIntegral<RightDataType>,
-                                            Then<LeftDataType>,
+    using ResultDataType = If<std::is_same_v<Op, PlusImpl<T0, T1>>,
+                              Then<
+                                  If<IsDateOrDateTime<LeftDataType> && IsIntegral<RightDataType>,
+                                     Then<LeftDataType>,
+                                     Else<
+                                         If<IsIntegral<LeftDataType> && IsDateOrDateTime<RightDataType>,
+                                            Then<RightDataType>,
                                             Else<InvalidType>>>>>,
-                            Else<InvalidType>>>,
-                    Else<
-                        If<std::is_same_v<T0, T1>
-                            && (std::is_same_v<Op, LeastImpl<T0, T1>> || std::is_same_v<Op, GreatestImpl<T0, T1>>),
-                            Then<LeftDataType>,
-                            Else<InvalidType>>>>>>;
+                              Else<
+                                  If<std::is_same_v<Op, MinusImpl<T0, T1>>,
+                                     Then<
+                                         If<IsDateOrDateTime<LeftDataType>,
+                                            Then<
+                                                If<std::is_same_v<LeftDataType, RightDataType>,
+                                                   Then<DataTypeInt32>,
+                                                   Else<
+                                                       If<IsIntegral<RightDataType>,
+                                                          Then<LeftDataType>,
+                                                          Else<InvalidType>>>>>,
+                                            Else<InvalidType>>>,
+                                     Else<
+                                         If<std::is_same_v<T0, T1> && (std::is_same_v<Op, LeastImpl<T0, T1>> || std::is_same_v<Op, GreatestImpl<T0, T1>>),
+                                            Then<LeftDataType>,
+                                            Else<InvalidType>>>>>>;
 };
 
 
@@ -1621,16 +1721,17 @@ struct DateBinaryOperationTraits
 template <template <typename, typename> class Operation, typename LeftDataType, typename RightDataType>
 struct BinaryOperationTraits
 {
-    using ResultDataType =
-        If<IsDateOrDateTime<LeftDataType> || IsDateOrDateTime<RightDataType>,
-            Then<
-                typename DateBinaryOperationTraits<
-                    Operation, LeftDataType, RightDataType>::ResultDataType>,
-            Else<
-                typename DataTypeFromFieldType<
-                    typename Operation<
-                        typename LeftDataType::FieldType,
-                        typename RightDataType::FieldType>::ResultType>::Type>>;
+    using ResultDataType = If<IsDateOrDateTime<LeftDataType> || IsDateOrDateTime<RightDataType>,
+                              Then<
+                                  typename DateBinaryOperationTraits<
+                                      Operation,
+                                      LeftDataType,
+                                      RightDataType>::ResultDataType>,
+                              Else<
+                                  typename DataTypeFromFieldType<
+                                      typename Operation<
+                                          typename LeftDataType::FieldType,
+                                          typename RightDataType::FieldType>::ResultType>::Type>>;
 };
 
 
@@ -1641,7 +1742,9 @@ public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(const Context & context) { return std::make_shared<FunctionBinaryArithmetic>(context); }
 
-    FunctionBinaryArithmetic(const Context & context) : context(context) {}
+    FunctionBinaryArithmetic(const Context & context)
+        : context(context)
+    {}
 
     bool useDefaultImplementationForNulls() const override { return default_impl_for_nulls; }
 
@@ -1661,7 +1764,8 @@ private:
         }
     }
 
-    std::pair<PrecType, ScaleType> getPrecAndScale(const IDataType* input_type) const {
+    std::pair<PrecType, ScaleType> getPrecAndScale(const IDataType * input_type) const
+    {
         const IDataType * type = input_type;
         if constexpr (!default_impl_for_nulls)
         {
@@ -1670,13 +1774,16 @@ private:
                 type = ptr->getNestedType().get();
             }
         }
-        if (auto ptr = typeid_cast<const DataTypeDecimal32 *>(type)) {
+        if (auto ptr = typeid_cast<const DataTypeDecimal32 *>(type))
+        {
             return std::make_pair(ptr->getPrec(), ptr->getScale());
         }
-        if (auto ptr = typeid_cast<const DataTypeDecimal64 *>(type)) {
+        if (auto ptr = typeid_cast<const DataTypeDecimal64 *>(type))
+        {
             return std::make_pair(ptr->getPrec(), ptr->getScale());
         }
-        if (auto ptr = typeid_cast<const DataTypeDecimal128 *>(type)) {
+        if (auto ptr = typeid_cast<const DataTypeDecimal128 *>(type))
+        {
             return std::make_pair(ptr->getPrec(), ptr->getScale());
         }
         auto ptr = typeid_cast<const DataTypeDecimal256 *>(type);
@@ -1684,7 +1791,8 @@ private:
     }
 
     template <typename LeftDataType, typename RightDataType>
-    DataTypePtr getDecimalReturnType(const DataTypes & arguments) const {
+    DataTypePtr getDecimalReturnType(const DataTypes & arguments) const
+    {
         using LeftFieldType = typename LeftDataType::FieldType;
         using RightFieldType = typename RightDataType::FieldType;
         if constexpr (!IsDecimal<typename Op<LeftFieldType, RightFieldType>::ResultType>)
@@ -1696,12 +1804,15 @@ private:
             PrecType result_prec = 0;
             ScaleType result_scale = 0;
             // Treat integer as a kind of decimal;
-            if constexpr (std::is_integral_v<LeftFieldType>) {
+            if constexpr (std::is_integral_v<LeftFieldType>)
+            {
                 PrecType leftPrec = IntPrec<LeftFieldType>::prec;
                 auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
                 Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, 0, rightPrec, rightScale, result_prec, result_scale);
                 return createDecimal(result_prec, result_scale);
-            } else if constexpr (std::is_integral_v<RightFieldType>) {
+            }
+            else if constexpr (std::is_integral_v<RightFieldType>)
+            {
                 ScaleType rightPrec = IntPrec<RightFieldType>::prec;
                 auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
                 Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, 0, result_prec, result_scale);
@@ -1723,13 +1834,17 @@ private:
         {
             right_type = removeNullable(right_type);
         }
-        if constexpr (IsDecimal<typename LeftDataType::FieldType> || IsDecimal<typename RightDataType::FieldType>) {
-            if (typeid_cast<const RightDataType *>(right_type.get())){
+        if constexpr (IsDecimal<typename LeftDataType::FieldType> || IsDecimal<typename RightDataType::FieldType>)
+        {
+            if (typeid_cast<const RightDataType *>(right_type.get()))
+            {
                 type_res = getDecimalReturnType<LeftDataType, RightDataType>(arguments);
                 return true;
             }
             return false;
-        } else {
+        }
+        else
+        {
             using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType>::ResultDataType;
 
             if (typeid_cast<const RightDataType *>(right_type.get()))
@@ -1860,23 +1975,23 @@ public:
         }
 
         if (!(checkLeftType<DataTypeDate>(arguments, type_res)
-            || checkLeftType<DataTypeDateTime>(arguments, type_res)
-            || checkLeftType<DataTypeUInt8>(arguments, type_res)
-            || checkLeftType<DataTypeUInt16>(arguments, type_res)
-            || checkLeftType<DataTypeUInt32>(arguments, type_res)
-            || checkLeftType<DataTypeUInt64>(arguments, type_res)
-            || checkLeftType<DataTypeInt8>(arguments, type_res)
-            || checkLeftType<DataTypeInt16>(arguments, type_res)
-            || checkLeftType<DataTypeInt32>(arguments, type_res)
-            || checkLeftType<DataTypeInt64>(arguments, type_res)
-            || checkLeftType<DataTypeDecimal<Decimal32>>(arguments, type_res)
-            || checkLeftType<DataTypeDecimal<Decimal64>>(arguments, type_res)
-            || checkLeftType<DataTypeDecimal<Decimal128>>(arguments, type_res)
-            || checkLeftType<DataTypeDecimal<Decimal256>>(arguments, type_res)
-            || checkLeftType<DataTypeFloat32>(arguments, type_res)
-            || checkLeftType<DataTypeFloat64>(arguments, type_res)))
+              || checkLeftType<DataTypeDateTime>(arguments, type_res)
+              || checkLeftType<DataTypeUInt8>(arguments, type_res)
+              || checkLeftType<DataTypeUInt16>(arguments, type_res)
+              || checkLeftType<DataTypeUInt32>(arguments, type_res)
+              || checkLeftType<DataTypeUInt64>(arguments, type_res)
+              || checkLeftType<DataTypeInt8>(arguments, type_res)
+              || checkLeftType<DataTypeInt16>(arguments, type_res)
+              || checkLeftType<DataTypeInt32>(arguments, type_res)
+              || checkLeftType<DataTypeInt64>(arguments, type_res)
+              || checkLeftType<DataTypeDecimal<Decimal32>>(arguments, type_res)
+              || checkLeftType<DataTypeDecimal<Decimal64>>(arguments, type_res)
+              || checkLeftType<DataTypeDecimal<Decimal128>>(arguments, type_res)
+              || checkLeftType<DataTypeDecimal<Decimal256>>(arguments, type_res)
+              || checkLeftType<DataTypeFloat32>(arguments, type_res)
+              || checkLeftType<DataTypeFloat64>(arguments, type_res)))
             throw Exception("Illegal types " + arguments[0]->getName() + " and " + arguments[1]->getName() + " of arguments of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if constexpr (!default_impl_for_nulls)
             type_res = makeNullable(type_res);
@@ -1884,7 +1999,7 @@ public:
     }
 
     template <typename F>
-    bool castType(const IDataType * type, F && f)
+    bool castType(const IDataType * type, F && f) const
     {
         return castTypeToEither<
             DataTypeUInt8,
@@ -1902,38 +2017,40 @@ public:
             DataTypeDecimal32,
             DataTypeDecimal64,
             DataTypeDecimal128,
-            DataTypeDecimal256
-        >(type, std::forward<F>(f));
+            DataTypeDecimal256>(type, std::forward<F>(f));
     }
 
     template <typename F>
-    bool castBothTypes(DataTypePtr left, DataTypePtr right, DataTypePtr result, F && f)
+    bool castBothTypes(DataTypePtr left, DataTypePtr right, DataTypePtr result, F && f) const
     {
         return castType(left.get(), [&](const auto & left_, bool is_left_nullable_) {
             return castType(right.get(), [&](const auto & right_, bool is_right_nullable_) {
-                return castType(result.get(), [&](const auto & result_, bool){
+                return castType(result.get(), [&](const auto & result_, bool) {
                     return f(left_, is_left_nullable_, right_, is_right_nullable_, result_);
                 });
             });
         });
     }
 
-    template <typename A, typename B, bool check = IsDecimal<A>> struct RefineCls;
+    template <typename A, typename B, bool check = IsDecimal<A>>
+    struct RefineCls;
 
-    template<typename T, typename ResultType>
-    struct RefineCls <T, ResultType, true> {
+    template <typename T, typename ResultType>
+    struct RefineCls<T, ResultType, true>
+    {
         using Type = If<std::is_floating_point_v<ResultType>, ResultType, typename T::NativeType>;
     };
 
-    template<typename T, typename ResultType>
-    struct RefineCls <T, ResultType, false> {
+    template <typename T, typename ResultType>
+    struct RefineCls<T, ResultType, false>
+    {
         using Type = T;
     };
 
-    template<typename A, typename B>
-    using Refine = typename RefineCls<A,B>::Type;
+    template <typename A, typename B>
+    using Refine = typename RefineCls<A, B>::Type;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         /// Special case when the function is plus or minus, one of arguments is Date/DateTime and another is Interval.
         if (auto function_builder = getFunctionForIntervalArithmetic(block.getByPosition(arguments[0]).type, block.getByPosition(arguments[1]).type))
@@ -1948,8 +2065,7 @@ public:
             Block new_block = block;
             new_block.getByPosition(new_arguments[1]).type = std::make_shared<typename DataTypeFromFieldType<DataTypeInterval::FieldType>::Type>();
 
-            ColumnsWithTypeAndName new_arguments_with_type_and_name =
-                    {new_block.getByPosition(new_arguments[0]), new_block.getByPosition(new_arguments[1])};
+            ColumnsWithTypeAndName new_arguments_with_type_and_name = {new_block.getByPosition(new_arguments[0]), new_block.getByPosition(new_arguments[1])};
             auto function = function_builder->build(new_arguments_with_type_and_name);
 
             function->execute(new_block, new_arguments, result);
@@ -1972,24 +2088,19 @@ public:
                 return;
             }
         }
-        bool valid = castBothTypes(left_generic, right_generic, result_type, [&](const auto & left, bool is_left_nullable [[maybe_unused]], const auto & right, bool is_right_nullable [[maybe_unused]], const auto & result_type)
-        {
+        bool valid = castBothTypes(left_generic, right_generic, result_type, [&](const auto & left, bool is_left_nullable [[maybe_unused]], const auto & right, bool is_right_nullable [[maybe_unused]], const auto & result_type) {
             using LeftDataType = std::decay_t<decltype(left)>;
             using RightDataType = std::decay_t<decltype(right)>;
             using ResultDataType = std::decay_t<decltype(result_type)>;
             constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
             constexpr bool is_multiply [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, MultiplyImpl<UInt8, UInt8>>;
-            constexpr bool is_division [[maybe_unused]] =
-                std::is_same_v<Op<UInt8, UInt8>, DivideFloatingImpl<UInt8, UInt8>>
-                || std::is_same_v<Op<UInt8, UInt8>, TiDBDivideFloatingImpl<UInt8, UInt8>>
-                || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralImpl<UInt8, UInt8>>
-                || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralOrZeroImpl<UInt8, UInt8>>;
+            constexpr bool is_division [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, DivideFloatingImpl<UInt8, UInt8>> || std::is_same_v<Op<UInt8, UInt8>, TiDBDivideFloatingImpl<UInt8, UInt8>> || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralImpl<UInt8, UInt8>> || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralOrZeroImpl<UInt8, UInt8>>;
 
             using T0 = typename LeftDataType::FieldType;
             using T1 = typename RightDataType::FieldType;
             using ResultType = typename ResultDataType::FieldType;
             using ExpectedResultType = typename Op<T0, T1>::ResultType;
-            if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>) && !std::is_same_v<ResultType, ExpectedResultType>)
+            if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>)&&!std::is_same_v<ResultType, ExpectedResultType>)
             {
                 return false;
             }
@@ -2006,12 +2117,12 @@ public:
                 using FieldT1 = typename NearestFieldType<T1>::Type;
                 /// Decimal operations need scale. Operations are on result type.
                 using OpImpl = std::conditional_t<result_is_decimal,
-                    DecimalBinaryOperation<T0, T1, Op, ResultType>,
-                    BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0,T1>::ResultType> >; // Use template to resolve !!!!!
+                                                  DecimalBinaryOperation<T0, T1, Op, ResultType>,
+                                                  BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0, T1>::ResultType>>; // Use template to resolve !!!!!
 
                 auto col_left_raw = block.getByPosition(arguments[0]).column.get();
                 auto col_right_raw = block.getByPosition(arguments[1]).column.get();
-                const ColumnUInt8 * col_left_nullmap [[maybe_unused]] = nullptr ;
+                const ColumnUInt8 * col_left_nullmap [[maybe_unused]] = nullptr;
                 const ColumnUInt8 * col_right_nullmap [[maybe_unused]] = nullptr;
                 bool is_left_null_constant [[maybe_unused]] = false;
                 bool is_right_null_constant [[maybe_unused]] = false;
@@ -2080,18 +2191,19 @@ public:
 
                             if constexpr (default_impl_for_nulls)
                             {
-                                auto res = OpImpl::constant_constant(col_left->template getValue<T0>(), col_right->template getValue<T1>(),
-                                                                     scale_a, scale_b, scale_result);
-                                block.getByPosition(result).column =
-                                    ResultDataType(result_type.getPrec(), result_type.getScale()).createColumnConst(
-                                        col_left->size(), toField(res, result_type.getScale()));
+                                auto res = OpImpl::constant_constant(col_left->template getValue<T0>(), col_right->template getValue<T1>(), scale_a, scale_b, scale_result);
+                                block.getByPosition(result).column = ResultDataType(result_type.getPrec(), result_type.getScale()).createColumnConst(col_left->size(), toField(res, result_type.getScale()));
                             }
                             else
                             {
                                 UInt8 res_null = false;
                                 Field result_field = Null();
                                 auto res = OpImpl::constant_constant_nullable(col_left->template getValue<T0>(),
-                                    col_right->template getValue<T1>(), scale_a, scale_b, scale_result, res_null);
+                                                                              col_right->template getValue<T1>(),
+                                                                              scale_a,
+                                                                              scale_b,
+                                                                              scale_result,
+                                                                              res_null);
                                 if (!res_null)
                                     result_field = toField(res, result_type.getScale());
                                 block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left->size(), result_field);
@@ -2109,7 +2221,8 @@ public:
                                 UInt8 res_null = false;
                                 Field result_field = Null();
                                 auto res = OpImpl::constant_constant_nullable(col_left->getField().template safeGet<FieldT0>(),
-                                    col_right->getField().template safeGet<FieldT1>(), res_null);
+                                                                              col_right->getField().template safeGet<FieldT1>(),
+                                                                              res_null);
                                 if (!res_null)
                                     result_field = toField(res);
                                 block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left->size(), result_field);
@@ -2147,12 +2260,16 @@ public:
                             if constexpr (default_impl_for_nulls)
                             {
                                 OpImpl::constant_vector(
-                                    col_left_const->template getValue<T0>(), col_right->getData(), vec_res, scale_a, scale_b, scale_result);
+                                    col_left_const->template getValue<T0>(),
+                                    col_right->getData(),
+                                    vec_res,
+                                    scale_a,
+                                    scale_b,
+                                    scale_result);
                             }
                             else
                             {
-                                OpImpl::constant_vector_nullable(col_left_const->template getValue<T0>(), col_right->getData(),
-                                    col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                                OpImpl::constant_vector_nullable(col_left_const->template getValue<T0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
                             }
                         }
                         else
@@ -2163,8 +2280,7 @@ public:
                             }
                             else
                             {
-                                OpImpl::constant_vector_nullable(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(),
-                                    col_right_nullmap, vec_res, vec_res_nulmap);
+                                OpImpl::constant_vector_nullable(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
                             }
                         }
                     }
@@ -2181,12 +2297,16 @@ public:
                             if constexpr (default_impl_for_nulls)
                             {
                                 OpImpl::vector_constant(
-                                    col_left->getData(), col_right_const->template getValue<T1>(), vec_res, scale_a, scale_b, scale_result);
+                                    col_left->getData(),
+                                    col_right_const->template getValue<T1>(),
+                                    vec_res,
+                                    scale_a,
+                                    scale_b,
+                                    scale_result);
                             }
                             else
                             {
-                                OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->template getValue<T1>(),
-                                                                 vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                                OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->template getValue<T1>(), vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
                             }
                         }
                         else
@@ -2197,8 +2317,7 @@ public:
                             }
                             else
                             {
-                                OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->getField().template safeGet<FieldT1>(),
-                                                                 vec_res, vec_res_nulmap);
+                                OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->getField().template safeGet<FieldT1>(), vec_res, vec_res_nulmap);
                             }
                         }
                     }
@@ -2209,13 +2328,11 @@ public:
                             auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
                             if constexpr (default_impl_for_nulls)
                             {
-                                OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b,
-                                                      scale_result);
+                                OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b, scale_result);
                             }
                             else
                             {
-                                OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap,
-                                    vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                                OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
                             }
                         }
                         else
@@ -2226,8 +2343,7 @@ public:
                             }
                             else
                             {
-                                OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(),
-                                    col_right_nullmap, vec_res, vec_res_nulmap);
+                                OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
                             }
                         }
                     }
@@ -2277,60 +2393,79 @@ struct NameGCD                  { static constexpr auto name = "gcd"; };
 struct NameLCM                  { static constexpr auto name = "lcm"; };
 // clang-format on
 
-template<typename A, typename B> using PlusImpl_t = PlusImpl<A, B>;
+template <typename A, typename B>
+using PlusImpl_t = PlusImpl<A, B>;
 using FunctionPlus = FunctionBinaryArithmetic<PlusImpl_t, NamePlus>;
-template<typename A, typename B> using MinusImpl_t = MinusImpl<A, B>;
+template <typename A, typename B>
+using MinusImpl_t = MinusImpl<A, B>;
 using FunctionMinus = FunctionBinaryArithmetic<MinusImpl_t, NameMinus>;
-template<typename A, typename B> using MultiplyImpl_t = MultiplyImpl<A, B>;
+template <typename A, typename B>
+using MultiplyImpl_t = MultiplyImpl<A, B>;
 using FunctionMultiply = FunctionBinaryArithmetic<MultiplyImpl_t, NameMultiply>;
-template<typename A, typename B> using DivideFloatingImpl_t = DivideFloatingImpl<A, B>;
+template <typename A, typename B>
+using DivideFloatingImpl_t = DivideFloatingImpl<A, B>;
 using FunctionDivideFloating = FunctionBinaryArithmetic<DivideFloatingImpl_t, NameDivideFloating>;
-template<typename A, typename B> using TiDBDivideFloatingImpl_t = TiDBDivideFloatingImpl<A, B>;
+template <typename A, typename B>
+using TiDBDivideFloatingImpl_t = TiDBDivideFloatingImpl<A, B>;
 using FunctionTiDBDivideFloating = FunctionBinaryArithmetic<TiDBDivideFloatingImpl_t, NameTiDBDivideFloating, false>;
-template<typename A, typename B> using DivideIntegralImpl_t = DivideIntegralImpl<A, B>;
+template <typename A, typename B>
+using DivideIntegralImpl_t = DivideIntegralImpl<A, B>;
 using FunctionDivideIntegral = FunctionBinaryArithmetic<DivideIntegralImpl_t, NameDivideIntegral>;
-template<typename A, typename B> using DivideIntegralOrZeroImpl_t = DivideIntegralOrZeroImpl<A, B>;
+template <typename A, typename B>
+using DivideIntegralOrZeroImpl_t = DivideIntegralOrZeroImpl<A, B>;
 using FunctionDivideIntegralOrZero = FunctionBinaryArithmetic<DivideIntegralOrZeroImpl_t, NameDivideIntegralOrZero>;
-template<typename A, typename B> using ModuloImpl_t = ModuloImpl<A, B>;
+template <typename A, typename B>
+using ModuloImpl_t = ModuloImpl<A, B>;
 using FunctionModulo = FunctionBinaryArithmetic<ModuloImpl_t, NameModulo, false>;
-template<typename A, typename B> using BitAndImpl_t = BitAndImpl<A, B>;
+template <typename A, typename B>
+using BitAndImpl_t = BitAndImpl<A, B>;
 using FunctionBitAnd = FunctionBinaryArithmetic<BitAndImpl_t, NameBitAnd>;
-template<typename A, typename B> using BitOrImpl_t = BitOrImpl<A, B>;
+template <typename A, typename B>
+using BitOrImpl_t = BitOrImpl<A, B>;
 using FunctionBitOr = FunctionBinaryArithmetic<BitOrImpl_t, NameBitOr>;
-template<typename A, typename B> using BitXorImpl_t = BitXorImpl<A, B>;
+template <typename A, typename B>
+using BitXorImpl_t = BitXorImpl<A, B>;
 using FunctionBitXor = FunctionBinaryArithmetic<BitXorImpl_t, NameBitXor>;
-template<typename A, typename B> using BitShiftLeftImpl_t = BitShiftLeftImpl<A, B>;
+template <typename A, typename B>
+using BitShiftLeftImpl_t = BitShiftLeftImpl<A, B>;
 using FunctionBitShiftLeft = FunctionBinaryArithmetic<BitShiftLeftImpl_t, NameBitShiftLeft>;
-template<typename A, typename B> using BitShiftRightImpl_t = BitShiftRightImpl<A, B>;
+template <typename A, typename B>
+using BitShiftRightImpl_t = BitShiftRightImpl<A, B>;
 using FunctionBitShiftRight = FunctionBinaryArithmetic<BitShiftRightImpl_t, NameBitShiftRight>;
-template<typename A, typename B> using BitRotateLeftImpl_t = BitRotateLeftImpl<A, B>;
+template <typename A, typename B>
+using BitRotateLeftImpl_t = BitRotateLeftImpl<A, B>;
 using FunctionBitRotateLeft = FunctionBinaryArithmetic<BitRotateLeftImpl_t, NameBitRotateLeft>;
-template<typename A, typename B> using BitRotateRightImpl_t = BitRotateRightImpl<A, B>;
+template <typename A, typename B>
+using BitRotateRightImpl_t = BitRotateRightImpl<A, B>;
 using FunctionBitRotateRight = FunctionBinaryArithmetic<BitRotateRightImpl_t, NameBitRotateRight>;
-template<typename A, typename B> using BitTestImpl_t = BitTestImpl<A, B>;
+template <typename A, typename B>
+using BitTestImpl_t = BitTestImpl<A, B>;
 using FunctionBitTest = FunctionBinaryArithmetic<BitTestImpl_t, NameBitTest>;
-template<typename A, typename B> using LeastImpl_t = LeastImpl<A, B>;
+template <typename A, typename B>
+using LeastImpl_t = LeastImpl<A, B>;
 using FunctionLeast = FunctionBinaryArithmetic<LeastImpl_t, NameLeast>;
-template<typename A, typename B> using GreatestImpl_t = GreatestImpl<A, B>;
+template <typename A, typename B>
+using GreatestImpl_t = GreatestImpl<A, B>;
 using FunctionGreatest = FunctionBinaryArithmetic<GreatestImpl_t, NameGreatest>;
-template<typename A, typename B> using GCDImpl_t = GCDImpl<A, B>;
+template <typename A, typename B>
+using GCDImpl_t = GCDImpl<A, B>;
 using FunctionGCD = FunctionBinaryArithmetic<GCDImpl_t, NameGCD>;
-template<typename A, typename B> using LCMImpl_t = LCMImpl<A, B>;
+template <typename A, typename B>
+using LCMImpl_t = LCMImpl<A, B>;
 using FunctionLCM = FunctionBinaryArithmetic<LCMImpl_t, NameLCM>;
 
-}
+} // namespace DB
 
 /// Optimizations for integer division by a constant.
 
 #if __SSE2__
-    #define LIBDIVIDE_SSE2 1
+#define LIBDIVIDE_SSE2 1
 #endif
 
 #include <libdivide.h>
 
 namespace DB
 {
-
 template <typename A, typename B>
 struct DivideIntegralByConstantImpl
     : BinaryOperationImplBase<A, B, DivideIntegralImpl<A, B>>
@@ -2369,7 +2504,7 @@ struct DivideIntegralByConstantImpl
         while (a_pos < a_end_sse)
         {
             _mm_storeu_si128(reinterpret_cast<__m128i *>(c_pos),
-                _mm_loadu_si128(reinterpret_cast<const __m128i *>(a_pos)) / divider);
+                             _mm_loadu_si128(reinterpret_cast<const __m128i *>(a_pos)) / divider);
 
             a_pos += values_per_sse_register;
             c_pos += values_per_sse_register;
@@ -2466,4 +2601,4 @@ template <> struct BinaryOperationImpl<Int32, Int32, ModuloImpl<Int32, Int32>> :
 template <> struct BinaryOperationImpl<Int32, Int64, ModuloImpl<Int32, Int64>> : ModuloByConstantImpl<Int32, Int64> {};
 // clang-format on
 
-}
+} // namespace DB
