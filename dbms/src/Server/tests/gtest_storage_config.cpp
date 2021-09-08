@@ -1,3 +1,13 @@
+/// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
+#if !__clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+#include <cpptoml.h>
+#if !__clang__
+#pragma GCC diagnostic pop
+#endif
+
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/TOMLConfiguration.h>
 #include <Interpreters/Quota.h>
@@ -6,16 +16,6 @@
 #include <Server/StorageConfigParser.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-/// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-#include <Common/Config/cpptoml.h>
-#if !__clang__
-#pragma GCC diagnostic pop
-#endif
 
 namespace DB
 {
