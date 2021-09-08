@@ -18,9 +18,6 @@ http_port = 8123
 ## The storage format version in storage engine. Valid values: 1, 2 (experimental).
 ## format_version = 1
 
-## Controls the total write rate of background tasks in bytes per second, 0 means no limit
-## bg_task_io_rate_limit = 104857600
-
 ## If there are multiple SSD disks on the machine,
 ## specify the path list on `storage.main.dir` can improve TiFlash performance.
 
