@@ -1,14 +1,12 @@
 #pragma once
 
-#include <Poco/Net/Socket.h>
-
-#include <IO/WriteBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/WriteBuffer.h>
+#include <Poco/Net/Socket.h>
 
 
 namespace DB
 {
-
 /** Works with the ready Poco::Net::Socket. Blocking operations.
   */
 class WriteBufferFromPocoSocket : public BufferWithOwnMemory<WriteBuffer>
@@ -31,4 +29,4 @@ public:
     ~WriteBufferFromPocoSocket();
 };
 
-}
+} // namespace DB

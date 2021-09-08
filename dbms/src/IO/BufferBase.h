@@ -1,13 +1,12 @@
 #pragma once
 
 #include <Core/Defines.h>
+
 #include <algorithm>
 
 
 namespace DB
 {
-
-
 /** Base class for ReadBuffer and WriteBuffer.
   * Contains common types, variables, and functions.
   *
@@ -34,7 +33,10 @@ public:
     /** A reference to the range of memory. */
     struct Buffer
     {
-        Buffer(Position begin_pos_, Position end_pos_) : begin_pos(begin_pos_), end_pos(end_pos_) {}
+        Buffer(Position begin_pos_, Position end_pos_)
+            : begin_pos(begin_pos_)
+            , end_pos(end_pos_)
+        {}
 
         inline Position begin() const { return begin_pos; }
         inline Position end() const { return end_pos; }
@@ -49,14 +51,17 @@ public:
 
     private:
         Position begin_pos;
-        Position end_pos;        /// 1 byte after the end of the buffer
+        Position end_pos; /// 1 byte after the end of the buffer
     };
 
     /** The constructor takes a range of memory to use for the buffer.
       * offset - the starting point of the cursor. ReadBuffer must set it to the end of the range, and WriteBuffer - to the beginning.
       */
     BufferBase(Position ptr, size_t size, size_t offset)
-        : pos(ptr + offset), working_buffer(ptr, ptr + size), internal_buffer(ptr, ptr + size) {}
+        : pos(ptr + offset)
+        , working_buffer(ptr, ptr + size)
+        , internal_buffer(ptr, ptr + size)
+    {}
 
     void set(Position ptr, size_t size, size_t offset)
     {
@@ -110,4 +115,4 @@ protected:
 };
 
 
-}
+} // namespace DB

@@ -1,32 +1,32 @@
 #pragma once
 
-#include <optional>
-#include <mutex>
+#include <Common/NetException.h>
+#include <Common/Stopwatch.h>
+#include <IO/BufferWithOwnMemory.h>
+#include <IO/HTTPCommon.h>
+#include <IO/Progress.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromOStream.h>
+#include <IO/ZlibDeflatingWriteBuffer.h>
 #include <Poco/Net/HTTPServerRequest.h>
 #include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Version.h>
-#include <IO/WriteBuffer.h>
-#include <IO/BufferWithOwnMemory.h>
-#include <IO/WriteBufferFromOStream.h>
-#include <IO/ZlibDeflatingWriteBuffer.h>
-#include <IO/HTTPCommon.h>
-#include <Common/NetException.h>
-#include <Common/Stopwatch.h>
-#include <IO/Progress.h>
+
+#include <mutex>
+#include <optional>
 
 
 namespace Poco
 {
-    namespace Net
-    {
-        class HTTPServerResponse;
-    }
+namespace Net
+{
+class HTTPServerResponse;
 }
+} // namespace Poco
 
 
 namespace DB
 {
-
 /// The difference from WriteBufferFromOStream is that this buffer gets the underlying std::ostream
 /// (using response.send()) only after data is flushed for the first time. This is needed in HTTP
 /// servers to change some HTTP headers (e.g. response code) before any data is sent to the client
@@ -61,16 +61,16 @@ private:
     std::optional<WriteBufferFromOStream> out_raw;
     std::optional<ZlibDeflatingWriteBuffer> deflating_buf;
 
-    WriteBuffer * out = nullptr;     /// Uncompressed HTTP body is written to this buffer. Points to out_raw or possibly to deflating_buf.
+    WriteBuffer * out = nullptr; /// Uncompressed HTTP body is written to this buffer. Points to out_raw or possibly to deflating_buf.
 
     bool headers_started_sending = false;
-    bool headers_finished_sending = false;    /// If true, you could not add any headers.
+    bool headers_finished_sending = false; /// If true, you could not add any headers.
 
     Progress accumulated_progress;
     size_t send_progress_interval_ms = 100;
     Stopwatch progress_watch;
 
-    std::mutex mutex;    /// progress callback could be called from different threads.
+    std::mutex mutex; /// progress callback could be called from different threads.
 
 
     /// Must be called under locked mutex.
@@ -88,7 +88,7 @@ public:
         Poco::Net::HTTPServerRequest & request_,
         Poco::Net::HTTPServerResponse & response_,
         unsigned keep_alive_timeout_,
-        bool compress_ = false,        /// If true - set Content-Encoding header and compress the result.
+        bool compress_ = false, /// If true - set Content-Encoding header and compress the result.
         ZlibCompressionMethod compression_method_ = ZlibCompressionMethod::Gzip,
         size_t size = DBMS_DEFAULT_BUFFER_SIZE);
 
@@ -131,4 +131,4 @@ public:
     ~WriteBufferFromHTTPServerResponse();
 };
 
-}
+} // namespace DB

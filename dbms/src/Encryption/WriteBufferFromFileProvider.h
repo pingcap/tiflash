@@ -6,14 +6,14 @@
 
 namespace DB
 {
-
 class WriteBufferFromFileProvider : public WriteBufferFromFileDescriptor
 {
 protected:
     void nextImpl() override;
 
 public:
-    WriteBufferFromFileProvider(const FileProviderPtr & file_provider_,
+    WriteBufferFromFileProvider(
+        const FileProviderPtr & file_provider_,
         const std::string & file_name_,
         const EncryptionPath & encryption_path,
         bool create_new_encryption_info_ = true,
@@ -35,4 +35,5 @@ public:
 private:
     WritableFilePtr file;
 };
+
 } // namespace DB
