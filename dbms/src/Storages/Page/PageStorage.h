@@ -74,7 +74,7 @@ public:
 
         // meta file reading buffer size
         size_t meta_file_reading_buf_size = DBMS_DEFAULT_META_READER_BUFFER_SIZE;
-        
+
         void reload(const Config & rhs);
 
         String toDebugString() const;
