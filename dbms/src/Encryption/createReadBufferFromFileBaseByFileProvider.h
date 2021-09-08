@@ -2,8 +2,7 @@
 
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileBase.h>
-#include <Storages/DeltaMerge/DMConfiguration.h>
-
+#include <Common/Checksum.h>
 #include <memory>
 #include <string>
 
@@ -40,6 +39,7 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
     const EncryptionPath & encryption_path_,
     size_t estimated_size,
     const ReadLimiterPtr & read_limiter,
-    const DM::DMConfiguration & configuration,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size,
     int flags_ = -1);
 } // namespace DB

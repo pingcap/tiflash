@@ -214,7 +214,8 @@ void runStackingTest()
                 {"/tmp/test.enc", "test.enc"},
                 true,
                 limiter->getReadLimiter(),
-                config);
+                config.getChecksumAlgorithm(),
+                config.getChecksumFrameLength());
             auto compression_buffer = CompressedWriteBuffer<false>(*buffer);
             compression_buffer.write(data.data(), data.size());
         }
@@ -225,7 +226,8 @@ void runStackingTest()
                 {"/tmp/test.enc", "test.enc"},
                 config.getChecksumFrameLength(),
                 limiter->getReadLimiter(),
-                config);
+                config.getChecksumAlgorithm(),
+                config.getChecksumFrameLength());
             auto cmp = std::vector<char>(size);
             ASSERT_EQ(buffer.read(cmp.data(), size), size) << "random seed: " << seed << std::endl;
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
@@ -261,7 +263,8 @@ void runStackedSeekingTest()
             {"/tmp/test.enc", "test.enc"},
             true,
             limiter->getWriteLimiter(),
-            config);
+            config.getChecksumAlgorithm(),
+            config.getChecksumFrameLength());
         auto compression_buffer = CompressedWriteBuffer<false>(*buffer);
         size_t acc = 0;
         for (size_t length = 1; acc + length <= size; acc += length, length <<= 1)
@@ -286,7 +289,8 @@ void runStackedSeekingTest()
             {"/tmp/test.enc", "test.enc"},
             config.getChecksumFrameLength(),
             limiter->getReadLimiter(),
-            config);
+            config.getChecksumAlgorithm(),
+            config.getChecksumFrameLength());
         std::shuffle(slices.begin(), slices.end(), local_engine);
         for (const auto & [x, y, z] : slices)
         {

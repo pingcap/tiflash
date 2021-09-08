@@ -36,8 +36,8 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     size_t aio_threshold,
     const ReadLimiterPtr & read_limiter_,
     size_t buf_size)
-    : CompressedSeekableReaderBuffer(),
-      p_file_in(createReadBufferFromFileBaseByFileProvider(
+    : CompressedSeekableReaderBuffer()
+    , p_file_in(createReadBufferFromFileBaseByFileProvider(
           file_provider,
           path,
           encryption_path,
@@ -52,12 +52,16 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
 
 template <bool has_checksum>
 CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider,
-    const std::string & path, const EncryptionPath & encryption_path, size_t estimated_size, const ReadLimiterPtr & read_limiter_,
-    const DM::DMConfiguration & configuration)
-    : CompressedSeekableReaderBuffer(),
-      p_file_in(
-          createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, read_limiter_, configuration)),
-      file_in(*p_file_in)
+                                                                                         const std::string & path,
+                                                                                         const EncryptionPath & encryption_path,
+                                                                                         size_t estimated_size,
+                                                                                         const ReadLimiterPtr & read_limiter_,
+                                                                                         ChecksumAlgo checksum_algorithm,
+                                                                                         size_t checksum_frame_size)
+    : CompressedSeekableReaderBuffer()
+    , p_file_in(
+          createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, read_limiter_, checksum_algorithm, checksum_frame_size))
+    , file_in(*p_file_in)
 {
     this->compressed_in = &file_in;
 }

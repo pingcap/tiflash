@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Common/Checksum.h>
 #include <Encryption/FileProvider.h>
 #include <IO/CompressedReadBufferBase.h>
 #include <IO/ReadBufferFromFileBase.h>
-#include <Storages/DeltaMerge/DMConfiguration.h>
 #include <time.h>
 
 #include <memory>
@@ -11,18 +11,20 @@
 
 namespace DB
 {
-
 /// CompressedSeekableReaderBuffer provides an extra abstraction layer to unify compressed buffers
 /// This helps to unify CompressedReadBufferFromFileProvider<false> and CompressedReadBufferFromFileProvider<true>
 struct CompressedSeekableReaderBuffer : public BufferWithOwnMemory<ReadBuffer>
 {
     virtual void setProfileCallback(
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
-    = 0;
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
+        clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
+        = 0;
 
     virtual void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) = 0;
 
-    CompressedSeekableReaderBuffer() : BufferWithOwnMemory<ReadBuffer>(0) {}
+    CompressedSeekableReaderBuffer()
+        : BufferWithOwnMemory<ReadBuffer>(0)
+    {}
 };
 
 
@@ -58,8 +60,13 @@ public:
 
     /// @attention: estimated_size should be at least DBMS_DEFAULT_BUFFER_SIZE if one want to do seeking; however, if one knows that target file
     /// only consists of a single small frame, one can use a smaller estimated_size to reduce memory footprint.
-    CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider, const std::string & path, const EncryptionPath & encryption_path,
-        size_t estimated_size, const ReadLimiterPtr & read_limiter, const DM::DMConfiguration & configuration);
+    CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider,
+                                         const std::string & path,
+                                         const EncryptionPath & encryption_path,
+                                         size_t estimated_size,
+                                         const ReadLimiterPtr & read_limiter,
+                                         ChecksumAlgo checksum_algorithm,
+                                         size_t checksum_frame_size);
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) override;
 
