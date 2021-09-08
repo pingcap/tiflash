@@ -38,8 +38,7 @@ protected:
     }
 };
 
-// test string and fixed string
-TEST_F(SubStringIndex, str_Test)
+TEST_F(SubStringIndex, str_string_index_str_Test)
 try
 {
     // Test string
