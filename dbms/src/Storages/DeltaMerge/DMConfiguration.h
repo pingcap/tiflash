@@ -35,7 +35,7 @@ public:
     [[nodiscard]] size_t getChecksumFrameLength() const { return checksum_frame_length; }
     [[nodiscard]] size_t getChecksumHeaderLength() const
     {
-        switch (checksum_algorihm)
+        switch (checksum_algorithm)
         {
         case DB::ChecksumAlgo::None:
             return sizeof(DB::ChecksumFrame<DB::Digest::None>);
@@ -50,7 +50,7 @@ public:
         }
         throw TiFlashException("unrecognized checksum algorithm", Errors::Checksum::Internal);
     }
-    [[nodiscard]] DB::ChecksumAlgo                           getChecksumAlgorithm() const { return checksum_algorihm; }
+    [[nodiscard]] DB::ChecksumAlgo                           getChecksumAlgorithm() const { return checksum_algorithm; }
     [[nodiscard]] std::map<std::string, std::string> &       getEmbeddedChecksum() { return embedded_checksum; }
     [[nodiscard]] const std::map<std::string, std::string> & getDebugInfo() const { return debug_info; }
 
@@ -58,7 +58,7 @@ public:
 
     [[nodiscard]] DB::UnifiedDigestBaseBox createUnifiedDigest() const
     {
-        switch (checksum_algorihm)
+        switch (checksum_algorithm)
         {
         case DB::ChecksumAlgo::None:
             return std::make_unique<DB::UnifiedDigest<DB::Digest::None>>();
@@ -77,7 +77,7 @@ public:
 
 private:
     size_t                             checksum_frame_length; // the length of checksum frame
-    DB::ChecksumAlgo                   checksum_algorihm;     // the algorithm of checksum
+    DB::ChecksumAlgo                   checksum_algorithm;     // the algorithm of checksum
     std::map<std::string, std::string> embedded_checksum;     // special checksums for meta files
     std::map<std::string, std::string> debug_info;            // debugging information
 };
