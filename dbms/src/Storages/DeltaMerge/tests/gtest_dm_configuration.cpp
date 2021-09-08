@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
 #include <Common/Checksum.h>
-#include <Storages/DeltaMerge/File/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMConfiguration.h>
 namespace DB::DM
 {
 

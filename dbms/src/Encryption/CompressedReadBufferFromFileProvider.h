@@ -3,7 +3,7 @@
 #include <Encryption/FileProvider.h>
 #include <IO/CompressedReadBufferBase.h>
 #include <IO/ReadBufferFromFileBase.h>
-#include <Storages/DeltaMerge/File/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMConfiguration.h>
 #include <time.h>
 
 #include <memory>
@@ -30,7 +30,7 @@ struct CompressedSeekableReaderBuffer : public BufferWithOwnMemory<ReadBuffer>
 template <bool has_checksum = true>
 class CompressedReadBufferFromFileProvider
     : public CompressedReadBufferBase<has_checksum>
-    , public BufferWithOwnMemory<ReadBuffer>
+    , public CompressedSeekableReaderBuffer
 {
 private:
     /** At any time, one of two things is true:

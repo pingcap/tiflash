@@ -2,7 +2,7 @@
 
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileBase.h>
-#include <Storages/DeltaMerge/File/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMConfiguration.h>
 
 #include <memory>
 #include <string>

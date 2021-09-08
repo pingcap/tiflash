@@ -6,7 +6,7 @@
 #include <dmfile.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Storages/DeltaMerge/File/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMConfiguration.h>
 
 namespace DB::DM
 {

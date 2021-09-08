@@ -14,7 +14,7 @@
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/File/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMConfiguration.h>
 #include <Storages/Page/PageUtil.h>
 
 #include <random>
