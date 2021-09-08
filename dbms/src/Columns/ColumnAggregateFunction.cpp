@@ -18,7 +18,7 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 ColumnAggregateFunction::~ColumnAggregateFunction()
 {
     if (!func->hasTrivialDestructor() && !src)
-        for (const auto & val : data)
+        for (auto * val : data)
             func->destroy(val);
 }
 
@@ -72,7 +72,7 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues() const
     MutableColumnPtr res = function->getReturnType()->createColumn();
     res->reserve(getData().size());
 
-    for (const auto & val : getData())
+    for (auto * val : getData())
         function->insertResultInto(val, *res, nullptr);
 
     return res;
@@ -84,12 +84,13 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
     const ColumnAggregateFunction & from_concrete = static_cast<const ColumnAggregateFunction &>(from);
 
     if (start + length > from_concrete.getData().size())
-        throw Exception("Parameters start = " + toString(start) + ", length = " + toString(length)
-                            + " are out of bound in ColumnAggregateFunction::insertRangeFrom method"
-                              " (data.size() = "
-                            + toString(from_concrete.getData().size())
-                            + ").",
-                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
+        throw Exception(
+            "Parameters start = " + toString(start) + ", length = " + toString(length)
+                + " are out of bound in ColumnAggregateFunction::insertRangeFrom method"
+                  " (data.size() = "
+                + toString(from_concrete.getData().size())
+                + ").",
+            ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     if (!empty() && src.get() != &from_concrete)
     {
@@ -184,7 +185,10 @@ void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::Ti
 {
     auto s = data.size();
     if (hash.getData().size() != data.size())
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Size of WeakHash32 does not match size of column: column size is "
+                + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
 
     auto & hash_data = hash.getData();
 
