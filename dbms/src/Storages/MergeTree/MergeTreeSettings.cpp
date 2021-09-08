@@ -66,7 +66,7 @@ void MergeTreeSettings::loadFromQuery(ASTStorage & storage_def)
 #define ADD_IF_ABSENT(NAME)                                                                                         \
     if (std::find_if(changes.begin(), changes.end(), [](const ASTSetQuery::Change & c) { return c.name == #NAME; }) \
         == changes.end())                                                                                           \
-        changes.push_back(ASTSetQuery::Change{#NAME, NAME.value});
+        changes.push_back(ASTSetQuery::Change{#NAME, NAME.get()});
 
     APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(ADD_IF_ABSENT);
 #undef ADD_IF_ABSENT
