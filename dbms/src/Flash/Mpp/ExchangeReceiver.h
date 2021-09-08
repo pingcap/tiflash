@@ -69,8 +69,7 @@ class RecyclableBuffer
 {
 public:
     explicit RecyclableBuffer(size_t limit)
-        : empty_ones(limit)
-        , ones(limit)
+        : capacity(limit)
     {
         /// init empty ones
         for (size_t i = 0; i < limit; ++i)
@@ -80,100 +79,70 @@ public:
     }
     bool hasEmpty()
     {
-        assert(!empty_ones.isOverflow());
-        return !empty_ones.isEmpty();
+        assert(!isOverflow(empty_ones));
+        return !empty_ones.empty();
     }
     bool hasOne()
     {
-        assert(!ones.isOverflow());
-        return !ones.isEmpty();
+        assert(!isOverflow(ones));
+        return !ones.empty();
     }
     /// before pushing one, the queue should have place
     bool hasEmptyPlace()
     {
-        assert(!empty_ones.isFullOrOverflow());
-        return !empty_ones.isFull();
+        assert(!isFullOrOverflow(empty_ones));
+        return !isFull(empty_ones);
     }
     bool hasPlace()
     {
-        assert(!ones.isFullOrOverflow());
-        return !ones.isFull();
+        assert(!isFullOrOverflow(ones));
+        return !isFull(ones);
     }
 
     void popEmpty(T & t)
     {
-        assert(!empty_ones.isEmpty() && !empty_ones.isOverflow());
+        assert(!empty_ones.empty() && !isOverflow(empty_ones));
         empty_ones.pop(t);
     }
     void popOne(T & t)
     {
-        assert(!ones.isEmpty() && !ones.isOverflow());
+        assert(!ones.empty() && !isOverflow(ones));
         ones.pop(t);
     }
     void pushOne(const T & t)
     {
-        assert(!ones.isFullOrOverflow());
+        assert(!isFullOrOverflow(ones));
         ones.push(t);
     }
     void pushEmpty(const T & t)
     {
-        assert(!empty_ones.isFullOrOverflow());
+        assert(!isFullOrOverflow(empty_ones));
         empty_ones.push(t);
     }
     void pushEmpty(T && t)
     {
-        assert(!empty_ones.isFullOrOverflow());
+        assert(!isFullOrOverflow(empty_ones));
         empty_ones.push(std::move(t));
     }
 
 private:
-    struct CVBoundedQueue
+    bool isFullOrOverflow(const std::queue<T> & q) const
     {
-        explicit CVBoundedQueue(size_t limit)
-            : capacity(limit)
-        {
-        }
-        bool isEmpty() const
-        {
-            return q.size() == 0;
-        }
-        bool isFull() const
-        {
-            return q.size() == capacity;
-        }
-        bool isFullOrOverflow() const
-        {
-            return q.size() >= capacity;
-        }
-        void push(const T & t)
-        {
-            q.push(t);
-        }
-        void push(T && t)
-        {
-            q.push(std::move(t));
-        }
-        void pop(T & t)
-        {
-            t = q.front();
-            q.pop();
-        }
-        size_t size() const
-        {
-            return q.size();
-        }
-        bool isOverflow() const
-        {
-            return q.size() > capacity;
-        }
+        return q.size() >= capacity;
+    }
+    bool isOverflow(const std::queue<T> & q) const
+    {
+        return q.size() > capacity;
+    }
+    bool isFull(const std::queue<T> & q) const
+    {
+        return q.size() == capacity;
+    }
 
-        std::queue<T> q;
-        size_t capacity;
-    };
-    CVBoundedQueue empty_ones;
-    CVBoundedQueue ones;
+    std::queue<T> empty_ones;
+    std::queue<T> ones;
+    size_t capacity;
 };
-
 
 class ExchangeReceiver
 {
