@@ -1,9 +1,10 @@
-#include <type_traits>
-#include <IO/ReadHelpers.h>
 #include <Core/Defines.h>
-#include <common/shift10.h>
+#include <IO/ReadHelpers.h>
 #include <common/likely.h>
+#include <common/shift10.h>
 #include <double-conversion/double-conversion.h>
+
+#include <type_traits>
 
 
 /** Methods for reading floating point numbers from text with decimal representation.
@@ -92,10 +93,9 @@ LIMIT 100
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_PARSE_NUMBER;
+extern const int CANNOT_PARSE_NUMBER;
 }
 
 
@@ -156,48 +156,53 @@ ReturnType readFloatTextPreciseImpl(T & x, ReadBuffer & buf)
     {
         switch (*buf.position())
         {
-            case '-':
-            {
-                negative = true;
-                ++buf.position();
-                continue;
-            }
+        case '-':
+        {
+            negative = true;
+            ++buf.position();
+            continue;
+        }
 
-            case 'i': [[fallthrough]];
-            case 'I':
+        case 'i':
+            [[fallthrough]];
+        case 'I':
+        {
+            if (assertOrParseInfinity<throw_exception>(buf))
             {
-                if (assertOrParseInfinity<throw_exception>(buf))
-                {
-                    x = std::numeric_limits<T>::infinity();
-                    if (negative)
-                        x = -x;
-                    return ReturnType(true);
-                }
-                return ReturnType(false);
+                x = std::numeric_limits<T>::infinity();
+                if (negative)
+                    x = -x;
+                return ReturnType(true);
             }
+            return ReturnType(false);
+        }
 
-            case 'n': [[fallthrough]];
-            case 'N':
+        case 'n':
+            [[fallthrough]];
+        case 'N':
+        {
+            if (assertOrParseNaN<throw_exception>(buf))
             {
-                if (assertOrParseNaN<throw_exception>(buf))
-                {
-                    x = std::numeric_limits<T>::quiet_NaN();
-                    if (negative)
-                        x = -x;
-                    return ReturnType(true);
-                }
-                return ReturnType(false);
+                x = std::numeric_limits<T>::quiet_NaN();
+                if (negative)
+                    x = -x;
+                return ReturnType(true);
             }
+            return ReturnType(false);
+        }
 
-            default:
-                break;
+        default:
+            break;
         }
         break;
     }
 
     static const double_conversion::StringToDoubleConverter converter(
         double_conversion::StringToDoubleConverter::ALLOW_TRAILING_JUNK,
-        0, 0, nullptr, nullptr);
+        0,
+        0,
+        nullptr,
+        nullptr);
 
     /// Fast path (avoid copying) if the buffer have at least MAX_LENGTH bytes.
     static constexpr int MAX_LENGTH = 316;
@@ -468,79 +473,91 @@ ReturnType readFloatTextSimpleImpl(T & x, ReadBuffer & buf)
     {
         switch (*buf.position())
         {
-            case '+':
-                break;
-            case '-':
-                negative = true;
-                break;
-            case '.':
-                after_point = true;
-                break;
-            case '0': [[fallthrough]];
-            case '1': [[fallthrough]];
-            case '2': [[fallthrough]];
-            case '3': [[fallthrough]];
-            case '4': [[fallthrough]];
-            case '5': [[fallthrough]];
-            case '6': [[fallthrough]];
-            case '7': [[fallthrough]];
-            case '8': [[fallthrough]];
-            case '9':
-                if (after_point)
-                {
-                    power_of_ten /= 10;
-                    x += (*buf.position() - '0') * power_of_ten;
-                }
-                else
-                {
-                    x *= 10;
-                    x += *buf.position() - '0';
-                }
-                break;
-            case 'e': [[fallthrough]];
-            case 'E':
+        case '+':
+            break;
+        case '-':
+            negative = true;
+            break;
+        case '.':
+            after_point = true;
+            break;
+        case '0':
+            [[fallthrough]];
+        case '1':
+            [[fallthrough]];
+        case '2':
+            [[fallthrough]];
+        case '3':
+            [[fallthrough]];
+        case '4':
+            [[fallthrough]];
+        case '5':
+            [[fallthrough]];
+        case '6':
+            [[fallthrough]];
+        case '7':
+            [[fallthrough]];
+        case '8':
+            [[fallthrough]];
+        case '9':
+            if (after_point)
             {
-                ++buf.position();
-                Int32 exponent = 0;
-                readIntText(exponent, buf);
-                x = shift10(x, exponent);
+                power_of_ten /= 10;
+                x += (*buf.position() - '0') * power_of_ten;
+            }
+            else
+            {
+                x *= 10;
+                x += *buf.position() - '0';
+            }
+            break;
+        case 'e':
+            [[fallthrough]];
+        case 'E':
+        {
+            ++buf.position();
+            Int32 exponent = 0;
+            readIntText(exponent, buf);
+            x = shift10(x, exponent);
+            if (negative)
+                x = -x;
+            return ReturnType(true);
+        }
+
+        case 'i':
+            [[fallthrough]];
+        case 'I':
+        {
+            if (assertOrParseInfinity<throw_exception>(buf))
+            {
+                x = std::numeric_limits<T>::infinity();
                 if (negative)
                     x = -x;
                 return ReturnType(true);
             }
+            return ReturnType(false);
+        }
 
-            case 'i': [[fallthrough]];
-            case 'I':
+        case 'n':
+            [[fallthrough]];
+        case 'N':
+        {
+            if (assertOrParseNaN<throw_exception>(buf))
             {
-                if (assertOrParseInfinity<throw_exception>(buf))
-                {
-                    x = std::numeric_limits<T>::infinity();
-                    if (negative)
-                        x = -x;
-                    return ReturnType(true);
-                }
-                return ReturnType(false);
-            }
-
-            case 'n': [[fallthrough]];
-            case 'N':
-            {
-                if (assertOrParseNaN<throw_exception>(buf))
-                {
-                    x = std::numeric_limits<T>::quiet_NaN();
-                    if (negative)
-                        x = -x;
-                    return ReturnType(true);
-                }
-                return ReturnType(false);
-            }
-
-            default:
-            {
+                x = std::numeric_limits<T>::quiet_NaN();
                 if (negative)
                     x = -x;
                 return ReturnType(true);
             }
+            return ReturnType(false);
+        }
+
+        default:
+        {
+            if (negative)
+                x = -x;
+            return ReturnType(true);
+        }
         }
         ++buf.position();
     }
@@ -552,20 +569,52 @@ ReturnType readFloatTextSimpleImpl(T & x, ReadBuffer & buf)
 }
 
 
-template <typename T> void readFloatTextPrecise(T & x, ReadBuffer & in) { readFloatTextPreciseImpl<T, void>(x, in); }
-template <typename T> bool tryReadFloatTextPrecise(T & x, ReadBuffer & in) { return readFloatTextPreciseImpl<T, bool>(x, in); }
+template <typename T>
+void readFloatTextPrecise(T & x, ReadBuffer & in)
+{
+    readFloatTextPreciseImpl<T, void>(x, in);
+}
+template <typename T>
+bool tryReadFloatTextPrecise(T & x, ReadBuffer & in)
+{
+    return readFloatTextPreciseImpl<T, bool>(x, in);
+}
 
-template <typename T> void readFloatTextFast(T & x, ReadBuffer & in) { readFloatTextFastImpl<T, void>(x, in); }
-template <typename T> bool tryReadFloatTextFast(T & x, ReadBuffer & in) { return readFloatTextFastImpl<T, bool>(x, in); }
+template <typename T>
+void readFloatTextFast(T & x, ReadBuffer & in)
+{
+    readFloatTextFastImpl<T, void>(x, in);
+}
+template <typename T>
+bool tryReadFloatTextFast(T & x, ReadBuffer & in)
+{
+    return readFloatTextFastImpl<T, bool>(x, in);
+}
 
-template <typename T> void readFloatTextSimple(T & x, ReadBuffer & in) { readFloatTextSimpleImpl<T, void>(x, in); }
-template <typename T> bool tryReadFloatTextSimple(T & x, ReadBuffer & in) { return readFloatTextSimpleImpl<T, bool>(x, in); }
+template <typename T>
+void readFloatTextSimple(T & x, ReadBuffer & in)
+{
+    readFloatTextSimpleImpl<T, void>(x, in);
+}
+template <typename T>
+bool tryReadFloatTextSimple(T & x, ReadBuffer & in)
+{
+    return readFloatTextSimpleImpl<T, bool>(x, in);
+}
 
 
 /// Implementation that is selected as default.
 
-template <typename T> void readFloatText(T & x, ReadBuffer & in) { readFloatTextFast(x, in); }
-template <typename T> bool tryReadFloatText(T & x, ReadBuffer & in) { return tryReadFloatTextFast(x, in); }
-
-
+template <typename T>
+void readFloatText(T & x, ReadBuffer & in)
+{
+    readFloatTextFast(x, in);
 }
+template <typename T>
+bool tryReadFloatText(T & x, ReadBuffer & in)
+{
+    return tryReadFloatTextFast(x, in);
+}
+
+
+} // namespace DB

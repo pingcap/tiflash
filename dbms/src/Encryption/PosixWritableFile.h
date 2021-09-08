@@ -25,7 +25,11 @@ protected:
 
 public:
     PosixWritableFile(
-        const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const WriteLimiterPtr & write_limiter_ = nullptr);
+        const std::string & file_name_,
+        bool truncate_when_exists_,
+        int flags,
+        mode_t mode,
+        const WriteLimiterPtr & write_limiter_ = nullptr);
 
     ~PosixWritableFile() override;
 
