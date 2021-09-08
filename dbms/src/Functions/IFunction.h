@@ -20,7 +20,7 @@ extern const int NOT_IMPLEMENTED;
 
 /// The simplest executable object.
 /// Motivation:
-///  * Prepare something heavy once before main execution loop instead of doing it for each columns.
+///  * Prepare something heavy once before main execution loop instead of doing it for each block.
 ///  * Provide const interface for IFunctionBase (later).
 ///  * Create one executable function per thread to use caches without synchronization (later).
 class IExecutableFunction
