@@ -1,14 +1,13 @@
 #pragma once
 
-#include <sys/types.h>
-
 #include <Common/CurrentMetrics.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
+#include <sys/types.h>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric OpenFileForWrite;
+extern const Metric OpenFileForWrite;
 }
 
 
@@ -18,7 +17,6 @@ namespace CurrentMetrics
 
 namespace DB
 {
-
 /** Accepts path to file and opens it, or pre-opened file descriptor.
   * Closes file by himself (thus "owns" a file descriptor).
   */
@@ -56,4 +54,4 @@ public:
     }
 };
 
-}
+} // namespace DB

@@ -7,10 +7,8 @@
 
 namespace DB
 {
-
 namespace
 {
-
 void copyDataImpl(ReadBuffer & from, WriteBuffer & to, bool check_bytes, size_t bytes, std::atomic<int> * is_cancelled)
 {
     /// If read to the end of the buffer, eof() either fills the buffer with new data and moves the cursor to the beginning, or returns false.
@@ -49,7 +47,7 @@ void copyDataImpl(ReadBuffer & from, WriteBuffer & to, bool check_bytes, size_t 
         throw Exception("Attempt to read after EOF.", ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF);
 }
 
-}
+} // namespace
 
 void copyData(ReadBuffer & from, WriteBuffer & to)
 {
@@ -81,4 +79,4 @@ void copyData(ReadBuffer & from, WriteBuffer & to, size_t bytes, std::function<v
     copyDataImpl(from, to, true, bytes, cancellation_hook);
 }
 
-}
+} // namespace DB
