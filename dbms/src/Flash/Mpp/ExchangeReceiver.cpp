@@ -77,10 +77,10 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                 LOG_TRACE(log, "begin next ");
                 {
                     std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return !empty_packets.isEmpty() || state != NORMAL; });
+                    cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != NORMAL; });
                     if (state == NORMAL)
                     {
-                        empty_packets.pop(packet);
+                        res_buffer.popEmpty(packet);
                         cv.notify_one();
                     }
                     else
@@ -104,10 +104,10 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                 }
                 {
                     std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return !full_packets.isFull() || state != NORMAL; });
+                    cv.wait(lock, [&] { return res_buffer.hasPlace() || state != NORMAL; });
                     if (state == NORMAL)
                     {
-                        full_packets.push(packet);
+                        res_buffer.pushOne(packet);
                         cv.notify_one();
                     }
                     else
@@ -163,16 +163,17 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         meet_error = true;
         local_err_msg = "fatal error";
     }
-    std::unique_lock<std::mutex> lock(mu);
-    live_connections--;
-    if (meet_error && state == NORMAL)
-        state = ERROR;
-    if (meet_error && err_msg.empty())
-        err_msg = local_err_msg;
-    auto copy_live_conn = live_connections;
-    cv.notify_all();
-    lock.unlock();
-
+    Int32 copy_live_conn;
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        live_connections--;
+        if (meet_error && state == NORMAL)
+            state = ERROR;
+        if (meet_error && err_msg.empty())
+            err_msg = local_err_msg;
+        copy_live_conn = live_connections;
+        cv.notify_all();
+    }
     LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
 
     if (copy_live_conn == 0)
@@ -185,32 +186,32 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
 {
     std::shared_ptr<ReceivedPacket> packet;
     ExchangeReceiverResult result;
-    Int32 copy_live_conn = live_connections;
-    std::unique_lock<std::mutex> lock(mu);
-    cv.wait(lock, [&] { return !full_packets.isEmpty() || live_connections == 0 || state != NORMAL; });
+    Int32 copy_live_conn;
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        cv.wait(lock, [&] { return res_buffer.hasOne() || live_connections == 0 || state != NORMAL; });
 
-    if (state != NORMAL)
-    {
-        String msg;
-        if (state == CANCELED)
-            msg = "query canceled";
-        else if (state == CLOSED)
-            msg = "ExchangeReceiver closed";
-        else if (!err_msg.empty())
-            msg = err_msg;
-        else
-            msg = "Unknown error";
-        result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
-        lock.unlock();
-        return result;
+        if (state != NORMAL)
+        {
+            String msg;
+            if (state == CANCELED)
+                msg = "query canceled";
+            else if (state == CLOSED)
+                msg = "ExchangeReceiver closed";
+            else if (!err_msg.empty())
+                msg = err_msg;
+            else
+                msg = "Unknown error";
+            result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
+            return result;
+        }
+        else if (res_buffer.hasOne())
+        {
+            res_buffer.popOne(packet);
+            cv.notify_one();
+        }
+        copy_live_conn = live_connections;
     }
-    else if (!full_packets.isEmpty())
-    {
-        full_packets.pop(packet);
-        cv.notify_one();
-    }
-    copy_live_conn = live_connections;
-    lock.unlock();
 
     if (packet != nullptr)
     {
@@ -230,10 +231,10 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
                 result = {resp_ptr, packet->source_index, packet->req_info};
                 packet->packet->Clear();
             }
-            lock.lock();
-            empty_packets.push(std::move(packet));
+            std::unique_lock<std::mutex> lock(mu);
+            cv.wait(lock, [&] { return res_buffer.hasEmptyPlace(); });
+            res_buffer.pushEmpty(std::move(packet));
             cv.notify_one();
-            lock.unlock();
         }
         else
         {

@@ -65,43 +65,115 @@ struct ReceivedPacket
 };
 
 template <typename T>
-struct CVBoundedQueue
+class RecyclableBuffer
 {
-    explicit CVBoundedQueue(size_t limit)
-        : capacity(limit)
+public:
+    explicit RecyclableBuffer(size_t limit)
+        : empty_ones(limit)
+        , ones(limit)
     {
+        /// init empty ones
+        for (size_t i = 0; i < limit; ++i)
+        {
+            empty_ones.push(T());
+        }
     }
-    bool isEmpty() const
+    bool hasEmpty()
     {
-        return q.size() == 0;
+        assert(!empty_ones.isOverflow());
+        return !empty_ones.isEmpty();
     }
-    bool isFull() const
+    bool hasOne()
     {
-        return q.size() == capacity;
+        assert(!ones.isOverflow());
+        return !ones.isEmpty();
     }
-    void push(T & t)
+    /// before pushing one, the queue should have place
+    bool hasEmptyPlace()
     {
-        q.push(std::move(t));
+        assert(!empty_ones.isFullOrOverflow());
+        return !empty_ones.isFull();
     }
-    void push(T && t)
+    bool hasPlace()
     {
-        q.push(std::move(t));
-    }
-    void pop(T & t)
-    {
-        t = q.front();
-        q.pop();
-    }
-    size_t size() const
-    {
-        return q.size();
+        assert(!ones.isFullOrOverflow());
+        return !ones.isFull();
     }
 
-    std::queue<T> q;
-    size_t capacity;
+    void popEmpty(T & t)
+    {
+        assert(!empty_ones.isEmpty() && !empty_ones.isOverflow());
+        empty_ones.pop(t);
+    }
+    void popOne(T & t)
+    {
+        assert(!ones.isEmpty() && !ones.isOverflow());
+        ones.pop(t);
+    }
+    void pushOne(T & t)
+    {
+        assert(!ones.isFullOrOverflow());
+        ones.push(t);
+    }
+    void pushEmpty(T & t)
+    {
+        assert(!empty_ones.isFullOrOverflow());
+        empty_ones.push(t);
+    }
+    void pushEmpty(T && t)
+    {
+        assert(!empty_ones.isFullOrOverflow());
+        empty_ones.push(t);
+    }
+
+private:
+    struct CVBoundedQueue
+    {
+        explicit CVBoundedQueue(size_t limit)
+            : capacity(limit)
+        {
+        }
+        bool isEmpty() const
+        {
+            return q.size() == 0;
+        }
+        bool isFull() const
+        {
+            return q.size() == capacity;
+        }
+        bool isFullOrOverflow() const
+        {
+            return q.size() >= capacity;
+        }
+        void push(T & t)
+        {
+            q.push(t);
+        }
+        void push(T && t)
+        {
+            q.push(std::move(t));
+        }
+        void pop(T & t)
+        {
+            t = q.front();
+            q.pop();
+        }
+        size_t size() const
+        {
+            return q.size();
+        }
+        bool isOverflow() const
+        {
+            return q.size() > capacity;
+        }
+
+        std::queue<T> q;
+        size_t capacity;
+    };
+    CVBoundedQueue empty_ones;
+    CVBoundedQueue ones;
 };
 
-using PacketsPool = CVBoundedQueue<std::shared_ptr<ReceivedPacket>>;
 
 class ExchangeReceiver
 {
@@ -120,8 +192,7 @@ private:
     DAGSchema schema;
     std::mutex mu;
     std::condition_variable cv;
-    PacketsPool empty_packets;
-    PacketsPool full_packets;
+    RecyclableBuffer<std::shared_ptr<ReceivedPacket>> res_buffer;
     Int32 live_connections;
     std::atomic<State> state;
     String err_msg;
@@ -140,8 +211,7 @@ public:
         , task_meta(meta)
         , max_streams(max_streams_)
         , max_buffer_size(max_streams_ * 2)
-        , empty_packets(max_buffer_size)
-        , full_packets(max_buffer_size)
+        , res_buffer(max_buffer_size)
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
         , state(NORMAL)
     {
@@ -154,12 +224,7 @@ public:
             schema.push_back(std::make_pair(name, info));
         }
 
-        /// init empty packets
-        for (size_t i = 0; i < max_buffer_size; ++i)
-        {
-            auto packet = std::make_shared<ReceivedPacket>();
-            empty_packets.push(packet);
-        }
+
         setUpConnection();
     }
 
