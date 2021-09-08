@@ -215,26 +215,29 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
 
     if (packet != nullptr)
     {
-        if (packet->packet->has_error())
+        if (packet->packet != nullptr)
         {
-            result = {nullptr, 0, "ExchangeReceiver", true, packet->packet->error().msg(), false};
-        }
-        else if (packet->packet != nullptr)
-        {
-            auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-            if (!resp_ptr->ParseFromString(packet->packet->data()))
+            if (packet->packet->has_error())
             {
-                result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
+                result = {nullptr, 0, "ExchangeReceiver", true, packet->packet->error().msg(), false};
             }
             else
             {
-                result = {resp_ptr, packet->source_index, packet->req_info};
+                auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+                if (!resp_ptr->ParseFromString(packet->packet->data()))
+                {
+                    result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
+                }
+                else
+                {
+                    result = {resp_ptr, packet->source_index, packet->req_info};
+                }
                 packet->packet->Clear();
+                std::unique_lock<std::mutex> lock(mu);
+                cv.wait(lock, [&] { return res_buffer.hasEmptyPlace(); });
+                res_buffer.pushEmpty(std::move(packet));
+                cv.notify_one();
             }
-            std::unique_lock<std::mutex> lock(mu);
-            cv.wait(lock, [&] { return res_buffer.hasEmptyPlace(); });
-            res_buffer.pushEmpty(std::move(packet));
-            cv.notify_one();
         }
         else
         {
