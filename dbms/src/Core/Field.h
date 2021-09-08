@@ -42,9 +42,10 @@ template <typename T>
 bool decimalLessOrEqual(T x, T y, UInt32 x_scale, UInt32 y_scale);
 
 #pragma GCC diagnostic push
-#if !defined(__has_warning) || __has_warning("-Wmaybe-uninitialized")
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized" // this one should be a false positive
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #endif
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized" // this one should be a false positive
 template <typename T>
 class DecimalField
 {
@@ -524,9 +525,10 @@ private:
 
     /// Assuming there was no allocated state or it was deallocated (see destroy).
 #pragma GCC diagnostic push
-#if !defined(__has_warning) || __has_warning("-Wmaybe-uninitialized")
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #endif
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
     template <typename T>
     void createConcrete(T && x)
     {
