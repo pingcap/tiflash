@@ -130,7 +130,7 @@ BlockIO InterpreterDAG::execute()
                 dag.getEncodeType(),
                 dag.getResultFieldTypes(),
                 dag.getDAGContext());
-            stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer));
+            stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
         });
     }
 
