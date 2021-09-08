@@ -32,7 +32,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
-    BatchWrite<true>();
+    batchWrite<true>();
 }
 
 template <class StreamWriterPtr>
@@ -48,12 +48,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     }
     if ((Int64)rows_in_blocks > (records_per_chunk == -1 ? 4096 : records_per_chunk))
     {
-        BatchWrite<false>();
+        batchWrite<false>();
     }
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::EncodeThenWriteBlock(
+void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlock(
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
@@ -122,7 +122,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::EncodeThenWriteBlock(
 
 template <class StreamWriterPtr>
 template <bool for_last_response>
-void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlock(
+void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlock(
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
@@ -240,18 +240,18 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::PartitionAndEncodeThenWriteBlo
 
 template <class StreamWriterPtr>
 template <bool collect_execution_info>
-void StreamingDAGResponseWriter<StreamWriterPtr>::BatchWrite()
+void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
 {
     tipb::SelectResponse response;
     if constexpr (collect_execution_info)
         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
-        PartitionAndEncodeThenWriteBlock<collect_execution_info>(blocks, response);
+        partitionAndEncodeThenWriteBlock<collect_execution_info>(blocks, response);
     }
     else
     {
-        EncodeThenWriteBlock(blocks, response);
+        encodeThenWriteBlock(blocks, response);
     }
     blocks.clear();
     rows_in_blocks = 0;

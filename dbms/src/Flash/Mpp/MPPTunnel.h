@@ -25,7 +25,7 @@ public:
         const mpp::TaskMeta & sender_meta_,
         const std::chrono::seconds timeout_,
         const std::shared_ptr<MPPTask> & current_task_,
-        int input_num_);
+        int input_steams_num_);
 
     ~MPPTunnel();
 
@@ -75,7 +75,7 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    int input_num;
+    int input_streams_num;
 
     std::unique_ptr<std::thread> send_thr;
 

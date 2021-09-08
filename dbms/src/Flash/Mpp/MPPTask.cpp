@@ -228,7 +228,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, shared_from_this(), context.getSettings().max_threads);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, shared_from_this());
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
@@ -304,18 +304,15 @@ void MPPTask::runImpl()
 
         while (Block block = from->read())
         {
-            if (block)
+            count += block.rows();
+            FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
+            if (dag_context->isRootMPPTask())
             {
-                count += block.rows();
-                FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-                if (dag_context->isRootMPPTask())
-                {
-                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
-                }
-                else
-                {
-                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
-                }
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
+            }
+            else
+            {
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
             }
         }
 

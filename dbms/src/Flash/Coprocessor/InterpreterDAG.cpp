@@ -25,7 +25,6 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const std::shared_ptr<LogWithPrefix> & log_)
     : context(context_)
     , dag(dag_)
