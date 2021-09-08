@@ -56,7 +56,7 @@ private:
     /// Array of pointers to aggregation states, that are placed in arenas.
     Container data;
 
-    ColumnAggregateFunction() {}
+    ColumnAggregateFunction() = default;
 
     /// Create a new column that has another column as a source.
     MutablePtr createView() const
@@ -66,7 +66,7 @@ private:
         return res;
     }
 
-    ColumnAggregateFunction(const AggregateFunctionPtr & func_)
+    explicit ColumnAggregateFunction(const AggregateFunctionPtr & func_)
         : func(func_)
     {
     }
