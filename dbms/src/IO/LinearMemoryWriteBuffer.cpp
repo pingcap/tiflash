@@ -5,8 +5,9 @@
 
 namespace DB
 {
-class ReadBufferFromLinearMemoryWriteBuffer : public ReadBuffer
-    , boost::noncopyable
+class ReadBufferFromLinearMemoryWriteBuffer
+    : public ReadBuffer
+    , private boost::noncopyable
 {
 public:
     explicit ReadBufferFromLinearMemoryWriteBuffer(LinearMemoryWriteBuffer && origin)

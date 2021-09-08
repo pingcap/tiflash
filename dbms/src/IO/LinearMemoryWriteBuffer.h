@@ -11,14 +11,15 @@
 namespace DB
 {
 /// Similar to MemoryWriteBuffer, but grow buffer linearly. And you can customize the memory allocator.
-class LinearMemoryWriteBuffer : public WriteBuffer
+class LinearMemoryWriteBuffer
+    : public WriteBuffer
     , public IReadableWriteBuffer
-    , boost::noncopyable
+    , private boost::noncopyable
 {
 public:
     static constexpr size_t DEFAULT_CHUNK_SIZE = 65536; // Equal to max_fixed_block_size in ArenaWithFreeLists
 
-    LinearMemoryWriteBuffer(RecycledAllocator & allocator_, size_t chunk_size_ = DEFAULT_CHUNK_SIZE);
+    explicit LinearMemoryWriteBuffer(RecycledAllocator & allocator_, size_t chunk_size_ = DEFAULT_CHUNK_SIZE);
 
     void nextImpl() override;
 

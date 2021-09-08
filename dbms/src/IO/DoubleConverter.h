@@ -20,9 +20,6 @@ struct DoubleToStringConverterFlags<true>
 template <bool emit_decimal_point>
 class DoubleConverter
 {
-    DoubleConverter(const DoubleConverter &) = delete;
-    DoubleConverter & operator=(const DoubleConverter &) = delete;
-
     DoubleConverter() = default;
 
 public:
@@ -33,18 +30,17 @@ public:
 
     static const auto & instance()
     {
+        // clang-format off
         static const double_conversion::DoubleToStringConverter instance{
-            DoubleToStringConverterFlags<emit_decimal_point>::flags,
-            "inf",
-            "nan",
-            'e',
-            -6,
-            21,
-            6,
-            1};
+            DoubleToStringConverterFlags<emit_decimal_point>::flags, "inf", "nan", 'e', -6, 21, 6, 1
+        };
+        // clang-format on
 
         return instance;
     }
+
+    DoubleConverter(const DoubleConverter &) = delete;
+    DoubleConverter & operator=(const DoubleConverter &) = delete;
 };
 
 } // namespace DB

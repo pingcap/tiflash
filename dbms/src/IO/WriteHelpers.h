@@ -631,26 +631,13 @@ inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTI
 {
     if (unlikely(!datetime))
     {
+        // clang-format off
         static const char s[] = {
-            '0',
-            '0',
-            '0',
-            '0',
-            date_delimeter,
-            '0',
-            '0',
-            date_delimeter,
-            '0',
-            '0',
+            '0', '0', '0', '0', date_delimeter, '0', '0', date_delimeter, '0', '0',
             between_date_time_delimiter,
-            '0',
-            '0',
-            time_delimeter,
-            '0',
-            '0',
-            time_delimeter,
-            '0',
-            '0'};
+            '0', '0', time_delimeter, '0', '0', time_delimeter, '0', '0'
+        };
+        // clang-format on
         buf.write(s, sizeof(s));
         return;
     }

@@ -26,7 +26,12 @@ namespace DB
 class WriteBufferAIO : public WriteBufferFromFileBase
 {
 public:
-    WriteBufferAIO(const std::string & filename_, size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE, int flags_ = -1, mode_t mode_ = 0666, char * existing_memory_ = nullptr);
+    explicit WriteBufferAIO(
+        const std::string & filename_,
+        size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
+        int flags_ = -1,
+        mode_t mode_ = 0666,
+        char * existing_memory_ = nullptr);
     ~WriteBufferAIO() override;
 
     WriteBufferAIO(const WriteBufferAIO &) = delete;

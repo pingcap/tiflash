@@ -15,7 +15,16 @@ extern const int CANNOT_WRITE_TO_OSTREAM;
 extern const int RECEIVED_ERROR_FROM_REMOTE_IO_SERVER;
 } // namespace ErrorCodes
 
-InterserverWriteBuffer::InterserverWriteBuffer(const std::string & host_, int port_, const std::string & endpoint_, const std::string & path_, bool compress_, size_t buffer_size_, const Poco::Timespan & connection_timeout, const Poco::Timespan & send_timeout, const Poco::Timespan & receive_timeout)
+InterserverWriteBuffer::InterserverWriteBuffer(
+    const std::string & host_,
+    int port_,
+    const std::string & endpoint_,
+    const std::string & path_,
+    bool compress_,
+    size_t buffer_size_,
+    const Poco::Timespan & connection_timeout,
+    const Poco::Timespan & send_timeout,
+    const Poco::Timespan & receive_timeout)
     : WriteBuffer(nullptr, 0)
     , host(host_)
     , port(port_)

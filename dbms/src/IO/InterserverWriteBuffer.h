@@ -19,7 +19,16 @@ constexpr auto DEFAULT_REMOTE_WRITE_BUFFER_SEND_TIMEOUT = 1800;
 class InterserverWriteBuffer final : public WriteBuffer
 {
 public:
-    InterserverWriteBuffer(const std::string & host_, int port_, const std::string & endpoint_, const std::string & path_, bool compress_ = false, size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE, const Poco::Timespan & connection_timeout = Poco::Timespan(DEFAULT_REMOTE_WRITE_BUFFER_CONNECTION_TIMEOUT, 0), const Poco::Timespan & send_timeout = Poco::Timespan(DEFAULT_REMOTE_WRITE_BUFFER_SEND_TIMEOUT, 0), const Poco::Timespan & receive_timeout = Poco::Timespan(DEFAULT_REMOTE_WRITE_BUFFER_RECEIVE_TIMEOUT, 0));
+    InterserverWriteBuffer(
+        const std::string & host_,
+        int port_,
+        const std::string & endpoint_,
+        const std::string & path_,
+        bool compress_ = false,
+        size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
+        const Poco::Timespan & connection_timeout = Poco::Timespan(DEFAULT_REMOTE_WRITE_BUFFER_CONNECTION_TIMEOUT, 0),
+        const Poco::Timespan & send_timeout = Poco::Timespan(DEFAULT_REMOTE_WRITE_BUFFER_SEND_TIMEOUT, 0),
+        const Poco::Timespan & receive_timeout = Poco::Timespan(DEFAULT_REMOTE_WRITE_BUFFER_RECEIVE_TIMEOUT, 0));
 
     ~InterserverWriteBuffer();
     void finalize();
