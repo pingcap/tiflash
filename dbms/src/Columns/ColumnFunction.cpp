@@ -55,22 +55,22 @@ ColumnPtr ColumnFunction::cut(size_t start, size_t length) const
     return ColumnFunction::create(length, function, capture);
 }
 
-ColumnPtr ColumnFunction::filter(const Filter & filt, ssize_t result_size_hint) const
+ColumnPtr ColumnFunction::filter(const Filter & filter_, ssize_t result_size_hint) const
 {
-    if (column_size != filt.size())
+    if (column_size != filter_.size())
         throw Exception(
-            "Size of filter (" + toString(filt.size())
+            "Size of filter (" + toString(filter_.size())
                 + ") doesn't match size of column ("
                 + toString(column_size) + ")",
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     ColumnsWithTypeAndName capture = captured_columns;
     for (auto & column : capture)
-        column.column = column.column->filter(filt, result_size_hint);
+        column.column = column.column->filter(filter_, result_size_hint);
 
     size_t filtered_size = 0;
     if (capture.empty())
-        filtered_size = countBytesInFilter(filt);
+        filtered_size = countBytesInFilter(filter_);
     else
         filtered_size = capture.front().column->size();
 
@@ -127,8 +127,8 @@ std::vector<MutableColumnPtr> ColumnFunction::scatter(
     for (IColumn::ColumnIndex part = 0; part < num_columns; ++part)
     {
         auto & capture = captures[part];
-        size_t size__ = capture.empty() ? counts[part] : capture.front().column->size();
-        columns.emplace_back(ColumnFunction::create(size__, function, std::move(capture)));
+        size_t s = capture.empty() ? counts[part] : capture.front().column->size();
+        columns.emplace_back(ColumnFunction::create(s, function, std::move(capture)));
     }
 
     return columns;
@@ -194,14 +194,14 @@ void ColumnFunction::appendArguments(const ColumnsWithTypeAndName & columns)
 
 void ColumnFunction::appendArgument(const ColumnWithTypeAndName & column)
 {
-    const auto & argumnet_types = function->getArgumentTypes();
+    const auto & argument_types = function->getArgumentTypes();
 
     auto index = captured_columns.size();
-    if (!column.type->equals(*argumnet_types[index]))
+    if (!column.type->equals(*argument_types[index]))
         throw Exception(
-            "Cannot capture column " + std::to_string(argumnet_types.size())
+            "Cannot capture column " + std::to_string(argument_types.size())
                 + "because it has incompatible type: got " + column.type->getName()
-                + ", but " + argumnet_types[index]->getName() + " is expected.",
+                + ", but " + argument_types[index]->getName() + " is expected.",
             ErrorCodes::LOGICAL_ERROR);
 
     captured_columns.push_back(column);
