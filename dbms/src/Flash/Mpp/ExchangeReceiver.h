@@ -102,12 +102,14 @@ public:
     void popEmpty(T & t)
     {
         assert(!empty_ones.empty() && !isOverflow(empty_ones));
-        empty_ones.pop(t);
+        t = empty_ones.front();
+        empty_ones.pop();
     }
     void popOne(T & t)
     {
         assert(!ones.empty() && !isOverflow(ones));
-        ones.pop(t);
+        t = ones.front();
+        ones.pop();
     }
     void pushOne(const T & t)
     {
