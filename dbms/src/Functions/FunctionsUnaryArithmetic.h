@@ -188,7 +188,7 @@ private:
     }
 
     template <typename T0>
-    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if (const ColumnVector<T0> * col = checkAndGetColumn<ColumnVector<T0>>(block.getByPosition(arguments[0]).column.get()))
         {
@@ -208,7 +208,7 @@ private:
     }
 
     template <typename T0>
-    bool executeDecimalType(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeDecimalType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if (const ColumnDecimal<T0> * col = checkAndGetColumn<ColumnDecimal<T0>>(block.getByPosition(arguments[0]).column.get()))
         {
@@ -248,7 +248,7 @@ public:
     }
 
     size_t getNumberOfArguments() const override { return 1; }
-    bool isInjective(const Block &) override { return is_injective; }
+    bool isInjective(const Block &) const override { return is_injective; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -277,7 +277,7 @@ public:
         return result;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (!(executeType<UInt8>(block, arguments, result)
               || executeType<UInt16>(block, arguments, result)
