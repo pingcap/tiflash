@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int SEEK_POSITION_OUT_OF_BOUND;
@@ -29,13 +28,24 @@ bool CompressedReadBufferFromFileProvider<has_checksum>::nextImpl()
 }
 
 template <bool has_checksum>
-CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider,
-    const std::string & path, const EncryptionPath & encryption_path, size_t estimated_size, size_t aio_threshold,
-    const ReadLimiterPtr & read_limiter_, size_t buf_size)
-    : BufferWithOwnMemory<ReadBuffer>(0),
-      p_file_in(createReadBufferFromFileBaseByFileProvider(
-          file_provider, path, encryption_path, estimated_size, aio_threshold, read_limiter_, buf_size)),
-      file_in(*p_file_in)
+CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(
+    FileProviderPtr & file_provider,
+    const std::string & path,
+    const EncryptionPath & encryption_path,
+    size_t estimated_size,
+    size_t aio_threshold,
+    const ReadLimiterPtr & read_limiter_,
+    size_t buf_size)
+    : BufferWithOwnMemory<ReadBuffer>(0)
+    , p_file_in(createReadBufferFromFileBaseByFileProvider(
+          file_provider,
+          path,
+          encryption_path,
+          estimated_size,
+          aio_threshold,
+          read_limiter_,
+          buf_size))
+    , file_in(*p_file_in)
 {
     this->compressed_in = &file_in;
 }
@@ -61,8 +71,8 @@ void CompressedReadBufferFromFileProvider<has_checksum>::seek(size_t offset_in_c
         if (offset_in_decompressed_block > working_buffer.size())
             throw Exception("Seek position is beyond the decompressed block"
                             " (pos: "
-                    + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
-                ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
+                                + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
+                            ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
 
         pos = working_buffer.begin() + offset_in_decompressed_block;
         bytes -= offset();
@@ -118,3 +128,4 @@ template class CompressedReadBufferFromFileProvider<true>;
 template class CompressedReadBufferFromFileProvider<false>;
 
 } // namespace DB
+
