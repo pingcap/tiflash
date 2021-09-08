@@ -1,5 +1,5 @@
-#include <IO/createWriteBufferFromFileBase.h>
 #include <IO/WriteBufferFromFile.h>
+#include <IO/createWriteBufferFromFileBase.h>
 #if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
 #include <IO/WriteBufferAIO.h>
 #endif
@@ -8,21 +8,18 @@
 
 namespace ProfileEvents
 {
-    extern const Event CreatedWriteBufferOrdinary;
-    extern const Event CreatedWriteBufferAIO;
-}
+extern const Event CreatedWriteBufferOrdinary;
+extern const Event CreatedWriteBufferAIO;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
-WriteBufferFromFileBase * createWriteBufferFromFileBase(const std::string & filename_, size_t estimated_size,
-        size_t aio_threshold, size_t buffer_size_, int flags_, mode_t mode, char * existing_memory_,
-        size_t alignment)
+WriteBufferFromFileBase * createWriteBufferFromFileBase(const std::string & filename_, size_t estimated_size, size_t aio_threshold, size_t buffer_size_, int flags_, mode_t mode, char * existing_memory_, size_t alignment)
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
@@ -40,4 +37,4 @@ WriteBufferFromFileBase * createWriteBufferFromFileBase(const std::string & file
     }
 }
 
-}
+} // namespace DB

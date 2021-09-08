@@ -1,40 +1,36 @@
 #pragma once
 
-#include <cstring>
-#include <cstdio>
-#include <limits>
-#include <algorithm>
-#include <iterator>
-#include <iomanip>
-
+#include <Common/Decimal.h>
+#include <Common/Exception.h>
+#include <Common/MyTime.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Core/Types.h>
+#include <Core/UUID.h>
+#include <IO/DoubleConverter.h>
+#include <IO/VarInt.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteIntText.h>
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
 #include <common/LocalDateTime.h>
+#include <common/StringRef.h>
 #include <common/find_symbols.h>
 
-#include <Core/Types.h>
-#include <Core/UUID.h>
-#include <Common/Exception.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <common/StringRef.h>
-#include <Common/Decimal.h>
-#include <Common/MyTime.h>
-
-#include <IO/DoubleConverter.h>
-#include <IO/WriteBuffer.h>
-#include <IO/WriteIntText.h>
-#include <IO/VarInt.h>
-#include <IO/DoubleConverter.h>
-#include <IO/WriteBufferFromString.h>
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <iomanip>
+#include <iterator>
+#include <limits>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-}
+extern const int CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+} // namespace ErrorCodes
 
 /// Helper functions for formatted and binary output.
 
@@ -156,70 +152,70 @@ inline void writeJSONString(const char * begin, const char * end, WriteBuffer & 
     {
         switch (*it)
         {
-            case '\b':
-                writeChar('\\', buf);
-                writeChar('b', buf);
-                break;
-            case '\f':
-                writeChar('\\', buf);
-                writeChar('f', buf);
-                break;
-            case '\n':
-                writeChar('\\', buf);
-                writeChar('n', buf);
-                break;
-            case '\r':
-                writeChar('\\', buf);
-                writeChar('r', buf);
-                break;
-            case '\t':
-                writeChar('\\', buf);
-                writeChar('t', buf);
-                break;
-            case '\\':
-                writeChar('\\', buf);
-                writeChar('\\', buf);
-                break;
-            case '/':
-                writeChar('\\', buf);
-                writeChar('/', buf);
-                break;
-            case '"':
-                writeChar('\\', buf);
-                writeChar('"', buf);
-                break;
-            default:
-                UInt8 c = *it;
-                if (c <= 0x1F)
-                {
-                    /// Escaping of ASCII control characters.
+        case '\b':
+            writeChar('\\', buf);
+            writeChar('b', buf);
+            break;
+        case '\f':
+            writeChar('\\', buf);
+            writeChar('f', buf);
+            break;
+        case '\n':
+            writeChar('\\', buf);
+            writeChar('n', buf);
+            break;
+        case '\r':
+            writeChar('\\', buf);
+            writeChar('r', buf);
+            break;
+        case '\t':
+            writeChar('\\', buf);
+            writeChar('t', buf);
+            break;
+        case '\\':
+            writeChar('\\', buf);
+            writeChar('\\', buf);
+            break;
+        case '/':
+            writeChar('\\', buf);
+            writeChar('/', buf);
+            break;
+        case '"':
+            writeChar('\\', buf);
+            writeChar('"', buf);
+            break;
+        default:
+            UInt8 c = *it;
+            if (c <= 0x1F)
+            {
+                /// Escaping of ASCII control characters.
 
-                    UInt8 higher_half = c >> 4;
-                    UInt8 lower_half = c & 0xF;
+                UInt8 higher_half = c >> 4;
+                UInt8 lower_half = c & 0xF;
 
-                    writeCString("\\u00", buf);
-                    writeChar('0' + higher_half, buf);
+                writeCString("\\u00", buf);
+                writeChar('0' + higher_half, buf);
 
-                    if (lower_half <= 9)
-                        writeChar('0' + lower_half, buf);
-                    else
-                        writeChar('A' + lower_half - 10, buf);
-                }
-                else if (end - it >= 3 && it[0] == '\xE2' && it[1] == '\x80' && (it[2] == '\xA8' || it[2] == '\xA9'))
-                {
-                    /// This is for compatibility with JavaScript, because unescaped line separators are prohibited in string literals,
-                    ///  and these code points are alternative line separators.
-
-                    if (it[2] == '\xA8')
-                        writeCString("\\u2028", buf);
-                    if (it[2] == '\xA9')
-                        writeCString("\\u2029", buf);
-
-                    /// Byte sequence is 3 bytes long. We have additional two bytes to skip.
-                    it += 2;
-                }
+                if (lower_half <= 9)
+                    writeChar('0' + lower_half, buf);
                 else
-                    writeChar(*it, buf);
+                    writeChar('A' + lower_half - 10, buf);
+            }
+            else if (end - it >= 3 && it[0] == '\xE2' && it[1] == '\x80' && (it[2] == '\xA8' || it[2] == '\xA9'))
+            {
+                /// This is for compatibility with JavaScript, because unescaped line separators are prohibited in string literals,
+                ///  and these code points are alternative line separators.
+
+                if (it[2] == '\xA8')
+                    writeCString("\\u2028", buf);
+                if (it[2] == '\xA9')
+                    writeCString("\\u2029", buf);
+
+                /// Byte sequence is 3 bytes long. We have additional two bytes to skip.
+                it += 2;
+            }
+            else
+                writeChar(*it, buf);
         }
     }
     writeChar('"', buf);
@@ -246,40 +242,40 @@ void writeAnyEscapedString(const char * begin, const char * end, WriteBuffer & b
             pos = next_pos;
             switch (*pos)
             {
-                case '\b':
-                    writeChar('\\', buf);
-                    writeChar('b', buf);
-                    break;
-                case '\f':
-                    writeChar('\\', buf);
-                    writeChar('f', buf);
-                    break;
-                case '\n':
-                    writeChar('\\', buf);
-                    writeChar('n', buf);
-                    break;
-                case '\r':
-                    writeChar('\\', buf);
-                    writeChar('r', buf);
-                    break;
-                case '\t':
-                    writeChar('\\', buf);
-                    writeChar('t', buf);
-                    break;
-                case '\0':
-                    writeChar('\\', buf);
-                    writeChar('0', buf);
-                    break;
-                case '\\':
-                    writeChar('\\', buf);
-                    writeChar('\\', buf);
-                    break;
-                case c:
-                    writeChar('\\', buf);
-                    writeChar(c, buf);
-                    break;
-                default:
-                    writeChar(*pos, buf);
+            case '\b':
+                writeChar('\\', buf);
+                writeChar('b', buf);
+                break;
+            case '\f':
+                writeChar('\\', buf);
+                writeChar('f', buf);
+                break;
+            case '\n':
+                writeChar('\\', buf);
+                writeChar('n', buf);
+                break;
+            case '\r':
+                writeChar('\\', buf);
+                writeChar('r', buf);
+                break;
+            case '\t':
+                writeChar('\\', buf);
+                writeChar('t', buf);
+                break;
+            case '\0':
+                writeChar('\\', buf);
+                writeChar('0', buf);
+                break;
+            case '\\':
+                writeChar('\\', buf);
+                writeChar('\\', buf);
+                break;
+            case c:
+                writeChar('\\', buf);
+                writeChar(c, buf);
+                break;
+            default:
+                writeChar(*pos, buf);
             }
             ++pos;
         }
@@ -331,7 +327,6 @@ void writeAnyQuotedString(const char * begin, const char * end, WriteBuffer & bu
     writeAnyEscapedString<c>(begin, end, buf);
     writeChar(c, buf);
 }
-
 
 
 template <char c>
@@ -500,17 +495,16 @@ inline void writeMyDateText(UInt64 date, WriteBuffer & buf)
 template <char delimiter = '-'>
 inline void writeDateText(const LocalDate & date, WriteBuffer & buf)
 {
-    static const char digits[201] =
-        "00010203040506070809"
-        "10111213141516171819"
-        "20212223242526272829"
-        "30313233343536373839"
-        "40414243444546474849"
-        "50515253545556575859"
-        "60616263646566676869"
-        "70717273747576777879"
-        "80818283848586878889"
-        "90919293949596979899";
+    static const char digits[201] = "00010203040506070809"
+                                    "10111213141516171819"
+                                    "20212223242526272829"
+                                    "30313233343536373839"
+                                    "40414243444546474849"
+                                    "50515253545556575859"
+                                    "60616263646566676869"
+                                    "70717273747576777879"
+                                    "80818283848586878889"
+                                    "90919293949596979899";
 
     if (buf.position() + 10 <= buf.buffer().end())
     {
@@ -552,9 +546,10 @@ inline void writeDateText(DayNum date, WriteBuffer & buf)
 }
 
 
-template<typename T>
-void writeText(const Decimal<T> & v, ScaleType scale, WriteBuffer & ostr) {
-    const std::string& str = v.toString(scale);
+template <typename T>
+void writeText(const Decimal<T> & v, ScaleType scale, WriteBuffer & ostr)
+{
+    const std::string & str = v.toString(scale);
     ostr.write(str.c_str(), str.length());
 }
 
@@ -562,17 +557,16 @@ void writeText(const Decimal<T> & v, ScaleType scale, WriteBuffer & ostr) {
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
 inline void writeDateTimeText(const LocalDateTime & datetime, WriteBuffer & buf)
 {
-    static const char digits[201] =
-        "00010203040506070809"
-        "10111213141516171819"
-        "20212223242526272829"
-        "30313233343536373839"
-        "40414243444546474849"
-        "50515253545556575859"
-        "60616263646566676869"
-        "70717273747576777879"
-        "80818283848586878889"
-        "90919293949596979899";
+    static const char digits[201] = "00010203040506070809"
+                                    "10111213141516171819"
+                                    "20212223242526272829"
+                                    "30313233343536373839"
+                                    "40414243444546474849"
+                                    "50515253545556575859"
+                                    "60616263646566676869"
+                                    "70717273747576777879"
+                                    "80818283848586878889"
+                                    "90919293949596979899";
 
     if (buf.position() + 19 <= buf.buffer().end())
     {
@@ -637,60 +631,126 @@ inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTI
 {
     if (unlikely(!datetime))
     {
-        static const char s[] =
-        {
-            '0', '0', '0', '0', date_delimeter, '0', '0', date_delimeter, '0', '0',
+        static const char s[] = {
+            '0',
+            '0',
+            '0',
+            '0',
+            date_delimeter,
+            '0',
+            '0',
+            date_delimeter,
+            '0',
+            '0',
             between_date_time_delimiter,
-            '0', '0', time_delimeter, '0', '0', time_delimeter, '0', '0'
-        };
+            '0',
+            '0',
+            time_delimeter,
+            '0',
+            '0',
+            time_delimeter,
+            '0',
+            '0'};
         buf.write(s, sizeof(s));
         return;
     }
 
     const auto & values = date_lut.getValues(datetime);
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(
-        LocalDateTime(values.year, values.month, values.day_of_month,
-            date_lut.toHour(datetime), date_lut.toMinute(datetime), date_lut.toSecond(datetime)), buf);
+        LocalDateTime(values.year, values.month, values.day_of_month, date_lut.toHour(datetime), date_lut.toMinute(datetime), date_lut.toSecond(datetime)),
+        buf);
 }
 
 
 /// Methods for output in binary format.
 template <typename T>
 inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-writeBinary(const T & x, WriteBuffer & buf) { writePODBinary(x, buf); }
+writeBinary(const T & x, WriteBuffer & buf)
+{
+    writePODBinary(x, buf);
+}
 
-inline void writeBinary(const String & x, WriteBuffer & buf) { writeStringBinary(x, buf); }
-inline void writeBinary(const StringRef & x, WriteBuffer & buf) { writeStringBinary(x, buf); }
-inline void writeBinary(const UInt128 & x, WriteBuffer & buf) { writePODBinary(x, buf); }
-inline void writeBinary(const UInt256 & x, WriteBuffer & buf) { writePODBinary(x, buf); }
-inline void writeBinary(const LocalDate & x, WriteBuffer & buf) { writePODBinary(x, buf); }
-inline void writeBinary(const LocalDateTime & x, WriteBuffer & buf) { writePODBinary(x, buf); }
-template<typename T>
-inline void writeBinary(const Decimal<T> & x, WriteBuffer & buf) { writePODBinary(x, buf); }
+inline void writeBinary(const String & x, WriteBuffer & buf)
+{
+    writeStringBinary(x, buf);
+}
+inline void writeBinary(const StringRef & x, WriteBuffer & buf)
+{
+    writeStringBinary(x, buf);
+}
+inline void writeBinary(const UInt128 & x, WriteBuffer & buf)
+{
+    writePODBinary(x, buf);
+}
+inline void writeBinary(const UInt256 & x, WriteBuffer & buf)
+{
+    writePODBinary(x, buf);
+}
+inline void writeBinary(const LocalDate & x, WriteBuffer & buf)
+{
+    writePODBinary(x, buf);
+}
+inline void writeBinary(const LocalDateTime & x, WriteBuffer & buf)
+{
+    writePODBinary(x, buf);
+}
+template <typename T>
+inline void writeBinary(const Decimal<T> & x, WriteBuffer & buf)
+{
+    writePODBinary(x, buf);
+}
 
 
 /// Methods for outputting the value in text form for a tab-separated format.
 template <typename T>
 inline std::enable_if_t<std::is_integral_v<T>, void>
-writeText(const T & x, WriteBuffer & buf) { writeIntText(x, buf); }
+writeText(const T & x, WriteBuffer & buf)
+{
+    writeIntText(x, buf);
+}
 
 template <typename T>
 inline std::enable_if_t<std::is_floating_point_v<T>, void>
-writeText(const T & x, WriteBuffer & buf) { writeFloatText(x, buf); }
+writeText(const T & x, WriteBuffer & buf)
+{
+    writeFloatText(x, buf);
+}
 
-inline void writeText(const String & x, WriteBuffer & buf) { writeEscapedString(x, buf); }
+inline void writeText(const String & x, WriteBuffer & buf)
+{
+    writeEscapedString(x, buf);
+}
 
 /// Implemented as template specialization (not function overload) to avoid preference over templates on arithmetic types above.
-template <> inline void writeText<bool>(const bool & x, WriteBuffer & buf) { writeBoolText(x, buf); }
+template <>
+inline void writeText<bool>(const bool & x, WriteBuffer & buf)
+{
+    writeBoolText(x, buf);
+}
 
 /// unlike the method for std::string
 /// assumes here that `x` is a null-terminated string.
-inline void writeText(const char * x, WriteBuffer & buf) { writeEscapedString(x, strlen(x), buf); }
-inline void writeText(const char * x, size_t size, WriteBuffer & buf) { writeEscapedString(x, size, buf); }
+inline void writeText(const char * x, WriteBuffer & buf)
+{
+    writeEscapedString(x, strlen(x), buf);
+}
+inline void writeText(const char * x, size_t size, WriteBuffer & buf)
+{
+    writeEscapedString(x, size, buf);
+}
 
-inline void writeText(const LocalDate & x, WriteBuffer & buf) { writeDateText(x, buf); }
-inline void writeText(const LocalDateTime & x, WriteBuffer & buf) { writeDateTimeText(x, buf); }
-inline void writeText(const UUID & x, WriteBuffer & buf) { writeUUIDText(x, buf); }
+inline void writeText(const LocalDate & x, WriteBuffer & buf)
+{
+    writeDateText(x, buf);
+}
+inline void writeText(const LocalDateTime & x, WriteBuffer & buf)
+{
+    writeDateTimeText(x, buf);
+}
+inline void writeText(const UUID & x, WriteBuffer & buf)
+{
+    writeUUIDText(x, buf);
+}
 inline void writeText(const UInt128 &, WriteBuffer &)
 {
     /** Because UInt128 isn't a natural type, without arithmetic operator and only use as an intermediary type -for UUID-
@@ -702,9 +762,15 @@ inline void writeText(const UInt128 &, WriteBuffer &)
 /// String, date, datetime are in single quotes with C-style escaping. Numbers - without.
 template <typename T>
 inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-writeQuoted(const T & x, WriteBuffer & buf) { writeText(x, buf); }
+writeQuoted(const T & x, WriteBuffer & buf)
+{
+    writeText(x, buf);
+}
 
-inline void writeQuoted(const String & x, WriteBuffer & buf) { writeQuotedString(x, buf); }
+inline void writeQuoted(const String & x, WriteBuffer & buf)
+{
+    writeQuotedString(x, buf);
+}
 
 inline void writeQuoted(const LocalDate & x, WriteBuffer & buf)
 {
@@ -724,9 +790,15 @@ inline void writeQuoted(const LocalDateTime & x, WriteBuffer & buf)
 /// String, date, datetime are in double quotes with C-style escaping. Numbers - without.
 template <typename T>
 inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-writeDoubleQuoted(const T & x, WriteBuffer & buf) { writeText(x, buf); }
+writeDoubleQuoted(const T & x, WriteBuffer & buf)
+{
+    writeText(x, buf);
+}
 
-inline void writeDoubleQuoted(const String & x, WriteBuffer & buf) { writeDoubleQuotedString(x, buf); }
+inline void writeDoubleQuoted(const String & x, WriteBuffer & buf)
+{
+    writeDoubleQuotedString(x, buf);
+}
 
 inline void writeDoubleQuoted(const LocalDate & x, WriteBuffer & buf)
 {
@@ -753,12 +825,27 @@ inline void writeDoubleQuoted(const UUID & x, WriteBuffer & buf)
 /// String - in double quotes and with CSV-escaping; date, datetime - in double quotes. Numbers - without.
 template <typename T>
 inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-writeCSV(const T & x, WriteBuffer & buf) { writeText(x, buf); }
+writeCSV(const T & x, WriteBuffer & buf)
+{
+    writeText(x, buf);
+}
 
-inline void writeCSV(const String & x, WriteBuffer & buf) { writeCSVString<>(x, buf); }
-inline void writeCSV(const LocalDate & x, WriteBuffer & buf) { writeDoubleQuoted(x, buf); }
-inline void writeCSV(const LocalDateTime & x, WriteBuffer & buf) { writeDoubleQuoted(x, buf); }
-inline void writeCSV(const UUID & x, WriteBuffer & buf) { writeDoubleQuoted(x, buf); }
+inline void writeCSV(const String & x, WriteBuffer & buf)
+{
+    writeCSVString<>(x, buf);
+}
+inline void writeCSV(const LocalDate & x, WriteBuffer & buf)
+{
+    writeDoubleQuoted(x, buf);
+}
+inline void writeCSV(const LocalDateTime & x, WriteBuffer & buf)
+{
+    writeDoubleQuoted(x, buf);
+}
+inline void writeCSV(const UUID & x, WriteBuffer & buf)
+{
+    writeDoubleQuoted(x, buf);
+}
 inline void writeCSV(const UInt128, WriteBuffer &)
 {
     /** Because UInt128 isn't a natural type, without arithmetic operator and only use as an intermediary type -for UUID-
@@ -809,7 +896,6 @@ void writeText(const std::vector<T> & x, WriteBuffer & buf)
 }
 
 
-
 /// Serialize exception (so that it can be transferred over the network)
 void writeException(const Exception & e, WriteBuffer & buf);
 
@@ -843,4 +929,4 @@ inline String ptrToString(const void * const p)
     return buf.releaseStr();
 }
 
-}
+} // namespace DB

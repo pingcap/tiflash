@@ -1,22 +1,23 @@
 #pragma once
-#include <forward_list>
-
-#include <IO/WriteBuffer.h>
-#include <IO/IReadableWriteBuffer.h>
 #include <Common/Allocator.h>
 #include <Core/Defines.h>
+#include <IO/IReadableWriteBuffer.h>
+#include <IO/WriteBuffer.h>
+
 #include <boost/noncopyable.hpp>
+#include <forward_list>
 
 
 namespace DB
 {
-
 /// Stores data in memory chunks, size of cunks are exponentially increasing during write
 /// Written data could be reread after write
-class MemoryWriteBuffer : public WriteBuffer, public IReadableWriteBuffer, boost::noncopyable, private Allocator<false>
+class MemoryWriteBuffer : public WriteBuffer
+    , public IReadableWriteBuffer
+    , boost::noncopyable
+    , private Allocator<false>
 {
 public:
-
     /// Use max_total_size_ = 0 for unlimited storage
     MemoryWriteBuffer(
         size_t max_total_size_ = 0,
@@ -29,7 +30,6 @@ public:
     ~MemoryWriteBuffer() override;
 
 protected:
-
     std::shared_ptr<ReadBuffer> getReadBufferImpl() override;
 
     const size_t max_total_size;
@@ -49,4 +49,4 @@ protected:
 };
 
 
-}
+} // namespace DB
