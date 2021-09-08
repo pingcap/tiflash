@@ -110,12 +110,12 @@ public:
         assert(!ones.isEmpty() && !ones.isOverflow());
         ones.pop(t);
     }
-    void pushOne(T & t)
+    void pushOne(const T & t)
     {
         assert(!ones.isFullOrOverflow());
         ones.push(t);
     }
-    void pushEmpty(T & t)
+    void pushEmpty(const T & t)
     {
         assert(!empty_ones.isFullOrOverflow());
         empty_ones.push(t);
@@ -123,7 +123,7 @@ public:
     void pushEmpty(T && t)
     {
         assert(!empty_ones.isFullOrOverflow());
-        empty_ones.push(t);
+        empty_ones.push(std::move(t));
     }
 
 private:
@@ -145,7 +145,7 @@ private:
         {
             return q.size() >= capacity;
         }
-        void push(T & t)
+        void push(const T & t)
         {
             q.push(t);
         }
