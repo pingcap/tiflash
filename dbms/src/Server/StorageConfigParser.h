@@ -16,7 +16,6 @@ class LayeredConfiguration;
 
 namespace DB
 {
-
 struct StorageIORateLimitConfig
 {
 public:
@@ -46,20 +45,20 @@ public:
     Int32 auto_tune_sec;
 
     StorageIORateLimitConfig()
-        : max_bytes_per_sec(0),
-          max_read_bytes_per_sec(0),
-          max_write_bytes_per_sec(0),
-          use_max_bytes_per_sec(true),
-          fg_write_weight(25),
-          bg_write_weight(25),
-          fg_read_weight(25),
-          bg_read_weight(25),
-          emergency_pct(96),
-          high_pct(85),
-          medium_pct(60),
-          tune_base(2),
-          min_bytes_per_sec(2 * 1024 * 1024),
-          auto_tune_sec(5)
+        : max_bytes_per_sec(0)
+        , max_read_bytes_per_sec(0)
+        , max_write_bytes_per_sec(0)
+        , use_max_bytes_per_sec(true)
+        , fg_write_weight(25)
+        , bg_write_weight(25)
+        , fg_read_weight(25)
+        , bg_read_weight(25)
+        , emergency_pct(96)
+        , high_pct(85)
+        , medium_pct(60)
+        , tune_base(2)
+        , min_bytes_per_sec(2 * 1024 * 1024)
+        , auto_tune_sec(5)
     {}
 
     void parse(const String & storage_io_rate_limit, Poco::Logger * log);
@@ -88,9 +87,9 @@ public:
     std::vector<size_t> latest_capacity_quota;
     Strings kvstore_data_path;
 
-    UInt64 bg_task_io_rate_limit = 0;
     UInt64 format_version = 0;
     bool lazily_init_store = true;
+
 public:
     TiFlashStorageConfig() {}
 
@@ -99,9 +98,11 @@ public:
     static std::tuple<size_t, TiFlashStorageConfig> parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
 
 private:
-    void parse(const String & storage_section, Poco::Logger * log);
+    void parseStoragePath(const String & storage_section, Poco::Logger * log);
 
     bool parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+
+    void parseMisc(const String & config, Poco::Logger * log);
 };
 
 
