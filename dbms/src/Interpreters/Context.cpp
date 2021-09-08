@@ -630,7 +630,7 @@ void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & co
             {
                 continue;
             }
-            dt_config_reload_log += fmt::format("config name: {}, old config: {}, new config: {}; ", key, settings.get(key), config_value);
+            dt_config_reload_log += fmt::format("config name: {}, old: {}, new: {}; ", key, settings.get(key), config_value);
             settings.set(key, config_value);
         }
     }

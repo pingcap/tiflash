@@ -692,7 +692,7 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_NE(persister.page_storage->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(persister.page_storage->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(persister.page_storage->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(persister.page_storage->config.open_file_max_idle_time, Seconds(settings.dt_open_file_max_idle_seconds));
+        EXPECT_NE(persister.page_storage->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_NE(persister.page_storage->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
         persister.gc();
@@ -701,7 +701,7 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_NE(persister.page_storage->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(persister.page_storage->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(persister.page_storage->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_EQ(persister.page_storage->config.open_file_max_idle_time, Seconds(settings.dt_open_file_max_idle_seconds));
+        EXPECT_EQ(persister.page_storage->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_EQ(persister.page_storage->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
 
@@ -761,7 +761,7 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_NE(storage_pool->data().config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(storage_pool->data().config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(storage_pool->data().config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(storage_pool->data().config.open_file_max_idle_time, Seconds(settings.dt_open_file_max_idle_seconds));
+        EXPECT_NE(storage_pool->data().config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_NE(storage_pool->data().config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
         storage_pool->gc(settings, DM::StoragePool::Seconds(0));
@@ -770,7 +770,7 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_EQ(storage_pool->data().config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_EQ(storage_pool->data().config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_DOUBLE_EQ(storage_pool->data().config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_EQ(storage_pool->data().config.open_file_max_idle_time, Seconds(settings.dt_open_file_max_idle_seconds));
+        EXPECT_EQ(storage_pool->data().config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_EQ(storage_pool->data().config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
 

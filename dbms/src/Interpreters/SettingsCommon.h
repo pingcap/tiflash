@@ -401,6 +401,81 @@ private:
     std::atomic<float> value;
 };
 
+struct SettingDouble
+{
+public:
+    bool changed = false;
+
+    SettingDouble(double x = 0)
+        : value(x)
+    {}
+    SettingDouble(const SettingDouble & setting) { value.store(setting.value.load()); }
+    operator double() const { return value.load(); }
+    SettingDouble & operator=(double x)
+    {
+        set(x);
+        return *this;
+    }
+    SettingDouble & operator=(const SettingDouble & setting)
+    {
+        set(setting.value.load());
+        return *this;
+    }
+
+    String toString() const
+    {
+        return DB::toString(value.load());
+    }
+
+    void set(double x)
+    {
+        value.store(x);
+        changed = true;
+    }
+
+    void set(const Field & x)
+    {
+        if (x.getType() == Field::Types::UInt64)
+        {
+            set(safeGet<UInt64>(x));
+        }
+        else if (x.getType() == Field::Types::Int64)
+        {
+            set(safeGet<Int64>(x));
+        }
+        else if (x.getType() == Field::Types::Float64)
+        {
+            set(safeGet<Float64>(x));
+        }
+        else
+            throw Exception(std::string("Bad type of setting. Expected UInt64, Int64 or Float64, got ") + x.getTypeName(), ErrorCodes::TYPE_MISMATCH);
+    }
+
+    void set(const String & x)
+    {
+        set(parse<double>(x));
+    }
+
+    void set(ReadBuffer & buf)
+    {
+        String x;
+        readBinary(x, buf);
+        set(x);
+    }
+
+    void write(WriteBuffer & buf) const
+    {
+        writeBinary(toString(), buf);
+    }
+
+    double get() const
+    {
+        return value.load();
+    }
+
+private:
+    std::atomic<double> value;
+};
 
 enum class LoadBalancing
 {
