@@ -82,7 +82,7 @@ enum State
     CLOSED,
 };
 
-struct GRPCContextForRecevier
+struct GRPCReceiverContext
 {
     using StatusType = ::grpc::Status;
 
@@ -125,7 +125,7 @@ struct GRPCContextForRecevier
 
     pingcap::kv::Cluster * cluster;
 
-    explicit GRPCContextForRecevier(pingcap::kv::Cluster * cluster_)
+    explicit GRPCReceiverContext(pingcap::kv::Cluster * cluster_)
         : cluster(cluster_)
     {}
 
@@ -409,10 +409,10 @@ public:
     String getName() { return "ExchangeReceiver"; }
 };
 
-class ExchangeReceiver : public ExchangeReceiverBase<GRPCContextForRecevier>
+class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>
 {
 public:
-    using Base = ExchangeReceiverBase<GRPCContextForRecevier>;
+    using Base = ExchangeReceiverBase<GRPCReceiverContext>;
     using Base::Base;
 };
 
