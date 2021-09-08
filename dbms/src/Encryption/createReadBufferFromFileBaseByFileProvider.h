@@ -19,7 +19,8 @@ namespace DB
   * Otherwise, the read operations are performed asynchronously.
   */
 
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(
+std::unique_ptr<ReadBufferFromFileBase>
+createReadBufferFromFileBaseByFileProvider(
     FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,
@@ -31,4 +32,3 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
     char * existing_memory_ = nullptr,
     size_t alignment = 0);
 } // namespace DB
-

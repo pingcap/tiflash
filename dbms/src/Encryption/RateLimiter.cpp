@@ -250,8 +250,11 @@ LimiterStat WriteLimiter::getStat()
     UInt64 elapsed_ms = stat_stop_watch.elapsedMilliseconds();
     if (refill_period_ms == 0 || refill_balance_per_period == 0 || elapsed_ms < refill_period_ms)
     {
-        auto msg = fmt::format("elapsed_ms {} refill_period_ms {} refill_balance_per_period {} is invalid.", elapsed_ms, refill_period_ms, refill_balance_per_period);
-        throw DB::Exception(msg, ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception(fmt::format("elapsed_ms {} refill_period_ms {} refill_balance_per_period {} is invalid.",
+                                        elapsed_ms,
+                                        refill_period_ms,
+                                        refill_balance_per_period),
+                            ErrorCodes::LOGICAL_ERROR);
     }
     // Get and Reset
     LimiterStat stat(alloc_bytes, elapsed_ms, refill_period_ms, refill_balance_per_period);
@@ -271,7 +274,12 @@ void WriteLimiter::updateMaxBytesPerSec(Int64 max_bytes_per_sec)
     refill_balance_per_period = calculateRefillBalancePerPeriod(max_bytes_per_sec);
 }
 
-ReadLimiter::ReadLimiter(std::function<Int64()> getIOStatistic_, Int64 rate_limit_per_sec_, LimiterType type_, Int64 get_io_stat_period_us, UInt64 refill_period_ms_)
+ReadLimiter::ReadLimiter(
+    std::function<Int64()> getIOStatistic_,
+    Int64 rate_limit_per_sec_,
+    LimiterType type_,
+    Int64 get_io_stat_period_us,
+    UInt64 refill_period_ms_)
     : WriteLimiter(rate_limit_per_sec_, type_, refill_period_ms_)
     , getIOStatistic(std::move(getIOStatistic_))
     , last_stat_bytes(getIOStatistic())
@@ -301,7 +309,11 @@ Int64 ReadLimiter::refreshAvailableBalance()
     if (bytes < last_stat_bytes)
     {
         LOG_WARNING(log,
-                    fmt::format("last_stat {}:{} current_stat {}:{}", last_stat_time.time_since_epoch().count(), last_stat_bytes, us.time_since_epoch().count(), bytes));
+                    fmt::format("last_stat {}:{} current_stat {}:{}",
+                                last_stat_time.time_since_epoch().count(),
+                                last_stat_bytes,
+                                us.time_since_epoch().count(),
+                                bytes));
     }
     else
     {
@@ -622,11 +634,12 @@ std::unique_ptr<IOLimitTuner> IORateLimiter::createIOLimitTuner()
         fg_read = fg_read_limiter;
         io_config_ = io_config;
     }
-    return std::make_unique<IOLimitTuner>(bg_write != nullptr ? std::make_unique<LimiterStat>(bg_write->getStat()) : nullptr,
-                                          fg_write != nullptr ? std::make_unique<LimiterStat>(fg_write->getStat()) : nullptr,
-                                          bg_read != nullptr ? std::make_unique<LimiterStat>(bg_read->getStat()) : nullptr,
-                                          fg_read != nullptr ? std::make_unique<LimiterStat>(fg_read->getStat()) : nullptr,
-                                          io_config_);
+    return std::make_unique<IOLimitTuner>(
+        bg_write != nullptr ? std::make_unique<LimiterStat>(bg_write->getStat()) : nullptr,
+        fg_write != nullptr ? std::make_unique<LimiterStat>(fg_write->getStat()) : nullptr,
+        bg_read != nullptr ? std::make_unique<LimiterStat>(bg_read->getStat()) : nullptr,
+        fg_read != nullptr ? std::make_unique<LimiterStat>(fg_read->getStat()) : nullptr,
+        io_config_);
 }
 
 void IORateLimiter::autoTune()
@@ -653,7 +666,12 @@ void IORateLimiter::autoTune()
 }
 
 
-IOLimitTuner::IOLimitTuner(LimiterStatUPtr bg_write_stat_, LimiterStatUPtr fg_write_stat_, LimiterStatUPtr bg_read_stat_, LimiterStatUPtr fg_read_stat_, const StorageIORateLimitConfig & io_config_)
+IOLimitTuner::IOLimitTuner(
+    LimiterStatUPtr bg_write_stat_,
+    LimiterStatUPtr fg_write_stat_,
+    LimiterStatUPtr bg_read_stat_,
+    LimiterStatUPtr fg_read_stat_,
+    const StorageIORateLimitConfig & io_config_)
     : bg_write_stat(std::move(bg_write_stat_))
     , fg_write_stat(std::move(fg_write_stat_))
     , bg_read_stat(std::move(bg_read_stat_))
@@ -760,7 +778,13 @@ std::tuple<Int64, Int64, bool> IOLimitTuner::tuneWrite(Int64 max_bytes_per_sec) 
 }
 
 // <bg, fg, has_tune>
-std::tuple<Int64, Int64, bool> IOLimitTuner::tuneBgFg(Int64 max_bytes_per_sec, const LimiterStatUPtr & bg, Int64 config_bg_max_bytes_per_sec, const LimiterStatUPtr & fg, Int64 config_fg_max_bytes_per_sec) const
+std::tuple<Int64, Int64, bool>
+IOLimitTuner::tuneBgFg(
+    Int64 max_bytes_per_sec,
+    const LimiterStatUPtr & bg,
+    Int64 config_bg_max_bytes_per_sec,
+    const LimiterStatUPtr & fg,
+    Int64 config_fg_max_bytes_per_sec) const
 {
     if (max_bytes_per_sec == 0)
     {

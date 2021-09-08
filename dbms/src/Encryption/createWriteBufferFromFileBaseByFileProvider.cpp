@@ -18,7 +18,8 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-WriteBufferFromFileBase * createWriteBufferFromFileBaseByFileProvider(
+WriteBufferFromFileBase *
+createWriteBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
     const EncryptionPath & encryption_path_,

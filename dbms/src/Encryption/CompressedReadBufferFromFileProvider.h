@@ -12,7 +12,8 @@ namespace DB
 {
 /// Unlike CompressedReadBuffer, it can do seek.
 template <bool has_checksum = true>
-class CompressedReadBufferFromFileProvider : public CompressedReadBufferBase<has_checksum>
+class CompressedReadBufferFromFileProvider
+    : public CompressedReadBufferBase<has_checksum>
     , public BufferWithOwnMemory<ReadBuffer>
 {
 private:
@@ -52,4 +53,3 @@ public:
 };
 
 } // namespace DB
-

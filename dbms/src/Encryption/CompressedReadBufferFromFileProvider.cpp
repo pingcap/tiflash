@@ -128,4 +128,3 @@ template class CompressedReadBufferFromFileProvider<true>;
 template class CompressedReadBufferFromFileProvider<false>;
 
 } // namespace DB
-

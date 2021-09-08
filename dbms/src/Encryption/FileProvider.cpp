@@ -10,7 +10,11 @@
 
 namespace DB
 {
-RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, const ReadLimiterPtr & read_limiter, int flags) const
+RandomAccessFilePtr FileProvider::newRandomAccessFile(
+    const String & file_path_,
+    const EncryptionPath & encryption_path_,
+    const ReadLimiterPtr & read_limiter,
+    int flags) const
 {
     RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
@@ -21,7 +25,14 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_,
     return file;
 }
 
-WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool truncate_if_exists_, bool create_new_encryption_info_, const WriteLimiterPtr & write_limiter_, int flags, mode_t mode) const
+WritableFilePtr FileProvider::newWritableFile(
+    const String & file_path_,
+    const EncryptionPath & encryption_path_,
+    bool truncate_if_exists_,
+    bool create_new_encryption_info_,
+    const WriteLimiterPtr & write_limiter_,
+    int flags,
+    mode_t mode) const
 {
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
     if (encryption_enabled && create_new_encryption_info_)
@@ -126,7 +137,12 @@ bool FileProvider::isEncryptionEnabled() const
     return encryption_enabled;
 }
 
-void FileProvider::renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_, const String & dst_file_path_, const EncryptionPath & dst_encryption_path_, bool rename_encryption_info_) const
+void FileProvider::renameFile(
+    const String & src_file_path_,
+    const EncryptionPath & src_encryption_path_,
+    const String & dst_file_path_,
+    const EncryptionPath & dst_encryption_path_,
+    bool rename_encryption_info_) const
 {
     Poco::File data_file(src_file_path_);
     if (unlikely(!data_file.exists()))
