@@ -5,8 +5,7 @@ mysql> insert into test.t values('www.pingcap.com', 12345, 123.45);
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
-mysql> set @@tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash';
-mysql> select substring_index(a, '.', 2), substring_index(b, '.', 2), substring_index(c, '.', -1) from test.t;
+mysql> set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select substring_index(a, '.', 2), substring_index(b, '.', 2), substring_index(c, '.', -1) from test.t;
 +----------------------------+----------------------------+-----------------------------+
 | substring_index(a, '.', 2) | substring_index(b, '.', 2) | substring_index(c, '.', -1) |
 +----------------------------+----------------------------+-----------------------------+
@@ -39,7 +38,7 @@ mysql> insert into test.t values('测试', '试' , NULL);
 
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
-mysql> select substring_index(a, b, c) from test.t;
+mysql> set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select substring_index(a, b, c) from test.t;
 substring_index(a, b, c)
 www
 www.pingcap
