@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 class ReadBuffer;
 class WriteBuffer;
 
@@ -27,4 +26,4 @@ void copyData(ReadBuffer & from, WriteBuffer & to, size_t bytes, std::atomic<int
 void copyData(ReadBuffer & from, WriteBuffer & to, std::function<void()> cancellation_hook);
 void copyData(ReadBuffer & from, WriteBuffer & to, size_t bytes, std::function<void()> cancellation_hook);
 
-}
+} // namespace DB

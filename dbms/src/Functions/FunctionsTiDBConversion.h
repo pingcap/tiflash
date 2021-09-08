@@ -1561,12 +1561,12 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     return getDatetime(number, result, ctx);
 }
 
-class PreparedFunctionTiDBCast : public PreparedFunctionImpl
+class ExecutableFunctionTiDBCast : public IExecutableFunction
 {
 public:
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
 
-    PreparedFunctionTiDBCast(
+    ExecutableFunctionTiDBCast(
         WrapperType && wrapper_function,
         const char * name_,
         bool in_union_,
@@ -1582,7 +1582,7 @@ public:
     String getName() const override { return name; }
 
 protected:
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         ColumnNumbers new_arguments{arguments.front()};
         wrapper_function(block, new_arguments, result, in_union, tidb_tp, context);
@@ -1619,9 +1619,9 @@ public:
     const DataTypes & getArgumentTypes() const override { return argument_types; }
     const DataTypePtr & getReturnType() const override { return return_type; }
 
-    PreparedFunctionPtr prepare(const Block & /*sample_block*/) const override
+    ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override
     {
-        return std::make_shared<PreparedFunctionTiDBCast>(
+        return std::make_shared<ExecutableFunctionTiDBCast>(
             prepare(getArgumentTypes()[0], getReturnType()),
             name,
             in_union,
@@ -1946,7 +1946,7 @@ private:
     }
 };
 
-class FunctionBuilderTiDBCast : public FunctionBuilderImpl
+class FunctionBuilderTiDBCast : public IFunctionBuilder
 {
 public:
     using MonotonicityForRange = FunctionTiDBCast::MonotonicityForRange;

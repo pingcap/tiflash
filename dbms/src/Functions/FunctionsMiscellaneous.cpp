@@ -1,54 +1,54 @@
-#include <Functions/FunctionsMiscellaneous.h>
-
-#include <cmath>
-#include <ext/range.h>
-#include <ext/bit_cast.h>
-#include <Poco/Net/DNS.h>
-#include <Common/ClickHouseRevision.h>
-#include <Common/TiFlashBuildInfo.h>
-#include <Columns/ColumnSet.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnSet.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
-#include <Columns/ColumnArray.h>
-#include <Functions/FunctionHelpers.h>
-#include <Common/UnicodeBar.h>
-#include <Common/UTF8Helpers.h>
+#include <Common/ClickHouseRevision.h>
 #include <Common/FieldVisitors.h>
+#include <Common/TiFlashBuildInfo.h>
+#include <Common/UTF8Helpers.h>
+#include <Common/UnicodeBar.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/NumberTraits.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsMiscellaneous.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/Set.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/Set.h>
+#include <Poco/Net/DNS.h>
 #include <Storages/IStorage.h>
-#include <Common/typeid_cast.h>
 #include <Storages/getStructureOfRemoteTable.h>
+
+#include <cmath>
+#include <ext/bit_cast.h>
+#include <ext/range.h>
 
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int FUNCTION_IS_SPECIAL;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int TOO_SLOW;
-    extern const int ILLEGAL_COLUMN;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int FUNCTION_THROW_IF_VALUE_IS_NON_ZERO;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int FUNCTION_IS_SPECIAL;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int TOO_SLOW;
+extern const int ILLEGAL_COLUMN;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int FUNCTION_THROW_IF_VALUE_IS_NON_ZERO;
+} // namespace ErrorCodes
 
 /** Helper functions
   *
@@ -93,7 +93,8 @@ public:
         return std::make_shared<FunctionCurrentDatabase>(context.getCurrentDatabase());
     }
 
-    explicit FunctionCurrentDatabase(const String & db_name) : db_name{db_name}
+    explicit FunctionCurrentDatabase(const String & db_name)
+        : db_name{db_name}
     {
     }
 
@@ -111,9 +112,9 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, const size_t result) const override
     {
         block.getByPosition(result).column = DataTypeString().createColumnConst(block.rows(), db_name);
     }
@@ -135,9 +136,9 @@ public:
         return name;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -155,10 +156,12 @@ public:
     /** convertToFullColumn needed because in distributed query processing,
       *    each server returns its own value.
       */
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(
-            block.rows(), Poco::Net::DNS::hostName())->convertToFullColumnIfConst();
+                                                                                 block.rows(),
+                                                                                 Poco::Net::DNS::hostName())
+                                                 ->convertToFullColumnIfConst();
     }
 };
 
@@ -193,7 +196,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
 
     /// Execute the function on the block.
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 };
 
 
@@ -225,7 +228,7 @@ public:
     }
 
     /// Execute the function on the block.
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         block.getByPosition(result).column
             = DataTypeString().createColumnConst(block.rows(), block.getByPosition(arguments[0]).type->getName());
@@ -265,7 +268,7 @@ public:
         throw Exception("The argument for function " + getName() + " must be Enum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (auto type = checkAndGetDataType<DataTypeEnum8>(block.getByPosition(arguments[0]).type.get()))
             block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(type->getValues().size()));
@@ -275,7 +278,6 @@ public:
             throw Exception("The argument for function " + getName() + " must be Enum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
-
 
 
 /// Returns name of IColumn instance.
@@ -305,13 +307,12 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         block.getByPosition(result).column
             = DataTypeString().createColumnConst(block.rows(), block.getByPosition(arguments[0]).column->getName());
     }
 };
-
 
 
 /// Dump the structure of type and column.
@@ -341,7 +342,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto & elem = block.getByPosition(arguments[0]);
 
@@ -349,7 +350,8 @@ public:
 
         block.getByPosition(result).column
             = DataTypeString().createColumnConst(block.rows(),
-                elem.type->getName() + ", " + elem.column->dumpStructure())->convertToFullColumnIfConst();
+                                                 elem.type->getName() + ", " + elem.column->dumpStructure())
+                  ->convertToFullColumnIfConst();
     }
 };
 
@@ -381,7 +383,7 @@ public:
         return arguments[0];
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IDataType & type = *block.getByPosition(arguments[0]).type;
         block.getByPosition(result).column = type.createColumnConst(block.rows(), type.getDefault());
@@ -404,9 +406,9 @@ public:
         return name;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -421,7 +423,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         size_t size = block.rows();
         block.getByPosition(result).column = ColumnUInt64::create(size, size);
@@ -449,9 +451,9 @@ public:
         return 0;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -461,7 +463,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         size_t size = block.rows();
         auto column = ColumnUInt64::create();
@@ -479,7 +481,7 @@ public:
 class FunctionBlockNumber : public IFunction
 {
 private:
-    std::atomic<size_t> block_number{0};
+    mutable std::atomic<size_t> block_number{0};
 
 public:
     static constexpr auto name = "blockNumber";
@@ -499,9 +501,9 @@ public:
         return 0;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -511,7 +513,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         size_t current_block_number = block_number++;
         block.getByPosition(result).column = ColumnUInt64::create(block.rows(), current_block_number);
@@ -523,7 +525,7 @@ public:
 class FunctionRowNumberInAllBlocks : public IFunction
 {
 private:
-    std::atomic<size_t> rows{0};
+    mutable std::atomic<size_t> rows{0};
 
 public:
     static constexpr auto name = "rowNumberInAllBlocks";
@@ -543,9 +545,9 @@ public:
         return 0;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -555,7 +557,7 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         size_t rows_in_block = block.rows();
         size_t current_row_number = rows.fetch_add(rows_in_block);
@@ -612,12 +614,12 @@ public:
             && !checkDataType<DataTypeUInt16>(&*arguments[0])
             && !checkDataType<DataTypeUInt8>(&*arguments[0]))
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName() + ", expected Float64",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * col = block.getByPosition(arguments[0]).column.get();
 
@@ -637,7 +639,7 @@ public:
             unsigned useconds = seconds * (variant == FunctionSleepVariant::PerBlock ? 1 : size) * 1e6;
 
             /// When sleeping, the query cannot be cancelled. For abitily to cancel query, we limit sleep time.
-            if (useconds > 3000000)   /// The choice is arbitary
+            if (useconds > 3000000) /// The choice is arbitary
                 throw Exception("The maximum sleep time is 3000000 microseconds. Requested: " + toString(useconds), ErrorCodes::TOO_SLOW);
 
             usleep(useconds);
@@ -674,7 +676,7 @@ public:
         return arguments[0];
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto & src = block.getByPosition(arguments[0]).column;
         if (ColumnPtr converted = src->convertToFullColumnIfConst())
@@ -765,15 +767,14 @@ public:
         return false;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnWithTypeAndName & left_arg = block.getByPosition(arguments[0]);
         if constexpr (!ignore_null)
         {
             if (left_arg.type->onlyNull())
             {
-                block.getByPosition(result).column =
-                        block.getByPosition(result).type->createColumnConst(block.rows(),Null());
+                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
                 return;
             }
         }
@@ -782,7 +783,7 @@ public:
         const ColumnSet * column_set = typeid_cast<const ColumnSet *>(&*column_set_ptr);
         if (!column_set)
             throw Exception("Second argument for function '" + getName() + "' must be Set; found " + column_set_ptr->getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         Block block_of_key_columns;
 
@@ -804,7 +805,7 @@ public:
             const DataTypes & tuple_types = type_tuple->getElements();
             size_t tuple_size = tuple_columns.size();
             for (size_t i = 0; i < tuple_size; ++i)
-                block_of_key_columns.insert({ tuple_columns[i], tuple_types[i], "" });
+                block_of_key_columns.insert({tuple_columns[i], tuple_types[i], ""});
         }
         else
             block_of_key_columns.insert(left_arg);
@@ -842,7 +843,7 @@ public:
                 {
                     auto col_null_map = ColumnUInt8::create();
                     ColumnUInt8::Container & vec_null_map = col_null_map->getData();
-                    vec_null_map.assign(block.rows(), (UInt8) 0);
+                    vec_null_map.assign(block.rows(), (UInt8)0);
                     auto uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
                     const auto & data = uint8_column->getData();
                     for (size_t i = 0, size = vec_null_map.size(); i < size; i++)
@@ -892,7 +893,7 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(0));
     }
@@ -940,7 +941,7 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(1));
     }
@@ -971,7 +972,7 @@ public:
         return arguments.front();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         block.getByPosition(result).column = block.getByPosition(arguments.front()).column;
     }
@@ -1000,9 +1001,9 @@ public:
     }
 
     /** It could return many different values for single argument. */
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -1016,7 +1017,7 @@ public:
         return arr->getNestedType();
     }
 
-    void executeImpl(Block & /*block*/, const ColumnNumbers & /*arguments*/, size_t /*result*/) override
+    void executeImpl(Block & /*block*/, const ColumnNumbers & /*arguments*/, size_t /*result*/) const override
     {
         throw Exception("Function " + getName() + " must not be executed directly.", ErrorCodes::FUNCTION_IS_SPECIAL);
     }
@@ -1043,7 +1044,7 @@ DataTypePtr FunctionReplicate::getReturnTypeImpl(const DataTypes & arguments) co
     return std::make_shared<DataTypeArray>(arguments[0]);
 }
 
-void FunctionReplicate::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionReplicate::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     ColumnPtr first_column = block.getByPosition(arguments[0]).column;
 
@@ -1092,10 +1093,10 @@ public:
     {
         if (arguments.size() != 3 && arguments.size() != 4)
             throw Exception("Function " + getName()
-                    + " requires from 3 or 4 parameters: value, min_value, max_value, [max_width_of_bar = 80]. Passed "
-                    + toString(arguments.size())
-                    + ".",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + " requires from 3 or 4 parameters: value, min_value, max_value, [max_width_of_bar = 80]. Passed "
+                                + toString(arguments.size())
+                                + ".",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!arguments[0]->isNumber() || !arguments[1]->isNumber() || !arguments[2]->isNumber()
             || (arguments.size() == 4 && !arguments[3]->isNumber()))
@@ -1107,7 +1108,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2, 3}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         Int64 min = extractConstant<Int64>(block, arguments, 1, "Second"); /// The level at which the line has zero length.
         Int64 max = extractConstant<Int64>(block, arguments, 2, "Third"); /// The level at which the line has the maximum length.
@@ -1151,18 +1152,19 @@ private:
 
         if (!column.isColumnConst())
             throw Exception(
-                which_argument + String(" argument for function ") + getName() + " must be constant.", ErrorCodes::ILLEGAL_COLUMN);
+                which_argument + String(" argument for function ") + getName() + " must be constant.",
+                ErrorCodes::ILLEGAL_COLUMN);
 
         return applyVisitor(FieldVisitorConvertToNumber<T>(), column[0]);
     }
 
     template <typename T>
     static void fill(const PaddedPODArray<T> & src,
-        ColumnString::Chars_t & dst_chars,
-        ColumnString::Offsets & dst_offsets,
-        Int64 min,
-        Int64 max,
-        Float64 max_width)
+                     ColumnString::Chars_t & dst_chars,
+                     ColumnString::Offsets & dst_offsets,
+                     Int64 min,
+                     Int64 max,
+                     Float64 max_width)
     {
         size_t size = src.size();
         size_t current_offset = 0;
@@ -1233,11 +1235,11 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto in = block.getByPosition(arguments.front()).column.get();
 
-        if (   !execute<UInt8>(block, in, result)
+        if (!execute<UInt8>(block, in, result)
             && !execute<UInt16>(block, in, result)
             && !execute<UInt32>(block, in, result)
             && !execute<UInt64>(block, in, result)
@@ -1251,7 +1253,7 @@ public:
     }
 
     template <typename T>
-    bool execute(Block & block, const IColumn * in_untyped, const size_t result)
+    bool execute(Block & block, const IColumn * in_untyped, const size_t result) const
     {
         if (const auto in = checkAndGetColumn<ColumnVector<T>>(in_untyped))
         {
@@ -1285,11 +1287,11 @@ struct IsFiniteImpl
     {
         if constexpr (std::is_same_v<T, float>)
             return (ext::bit_cast<uint32_t>(t)
-                 & 0b01111111100000000000000000000000)
+                    & 0b01111111100000000000000000000000)
                 != 0b01111111100000000000000000000000;
         else if constexpr (std::is_same_v<T, double>)
             return (ext::bit_cast<uint64_t>(t)
-                 & 0b0111111111110000000000000000000000000000000000000000000000000000)
+                    & 0b0111111111110000000000000000000000000000000000000000000000000000)
                 != 0b0111111111110000000000000000000000000000000000000000000000000000;
         else
         {
@@ -1307,11 +1309,11 @@ struct IsInfiniteImpl
     {
         if constexpr (std::is_same_v<T, float>)
             return (ext::bit_cast<uint32_t>(t)
-                 & 0b01111111111111111111111111111111)
+                    & 0b01111111111111111111111111111111)
                 == 0b01111111100000000000000000000000;
         else if constexpr (std::is_same_v<T, double>)
             return (ext::bit_cast<uint64_t>(t)
-                 & 0b0111111111111111111111111111111111111111111111111111111111111111)
+                    & 0b0111111111111111111111111111111111111111111111111111111111111111)
                 == 0b0111111111110000000000000000000000000000000000000000000000000000;
         else
         {
@@ -1362,7 +1364,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         static const std::string version = getVersion();
         block.getByPosition(result).column = DataTypeString().createColumnConst(block.rows(), version);
@@ -1384,7 +1386,8 @@ public:
         return std::make_shared<FunctionUptime>(context.getUptimeSeconds());
     }
 
-    explicit FunctionUptime(time_t uptime_) : uptime(uptime_)
+    explicit FunctionUptime(time_t uptime_)
+        : uptime(uptime_)
     {
     }
 
@@ -1403,9 +1406,9 @@ public:
         return std::make_shared<DataTypeUInt32>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeUInt32().createColumnConst(block.rows(), static_cast<UInt64>(uptime));
     }
@@ -1440,9 +1443,9 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) const override
     {
         block.getByPosition(result).column = DataTypeString().createColumnConst(block.rows(), DateLUT::instance().getTimeZone());
     }
@@ -1474,9 +1477,9 @@ public:
         return 1;
     }
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -1486,26 +1489,25 @@ public:
         const DataTypeAggregateFunction * type = checkAndGetDataType<DataTypeAggregateFunction>(&*arguments[0]);
         if (!type)
             throw Exception("Argument for function " + getName() + " must have type AggregateFunction - state of aggregate function.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return type->getReturnType();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnAggregateFunction * column_with_states
             = typeid_cast<const ColumnAggregateFunction *>(&*block.getByPosition(arguments.at(0)).column);
         if (!column_with_states)
             throw Exception("Illegal column " + block.getByPosition(arguments.at(0)).column->getName()
-                    + " of first argument of function "
-                    + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function "
+                                + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         AggregateFunctionPtr aggregate_function_ptr = column_with_states->getAggregateFunction();
         const IAggregateFunction & agg_func = *aggregate_function_ptr;
 
-        auto deleter = [&agg_func](char * ptr)
-        {
+        auto deleter = [&agg_func](char * ptr) {
             agg_func.destroy(ptr);
             free(ptr);
         };
@@ -1630,7 +1632,7 @@ public:
         return 1;
     }
 
-    bool isDeterministicInScopeOfQuery() override
+    bool isDeterministicInScopeOfQuery() const override
     {
         return false;
     }
@@ -1638,15 +1640,14 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         DataTypePtr res;
-        dispatchForSourceType(*arguments[0], [&](auto field_type_tag)
-        {
+        dispatchForSourceType(*arguments[0], [&](auto field_type_tag) {
             res = std::make_shared<DataTypeNumber<DstFieldType<decltype(field_type_tag)>>>();
         });
 
         return res;
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto & src = block.getByPosition(arguments.at(0));
         const auto & res_type = block.getByPosition(result).type;
@@ -1660,11 +1661,10 @@ public:
 
         auto res_column = res_type->createColumn();
 
-        dispatchForSourceType(*src.type, [&](auto field_type_tag)
-        {
+        dispatchForSourceType(*src.type, [&](auto field_type_tag) {
             using SrcFieldType = decltype(field_type_tag);
             process(static_cast<const ColumnVector<SrcFieldType> &>(*src.column).getData(),
-                static_cast<ColumnVector<DstFieldType<SrcFieldType>> &>(*res_column).getData());
+                    static_cast<ColumnVector<DstFieldType<SrcFieldType>> &>(*res_column).getData());
         });
 
         block.getByPosition(result).column = std::move(res_column);
@@ -1701,20 +1701,20 @@ public:
         const DataTypeAggregateFunction * type = checkAndGetDataType<DataTypeAggregateFunction>(&*arguments[0]);
         if (!type)
             throw Exception("Argument for function " + getName() + " must have type AggregateFunction - state of aggregate function.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return type->getReturnType();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnAggregateFunction * column_with_states
             = typeid_cast<const ColumnAggregateFunction *>(&*block.getByPosition(arguments.at(0)).column);
         if (!column_with_states)
             throw Exception("Illegal column " + block.getByPosition(arguments.at(0)).column->getName()
-                    + " of first argument of function "
-                    + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of first argument of function "
+                                + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = column_with_states->convertToValues();
     }
@@ -1733,7 +1733,8 @@ public:
         return std::make_shared<FunctionHasColumnInTable>(context.getGlobalContext());
     }
 
-    explicit FunctionHasColumnInTable(const Context & global_context_) : global_context(global_context_)
+    explicit FunctionHasColumnInTable(const Context & global_context_)
+        : global_context(global_context_)
     {
     }
 
@@ -1753,16 +1754,16 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
 
-    bool isDeterministic() override { return false; }
+    bool isDeterministic() const override { return false; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 
 private:
     const Context & global_context;
 };
 
 
-void FunctionVisibleWidth::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionVisibleWidth::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     auto & src = block.getByPosition(arguments[0]);
     size_t size = block.rows();
@@ -1791,7 +1792,7 @@ DataTypePtr FunctionHasColumnInTable::getReturnTypeImpl(const ColumnsWithTypeAnd
 {
     if (arguments.size() < 3 || arguments.size() > 6)
         throw Exception{"Invalid number of arguments for function " + getName(),
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
+                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
     static const std::string arg_pos_description[] = {"First", "Second", "Third", "Fourth", "Fifth", "Sixth"};
     for (size_t i = 0; i < arguments.size(); ++i)
@@ -1801,7 +1802,7 @@ DataTypePtr FunctionHasColumnInTable::getReturnTypeImpl(const ColumnsWithTypeAnd
         if (!checkColumnConst<ColumnString>(argument.column.get()))
         {
             throw Exception(arg_pos_description[i] + " argument for function " + getName() + " must be const String.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 
@@ -1809,10 +1810,9 @@ DataTypePtr FunctionHasColumnInTable::getReturnTypeImpl(const ColumnsWithTypeAnd
 }
 
 
-void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
-    auto get_string_from_block = [&](size_t column_pos) -> String
-    {
+    auto get_string_from_block = [&](size_t column_pos) -> String {
         ColumnPtr column = block.getByPosition(column_pos).column;
         const ColumnConst * const_column = checkAndGetColumnConst<ColumnString>(column.get());
         return const_column->getValue<String>();
@@ -1844,7 +1844,7 @@ void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & 
     }
     else
     {
-        std::vector<std::vector<String>> host_names = {{ host_name }};
+        std::vector<std::vector<String>> host_names = {{host_name}};
         auto cluster = std::make_shared<Cluster>(global_context.getSettings(), host_names, !user_name.empty() ? user_name : "default", password, global_context.getTCPPort(), false);
         auto remote_columns = getStructureOfRemoteTable(*cluster, database_name, table_name, global_context);
         has_column = remote_columns.hasPhysical(column_name);
@@ -1884,11 +1884,11 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
         const auto in = block.getByPosition(arguments.front()).column.get();
 
-        if (   !execute<UInt8>(block, in, result)
+        if (!execute<UInt8>(block, in, result)
             && !execute<UInt16>(block, in, result)
             && !execute<UInt32>(block, in, result)
             && !execute<UInt64>(block, in, result)
@@ -1902,7 +1902,7 @@ public:
     }
 
     template <typename T>
-    bool execute(Block & block, const IColumn * in_untyped, const size_t result)
+    bool execute(Block & block, const IColumn * in_untyped, const size_t result) const
     {
         if (const auto in = checkAndGetColumn<ColumnVector<T>>(in_untyped))
         {
@@ -1974,4 +1974,4 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     factory.registerFunction<FunctionRunningIncome>();
     factory.registerFunction<FunctionFinalizeAggregation>();
 }
-}
+} // namespace DB
