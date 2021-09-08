@@ -747,17 +747,19 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
         || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
     {
         LOG_WARNING(log,
-                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString()
-                                 << ", should be in range " << rowkey_range.toDebugString() << ", cur_rows: " << cur_rows
-                                 << ", read_row_in_pack: " << read_row_in_pack << ", file_index: " << file_index);
+                    __FUNCTION__ << " unexpected split_handle: " << split_point.toRowKeyValueRef().toDebugString() << ", should be in range "
+                                 << rowkey_range.toDebugString() << ", cur_rows: " << cur_rows << ", read_row_in_pack: " << read_row_in_pack
+                                 << ", file_index: " << file_index);
         return {};
     }
 
     return {split_point};
 }
 
-std::optional<RowKeyValue>
-Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
+std::optional<RowKeyValue> Segment::getSplitPointSlow(
+    DMContext & dm_context,
+    const ReadInfo & read_info,
+    const SegmentSnapshotPtr & segment_snap) const
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
@@ -860,10 +862,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
             || compare(split_point_opt->toRowKeyValueRef(), rowkey_range.getStart()) == 0;
         if (bad_split_point)
         {
-            LOG_INFO(
-                log,
-                "Got bad split point [" << (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value")
-                                        << "] for segment " << info() << ", fall back to split physical.");
+            LOG_INFO(log,
+                     "Got bad split point [" << (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value")
+                                             << "] for segment " << info() << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
         }
         else
@@ -965,8 +966,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     if (my_range.none() || other_range.none())
     {
         LOG_WARNING(log,
-                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString()
-                                 << ", other_range: " << other_range.toDebugString() << ", aborted");
+                    __FUNCTION__ << ": unexpected range! my_range: " << my_range.toDebugString() << ", other_range: " << other_range.toDebugString()
+                                 << ", aborted");
         return {};
     }
 
@@ -1385,11 +1386,14 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     auto my_delta_tree = my_delta_index->getDeltaTree();
 
+    bool relevant_place = dm_context.enable_relevant_place;
+    bool skippable_place = dm_context.enable_skippable_place;
+
     // Note that, when enable_relevant_place is false , we cannot use the range of this segment.
     // Because some block / delete ranges could contain some data / range that are not belong to current segment.
     // If we use the range of this segment as relevant_range, fully_indexed will always be false in those cases.
-    RowKeyRange relevant_range = dm_context.enable_relevant_place ? mergeRanges(read_ranges, is_common_handle, rowkey_column_size)
-                                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+    RowKeyRange relevant_range = relevant_place ? mergeRanges(read_ranges, is_common_handle, rowkey_column_size)
+                                                : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
@@ -1418,23 +1422,49 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
             if (unlikely(my_placed_rows != offset))
                 throw Exception("Place block offset not match", ErrorCodes::LOGICAL_ERROR);
 
-            if (dm_context.enable_skippable_place)
-                fully_indexed
-                    &= placeUpsert<true>(dm_context, stable_snap, delta_reader, offset, std::move(block), *my_delta_tree, relevant_range);
+            if (skippable_place)
+                fully_indexed &= placeUpsert<true>(
+                    dm_context,
+                    stable_snap,
+                    delta_reader,
+                    offset,
+                    std::move(block),
+                    *my_delta_tree,
+                    relevant_range,
+                    relevant_place);
             else
-                fully_indexed
-                    &= placeUpsert<false>(dm_context, stable_snap, delta_reader, offset, std::move(block), *my_delta_tree, relevant_range);
+                fully_indexed &= placeUpsert<false>(
+                    dm_context,
+                    stable_snap,
+                    delta_reader,
+                    offset,
+                    std::move(block),
+                    *my_delta_tree,
+                    relevant_range,
+                    relevant_place);
 
             my_placed_rows += rows;
         }
         else
         {
-            if (dm_context.enable_skippable_place)
-                fully_indexed
-                    &= placeDelete<true>(dm_context, stable_snap, delta_reader, v.getDeleteRange(), *my_delta_tree, relevant_range);
+            if (skippable_place)
+                fully_indexed &= placeDelete<true>(
+                    dm_context,
+                    stable_snap,
+                    delta_reader,
+                    v.getDeleteRange(),
+                    *my_delta_tree,
+                    relevant_range,
+                    relevant_place);
             else
-                fully_indexed
-                    &= placeDelete<false>(dm_context, stable_snap, delta_reader, v.getDeleteRange(), *my_delta_tree, relevant_range);
+                fully_indexed &= placeDelete<false>(
+                    dm_context,
+                    stable_snap,
+                    delta_reader,
+                    v.getDeleteRange(),
+                    *my_delta_tree,
+                    relevant_range,
+                    relevant_place);
 
             ++my_placed_deletes;
         }
@@ -1442,8 +1472,8 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
 
     if (unlikely(my_placed_rows != delta_snap->getRows() || my_placed_deletes != delta_snap->getDeletes()))
         throw Exception("Placed status not match! Expected place rows:" + DB::toString(delta_snap->getRows())
-                        + ", deletes:" + DB::toString(delta_snap->getDeletes())
-                        + ", but actually placed rows:" + DB::toString(my_placed_rows) + ", deletes:" + DB::toString(my_placed_deletes));
+                        + ", deletes:" + DB::toString(delta_snap->getDeletes()) + ", but actually placed rows:" + DB::toString(my_placed_rows)
+                        + ", deletes:" + DB::toString(my_placed_deletes));
 
     my_delta_index->update(my_delta_tree, my_placed_rows, my_placed_deletes);
 
@@ -1462,7 +1492,8 @@ bool Segment::placeUpsert(const DMContext & dm_context,
                           size_t delta_value_space_offset,
                           Block && block,
                           DeltaTree & update_delta_tree,
-                          const RowKeyRange & relevant_range) const
+                          const RowKeyRange & relevant_range,
+                          bool relevant_place) const
 {
     EventRecorder recorder(ProfileEvents::DMPlaceUpsert, ProfileEvents::DMPlaceUpsertNS);
 
@@ -1494,6 +1525,7 @@ bool Segment::placeUpsert(const DMContext & dm_context,
             merged_stream,
             block,
             relevant_range,
+            relevant_place,
             update_delta_tree,
             delta_value_space_offset,
             perm,
@@ -1503,6 +1535,7 @@ bool Segment::placeUpsert(const DMContext & dm_context,
             merged_stream,
             block,
             relevant_range,
+            relevant_place,
             update_delta_tree,
             delta_value_space_offset,
             perm,
@@ -1515,7 +1548,8 @@ bool Segment::placeDelete(const DMContext & dm_context,
                           const DeltaValueReaderPtr & delta_reader,
                           const RowKeyRange & delete_range,
                           DeltaTree & update_delta_tree,
-                          const RowKeyRange & relevant_range) const
+                          const RowKeyRange & relevant_range,
+                          bool relevant_place) const
 {
     EventRecorder recorder(ProfileEvents::DMPlaceDeleteRange, ProfileEvents::DMPlaceDeleteRangeNS);
 
@@ -1570,7 +1604,7 @@ bool Segment::placeDelete(const DMContext & dm_context,
             compacted_index->begin(),
             compacted_index->end(),
             dm_context.stable_pack_rows);
-        fully_indexed &= DM::placeDelete(merged_stream, block, relevant_range, update_delta_tree, getPkSort(handle));
+        fully_indexed &= DM::placeDelete(merged_stream, block, relevant_range, relevant_place, update_delta_tree, getPkSort(handle));
     }
     return fully_indexed;
 }

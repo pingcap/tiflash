@@ -1,3 +1,13 @@
+/// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
+#if !__clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+#include <cpptoml.h>
+#if !__clang__
+#pragma GCC diagnostic pop
+#endif
+
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/TOMLConfiguration.h>
 #include <Interpreters/Quota.h>
@@ -7,21 +17,10 @@
 #include <Storages/PathCapacityMetrics.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-/// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-#include <Common/Config/cpptoml.h>
-#if !__clang__
-#pragma GCC diagnostic pop
-#endif
-
 namespace DB
 {
 namespace tests
 {
-
 static auto loadConfigFromString(const String & s)
 {
     std::istringstream ss(s);
@@ -35,7 +34,9 @@ static auto loadConfigFromString(const String & s)
 class StorageConfig_test : public ::testing::Test
 {
 public:
-    StorageConfig_test() : log(&Poco::Logger::get("StorageConfig_test")) {}
+    StorageConfig_test()
+        : log(&Poco::Logger::get("StorageConfig_test"))
+    {}
 
     static void SetUpTestCase() {}
 
@@ -85,8 +86,7 @@ dir=["/data0/tiflash"]
         EXPECT_EQ(all_paths[0], "/data0/tiflash/");
 
         // Ensure that creating PathCapacityMetrics is OK.
-        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota,
-            storage.latest_data_paths, storage.latest_capacity_quota);
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
     }
 }
 CATCH
@@ -132,8 +132,7 @@ dir=["/ssd0/tiflash"]
         EXPECT_EQ(all_paths[0], "/ssd0/tiflash/");
 
         // Ensure that creating PathCapacityMetrics is OK.
-        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota,
-            storage.latest_data_paths, storage.latest_capacity_quota);
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
     }
 }
 CATCH
@@ -259,20 +258,19 @@ capacity=[ 1024 ]
         EXPECT_EQ(all_paths[0], "/data0/tiflash/");
 
         // Ensure that creating PathCapacityMetrics is OK.
-        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota,
-            storage.latest_data_paths, storage.latest_capacity_quota);
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
 
         auto idx = path_capacity.locatePath("/data0/tiflash/");
         ASSERT_NE(idx, PathCapacityMetrics::INVALID_INDEX);
         switch (i)
         {
-            case 0:
-            case 1:
-                EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 0UL);
-                break;
-            case 2:
-                EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 2048UL);
-                break;
+        case 0:
+        case 1:
+            EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 0UL);
+            break;
+        case 2:
+            EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 2048UL);
+            break;
         }
         idx = path_capacity.locatePath("/data1/tiflash/");
         ASSERT_NE(idx, PathCapacityMetrics::INVALID_INDEX);
@@ -287,7 +285,9 @@ CATCH
 class UsersConfigParser_test : public ::testing::Test
 {
 public:
-    UsersConfigParser_test() : log(&Poco::Logger::get("UsersConfigParser_test")) {}
+    UsersConfigParser_test()
+        : log(&Poco::Logger::get("UsersConfigParser_test"))
+    {}
 
     static void SetUpTestCase() {}
 
@@ -392,6 +392,61 @@ dt_enable_rough_set_filter = false
 }
 CATCH
 
+TEST_F(StorageConfig_test, CompatibilityWithIORateLimitConfig)
+try
+{
+    Strings tests = {
+        R"(
+path = "/tmp/tiflash/data/db0/,/tmp/tiflash/data/db1/"
+[storage]
+format_version = 123
+lazily_init_store = 1
+)",
+        R"(
+path = "/tmp/tiflash/data/db0/,/tmp/tiflash/data/db1/"
+[storage]
+format_version = 123
+lazily_init_store = 1
+[storage.main]
+dir = [ "/data0/tiflash/", "/data1/tiflash/" ]
+)",
+        R"(
+path = "/data0/tiflash/,/data1/tiflash/"
+[storage]
+format_version = 123
+lazily_init_store = 1
+[storage.io_rate_limit]
+max_bytes_per_sec=1024000
+)",
+    };
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        std::ignore = global_capacity_quota;
+        Strings paths;
+        if (i == 0)
+        {
+            paths = Strings{"/tmp/tiflash/data/db0/", "/tmp/tiflash/data/db1/"};
+        }
+        else if (i == 1)
+        {
+            paths = Strings{"/data0/tiflash/", "/data1/tiflash/"};
+        }
+        else if (i == 2)
+        {
+            paths = Strings{"/data0/tiflash/", "/data1/tiflash/"};
+        }
+        ASSERT_EQ(storage.main_data_paths, paths);
+        ASSERT_EQ(storage.format_version, 123);
+        ASSERT_EQ(storage.lazily_init_store, 1);
+    }
+}
+CATCH
+
 TEST(StorageIORateLimitConfig_test, StorageIORateLimitConfig)
 try
 {
@@ -444,8 +499,7 @@ background_read_weight=2
 
     Poco::Logger * log = &Poco::Logger::get("StorageIORateLimitConfig_test");
 
-    auto verifyDefault = [](const StorageIORateLimitConfig& io_config)
-    {
+    auto verifyDefault = [](const StorageIORateLimitConfig & io_config) {
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
@@ -457,14 +511,13 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 50);
         ASSERT_EQ(io_config.writeWeight(), 50);
         ASSERT_EQ(io_config.totalWeight(), 100);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);        
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);        
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 0);
     };
 
-    auto verifyCase0 = [](const StorageIORateLimitConfig& io_config)
-    {
+    auto verifyCase0 = [](const StorageIORateLimitConfig & io_config) {
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
@@ -476,14 +529,13 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 7);
         ASSERT_EQ(io_config.writeWeight(), 3);
         ASSERT_EQ(io_config.totalWeight(), 10);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);        
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);        
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 0);
     };
 
-    auto verifyCase1 = [](const StorageIORateLimitConfig& io_config)
-    {
+    auto verifyCase1 = [](const StorageIORateLimitConfig & io_config) {
         ASSERT_EQ(io_config.max_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
@@ -497,12 +549,11 @@ background_read_weight=2
         ASSERT_EQ(io_config.totalWeight(), 10);
         ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 102400 * 2);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400 * 5);   
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 2);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400 * 5);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 2);
     };
 
-    auto verifyCase2 = [](const StorageIORateLimitConfig& io_config)
-    {
+    auto verifyCase2 = [](const StorageIORateLimitConfig & io_config) {
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
@@ -514,14 +565,13 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 7);
         ASSERT_EQ(io_config.writeWeight(), 3);
         ASSERT_EQ(io_config.totalWeight(), 10);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 731428);        
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 341333);        
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 731428);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 341333);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 682666);
     };
 
-    auto verifyCase3 = [](const StorageIORateLimitConfig& io_config)
-    {
+    auto verifyCase3 = [](const StorageIORateLimitConfig & io_config) {
         ASSERT_EQ(io_config.max_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
@@ -533,13 +583,13 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 7);
         ASSERT_EQ(io_config.writeWeight(), 3);
         ASSERT_EQ(io_config.totalWeight(), 10);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400);        
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400 * 2);        
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 5);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400 * 2);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 5);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 102400 * 2);
     };
 
-    std::vector<std::function<void(const StorageIORateLimitConfig&)>> case_verifiers;
+    std::vector<std::function<void(const StorageIORateLimitConfig &)>> case_verifiers;
     case_verifiers.push_back(verifyCase0);
     case_verifiers.push_back(verifyCase1);
     case_verifiers.push_back(verifyCase2);
@@ -552,7 +602,7 @@ background_read_weight=2
 
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
         ASSERT_TRUE(config->has("storage.io_rate_limit"));
-    
+
         StorageIORateLimitConfig io_config;
         verifyDefault(io_config);
         io_config.parse(config->getString("storage.io_rate_limit"), log);
