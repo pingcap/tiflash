@@ -153,6 +153,7 @@ StableValueSpacePtr createNewStable(DMContext & context,
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dtfile_id, 0);
     delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
+    LOG_DEBUG(&Poco::Logger::get("createNewStable"), "Metric size test " << store_path << " DTFile " << dtfile_id << " create " << dtfile->getBytesOnDisk() << " bytes");
 
     return stable;
 }

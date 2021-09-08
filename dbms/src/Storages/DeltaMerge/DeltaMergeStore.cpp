@@ -267,9 +267,11 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, DMFile::ReadMetaMode::none());
+                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, DMFile::ReadMetaMode::diskSizeOnly());
                 if (dmfile->canGC())
                 {
+                    auto file_size = dmfile->getBytesOnDisk();
+                    LOG_DEBUG(log, "Metric size test " << path << " DTFile " << dmfile->fileId() << " remove " << file_size << " bytes");
                     delegate.removeDTFile(dmfile->fileId());
                     dmfile->remove(global_context.getFileProvider());
                 }
@@ -580,6 +582,7 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId fil
 
     auto delegator = path_pool.getStableDiskDelegator();
     delegator.addDTFile(file_id, file_size, parent_path);
+    LOG_DEBUG(log, "Metric size test " << parent_path << " DTFile " << file_id << " preIngestFile " << file_size << " bytes");
 }
 
 void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
@@ -2045,6 +2048,7 @@ void DeltaMergeStore::restoreStableFiles()
         {
             auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
+            LOG_DEBUG(log, "Metric size test " << root_path << " DTFile " << file_id << " restore " << dmfile->getBytesOnDisk() << " bytes");
         }
     }
 }
