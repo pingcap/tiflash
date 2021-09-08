@@ -84,7 +84,7 @@ try
         auto [exact_rows, exact_bytes] = store->getRowsAndBytesInRange(*db_context, range, /*is_exact*/ true);
 
         // We cannot correctly calculate too small range in approximate mode.
-        if (exact_rows <= settings.dt_segment_stable_pack_rows.value * 3)
+        if (exact_rows <= settings.dt_segment_stable_pack_rows * 3)
             return;
         auto [approx_rows, approx_bytes] = store->getRowsAndBytesInRange(*db_context, range, /*is_exact*/ false);
         ASSERT_LE(std::abs((Int64)(approx_rows - exact_rows)), exact_rows * 0.2);

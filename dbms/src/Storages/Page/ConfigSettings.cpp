@@ -5,7 +5,7 @@ namespace DB
 {
 void mergeConfigFromSettings(const DB::Settings & settings, PageStorage::Config & config)
 {
-    config.open_file_max_idle_time = Seconds(settings.dt_open_file_max_idle_seconds);
+    config.open_file_max_idle_time = settings.dt_open_file_max_idle_seconds;
 
     {
         // The probability is [0~1000] out of 1000
