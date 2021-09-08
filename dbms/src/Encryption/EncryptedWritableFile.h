@@ -2,6 +2,7 @@
 
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/WritableFile.h>
+
 #include <string>
 
 namespace DB
@@ -10,7 +11,9 @@ class EncryptedWritableFile : public WritableFile
 {
 public:
     EncryptedWritableFile(WritableFilePtr & file_, BlockAccessCipherStreamPtr stream_)
-        : file{file_}, file_offset{0}, stream{std::move(stream_)}
+        : file{file_}
+        , file_offset{0}
+        , stream{std::move(stream_)}
     {}
 
     ~EncryptedWritableFile() override = default;

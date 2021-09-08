@@ -1,17 +1,17 @@
 #pragma once
 
-#include <functional>
+#include <IO/ConnectionTimeouts.h>
+#include <IO/ReadBuffer.h>
 #include <Poco/Net/HTTPClientSession.h>
 #include <Poco/URI.h>
-#include <IO/ReadBuffer.h>
-#include <IO/ConnectionTimeouts.h>
+
+#include <functional>
 
 #define DEFAULT_HTTP_READ_BUFFER_TIMEOUT 1800
 #define DEFAULT_HTTP_READ_BUFFER_CONNECTION_TIMEOUT 1
 
 namespace DB
 {
-
 const int HTTP_TOO_MANY_REQUESTS = 429;
 
 
@@ -26,7 +26,7 @@ private:
 
     bool is_ssl;
     std::unique_ptr<Poco::Net::HTTPClientSession> session;
-    std::istream * istr;    /// owned by session
+    std::istream * istr; /// owned by session
     std::unique_ptr<ReadBuffer> impl;
 
 public:
@@ -42,4 +42,4 @@ public:
     bool nextImpl() override;
 };
 
-}
+} // namespace DB

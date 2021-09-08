@@ -1,15 +1,14 @@
 #pragma once
 
-#include <vector>
-
 #include <IO/WriteBuffer.h>
+
+#include <vector>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_WRITE_AFTER_END_OF_BUFFER;
+extern const int CANNOT_WRITE_AFTER_END_OF_BUFFER;
 }
 
 /** Writes data to existing std::vector or similar type. When not enough space, it doubles vector size.
@@ -23,6 +22,7 @@ template <typename VectorType, size_t initial_size = 32>
 class WriteBufferFromVector : public WriteBuffer
 {
     static_assert(sizeof(typename VectorType::value_type) == sizeof(char));
+
 private:
     VectorType & vector;
     bool is_finished = false;
@@ -44,7 +44,8 @@ private:
 
 public:
     explicit WriteBufferFromVector(VectorType & vector_)
-        : WriteBuffer(reinterpret_cast<Position>(vector_.data()), vector_.size()), vector(vector_)
+        : WriteBuffer(reinterpret_cast<Position>(vector_.data()), vector_.size())
+        , vector(vector_)
     {
         if (vector.empty())
         {
@@ -54,9 +55,12 @@ public:
     }
 
     /// Append to vector instead of rewrite.
-    struct AppendModeTag {};
+    struct AppendModeTag
+    {
+    };
     WriteBufferFromVector(VectorType & vector_, AppendModeTag)
-        : WriteBuffer(nullptr, 0), vector(vector_)
+        : WriteBuffer(nullptr, 0)
+        , vector(vector_)
     {
         size_t old_size = vector.size();
         size_t size = (old_size < initial_size) ? initial_size
@@ -73,7 +77,7 @@ public:
         is_finished = true;
         vector.resize(
             ((position() - reinterpret_cast<Position>(vector.data()))
-                + sizeof(typename VectorType::value_type) - 1)  /// Align up.
+             + sizeof(typename VectorType::value_type) - 1) /// Align up.
             / sizeof(typename VectorType::value_type));
         bytes += offset();
         /// Prevent further writes.
@@ -97,4 +101,4 @@ public:
     }
 };
 
-}
+} // namespace DB
