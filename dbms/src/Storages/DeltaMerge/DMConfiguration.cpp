@@ -45,10 +45,10 @@ DMConfiguration::DMConfiguration(std::istream & input) : embedded_checksum(), de
 
     // we cannot directly convert the value to enum;
     // it will be UB if the value is out of the range.
-    checksum_algorihm = static_cast<DB::ChecksumAlgo>(unchecked_algorithm);
+    checksum_algorithm = static_cast<DB::ChecksumAlgo>(unchecked_algorithm);
 
     digest->update(&checksum_frame_length, sizeof(checksum_frame_length));
-    digest->update(&checksum_algorihm, sizeof(checksum_algorihm));
+    digest->update(&checksum_algorithm, sizeof(checksum_algorithm));
 
     const auto & embedded_checksum_array = configuration.embedded_checksum();
     for (const auto & var : embedded_checksum_array)
@@ -78,10 +78,10 @@ std::ostream & operator<<(std::ostream & output, const DMConfiguration & config)
     dtpb::Configuration      configuration;
     DB::UnifiedDigestBaseBox digest = config.createUnifiedDigest();
 
-    configuration.set_checksum_algorithm(static_cast<uint64_t>(config.checksum_algorihm));
+    configuration.set_checksum_algorithm(static_cast<uint64_t>(config.checksum_algorithm));
     configuration.set_checksum_frame_length(static_cast<uint64_t>(config.checksum_frame_length));
     digest->update(&config.checksum_frame_length, sizeof(config.checksum_frame_length));
-    digest->update(&config.checksum_algorihm, sizeof(config.checksum_algorihm));
+    digest->update(&config.checksum_algorithm, sizeof(config.checksum_algorithm));
 
     {
         for (const auto & [name, checksum] : config.embedded_checksum)

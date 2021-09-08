@@ -37,7 +37,7 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
     const ReadLimiterPtr & read_limiter_,
     size_t buf_size)
     : CompressedSeekableReaderBuffer(),
-    , p_file_in(createReadBufferFromFileBaseByFileProvider(
+      p_file_in(createReadBufferFromFileBaseByFileProvider(
           file_provider,
           path,
           encryption_path,

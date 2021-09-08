@@ -24,7 +24,7 @@ public:
                                                                                {"creation_release_version", TIFLASH_RELEASE_VERSION},
                                                                                {"creation_build_time", TIFLASH_UTC_BUILD_TIME}})
         : checksum_frame_length(checksum_frame_length_),
-          checksum_algorihm(checksum_algorithm_),
+          checksum_algorithm(checksum_algorithm_),
           embedded_checksum(std::move(embedded_checksum_)),
           debug_info(std::move(debug_info_))
     {
