@@ -14,7 +14,7 @@ ColumnFunction::ColumnFunction(
     size_t size,
     FunctionBasePtr function,
     const ColumnsWithTypeAndName & columns_to_capture)
-    : size_(size)
+    : column_size(size)
     , function(function)
 {
     appendArguments(columns_to_capture);
@@ -31,18 +31,18 @@ MutableColumnPtr ColumnFunction::cloneResized(size_t size) const
 
 ColumnPtr ColumnFunction::replicate(const Offsets & offsets) const
 {
-    if (size_ != offsets.size())
+    if (column_size != offsets.size())
         throw Exception(
             "Size of offsets (" + toString(offsets.size())
                 + ") doesn't match size of column ("
-                + toString(size_) + ")",
+                + toString(column_size) + ")",
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     ColumnsWithTypeAndName capture = captured_columns;
     for (auto & column : capture)
         column.column = column.column->replicate(offsets);
 
-    size_t replicated_size = 0 == size_ ? 0 : offsets.back();
+    size_t replicated_size = 0 == column_size ? 0 : offsets.back();
     return ColumnFunction::create(replicated_size, function, capture);
 }
 
@@ -57,11 +57,11 @@ ColumnPtr ColumnFunction::cut(size_t start, size_t length) const
 
 ColumnPtr ColumnFunction::filter(const Filter & filt, ssize_t result_size_hint) const
 {
-    if (size_ != filt.size())
+    if (column_size != filt.size())
         throw Exception(
             "Size of filter (" + toString(filt.size())
                 + ") doesn't match size of column ("
-                + toString(size_) + ")",
+                + toString(column_size) + ")",
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     ColumnsWithTypeAndName capture = captured_columns;
@@ -80,9 +80,9 @@ ColumnPtr ColumnFunction::filter(const Filter & filt, ssize_t result_size_hint) 
 ColumnPtr ColumnFunction::permute(const Permutation & perm, size_t limit) const
 {
     if (limit == 0)
-        limit = size_;
+        limit = column_size;
     else
-        limit = std::min(size_, limit);
+        limit = std::min(column_size, limit);
 
     if (perm.size() < limit)
         throw Exception(
@@ -102,11 +102,11 @@ std::vector<MutableColumnPtr> ColumnFunction::scatter(
     IColumn::ColumnIndex num_columns,
     const IColumn::Selector & selector) const
 {
-    if (size_ != selector.size())
+    if (column_size != selector.size())
         throw Exception(
             "Size of selector (" + toString(selector.size())
                 + ") doesn't match size of column ("
-                + toString(size_) + ")",
+                + toString(column_size) + ")",
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     std::vector<size_t> counts;
@@ -138,13 +138,13 @@ void ColumnFunction::insertDefault()
 {
     for (auto & column : captured_columns)
         column.column->assumeMutableRef().insertDefault();
-    ++size_;
+    ++column_size;
 }
 void ColumnFunction::popBack(size_t n)
 {
     for (auto & column : captured_columns)
         column.column->assumeMutableRef().popBack(n);
-    size_ -= n;
+    column_size -= n;
 }
 
 size_t ColumnFunction::byteSize() const

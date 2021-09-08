@@ -24,7 +24,7 @@ public:
 
     MutableColumnPtr cloneResized(size_t size) const override;
 
-    size_t size() const override { return size_; }
+    size_t size() const override { return column_size; }
 
     ColumnPtr cut(size_t start, size_t length) const override;
     ColumnPtr replicate(const Offsets & offsets) const override;
@@ -116,7 +116,7 @@ public:
     }
 
 private:
-    size_t size_;
+    size_t column_size;
     FunctionBasePtr function;
     ColumnsWithTypeAndName captured_columns;
 
