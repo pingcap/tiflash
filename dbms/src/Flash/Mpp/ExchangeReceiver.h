@@ -64,6 +64,7 @@ struct ReceivedPacket
     String req_info;
 };
 
+/// RecyclableBuffer recycles unused T to avoid too much allocation of objects.
 template <typename T>
 class RecyclableBuffer
 {
@@ -87,7 +88,6 @@ public:
         assert(!isOverflow(ones));
         return !ones.empty();
     }
-    /// before pushing one, the queue should have place
     bool hasEmptyPlace()
     {
         assert(!isOverflow(empty_ones));
