@@ -29,9 +29,11 @@ private:
 
     static constexpr size_t size_multiplier = 2;
 
-    void resetBuffer()
+    void resizeBuffer(size_t size)
     {
+        /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
         size_t pos_offset = pos - reinterpret_cast<Position>(vector.data());
+        vector.resize(size);
         internal_buffer = Buffer(reinterpret_cast<Position>(vector.data() + pos_offset), reinterpret_cast<Position>(vector.data() + vector.size()));
         working_buffer = internal_buffer;
     }
@@ -42,9 +44,7 @@ private:
             throw Exception("WriteBufferFromVector is finished", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER);
 
         size_t old_size = vector.size();
-        /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
-        vector.resize(old_size * size_multiplier);
-        resetBuffer();
+        resizeBuffer(old_size * size_multiplier);
     }
 
     void reserveImpl(size_t size) override
@@ -53,10 +53,7 @@ private:
             return;
 
         if (size > vector.size())
-        {
-            vector.resize(size);
-            resetBuffer();
-        }
+            resizeBuffer(size);
     }
 
 public:
