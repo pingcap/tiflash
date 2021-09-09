@@ -161,10 +161,10 @@ public:
 
     String toDebugStirng() const
     {
-        String debug_string = "Support Workloads : \n";
+        String debug_string = "Support Workloads: \n";
         for (const auto & it : funcs)
         {
-            debug_string += fmt::format("   Name : {} , mask : {}. \n", it.second.first, it.first);
+            debug_string += fmt::format("   Name: {}, mask :{}. \n", it.second.first, it.first);
         }
         debug_string += fmt::format("   Need to run all over? try use `-M {}`", registed_masks);
         return debug_string;
