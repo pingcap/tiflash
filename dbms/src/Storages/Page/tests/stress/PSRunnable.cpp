@@ -18,8 +18,12 @@ void PSRunnable::run()
     {
         /*Just for no warming*/
     }
-    String desc = description();
-    tracker.setDescription(desc.c_str());
+    const auto desc = description();
+    const size_t desc_size = strlen(desc.c_str());
+    char desc_buff[desc_size];
+    strncpy(desc_buff, desc.c_str(), desc_size);
+    tracker.setDescription(desc_buff);
+
     current_memory_tracker = nullptr;
     LOG_INFO(StressEnv::logger, desc + " exit");
 }
