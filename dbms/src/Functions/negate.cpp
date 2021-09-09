@@ -9,7 +9,7 @@ struct NegateImpl
 {
     using ResultType = typename NumberTraits::ResultOfNegate<A>::Type;
 
-    static inline ResultType apply(A a)
+    static ResultType apply(A a)
     {
         if constexpr (IsDecimal<A>)
         {

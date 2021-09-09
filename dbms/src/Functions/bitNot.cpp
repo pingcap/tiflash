@@ -9,7 +9,7 @@ struct BitNotImpl
 {
     using ResultType = typename NumberTraits::ResultOfBitNot<A>::Type;
 
-    static inline ResultType apply(A a [[maybe_unused]])
+    static ResultType apply(A a [[maybe_unused]])
     {
         if constexpr (IsDecimal<A>)
             throw Exception("unimplement");

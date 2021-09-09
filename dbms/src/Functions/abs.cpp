@@ -9,7 +9,7 @@ struct AbsImpl
 {
     using ResultType = typename NumberTraits::ResultOfAbs<A>::Type;
 
-    static inline ResultType apply(A a)
+    static ResultType apply(A a)
     {
         if constexpr (std::is_integral_v<A> && std::is_signed_v<A>)
         {

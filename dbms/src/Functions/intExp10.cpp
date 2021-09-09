@@ -9,7 +9,7 @@ struct IntExp10Impl
 {
     using ResultType = UInt64;
 
-    static inline ResultType apply(A a)
+    static ResultType apply(A a)
     {
         return intExp10(a);
     }
@@ -20,7 +20,7 @@ struct IntExp10Impl<Decimal<A>>
 {
     using ResultType = UInt64;
 
-    static inline ResultType apply(Decimal<A> a)
+    static ResultType apply(Decimal<A> a)
     {
         return intExp10(a);
     }
