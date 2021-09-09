@@ -5,6 +5,10 @@ class NormalWorkload
     , public StressWorkloadFunc<NormalWorkload>
 {
 public:
+    explicit NormalWorkload(const StressEnv & options_)
+        : StressWorkload(options_)
+    {}
+
     static String name()
     {
         return "Normal workload";
@@ -15,7 +19,6 @@ public:
         return NORMAL_WORKLOAD;
     }
 
-private:
     String desc() override
     {
         return options.toDebugString();

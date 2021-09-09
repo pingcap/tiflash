@@ -6,21 +6,10 @@
 
 #include <atomic>
 
-namespace Poco {
-    class Logger;
+namespace Poco
+{
+class Logger;
 }
-
-namespace DB
-{
-
-namespace FailPoints
-{
-extern const char random_slow_page_storage_remove_expired_snapshots[];
-extern const char random_slow_page_storage_list_all_live_files[];
-} // namespace FailPoints
-
-} // namespace DB
-
 
 using PSPtr = std::shared_ptr<DB::PageStorage>;
 
@@ -95,7 +84,6 @@ struct StressEnv
             //
         );
     }
-
 
     static void initGlobalLogger();
 
