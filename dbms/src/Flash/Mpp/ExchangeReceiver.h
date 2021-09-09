@@ -165,7 +165,7 @@ private:
     std::condition_variable cv;
     RecyclableBuffer<std::shared_ptr<ReceivedPacket>> res_buffer;
     Int32 live_connections;
-    std::atomic<State> state;
+    State state;
     String err_msg;
 
     std::shared_ptr<LogWithPrefix> log;

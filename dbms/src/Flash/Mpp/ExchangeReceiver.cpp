@@ -113,8 +113,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "Decode packet meet error";
-                        LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                        local_err_msg = "The state is abnormal, exit from ReadLoop";
+                        LOG_WARNING(log, local_err_msg);
                         break;
                     }
                 }
@@ -201,8 +201,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
                 msg = err_msg;
             else
                 msg = "Unknown error";
-            result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
-            return result;
+            return {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
         else if (res_buffer.hasOne())
         {
@@ -211,8 +210,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
         }
         else
         {
-            result = {nullptr, 0, "ExchangeReceiver", false, "", true};
-            return result;
+            return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
 
