@@ -53,6 +53,21 @@ enum State
     CLOSED,
 };
 
+String getState(const State & s)
+{
+    switch (s)
+    {
+    case NORMAL:
+        return "NORMAL";
+    case ERROR:
+        return "ERROR";
+    case CANCELED:
+        return "CANCELED";
+    case CLOSED:
+        return "CLOSED";
+    }
+}
+
 struct ReceivedPacket
 {
     ReceivedPacket()
@@ -64,7 +79,7 @@ struct ReceivedPacket
     String req_info;
 };
 
-/// RecyclableBuffer recycles unused T to avoid too much allocation of objects.
+/// RecyclableBuffer recycles unused objects to avoid too much allocation of objects.
 template <typename T>
 class RecyclableBuffer
 {
@@ -72,59 +87,59 @@ public:
     explicit RecyclableBuffer(size_t limit)
         : capacity(limit)
     {
-        /// init empty ones
+        /// init empty objects
         for (size_t i = 0; i < limit; ++i)
         {
-            empty_ones.push(T());
+            empty_objects.emplace();
         }
     }
-    bool hasEmpty()
+    bool hasEmpty() const
     {
-        assert(!isOverflow(empty_ones));
-        return !empty_ones.empty();
+        assert(!isOverflow(empty_objects));
+        return !empty_objects.empty();
     }
-    bool hasOne()
+    bool hasObjects() const
     {
-        assert(!isOverflow(ones));
-        return !ones.empty();
+        assert(!isOverflow(objects));
+        return !objects.empty();
     }
-    bool hasEmptyPlace()
+    bool canPushEmpty() const
     {
-        assert(!isOverflow(empty_ones));
-        return !isFull(empty_ones);
+        assert(!isOverflow(empty_objects));
+        return !isFull(empty_objects);
     }
-    bool hasPlace()
+    bool canPush() const
     {
-        assert(!isOverflow(ones));
-        return !isFull(ones);
+        assert(!isOverflow(objects));
+        return !isFull(objects);
     }
 
     void popEmpty(T & t)
     {
-        assert(!empty_ones.empty() && !isOverflow(empty_ones));
-        t = empty_ones.front();
-        empty_ones.pop();
+        assert(!empty_objects.empty() && !isOverflow(empty_objects));
+        t = empty_objects.front();
+        empty_objects.pop();
     }
-    void popOne(T & t)
+    void popObject(T & t)
     {
-        assert(!ones.empty() && !isOverflow(ones));
-        t = ones.front();
-        ones.pop();
+        assert(!objects.empty() && !isOverflow(objects));
+        t = objects.front();
+        objects.pop();
     }
-    void pushOne(const T & t)
+    void pushObject(const T & t)
     {
-        assert(!isFullOrOverflow(ones));
-        ones.push(t);
+        assert(!isFullOrOverflow(objects));
+        objects.push(t);
     }
     void pushEmpty(const T & t)
     {
-        assert(!isFullOrOverflow(empty_ones));
-        empty_ones.push(t);
+        assert(!isFullOrOverflow(empty_objects));
+        empty_objects.push(t);
     }
     void pushEmpty(T && t)
     {
-        assert(!isFullOrOverflow(empty_ones));
-        empty_ones.push(std::move(t));
+        assert(!isFullOrOverflow(empty_objects));
+        empty_objects.push(std::move(t));
     }
 
 private:
@@ -141,8 +156,8 @@ private:
         return q.size() == capacity;
     }
 
-    std::queue<T> empty_ones;
-    std::queue<T> ones;
+    std::queue<T> empty_objects;
+    std::queue<T> objects;
     size_t capacity;
 };
 

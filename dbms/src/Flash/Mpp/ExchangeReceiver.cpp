@@ -86,7 +86,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "receiver's state is abnormal, exit from ReadLoop";
+                        local_err_msg = "receiver's state is " + getState(state) + ", exit from ReadLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
@@ -104,16 +104,16 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                 }
                 {
                     std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.hasPlace() || state != NORMAL; });
+                    cv.wait(lock, [&] { return res_buffer.canPush() || state != NORMAL; });
                     if (state == NORMAL)
                     {
-                        res_buffer.pushOne(packet);
+                        res_buffer.pushObject(packet);
                         cv.notify_all();
                     }
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "receiver's state is abnormal, exit from ReadLoop";
+                        local_err_msg = "receiver's state is " + getState(state) + ", exit from ReadLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
@@ -163,7 +163,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         meet_error = true;
         local_err_msg = "fatal error";
     }
-    Int32 copy_live_conn;
+    Int32 copy_live_conn = -1;
     {
         std::unique_lock<std::mutex> lock(mu);
         live_connections--;
@@ -187,7 +187,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
     std::shared_ptr<ReceivedPacket> packet;
     {
         std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return res_buffer.hasOne() || live_connections == 0 || state != NORMAL; });
+        cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != NORMAL; });
 
         if (state != NORMAL)
         {
@@ -202,17 +202,17 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
                 msg = "Unknown error";
             return {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
-        else if (res_buffer.hasOne())
+        else if (res_buffer.hasObjects())
         {
-            res_buffer.popOne(packet);
+            res_buffer.popObject(packet);
             cv.notify_all();
         }
-        else /// live_connections == 0 and res_buffer is empty, that is the end.
+        else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
         {
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
-
+    assert(packet != nullptr && packet->packet != nullptr);
     ExchangeReceiverResult result;
     if (packet->packet->has_error())
     {
@@ -229,12 +229,12 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
         {
             result = {resp_ptr, packet->source_index, packet->req_info};
         }
-        packet->packet->Clear();
-        std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return res_buffer.hasEmptyPlace(); });
-        res_buffer.pushEmpty(std::move(packet));
-        cv.notify_all();
     }
+    packet->packet->Clear();
+    std::unique_lock<std::mutex> lock(mu);
+    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
+    res_buffer.pushEmpty(std::move(packet));
+    cv.notify_all();
     return result;
 }
 
