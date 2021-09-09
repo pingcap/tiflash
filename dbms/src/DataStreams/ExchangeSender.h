@@ -12,8 +12,8 @@ class ExchangeSender : public IProfilingBlockInputStream
 public:
     ExchangeSender(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
         : writer(std::move(writer))
+        , log(getLogWithPrefix(log_, getName()))
     {
-        log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeSender"), "");
         children.push_back(input);
     }
     String getName() const override { return "ExchangeSender"; }

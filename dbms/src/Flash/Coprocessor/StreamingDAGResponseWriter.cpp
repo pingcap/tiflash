@@ -1,3 +1,4 @@
+#include <Common/LogWithPrefix.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
@@ -22,9 +23,8 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
+    , log(getLogWithPrefix(log_, "StreamingDAGResponseWriter"))
 {
-    log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), "");
-
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
 }
@@ -53,7 +53,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlock(
+void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
@@ -122,7 +122,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlock(
 
 template <class StreamWriterPtr>
 template <bool for_last_response>
-void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlock(
+void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
@@ -239,19 +239,19 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
 }
 
 template <class StreamWriterPtr>
-template <bool collect_execution_info>
+template <bool for_last_response>
 void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
 {
     tipb::SelectResponse response;
-    if constexpr (collect_execution_info)
+    if constexpr (for_last_response)
         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
-        partitionAndEncodeThenWriteBlock<collect_execution_info>(blocks, response);
+        partitionAndEncodeThenWriteBlocks<for_last_response>(blocks, response);
     }
     else
     {
-        encodeThenWriteBlock(blocks, response);
+        encodeThenWriteBlocks(blocks, response);
     }
     blocks.clear();
     rows_in_blocks = 0;

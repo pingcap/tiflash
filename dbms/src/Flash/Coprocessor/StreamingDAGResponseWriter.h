@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -25,11 +26,11 @@ public:
     void finishWrite() override;
 
 private:
-    template <bool collect_execution_info>
-    void batchWrite();
-    void encodeThenWriteBlock(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     template <bool for_last_response>
-    void partitionAndEncodeThenWriteBlock(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void batchWrite();
+    void encodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    template <bool for_last_response>
+    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     tipb::ExchangeType exchange_type;
     StreamWriterPtr writer;
