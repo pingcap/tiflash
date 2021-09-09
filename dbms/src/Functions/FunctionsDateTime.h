@@ -56,9 +56,15 @@ inline void fillMonthAndDay(int day_num, int & month, int & day, const int * acc
 
 inline void fromDayNum(MyDateTime & t, int day_num)
 {
-    // day_num is the days from 0000-01-01
-    if (day_num < 0)
-        throw Exception("MyDate/MyDateTime only support date after 0000-01-01");
+    // day_num is the days from 0000-01-01, to 9999-12-31.  calcDayNum(9999,12,31) = 3652424
+    if (day_num < 0 || day_num > 3652424)
+    {
+        // set date valid, return null
+        t.year = -1;
+        t.month = 0;
+        t.day = 0;
+        return;
+    }
     int year = 0, month = 0, day = 0;
     if (likely(day_num >= 366))
     {
@@ -920,6 +926,13 @@ static inline void addMonths(MyDateTime & t, Int64 months)
         current_month += year * 12;
         t.year -= year;
     }
+    if (t.year < 0 || t.year > 9999)
+    {
+        t.year = -1;
+        t.month = 0;
+        t.day = 0;
+        return;
+    }
     static const int day_num_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     static const int day_num_in_month_leap_year[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     int max_day = 0;
@@ -1113,6 +1126,11 @@ struct AddYearsImpl
 
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
+        if (delta < -9999 || delta > 9999)
+        {
+            MyDateTime invalid_t(-1, 0, 0, 0, 0, 0, 0);
+            return invalid_t.toPackedUInt();
+        }
         return AddMonthsImpl::execute(t, delta * 12, time_zone);
     }
 };
@@ -1170,7 +1188,7 @@ struct SubtractYearsImpl : SubtractIntervalImpl<AddYearsImpl>
 // year = 0, dateTime is valid and set year, month, day = 0
 // year < 0 or year > 9999, dateTime is invalid
 template <typename ToType>
-static inline bool checkDateTimeValidAndReformatDate(ToType & packed)
+static inline bool checkDateTimeValidAndResetDate(ToType & packed)
 {
     MyDateTime dateTime(packed);
     if (dateTime.year == 0)
@@ -1191,7 +1209,7 @@ struct Adder
         for (size_t i = 0; i < size; ++i)
         {
             vec_to[i] = Transform::execute(vec_from[i], delta.getInt(i), time_zone);
-            (*vec_null_map_to)[i] = checkDateTimeValidAndReformatDate<ToType>(vec_to[i]);
+            (*vec_null_map_to)[i] = checkDateTimeValidAndResetDate<ToType>(vec_to[i]);
         }
     }
 
@@ -1203,7 +1221,7 @@ struct Adder
         for (size_t i = 0; i < size; ++i)
         {
             vec_to[i] = Transform::execute(vec_from[i], delta, time_zone);
-            (*vec_null_map_to)[i] = checkDateTimeValidAndReformatDate<ToType>(vec_to[i]);
+            (*vec_null_map_to)[i] = checkDateTimeValidAndResetDate<ToType>(vec_to[i]);
         }
     }
 
@@ -1215,7 +1233,7 @@ struct Adder
         for (size_t i = 0; i < size; ++i)
         {
             vec_to[i] = Transform::execute(from, delta.getInt(i), time_zone);
-            (*vec_null_map_to)[i] = checkDateTimeValidAndReformatDate<ToType>(vec_to[i]);
+            (*vec_null_map_to)[i] = checkDateTimeValidAndResetDate<ToType>(vec_to[i]);
         }
     }
 };
