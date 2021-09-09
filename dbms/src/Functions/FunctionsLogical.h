@@ -7,7 +7,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsUnaryArithmetic.h>
+#include <Functions/FunctionUnaryArithmetic.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
 
