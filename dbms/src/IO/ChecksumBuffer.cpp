@@ -2,7 +2,6 @@
 
 namespace DB
 {
-
 using namespace DB::Digest;
 
 template class FramedChecksumReadBuffer<None>;

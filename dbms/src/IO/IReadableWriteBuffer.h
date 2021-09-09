@@ -1,10 +1,10 @@
 #pragma once
-#include <memory>
 #include <IO/ReadBuffer.h>
+
+#include <memory>
 
 namespace DB
 {
-
 struct IReadableWriteBuffer
 {
     /// At the first time returns getReadBufferImpl(). Next calls return nullptr.
@@ -20,7 +20,6 @@ struct IReadableWriteBuffer
     virtual ~IReadableWriteBuffer() {}
 
 protected:
-
     /// Creates read buffer from current write buffer.
     /// Returned buffer points to the first byte of original buffer.
     /// Original stream becomes invalid.
@@ -29,4 +28,4 @@ protected:
     bool can_reread = true;
 };
 
-}
+} // namespace DB
