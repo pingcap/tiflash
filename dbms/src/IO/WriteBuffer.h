@@ -59,7 +59,7 @@ public:
     /** it is desirable in the successors to place the next() call in the destructor,
       * so that the last data is written
       */
-    virtual ~WriteBuffer() {}
+    virtual ~WriteBuffer() = default;
 
 
     inline void nextIfAtEnd()
@@ -91,11 +91,21 @@ public:
         ++pos;
     }
 
+    void reserve(size_t size)
+    {
+        reserveImpl(size);
+    }
+
 private:
     /** Write the data in the buffer (from the beginning of the buffer to the current position).
       * Throw an exception if something is wrong.
       */
     virtual void nextImpl() { throw Exception("Cannot write after end of buffer.", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER); };
+
+    /** reserve at least `size` bytes for future writes.
+      * this is a hint so the default implementation does nothing.
+      */
+    virtual void reserveImpl(size_t size [[maybe_unused]]) {}
 };
 
 

@@ -42,6 +42,16 @@ private:
         working_buffer = internal_buffer;
     }
 
+    void reserveImpl(size_t size) override
+    {
+        if (is_finished)
+            return;
+
+        size_t available = vector.size() - (pos - reinterpret_cast<Position>(vector.data()));
+        if (size > available)
+            vector.reserve(vector.size() + (size - available));
+    }
+
 public:
     explicit WriteBufferFromVector(VectorType & vector_)
         : WriteBuffer(reinterpret_cast<Position>(vector_.data()), vector_.size())

@@ -14,9 +14,9 @@ public:
     explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types)
     {
         output = std::make_unique<WriteBufferFromOwnString>();
-        for (size_t i = 0; i < field_types.size(); i++)
+        for (const auto & field_type : field_types)
         {
-            expected_types.emplace_back(getDataTypeByFieldType(field_types[i]));
+            expected_types.emplace_back(getDataTypeByFieldType(field_type));
         }
     }
 
@@ -59,6 +59,8 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     block.checkNumberOfRows();
     size_t columns = block.columns();
     size_t rows = block.rows();
+
+    output->reserve(block.bytes() * 1.1);
 
     writeVarUInt(columns, *output);
     writeVarUInt(rows, *output);
