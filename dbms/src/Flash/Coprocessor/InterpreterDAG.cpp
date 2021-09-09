@@ -3,6 +3,7 @@
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExchangeSender.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
@@ -11,8 +12,6 @@
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
 #include <pingcap/coprocessor/Client.h>
-
-#include "DAGCodec.h"
 
 namespace DB
 {

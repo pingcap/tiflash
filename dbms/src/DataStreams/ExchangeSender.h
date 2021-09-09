@@ -7,6 +7,7 @@
 namespace DB
 {
 /// read blocks directly from Union, then broadcast or partition blocks and encode them, later put them into sending tunnels
+/// it should be an output stream but derived from the inputSteam
 class ExchangeSender : public IProfilingBlockInputStream
 {
 public:

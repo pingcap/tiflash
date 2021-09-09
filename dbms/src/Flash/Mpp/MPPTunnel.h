@@ -17,6 +17,8 @@
 namespace DB
 {
 class MPPTask;
+using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
+
 class MPPTunnel : private boost::noncopyable
 {
 public:
@@ -37,7 +39,7 @@ public:
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false);
 
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
-    void send();
+    void sendLoop();
 
     // finish the writing.
     void writeDone();
@@ -77,9 +79,9 @@ private:
 
     int input_streams_num;
 
-    std::unique_ptr<std::thread> send_thr;
+    std::unique_ptr<std::thread> send_thread;
 
-    ConcurrentBoundedQueue<std::shared_ptr<mpp::MPPDataPacket>> send_queue;
+    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
 
     Poco::Logger * log;
 };

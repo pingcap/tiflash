@@ -28,7 +28,7 @@ public:
 private:
     template <bool for_last_response>
     void batchWrite();
-    void encodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     template <bool for_last_response>
     void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 

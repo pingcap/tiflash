@@ -23,7 +23,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWr
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
-    , log(getLogWithPrefix(log_, "StreamingDAGResponseWriter"))
+    , log(IProfilingBlockInputStream::getLogWithPrefix(log_, "StreamingDAGResponseWriter"))
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
@@ -46,7 +46,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     {
         blocks.push_back(block);
     }
-    if ((Int64)rows_in_blocks > (records_per_chunk == -1 ? 4096 : records_per_chunk))
+    if ((Int64)rows_in_blocks > (records_per_chunk == -1 ? 65535 : records_per_chunk))
     {
         batchWrite<false>();
     }
@@ -54,7 +54,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
-    std::vector<Block> & input_blocks,
+    const std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;

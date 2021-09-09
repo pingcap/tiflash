@@ -25,7 +25,7 @@ MPPTunnel::MPPTunnel(
     , current_task(current_task_)
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_streams_num(input_steams_num_)
-    , send_thr(nullptr)
+    , send_thread(nullptr)
     , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
     , log(&Poco::Logger::get(tunnel_id))
 {
@@ -37,9 +37,9 @@ MPPTunnel::~MPPTunnel()
     {
         if (!finished)
             writeDone();
-        if (nullptr != send_thr && send_thr->joinable())
+        if (nullptr != send_thread && send_thread->joinable())
         {
-            send_thr->join();
+            send_thread->join();
         }
     }
     catch (...)
@@ -103,12 +103,12 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
 }
 
 /// to avoid being blocked when pop(), we should send nullptr into send_queue
-void MPPTunnel::send()
+void MPPTunnel::sendLoop()
 {
     while (!finished)
     {
         /// TODO(fzh) reuse it later
-        auto res = std::shared_ptr<mpp::MPPDataPacket>();
+        MPPDataPacketPtr res;
         send_queue.pop(res);
         if (nullptr == res)
         {
@@ -119,7 +119,7 @@ void MPPTunnel::send()
         }
         else
         {
-            writer->Write(*res.get());
+            writer->Write(*res);
         }
     }
 }
@@ -153,7 +153,7 @@ void MPPTunnel::connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
         writer = writer_;
         cv_for_connected.notify_all();
     }
-    send_thr = std::make_unique<std::thread>([this] { send(); });
+    send_thread = std::make_unique<std::thread>([this] { sendLoop(); });
 }
 
 
