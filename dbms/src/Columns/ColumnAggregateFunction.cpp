@@ -5,6 +5,7 @@
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteBufferFromArena.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -85,11 +86,11 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
 
     if (start + length > from_concrete.getData().size())
         throw Exception(
-            "Parameters start = " + toString(start) + ", length = " + toString(length)
-                + " are out of bound in ColumnAggregateFunction::insertRangeFrom method"
-                  " (data.size() = "
-                + toString(from_concrete.getData().size())
-                + ").",
+            fmt::format(
+                "Parameters start = {}, length = {} are out of bound in ColumnAggregateFunction::insertRangeFrom method (data.size() = {}).",
+                start,
+                length,
+                from_concrete.getData().size()),
             ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     if (!empty() && src.get() != &from_concrete)
@@ -186,8 +187,7 @@ void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::Ti
     auto s = data.size();
     if (hash.getData().size() != data.size())
         throw Exception(
-            "Size of WeakHash32 does not match size of column: column size is "
-                + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()),
+            fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()),
             ErrorCodes::LOGICAL_ERROR);
 
     auto & hash_data = hash.getData();
