@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Arena.h>
+#include <common/StringRef.h>
 
 /**
   * In some aggregation scenarios, when adding a key to the hash table, we
