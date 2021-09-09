@@ -1021,7 +1021,6 @@ public:
             constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
             constexpr bool is_multiply [[maybe_unused]] = IsOperation<Op>::multiply;
             constexpr bool is_division [[maybe_unused]] = IsOperation<Op>::div_floating || IsOperation<Op>::div_int;
-            ;
 
             using T0 = typename LeftDataType::FieldType;
             using T1 = typename RightDataType::FieldType;
