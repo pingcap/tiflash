@@ -1,25 +1,26 @@
 
-#include "PSStressEnv.h"
-
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <PSStressEnv.h>
 #include <PSWorkload.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <signal.h>
 
 #include <boost/program_options.hpp>
 
-int StressEnvStatus::isSuccess()
+int StressEnvStatus::isSuccess() const
 {
-    return status > 0 ? 0 : (int)status;
+    auto code = status.load();
+    return code > 0 ? 0 : static_cast<int>(code);
 }
 
-bool StressEnvStatus::stat()
+bool StressEnvStatus::stat() const
 {
     return status == STATUS_LOOP;
 }

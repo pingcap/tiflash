@@ -19,11 +19,11 @@ template <typename Child>
 class StressWorkloadFunc
 {
 public:
-    static String name_func()
+    static String nameFunc()
     {
         return Child::name();
     }
-    static UInt64 mask_func()
+    static UInt64 maskFunc()
     {
         return Child::mask();
     }
@@ -32,21 +32,20 @@ public:
 class StressWorkload
 {
 public:
-    virtual ~StressWorkload(){};
+    virtual ~StressWorkload() = default;
 
-public:
     virtual void init(StressEnv & options_)
     {
         options = options_;
     }
 
-    virtual String desc() { return ""; };
-    virtual void run(){};
+    virtual String desc() { return ""; }
+    virtual void run() {}
     virtual bool verify()
     {
         return true;
-    };
-    virtual void failed(){};
+    }
+    virtual void failed() {}
     virtual void result();
 
 protected:
@@ -86,7 +85,7 @@ protected:
         }
     }
 
-protected:
+
     StressEnv options;
     Poco::ThreadPool pool;
 
@@ -112,18 +111,19 @@ private:
     std::map<UInt64, std::pair<String, workload_func>> funcs;
     UInt64 mask = 0;
 
-private:
-    StressWorkloadManger(){};
-    ~StressWorkloadManger(){};
+    StressWorkloadManger() = default;
 
 public:
+    StressWorkloadManger(const StressWorkloadManger &) = delete;
+    StressWorkloadManger(StressWorkloadManger &&) = delete;
+
     static StressWorkloadManger & getInstance()
     {
         static StressWorkloadManger instance;
         return instance;
     }
 
-    void setEnv(StressEnv & env_)
+    void setEnv(const StressEnv & env_)
     {
         options = env_;
     }
@@ -150,7 +150,7 @@ public:
     String toWorkloadSelctedString() const
     {
         String debug_string = "Selected Workloads : \n";
-        for (auto & it : funcs)
+        for (const auto & it : funcs)
         {
             if (options.situation_mask & it.first)
             {
@@ -163,7 +163,7 @@ public:
     String toDebugStirng() const
     {
         String debug_string = "Support Workloads : \n";
-        for (auto & it : funcs)
+        for (const auto & it : funcs)
         {
             debug_string += fmt::format("   Name : {} , mask : {}. \n", it.second.first, it.first);
         }
@@ -180,8 +180,8 @@ private:
 #define REGISTER_WORKLOAD(WORKLOAD)                                                     \
     static void __attribute__((constructor)) _work_load_register_named_##WORKLOAD(void) \
     {                                                                                   \
-        StressWorkloadManger::getInstance().reg(WORKLOAD::name_func(),                  \
-                                                WORKLOAD::mask_func(),                  \
+        StressWorkloadManger::getInstance().reg(WORKLOAD::nameFunc(),                   \
+                                                WORKLOAD::maskFunc(),                   \
                                                 []() -> WORKLOAD * {                    \
                                                     return new WORKLOAD();              \
                                                 });                                     \

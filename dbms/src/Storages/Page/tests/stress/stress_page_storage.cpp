@@ -5,6 +5,7 @@
 
 namespace DB
 {
+// Define is_background_thread for this binary
 #if __APPLE__ && __clang__
 __thread bool is_background_thread = false;
 #else

@@ -23,12 +23,12 @@ void PSRunnable::run()
     LOG_INFO(StressEnv::logger, description() + " exit");
 }
 
-size_t PSRunnable::getBytesUsed()
+size_t PSRunnable::getBytesUsed() const
 {
     return bytes_used;
 }
 
-size_t PSRunnable::getPagesUsed()
+size_t PSRunnable::getPagesUsed() const
 {
     return pages_used;
 }
@@ -44,7 +44,7 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder
 {
     // fill page with random bytes
     const size_t buff_sz = approx_page_mb * DB::MB + random() % 3000;
-    char * buff = (char *)malloc(buff_sz);
+    char * buff = static_cast<char *>(malloc(buff_sz));
     const char buff_ch = pageId % 0xFF;
     memset(buff, buff_ch, buff_sz);
 
@@ -55,29 +55,29 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder
 
 void PSWriter::fillAllPages(const PSPtr & ps)
 {
-    for (DB::PageId pageId = 0; pageId < MAX_PAGE_ID_DEFAULT; ++pageId)
+    for (DB::PageId page_id = 0; page_id < MAX_PAGE_ID_DEFAULT; ++page_id)
     {
         DB::MemHolder holder;
-        DB::ReadBufferPtr buff = genRandomData(pageId, holder);
+        DB::ReadBufferPtr buff = genRandomData(page_id, holder);
 
         DB::WriteBatch wb;
-        wb.putPage(pageId, 0, buff, buff->buffer().size());
+        wb.putPage(page_id, 0, buff, buff->buffer().size());
         ps->write(std::move(wb));
-        if (pageId % 100 == 0)
-            LOG_INFO(StressEnv::logger, fmt::format("writer wrote page {}", pageId));
+        if (page_id % 100 == 0)
+            LOG_INFO(StressEnv::logger, fmt::format("writer wrote page {}", page_id));
     }
 }
 
 bool PSWriter::runImpl()
 {
     assert(ps != nullptr);
-    const DB::PageId pageId = genRandomPageId();
+    const DB::PageId page_id = genRandomPageId();
 
     DB::MemHolder holder;
-    DB::ReadBufferPtr buff = genRandomData(pageId, holder);
+    DB::ReadBufferPtr buff = genRandomData(page_id, holder);
 
     DB::WriteBatch wb;
-    wb.putPage(pageId, 0, buff, buff->buffer().size());
+    wb.putPage(page_id, 0, buff, buff->buffer().size());
     ps->write(std::move(wb));
     ++pages_used;
     bytes_used += buff->buffer().size();
@@ -86,33 +86,33 @@ bool PSWriter::runImpl()
 
 DB::PageId PSWriter::genRandomPageId()
 {
-    std::normal_distribution<> distribution{(double)max_page_id / 2, 150};
+    std::normal_distribution<> distribution{static_cast<double>(max_page_id) / 2, 150};
     return static_cast<DB::PageId>(std::round(distribution(gen))) % max_page_id;
 }
 
 void PSCommonWriter::updatedRandomData()
 {
-    buffPtrs.clear();
+    buff_ptrs.clear();
     batch_buffer_size = genBufferSize();
     for (size_t i = 0; i < batch_buffer_nums; ++i)
     {
-        char * buff = (char *)malloc(batch_buffer_size);
+        char * buff = static_cast<char *>(malloc(batch_buffer_size));
         DB::MemHolder holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
-        buffPtrs.push_back(std::make_shared<DB::ReadBufferFromMemory>(buff, batch_buffer_size));
+        buff_ptrs.push_back(std::make_shared<DB::ReadBufferFromMemory>(buff, batch_buffer_size));
     }
 }
 
 bool PSCommonWriter::runImpl()
 {
     assert(ps != nullptr);
-    const DB::PageId pageId = genRandomPageId();
+    const DB::PageId page_id = genRandomPageId();
 
     DB::WriteBatch wb;
     updatedRandomData();
 
-    for (auto & buffptr : buffPtrs)
+    for (auto & buffptr : buff_ptrs)
     {
-        wb.putPage(pageId, 0, buffptr, batch_buffer_size);
+        wb.putPage(page_id, 0, buffptr, batch_buffer_size);
         ++pages_used;
         bytes_used += batch_buffer_size;
     }
@@ -169,10 +169,10 @@ bool PSReader::runImpl()
 {
     assert(ps != nullptr);
 
-    std::vector<DB::PageId> pageIds;
+    std::vector<DB::PageId> page_ids;
     for (size_t i = 0; i < page_read_once; ++i)
     {
-        pageIds.emplace_back(random() % max_page_id);
+        page_ids.emplace_back(random() % max_page_id);
     }
 
     DB::PageHandler handler = [&](DB::PageId page_id, const DB::Page & page) {
@@ -186,7 +186,7 @@ bool PSReader::runImpl()
         ++pages_used;
         bytes_used += page.data.size();
     };
-    ps->read(pageIds, handler);
+    ps->read(page_ids, handler);
     return true;
 }
 

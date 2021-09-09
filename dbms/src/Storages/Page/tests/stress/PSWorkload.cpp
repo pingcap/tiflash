@@ -3,9 +3,9 @@
 
 void StressWorkload::result()
 {
-    UInt64 timeInterval = stop_watch.elapsedMilliseconds();
-    fmt::print(stdout, "result in {}ms\n", timeInterval);
-    double seconds_run = 1.0 * timeInterval / 1000;
+    UInt64 time_interval = stop_watch.elapsedMilliseconds();
+    fmt::print(stdout, "result in {}ms\n", time_interval);
+    double seconds_run = 1.0 * time_interval / 1000;
 
     size_t total_pages_written = 0;
     size_t total_bytes_written = 0;
@@ -26,15 +26,15 @@ void StressWorkload::result()
     }
 
     fmt::print(stdout,
-               "W: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
+               "W: {} pages, {:.4f} GB, {:.4f} GB/s\n",
                total_pages_written,
-               (double)total_bytes_written / DB::GB,
-               (double)total_bytes_written / DB::GB / seconds_run);
+               static_cast<double>(total_bytes_written) / DB::GB,
+               static_cast<double>(total_bytes_written) / DB::GB / seconds_run);
     fmt::print(stdout,
-               "R: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
+               "R: {} pages, {:.4f} GB, {:.4f} GB/s\n",
                total_pages_read,
-               (double)total_bytes_read / DB::GB,
-               (double)total_bytes_read / DB::GB / seconds_run);
+               static_cast<double>(total_bytes_read) / DB::GB,
+               static_cast<double>(total_bytes_read) / DB::GB / seconds_run);
 
     if (options.status_interval != 0)
     {
@@ -46,7 +46,7 @@ void StressWorkload::initPageStorage(DB::PageStorage::Config & config, String pa
 {
     DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(std::make_shared<DB::MockKeyManager>(false), false);
 
-    if (path_prefix.size() == 0)
+    if (path_prefix.empty())
     {
         // FIXME: running with `MockDiskDelegatorMulti` is not well-testing
         if (options.paths.empty())

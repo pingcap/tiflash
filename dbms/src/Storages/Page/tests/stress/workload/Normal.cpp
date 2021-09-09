@@ -1,6 +1,7 @@
 #include <PSWorkload.h>
 
-class NormalWorkload : public StressWorkload
+class NormalWorkload
+    : public StressWorkload
     , public StressWorkloadFunc<NormalWorkload>
 {
 public:

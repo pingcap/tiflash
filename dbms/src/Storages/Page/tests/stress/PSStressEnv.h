@@ -1,15 +1,17 @@
 #pragma once
 
-#include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <fmt/format.h>
 
 #include <atomic>
 
+namespace Poco {
+    class Logger;
+}
+
 namespace DB
 {
-// Define is_background_thread for Pagestorage
 
 namespace FailPoints
 {
@@ -33,8 +35,8 @@ enum StressEnvStat
 class StressEnvStatus
 {
 private:
-    StressEnvStatus(){};
-    ~StressEnvStatus(){};
+    StressEnvStatus() = default;
+    ~StressEnvStatus() = default;
 
 public:
     static StressEnvStatus & getInstance()
@@ -44,9 +46,8 @@ public:
     }
 
     std::atomic<StressEnvStat> status = STATUS_LOOP;
-    int isSuccess();
-
-    bool stat();
+    bool stat() const;
+    int isSuccess() const;
 
     void setStat(enum StressEnvStat status_);
 };
@@ -72,23 +73,26 @@ struct StressEnv
 
     String toDebugString() const
     {
-        return fmt::format("{{ num_writers: {}, num_readers: {}, clean_before_run: {}" //
-                           ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
-                           ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}]"
-                           ", status_interval: {}, situation_mask : {} }}",
-                           num_writers,
-                           num_readers,
-                           clean_before_run,
-                           timeout_s,
-                           read_delay_ms,
-                           num_writer_slots,
-                           avg_page_size_mb,
-                           rand_seed,
-                           fmt::join(paths.begin(), paths.end(), ","),
-                           fmt::join(failpoints.begin(), failpoints.end(), ","),
-                           status_interval,
-                           situation_mask
-                           //
+        return fmt::format(
+            "{{ "
+            "num_writers: {}, num_readers: {}, clean_before_run: {}"
+            ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
+            ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}]"
+            ", status_interval: {}, situation_mask : {}"
+            " }}",
+            num_writers,
+            num_readers,
+            clean_before_run,
+            timeout_s,
+            read_delay_ms,
+            num_writer_slots,
+            avg_page_size_mb,
+            rand_seed,
+            fmt::join(paths.begin(), paths.end(), ","),
+            fmt::join(failpoints.begin(), failpoints.end(), ","),
+            status_interval,
+            situation_mask
+            //
         );
     }
 

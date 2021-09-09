@@ -1,6 +1,7 @@
 #include <PSWorkload.h>
 
-class HeavyMemoryCostInGC : public StressWorkload
+class HeavyMemoryCostInGC
+    : public StressWorkload
     , public StressWorkloadFunc<HeavyMemoryCostInGC>
 {
 public:
@@ -53,13 +54,13 @@ private:
     bool verify() override
     {
         return (metrics_dumper->getMemoryPeak() < 5UL * 1024 * 1024);
-    };
+    }
 
     void failed() override
     {
         LOG_WARNING(StressEnv::logger,
                     fmt::format("Memory Peak is {} , it should not bigger than {} ", metrics_dumper->getMemoryPeak(), 5 * 1024 * 1024));
-    };
+    }
 };
 
 REGISTER_WORKLOAD(HeavyMemoryCostInGC)

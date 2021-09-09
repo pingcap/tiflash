@@ -1,6 +1,7 @@
 #include <PSWorkload.h>
 
-class HighValidBigFileGCWorkload : public StressWorkload
+class HighValidBigFileGCWorkload
+    : public StressWorkload
     , public StressWorkloadFunc<HighValidBigFileGCWorkload>
 {
 public:
@@ -99,14 +100,14 @@ private:
     bool verify() override
     {
         return (gc_time_ms < 1 * 1000);
-    };
+    }
 
     void failed() override
     {
         LOG_WARNING(StressEnv::logger, fmt::format("GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000));
-    };
+    }
 
-private:
+
     UInt64 gc_time_ms = 0;
 };
 
