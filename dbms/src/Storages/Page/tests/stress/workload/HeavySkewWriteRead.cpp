@@ -1,12 +1,12 @@
 #include <PSWorkload.h>
 
-class HeavySkewWrite : public StressWorkload
-    , public StressWorkloadFunc<HeavySkewWrite>
+class HeavySkewWriteRead : public StressWorkload
+    , public StressWorkloadFunc<HeavySkewWriteRead>
 {
 public:
     static String name()
     {
-        return "HeavySkewWrite";
+        return "HeavySkewWriteRead";
     }
 
     static UInt64 mask()
@@ -66,4 +66,4 @@ private:
     }
 };
 
-REGISTER_WORKLOAD(HeavySkewWrite)
+REGISTER_WORKLOAD(HeavySkewWriteRead)
