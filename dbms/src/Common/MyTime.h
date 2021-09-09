@@ -44,7 +44,7 @@ struct MyTimeBase
     static const UInt64 PACKED_ISDATE_BIT_FIELD_MASK = ((1ull << PACKED_ISDATE_BIT_FIELD_WIDTH) - 1) << PACKED_ISDATE_BIT_FIELD_OFFSET;
     static const UInt64 PACKED_TIME_BIT_FIELD_MASK = ((1ull << PACKED_ISDATE_BIT_FIELD_OFFSET) - 1);
 
-    static const UInt64 YMD_MASK = ~((1ull << 41) - 1);
+    static const UInt64 YMD_MASK = ~(((1ull << 41) - 1) | PACKED_ISDATE_BIT_FIELD_MASK);
 
     // weekBehaviourMondayFirst set Monday as first day of week; otherwise Sunday is first day of week
     static const UInt32 WEEK_BEHAVIOR_MONDAY_FIRST = 1;
