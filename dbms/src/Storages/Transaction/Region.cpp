@@ -1,3 +1,4 @@
+#include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
@@ -12,6 +13,11 @@
 
 #include <ext/scope_guard.h>
 #include <memory>
+
+namespace ProfileEvents
+{
+extern const Event RaftWaitIndexTimeout;
+} // namespace ProfileEvents
 
 namespace DB
 {
@@ -547,7 +553,12 @@ ReadIndexResult Region::learnerRead(UInt64 start_ts)
     return {};
 }
 
-double Region::waitIndex(UInt64 index, const TMTContext & tmt)
+bool Region::checkIndex(UInt64 index) const
+{
+    return meta.checkIndex(index);
+}
+
+std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const TMTContext & tmt)
 {
     if (proxy_helper != nullptr)
     {
@@ -555,13 +566,31 @@ double Region::waitIndex(UInt64 index, const TMTContext & tmt)
         {
             Stopwatch wait_index_watch;
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            if (meta.waitIndex(index, [&tmt]() { return tmt.checkRunning(); }))
-                return wait_index_watch.elapsedSeconds();
-            LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
-            return wait_index_watch.elapsedSeconds();
+            auto timeout_ms = tmt.waitIndexTimeout();
+            auto wait_idx_res = meta.waitIndex(index, timeout_ms, [&tmt]() { return tmt.checkRunning(); });
+            auto elapsed_secs = wait_index_watch.elapsedSeconds();
+            switch (wait_idx_res)
+            {
+            case WaitIndexResult::Finished:
+            {
+                LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
+                return {wait_idx_res, elapsed_secs};
+            }
+            case WaitIndexResult::Terminated:
+            {
+                return {wait_idx_res, elapsed_secs};
+            }
+            case WaitIndexResult::Timeout:
+            {
+                ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
+                LOG_WARNING(log, toString(false) << " wait learner index " << index << " timeout");
+                return {wait_idx_res, elapsed_secs};
+            }
+            }
+            throw Exception("Unknown result of wait index:" + DB::toString(static_cast<int>(wait_idx_res)));
         }
     }
-    return 0;
+    return {WaitIndexResult::Finished, 0};
 }
 
 UInt64 Region::version() const

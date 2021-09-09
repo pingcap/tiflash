@@ -1,23 +1,20 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
-
-#include <Common/HyperLogLogCounter.h>
 #include <Common/HashTable/SmallTable.h>
+#include <Common/HyperLogLogCounter.h>
 #include <Common/MemoryTracker.h>
+
+#include <boost/noncopyable.hpp>
 
 
 namespace DB
 {
-
-
 /** For a small number of keys - an array of fixed size "on the stack".
   * For large, HyperLogLog is allocated.
   * See also the more practical implementation in CombinedCardinalityEstimator.h,
   *  where a hash table is also used for medium-sized sets.
   */
-template
-<
+template <
     typename Key,
     UInt8 small_set_size,
     UInt8 K,
@@ -146,4 +143,4 @@ public:
 };
 
 
-}
+} // namespace DB

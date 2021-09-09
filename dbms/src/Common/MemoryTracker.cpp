@@ -152,6 +152,7 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 namespace CurrentMemoryTracker
 {
+static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 8 * 1024 * 1024; // 8 MiB
 #if __APPLE__ && __clang__
 static __thread Int64 local_delta{};
 #else
@@ -172,6 +173,11 @@ __attribute__((always_inline)) inline void checkSubmit()
             current_memory_tracker->free(-local_delta);
         local_delta = 0;
     }
+}
+
+void disableThreshold()
+{
+    MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
 }
 
 void alloc(Int64 size)

@@ -8,7 +8,6 @@
 
 namespace DB
 {
-
 class RandomAccessFile
 {
 public:

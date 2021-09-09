@@ -19,7 +19,8 @@ protected:
     bool nextImpl() override;
 
 public:
-    ReadBufferFromFileProvider(const FileProviderPtr & file_provider_,
+    ReadBufferFromFileProvider(
+        const FileProviderPtr & file_provider_,
         const std::string & file_name_,
         const EncryptionPath & encryption_path_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,

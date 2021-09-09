@@ -1,26 +1,25 @@
 #pragma once
 
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnVector.h>
+#include <Common/memcpySmall.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnConst.h>
-#include <Columns/ColumnVector.h>
-#include <Common/typeid_cast.h>
-#include <Functions/IFunction.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Common/memcpySmall.h>
+#include <Functions/IFunction.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_COLUMN;
+extern const int ILLEGAL_COLUMN;
 }
 
 
@@ -51,7 +50,7 @@ public:
         throw Exception("Cannot reinterpret " + type.getName() + " as String because it is not contiguous in memory", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    void executeToString(const IColumn & src, ColumnString & dst)
+    void executeToString(const IColumn & src, ColumnString & dst) const
     {
         size_t rows = src.size();
         ColumnString::Chars_t & data_to = dst.getChars();
@@ -78,7 +77,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn & src = *block.getByPosition(arguments[0]).column;
         MutableColumnPtr dst = block.getByPosition(result).type->createColumn();
@@ -133,7 +132,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn & src = *block.getByPosition(arguments[0]).column;
         MutableColumnPtr dst = block.getByPosition(result).type->createColumn();
@@ -175,7 +174,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (const ColumnString * col_from = typeid_cast<const ColumnString *>(block.getByPosition(arguments[0]).column.get()))
         {
@@ -223,43 +222,85 @@ public:
         else
         {
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                                + " of argument of function " + getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
         }
     }
 };
 
 
-struct NameReinterpretAsUInt8       { static constexpr auto name = "reinterpretAsUInt8"; };
-struct NameReinterpretAsUInt16      { static constexpr auto name = "reinterpretAsUInt16"; };
-struct NameReinterpretAsUInt32      { static constexpr auto name = "reinterpretAsUInt32"; };
-struct NameReinterpretAsUInt64      { static constexpr auto name = "reinterpretAsUInt64"; };
-struct NameReinterpretAsInt8        { static constexpr auto name = "reinterpretAsInt8"; };
-struct NameReinterpretAsInt16       { static constexpr auto name = "reinterpretAsInt16"; };
-struct NameReinterpretAsInt32       { static constexpr auto name = "reinterpretAsInt32"; };
-struct NameReinterpretAsInt64       { static constexpr auto name = "reinterpretAsInt64"; };
-struct NameReinterpretAsFloat32     { static constexpr auto name = "reinterpretAsFloat32"; };
-struct NameReinterpretAsFloat64     { static constexpr auto name = "reinterpretAsFloat64"; };
-struct NameReinterpretAsDate        { static constexpr auto name = "reinterpretAsDate"; };
-struct NameReinterpretAsDateTime    { static constexpr auto name = "reinterpretAsDateTime"; };
-struct NameReinterpretAsString      { static constexpr auto name = "reinterpretAsString"; };
-struct NameReinterpretAsFixedString      { static constexpr auto name = "reinterpretAsFixedString"; };
+struct NameReinterpretAsUInt8
+{
+    static constexpr auto name = "reinterpretAsUInt8";
+};
+struct NameReinterpretAsUInt16
+{
+    static constexpr auto name = "reinterpretAsUInt16";
+};
+struct NameReinterpretAsUInt32
+{
+    static constexpr auto name = "reinterpretAsUInt32";
+};
+struct NameReinterpretAsUInt64
+{
+    static constexpr auto name = "reinterpretAsUInt64";
+};
+struct NameReinterpretAsInt8
+{
+    static constexpr auto name = "reinterpretAsInt8";
+};
+struct NameReinterpretAsInt16
+{
+    static constexpr auto name = "reinterpretAsInt16";
+};
+struct NameReinterpretAsInt32
+{
+    static constexpr auto name = "reinterpretAsInt32";
+};
+struct NameReinterpretAsInt64
+{
+    static constexpr auto name = "reinterpretAsInt64";
+};
+struct NameReinterpretAsFloat32
+{
+    static constexpr auto name = "reinterpretAsFloat32";
+};
+struct NameReinterpretAsFloat64
+{
+    static constexpr auto name = "reinterpretAsFloat64";
+};
+struct NameReinterpretAsDate
+{
+    static constexpr auto name = "reinterpretAsDate";
+};
+struct NameReinterpretAsDateTime
+{
+    static constexpr auto name = "reinterpretAsDateTime";
+};
+struct NameReinterpretAsString
+{
+    static constexpr auto name = "reinterpretAsString";
+};
+struct NameReinterpretAsFixedString
+{
+    static constexpr auto name = "reinterpretAsFixedString";
+};
 
-using FunctionReinterpretAsUInt8 = FunctionReinterpretStringAs<DataTypeUInt8,       NameReinterpretAsUInt8>;
-using FunctionReinterpretAsUInt16 = FunctionReinterpretStringAs<DataTypeUInt16,     NameReinterpretAsUInt16>;
-using FunctionReinterpretAsUInt32 = FunctionReinterpretStringAs<DataTypeUInt32,     NameReinterpretAsUInt32>;
-using FunctionReinterpretAsUInt64 = FunctionReinterpretStringAs<DataTypeUInt64,     NameReinterpretAsUInt64>;
-using FunctionReinterpretAsInt8 = FunctionReinterpretStringAs<DataTypeInt8,         NameReinterpretAsInt8>;
-using FunctionReinterpretAsInt16 = FunctionReinterpretStringAs<DataTypeInt16,       NameReinterpretAsInt16>;
-using FunctionReinterpretAsInt32 = FunctionReinterpretStringAs<DataTypeInt32,       NameReinterpretAsInt32>;
-using FunctionReinterpretAsInt64 = FunctionReinterpretStringAs<DataTypeInt64,       NameReinterpretAsInt64>;
-using FunctionReinterpretAsFloat32 = FunctionReinterpretStringAs<DataTypeFloat32,   NameReinterpretAsFloat32>;
-using FunctionReinterpretAsFloat64 = FunctionReinterpretStringAs<DataTypeFloat64,   NameReinterpretAsFloat64>;
-using FunctionReinterpretAsDate = FunctionReinterpretStringAs<DataTypeDate,         NameReinterpretAsDate>;
+using FunctionReinterpretAsUInt8 = FunctionReinterpretStringAs<DataTypeUInt8, NameReinterpretAsUInt8>;
+using FunctionReinterpretAsUInt16 = FunctionReinterpretStringAs<DataTypeUInt16, NameReinterpretAsUInt16>;
+using FunctionReinterpretAsUInt32 = FunctionReinterpretStringAs<DataTypeUInt32, NameReinterpretAsUInt32>;
+using FunctionReinterpretAsUInt64 = FunctionReinterpretStringAs<DataTypeUInt64, NameReinterpretAsUInt64>;
+using FunctionReinterpretAsInt8 = FunctionReinterpretStringAs<DataTypeInt8, NameReinterpretAsInt8>;
+using FunctionReinterpretAsInt16 = FunctionReinterpretStringAs<DataTypeInt16, NameReinterpretAsInt16>;
+using FunctionReinterpretAsInt32 = FunctionReinterpretStringAs<DataTypeInt32, NameReinterpretAsInt32>;
+using FunctionReinterpretAsInt64 = FunctionReinterpretStringAs<DataTypeInt64, NameReinterpretAsInt64>;
+using FunctionReinterpretAsFloat32 = FunctionReinterpretStringAs<DataTypeFloat32, NameReinterpretAsFloat32>;
+using FunctionReinterpretAsFloat64 = FunctionReinterpretStringAs<DataTypeFloat64, NameReinterpretAsFloat64>;
+using FunctionReinterpretAsDate = FunctionReinterpretStringAs<DataTypeDate, NameReinterpretAsDate>;
 using FunctionReinterpretAsDateTime = FunctionReinterpretStringAs<DataTypeDateTime, NameReinterpretAsDateTime>;
 
 using FunctionReinterpretAsString = FunctionReinterpretAsStringImpl<NameReinterpretAsString>;
 using FunctionReinterpretAsFixedString = FunctionReinterpretAsStringImpl<NameReinterpretAsFixedString>;
 
 
-}
+} // namespace DB

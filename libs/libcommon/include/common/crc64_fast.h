@@ -2,7 +2,6 @@
 #include <common/crc64_table.h>
 namespace crc64::_detail
 {
-
 #if defined(TIFLASH_ENABLE_ASIMD_SUPPORT) || __SSE2__
 #define TIFLASH_CRC64_HAS_SIMD_SUPPORT
 // avx2 and avx512 variants

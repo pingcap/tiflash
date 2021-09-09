@@ -1,0 +1,31 @@
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
+mysql> drop table if exists test.a
+mysql> create table test.a (pk int not null, id int, value varchar(64))
+mysql> insert into test.a values(0,1,'a'),(1,2,'b')
+
+mysql> alter table test.a set tiflash replica 1
+
+func> wait_table test a
+
+
+=> DBGInvoke __enable_fail_point(force_no_local_region_for_mpp_task)
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=on; select * from a as t1 left join a as t2 on t1.id > 10 * t2.id;
++----+------+-------+------+------+-------+
+| pk | id   | value | pk   | id   | value |
++----+------+-------+------+------+-------+
+|  0 |    1 | a     | NULL | NULL | NULL  |
+|  1 |    2 | b     | NULL | NULL | NULL  |
++----+------+-------+------+------+-------+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_broadcast_join_threshold_count = 0; set tidb_broadcast_join_threshold_size = 0; set @@tidb_enforce_mpp=on; select * from a as t1 left join a as t2 on t1.id = 10 * t2.id;
++----+------+-------+------+------+-------+
+| pk | id   | value | pk   | id   | value |
++----+------+-------+------+------+-------+
+|  0 |    1 | a     | NULL | NULL | NULL  |
+|  1 |    2 | b     | NULL | NULL | NULL  |
++----+------+-------+------+------+-------+
+=> DBGInvoke __disable_fail_point(force_no_local_region_for_mpp_task)
+
+# Clean up.
+mysql> drop table if exists test.a

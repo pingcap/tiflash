@@ -1,30 +1,29 @@
 #pragma once
 
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <IO/WriteBufferFromFile.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromOStream.h>
+#include <Common/Exception.h>
 #include <IO/HashingWriteBuffer.h>
 #include <IO/PersistedCache.h>
-
-#include <Common/Exception.h>
-
+#include <IO/ReadBufferFromFile.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromOStream.h>
 #include <Poco/File.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 
-namespace DB {
-
-struct CompactCtxBase {
-    static constexpr char    CompactFileName[8] = "compact";
-    static constexpr size_t  MagicNumber = 19910905;
-    static constexpr short   Version = 1;
+namespace DB
+{
+struct CompactCtxBase
+{
+    static constexpr char CompactFileName[8] = "compact";
+    static constexpr size_t MagicNumber = 19910905;
+    static constexpr short Version = 1;
 };
 
-struct CompactWriteCtx : public CompactCtxBase {
-
-    struct FilePosition {
+struct CompactWriteCtx : public CompactCtxBase
+{
+    struct FilePosition
+    {
         size_t begin;
         size_t end;
     };
@@ -57,12 +56,14 @@ private:
     void writeFooter(size_t, size_t);
 };
 
-struct CompactReadCtx : public CompactCtxBase {
+struct CompactReadCtx : public CompactCtxBase
+{
     std::string compact_path;
 
     size_t rows_count;
 
-    struct FilePosition {
+    struct FilePosition
+    {
         size_t begin;
         size_t end;
     };
@@ -83,10 +84,11 @@ private:
 using CompactWriteContextPtr = std::unique_ptr<CompactWriteCtx>;
 using CompactReadContextPtr = std::shared_ptr<CompactReadCtx>;
 
-struct CompactContextFactory {
-
+struct CompactContextFactory
+{
 public:
-    static CompactWriteContextPtr tryToGetCompactWriteCtxPtr(std::string part_path, size_t buffer_size) {
+    static CompactWriteContextPtr tryToGetCompactWriteCtxPtr(std::string part_path, size_t buffer_size)
+    {
         return std::make_unique<CompactWriteCtx>(part_path + CompactCtxBase::CompactFileName, buffer_size);
     }
     static CompactReadContextPtr tryToGetCompactReadCtxPtr(std::string part_path)
@@ -100,4 +102,4 @@ public:
     }
 };
 
-}
+} // namespace DB

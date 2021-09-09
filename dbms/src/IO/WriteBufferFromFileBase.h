@@ -1,14 +1,13 @@
 #pragma once
 
-#include <string>
+#include <IO/BufferWithOwnMemory.h>
+#include <IO/WriteBuffer.h>
 #include <fcntl.h>
 
-#include <IO/WriteBuffer.h>
-#include <IO/BufferWithOwnMemory.h>
+#include <string>
 
 namespace DB
 {
-
 class WriteBufferFromFileBase : public BufferWithOwnMemory<WriteBuffer>
 {
 public:
@@ -27,4 +26,4 @@ protected:
     virtual void doTruncate(off_t length) = 0;
 };
 
-}
+} // namespace DB

@@ -4,7 +4,9 @@
 
 namespace DB
 {
-DataKeyManager::DataKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_) : tiflash_instance_wrap{tiflash_instance_wrap_} {}
+DataKeyManager::DataKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_)
+    : tiflash_instance_wrap{tiflash_instance_wrap_}
+{}
 
 FileEncryptionInfo DataKeyManager::getFile(const String & fname)
 {
@@ -22,7 +24,8 @@ FileEncryptionInfo DataKeyManager::newFile(const String & fname)
     if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
     {
         throw DB::TiFlashException(
-            "Create encryption info for file: " + fname + " meet error: " + *r.error_msg, Errors::Encryption::Internal);
+            "Create encryption info for file: " + fname + " meet error: " + *r.error_msg,
+            Errors::Encryption::Internal);
     }
     return r;
 }
@@ -33,7 +36,8 @@ void DataKeyManager::deleteFile(const String & fname, bool throw_on_error)
     if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled && throw_on_error))
     {
         throw DB::TiFlashException(
-            "Delete encryption info for file: " + fname + " meet error: " + *r.error_msg, Errors::Encryption::Internal);
+            "Delete encryption info for file: " + fname + " meet error: " + *r.error_msg,
+            Errors::Encryption::Internal);
     }
 }
 
@@ -43,7 +47,7 @@ void DataKeyManager::linkFile(const String & src_fname, const String & dst_fname
     if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
     {
         throw DB::TiFlashException("Link encryption info from file: " + src_fname + " to " + dst_fname + " meet error: " + *r.error_msg,
-            Errors::Encryption::Internal);
+                                   Errors::Encryption::Internal);
     }
 }
 

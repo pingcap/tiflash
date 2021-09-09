@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 /** Everything that is written into it, translates to HEX (in capital letters) and writes to another WriteBuffer.
   */
 class HexWriteBuffer final : public WriteBuffer
@@ -21,8 +20,11 @@ protected:
     void nextImpl() override;
 
 public:
-    HexWriteBuffer(WriteBuffer & out_) : WriteBuffer(buf, sizeof(buf)), out(out_) {}
+    HexWriteBuffer(WriteBuffer & out_)
+        : WriteBuffer(buf, sizeof(buf))
+        , out(out_)
+    {}
     ~HexWriteBuffer() override;
 };
 
-}
+} // namespace DB

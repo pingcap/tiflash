@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 struct Settings;
 
 struct CompressionSettings
@@ -35,4 +34,4 @@ struct CompressionSettings
     static int getDefaultLevel(CompressionMethod method);
 };
 
-}
+} // namespace DB

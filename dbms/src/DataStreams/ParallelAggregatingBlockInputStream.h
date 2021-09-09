@@ -1,17 +1,15 @@
 #pragma once
 
-#include <Interpreters/Aggregator.h>
+#include <Common/LogWithPrefix.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/ParallelInputsProcessor.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/ParallelInputsProcessor.h>
 
 
 namespace DB
 {
-
-
 /** Aggregates several sources in parallel.
   * Makes aggregation of blocks from different sources independently in different threads, then combines the results.
   * If final == false, aggregate functions are not finalized, that is, they are not replaced by their value, but contain an intermediate state of calculations.
@@ -23,8 +21,14 @@ public:
     /** Columns from key_names and arguments of aggregate functions must already be computed.
       */
     ParallelAggregatingBlockInputStream(
-        const BlockInputStreams & inputs, const BlockInputStreamPtr & additional_input_at_end,
-        const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, size_t max_threads_, size_t temporary_data_merge_threads_);
+        const BlockInputStreams & inputs,
+        const BlockInputStreamPtr & additional_input_at_end,
+        const Aggregator::Params & params_,
+        const FileProviderPtr & file_provider_,
+        bool final_,
+        size_t max_threads_,
+        size_t temporary_data_merge_threads_,
+        const LogWithPrefixPtr & log_ = nullptr);
 
     String getName() const override { return "ParallelAggregating"; }
 
@@ -58,7 +62,7 @@ private:
       */
     bool no_more_keys = false;
 
-    std::atomic<bool> executed {false};
+    std::atomic<bool> executed{false};
 
     /// To read the data stored into the temporary data file.
     struct TemporaryFileStream
@@ -72,9 +76,6 @@ private:
         ~TemporaryFileStream();
     };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
-
-    Poco::Logger * log = &Poco::Logger::get("ParallelAggregatingBlockInputStream");
-
 
     ManyAggregatedDataVariants many_data;
     Exceptions exceptions;
@@ -100,7 +101,8 @@ private:
     struct Handler
     {
         Handler(ParallelAggregatingBlockInputStream & parent_)
-            : parent(parent_) {}
+            : parent(parent_)
+        {}
 
         void onBlock(Block & block, size_t thread_num);
         void onFinishThread(size_t thread_num);
@@ -120,6 +122,8 @@ private:
     /** From here we get the finished blocks after the aggregation.
       */
     std::unique_ptr<IBlockInputStream> impl;
+
+    LogWithPrefixPtr log;
 };
 
-}
+} // namespace DB

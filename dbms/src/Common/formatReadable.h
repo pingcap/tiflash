@@ -1,7 +1,8 @@
 #pragma once
 
-#include <string>
 #include <IO/WriteBuffer.h>
+
+#include <string>
 
 
 /// Displays the passed size in bytes as 123.45 GiB.

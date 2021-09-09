@@ -511,14 +511,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
                     else
                     {
-                        Stopwatch wait_index_watch;
-                        if (region->waitIndex(read_index_result.read_index, tmt))
+                        auto [wait_res, time_cost] = region->waitIndex(read_index_result.read_index, tmt);
+                        if (wait_res != WaitIndexResult::Finished)
                         {
                             region_status = RegionException::RegionReadStatus::NOT_FOUND;
                             continue;
                         }
-                        GET_METRIC(tiflash_raft_wait_index_duration_seconds)
-                            .Observe(wait_index_watch.elapsedSeconds());
+                        GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
                     }
 
                     auto block_status = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read, kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.bypass_lock_ts, regions_executor_data[region_index].range_scan_filter);
@@ -841,8 +840,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             if (relative_sample_size == RelativeSize(0))
                 relative_sample_size = 1;
 
-            relative_sample_size /= settings.parallel_replicas_count.value;
-            relative_sample_offset += relative_sample_size * RelativeSize(settings.parallel_replica_offset.value);
+            relative_sample_size /= settings.parallel_replicas_count.get();
+            relative_sample_offset += relative_sample_size * RelativeSize(settings.parallel_replica_offset.get());
         }
 
         if (relative_sample_offset >= RelativeSize(1))

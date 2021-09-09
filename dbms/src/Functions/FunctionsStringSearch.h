@@ -3,8 +3,8 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsArithmetic.h>
 #include <Functions/IFunction.h>
 
 
@@ -36,6 +36,11 @@ namespace DB
   *
   * Warning! At this point, the arguments needle, pattern, n, replacement must be constants.
   */
+
+namespace ErrorCodes
+{
+extern const int ILLEGAL_COLUMN;
+}
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
 
@@ -81,7 +86,7 @@ public:
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         using ResultType = typename Impl::ResultType;
 
@@ -205,7 +210,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         const ColumnPtr column_needle = block.getByPosition(arguments[1]).column;

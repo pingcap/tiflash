@@ -1,21 +1,21 @@
 #pragma once
 
-#include <type_traits>
-#include <typeinfo>
-#include <typeindex>
-#include <string>
-
 #include <Common/Exception.h>
 #include <common/demangle.h>
+
+#include <string>
+#include <type_traits>
+#include <typeindex>
+#include <typeinfo>
 
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int BAD_CAST;
-    }
+namespace ErrorCodes
+{
+extern const int BAD_CAST;
 }
+} // namespace DB
 
 
 /** Checks type by comparing typeid.
@@ -29,7 +29,7 @@ std::enable_if_t<std::is_reference_v<To>, To> typeid_cast(From & from)
         return static_cast<To>(from);
     else
         throw DB::Exception("Bad cast from type " + demangle(typeid(from).name()) + " to " + demangle(typeid(To).name()),
-            DB::ErrorCodes::BAD_CAST);
+                            DB::ErrorCodes::BAD_CAST);
 }
 
 template <typename To, typename From>
