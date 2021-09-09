@@ -42,6 +42,23 @@ void ExchangeReceiver::setUpConnection()
     }
 }
 
+String getReceiverStateStr(const State & s)
+{
+    switch (s)
+    {
+    case NORMAL:
+        return "NORMAL";
+    case ERROR:
+        return "ERROR";
+    case CANCELED:
+        return "CANCELED";
+    case CLOSED:
+        return "CLOSED";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
     bool meet_error = false;

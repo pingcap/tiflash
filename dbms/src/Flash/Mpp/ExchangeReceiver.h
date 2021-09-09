@@ -53,21 +53,6 @@ enum State
     CLOSED,
 };
 
-String getReceiverStateStr(const State & s)
-{
-    switch (s)
-    {
-    case NORMAL:
-        return "NORMAL";
-    case ERROR:
-        return "ERROR";
-    case CANCELED:
-        return "CANCELED";
-    case CLOSED:
-        return "CLOSED";
-    }
-}
-
 struct ReceivedPacket
 {
     ReceivedPacket()
