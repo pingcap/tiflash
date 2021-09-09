@@ -217,7 +217,7 @@ struct DivideIntegralByConstantImpl : BinaryOperationImplBase<A, B, DivideIntegr
 
         if constexpr (is_signed_v<B>)
         {
-            if (unlikely( b == -1))
+            if (unlikely(b == -1))
             {
                 size_t size = a.size();
                 for (size_t i = 0; i < size; ++i)
