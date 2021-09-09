@@ -398,7 +398,7 @@ void MPPTask::runImpl()
     }
     else
     {
-        writeErrToAllTunnel(err_msg);
+        writeErrToAllTunnels(err_msg);
     }
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     unregisterTask();
