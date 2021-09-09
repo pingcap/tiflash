@@ -86,7 +86,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "receiver's state is " + getState(state) + ", exit from ReadLoop";
+                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from ReadLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
@@ -113,7 +113,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "receiver's state is " + getState(state) + ", exit from ReadLoop";
+                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from ReadLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }

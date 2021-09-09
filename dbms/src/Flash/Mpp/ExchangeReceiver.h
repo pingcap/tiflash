@@ -53,7 +53,7 @@ enum State
     CLOSED,
 };
 
-String getState(const State & s)
+String getReceiverStateStr(const State & s)
 {
     switch (s)
     {
