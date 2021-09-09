@@ -1,6 +1,7 @@
 #pragma once
 #include <PSStressEnv.h>
 #include <Poco/Runnable.h>
+#include <Storages/Page/PageDefines.h>
 
 const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
 
@@ -80,6 +81,8 @@ public:
 
     void setBatchBufferRange(size_t min, size_t max);
 
+    void setFieldSize(DB::PageFieldSizes data_sizes);
+
 protected:
     std::vector<DB::ReadBufferPtr> buffPtrs;
     size_t batch_buffer_nums = 100;
@@ -88,6 +91,8 @@ protected:
 
     size_t buffer_size_min = 0;
     size_t buffer_size_max = 0;
+
+    DB::PageFieldSizes data_sizes = {};
 
     virtual DB::PageId genRandomPageId() override;
     virtual size_t genBufferSize();

@@ -113,10 +113,11 @@ bool PSCommonWriter::runImpl()
 
     for (auto & buffptr : buffPtrs)
     {
-        wb.putPage(pageId, 0, buffptr, batch_buffer_size);
+        wb.putPage(pageId, 0, buffptr, batch_buffer_size, data_sizes);
         ++pages_used;
         bytes_used += batch_buffer_size;
     }
+
     writing_page[index] = pageId;
     ps->write(std::move(wb));
     return (batch_buffer_limit == 0 || bytes_used < batch_buffer_limit);
@@ -154,6 +155,11 @@ void PSCommonWriter::setBatchBufferRange(size_t min, size_t max)
         buffer_size_min = min;
         buffer_size_max = max;
     }
+}
+
+void PSCommonWriter::setFieldSize(DB::PageFieldSizes data_sizes_)
+{
+    data_sizes = data_sizes_;
 }
 
 size_t PSCommonWriter::genBufferSize()
