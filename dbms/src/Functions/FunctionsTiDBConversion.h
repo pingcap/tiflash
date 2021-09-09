@@ -547,6 +547,14 @@ struct TiDBConvertToInteger
                 for (size_t i = 0; i < size; i++)
                     vec_to[i] = toInt<FromFieldType, ToFieldType>(vec_from[i], context);
             }
+        } else if constexpr (std::is_same_v<FromDataType, DataTypeEnum8> || std::is_same_v<FromDataType, DataTypeEnum16>)
+        {
+            const auto * col_from = block.getByPosition(arguments[0]).column.get();
+            for (size_t i = 0; i < size; ++i)
+            {
+                Int64 val = col_from->getInt(i);
+                vec_to[i] = static_cast<ToFieldType>(val);
+            }
         }
         else
         {
@@ -787,6 +795,15 @@ struct TiDBConvertToFloat
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
             for (size_t i = 0; i < size; i++)
                 vec_to[i] = toFloat(vec_from[i]);
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeEnum8> || std::is_same_v<FromDataType, DataTypeEnum16>)
+        {
+            const auto * col_from = block.getByPosition(arguments[0]).column.get();
+            for (size_t i = 0; i < size; ++i)
+            {
+                Int64 val = col_from->getInt(i);
+                vec_to[i] = static_cast<Float64>(val);
+            }
         }
         else
         {
@@ -1187,6 +1204,16 @@ struct TiDBConvertToDecimal
 
             for (size_t i = 0; i < size; ++i)
                 vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeEnum8> || std::is_same_v<FromDataType, DataTypeEnum16>)
+        {
+            const auto * col_from = block.getByPosition(arguments[0]).column.get();
+            for (size_t i = 0; i < size; ++i)
+            {
+                Int64 val = col_from->getInt(i);
+                //TODO
+//                vec_to[i] = static_cast<Float64>(val);
+            }
         }
         else
         {
@@ -1827,6 +1854,10 @@ private:
             return createWrapper<DataTypeMyDateTime, return_nullable>(to_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeString>(from_type.get()))
             return createWrapper<DataTypeString, return_nullable>(to_type);
+        if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum8>(from_type.get()))
+            return createWrapper<DataTypeEnum8, return_nullable>(to_type);
+        if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum16>(from_type.get()))
+            return createWrapper<DataTypeEnum16, return_nullable>(to_type);
 
         // todo support convert to duration/json type
         throw Exception{

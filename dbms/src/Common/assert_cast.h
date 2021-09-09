@@ -36,7 +36,11 @@ To assert_cast(From && from)
         {
             if (typeid(from) == typeid(To))
                 return static_cast<To>(from);
+            else if (typeid(from) == typeid(DB::ColumnVector<short>) && typeid(To) == typeid(DB::ColumnVector<unsigned short>)) {
+                return static_cast<To>(from);
+            }
         }
+
     }
     catch (const std::exception & e)
     {
