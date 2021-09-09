@@ -47,9 +47,7 @@ private:
         if (is_finished)
             return;
 
-        size_t available = vector.size() - (pos - reinterpret_cast<Position>(vector.data()));
-        if (size > available)
-            vector.reserve(vector.size() + (size - available));
+        vector.reserve(size);
     }
 
 public:
