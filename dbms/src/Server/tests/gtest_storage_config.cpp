@@ -799,5 +799,37 @@ dt_page_gc_low_write_prob = 0.2
     global_ctx.setSettings(origin_settings);
 }
 CATCH
+
+
+TEST_F(UsersConfigParser_test, ReloadStorageBoolConfig)
+try
+{
+    Strings tests = {
+        R"(
+[profiles]
+[profiles.default]
+dt_enable_rough_set_filter = false
+dt_raw_filter_range = 0
+dt_read_delta_only = 1
+dt_read_stable_only = true
+        )"};
+
+    auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+
+        global_ctx.reloadDeltaTreeConfig(*config);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, false);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_raw_filter_range, false);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_read_delta_only, true);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_read_stable_only, true);
+    }
+    global_ctx.setSettings(origin_settings);
+}
+CATCH
 } // namespace tests
 } // namespace DB
