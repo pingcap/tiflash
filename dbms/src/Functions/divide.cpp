@@ -5,197 +5,197 @@ namespace DB
 {
 template <typename A, typename B>
 struct DivideFloatingImpl<A, B, false>
-    {
+{
     using ResultType = typename NumberTraits::ResultOfFloatingPointDivision<A, B>::Type;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
-        {
-            return static_cast<Result>(a) / b;
-        }
+    static Result apply(A a, B b)
+    {
+        return static_cast<Result>(a) / b;
+    }
 
-        template <typename Result = ResultType>
-            static Result apply(A, B, UInt8 &)
-            {
-                throw Exception("Should not reach here");
-            }
-    };
+    template <typename Result = ResultType>
+    static Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
 
 template <typename A, typename B>
 struct DivideFloatingImpl<A, B, true>
-    {
+{
     using ResultPrecInferer = DivDecimalInferer;
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
-        {
-            return static_cast<Result>(a) / static_cast<Result>(b);
-        }
+    static Result apply(A a, B b)
+    {
+        return static_cast<Result>(a) / static_cast<Result>(b);
+    }
 
-        template <typename Result = ResultType>
-            static Result apply(A, B, UInt8 &)
-            {
-                throw Exception("Should not reach here");
-            }
-    };
+    template <typename Result = ResultType>
+    static Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
 
 template <typename A, typename B>
 struct TiDBDivideFloatingImpl<A, B, false>
-    {
+{
     using ResultType = typename NumberTraits::ResultOfFloatingPointDivision<A, B>::Type;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
+    static Result apply(A a, B b)
+    {
+        return static_cast<Result>(a) / b;
+    }
+    template <typename Result = ResultType>
+    static Result apply(A a, B b, UInt8 & res_null)
+    {
+        if (b == 0)
         {
-            return static_cast<Result>(a) / b;
+            /// we can check res_null to see if it is DIVISION_BY_ZERO or DIVISION_BY_NULL, when sql mode is ERROR_FOR_DIVISION_BY_ZERO,
+            /// inserts and updates involving expressions that perform division by zero should be treated as errors, now only read-only
+            /// statement will send to TiFlash, so just return NULL here
+            res_null = 1;
+            return static_cast<Result>(0);
         }
-        template <typename Result = ResultType>
-            static Result apply(A a, B b, UInt8 & res_null)
-            {
-                if (b == 0)
-                {
-                    /// we can check res_null to see if it is DIVISION_BY_ZERO or DIVISION_BY_NULL, when sql mode is ERROR_FOR_DIVISION_BY_ZERO,
-                    /// inserts and updates involving expressions that perform division by zero should be treated as errors, now only read-only
-                    /// statement will send to TiFlash, so just return NULL here
-                    res_null = 1;
-                    return static_cast<Result>(0);
-                }
-                return static_cast<Result>(a) / b;
-            }
-    };
+        return static_cast<Result>(a) / b;
+    }
+};
 
 template <typename A, typename B>
 struct TiDBDivideFloatingImpl<A, B, true>
-    {
+{
     using ResultPrecInferer = DivDecimalInferer;
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
-        {
-            return static_cast<Result>(a) / static_cast<Result>(b);
-        }
+    static Result apply(A a, B b)
+    {
+        return static_cast<Result>(a) / static_cast<Result>(b);
+    }
 
-        template <typename Result = ResultType>
-            static Result apply(A a, B b, UInt8 & res_null)
-            {
-                if (static_cast<Result>(b) == static_cast<Result>(0))
-                {
-                    /// we can check res_null to see if it is DIVISION_BY_ZERO or DIVISION_BY_NULL, when sql mode is ERROR_FOR_DIVISION_BY_ZERO,
-                    /// inserts and updates involving expressions that perform division by zero should be treated as errors, now only read-only
-                    /// statement will send to TiFlash, so just return NULL here
-                    res_null = 1;
-                    return static_cast<Result>(0);
-                }
-                return static_cast<Result>(a) / static_cast<Result>(b);
-            }
-    };
+    template <typename Result = ResultType>
+    static Result apply(A a, B b, UInt8 & res_null)
+    {
+        if (static_cast<Result>(b) == static_cast<Result>(0))
+        {
+            /// we can check res_null to see if it is DIVISION_BY_ZERO or DIVISION_BY_NULL, when sql mode is ERROR_FOR_DIVISION_BY_ZERO,
+            /// inserts and updates involving expressions that perform division by zero should be treated as errors, now only read-only
+            /// statement will send to TiFlash, so just return NULL here
+            res_null = 1;
+            return static_cast<Result>(0);
+        }
+        return static_cast<Result>(a) / static_cast<Result>(b);
+    }
+};
 
 template <typename A, typename B>
 struct DivideIntegralImpl<A, B, false>
-    {
+{
     using ResultType = typename NumberTraits::ResultOfIntegerDivision<A, B>::Type;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
-        {
-            throwIfDivisionLeadsToFPE(a, b);
-            return static_cast<Result>(a) / static_cast<Result>(b);
-        }
-        template <typename Result = ResultType>
-            static Result apply(A, B, UInt8 &)
-            {
-                throw Exception("Should not reach here");
-            }
-    };
+    static Result apply(A a, B b)
+    {
+        throwIfDivisionLeadsToFPE(a, b);
+        return static_cast<Result>(a) / static_cast<Result>(b);
+    }
+    template <typename Result = ResultType>
+    static Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
 
 template <typename A, typename B>
 struct DivideIntegralImpl<A, B, true>
-    {
+{
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
+    static Result apply(A a, B b)
+    {
+        Result x, y;
+        if constexpr (IsDecimal<A>)
         {
-            Result x, y;
-            if constexpr (IsDecimal<A>)
-            {
-                x = static_cast<Result>(a.value);
-            }
-            else
-            {
-                x = static_cast<Result>(a);
-            }
-            if constexpr (IsDecimal<B>)
-            {
-                y = static_cast<Result>(b.value);
-            }
-            else
-            {
-                y = static_cast<Result>(b);
-            }
-            throwIfDivisionLeadsToFPE(x, y);
-            return x / y;
+            x = static_cast<Result>(a.value);
         }
-        template <typename Result = ResultType>
-            static Result apply(A, B, UInt8 &)
-            {
-                throw Exception("Should not reach here");
-            }
-    };
+        else
+        {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>)
+        {
+            y = static_cast<Result>(b.value);
+        }
+        else
+        {
+            y = static_cast<Result>(b);
+        }
+        throwIfDivisionLeadsToFPE(x, y);
+        return x / y;
+    }
+    template <typename Result = ResultType>
+    static Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
 
 template <typename A, typename B>
 struct DivideIntegralOrZeroImpl<A, B, false>
-    {
+{
     using ResultType = typename NumberTraits::ResultOfIntegerDivision<A, B>::Type;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
-        {
-            return static_cast<Result>(unlikely(divisionLeadsToFPE(a, b)) ? 0 : static_cast<Result>(a) / static_cast<Result>(b));
-        }
-        template <typename Result = ResultType>
-            static Result apply(A, B, UInt8 &)
-            {
-                throw Exception("Should not reach here");
-            }
-    };
+    static Result apply(A a, B b)
+    {
+        return static_cast<Result>(unlikely(divisionLeadsToFPE(a, b)) ? 0 : static_cast<Result>(a) / static_cast<Result>(b));
+    }
+    template <typename Result = ResultType>
+    static Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
 
 template <typename A, typename B>
 struct DivideIntegralOrZeroImpl<A, B, true>
-    {
+{
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
+    static Result apply(A a, B b)
+    {
+        Result x, y;
+        if constexpr (IsDecimal<A>)
         {
-            Result x, y;
-            if constexpr (IsDecimal<A>)
-            {
-                x = static_cast<Result>(a.value);
-            }
-            else
-            {
-                x = static_cast<Result>(a);
-            }
-            if constexpr (IsDecimal<B>)
-            {
-                y = static_cast<Result>(b.value);
-            }
-            else
-            {
-                y = static_cast<Result>(b);
-            }
-            throwIfDivisionLeadsToFPE(x, y);
-            return unlikely(divisionLeadsToFPE(x, y)) ? 0 : x / y;
+            x = static_cast<Result>(a.value);
         }
-        template <typename Result = ResultType>
-            static Result apply(A, B, UInt8 &)
-            {
-                throw Exception("Should not reach here");
-            }
-    };
+        else
+        {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>)
+        {
+            y = static_cast<Result>(b.value);
+        }
+        else
+        {
+            y = static_cast<Result>(b);
+        }
+        throwIfDivisionLeadsToFPE(x, y);
+        return unlikely(divisionLeadsToFPE(x, y)) ? 0 : x / y;
+    }
+    template <typename Result = ResultType>
+    static Result apply(A, B, UInt8 &)
+    {
+        throw Exception("Should not reach here");
+    }
+};
 
 /// Optimizations for integer division by a constant.
 
@@ -207,7 +207,7 @@ struct DivideIntegralOrZeroImpl<A, B, true>
 
 template <typename A, typename B>
 struct DivideIntegralByConstantImpl : BinaryOperationImplBase<A, B, DivideIntegralImpl<A, B>>
-    {
+{
     using ResultType = typename DivideIntegralImpl<A, B>::ResultType;
 
     static void vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<ResultType> & c)
@@ -228,7 +228,7 @@ struct DivideIntegralByConstantImpl : BinaryOperationImplBase<A, B, DivideIntegr
 
 #pragma GCC diagnostic pop
 
-libdivide::divider<A> divider(b);
+        libdivide::divider<A> divider(b);
 
         size_t size = a.size();
         const A * a_pos = &a[0];
@@ -256,7 +256,7 @@ libdivide::divider<A> divider(b);
             ++c_pos;
         }
     }
-    };
+};
 
 /** Specializations are specified for dividing numbers of the type UInt64 and UInt32 by the numbers of the same sign.
   * Can be expanded to all possible combinations, but more code is needed.

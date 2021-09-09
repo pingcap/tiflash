@@ -5,96 +5,96 @@ namespace DB
 {
 template <typename A, typename B>
 struct ModuloImpl<A, B, false>
-    {
+{
     using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
+    static Result apply(A a, B b)
+    {
+        if constexpr (std::is_floating_point_v<Result>)
         {
-            if constexpr (std::is_floating_point_v<Result>)
+            auto x = static_cast<Result>(a);
+            auto y = static_cast<Result>(b);
+
+            // assert no infinite or NaN values.
+            assert(std::isfinite(x) && std::isfinite(y));
+
+            // C++ does not allow operator% between floating point
+            // values, so we call into std::fmod.
+            return std::fmod(x, y);
+        }
+        else // both A and B are integrals.
+        {
+            // decimals are expected to be converted to integers or floating point values before computations.
+            static_assert(is_integer_v<Result>);
+
+            // convert to unsigned before computing.
+            // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
+            // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
+            auto x = toSafeUnsigned<Result>(a);
+            auto y = toSafeUnsigned<Result>(b);
+
+            auto result = static_cast<Result>(x % y);
+
+            // in MySQL, the sign of a % b is the same as that of a.
+            // e.g. 5 % -3 = 2, -5 % 3 = -2.
+            if constexpr (is_signed_v<Result>)
             {
-                auto x = static_cast<Result>(a);
-                auto y = static_cast<Result>(b);
-
-                // assert no infinite or NaN values.
-                assert(std::isfinite(x) && std::isfinite(y));
-
-                // C++ does not allow operator% between floating point
-                // values, so we call into std::fmod.
-                return std::fmod(x, y);
-            }
-            else // both A and B are integrals.
-            {
-                // decimals are expected to be converted to integers or floating point values before computations.
-                static_assert(is_integer_v<Result>);
-
-                // convert to unsigned before computing.
-                // we have to prevent wrong result like UInt64(5) = UInt64(5) % Int64(-3).
-                // in MySQL, UInt64(5) % Int64(-3) evaluates to UInt64(2).
-                auto x = toSafeUnsigned<Result>(a);
-                auto y = toSafeUnsigned<Result>(b);
-
-                auto result = static_cast<Result>(x % y);
-
-                // in MySQL, the sign of a % b is the same as that of a.
-                // e.g. 5 % -3 = 2, -5 % 3 = -2.
-                if constexpr (is_signed_v<Result>)
-                {
-                    if (a < 0)
-                        return -result;
-                    else
-                        return result;
-                }
+                if (a < 0)
+                    return -result;
                 else
                     return result;
             }
+            else
+                return result;
         }
-        template <typename Result = ResultType>
-            static Result apply(A a, B b, UInt8 & res_null)
-            {
-                if (unlikely(b == 0))
-                {
-                    res_null = 1;
-                    return static_cast<Result>(0);
-                }
+    }
+    template <typename Result = ResultType>
+    static Result apply(A a, B b, UInt8 & res_null)
+    {
+        if (unlikely(b == 0))
+        {
+            res_null = 1;
+            return static_cast<Result>(0);
+        }
 
-                return apply(a, b);
-            }
-    };
+        return apply(a, b);
+    }
+};
 
 template <typename A, typename B>
 struct ModuloImpl<A, B, true>
-    {
+{
     using ResultPrecInferer = ModDecimalInferer;
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
 
     template <typename Result = ResultType>
-        static Result apply(A a, B b)
-        {
-            Result x, y;
-            if constexpr (IsDecimal<A>)
+    static Result apply(A a, B b)
+    {
+        Result x, y;
+        if constexpr (IsDecimal<A>)
             x = static_cast<Result>(a.value);
-            else
-                x = static_cast<Result>(a);
-            if constexpr (IsDecimal<B>)
+        else
+            x = static_cast<Result>(a);
+        if constexpr (IsDecimal<B>)
             y = static_cast<Result>(b.value);
-            else
-                y = static_cast<Result>(b);
+        else
+            y = static_cast<Result>(b);
 
-            return ModuloImpl<Result, Result>::apply(x, y);
+        return ModuloImpl<Result, Result>::apply(x, y);
+    }
+    template <typename Result = ResultType>
+    static Result apply(A a, B b, UInt8 & res_null)
+    {
+        if (unlikely(b == 0))
+        {
+            res_null = 1;
+            return static_cast<Result>(0);
         }
-        template <typename Result = ResultType>
-            static Result apply(A a, B b, UInt8 & res_null)
-            {
-                if (unlikely(b == 0))
-                {
-                    res_null = 1;
-                    return static_cast<Result>(0);
-                }
 
-                return apply(a, b);
-            }
-    };
+        return apply(a, b);
+    }
+};
 
 /// Optimizations for integer division by a constant.
 
@@ -106,7 +106,7 @@ struct ModuloImpl<A, B, true>
 
 template <typename A, typename B>
 struct ModuloByConstantImpl : BinaryOperationImplBase<A, B, ModuloImpl<A, B>>
-    {
+{
     using ResultType = typename ModuloImpl<A, B>::ResultType;
 
     static void vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<ResultType> & c)
@@ -127,14 +127,14 @@ struct ModuloByConstantImpl : BinaryOperationImplBase<A, B, ModuloImpl<A, B>>
 
 #pragma GCC diagnostic pop
 
-libdivide::divider<A> divider(b);
+        libdivide::divider<A> divider(b);
 
         /// Here we failed to make the SSE variant from libdivide give an advantage.
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
             c[i] = a[i] - (a[i] / divider) * b; /// NOTE: perhaps, the division semantics with the remainder of negative numbers is not preserved.
     }
-    };
+};
 
 
 /** Specializations are specified for dividing numbers of the type UInt64 and UInt32 by the numbers of the same sign.

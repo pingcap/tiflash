@@ -6,25 +6,25 @@ namespace
 {
 template <typename A>
 struct IntExp2Impl
-    {
+{
     using ResultType = UInt64;
 
     static inline ResultType apply(A a)
     {
         return intExp2(a);
     }
-    };
+};
 
 template <typename A>
 struct IntExp2Impl<Decimal<A>>
-    {
+{
     using ResultType = UInt64;
 
     static inline ResultType apply(Decimal<A>)
     {
         return 0;
     }
-    };
+};
 
 // clang-format off
 struct NameIntExp2              { static constexpr auto name = "intExp2"; };
@@ -36,7 +36,7 @@ using FunctionIntExp2 = FunctionUnaryArithmetic<IntExp2Impl, NameIntExp2, true>;
 
 template <>
 struct FunctionUnaryArithmeticMonotonicity<NameIntExp2>
-    {
+{
     static bool has() { return true; }
     static IFunction::Monotonicity get(const Field & left, const Field & right)
     {
@@ -52,7 +52,7 @@ struct FunctionUnaryArithmeticMonotonicity<NameIntExp2>
 
         return {true};
     }
-    };
+};
 
 void registerFunctionIntExp2(FunctionFactory & factory)
 {
