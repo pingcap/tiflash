@@ -90,12 +90,12 @@ public:
     /// before pushing one, the queue should have place
     bool hasEmptyPlace()
     {
-        assert(!isFullOrOverflow(empty_ones));
+        assert(!isOverflow(empty_ones));
         return !isFull(empty_ones);
     }
     bool hasPlace()
     {
-        assert(!isFullOrOverflow(ones));
+        assert(!isOverflow(ones));
         return !isFull(ones);
     }
 
