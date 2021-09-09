@@ -24,7 +24,7 @@ public:
 
     MutableColumnPtr cloneResized(size_t size) const override;
 
-    size_t size() const override { return size_; }
+    size_t size() const override { return column_size; }
 
     ColumnPtr cut(size_t start, size_t length) const override;
     ColumnPtr replicate(const Offsets & offsets) const override;
@@ -32,8 +32,9 @@ public:
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     void insertDefault() override;
     void popBack(size_t n) override;
-    std::vector<MutableColumnPtr> scatter(IColumn::ColumnIndex num_columns,
-                                          const IColumn::Selector & selector) const override;
+    std::vector<MutableColumnPtr> scatter(
+        IColumn::ColumnIndex num_columns,
+        const IColumn::Selector & selector) const override;
 
     void getExtremes(Field &, Field &) const override {}
 
@@ -64,14 +65,12 @@ public:
         throw Exception("Cannot get insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertRangeFrom(const IColumn &, size_t, size_t)
-        override
+    void insertRangeFrom(const IColumn &, size_t, size_t) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertData(const char *, size_t)
-        override
+    void insertData(const char *, size_t) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -117,7 +116,7 @@ public:
     }
 
 private:
-    size_t size_;
+    size_t column_size;
     FunctionBasePtr function;
     ColumnsWithTypeAndName captured_columns;
 
