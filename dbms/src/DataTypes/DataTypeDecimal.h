@@ -129,7 +129,7 @@ public:
     template <typename U>
     typename T::NativeType scaleFactorFor(const DataTypeDecimal<U> & x) const
     {
-        if (scale < x.getScale())
+        if (getScale() < x.getScale())
         {
             return 1;
         }

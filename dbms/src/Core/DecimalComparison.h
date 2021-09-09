@@ -258,30 +258,31 @@ private:
             if constexpr (std::is_unsigned_v<B>)
                 overflow |= (y < 0);
 
-            if constexpr (scale_left) {
-                if constexpr (std::is_same_v<CompareInt, Int256>)
-                    x = x * scale;
-                else
-                    overflow |= common::mulOverflow(x, scale, x);
-            }
-            if constexpr (scale_right) {
-                if constexpr (std::is_same_v<CompareInt, Int256>)
-                    y = y * scale;
-                else
-                    overflow |= common::mulOverflow(y, scale, y);
-            }
             if (overflow)
                 throw Exception("Can't compare", ErrorCodes::DECIMAL_OVERFLOW);
         }
-        else
+
+        int remainder = 0;
+        if constexpr (scale_left)
         {
-            if constexpr (scale_left)
-                x *= scale;
-            if constexpr (scale_right)
-                y *= scale;
+            remainder += boost::math::sign(y % scale);
+            y /= scale;
+        }
+        if constexpr (scale_right)
+        {
+            remainder -= boost::math::sign(y % scale);
+            x /= scale;
         }
 
-        return Op::apply(x, y);
+        int result = 0;
+        if (x < y)
+            result = 1;
+        else if (x > y)
+            result = -1;
+        else
+            result = remainder;
+
+        return Op::apply(0, result);
     }
 
     template <bool scale_left, bool scale_right>
