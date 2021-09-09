@@ -8,7 +8,6 @@
 
 namespace DB
 {
-
 enum class EncryptionMethod : uint8_t;
 struct FileEncryptionInfo;
 

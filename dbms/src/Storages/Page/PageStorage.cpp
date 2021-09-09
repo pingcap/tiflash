@@ -89,11 +89,11 @@ String PageStorage::Config::toDebugString() const
 {
     std::stringstream ss;
     ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
-       << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate, 3) << ", gc_min_legacy_num:" << gc_min_legacy_num
-       << ", gc_max_expect_legacy: " << DB::toString(gc_max_expect_legacy_files)
-       << ", gc_max_valid_rate_bound: " << DB::toString(gc_max_valid_rate_bound, 3)
+       << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate.get(), 3) << ", gc_min_legacy_num:" << gc_min_legacy_num
+       << ", gc_max_expect_legacy: " << DB::toString(gc_max_expect_legacy_files.get())
+       << ", gc_max_valid_rate_bound: " << DB::toString(gc_max_valid_rate_bound.get(), 3)
        << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
-       << ", open_file_max_idle_time:" << open_file_max_idle_time.count() << "}";
+       << ", open_file_max_idle_time:" << open_file_max_idle_time << "}";
     return ss.str();
 }
 
@@ -208,13 +208,13 @@ PageStorage::PageStorage(String name,
     , delegator(std::move(delegator_))
     , config(config_)
     , file_provider(file_provider_)
-    , write_files(std::max(1UL, config.num_write_slots))
+    , write_files(std::max(1UL, config.num_write_slots.get()))
     , page_file_log(&Poco::Logger::get("PageFile"))
     , log(&Poco::Logger::get("PageStorage"))
     , versioned_page_entries(storage_name, config.version_set_config, log)
 {
     // at least 1 write slots
-    config.num_write_slots = std::max(1UL, config.num_write_slots);
+    config.num_write_slots = std::max(1UL, config.num_write_slots.get());
     /// align write slots with numPathsForDelta
     const size_t num_paths = delegator->numPaths();
     if (num_paths >= config.num_write_slots)
@@ -994,7 +994,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
         // writing.
         for (auto & writer : idle_writers)
         {
-            writer->tryCloseIdleFd(config.open_file_max_idle_time);
+            writer->tryCloseIdleFd(Seconds(config.open_file_max_idle_time));
         }
         statistics_snapshot = statistics;
     }
@@ -1030,7 +1030,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
             // of idle readers here. The file descriptor will be closed after all readers done.
             for (auto iter = open_read_files.begin(); iter != open_read_files.end(); /*empty*/)
             {
-                if (iter->second->isIdle(config.open_file_max_idle_time))
+                if (iter->second->isIdle(Seconds(config.open_file_max_idle_time)))
                     iter = open_read_files.erase(iter);
                 else
                     ++iter;

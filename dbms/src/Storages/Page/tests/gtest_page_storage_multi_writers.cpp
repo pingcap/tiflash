@@ -301,7 +301,7 @@ struct Suit
     {
         LOG_INFO(&Poco::Logger::get("root"),
                  "start running with these threads: W:" + DB::toString(num_writers) + ",R:" + DB::toString(num_readers)
-                     + ",Gc:1, config.num_writer_slots:" + DB::toString(storage->config.num_write_slots));
+                     + ",Gc:1, config.num_writer_slots:" + DB::toString(storage->config.num_write_slots.get()));
     }
 
     void run()
