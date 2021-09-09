@@ -19,20 +19,22 @@ uint64_t update_vpclmulqdq_avx512(uint64_t state, const void * src, size_t lengt
 
     const auto * ptr = reinterpret_cast<const avx512_t *>(__builtin_assume_aligned(src, 512));
 
-    auto load_slice = [](const avx512_t * address) -> Slice<2> { return {_mm512_load_si512(address), _mm512_load_si512(address + 1)}; };
+    auto load_slice = [](const avx512_t * address) -> Slice<2> {
+        return {_mm512_load_si512(address), _mm512_load_si512(address + 1)};
+    };
 
     auto x = load_slice(ptr);
     ptr += 2;
     x[0] = _mm512_xor_si512(x[0], _mm512_set_epi64(0, 0, 0, 0, 0, 0, 0, static_cast<int64_t>(state)));
 
     auto coeff = _mm512_set_epi64(static_cast<int64_t>(K_1023),
-        static_cast<int64_t>(K_1087),
-        static_cast<int64_t>(K_1023),
-        static_cast<int64_t>(K_1087),
-        static_cast<int64_t>(K_1023),
-        static_cast<int64_t>(K_1087),
-        static_cast<int64_t>(K_1023),
-        static_cast<int64_t>(K_1087));
+                                  static_cast<int64_t>(K_1087),
+                                  static_cast<int64_t>(K_1023),
+                                  static_cast<int64_t>(K_1087),
+                                  static_cast<int64_t>(K_1023),
+                                  static_cast<int64_t>(K_1087),
+                                  static_cast<int64_t>(K_1023),
+                                  static_cast<int64_t>(K_1087));
 
     auto fold = [](avx512_t a, avx512_t b) -> avx512_t {
         auto h = _mm512_clmulepi64_epi128(a, b, 0x11);
@@ -97,7 +99,7 @@ uint64_t update_vpclmulqdq_avx512(uint64_t state, const void * src, size_t lengt
         SIMD{K_511, K_575}, // fold by distance of 64 bytes
         SIMD{K_383, K_447}, // fold by distance of 48 bytes
         SIMD{K_255, K_319}, // fold by distance of 32 bytes
-        SIMD{K_127, K_191}  // fold by distance of 16 bytes
+        SIMD{K_127, K_191} // fold by distance of 16 bytes
     };
 
     auto acc = y[7];
