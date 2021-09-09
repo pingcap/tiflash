@@ -613,30 +613,31 @@ struct DateBinaryOperationTraits
     using T1 = typename RightDataType::FieldType;
     using Op = Operation<T0, T1>;
 
-    using ResultDataType = If<std::is_same_v<Op, PlusImpl<T0, T1>>,
-                              Then<
-                                  If<IsDateOrDateTime<LeftDataType> && IsIntegral<RightDataType>,
-                                     Then<LeftDataType>,
-                                     Else<
-                                         If<IsIntegral<LeftDataType> && IsDateOrDateTime<RightDataType>,
-                                            Then<RightDataType>,
-                                            Else<InvalidType>>>>>,
-                              Else<
-                                  If<std::is_same_v<Op, MinusImpl<T0, T1>>,
-                                     Then<
-                                         If<IsDateOrDateTime<LeftDataType>,
-                                            Then<
-                                                If<std::is_same_v<LeftDataType, RightDataType>,
-                                                   Then<DataTypeInt32>,
-                                                   Else<
-                                                       If<IsIntegral<RightDataType>,
-                                                          Then<LeftDataType>,
-                                                          Else<InvalidType>>>>>,
-                                            Else<InvalidType>>>,
-                                     Else<
-                                         If<std::is_same_v<T0, T1> && (std::is_same_v<Op, LeastImpl<T0, T1>> || std::is_same_v<Op, GreatestImpl<T0, T1>>),
-                                            Then<LeftDataType>,
-                                            Else<InvalidType>>>>>>;
+    using ResultDataType
+        = If<std::is_same_v<Op, PlusImpl<T0, T1>>,
+             Then<
+                 If<IsDateOrDateTime<LeftDataType> && IsIntegral<RightDataType>,
+                    Then<LeftDataType>,
+                    Else<
+                        If<IsIntegral<LeftDataType> && IsDateOrDateTime<RightDataType>,
+                           Then<RightDataType>,
+                           Else<InvalidType>>>>>,
+             Else<
+                 If<std::is_same_v<Op, MinusImpl<T0, T1>>,
+                    Then<
+                        If<IsDateOrDateTime<LeftDataType>,
+                           Then<
+                               If<std::is_same_v<LeftDataType, RightDataType>,
+                                  Then<DataTypeInt32>,
+                                  Else<
+                                      If<IsIntegral<RightDataType>,
+                                         Then<LeftDataType>,
+                                         Else<InvalidType>>>>>,
+                           Else<InvalidType>>>,
+                    Else<
+                        If<std::is_same_v<T0, T1> && (std::is_same_v<Op, LeastImpl<T0, T1>> || std::is_same_v<Op, GreatestImpl<T0, T1>>),
+                           Then<LeftDataType>,
+                           Else<InvalidType>>>>>>;
 };
 
 
@@ -644,17 +645,18 @@ struct DateBinaryOperationTraits
 template <template <typename, typename> class Operation, typename LeftDataType, typename RightDataType>
 struct BinaryOperationTraits
 {
-    using ResultDataType = If<IsDateOrDateTime<LeftDataType> || IsDateOrDateTime<RightDataType>,
-                              Then<
-                                  typename DateBinaryOperationTraits<
-                                      Operation,
-                                      LeftDataType,
-                                      RightDataType>::ResultDataType>,
-                              Else<
-                                  typename DataTypeFromFieldType<
-                                      typename Operation<
-                                          typename LeftDataType::FieldType,
-                                          typename RightDataType::FieldType>::ResultType>::Type>>;
+    using ResultDataType
+        = If<IsDateOrDateTime<LeftDataType> || IsDateOrDateTime<RightDataType>,
+             Then<
+                 typename DateBinaryOperationTraits<
+                     Operation,
+                     LeftDataType,
+                     RightDataType>::ResultDataType>,
+             Else<
+                 typename DataTypeFromFieldType<
+                     typename Operation<
+                         typename LeftDataType::FieldType,
+                         typename RightDataType::FieldType>::ResultType>::Type>>;
 };
 
 
@@ -913,8 +915,9 @@ public:
               || checkLeftType<DataTypeDecimal<Decimal256>>(arguments, type_res)
               || checkLeftType<DataTypeFloat32>(arguments, type_res)
               || checkLeftType<DataTypeFloat64>(arguments, type_res)))
-            throw Exception("Illegal types " + arguments[0]->getName() + " and " + arguments[1]->getName() + " of arguments of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                "Illegal types " + arguments[0]->getName() + " and " + arguments[1]->getName() + " of arguments of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if constexpr (!default_impl_for_nulls)
             type_res = makeNullable(type_res);
@@ -1016,8 +1019,9 @@ public:
             using RightDataType = std::decay_t<decltype(right)>;
             using ResultDataType = std::decay_t<decltype(result_type)>;
             constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
-            constexpr bool is_multiply [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, MultiplyImpl<UInt8, UInt8>>;
-            constexpr bool is_division [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, DivideFloatingImpl<UInt8, UInt8>> || std::is_same_v<Op<UInt8, UInt8>, TiDBDivideFloatingImpl<UInt8, UInt8>> || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralImpl<UInt8, UInt8>> || std::is_same_v<Op<UInt8, UInt8>, DivideIntegralOrZeroImpl<UInt8, UInt8>>;
+            constexpr bool is_multiply [[maybe_unused]] = IsOperation<Op>::multiply;
+            constexpr bool is_division [[maybe_unused]] = IsOperation<Op>::div_floating || IsOperation<Op>::div_int;
+            ;
 
             using T0 = typename LeftDataType::FieldType;
             using T1 = typename RightDataType::FieldType;
@@ -1039,9 +1043,10 @@ public:
                 using FieldT0 = typename NearestFieldType<T0>::Type;
                 using FieldT1 = typename NearestFieldType<T1>::Type;
                 /// Decimal operations need scale. Operations are on result type.
-                using OpImpl = std::conditional_t<result_is_decimal,
-                                                  DecimalBinaryOperation<T0, T1, Op, ResultType>,
-                                                  BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0, T1>::ResultType>>; // Use template to resolve !!!!!
+                using OpImpl = std::conditional_t<
+                    result_is_decimal,
+                    DecimalBinaryOperation<T0, T1, Op, ResultType>,
+                    BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0, T1>::ResultType>>; // Use template to resolve !!!!!
 
                 auto col_left_raw = block.getByPosition(arguments[0]).column.get();
                 auto col_right_raw = block.getByPosition(arguments[1]).column.get();
@@ -1121,12 +1126,13 @@ public:
                             {
                                 UInt8 res_null = false;
                                 Field result_field = Null();
-                                auto res = OpImpl::constant_constant_nullable(col_left->template getValue<T0>(),
-                                                                              col_right->template getValue<T1>(),
-                                                                              scale_a,
-                                                                              scale_b,
-                                                                              scale_result,
-                                                                              res_null);
+                                auto res = OpImpl::constant_constant_nullable(
+                                    col_left->template getValue<T0>(),
+                                    col_right->template getValue<T1>(),
+                                    scale_a,
+                                    scale_b,
+                                    scale_result,
+                                    res_null);
                                 if (!res_null)
                                     result_field = toField(res, result_type.getScale());
                                 block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left->size(), result_field);
@@ -1143,9 +1149,10 @@ public:
                             {
                                 UInt8 res_null = false;
                                 Field result_field = Null();
-                                auto res = OpImpl::constant_constant_nullable(col_left->getField().template safeGet<FieldT0>(),
-                                                                              col_right->getField().template safeGet<FieldT1>(),
-                                                                              res_null);
+                                auto res = OpImpl::constant_constant_nullable(
+                                    col_left->getField().template safeGet<FieldT0>(),
+                                    col_right->getField().template safeGet<FieldT1>(),
+                                    res_null);
                                 if (!res_null)
                                     result_field = toField(res);
                                 block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left->size(), result_field);
