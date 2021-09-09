@@ -1,4 +1,5 @@
 #include <Common/MemoryTracker.h>
+#include <Common/formatReadable.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <PSRunnable.h>
@@ -12,14 +13,16 @@
 void PSRunnable::run()
 {
     MemoryTracker tracker;
+    tracker.setDescription(nullptr);
     current_memory_tracker = &tracker;
     // If runImpl() return false, means it need break itself
     while (StressEnvStatus::getInstance().stat() && runImpl())
     {
         /*Just for no warning*/
     }
+    auto peak = current_memory_tracker->getPeak();
     current_memory_tracker = nullptr;
-    LOG_INFO(StressEnv::logger, description() + " exit");
+    LOG_INFO(StressEnv::logger, description() << " exit with peak memory usage: " << formatReadableSizeWithBinarySuffix(peak));
 }
 
 size_t PSRunnable::getBytesUsed() const
