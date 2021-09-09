@@ -9,8 +9,8 @@ class PSRunnable : public Poco::Runnable
 public:
     void run() override;
 
-    size_t getBytesUsed()const;
-    size_t getPagesUsed()const;
+    size_t getBytesUsed() const;
+    size_t getPagesUsed() const;
 
     virtual String description() = 0;
     virtual bool runImpl() = 0;

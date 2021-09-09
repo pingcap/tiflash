@@ -18,7 +18,6 @@ void PSRunnable::run()
     {
         /*Just for no warning*/
     }
-    tracker.setDescription(description().c_str());
     current_memory_tracker = nullptr;
     LOG_INFO(StressEnv::logger, description() + " exit");
 }

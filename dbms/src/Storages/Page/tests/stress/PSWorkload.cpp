@@ -1,13 +1,13 @@
 #include <Common/MemoryTracker.h>
 #include <Encryption/MockKeyManager.h>
-#include <Poco/Logger.h>
 #include <PSWorkload.h>
+#include <Poco/Logger.h>
 #include <TestUtils/MockDiskDelegator.h>
 
 void StressWorkload::onDumpResult()
 {
     UInt64 time_interval = stop_watch.elapsedMilliseconds();
-    fmt::print(stdout, "result in {}ms\n", time_interval);
+    LOG_INFO(options.logger, fmt::format("result in {}ms", time_interval));
     double seconds_run = 1.0 * time_interval / 1000;
 
     size_t total_pages_written = 0;
@@ -28,20 +28,22 @@ void StressWorkload::onDumpResult()
         total_bytes_read += reader->bytes_used;
     }
 
-    fmt::print(stdout,
-               "W: {} pages, {:.4f} GB, {:.4f} GB/s\n",
-               total_pages_written,
-               static_cast<double>(total_bytes_written) / DB::GB,
-               static_cast<double>(total_bytes_written) / DB::GB / seconds_run);
-    fmt::print(stdout,
-               "R: {} pages, {:.4f} GB, {:.4f} GB/s\n",
-               total_pages_read,
-               static_cast<double>(total_bytes_read) / DB::GB,
-               static_cast<double>(total_bytes_read) / DB::GB / seconds_run);
+    LOG_INFO(options.logger,
+             fmt::format(
+                 "W: {} pages, {:.4f} GB, {:.4f} GB/s",
+                 total_pages_written,
+                 static_cast<double>(total_bytes_written) / DB::GB,
+                 static_cast<double>(total_bytes_written) / DB::GB / seconds_run));
+    LOG_INFO(options.logger,
+             fmt::format(
+                 "R: {} pages, {:.4f} GB, {:.4f} GB/s",
+                 total_pages_read,
+                 static_cast<double>(total_bytes_read) / DB::GB,
+                 static_cast<double>(total_bytes_read) / DB::GB / seconds_run));
 
     if (options.status_interval != 0)
     {
-        fmt::print(stdout, metrics_dumper->toString());
+        LOG_INFO(options.logger, metrics_dumper->toString());
     }
 }
 
@@ -118,7 +120,7 @@ void StressWorkloadManger::runWorkload()
 
     // skip NORMAL_WORKLOAD
     funcs.erase(funcs.find(NORMAL_WORKLOAD));
-    fmt::print(stdout, toWorkloadSelctedString());
+    LOG_INFO(options.logger, toWorkloadSelctedString());
 
     for (auto & it : funcs)
     {
