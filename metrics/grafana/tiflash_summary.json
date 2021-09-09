@@ -14,7 +14,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "7.5.7"
+      "version": "6.1.6"
     },
     {
       "type": "panel",
@@ -2286,7 +2286,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -2399,7 +2399,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -2548,7 +2548,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -2650,7 +2650,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -2778,7 +2778,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -2961,7 +2961,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3062,7 +3062,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3185,7 +3185,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3313,7 +3313,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3435,7 +3435,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3552,7 +3552,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3666,7 +3666,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -3865,7 +3865,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -3997,7 +3997,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -5869,7 +5869,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -6008,7 +6008,7 @@
           "legend": {
             "show": false
           },
-          "pluginVersion": "7.5.7",
+          "pluginVersion": "6.1.6",
           "reverseYBuckets": false,
           "targets": [
             {
@@ -6069,10 +6069,7 @@
         "multi": false,
         "name": "tidb_cluster",
         "options": [],
-        "query": {
-          "query": "label_values(tiflash_system_profile_event_Query, tidb_cluster)",
-          "refId": "ctl-tidb-test-tidb_cluster-Variable-Query"
-        },
+        "query": "label_values(tiflash_system_profile_event_Query, tidb_cluster)",
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
@@ -6096,10 +6093,7 @@
         "multi": true,
         "name": "instance",
         "options": [],
-        "query": {
-          "query": "label_values(tiflash_system_profile_event_Query{tidb_cluster=\"$tidb_cluster\"}, instance)",
-          "refId": "ctl-tidb-test-instance-Variable-Query"
-        },
+        "query": "label_values(tiflash_system_profile_event_Query{tidb_cluster=\"$tidb_cluster\"}, instance)",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,

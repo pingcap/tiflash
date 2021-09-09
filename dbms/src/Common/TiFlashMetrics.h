@@ -131,6 +131,8 @@ namespace DB
         F(type_bg_read_alloc_bytes, {"type", "bg_read_alloc_bytes"}), F(type_fg_write_req_bytes, {"type", "fg_write_req_bytes"}),         \
         F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}), F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),       \
         F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                                   \
+    M(tiflash_storage_rough_set_filter_rate, "Bucketed histogram of rough set filter rate", Histogram,                                    \
+        F(type_dtfile_pack, {{"type", "dtfile_pack"}}, EqualWidthBuckets{0, 6, 20}))                                                      \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \
@@ -145,9 +147,8 @@ namespace DB
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
         F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
-        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
-    M(tiflash_storage_rough_set_filter_rate, "Bucketed histogram of rough set filter rate", Histogram,                                    \
-        F(type_dtfile_pack, {{"type", "dtfile_pack"}}, EqualWidthBuckets{0, 6, 20})) // clang-format on
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
+// clang-format on
 
 struct ExpBuckets
 {
