@@ -1,8 +1,6 @@
 #include <Functions/FunctionFactory.h>
 
-#include "registerFunctionAbs.h"
 #include "registerFunctionBitAnd.h"
-#include "registerFunctionBitNot.h"
 #include "registerFunctionBitOr.h"
 #include "registerFunctionBitRotateLeft.h"
 #include "registerFunctionBitRotateRight.h"
@@ -17,20 +15,25 @@
 #include "registerFunctionDivideIntegralOrZero.h"
 #include "registerFunctionGCD.h"
 #include "registerFunctionGreatest.h"
-#include "registerFunctionIntExp10.h"
-#include "registerFunctionIntExp2.h"
 #include "registerFunctionLCM.h"
 #include "registerFunctionLeast.h"
 #include "registerFunctionMinus.h"
 #include "registerFunctionModulo.h"
 #include "registerFunctionMultiply.h"
-#include "registerFunctionNegate.h"
 #include "registerFunctionPlus.h"
 #include "registerFunctionTiDBDivideFloating.h"
 
 
 namespace DB
 {
+class FunctionFactory;
+
+void registerFunctionIntExp2(FunctionFactory & factory);
+void registerFunctionIntExp10(FunctionFactory & factory);
+void registerFunctionAbs(FunctionFactory & factory);
+void registerFunctionBitNot(FunctionFactory & factory);
+void registerFunctionNegate(FunctionFactory & factory);
+
 void registerFunctionsArithmetic(FunctionFactory & factory)
 {
     registerFunctionPlus(factory);

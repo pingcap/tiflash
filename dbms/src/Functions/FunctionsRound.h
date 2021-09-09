@@ -4,7 +4,7 @@
 #include <Common/TiFlashException.h>
 #include <Common/toSafeUnsigned.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsUnaryArithmetic.h>
+#include <Functions/FunctionUnaryArithmetic.h>
 #include <IO/WriteHelpers.h>
 
 #include <array>
