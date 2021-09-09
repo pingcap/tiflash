@@ -196,7 +196,7 @@ void RegionRaftCommandDelegate::execPrepareMerge(
 {
     const auto & prepare_merge_request = request.prepare_merge();
 
-    auto & target = prepare_merge_request.target();
+    const auto & target = prepare_merge_request.target();
 
     LOG_INFO(log,
              toString(false) << " execute prepare merge, min_index: " << prepare_merge_request.min_index() << ", target: [region " << target.id()
@@ -211,7 +211,7 @@ void RegionRaftCommandDelegate::execRollbackMerge(
     const UInt64 index,
     const UInt64 term)
 {
-    auto & rollback_request = request.rollback_merge();
+    const auto & rollback_request = request.rollback_merge();
 
     LOG_INFO(log, toString(false) << " execute rollback merge, commit index: " << rollback_request.commit());
     meta.makeRaftCommandDelegate().execRollbackMerge(request, response, index, term);
@@ -226,7 +226,7 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(const raft_cmdpb::AdminReque
 {
     const auto & commit_merge_request = request.commit_merge();
     auto & meta_delegate = meta.makeRaftCommandDelegate();
-    auto & source_meta = commit_merge_request.source();
+    const auto & source_meta = commit_merge_request.source();
     auto source_region = kvstore.getRegion(source_meta.id());
     if (source_region == nullptr)
     {
@@ -510,7 +510,7 @@ kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 st
     auto meta_snap = region.dumpRegionMetaSnapshot();
     kvrpcpb::ReadIndexRequest request;
     {
-        auto context = request.mutable_context();
+        auto * context = request.mutable_context();
         context->set_region_id(region.id());
         *context->mutable_peer() = meta_snap.peer;
         context->mutable_region_epoch()->set_version(meta_snap.ver);
@@ -519,7 +519,7 @@ kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 st
         if (start_ts)
         {
             request.set_start_ts(start_ts);
-            auto key_range = request.add_ranges();
+            auto * key_range = request.add_ranges();
             key_range->set_start_key(*meta_snap.range->rawKeys().first);
             key_range->set_end_key(*meta_snap.range->rawKeys().second);
         }
@@ -542,7 +542,7 @@ ReadIndexResult Region::learnerRead(UInt64 start_ts)
 
         if (response.has_region_error())
         {
-            auto & region_error = response.region_error();
+            const auto & region_error = response.region_error();
             LOG_WARNING(log, toString(false) << " find error during ReadIndex: " << region_error.message());
             auto status = region_error.has_epoch_not_match() ? RegionException::RegionReadStatus::EPOCH_NOT_MATCH
                                                              : RegionException::RegionReadStatus::NOT_FOUND;
@@ -691,10 +691,10 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
     }
 
     // second check, remove same data in current region and handle map. remove deleted data by add a record with DelFlag.
-    for (auto it = handle_map.begin(); it != handle_map.end(); ++it)
+    for (auto & ele : handle_map)
     {
-        const auto & handle = it->first;
-        const auto & [ori_ts, ori_del] = it->second;
+        const auto & handle = ele.first;
+        const auto & [ori_ts, ori_del] = ele.second;
         std::ignore = ori_del;
 
         if (ori_ts >= safe_point)
@@ -839,7 +839,7 @@ void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt6
 
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
-            auto & snapshot = snaps.views[i];
+            const auto & snapshot = snaps.views[i];
             auto sst_reader = SSTReader{proxy_helper, snapshot};
 
             LOG_INFO(log,

@@ -246,8 +246,8 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     const raft_cmdpb::AdminRequest & request,
     const MetaRaftCommandDelegate & source_meta) const
 {
-    auto & commit_merge_request = request.commit_merge();
-    auto & source_region = commit_merge_request.source();
+    const auto & commit_merge_request = request.commit_merge();
+    const auto & source_region = commit_merge_request.source();
 
     switch (auto state = source_meta.region_state.getState())
     {
@@ -298,7 +298,7 @@ void MetaRaftCommandDelegate::execRollbackMerge(
     const UInt64 index,
     const UInt64 term)
 {
-    auto & rollback_request = request.rollback_merge();
+    const auto & rollback_request = request.rollback_merge();
 
     if (region_state.getState() != raft_serverpb::PeerState::Merging)
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": region state is " + raft_serverpb::PeerState_Name(region_state.getState()),
@@ -345,11 +345,11 @@ void MetaRaftCommandDelegate::execPrepareMerge(
     UInt64 index,
     UInt64 term)
 {
-    auto & prepare_merge_request = request.prepare_merge();
-    auto & target = prepare_merge_request.target();
+    const auto & prepare_merge_request = request.prepare_merge();
+    const auto & target = prepare_merge_request.target();
 
     std::lock_guard<std::mutex> lock(mutex);
-    auto & region = region_state.getRegion();
+    const auto & region = region_state.getRegion();
     auto region_version = region.region_epoch().version() + 1;
     region_state.setVersion(region_version);
 
