@@ -18,9 +18,10 @@ void PSRunnable::run()
     {
         /*Just for no warming*/
     }
-    tracker.setDescription(description().c_str());
+    String desc = description();
+    tracker.setDescription(desc.c_str());
     current_memory_tracker = nullptr;
-    LOG_INFO(StressEnv::logger, description() + " exit");
+    LOG_INFO(StressEnv::logger, desc + " exit");
 }
 
 size_t PSRunnable::getBytesUsed()
