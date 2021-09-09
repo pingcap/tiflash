@@ -86,8 +86,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "Decode packet meet error";
-                        LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                        local_err_msg = "receiver's state is abnormal, exit from ReadLoop";
+                        LOG_WARNING(log, local_err_msg);
                         break;
                     }
                 }
@@ -113,7 +113,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "The state is abnormal, exit from ReadLoop";
+                        local_err_msg = "receiver's state is abnormal, exit from ReadLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
@@ -185,7 +185,6 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 ExchangeReceiverResult ExchangeReceiver::nextResult()
 {
     std::shared_ptr<ReceivedPacket> packet;
-    ExchangeReceiverResult result;
     {
         std::unique_lock<std::mutex> lock(mu);
         cv.wait(lock, [&] { return res_buffer.hasOne() || live_connections == 0 || state != NORMAL; });
@@ -208,22 +207,23 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
             res_buffer.popOne(packet);
             cv.notify_one();
         }
-        else
+        else /// live_connections == 0 and res_buffer is empty, that is the end.
         {
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
 
+    ExchangeReceiverResult result;
     if (packet->packet->has_error())
     {
-        result = {nullptr, 0, "ExchangeReceiver", true, packet->packet->error().msg(), false};
+        result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
     }
     else
     {
         auto resp_ptr = std::make_shared<tipb::SelectResponse>();
         if (!resp_ptr->ParseFromString(packet->packet->data()))
         {
-            result = {nullptr, 0, "ExchangeReceiver", true, "decode error", false};
+            result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
         }
         else
         {
