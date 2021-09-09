@@ -66,7 +66,7 @@ public:
 
     virtual void updatedRandomData();
 
-    String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
+    virtual String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
 
     virtual bool runImpl() override;
 
@@ -93,6 +93,43 @@ protected:
     virtual size_t genBufferSize();
 };
 
+
+// PSWindowsWriter can better simulate the user's workload in cooperation with PSWindowsReader
+// It can also be used as an independent writer to imitate user writing.
+// When the user is using TiFlash, The Pageid which in PageStorage should be continuously incremented.
+// In the meantime, The PageId near the end may be constantly updated.So PSWindowsWriter looks like:
+//
+//
+//  | Pageid 1          Pageid 100                           Pageid N |
+//  |-----------------------------------------------------------------|
+//                                                           |              |
+//                                                           |    window    |
+//
+// Every time the pageid written will be generated from the "window" range.
+// And The random from the window should conform to the normal distribution.
+// When random number bigger than Pageid N, it will be Pageid N + 1, it means new page come.
+// When random number smaller than Pageid N, it means Page updated.
+class PSWindowWriter : public PSCommonWriter
+{
+public:
+    PSWindowWriter(const PSPtr & ps_, DB::UInt32 index_)
+        : PSCommonWriter(ps_, index_)
+    {}
+
+    String description() override { return fmt::format("(Stress Test Window Writer {})", index); }
+
+    void setWindowSize(size_t window_size);
+
+    void setNormalDistributionSigma(size_t sigma);
+
+protected:
+    virtual DB::PageId genRandomPageId() override;
+
+protected:
+    size_t window_size = 100;
+    size_t sigma = 9;
+};
+
 class PSReader : public PSRunnable
 {
 public:
@@ -102,9 +139,11 @@ public:
         , index(index_)
     {}
 
-    String description() override { return fmt::format("(Stress Test PSReader {})", index); }
+    virtual String description() override { return fmt::format("(Stress Test PSReader {})", index); }
 
-    bool runImpl() override;
+    virtual bool runImpl() override;
+
+    void setPageReadOnce(size_t page_read_once);
 
     void setReadDelay(size_t delay_ms);
 
@@ -113,9 +152,47 @@ public:
     void setReadPageNums(size_t page_read_once);
 
 protected:
+    virtual DB::PageIds genRandomPageIds();
+
+protected:
     PSPtr ps;
     size_t heavy_read_delay_ms = 0;
     size_t page_read_once = 5;
     DB::UInt32 index = 0;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
+};
+
+// PSWindowReader can better simulate the user's workload in cooperation with PSWindowsWriter
+// It can also be used as an independent reader to imitate user reading
+// Same as PSWindowWriter, it contains a "window".
+// And the pageid will be randomly generated from this window (random in accordance with the normal distribution)
+//
+//  | Pageid 1          Pageid 100                           Pageid N |
+//  |-----------------------------------------------------------------|
+//                                                     |              |
+//                                                     |    window    |
+// The "window" will move backwards following pageid N.
+// Different from PSWindowWriter, The window orientation of PSWindowReader should smaller than Pageid N.
+// In this case, the pageid that PSWindowReader needs to read will never disappear.
+class PSWindowReader : public PSReader
+{
+public:
+    PSWindowReader(const PSPtr & ps_, DB::UInt32 index_)
+        : PSReader(ps_, index_)
+    {}
+
+    void setWindowSize(size_t window_size);
+
+    void setNormalDistributionSigma(size_t sigma);
+
+    void setWriterNums(size_t writer_nums);
+
+protected:
+    virtual DB::PageIds genRandomPageIds() override;
+
+protected:
+    size_t window_size = 100;
+    size_t sigma = 11;
+    size_t writer_nums = 0;
+    std::mt19937 gen;
 };
