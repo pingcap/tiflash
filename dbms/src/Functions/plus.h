@@ -9,13 +9,13 @@ struct PlusImpl<A, B, false>
     using ResultType = typename NumberTraits::ResultOfAdditionMultiplication<A, B>::Type;
 
     template <typename Result = ResultType>
-    static inline Result apply(A a, B b)
+    static Result apply(A a, B b)
     {
         /// Next everywhere, static_cast - so that there is no wrong result in expressions of the form Int64 c = UInt32(a) * Int32(-1).
         return static_cast<Result>(a) + b;
     }
     template <typename Result = ResultType>
-    static inline Result apply(A, B, UInt8 &)
+    static Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
@@ -28,12 +28,12 @@ struct PlusImpl<A, B, true>
     using ResultPrecInferer = PlusDecimalInferer;
 
     template <typename Result = ResultType>
-    static inline Result apply(A a, B b)
+    static Result apply(A a, B b)
     {
         return static_cast<Result>(a) + static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A, B, UInt8 &)
+    static Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }

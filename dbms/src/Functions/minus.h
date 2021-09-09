@@ -9,12 +9,12 @@ struct MinusImpl<A, B, false>
     using ResultType = typename NumberTraits::ResultOfSubtraction<A, B>::Type;
 
     template <typename Result = ResultType>
-    static inline Result apply(A a, B b)
+    static Result apply(A a, B b)
     {
         return static_cast<Result>(a) - b;
     }
     template <typename Result = ResultType>
-    static inline Result apply(A, B, UInt8 &)
+    static Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }
@@ -27,12 +27,12 @@ struct MinusImpl<A, B, true>
     using ResultPrecInferer = PlusDecimalInferer;
 
     template <typename Result = ResultType>
-    static inline Result apply(A a, B b)
+    static Result apply(A a, B b)
     {
         return static_cast<Result>(a) - static_cast<Result>(b);
     }
     template <typename Result = ResultType>
-    static inline Result apply(A, B, UInt8 &)
+    static Result apply(A, B, UInt8 &)
     {
         throw Exception("Should not reach here");
     }

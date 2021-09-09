@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Common/Decimal.h>
+
 namespace DB
 {
 template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
