@@ -81,7 +81,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     if (state == NORMAL)
                     {
                         res_buffer.popEmpty(packet);
-                        cv.notify_one();
+                        cv.notify_all();
                     }
                     else
                     {
@@ -108,7 +108,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                     if (state == NORMAL)
                     {
                         res_buffer.pushOne(packet);
-                        cv.notify_one();
+                        cv.notify_all();
                     }
                     else
                     {
@@ -205,7 +205,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
         else if (res_buffer.hasOne())
         {
             res_buffer.popOne(packet);
-            cv.notify_one();
+            cv.notify_all();
         }
         else /// live_connections == 0 and res_buffer is empty, that is the end.
         {
@@ -233,7 +233,7 @@ ExchangeReceiverResult ExchangeReceiver::nextResult()
         std::unique_lock<std::mutex> lock(mu);
         cv.wait(lock, [&] { return res_buffer.hasEmptyPlace(); });
         res_buffer.pushEmpty(std::move(packet));
-        cv.notify_one();
+        cv.notify_all();
     }
     return result;
 }
