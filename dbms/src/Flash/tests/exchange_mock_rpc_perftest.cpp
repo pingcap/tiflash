@@ -1,4 +1,6 @@
 #include <Common/ConcurrentBoundedQueue.h>
+#include <DataStreams/TiRemoteBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <atomic>
@@ -102,7 +104,7 @@ struct MockReceiverContext
 
     std::vector<std::unique_ptr<PacketQueue>> queues;
 };
-    
+
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
 
 Block makeBlock(int row_num)
@@ -147,6 +149,7 @@ mpp::MPPDataPacket makePacket(ChunkCodecStream & codec, int row_num)
     codec.encode(block, 0, row_num);
 
     tipb::SelectResponse response;
+    response.set_encode_type(tipb::TypeCHBlock);
     auto chunk = response.add_chunks();
     chunk->set_rows_data(codec.getString());
     codec.clear();
@@ -169,8 +172,7 @@ void sendPacket(const std::vector<PacketPtr> & packets, PacketQueue & queue, std
     queue.push(PacketPtr());
 }
 
-template <typename ExchangeReceiverType>
-void receivePacket(ExchangeReceiverType & receiver)
+void readBlock(BlockInputStreamPtr stream)
 {
     auto get_rate = [](auto count, auto duration)
     {
@@ -184,45 +186,59 @@ void receivePacket(ExchangeReceiverType & receiver)
 
     auto start = std::chrono::high_resolution_clock::now();
     auto second_ago = start;
-    Int64 packet_count = 0;
-    Int64 last_packet_count = 0;
+    Int64 block_count = 0;
+    Int64 last_block_count = 0;
     Int64 last_data_size = received_data_size.load();
-    while (true)
+    try
     {
-        auto res = receiver.nextResult();
-        if (res.eof)
-            break;
-        ++packet_count;
-        auto cur = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - second_ago);
-        if (duration.count() >= 1000)
+        stream->readPrefix();
+        while (auto block = stream->read())
         {
-            Int64 data_size = received_data_size.load();
-            std::cout
-                << fmt::format(
-                    "Packets: {:<10} Data(MiB): {:<8} Packet/s: {:<6} Data/s(MiB): {:<6}",
-                    packet_count,
-                    get_mib(data_size),
-                    get_rate(packet_count - last_packet_count, duration),
-                    get_mib(get_rate(data_size - last_data_size, duration)))
-                << std::endl;
-            second_ago = cur;
-            last_packet_count = packet_count;
-            last_data_size = data_size;
+            ++block_count;
+            auto cur = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - second_ago);
+            if (duration.count() >= 1000)
+            {
+                Int64 data_size = received_data_size.load();
+                std::cout
+                    << fmt::format(
+                        "Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
+                        block_count,
+                        get_mib(data_size),
+                        get_rate(block_count - last_block_count, duration),
+                        get_mib(get_rate(data_size - last_data_size, duration)))
+                    << std::endl;
+                second_ago = cur;
+                last_block_count = block_count;
+                last_data_size = data_size;
+            }
         }
-    }
+        stream->readSuffix();
 
-    auto cur = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - start);
-    Int64 data_size = received_data_size.load();
-    std::cout
-        << fmt::format(
-            "End. Packets: {:<10} Data(MiB): {:<8} Packet/s: {:<6} Data/s(MiB): {:<6}",
-            packet_count,
-            get_mib(data_size),
-            get_rate(packet_count, duration),
-            get_mib(get_rate(data_size, duration)))
-        << std::endl;
+        auto cur = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - start);
+        Int64 data_size = received_data_size.load();
+        std::cout
+            << fmt::format(
+                "End. Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
+                block_count,
+                get_mib(data_size),
+                get_rate(block_count, duration),
+                get_mib(get_rate(data_size, duration)))
+            << std::endl;
+    }
+    catch (const Exception & e)
+    {
+        std::string text = e.displayText();
+
+        auto embedded_stack_trace_pos = text.find("Stack trace");
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl
+                  << std::endl;
+        if (std::string::npos == embedded_stack_trace_pos)
+            std::cerr << "Stack trace:" << std::endl
+                      << e.getStackTrace().toString() << std::endl;
+        return;
+    }
 }
 
 void testReceiver(int source_num, int block_rows, int seconds)
@@ -260,22 +276,28 @@ void testReceiver(int source_num, int block_rows, int seconds)
     std::vector<PacketPtr> packets;
     for (int i = 0; i < 100; ++i)
         packets.push_back(std::make_shared<mpp::MPPDataPacket>(makePacket(*chunk_codec_stream, block_rows)));
-    
+
     auto context = std::make_shared<MockReceiverContext>(source_num);
     std::atomic<bool> stop_flag(false);
 
-    ExchangeReceiverBase<MockReceiverContext> receiver(
+    auto receiver = std::make_shared<MockExchangeReceiver>(
         context,
         pb_exchange_receiver,
         task_meta,
         source_num * 5);
+
+    using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
+    std::vector<BlockInputStreamPtr> streams;
+    for (int i = 0; i < source_num; ++i)
+        streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
+    auto union_input_stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, source_num);
 
     std::vector<std::thread> threads;
     for (int i = 0; i < source_num; ++i)
     {
         threads.emplace_back(sendPacket, std::ref(packets), std::ref(*context->queues[i]), std::ref(stop_flag));
     }
-    threads.emplace_back(receivePacket<ExchangeReceiverBase<MockReceiverContext>>, std::ref(receiver));
+    threads.emplace_back(readBlock, union_input_stream);
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
     stop_flag.store(true);
