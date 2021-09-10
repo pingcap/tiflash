@@ -51,13 +51,14 @@ CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFile
 }
 
 template <bool has_checksum>
-CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider,
-                                                                                         const std::string & path,
-                                                                                         const EncryptionPath & encryption_path,
-                                                                                         size_t estimated_size,
-                                                                                         const ReadLimiterPtr & read_limiter_,
-                                                                                         ChecksumAlgo checksum_algorithm,
-                                                                                         size_t checksum_frame_size)
+CompressedReadBufferFromFileProvider<has_checksum>::CompressedReadBufferFromFileProvider(
+    FileProviderPtr & file_provider,
+    const std::string & path,
+    const EncryptionPath & encryption_path,
+    size_t estimated_size,
+    const ReadLimiterPtr & read_limiter_,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size)
     : CompressedSeekableReaderBuffer()
     , p_file_in(
           createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, read_limiter_, checksum_algorithm, checksum_frame_size))

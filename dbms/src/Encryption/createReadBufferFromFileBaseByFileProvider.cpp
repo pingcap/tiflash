@@ -50,14 +50,16 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
     }
 }
 
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(const FileProviderPtr & file_provider,
-                                                                                   const std::string & filename_,
-                                                                                   const EncryptionPath & encryption_path_,
-                                                                                   size_t estimated_size,
-                                                                                   const ReadLimiterPtr & read_limiter,
-                                                                                   ChecksumAlgo checksum_algorithm,
-                                                                                   size_t checksum_frame_size,
-                                                                                   int flags_)
+std::unique_ptr<ReadBufferFromFileBase>
+createReadBufferFromFileBaseByFileProvider(
+    const FileProviderPtr & file_provider,
+    const std::string & filename_,
+    const EncryptionPath & encryption_path_,
+    size_t estimated_size,
+    const ReadLimiterPtr & read_limiter,
+    ChecksumAlgo checksum_algorithm,
+    size_t checksum_frame_size,
+    int flags_)
 {
     ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
     auto file = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);

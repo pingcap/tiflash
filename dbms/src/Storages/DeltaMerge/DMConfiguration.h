@@ -8,25 +8,23 @@
 
 namespace DB::DM
 {
-
-
 class DMConfiguration
 {
 public:
     explicit DMConfiguration(std::istream & input);
 
-    explicit DMConfiguration(std::map<std::string, std::string> embedded_checksum_     = {},
-                             size_t                             checksum_frame_length_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
-                             DB::ChecksumAlgo                   checksum_algorithm_    = DB::ChecksumAlgo::XXH3,
-                             std::map<std::string, std::string> debug_info_            = {{"creation_commit_hash", TIFLASH_GIT_HASH},
+    explicit DMConfiguration(std::map<std::string, std::string> embedded_checksum_ = {},
+                             size_t checksum_frame_length_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
+                             DB::ChecksumAlgo checksum_algorithm_ = DB::ChecksumAlgo::XXH3,
+                             std::map<std::string, std::string> debug_info_ = {{"creation_commit_hash", TIFLASH_GIT_HASH},
                                                                                {"creation_edition", TIFLASH_EDITION},
                                                                                {"creation_version", TIFLASH_VERSION},
                                                                                {"creation_release_version", TIFLASH_RELEASE_VERSION},
                                                                                {"creation_build_time", TIFLASH_UTC_BUILD_TIME}})
-        : checksum_frame_length(checksum_frame_length_),
-          checksum_algorithm(checksum_algorithm_),
-          embedded_checksum(std::move(embedded_checksum_)),
-          debug_info(std::move(debug_info_))
+        : checksum_frame_length(checksum_frame_length_)
+        , checksum_algorithm(checksum_algorithm_)
+        , embedded_checksum(std::move(embedded_checksum_))
+        , debug_info(std::move(debug_info_))
     {
     }
 
@@ -50,8 +48,8 @@ public:
         }
         throw TiFlashException("unrecognized checksum algorithm", Errors::Checksum::Internal);
     }
-    [[nodiscard]] DB::ChecksumAlgo                           getChecksumAlgorithm() const { return checksum_algorithm; }
-    [[nodiscard]] std::map<std::string, std::string> &       getEmbeddedChecksum() { return embedded_checksum; }
+    [[nodiscard]] DB::ChecksumAlgo getChecksumAlgorithm() const { return checksum_algorithm; }
+    [[nodiscard]] std::map<std::string, std::string> & getEmbeddedChecksum() { return embedded_checksum; }
     [[nodiscard]] const std::map<std::string, std::string> & getDebugInfo() const { return debug_info; }
 
     void addChecksum(std::string name, std::string value) { embedded_checksum[std::move(name)] = std::move(value); }
@@ -76,10 +74,10 @@ public:
     }
 
 private:
-    size_t                             checksum_frame_length; // the length of checksum frame
-    DB::ChecksumAlgo                   checksum_algorithm;     // the algorithm of checksum
-    std::map<std::string, std::string> embedded_checksum;     // special checksums for meta files
-    std::map<std::string, std::string> debug_info;            // debugging information
+    size_t checksum_frame_length; // the length of checksum frame
+    DB::ChecksumAlgo checksum_algorithm; // the algorithm of checksum
+    std::map<std::string, std::string> embedded_checksum; // special checksums for meta files
+    std::map<std::string, std::string> debug_info; // debugging information
 };
 
 

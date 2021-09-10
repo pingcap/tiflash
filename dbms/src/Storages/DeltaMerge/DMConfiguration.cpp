@@ -10,8 +10,9 @@
 
 namespace DB::DM
 {
-
-DMConfiguration::DMConfiguration(std::istream & input) : embedded_checksum(), debug_info()
+DMConfiguration::DMConfiguration(std::istream & input)
+    : embedded_checksum()
+    , debug_info()
 {
     dtpb::Configuration configuration;
     if (unlikely(!configuration.ParseFromIstream(&input)))
@@ -19,9 +20,9 @@ DMConfiguration::DMConfiguration(std::istream & input) : embedded_checksum(), de
         throw TiFlashException("failed to parse configuration proto from input stream", Errors::Checksum::IOFailure);
     }
 
-    auto                     unchecked_algorithm = configuration.checksum_algorithm();
-    DB::UnifiedDigestBaseBox digest              = nullptr;
-    checksum_frame_length                        = configuration.checksum_frame_length();
+    auto unchecked_algorithm = configuration.checksum_algorithm();
+    DB::UnifiedDigestBaseBox digest = nullptr;
+    checksum_frame_length = configuration.checksum_frame_length();
     switch (unchecked_algorithm)
     {
     case static_cast<uint64_t>(DB::ChecksumAlgo::None):
@@ -53,7 +54,6 @@ DMConfiguration::DMConfiguration(std::istream & input) : embedded_checksum(), de
     const auto & embedded_checksum_array = configuration.embedded_checksum();
     for (const auto & var : embedded_checksum_array)
     {
-
         digest->update(var.name().data(), var.name().length());
         digest->update(var.checksum().data(), var.checksum().length());
         embedded_checksum.emplace(var.name(), var.checksum());
@@ -75,7 +75,7 @@ DMConfiguration::DMConfiguration(std::istream & input) : embedded_checksum(), de
 
 std::ostream & operator<<(std::ostream & output, const DMConfiguration & config)
 {
-    dtpb::Configuration      configuration;
+    dtpb::Configuration configuration;
     DB::UnifiedDigestBaseBox digest = config.createUnifiedDigest();
 
     configuration.set_checksum_algorithm(static_cast<uint64_t>(config.checksum_algorithm));

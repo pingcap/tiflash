@@ -17,7 +17,7 @@ public:
         : underlying(underlying)
     {
         underlying.next();
-        auto *gptr = underlying.buffer().begin();
+        auto * gptr = underlying.buffer().begin();
         this->setg(gptr, gptr, gptr);
     }
 
@@ -62,7 +62,7 @@ public:
         if (this->gptr() == this->egptr())
         {
             underlying.next();
-            auto *gptr = underlying.buffer().begin();
+            auto * gptr = underlying.buffer().begin();
             this->setg(gptr, gptr, underlying.buffer().end());
         }
         return this->gptr() == this->egptr() ? std::char_traits<char>::eof() : std::char_traits<char>::to_int_type(*this->gptr());
@@ -86,7 +86,7 @@ struct OutputStreamWrapperBase
 };
 
 
-} // namespace _Detail
+} // namespace Detail
 
 // the problem here is that `std::ios` is the base class determining the buffer, but it is hard to
 // construct a buffer before `std::ios` unless we set the virtual base for the wrapper. By doing so,

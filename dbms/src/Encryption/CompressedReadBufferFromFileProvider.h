@@ -60,13 +60,14 @@ public:
 
     /// @attention: estimated_size should be at least DBMS_DEFAULT_BUFFER_SIZE if one want to do seeking; however, if one knows that target file
     /// only consists of a single small frame, one can use a smaller estimated_size to reduce memory footprint.
-    CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider,
-                                         const std::string & path,
-                                         const EncryptionPath & encryption_path,
-                                         size_t estimated_size,
-                                         const ReadLimiterPtr & read_limiter,
-                                         ChecksumAlgo checksum_algorithm,
-                                         size_t checksum_frame_size);
+    CompressedReadBufferFromFileProvider(
+        FileProviderPtr & file_provider,
+        const std::string & path,
+        const EncryptionPath & encryption_path,
+        size_t estimated_size,
+        const ReadLimiterPtr & read_limiter,
+        ChecksumAlgo checksum_algorithm,
+        size_t checksum_frame_size);
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block) override;
 
