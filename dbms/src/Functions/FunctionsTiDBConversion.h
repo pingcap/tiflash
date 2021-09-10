@@ -549,6 +549,7 @@ struct TiDBConvertToInteger
             }
         } else if constexpr (std::is_same_v<FromDataType, DataTypeEnum8> || std::is_same_v<FromDataType, DataTypeEnum16>)
         {
+            /// cast enum
             const auto * col_from = block.getByPosition(arguments[0]).column.get();
             for (size_t i = 0; i < size; ++i)
             {
@@ -798,6 +799,7 @@ struct TiDBConvertToFloat
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeEnum8> || std::is_same_v<FromDataType, DataTypeEnum16>)
         {
+            /// cast enum
             const auto * col_from = block.getByPosition(arguments[0]).column.get();
             for (size_t i = 0; i < size; ++i)
             {
@@ -1199,21 +1201,11 @@ struct TiDBConvertToDecimal
         else if (const ColumnVector<FromFieldType> * col_from
                  = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
-            /// cast int/real as decimal
+            /// cast enum/int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
             for (size_t i = 0; i < size; ++i)
                 vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
-        }
-        else if constexpr (std::is_same_v<FromDataType, DataTypeEnum8> || std::is_same_v<FromDataType, DataTypeEnum16>)
-        {
-            const auto * col_from = block.getByPosition(arguments[0]).column.get();
-            for (size_t i = 0; i < size; ++i)
-            {
-                Int64 val = col_from->getInt(i);
-                //TODO
-//                vec_to[i] = static_cast<Float64>(val);
-            }
         }
         else
         {
