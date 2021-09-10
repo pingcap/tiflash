@@ -127,12 +127,12 @@ void PosixWritableFile::hardLink(const char * link_file)
 
     if (link_file == nullptr || strlen(link_file) == 0)
     {
-        throwFromErrno("Link file is not exist.", ErrorCodes::FILE_DOESNT_EXIST);
+        throwFromErrno("Link file does not exist.", ErrorCodes::FILE_DOESNT_EXIST);
     }
 
     if (getFileName().empty())
     {
-        throwFromErrno("File is not exist.", ErrorCodes::FILE_DOESNT_EXIST);
+        throwFromErrno("File does not exist.", ErrorCodes::FILE_DOESNT_EXIST);
     }
 
     close();
