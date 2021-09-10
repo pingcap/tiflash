@@ -89,14 +89,14 @@ BlockIO InterpreterDAG::execute()
     if (context.getDAGContext()->tunnel_set != nullptr)
     {
         /// add exchange sender on the top of operators
-        const auto & exchangeSender = dag.getDAGRequest().root_executor().exchange_sender();
-        // get partition column ids
-        auto part_keys = exchangeSender.partition_keys();
+        const auto & exchange_sender = dag.getDAGRequest().root_executor().exchange_sender();
+        /// get partition column ids
+        const auto & part_keys = exchange_sender.partition_keys();
         std::vector<Int64> partition_col_id;
         TiDB::TiDBCollators collators;
-        /// in case TiDB is an old version, it has not collation info
-        bool has_collator_info = exchangeSender.types_size() != 0;
-        if (has_collator_info && part_keys.size() != exchangeSender.types_size())
+        /// in case TiDB is an old version, it has no collation info
+        bool has_collator_info = exchange_sender.types_size() != 0;
+        if (has_collator_info && part_keys.size() != exchange_sender.types_size())
         {
             throw TiFlashException(std::string(__PRETTY_FUNCTION__)
                                        + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
@@ -111,7 +111,7 @@ BlockIO InterpreterDAG::execute()
             partition_col_id.emplace_back(column_index);
             if (has_collator_info && getDataTypeByFieldType(expr.field_type())->isString())
             {
-                collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
+                collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
             }
             else
             {
@@ -124,7 +124,7 @@ BlockIO InterpreterDAG::execute()
                 context.getDAGContext()->tunnel_set,
                 partition_col_id,
                 collators,
-                exchangeSender.tp(),
+                exchange_sender.tp(),
                 context.getSettings().dag_records_per_chunk,
                 dag.getEncodeType(),
                 dag.getResultFieldTypes(),
