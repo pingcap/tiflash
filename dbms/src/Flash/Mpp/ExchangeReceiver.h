@@ -75,7 +75,7 @@ public:
         /// init empty objects
         for (size_t i = 0; i < limit; ++i)
         {
-            empty_objects.emplace();
+            empty_objects.push(std::make_shared<T>());
         }
     }
     bool hasEmpty() const
@@ -99,50 +99,50 @@ public:
         return !isFull(objects);
     }
 
-    void popEmpty(T & t)
+    void popEmpty(std::shared_ptr<T> & t)
     {
         assert(!empty_objects.empty() && !isOverflow(empty_objects));
         t = empty_objects.front();
         empty_objects.pop();
     }
-    void popObject(T & t)
+    void popObject(std::shared_ptr<T> & t)
     {
         assert(!objects.empty() && !isOverflow(objects));
         t = objects.front();
         objects.pop();
     }
-    void pushObject(const T & t)
+    void pushObject(const std::shared_ptr<T> & t)
     {
         assert(!isFullOrOverflow(objects));
         objects.push(t);
     }
-    void pushEmpty(const T & t)
+    void pushEmpty(const std::shared_ptr<T> & t)
     {
         assert(!isFullOrOverflow(empty_objects));
         empty_objects.push(t);
     }
-    void pushEmpty(T && t)
+    void pushEmpty(std::shared_ptr<T> && t)
     {
         assert(!isFullOrOverflow(empty_objects));
         empty_objects.push(std::move(t));
     }
 
 private:
-    bool isFullOrOverflow(const std::queue<T> & q) const
+    bool isFullOrOverflow(const std::queue<std::shared_ptr<T>> & q) const
     {
         return q.size() >= capacity;
     }
-    bool isOverflow(const std::queue<T> & q) const
+    bool isOverflow(const std::queue<std::shared_ptr<T>> & q) const
     {
         return q.size() > capacity;
     }
-    bool isFull(const std::queue<T> & q) const
+    bool isFull(const std::queue<std::shared_ptr<T>> & q) const
     {
         return q.size() == capacity;
     }
 
-    std::queue<T> empty_objects;
-    std::queue<T> objects;
+    std::queue<std::shared_ptr<T>> empty_objects;
+    std::queue<std::shared_ptr<T>> objects;
     size_t capacity;
 };
 
@@ -163,7 +163,7 @@ private:
     DAGSchema schema;
     std::mutex mu;
     std::condition_variable cv;
-    RecyclableBuffer<std::shared_ptr<ReceivedPacket>> res_buffer;
+    RecyclableBuffer<ReceivedPacket> res_buffer;
     Int32 live_connections;
     State state;
     String err_msg;
