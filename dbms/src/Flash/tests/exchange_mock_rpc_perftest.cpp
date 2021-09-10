@@ -322,8 +322,10 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
 
     if (source_num <= 0)
         source_num = 5;
+
     if (block_rows <= 0)
         block_rows = 20000;
+
     if (seconds <= 0)
         seconds = 30;
 
