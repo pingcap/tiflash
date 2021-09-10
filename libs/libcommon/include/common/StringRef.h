@@ -28,17 +28,30 @@ struct StringRef
 
     /// Non-constexpr due to reinterpret_cast.
     template <typename CharT, typename = std::enable_if_t<sizeof(CharT) == 1>>
-    StringRef(const CharT * data_, size_t size_) : data(reinterpret_cast<const char *>(data_)), size(size_)
+    StringRef(const CharT * data_, size_t size_)
+        : data(reinterpret_cast<const char *>(data_))
+        , size(size_)
     {
         /// Sanity check for overflowed values.
         assert(size < 0x8000000000000000ULL);
     }
 
-    constexpr StringRef(const char * data_, size_t size_) : data(data_), size(size_) {}
+    constexpr StringRef(const char * data_, size_t size_)
+        : data(data_)
+        , size(size_)
+    {}
 
-    StringRef(const std::string & s) : data(s.data()), size(s.size()) {}
-    constexpr explicit StringRef(std::string_view s) : data(s.data()), size(s.size()) {}
-    constexpr StringRef(const char * data_) : StringRef(std::string_view{data_}) {}
+    explicit StringRef(const std::string & s)
+        : data(s.data())
+        , size(s.size())
+    {}
+    constexpr explicit StringRef(std::string_view s)
+        : data(s.data())
+        , size(s.size())
+    {}
+    constexpr explicit StringRef(const char * data_)
+        : StringRef(std::string_view{data_})
+    {}
     constexpr StringRef() = default;
 
     std::string toString() const { return std::string(data, size); }
@@ -51,7 +64,7 @@ struct StringRef
 /// nullptr can't be used because the StringRef values are used in SipHash's pointer arithmetic
 /// and the UBSan thinks that something like nullptr + 8 is UB.
 constexpr const inline char empty_string_ref_addr{};
-constexpr const inline StringRef EMPTY_STRING_REF{&empty_string_ref_addr, 0};
+[[maybe_unused]] constexpr const inline StringRef EMPTY_STRING_REF{&empty_string_ref_addr, 0};
 
 using StringRefs = std::vector<StringRef>;
 
@@ -66,7 +79,10 @@ inline bool operator==(StringRef lhs, StringRef rhs)
     return mem_utils::memoryEqual(lhs.data, rhs.data, lhs.size);
 }
 
-inline bool operator!=(StringRef lhs, StringRef rhs) { return !(lhs == rhs); }
+inline bool operator!=(StringRef lhs, StringRef rhs)
+{
+    return !(lhs == rhs);
+}
 
 inline bool operator<(StringRef lhs, StringRef rhs)
 {
@@ -98,11 +114,20 @@ struct StringRefHash64
 
 /// Parts are taken from CityHash.
 
-inline UInt64 hashLen16(UInt64 u, UInt64 v) { return CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::uint128(u, v)); }
+inline UInt64 hashLen16(UInt64 u, UInt64 v)
+{
+    return CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::uint128(u, v));
+}
 
-inline UInt64 shiftMix(UInt64 val) { return val ^ (val >> 47); }
+inline UInt64 shiftMix(UInt64 val)
+{
+    return val ^ (val >> 47);
+}
 
-inline UInt64 rotateByAtLeast1(UInt64 val, int shift) { return (val >> shift) | (val << (64 - shift)); }
+inline UInt64 rotateByAtLeast1(UInt64 val, int shift)
+{
+    return (val >> shift) | (val << (64 - shift));
+}
 
 inline size_t hashLessThan8(const char * data, size_t size)
 {
@@ -128,7 +153,7 @@ inline size_t hashLessThan8(const char * data, size_t size)
     return k2;
 }
 
-inline size_t hashLessThan16(const char * data, size_t size)
+[[maybe_unused]] inline size_t hashLessThan16(const char * data, size_t size)
 {
     if (size > 8)
     {
@@ -202,8 +227,14 @@ struct hash<StringRef> : public StringRefHash
 
 namespace ZeroTraits
 {
-inline bool check(const StringRef & x) { return 0 == x.size; }
-inline void set(StringRef & x) { x.size = 0; }
+inline bool check(const StringRef & x)
+{
+    return 0 == x.size;
+}
+inline void set(StringRef & x)
+{
+    x.size = 0;
+}
 } // namespace ZeroTraits
 
 
