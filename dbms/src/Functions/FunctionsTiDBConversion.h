@@ -547,7 +547,8 @@ struct TiDBConvertToInteger
                 for (size_t i = 0; i < size; i++)
                     vec_to[i] = toInt<FromFieldType, ToFieldType>(vec_from[i], context);
             }
-        } else if constexpr (std::is_same_v<FromDataType, DataTypeEnum8> || std::is_same_v<FromDataType, DataTypeEnum16>)
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeEnum8> || std::is_same_v<FromDataType, DataTypeEnum16>)
         {
             /// cast enum
             const auto * col_from = block.getByPosition(arguments[0]).column.get();
