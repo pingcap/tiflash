@@ -41,7 +41,7 @@ struct StringRef
         , size(size_)
     {}
 
-    explicit StringRef(const std::string & s)
+    StringRef(const std::string & s)
         : data(s.data())
         , size(s.size())
     {}
@@ -49,7 +49,7 @@ struct StringRef
         : data(s.data())
         , size(s.size())
     {}
-    constexpr explicit StringRef(const char * data_)
+    constexpr StringRef(const char * data_)
         : StringRef(std::string_view{data_})
     {}
     constexpr StringRef() = default;
