@@ -15,13 +15,18 @@ namespace
 
 std::random_device rd;
 
-using PacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
+using Packet = mpp::MPPDataPacket;
+using PacketPtr = std::shared_ptr<Packet>;
 using PacketQueue = ConcurrentBoundedQueue<PacketPtr>;
+using PacketQueuePtr = std::shared_ptr<ConcurrentBoundedQueue<PacketPtr>>;
 
 std::atomic<Int64> received_data_size{0};
 
+template <typename Channel>
 struct MockReceiverContext
 {
+    using ChannelPtr = std::shared_ptr<Channel>;
+
     struct Status
     {
         int status_code = 0;
@@ -50,8 +55,8 @@ struct MockReceiverContext
 
     struct Reader
     {
-        Reader(PacketQueue & queue_, std::atomic<Int64> & counter)
-            : queue(queue_), size_counter(counter)
+        explicit Reader(const ChannelPtr & channel_)
+            : channel(channel_)
         {}
 
         void initialize() const
@@ -61,11 +66,11 @@ struct MockReceiverContext
         bool read(mpp::MPPDataPacket * packet [[maybe_unused]]) const
         {
             PacketPtr ptr;
-            queue.pop(ptr);
+            channel->pop(ptr);
             if (!ptr)
                 return false;
             *packet = *ptr;
-            size_counter.fetch_add(packet->ByteSizeLong());
+            received_data_size.fetch_add(packet->ByteSizeLong());
             return true;
         }
 
@@ -74,14 +79,12 @@ struct MockReceiverContext
             return {0, ""};
         }
 
-        PacketQueue & queue;
-        std::atomic<Int64> & size_counter;
+        ChannelPtr channel;
     };
 
-    explicit MockReceiverContext(int source_num)
+    explicit MockReceiverContext(const std::vector<ChannelPtr> & channels_)
+        : channels(channels_)
     {
-        for (int i = 0; i < source_num; ++i)
-            queues.emplace_back(new PacketQueue(10));
     }
 
     Request makeRequest(
@@ -94,7 +97,7 @@ struct MockReceiverContext
 
     std::shared_ptr<Reader> makeReader(const Request & request [[maybe_unused]])
     {
-        return std::make_shared<Reader>(*queues[request.send_task_id], received_data_size);
+        return std::make_shared<Reader>(channels[request.send_task_id]);
     }
 
     static Status getStatusOK()
@@ -102,10 +105,11 @@ struct MockReceiverContext
         return {0, ""};
     }
 
-    std::vector<std::unique_ptr<PacketQueue>> queues;
+    std::vector<ChannelPtr> channels;
 };
 
-using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
+template <typename Channel>
+using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext<Channel>>;
 
 Block makeBlock(int row_num)
 {
@@ -159,7 +163,7 @@ mpp::MPPDataPacket makePacket(ChunkCodecStream & codec, int row_num)
     return packet;
 }
 
-void sendPacket(const std::vector<PacketPtr> & packets, PacketQueue & queue, std::atomic<bool> & stop_flag)
+void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & queue, std::atomic<bool> & stop_flag)
 {
     std::mt19937 mt(rd());
     std::uniform_int_distribution<int> dist(0, packets.size() - 1);
@@ -167,9 +171,9 @@ void sendPacket(const std::vector<PacketPtr> & packets, PacketQueue & queue, std
     while (!stop_flag.load())
     {
         int i = dist(mt);
-        queue.tryPush(packets[i], 10);
+        queue->tryPush(packets[i], 10);
     }
-    queue.push(PacketPtr());
+    queue->push(PacketPtr());
 }
 
 void readBlock(BlockInputStreamPtr stream)
@@ -241,7 +245,7 @@ void readBlock(BlockInputStreamPtr stream)
     }
 }
 
-void testReceiver(int source_num, int block_rows, int seconds)
+void testOnlyReceiver(int source_num, int block_rows, int seconds)
 {
     tipb::ExchangeReceiver pb_exchange_receiver;
     pb_exchange_receiver.set_tp(tipb::PassThrough);
@@ -277,16 +281,20 @@ void testReceiver(int source_num, int block_rows, int seconds)
     for (int i = 0; i < 100; ++i)
         packets.push_back(std::make_shared<mpp::MPPDataPacket>(makePacket(*chunk_codec_stream, block_rows)));
 
-    auto context = std::make_shared<MockReceiverContext>(source_num);
+    std::vector<PacketQueuePtr> channels;
+    for (int i = 0; i < source_num; ++i)
+        channels.push_back(std::make_shared<PacketQueue>(10));
+
+    auto context = std::make_shared<MockReceiverContext<PacketQueue>>(channels);
     std::atomic<bool> stop_flag(false);
 
-    auto receiver = std::make_shared<MockExchangeReceiver>(
+    auto receiver = std::make_shared<MockExchangeReceiver<PacketQueue>>(
         context,
         pb_exchange_receiver,
         task_meta,
         source_num * 5);
 
-    using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
+    using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver<PacketQueue>>;
     std::vector<BlockInputStreamPtr> streams;
     for (int i = 0; i < source_num; ++i)
         streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
@@ -295,7 +303,7 @@ void testReceiver(int source_num, int block_rows, int seconds)
     std::vector<std::thread> threads;
     for (int i = 0; i < source_num; ++i)
     {
-        threads.emplace_back(sendPacket, std::cref(packets), std::ref(*context->queues[i]), std::ref(stop_flag));
+        threads.emplace_back(sendPacket, std::cref(packets), channels[i], std::ref(stop_flag));
     }
     threads.emplace_back(readBlock, union_input_stream);
 
@@ -329,6 +337,6 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
     if (seconds <= 0)
         seconds = 30;
 
-    DB::tests::testReceiver(source_num, block_rows, seconds);
+    DB::tests::testOnlyReceiver(source_num, block_rows, seconds);
 }
 
