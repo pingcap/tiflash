@@ -8,7 +8,7 @@ namespace
 struct BitTestAllImpl
 {
     template <typename A, typename B>
-    static inline UInt8 apply(A a, B b)
+    static UInt8 apply(A a, B b)
     {
         return (a & b) == b;
     };
