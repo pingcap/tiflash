@@ -229,7 +229,6 @@ void sendBlock(
         out->write(blocks[i]);
     }
     out->writeSuffix();
-    raw_writer->finish();
 }
 
 void readBlock(BlockInputStreamPtr stream)
@@ -443,14 +442,15 @@ void testSenderReceiver(int source_num, int block_rows, int seconds)
     BlockOutputStreamPtr output_stream = std::make_shared<DAGBlockOutputStream>(union_input_stream->getHeader(), std::move(response_writer));
     output_stream = std::make_shared<SquashingBlockOutputStream>(output_stream, 20000, 0);
 
-    std::vector<std::thread> threads;
-    threads.emplace_back(sendBlock, std::cref(blocks), output_stream, mock_writer, std::ref(stop_flag));
-    threads.emplace_back(readBlock, union_input_stream);
+    auto write_thread = std::thread(sendBlock, std::cref(blocks), output_stream, mock_writer, std::ref(stop_flag));
+    auto read_thread = std::thread(readBlock, union_input_stream);
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
     stop_flag.store(true);
-    for (auto & thread : threads)
-        thread.join();
+
+    write_thread.join();
+    mock_writer->finish();
+    read_thread.join();
 }
 
 } // namespace
