@@ -41,7 +41,7 @@ struct StringRef
         , size(size_)
     {}
 
-    StringRef(const std::string & s)
+    StringRef(const std::string & s) // NOLINT(google-explicit-constructor)
         : data(s.data())
         , size(s.size())
     {}
@@ -49,7 +49,7 @@ struct StringRef
         : data(s.data())
         , size(s.size())
     {}
-    constexpr StringRef(const char * data_)
+    constexpr StringRef(const char * data_) // NOLINT(google-explicit-constructor)
         : StringRef(std::string_view{data_})
     {}
     constexpr StringRef() = default;
