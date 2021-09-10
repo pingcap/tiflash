@@ -1,6 +1,9 @@
 #include <Common/ConcurrentBoundedQueue.h>
+#include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <atomic>
@@ -22,11 +25,8 @@ using PacketQueuePtr = std::shared_ptr<ConcurrentBoundedQueue<PacketPtr>>;
 
 std::atomic<Int64> received_data_size{0};
 
-template <typename Channel>
 struct MockReceiverContext
 {
-    using ChannelPtr = std::shared_ptr<Channel>;
-
     struct Status
     {
         int status_code = 0;
@@ -55,8 +55,8 @@ struct MockReceiverContext
 
     struct Reader
     {
-        explicit Reader(const ChannelPtr & channel_)
-            : channel(channel_)
+        explicit Reader(const PacketQueuePtr & queue_)
+            : queue(queue_)
         {}
 
         void initialize() const
@@ -66,7 +66,7 @@ struct MockReceiverContext
         bool read(mpp::MPPDataPacket * packet [[maybe_unused]]) const
         {
             PacketPtr ptr;
-            channel->pop(ptr);
+            queue->pop(ptr);
             if (!ptr)
                 return false;
             *packet = *ptr;
@@ -79,11 +79,11 @@ struct MockReceiverContext
             return {0, ""};
         }
 
-        ChannelPtr channel;
+        PacketQueuePtr queue;
     };
 
-    explicit MockReceiverContext(const std::vector<ChannelPtr> & channels_)
-        : channels(channels_)
+    explicit MockReceiverContext(const std::vector<PacketQueuePtr> & queues_)
+        : queues(queues_)
     {
     }
 
@@ -97,7 +97,7 @@ struct MockReceiverContext
 
     std::shared_ptr<Reader> makeReader(const Request & request [[maybe_unused]])
     {
-        return std::make_shared<Reader>(channels[request.send_task_id]);
+        return std::make_shared<Reader>(queues[request.send_task_id]);
     }
 
     static Status getStatusOK()
@@ -105,11 +105,45 @@ struct MockReceiverContext
         return {0, ""};
     }
 
-    std::vector<ChannelPtr> channels;
+    std::vector<PacketQueuePtr> queues;
 };
 
-template <typename Channel>
-using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext<Channel>>;
+using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
+
+struct MockWriter
+{
+    explicit MockWriter(const std::vector<PacketQueuePtr> & queues_)
+        : queues(queues_)
+    {}
+
+    void write(tipb::SelectResponse & response)
+    {
+        auto packet = std::make_shared<Packet>();
+        response.SerializeToString(packet->mutable_data());
+        for (const auto & queue : queues)
+            queue->push(packet);
+    }
+
+    void write(tipb::SelectResponse & response, int16_t i)
+    {
+        auto packet = std::make_shared<Packet>();
+        response.SerializeToString(packet->mutable_data());
+        queues[i]->push(packet);
+    }
+
+    void finish()
+    {
+        for (const auto & queue : queues)
+            queue->push(PacketPtr{});
+    }
+
+    uint16_t getPartitionNum() const
+    {
+        return queues.size();
+    }
+
+    std::vector<PacketQueuePtr> queues;
+};
 
 Block makeBlock(int row_num)
 {
@@ -174,6 +208,28 @@ void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & q
         queue->tryPush(packets[i], 10);
     }
     queue->push(PacketPtr());
+}
+
+using BlockWriter = StreamingDAGResponseWriter<std::shared_ptr<MockWriter>>;
+using BlockWriterPtr = std::shared_ptr<BlockWriter>;
+
+void sendBlock(
+    const std::vector<Block> & blocks,
+    const BlockOutputStreamPtr & out,
+    const std::shared_ptr<MockWriter> & raw_writer [[maybe_unused]],
+    const std::atomic<bool> & stop_flag)
+{
+    std::mt19937 mt(rd());
+    std::uniform_int_distribution<int> dist(0, blocks.size() - 1);
+
+    out->writePrefix();
+    while (!stop_flag.load())
+    {
+        int i = dist(mt);
+        out->write(blocks[i]);
+    }
+    out->writeSuffix();
+    raw_writer->finish();
 }
 
 void readBlock(BlockInputStreamPtr stream)
@@ -241,7 +297,7 @@ void readBlock(BlockInputStreamPtr stream)
         if (std::string::npos == embedded_stack_trace_pos)
             std::cerr << "Stack trace:" << std::endl
                       << e.getStackTrace().toString() << std::endl;
-        return;
+        exit(1);
     }
 }
 
@@ -281,20 +337,20 @@ void testOnlyReceiver(int source_num, int block_rows, int seconds)
     for (int i = 0; i < 100; ++i)
         packets.push_back(std::make_shared<mpp::MPPDataPacket>(makePacket(*chunk_codec_stream, block_rows)));
 
-    std::vector<PacketQueuePtr> channels;
+    std::vector<PacketQueuePtr> queues;
     for (int i = 0; i < source_num; ++i)
-        channels.push_back(std::make_shared<PacketQueue>(10));
+        queues.push_back(std::make_shared<PacketQueue>(10));
 
-    auto context = std::make_shared<MockReceiverContext<PacketQueue>>(channels);
+    auto context = std::make_shared<MockReceiverContext>(queues);
     std::atomic<bool> stop_flag(false);
 
-    auto receiver = std::make_shared<MockExchangeReceiver<PacketQueue>>(
+    auto receiver = std::make_shared<MockExchangeReceiver>(
         context,
         pb_exchange_receiver,
         task_meta,
         source_num * 5);
 
-    using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver<PacketQueue>>;
+    using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
     std::vector<BlockInputStreamPtr> streams;
     for (int i = 0; i < source_num; ++i)
         streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
@@ -303,8 +359,92 @@ void testOnlyReceiver(int source_num, int block_rows, int seconds)
     std::vector<std::thread> threads;
     for (int i = 0; i < source_num; ++i)
     {
-        threads.emplace_back(sendPacket, std::cref(packets), channels[i], std::ref(stop_flag));
+        threads.emplace_back(sendPacket, std::cref(packets), queues[i], std::ref(stop_flag));
     }
+    threads.emplace_back(readBlock, union_input_stream);
+
+    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+    stop_flag.store(true);
+    for (auto & thread : threads)
+        thread.join();
+}
+
+void testSenderReceiver(int source_num, int block_rows, int seconds)
+{
+    tipb::ExchangeReceiver pb_exchange_receiver;
+    pb_exchange_receiver.set_tp(tipb::PassThrough);
+    for (int i = 0; i < source_num; ++i)
+    {
+        mpp::TaskMeta task;
+        task.set_start_ts(0);
+        task.set_task_id(i);
+        task.set_partition_id(i);
+        task.set_address("");
+
+        String encoded_task;
+        task.SerializeToString(&encoded_task);
+
+        pb_exchange_receiver.add_encoded_task_meta(encoded_task);
+    }
+
+    tipb::FieldType f0, f1, f2;
+
+    f0.set_tp(TiDB::TypeLongLong);
+    f1.set_tp(TiDB::TypeString);
+    f2.set_tp(TiDB::TypeLongLong);
+
+    *pb_exchange_receiver.add_field_types() = f0;
+    *pb_exchange_receiver.add_field_types() = f1;
+    *pb_exchange_receiver.add_field_types() = f2;
+
+    mpp::TaskMeta task_meta;
+    task_meta.set_task_id(100);
+
+    std::vector<Block> blocks;
+    for (int i = 0; i < 100; ++i)
+        blocks.push_back(makeBlock(block_rows));
+
+    std::vector<PacketQueuePtr> queues;
+    for (int i = 0; i < source_num; ++i)
+        queues.push_back(std::make_shared<PacketQueue>(10));
+
+    auto context = std::make_shared<MockReceiverContext>(queues);
+    std::atomic<bool> stop_flag(false);
+
+    auto receiver = std::make_shared<MockExchangeReceiver>(
+        context,
+        pb_exchange_receiver,
+        task_meta,
+        source_num * 5);
+
+    using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
+    std::vector<BlockInputStreamPtr> streams;
+    for (int i = 0; i < source_num; ++i)
+        streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
+    auto union_input_stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, source_num);
+
+    auto mock_writer = std::make_shared<MockWriter>(queues);
+
+    DAGContext dag_context(tipb::DAGRequest{});
+    dag_context.final_concurrency = source_num;
+    dag_context.is_mpp_task = true;
+    dag_context.is_root_mpp_task = false;
+    std::unique_ptr<DAGResponseWriter> response_writer(
+        new BlockWriter(
+            mock_writer,
+            {0, 1, 2},
+            TiDB::TiDBCollators(3),
+            tipb::Hash,
+            -1,
+            tipb::TypeCHBlock,
+            {f0, f1, f2},
+            dag_context));
+
+    BlockOutputStreamPtr output_stream = std::make_shared<DAGBlockOutputStream>(union_input_stream->getHeader(), std::move(response_writer));
+    output_stream = std::make_shared<SquashingBlockOutputStream>(output_stream, 20000, 0);
+
+    std::vector<std::thread> threads;
+    threads.emplace_back(sendBlock, std::cref(blocks), output_stream, mock_writer, std::ref(stop_flag));
     threads.emplace_back(readBlock, union_input_stream);
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
@@ -318,15 +458,18 @@ void testOnlyReceiver(int source_num, int block_rows, int seconds)
 
 int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
 {
-    if (argc != 4)
+    if (argc != 4 && argc != 5)
     {
-        std::cerr << fmt::format("Usage: {} <source_num> <block_rows> <seconds>", argv[0]) << std::endl;
+        std::cerr << fmt::format("Usage: {} <source_num> <block_rows> <seconds> [receiver|sender_receiver]", argv[0]) << std::endl;
         exit(1);
     }
 
     int source_num = atoi(argv[1]);
     int block_rows = atoi(argv[2]);
     int seconds = atoi(argv[3]);
+    String method = "receiver";
+    if (argc == 5)
+        method = argv[4];
 
     if (source_num <= 0)
         source_num = 5;
@@ -337,6 +480,14 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
     if (seconds <= 0)
         seconds = 30;
 
-    DB::tests::testOnlyReceiver(source_num, block_rows, seconds);
+    if (method == "receiver")
+        DB::tests::testOnlyReceiver(source_num, block_rows, seconds);
+    else if (method == "sender_receiver")
+        DB::tests::testSenderReceiver(source_num, block_rows, seconds);
+    else
+    {
+        std::cerr << "Unknown method: " << method << std::endl;
+        exit(1);
+    }
 }
 

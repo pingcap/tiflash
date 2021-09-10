@@ -537,8 +537,6 @@ public:
             {
                 result = {resp_ptr, packet->source_index, packet->req_info};
             }
-            if (resp_ptr->chunks_size() == 0)
-                throw Exception("Exchange receiver find empty response: ");
         }
         packet->packet->Clear();
         std::unique_lock<std::mutex> lock(mu);
