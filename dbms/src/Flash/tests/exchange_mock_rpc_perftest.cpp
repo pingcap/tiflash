@@ -76,9 +76,10 @@ struct MockReceiverContext
         std::atomic<Int64> & size_counter;
     };
 
-    explicit MockReceiverContext(PacketQueue & queue_)
-        : queue(queue_)
+    explicit MockReceiverContext(int source_num)
     {
+        for (int i = 0; i < source_num; ++i)
+            queues.emplace_back(new PacketQueue(10));
     }
 
     Request makeRequest(
@@ -91,7 +92,7 @@ struct MockReceiverContext
 
     std::shared_ptr<Reader> makeReader(const Request & request [[maybe_unused]])
     {
-        return std::make_shared<Reader>(queue, received_data_size);
+        return std::make_shared<Reader>(*queues[request.send_task_id], received_data_size);
     }
 
     static Status getStatusOK()
@@ -99,7 +100,7 @@ struct MockReceiverContext
         return {0, ""};
     }
 
-    PacketQueue & queue;
+    std::vector<std::unique_ptr<PacketQueue>> queues;
 };
     
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
@@ -155,7 +156,7 @@ mpp::MPPDataPacket makePacket(ChunkCodecStream & codec, int row_num)
     return packet;
 }
 
-void sendPacket(const std::vector<PacketPtr> & packets, int source_num, PacketQueue & queue, std::atomic<bool> & stop_flag)
+void sendPacket(const std::vector<PacketPtr> & packets, PacketQueue & queue, std::atomic<bool> & stop_flag)
 {
     std::mt19937 mt(rd());
     std::uniform_int_distribution<int> dist(0, packets.size() - 1);
@@ -165,16 +166,26 @@ void sendPacket(const std::vector<PacketPtr> & packets, int source_num, PacketQu
         int i = dist(mt);
         queue.tryPush(packets[i], 10);
     }
-    for (int i = 0; i < source_num; ++i)
-        queue.push(PacketPtr());
+    queue.push(PacketPtr());
 }
 
 template <typename ExchangeReceiverType>
 void receivePacket(ExchangeReceiverType & receiver)
 {
+    auto get_rate = [](auto count, auto duration)
+    {
+        return count * 1000 / duration.count();
+    };
+
+    auto get_mib = [](auto v)
+    {
+        return v / 1024 / 1024;
+    };
+
     auto start = std::chrono::high_resolution_clock::now();
     auto second_ago = start;
     Int64 packet_count = 0;
+    Int64 last_packet_count = 0;
     Int64 last_data_size = received_data_size.load();
     while (true)
     {
@@ -189,12 +200,14 @@ void receivePacket(ExchangeReceiverType & receiver)
             Int64 data_size = received_data_size.load();
             std::cout
                 << fmt::format(
-                    "Packets: {:<12} Data: {:<12} Rate(MiB): {:<6}",
+                    "Packets: {:<10} Data(MiB): {:<8} Packet/s: {:<6} Data/s(MiB): {:<6}",
                     packet_count,
-                    data_size,
-                    (data_size - last_data_size) * 1000 / duration.count() / 1024 / 1024)
+                    get_mib(data_size),
+                    get_rate(packet_count - last_packet_count, duration),
+                    get_mib(get_rate(data_size - last_data_size, duration)))
                 << std::endl;
             second_ago = cur;
+            last_packet_count = packet_count;
             last_data_size = data_size;
         }
     }
@@ -204,10 +217,11 @@ void receivePacket(ExchangeReceiverType & receiver)
     Int64 data_size = received_data_size.load();
     std::cout
         << fmt::format(
-            "Packets: {:<12} Data: {:<12} Rate(MiB): {:<6}. End",
+            "End. Packets: {:<10} Data(MiB): {:<8} Packet/s: {:<6} Data/s(MiB): {:<6}",
             packet_count,
-            data_size,
-            data_size * 1000 / duration.count() / 1024 / 1024)
+            get_mib(data_size),
+            get_rate(packet_count, duration),
+            get_mib(get_rate(data_size, duration)))
         << std::endl;
 }
 
@@ -247,8 +261,7 @@ void testReceiver(int source_num, int block_rows, int seconds)
     for (int i = 0; i < 100; ++i)
         packets.push_back(std::make_shared<mpp::MPPDataPacket>(makePacket(*chunk_codec_stream, block_rows)));
     
-    PacketQueue queue(source_num * 5);
-    auto context = std::make_shared<MockReceiverContext>(queue);
+    auto context = std::make_shared<MockReceiverContext>(source_num);
     std::atomic<bool> stop_flag(false);
 
     ExchangeReceiverBase<MockReceiverContext> receiver(
@@ -257,15 +270,17 @@ void testReceiver(int source_num, int block_rows, int seconds)
         task_meta,
         source_num * 5);
 
-    std::thread send_thread([&] { sendPacket(packets, source_num, queue, stop_flag); });
-    std::thread receive_thread([&] { receivePacket(receiver); });
+    std::vector<std::thread> threads;
+    for (int i = 0; i < source_num; ++i)
+    {
+        threads.emplace_back(sendPacket, std::ref(packets), std::ref(*context->queues[i]), std::ref(stop_flag));
+    }
+    threads.emplace_back(receivePacket<ExchangeReceiverBase<MockReceiverContext>>, std::ref(receiver));
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
     stop_flag.store(true);
-    send_thread.join();
-    receive_thread.join();
-
-    packets.clear();
+    for (auto & thread : threads)
+        thread.join();
 }
 
 } // namespace
@@ -286,7 +301,7 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
     if (source_num <= 0)
         source_num = 5;
     if (block_rows <= 0)
-        block_rows = 1000;
+        block_rows = 20000;
     if (seconds <= 0)
         seconds = 30;
 
