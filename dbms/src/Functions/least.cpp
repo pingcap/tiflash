@@ -63,7 +63,7 @@ namespace
 struct NameLeast                { static constexpr auto name = "least"; };
 // clang-format on
 
-using FunctionLeast = FunctionBinaryArithmetic<LeastImpl, NameLeast>;
+using FunctionLeast = FunctionBinaryArithmetic<LeastImpl_t, NameLeast>;
 
 } // namespace
 

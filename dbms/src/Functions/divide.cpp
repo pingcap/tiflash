@@ -291,10 +291,10 @@ struct NameDivideIntegral       { static constexpr auto name = "intDiv"; };
 struct NameDivideIntegralOrZero { static constexpr auto name = "intDivOrZero"; };
 // clang-format on
 
-using FunctionDivideFloating = FunctionBinaryArithmetic<DivideFloatingImpl, NameDivideFloating>;
-using FunctionTiDBDivideFloating = FunctionBinaryArithmetic<TiDBDivideFloatingImpl, NameTiDBDivideFloating, false>;
-using FunctionDivideIntegral = FunctionBinaryArithmetic<DivideIntegralImpl, NameDivideIntegral>;
-using FunctionDivideIntegralOrZero = FunctionBinaryArithmetic<DivideIntegralOrZeroImpl, NameDivideIntegralOrZero>;
+using FunctionDivideFloating = FunctionBinaryArithmetic<DivideFloatingImpl_t, NameDivideFloating>;
+using FunctionTiDBDivideFloating = FunctionBinaryArithmetic<TiDBDivideFloatingImpl_t, NameTiDBDivideFloating, false>;
+using FunctionDivideIntegral = FunctionBinaryArithmetic<DivideIntegralImpl_t, NameDivideIntegral>;
+using FunctionDivideIntegralOrZero = FunctionBinaryArithmetic<DivideIntegralOrZeroImpl_t, NameDivideIntegralOrZero>;
 
 } // namespace
 

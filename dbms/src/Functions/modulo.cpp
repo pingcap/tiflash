@@ -169,7 +169,7 @@ namespace
 struct NameModulo               { static constexpr auto name = "modulo"; };
 // clang-format on
 
-using FunctionModulo = FunctionBinaryArithmetic<ModuloImpl, NameModulo, false>;
+using FunctionModulo = FunctionBinaryArithmetic<ModuloImpl_t, NameModulo, false>;
 
 } // namespace
 
