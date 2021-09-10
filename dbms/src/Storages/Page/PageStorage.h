@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -41,38 +42,38 @@ public:
     {
         Config() = default;
 
-        bool sync_on_write = true;
+        SettingBool sync_on_write = true;
 
-        size_t file_roll_size = PAGE_FILE_ROLL_SIZE;
-        size_t file_max_size = PAGE_FILE_MAX_SIZE;
-        size_t file_small_size = PAGE_FILE_SMALL_SIZE;
+        SettingUInt64 file_roll_size = PAGE_FILE_ROLL_SIZE;
+        SettingUInt64 file_max_size = PAGE_FILE_MAX_SIZE;
+        SettingUInt64 file_small_size = PAGE_FILE_SMALL_SIZE;
 
-        size_t file_meta_roll_size = PAGE_META_ROLL_SIZE;
+        SettingUInt64 file_meta_roll_size = PAGE_META_ROLL_SIZE;
 
         // When the value of gc_force_hardlink_rate is less than 1,
         // It means that candidates whose vaild rate is less than this value will be forced to hardlink(This will reduce the gc duration).
         // Otherwise, if gc_force_hardlink_rate equal 1, hardlink won't happen
-        Float64 gc_force_hardlink_rate = 0.8;
+        SettingDouble gc_force_hardlink_rate = 0.8;
 
-        Float64 gc_max_valid_rate = 0.35;
-        size_t gc_min_bytes = PAGE_FILE_ROLL_SIZE;
-        size_t gc_min_files = 10;
+        SettingDouble gc_max_valid_rate = 0.35;
+        SettingUInt64 gc_min_bytes = PAGE_FILE_ROLL_SIZE;
+        SettingUInt64 gc_min_files = 10;
         // Minimum number of legacy files to be selected for compaction
-        size_t gc_min_legacy_num = 3;
+        SettingUInt64 gc_min_legacy_num = 3;
 
-        size_t gc_max_expect_legacy_files = 100;
-        Float64 gc_max_valid_rate_bound = 1.0;
+        SettingUInt64 gc_max_expect_legacy_files = 100;
+        SettingDouble gc_max_valid_rate_bound = 1.0;
 
         // Maximum write concurrency. Must not be changed once the PageStorage object is created.
-        size_t num_write_slots = 1;
+        SettingUInt64 num_write_slots = 1;
 
         // Maximum seconds of reader / writer idle time.
         // 0 for never reclaim idle file descriptor.
-        Seconds open_file_max_idle_time{15};
+        SettingUInt64 open_file_max_idle_time = 15;
 
         // Probability to do gc when write is low.
         // The probability is `prob_do_gc_when_write_is_low` out of 1000.
-        size_t prob_do_gc_when_write_is_low = 10;
+        SettingUInt64 prob_do_gc_when_write_is_low = 10;
 
         ::DB::MVCC::VersionSetConfig version_set_config;
 

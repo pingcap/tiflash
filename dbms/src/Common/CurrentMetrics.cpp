@@ -17,8 +17,6 @@
     M(InterserverConnection)                    \
     M(OpenFileForRead)                          \
     M(OpenFileForWrite)                         \
-    M(Read)                                     \
-    M(Write)                                    \
     M(SendExternalTables)                       \
     M(QueryThread)                              \
     M(ReadonlyReplica)                          \
@@ -87,7 +85,10 @@ const char * getDescription(Metric event)
     return descriptions[event];
 }
 
-Metric end() { return END; }
+Metric end()
+{
+    return END;
+}
 } // namespace CurrentMetrics
 
 #undef APPLY_FOR_METRICS

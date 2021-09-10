@@ -5,13 +5,14 @@
 
 namespace DB
 {
-
-template <bool emit_decimal_point> struct DoubleToStringConverterFlags
+template <bool emit_decimal_point>
+struct DoubleToStringConverterFlags
 {
     static constexpr auto flags = double_conversion::DoubleToStringConverter::NO_FLAGS;
 };
 
-template <> struct DoubleToStringConverterFlags<true>
+template <>
+struct DoubleToStringConverterFlags<true>
 {
     static constexpr auto flags = double_conversion::DoubleToStringConverter::EMIT_TRAILING_DECIMAL_POINT;
 };
@@ -19,9 +20,6 @@ template <> struct DoubleToStringConverterFlags<true>
 template <bool emit_decimal_point>
 class DoubleConverter
 {
-    DoubleConverter(const DoubleConverter &) = delete;
-    DoubleConverter & operator=(const DoubleConverter &)  = delete;
-
     DoubleConverter() = default;
 
 public:
@@ -32,12 +30,17 @@ public:
 
     static const auto & instance()
     {
+        // clang-format off
         static const double_conversion::DoubleToStringConverter instance{
             DoubleToStringConverterFlags<emit_decimal_point>::flags, "inf", "nan", 'e', -6, 21, 6, 1
         };
+        // clang-format on
 
         return instance;
     }
+
+    DoubleConverter(const DoubleConverter &) = delete;
+    DoubleConverter & operator=(const DoubleConverter &) = delete;
 };
 
-}
+} // namespace DB

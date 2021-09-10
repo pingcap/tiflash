@@ -1,28 +1,27 @@
 #pragma once
 
-#include <IO/WriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
-
+#include <IO/WriteBuffer.h>
 #include <Poco/Net/HTTPClientSession.h>
 
 namespace DB
 {
-
 namespace
 {
-
 constexpr auto DEFAULT_REMOTE_WRITE_BUFFER_CONNECTION_TIMEOUT = 1;
 constexpr auto DEFAULT_REMOTE_WRITE_BUFFER_RECEIVE_TIMEOUT = 1800;
 constexpr auto DEFAULT_REMOTE_WRITE_BUFFER_SEND_TIMEOUT = 1800;
 
-}
+} // namespace
 
 /** Allows you to write a file to a remote server.
   */
 class InterserverWriteBuffer final : public WriteBuffer
 {
 public:
-    InterserverWriteBuffer(const std::string & host_, int port_,
+    InterserverWriteBuffer(
+        const std::string & host_,
+        int port_,
         const std::string & endpoint_,
         const std::string & path_,
         bool compress_ = false,
@@ -44,11 +43,11 @@ private:
     std::string path;
 
     Poco::Net::HTTPClientSession session;
-    std::ostream * ostr;    /// this is owned by session
+    std::ostream * ostr; /// this is owned by session
     std::unique_ptr<WriteBuffer> impl;
 
     /// Sent all the data and renamed the file
     bool finalized = false;
 };
 
-}
+} // namespace DB

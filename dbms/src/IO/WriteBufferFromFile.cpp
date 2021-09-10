@@ -1,27 +1,24 @@
-#include <sys/stat.h>
-#include <fcntl.h>
-
 #include <Common/ProfileEvents.h>
-
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event FileOpen;
-    extern const Event FileOpenFailed;
-}
+extern const Event FileOpen;
+extern const Event FileOpenFailed;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int FILE_DOESNT_EXIST;
-    extern const int CANNOT_OPEN_FILE;
-    extern const int CANNOT_CLOSE_FILE;
-}
+extern const int FILE_DOESNT_EXIST;
+extern const int CANNOT_OPEN_FILE;
+extern const int CANNOT_CLOSE_FILE;
+} // namespace ErrorCodes
 
 
 WriteBufferFromFile::WriteBufferFromFile(
@@ -31,7 +28,8 @@ WriteBufferFromFile::WriteBufferFromFile(
     mode_t mode,
     char * existing_memory,
     size_t alignment)
-    : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment), file_name(file_name_)
+    : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment)
+    , file_name(file_name_)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
 
@@ -69,9 +67,8 @@ WriteBufferFromFile::WriteBufferFromFile(
     size_t buf_size,
     char * existing_memory,
     size_t alignment)
-    :
-    WriteBufferFromFileDescriptor(fd, buf_size, existing_memory, alignment),
-    file_name(original_file_name.empty() ? "(fd = " + toString(fd) + ")" : original_file_name)
+    : WriteBufferFromFileDescriptor(fd, buf_size, existing_memory, alignment)
+    , file_name(original_file_name.empty() ? "(fd = " + toString(fd) + ")" : original_file_name)
 {
 }
 
@@ -106,4 +103,4 @@ void WriteBufferFromFile::close()
     metric_increment.destroy();
 }
 
-}
+} // namespace DB

@@ -5,5 +5,5 @@
 
 namespace ClickHouseRevision
 {
-    unsigned get();
+unsigned get();
 }

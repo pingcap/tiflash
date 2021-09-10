@@ -1,12 +1,11 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 
 
 namespace DB
 {
-
-
 /** Combines several sources into one.
   * Unlike UnionBlockInputStream, it does this sequentially.
   * Blocks of different sources are not interleaved with each other.
@@ -14,7 +13,8 @@ namespace DB
 class ConcatBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ConcatBlockInputStream(BlockInputStreams inputs_)
+    ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_ = nullptr)
+        : log(getLogWithPrefix(log_))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -53,6 +53,8 @@ protected:
 
 private:
     BlockInputStreams::iterator current_stream;
+
+    LogWithPrefixPtr log;
 };
 
 } // namespace DB

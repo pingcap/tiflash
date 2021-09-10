@@ -16,11 +16,16 @@ struct FixedHashMapCell
     bool full;
     Mapped mapped;
 
-    FixedHashMapCell() {} //-V730
-    FixedHashMapCell(const Key &, const State &) : full(true) {}
-    FixedHashMapCell(const value_type & value_, const State &) : full(true), mapped(value_.second) {}
+    FixedHashMapCell() = default;
+    FixedHashMapCell(const Key &, const State &)
+        : full(true)
+    {}
+    FixedHashMapCell(const value_type & value_, const State &)
+        : full(true)
+        , mapped(value_.second)
+    {}
 
-    const VoidKey getKey() const { return {}; }
+    VoidKey getKey() const { return {}; }
     Mapped & getMapped() { return mapped; }
     const Mapped & getMapped() const { return mapped; }
 
@@ -31,8 +36,11 @@ struct FixedHashMapCell
     ///  Note that we have to assemble a continuous layout for the value_type on each call of getValue().
     struct CellExt
     {
-        CellExt() {} //-V730
-        CellExt(Key && key_, const FixedHashMapCell * ptr_) : key(key_), ptr(const_cast<FixedHashMapCell *>(ptr_)) {}
+        CellExt() = default;
+        CellExt(Key && key_, const FixedHashMapCell * ptr_)
+            : key(key_)
+            , ptr(const_cast<FixedHashMapCell *>(ptr_))
+        {}
         void update(Key && key_, const FixedHashMapCell * ptr_)
         {
             key = key_;
@@ -44,7 +52,7 @@ struct FixedHashMapCell
         const Key & getKey() const { return key; }
         Mapped & getMapped() { return ptr->mapped; }
         const Mapped & getMapped() const { return ptr->mapped; }
-        const value_type getValue() const { return {key, ptr->mapped}; }
+        value_type getValue() const { return {key, ptr->mapped}; }
     };
 };
 
@@ -61,11 +69,13 @@ struct FixedHashMapImplicitZeroCell
 
     Mapped mapped;
 
-    FixedHashMapImplicitZeroCell() {}
+    FixedHashMapImplicitZeroCell() = default;
     FixedHashMapImplicitZeroCell(const Key &, const State &) {}
-    FixedHashMapImplicitZeroCell(const value_type & value_, const State &) : mapped(value_.second) {}
+    FixedHashMapImplicitZeroCell(const value_type & value_, const State &)
+        : mapped(value_.second)
+    {}
 
-    const VoidKey getKey() const { return {}; }
+    VoidKey getKey() const { return {}; }
     Mapped & getMapped() { return mapped; }
     const Mapped & getMapped() const { return mapped; }
 
@@ -76,8 +86,11 @@ struct FixedHashMapImplicitZeroCell
     ///  Note that we have to assemble a continuous layout for the value_type on each call of getValue().
     struct CellExt
     {
-        CellExt() {} //-V730
-        CellExt(Key && key_, const FixedHashMapImplicitZeroCell * ptr_) : key(key_), ptr(const_cast<FixedHashMapImplicitZeroCell *>(ptr_)) {}
+        CellExt() = default;
+        CellExt(Key && key_, const FixedHashMapImplicitZeroCell * ptr_)
+            : key(key_)
+            , ptr(const_cast<FixedHashMapImplicitZeroCell *>(ptr_))
+        {}
         void update(Key && key_, const FixedHashMapImplicitZeroCell * ptr_)
         {
             key = key_;
@@ -89,7 +102,7 @@ struct FixedHashMapImplicitZeroCell
         const Key & getKey() const { return key; }
         Mapped & getMapped() { return ptr->mapped; }
         const Mapped & getMapped() const { return ptr->mapped; }
-        const value_type getValue() const { return {key, ptr->mapped}; }
+        value_type getValue() const { return {key, ptr->mapped}; }
     };
 };
 

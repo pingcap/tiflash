@@ -9,15 +9,20 @@ const unsigned char MockKeyManager::default_key[]
 const unsigned char MockKeyManager::default_iv[] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xf7\x05\xd2\xd6\xb8\xaa\xa9\x2c";
 
 MockKeyManager::MockKeyManager(bool encryption_enabled_)
-    : MockKeyManager(default_method, String(reinterpret_cast<const char *>(default_key), 32),
-        String(reinterpret_cast<const char *>(default_iv), 16), encryption_enabled_)
+    : MockKeyManager(default_method, String(reinterpret_cast<const char *>(default_key), 32), String(reinterpret_cast<const char *>(default_iv), 16), encryption_enabled_)
 {}
 
 MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv, bool encryption_enabled_)
-    : method{method_}, key{key_}, iv{iv}, encryption_enabled{encryption_enabled_}
+    : method{method_}
+    , key{key_}
+    , iv{iv}
+    , encryption_enabled{encryption_enabled_}
 {}
 
-FileEncryptionInfo MockKeyManager::newFile(const String & fname) { return getFile(fname); }
+FileEncryptionInfo MockKeyManager::newFile(const String & fname)
+{
+    return getFile(fname);
+}
 
 FileEncryptionInfo MockKeyManager::getFile(const String & fname)
 {

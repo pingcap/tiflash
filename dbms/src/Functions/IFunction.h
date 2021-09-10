@@ -16,33 +16,25 @@ namespace ErrorCodes
 {
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 extern const int NOT_IMPLEMENTED;
-extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 /// The simplest executable object.
 /// Motivation:
 ///  * Prepare something heavy once before main execution loop instead of doing it for each block.
 ///  * Provide const interface for IFunctionBase (later).
-class IPreparedFunction
+///  * Create one executable function per thread to use caches without synchronization (later).
+class IExecutableFunction
 {
 public:
-    virtual ~IPreparedFunction() = default;
+    virtual ~IExecutableFunction() = default;
 
     /// Get the main function name.
     virtual String getName() const = 0;
 
-    virtual void execute(Block & block, const ColumnNumbers & arguments, size_t result) = 0;
-};
-
-using PreparedFunctionPtr = std::shared_ptr<IPreparedFunction>;
-
-class PreparedFunctionImpl : public IPreparedFunction
-{
-public:
-    void execute(Block & block, const ColumnNumbers & arguments, size_t result) final;
+    void execute(Block & block, const ColumnNumbers & arguments, size_t result) const;
 
 protected:
-    virtual void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) = 0;
+    virtual void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const = 0;
 
     /** Default implementation in presence of Nullable arguments or NULL constants as arguments is the following:
       *  if some of arguments are NULL constants then return NULL constant,
@@ -64,9 +56,11 @@ protected:
     virtual ColumnNumbers getArgumentsThatAreAlwaysConstant() const { return {}; }
 
 private:
-    bool defaultImplementationForNulls(Block & block, const ColumnNumbers & args, size_t result);
-    bool defaultImplementationForConstantArguments(Block & block, const ColumnNumbers & args, size_t result);
+    bool defaultImplementationForNulls(Block & block, const ColumnNumbers & args, size_t result) const;
+    bool defaultImplementationForConstantArguments(Block & block, const ColumnNumbers & args, size_t result) const;
 };
+
+using ExecutableFunctionPtr = std::shared_ptr<IExecutableFunction>;
 
 /// Function with known arguments and return type.
 class IFunctionBase
@@ -82,11 +76,11 @@ public:
 
     /// Do preparations and return executable.
     /// sample_block should contain data types of arguments and values of constants, if relevant.
-    virtual PreparedFunctionPtr prepare(const Block & sample_block) const = 0;
+    virtual ExecutableFunctionPtr prepare(const Block & sample_block) const = 0;
 
     /// TODO: make const
     /// both arguments and result are column positions in block.
-    virtual void execute(Block & block, const ColumnNumbers & arguments, size_t result)
+    virtual void execute(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         return prepare(block)->execute(block, arguments, result);
     }
@@ -128,9 +122,9 @@ public:
       * Example: now(). Another example: functions that work with periodically updated dictionaries.
       */
 
-    virtual bool isDeterministic() { return true; }
+    virtual bool isDeterministic() const { return true; }
 
-    virtual bool isDeterministicInScopeOfQuery() { return true; }
+    virtual bool isDeterministicInScopeOfQuery() const { return true; }
 
     /** Lets you know if the function is monotonic in a range of values.
       * This is used to work with the index in a sorted chunk of data.
@@ -170,6 +164,14 @@ class IFunctionBuilder
 public:
     virtual ~IFunctionBuilder() = default;
 
+    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator = nullptr) const;
+
+    DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments) const;
+
+    void getLambdaArgumentTypes(DataTypes & arguments) const;
+
+    void checkNumberOfArguments(size_t number_of_arguments) const;
+
     /// Get the main function name.
     virtual String getName() const = 0;
 
@@ -179,40 +181,15 @@ public:
     /// For non-variadic functions, return number of arguments; otherwise return zero (that should be ignored).
     virtual size_t getNumberOfArguments() const = 0;
 
-    /// Throw if number of arguments is incorrect. Default implementation will check only in non-variadic case.
-    virtual void checkNumberOfArguments(size_t number_of_arguments) const = 0;
-
-    /// Check arguments and return IFunctionBase.
-    virtual FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator = nullptr) const = 0;
-
+protected:
     /// For higher-order functions (functions, that have lambda expression as at least one argument).
     /// You pass data types with empty DataTypeFunction for lambda arguments.
     /// This function will replace it with DataTypeFunction containing actual types.
-    virtual void getLambdaArgumentTypes(DataTypes & arguments) const = 0;
-};
-
-using FunctionBuilderPtr = std::shared_ptr<IFunctionBuilder>;
-
-class FunctionBuilderImpl : public IFunctionBuilder
-{
-public:
-    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator) const final
+    virtual void getLambdaArgumentTypesImpl(DataTypes & /*arguments*/) const
     {
-        return buildImpl(arguments, getReturnType(arguments), collator);
+        throw Exception("Function " + getName() + " can't have lambda-expressions as arguments", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    /// Default implementation. Will check only in non-variadic case.
-    void checkNumberOfArguments(size_t number_of_arguments) const override;
-
-    DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments) const;
-
-    void getLambdaArgumentTypes(DataTypes & arguments) const override
-    {
-        checkNumberOfArguments(arguments.size());
-        getLambdaArgumentTypesImpl(arguments);
-    }
-
-protected:
     /// Get the result type by argument type. If the function does not apply to these arguments, throw an exception.
     virtual DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
     {
@@ -242,65 +219,69 @@ protected:
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & return_type,
         const TiDB::TiDBCollatorPtr & collator) const = 0;
+};
 
-    virtual void getLambdaArgumentTypesImpl(DataTypes & /*arguments*/) const
+using FunctionBuilderPtr = std::shared_ptr<IFunctionBuilder>;
+
+/// Old function interface. Check documentation in IFunction.h.
+class IFunction
+{
+public:
+    virtual ~IFunction() = default;
+
+    virtual String getName() const = 0;
+
+    virtual void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const = 0;
+
+    /// Override these functions to change default implementation behavior. See details in IExecutableFunction.
+    virtual bool useDefaultImplementationForNulls() const { return true; }
+    virtual bool useDefaultImplementationForConstants() const { return false; }
+    virtual ColumnNumbers getArgumentsThatAreAlwaysConstant() const { return {}; }
+
+    /// Override these functions to change default implementation behavior. See details in IFunctionBase.
+    virtual bool isSuitableForConstantFolding() const { return true; }
+    virtual bool isInjective(const Block & /*sample_block*/) const { return false; }
+    virtual bool isDeterministic() const { return true; }
+    virtual bool isDeterministicInScopeOfQuery() const { return true; }
+    virtual bool hasInformationAboutMonotonicity() const { return false; }
+
+    using Monotonicity = IFunctionBase::Monotonicity;
+    virtual Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const
+    {
+        throw Exception("Function " + getName() + " has no information about its monotonicity.", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    /// For non-variadic functions, return number of arguments; otherwise return zero (that should be ignored).
+    virtual size_t getNumberOfArguments() const = 0;
+
+    virtual DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const
+    {
+        throw Exception("getReturnType is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    /// Get the result type by argument type. If the function does not apply to these arguments, throw an exception.
+    virtual DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
+    {
+        DataTypes data_types(arguments.size());
+        for (size_t i = 0; i < arguments.size(); ++i)
+            data_types[i] = arguments[i].type;
+
+        return getReturnTypeImpl(data_types);
+    }
+
+    virtual bool isVariadic() const { return false; }
+
+    virtual void getLambdaArgumentTypes(DataTypes & /*arguments*/) const
     {
         throw Exception("Function " + getName() + " can't have lambda-expressions as arguments", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-};
 
-/// Previous function interface.
-class IFunction : public std::enable_shared_from_this<IFunction>
-    , public FunctionBuilderImpl
-    , public IFunctionBase
-    , public PreparedFunctionImpl
-{
-public:
-    String getName() const override = 0;
-    /// TODO: make const
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override = 0;
-
-    /// Override this functions to change default implementation behavior. See details in IPreparedFunction.
-    bool useDefaultImplementationForNulls() const override { return true; }
-    bool useDefaultImplementationForConstants() const override { return false; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {}; }
-
-    using FunctionBuilderImpl::getLambdaArgumentTypesImpl;
-    using FunctionBuilderImpl::getReturnTypeImpl;
-    using PreparedFunctionImpl::execute;
-
-    using FunctionBuilderImpl::getReturnType;
-
-    PreparedFunctionPtr prepare(const Block & /*sample_block*/) const final
-    {
-        throw Exception("prepare is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    const DataTypes & getArgumentTypes() const final
-    {
-        throw Exception("getArgumentTypes is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    const DataTypePtr & getReturnType() const override
-    {
-        throw Exception("getReturnType is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    virtual void setCollator(const TiDB::TiDBCollatorPtr &){};
-
-protected:
-    FunctionBasePtr buildImpl(
-        const ColumnsWithTypeAndName & /*arguments*/,
-        const DataTypePtr & /*return_type*/,
-        const TiDB::TiDBCollatorPtr & /*collator*/) const final
-    {
-        throw Exception("buildImpl is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
-    }
+    virtual void setCollator(const TiDB::TiDBCollatorPtr &) {}
 };
 
 /// Wrappers over IFunction.
 
-class DefaultExecutable final : public PreparedFunctionImpl
+class DefaultExecutable final : public IExecutableFunction
 {
 public:
     explicit DefaultExecutable(std::shared_ptr<IFunction> function)
@@ -310,7 +291,7 @@ public:
     String getName() const override { return function->getName(); }
 
 protected:
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) final
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const final
     {
         return function->executeImpl(block, arguments, result);
     }
@@ -322,10 +303,10 @@ private:
     std::shared_ptr<IFunction> function;
 };
 
-class DefaultFunction final : public IFunctionBase
+class DefaultFunctionBase final : public IFunctionBase
 {
 public:
-    DefaultFunction(std::shared_ptr<IFunction> function, DataTypes arguments, DataTypePtr return_type)
+    DefaultFunctionBase(std::shared_ptr<IFunction> function, DataTypes arguments, DataTypePtr return_type)
         : function(std::move(function))
         , arguments(std::move(arguments))
         , return_type(std::move(return_type))
@@ -336,15 +317,15 @@ public:
     const DataTypes & getArgumentTypes() const override { return arguments; }
     const DataTypePtr & getReturnType() const override { return return_type; }
 
-    PreparedFunctionPtr prepare(const Block & /*sample_block*/) const override { return std::make_shared<DefaultExecutable>(function); }
+    ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override { return std::make_shared<DefaultExecutable>(function); }
 
     bool isSuitableForConstantFolding() const override { return function->isSuitableForConstantFolding(); }
 
     bool isInjective(const Block & sample_block) override { return function->isInjective(sample_block); }
 
-    bool isDeterministic() override { return function->isDeterministic(); }
+    bool isDeterministic() const override { return function->isDeterministic(); }
 
-    bool isDeterministicInScopeOfQuery() override { return function->isDeterministicInScopeOfQuery(); }
+    bool isDeterministicInScopeOfQuery() const override { return function->isDeterministicInScopeOfQuery(); }
 
     bool hasInformationAboutMonotonicity() const override { return function->hasInformationAboutMonotonicity(); }
 
@@ -359,23 +340,17 @@ private:
     DataTypePtr return_type;
 };
 
-class DefaultFunctionBuilder : public FunctionBuilderImpl
+class DefaultFunctionBuilder : public IFunctionBuilder
 {
 public:
     explicit DefaultFunctionBuilder(std::shared_ptr<IFunction> function)
         : function(std::move(function))
     {}
 
-    void checkNumberOfArguments(size_t number_of_arguments) const override
-    {
-        return function->checkNumberOfArguments(number_of_arguments);
-    }
-
-    String getName() const override { return function->getName(); };
+    String getName() const override { return function->getName(); }
     bool isVariadic() const override { return function->isVariadic(); }
     size_t getNumberOfArguments() const override { return function->getNumberOfArguments(); }
 
-protected:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return function->getReturnTypeImpl(arguments); }
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override { return function->getReturnTypeImpl(arguments); }
 
@@ -383,17 +358,18 @@ protected:
 
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
-        const DataTypePtr & return_type,
+        const DataTypePtr & result_type,
         const TiDB::TiDBCollatorPtr & collator) const override
     {
         function->setCollator(collator);
         DataTypes data_types(arguments.size());
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
-        return std::make_shared<DefaultFunction>(function, data_types, return_type);
+
+        return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
     }
 
-    void getLambdaArgumentTypesImpl(DataTypes & arguments) const override { return function->getLambdaArgumentTypesImpl(arguments); }
+    void getLambdaArgumentTypesImpl(DataTypes & arguments) const override { function->getLambdaArgumentTypes(arguments); }
 
 private:
     std::shared_ptr<IFunction> function;

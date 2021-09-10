@@ -24,19 +24,17 @@ struct TwoLevelHashTableGrower : public HashTableGrower<initial_size_degree>
     }
 };
 
-template
-<
+template <
     typename Key,
     typename Cell,
     typename Hash,
     typename Grower,
     typename Allocator,
     typename ImplTable = HashTable<Key, Cell, Hash, Grower, Allocator>,
-    size_t BITS_FOR_BUCKET = 8
->
-class TwoLevelHashTable :
-    private boost::noncopyable,
-    protected Hash            /// empty base optimization
+    size_t BITS_FOR_BUCKET = 8>
+class TwoLevelHashTable : private boost::noncopyable
+    ,
+                          protected Hash /// empty base optimization
 {
 protected:
     friend class const_iterator;
@@ -44,6 +42,7 @@ protected:
 
     using HashValue = size_t;
     using Self = TwoLevelHashTable;
+
 public:
     using Impl = ImplTable;
 
@@ -126,13 +125,16 @@ public:
         friend class TwoLevelHashTable;
 
         iterator(Self * container_, size_t bucket_, typename Impl::iterator current_it_)
-            : container(container_), bucket(bucket_), current_it(current_it_) {}
+            : container(container_)
+            , bucket(bucket_)
+            , current_it(current_it_)
+        {}
 
     public:
         iterator() {}
 
-        bool operator== (const iterator & rhs) const { return bucket == rhs.bucket && current_it == rhs.current_it; }
-        bool operator!= (const iterator & rhs) const { return !(*this == rhs); }
+        bool operator==(const iterator & rhs) const { return bucket == rhs.bucket && current_it == rhs.current_it; }
+        bool operator!=(const iterator & rhs) const { return !(*this == rhs); }
 
         iterator & operator++()
         {
@@ -146,7 +148,7 @@ public:
             return *this;
         }
 
-        Cell & operator* () const { return *current_it; }
+        Cell & operator*() const { return *current_it; }
         Cell * operator->() const { return current_it.getPtr(); }
 
         Cell * getPtr() const { return current_it.getPtr(); }
@@ -163,14 +165,21 @@ public:
         friend class TwoLevelHashTable;
 
         const_iterator(Self * container_, size_t bucket_, typename Impl::const_iterator current_it_)
-            : container(container_), bucket(bucket_), current_it(current_it_) {}
+            : container(container_)
+            , bucket(bucket_)
+            , current_it(current_it_)
+        {}
 
     public:
         const_iterator() {}
-        const_iterator(const iterator & rhs) : container(rhs.container), bucket(rhs.bucket), current_it(rhs.current_it) {}
+        const_iterator(const iterator & rhs)
+            : container(rhs.container)
+            , bucket(rhs.bucket)
+            , current_it(rhs.current_it)
+        {}
 
-        bool operator== (const const_iterator & rhs) const { return bucket == rhs.bucket && current_it == rhs.current_it; }
-        bool operator!= (const const_iterator & rhs) const { return !(*this == rhs); }
+        bool operator==(const const_iterator & rhs) const { return bucket == rhs.bucket && current_it == rhs.current_it; }
+        bool operator!=(const const_iterator & rhs) const { return !(*this == rhs); }
 
         const_iterator & operator++()
         {
@@ -184,7 +193,7 @@ public:
             return *this;
         }
 
-        const Cell & operator* () const { return *current_it; }
+        const Cell & operator*() const { return *current_it; }
         const Cell * operator->() const { return current_it->getPtr(); }
 
         const Cell * getPtr() const { return current_it.getPtr(); }
@@ -196,18 +205,18 @@ public:
     {
         size_t buck = 0;
         typename Impl::const_iterator impl_it = beginOfNextNonEmptyBucket(buck);
-        return { this, buck, impl_it };
+        return {this, buck, impl_it};
     }
 
     iterator begin()
     {
         size_t buck = 0;
         typename Impl::iterator impl_it = beginOfNextNonEmptyBucket(buck);
-        return { this, buck, impl_it };
+        return {this, buck, impl_it};
     }
 
-    const_iterator end() const         { return { this, MAX_BUCKET, impls[MAX_BUCKET].end() }; }
-    iterator end()                     { return { this, MAX_BUCKET, impls[MAX_BUCKET].end() }; }
+    const_iterator end() const { return {this, MAX_BUCKET, impls[MAX_BUCKET].end()}; }
+    iterator end() { return {this, MAX_BUCKET, impls[MAX_BUCKET].end()}; }
 
 
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
@@ -250,8 +259,7 @@ public:
 
     /// Same, but with a precalculated values of hash function.
     template <typename KeyHolder>
-    void ALWAYS_INLINE emplace(KeyHolder && key_holder, LookupResult & it,
-                                  bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hash_value)
     {
         size_t buck = getBucketFromHash(hash_value);
         impls[buck].emplace(key_holder, it, inserted, hash_value);

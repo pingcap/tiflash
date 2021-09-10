@@ -171,7 +171,7 @@ DeltaPacks DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
             auto file_id = f->getFile()->fileId();
             wbs.data.putRefPage(new_ref_id, file_id);
             auto file_parent_path = delegator.getDTFilePath(file_id);
-            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* ref_id= */ new_ref_id, file_parent_path);
+            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* ref_id= */ new_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
             auto new_pack = f->cloneWith(context, new_file, target_range);
             cloned_tail.push_back(new_pack);

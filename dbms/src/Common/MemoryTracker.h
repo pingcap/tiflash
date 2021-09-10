@@ -95,7 +95,7 @@ extern thread_local MemoryTracker * current_memory_tracker;
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker
 {
-static constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 8 * 1024 * 1024; // 8 MiB
+void disableThreshold();
 void alloc(Int64 size);
 void realloc(Int64 old_size, Int64 new_size);
 void free(Int64 size);
