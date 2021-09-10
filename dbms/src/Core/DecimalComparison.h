@@ -247,42 +247,43 @@ private:
 
         if constexpr (_check_overflow)
         {
-            bool overflow = false;
+            bool invalid = false;
 
             if constexpr (sizeof(A) > sizeof(CompareInt))
-                overflow |= (A(x) != a);
+                invalid |= (A(x) != a);
             if constexpr (sizeof(B) > sizeof(CompareInt))
-                overflow |= (B(y) != b);
+                invalid |= (B(y) != b);
             if constexpr (std::is_unsigned_v<A>)
-                overflow |= (x < 0);
+                invalid |= (x < 0);
             if constexpr (std::is_unsigned_v<B>)
-                overflow |= (y < 0);
+                invalid |= (y < 0);
 
-            if (overflow)
+            if (invalid)
                 throw Exception("Can't compare", ErrorCodes::DECIMAL_OVERFLOW);
         }
 
-        int remainder = 0;
+        if constexpr (scale_left && scale_right)
+            throw DB::Exception("Assumption broken: there should only one side need to be multiplied in decimal comparison.", ErrorCodes::LOGICAL_ERROR);
+        if constexpr (!scale_left && !scale_right)
+            return Op::apply(x, y);
+
+        // overflow means absolute value must be greater.
+        // we use this variable to mark whether the right side is greater than left side by overflow.
+        int right_side_greater_by_overflow = 0;
         if constexpr (scale_left)
         {
-            remainder += boost::math::sign(y % scale);
-            y /= scale;
+            right_side_greater_by_overflow = -boost::math::sign(x);
+            right_side_greater_by_overflow *= common::mulOverflow(x, scale, x); // x will be changed.
         }
         if constexpr (scale_right)
         {
-            remainder -= boost::math::sign(x % scale);
-            x /= scale;
+            right_side_greater_by_overflow = boost::math::sign(y);
+            right_side_greater_by_overflow *= common::mulOverflow(y, scale, y); // y will be changed.
         }
 
-        int result = 0;
-        if (x < y)
-            result = 1;
-        else if (x > y)
-            result = -1;
-        else
-            result = remainder;
-
-        return Op::apply(0, result);
+        if (right_side_greater_by_overflow)
+            return Op::apply(0, right_side_greater_by_overflow);
+        return Op::apply(x, y);
     }
 
     template <bool scale_left, bool scale_right>

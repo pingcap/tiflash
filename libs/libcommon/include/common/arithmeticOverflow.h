@@ -103,4 +103,18 @@ namespace common
         unsigned __int128 b = (y > 0) ? y : -y;
         return (a * b) / b != a;
     }
+
+    template <>
+    inline bool mulOverflow(Int256 x, Int256 y, Int256 & res)
+    {
+        try
+        {
+            res = x * y;
+        }
+        catch (std::overflow_error &)
+        {
+            return true;
+        }
+        return false;
+    }
 }
