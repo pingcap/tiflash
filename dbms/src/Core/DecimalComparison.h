@@ -270,7 +270,7 @@ private:
         }
         if constexpr (scale_right)
         {
-            remainder -= boost::math::sign(y % scale);
+            remainder -= boost::math::sign(x % scale);
             x /= scale;
         }
 
