@@ -36,12 +36,12 @@ To assert_cast(From && from)
         {
             if (typeid(from) == typeid(To))
                 return static_cast<To>(from);
-            else if (typeid(from) == typeid(DB::ColumnVector<short>) && typeid(To) == typeid(DB::ColumnVector<unsigned short>)) {
+            else if (typeid(from) == typeid(DB::ColumnVector<short>) && typeid(To) == typeid(DB::ColumnVector<unsigned short>))
+            {
                 //make it work when sum(enum) is used in clickhouse query
                 return static_cast<To>(from);
             }
         }
-
     }
     catch (const std::exception & e)
     {
