@@ -1,74 +1,69 @@
 #pragma once
 
-#include <cassert>
-#include <cmath>
-#include <cstring>
-#include <limits>
-#include <algorithm>
-#include <iterator>
-
-#include <type_traits>
-
-#include <common/DateLUT.h>
-#include <common/LocalDate.h>
-#include <common/LocalDateTime.h>
-
-#include <Core/Types.h>
-#include <Core/UUID.h>
-#include <common/StringRef.h>
+#include <Common/Arena.h>
+#include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/Arena.h>
-#include <Common/Decimal.h>
-
+#include <Core/Types.h>
+#include <Core/UUID.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/VarInt.h>
-
+#include <common/DateLUT.h>
+#include <common/LocalDate.h>
+#include <common/LocalDateTime.h>
+#include <common/StringRef.h>
 #include <double-conversion/double-conversion.h>
+
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstring>
+#include <iterator>
+#include <limits>
+#include <type_traits>
 
 #define DEFAULT_MAX_STRING_SIZE 0x00FFFFFFULL
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_PARSE_DATE;
-    extern const int CANNOT_PARSE_DATETIME;
-    extern const int CANNOT_PARSE_UUID;
-    extern const int CANNOT_READ_ARRAY_FROM_TEXT;
-    extern const int CANNOT_PARSE_NUMBER;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-}
+extern const int CANNOT_PARSE_DATE;
+extern const int CANNOT_PARSE_DATETIME;
+extern const int CANNOT_PARSE_UUID;
+extern const int CANNOT_READ_ARRAY_FROM_TEXT;
+extern const int CANNOT_PARSE_NUMBER;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+} // namespace ErrorCodes
 
 /// Helper functions for formatted input.
 
 inline char parseEscapeSequence(char c)
 {
-    switch(c)
+    switch (c)
     {
-        case 'a':
-            return '\a';
-        case 'b':
-            return '\b';
-        case 'e':
-            return '\x1B';      /// \e escape sequence is non standard for C and C++ but supported by gcc and clang.
-        case 'f':
-            return '\f';
-        case 'n':
-            return '\n';
-        case 'r':
-            return '\r';
-        case 't':
-            return '\t';
-        case 'v':
-            return '\v';
-        case '0':
-            return '\0';
-        default:
-            return c;
+    case 'a':
+        return '\a';
+    case 'b':
+        return '\b';
+    case 'e':
+        return '\x1B'; /// \e escape sequence is non standard for C and C++ but supported by gcc and clang.
+    case 'f':
+        return '\f';
+    case 'n':
+        return '\n';
+    case 'r':
+        return '\r';
+    case 't':
+        return '\t';
+    case 'v':
+        return '\v';
+    case '0':
+        return '\0';
+    default:
+        return c;
     }
 }
 
@@ -227,18 +222,21 @@ inline void readBoolTextWord(bool & x, ReadBuffer & buf)
 inline void decimalRound(Int256 & value, ReadBuffer & buf)
 {
     ++buf.position();
-    if (buf.eof()) {
+    if (buf.eof())
+    {
         return;
     }
-    if (*buf.position() >= '5' && *buf.position() <= '9') {
-        value ++;
+    if (*buf.position() >= '5' && *buf.position() <= '9')
+    {
+        value++;
     }
-    while(!buf.eof() && *buf.position() >= '0' && *buf.position() <= '9') {
+    while (!buf.eof() && *buf.position() >= '0' && *buf.position() <= '9')
+    {
         ++buf.position();
     }
 }
 
-template<typename T>
+template <typename T>
 inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision, ScaleType scale)
 {
     Int256 value(0); // Int256 is ok for 65 digits number at most.
@@ -253,17 +251,53 @@ inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision
     {
         switch (*buf.position())
         {
-            case '+':
-                break;
-            case '-':
-                negative = !negative;
-                break;
-            case '.':
-                if (fractional) {
-                    throw Exception("invalid format!");
-                }
-                fractional = true;
-                if (scale == 0) {
+        case '+':
+            break;
+        case '-':
+            negative = !negative;
+            break;
+        case '.':
+            if (fractional)
+            {
+                throw Exception("invalid format!");
+            }
+            fractional = true;
+            if (scale == 0)
+            {
+                decimalRound(value, buf);
+                if (negative)
+                    value = -value;
+                x.value = static_cast<T>(value);
+                checkDecimalOverflow(x, precision);
+                return;
+            }
+            break;
+        case '0':
+            [[fallthrough]];
+        case '1':
+            [[fallthrough]];
+        case '2':
+            [[fallthrough]];
+        case '3':
+            [[fallthrough]];
+        case '4':
+            [[fallthrough]];
+        case '5':
+            [[fallthrough]];
+        case '6':
+            [[fallthrough]];
+        case '7':
+            [[fallthrough]];
+        case '8':
+            [[fallthrough]];
+        case '9':
+            value *= 10;
+            value += *buf.position() - '0';
+            if (fractional)
+            {
+                cur_scale++;
+                if (scale == cur_scale)
+                {
                     decimalRound(value, buf);
                     if (negative)
                         value = -value;
@@ -271,44 +305,23 @@ inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision
                     checkDecimalOverflow(x, precision);
                     return;
                 }
-                break;
-            case '0': [[fallthrough]];
-            case '1': [[fallthrough]];
-            case '2': [[fallthrough]];
-            case '3': [[fallthrough]];
-            case '4': [[fallthrough]];
-            case '5': [[fallthrough]];
-            case '6': [[fallthrough]];
-            case '7': [[fallthrough]];
-            case '8': [[fallthrough]];
-            case '9':
+            }
+            break;
+        default:
+            for (; cur_scale < scale; cur_scale++)
+            {
                 value *= 10;
-                value += *buf.position() - '0';
-                if (fractional) {
-                    cur_scale++;
-                    if (scale == cur_scale) {
-                        decimalRound(value, buf);
-                        if (negative)
-                            value = -value;
-                        x.value = static_cast<T>(value);
-                        checkDecimalOverflow(x, precision);
-                        return;
-                    }
-                } 
-                break;
-            default:
-                for(;cur_scale < scale; cur_scale++) {
-                    value *= 10;
-                }
-                if (negative)
-                    value = -value;
-                x.value = static_cast<T>(value);
-                checkDecimalOverflow(x, precision);
-                return;
+            }
+            if (negative)
+                value = -value;
+            x.value = static_cast<T>(value);
+            checkDecimalOverflow(x, precision);
+            return;
         }
         ++buf.position();
     }
-    for(;cur_scale < scale; cur_scale++) {
+    for (; cur_scale < scale; cur_scale++)
+    {
         value *= 10;
     }
     if (negative)
@@ -337,36 +350,45 @@ ReturnType readIntTextImpl(T & x, ReadBuffer & buf)
     {
         switch (*buf.position())
         {
-            case '+':
-                break;
-            case '-':
-                if (std::is_signed_v<T>)
-                    negative = true;
+        case '+':
+            break;
+        case '-':
+            if (std::is_signed_v<T>)
+                negative = true;
+            else
+            {
+                if (throw_exception)
+                    throw Exception("Unsigned type must not contain '-' symbol", ErrorCodes::CANNOT_PARSE_NUMBER);
                 else
-                {
-                    if (throw_exception)
-                        throw Exception("Unsigned type must not contain '-' symbol", ErrorCodes::CANNOT_PARSE_NUMBER);
-                    else
-                        return ReturnType(false);
-                }
-                break;
-            case '0': [[fallthrough]];
-            case '1': [[fallthrough]];
-            case '2': [[fallthrough]];
-            case '3': [[fallthrough]];
-            case '4': [[fallthrough]];
-            case '5': [[fallthrough]];
-            case '6': [[fallthrough]];
-            case '7': [[fallthrough]];
-            case '8': [[fallthrough]];
-            case '9':
-                x *= 10;
-                x += *buf.position() - '0';
-                break;
-            default:
-                if (negative)
-                    x = -x;
-                return ReturnType(true);
+                    return ReturnType(false);
+            }
+            break;
+        case '0':
+            [[fallthrough]];
+        case '1':
+            [[fallthrough]];
+        case '2':
+            [[fallthrough]];
+        case '3':
+            [[fallthrough]];
+        case '4':
+            [[fallthrough]];
+        case '5':
+            [[fallthrough]];
+        case '6':
+            [[fallthrough]];
+        case '7':
+            [[fallthrough]];
+        case '8':
+            [[fallthrough]];
+        case '9':
+            x *= 10;
+            x += *buf.position() - '0';
+            break;
+        default:
+            if (negative)
+                x = -x;
+            return ReturnType(true);
         }
         ++buf.position();
     }
@@ -403,8 +425,7 @@ void readIntTextUnsafe(T & x, ReadBuffer & buf)
     bool negative = false;
     x = 0;
 
-    auto on_error = []
-    {
+    auto on_error = [] {
         if (throw_on_error)
             throwReadAfterEOF();
     };
@@ -456,8 +477,10 @@ void tryReadIntTextUnsafe(T & x, ReadBuffer & buf)
 
 
 /// Look at readFloatText.h
-template <typename T> void readFloatText(T & x, ReadBuffer & in);
-template <typename T> bool tryReadFloatText(T & x, ReadBuffer & in);
+template <typename T>
+void readFloatText(T & x, ReadBuffer & in);
+template <typename T>
+bool tryReadFloatText(T & x, ReadBuffer & in);
 
 
 /// simple: all until '\n' or '\t'
@@ -528,8 +551,8 @@ bool tryReadJSONStringInto(Vector & s, ReadBuffer & buf)
 /// This could be used as template parameter for functions above, if you want to just skip data.
 struct NullSink
 {
-    void append(const char *, size_t) {};
-    void push_back(char) {};
+    void append(const char *, size_t){};
+    void push_back(char){};
 };
 
 void parseUUID(const UInt8 * src36, UInt8 * dst16);
@@ -586,7 +609,7 @@ inline bool tryReadMyDateText(UInt64 & x, ReadBuffer & buf)
 {
     UInt64 tmp(0);
     bool ret = readMyDateTextImpl<bool>(tmp, buf);
-    if(ret)
+    if (ret)
         x = tmp;
     return ret;
 }
@@ -680,14 +703,14 @@ ReturnType readMyDateTimeTextImpl(UInt64 & packed, int fsp, ReadBuffer & buf)
             bool fractional = false;
             int digit = 0;
             buf.position() += 19;
-            while(buf.position() <= buf.buffer().end())
+            while (buf.position() <= buf.buffer().end())
             {
                 char x = *buf.position();
                 if (x == '.')
                 {
                     fractional = true;
                 }
-                else if(!fractional)
+                else if (!fractional)
                 {
                     break;
                 }
@@ -696,16 +719,16 @@ ReturnType readMyDateTimeTextImpl(UInt64 & packed, int fsp, ReadBuffer & buf)
                     if (digit < fsp)
                     {
                         micro_second = micro_second * 10 + (x - '0');
-                        digit ++;
+                        digit++;
                     }
                 }
                 else
                 {
                     break;
                 }
-                buf.position() ++;
+                buf.position()++;
             }
-            for(;digit<6;digit++)
+            for (; digit < 6; digit++)
                 micro_second *= 10;
 
             packed = MyDateTime(year, month, day, hour, minute, second, micro_second).toPackedUInt();
@@ -716,7 +739,6 @@ ReturnType readMyDateTimeTextImpl(UInt64 & packed, int fsp, ReadBuffer & buf)
     {
         // try to parse it as MyDate
         return readMyDateTextImpl<ReturnType>(packed, buf);
-
     }
 
     if constexpr (throw_exception)
@@ -734,7 +756,7 @@ inline bool tryReadMyDateTimeText(UInt64 & x, int fsp, ReadBuffer & buf)
 {
     UInt64 tmp(0);
     bool ret = readMyDateTimeTextImpl<bool>(tmp, fsp, buf);
-    if(ret)
+    if (ret)
         x = tmp;
     return ret;
 }
@@ -806,31 +828,73 @@ inline void readDateTimeText(LocalDateTime & datetime, ReadBuffer & buf)
 /// Generic methods to read value in native binary format.
 template <typename T>
 inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-readBinary(T & x, ReadBuffer & buf) { readPODBinary(x, buf); }
+readBinary(T & x, ReadBuffer & buf)
+{
+    readPODBinary(x, buf);
+}
 
-inline void readBinary(String & x, ReadBuffer & buf) { readStringBinary(x, buf); }
-inline void readBinary(UInt128 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
-inline void readBinary(UInt256 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
-inline void readBinary(LocalDate & x, ReadBuffer & buf) { readPODBinary(x, buf); }
-inline void readBinary(LocalDateTime & x, ReadBuffer & buf) { readPODBinary(x, buf); }
-template<typename T>
-inline void readBinary(Decimal<T> & x, ReadBuffer & buf) { readPODBinary(x, buf); }
+inline void readBinary(String & x, ReadBuffer & buf)
+{
+    readStringBinary(x, buf);
+}
+inline void readBinary(UInt128 & x, ReadBuffer & buf)
+{
+    readPODBinary(x, buf);
+}
+inline void readBinary(UInt256 & x, ReadBuffer & buf)
+{
+    readPODBinary(x, buf);
+}
+inline void readBinary(LocalDate & x, ReadBuffer & buf)
+{
+    readPODBinary(x, buf);
+}
+inline void readBinary(LocalDateTime & x, ReadBuffer & buf)
+{
+    readPODBinary(x, buf);
+}
+template <typename T>
+inline void readBinary(Decimal<T> & x, ReadBuffer & buf)
+{
+    readPODBinary(x, buf);
+}
 
 
 /// Generic methods to read value in text tab-separated format.
 template <typename T>
 inline std::enable_if_t<std::is_integral_v<T>, void>
-readText(T & x, ReadBuffer & buf) { readIntText(x, buf); }
+readText(T & x, ReadBuffer & buf)
+{
+    readIntText(x, buf);
+}
 
 template <typename T>
 inline std::enable_if_t<std::is_floating_point_v<T>, void>
-readText(T & x, ReadBuffer & buf) { readFloatText(x, buf); }
+readText(T & x, ReadBuffer & buf)
+{
+    readFloatText(x, buf);
+}
 
-inline void readText(bool & x, ReadBuffer & buf) { readBoolText(x, buf); }
-inline void readText(String & x, ReadBuffer & buf) { readEscapedString(x, buf); }
-inline void readText(LocalDate & x, ReadBuffer & buf) { readDateText(x, buf); }
-inline void readText(LocalDateTime & x, ReadBuffer & buf) { readDateTimeText(x, buf); }
-inline void readText(UUID & x, ReadBuffer & buf) { readUUIDText(x, buf); }
+inline void readText(bool & x, ReadBuffer & buf)
+{
+    readBoolText(x, buf);
+}
+inline void readText(String & x, ReadBuffer & buf)
+{
+    readEscapedString(x, buf);
+}
+inline void readText(LocalDate & x, ReadBuffer & buf)
+{
+    readDateText(x, buf);
+}
+inline void readText(LocalDateTime & x, ReadBuffer & buf)
+{
+    readDateTimeText(x, buf);
+}
+inline void readText(UUID & x, ReadBuffer & buf)
+{
+    readUUIDText(x, buf);
+}
 inline void readText(UInt128 &, ReadBuffer &)
 {
     /** Because UInt128 isn't a natural type, without arithmetic operator and only use as an intermediary type -for UUID-
@@ -843,9 +907,15 @@ inline void readText(UInt128 &, ReadBuffer &)
 ///  possibly in single quotes (only for data types that use quotes in VALUES format of INSERT statement in SQL).
 template <typename T>
 inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-readQuoted(T & x, ReadBuffer & buf) { readText(x, buf); }
+readQuoted(T & x, ReadBuffer & buf)
+{
+    readText(x, buf);
+}
 
-inline void readQuoted(String & x, ReadBuffer & buf) { readQuotedString(x, buf); }
+inline void readQuoted(String & x, ReadBuffer & buf)
+{
+    readQuotedString(x, buf);
+}
 
 inline void readQuoted(LocalDate & x, ReadBuffer & buf)
 {
@@ -865,9 +935,15 @@ inline void readQuoted(LocalDateTime & x, ReadBuffer & buf)
 /// Same as above, but in double quotes.
 template <typename T>
 inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-readDoubleQuoted(T & x, ReadBuffer & buf) { readText(x, buf); }
+readDoubleQuoted(T & x, ReadBuffer & buf)
+{
+    readText(x, buf);
+}
 
-inline void readDoubleQuoted(String & x, ReadBuffer & buf) { readDoubleQuotedString(x, buf); }
+inline void readDoubleQuoted(String & x, ReadBuffer & buf)
+{
+    readDoubleQuotedString(x, buf);
+}
 
 inline void readDoubleQuoted(LocalDate & x, ReadBuffer & buf)
 {
@@ -953,12 +1029,27 @@ inline void readDateTimeCSV(time_t & datetime, ReadBuffer & buf, const DateLUTIm
 
 template <typename T>
 inline std::enable_if_t<std::is_arithmetic_v<T>, void>
-readCSV(T & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
+readCSV(T & x, ReadBuffer & buf)
+{
+    readCSVSimple(x, buf);
+}
 
-inline void readCSV(String & x, ReadBuffer & buf, const char delimiter = ',') { readCSVString(x, buf, delimiter); }
-inline void readCSV(LocalDate & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
-inline void readCSV(LocalDateTime & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
-inline void readCSV(UUID & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
+inline void readCSV(String & x, ReadBuffer & buf, const char delimiter = ',')
+{
+    readCSVString(x, buf, delimiter);
+}
+inline void readCSV(LocalDate & x, ReadBuffer & buf)
+{
+    readCSVSimple(x, buf);
+}
+inline void readCSV(LocalDateTime & x, ReadBuffer & buf)
+{
+    readCSVSimple(x, buf);
+}
+inline void readCSV(UUID & x, ReadBuffer & buf)
+{
+    readCSVSimple(x, buf);
+}
 inline void readCSV(UInt128 &, ReadBuffer &)
 {
     /** Because UInt128 isn't a natural type, without arithmetic operator and only use as an intermediary type -for UUID-
@@ -1111,4 +1202,4 @@ void skipToNextLineOrEOF(ReadBuffer & buf);
 /// Skip to next character after next unescaped \n. If no \n in stream, skip to end. Does not throw on invalid escape sequences.
 void skipToUnescapedNextLineOrEOF(ReadBuffer & buf);
 
-}
+} // namespace DB

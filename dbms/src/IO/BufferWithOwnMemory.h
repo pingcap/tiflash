@@ -1,30 +1,28 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
-
-#include <Common/ProfileEvents.h>
 #include <Common/Allocator.h>
-
 #include <Common/Exception.h>
+#include <Common/ProfileEvents.h>
 #include <Core/Defines.h>
+
+#include <boost/noncopyable.hpp>
 
 
 namespace ProfileEvents
 {
-    extern const Event IOBufferAllocs;
-    extern const Event IOBufferAllocBytes;
-}
+extern const Event IOBufferAllocs;
+extern const Event IOBufferAllocBytes;
+} // namespace ProfileEvents
 
 
 namespace DB
 {
-
-
 /** Replacement for std::vector<char> to use in buffers.
   * Differs in that is doesn't do unneeded memset. (And also tries to do as little as possible.)
   * Also allows to allocate aligned piece of memory (to use with O_DIRECT, for example).
   */
-struct Memory : boost::noncopyable, Allocator<false>
+struct Memory : boost::noncopyable
+    , Allocator<false>
 {
     size_t m_capacity = 0;
     size_t m_size = 0;
@@ -34,7 +32,10 @@ struct Memory : boost::noncopyable, Allocator<false>
     Memory() {}
 
     /// If alignment != 0, then allocate memory aligned to specified value.
-    Memory(size_t size_, size_t alignment_ = 0) : m_capacity(size_), m_size(m_capacity), alignment(alignment_)
+    Memory(size_t size_, size_t alignment_ = 0)
+        : m_capacity(size_)
+        , m_size(m_capacity)
+        , alignment(alignment_)
     {
         alloc();
     }
@@ -118,7 +119,7 @@ private:
             return;
 
         Allocator::free(m_data, m_capacity);
-        m_data = nullptr;    /// To avoid double free if next alloc will throw an exception.
+        m_data = nullptr; /// To avoid double free if next alloc will throw an exception.
     }
 };
 
@@ -131,14 +132,16 @@ class BufferWithOwnMemory : public Base
 {
 protected:
     Memory memory;
+
 public:
     /// If non-nullptr 'existing_memory' is passed, then buffer will not create its own memory and will use existing_memory without ownership.
     BufferWithOwnMemory(size_t size = DBMS_DEFAULT_BUFFER_SIZE, char * existing_memory = nullptr, size_t alignment = 0)
-        : Base(nullptr, 0), memory(existing_memory ? 0 : size, alignment)
+        : Base(nullptr, 0)
+        , memory(existing_memory ? 0 : size, alignment)
     {
         Base::set(existing_memory ? existing_memory : memory.data(), size);
     }
 };
 
 
-}
+} // namespace DB

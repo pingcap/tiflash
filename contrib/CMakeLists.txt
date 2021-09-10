@@ -140,3 +140,8 @@ endif ()
 
 add_subdirectory (prometheus-cpp)
 add_subdirectory (fmtlib-cmake)
+
+# Add a target that pop include directory to the linked object
+add_library(cpptoml INTERFACE)
+target_include_directories(cpptoml INTERFACE
+    ${PROJECT_SOURCE_DIR}/contrib/cpptoml)

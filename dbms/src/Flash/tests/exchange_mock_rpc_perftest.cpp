@@ -64,7 +64,7 @@ struct MockReceiverContext
             queue.pop(ptr);
             if (!ptr)
                 return false;
-            *packet = std::move(*ptr);
+            *packet = *ptr;
             size_counter.fetch_add(packet->ByteSizeLong());
             return true;
         }
@@ -295,7 +295,7 @@ void testReceiver(int source_num, int block_rows, int seconds)
     std::vector<std::thread> threads;
     for (int i = 0; i < source_num; ++i)
     {
-        threads.emplace_back(sendPacket, std::ref(packets), std::ref(*context->queues[i]), std::ref(stop_flag));
+        threads.emplace_back(sendPacket, std::cref(packets), std::ref(*context->queues[i]), std::ref(stop_flag));
     }
     threads.emplace_back(readBlock, union_input_stream);
 

@@ -1,13 +1,12 @@
 #pragma once
 
-#include <port/unistd.h>
-#include <IO/ReadBufferFromFileBase.h>
 #include <IO/ReadBuffer.h>
+#include <IO/ReadBufferFromFileBase.h>
+#include <port/unistd.h>
 
 
 namespace DB
 {
-
 /** Use ready file descriptor. Does not open or close a file.
   */
 class ReadBufferFromFileDescriptor : public ReadBufferFromFileBase
@@ -22,8 +21,11 @@ protected:
     std::string getFileName() const override;
 
 public:
-    ReadBufferFromFileDescriptor(int fd_, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE, char * existing_memory = nullptr, size_t alignment = 0)
-        : ReadBufferFromFileBase(buf_size, existing_memory, alignment), fd(fd_), pos_in_file(0) {}
+    explicit ReadBufferFromFileDescriptor(int fd_, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE, char * existing_memory = nullptr, size_t alignment = 0)
+        : ReadBufferFromFileBase(buf_size, existing_memory, alignment)
+        , fd(fd_)
+        , pos_in_file(0)
+    {}
 
     ReadBufferFromFileDescriptor(ReadBufferFromFileDescriptor &&) = default;
 
@@ -47,4 +49,4 @@ private:
     bool poll(size_t timeout_microseconds);
 };
 
-}
+} // namespace DB

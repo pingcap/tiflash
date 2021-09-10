@@ -95,7 +95,7 @@ DB::PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logge
 
     LOG_INFO(logger,
              "[gc_min_files=" << config.gc_min_files << "] [gc_min_bytes=" << config.gc_min_bytes
-                              << "] [gc_max_valid_rate=" << DB::toString(config.gc_max_valid_rate, 3) << "]");
+                              << "] [gc_max_valid_rate=" << DB::toString(config.gc_max_valid_rate.get(), 3) << "]");
 
     return config;
 }

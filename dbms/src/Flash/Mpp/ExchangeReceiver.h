@@ -161,6 +161,99 @@ struct GRPCReceiverContext
     }
 };
 
+struct ReceivedPacket
+{
+    ReceivedPacket()
+    {
+        packet = std::make_shared<mpp::MPPDataPacket>();
+    }
+    std::shared_ptr<mpp::MPPDataPacket> packet;
+    size_t source_index = 0;
+    String req_info;
+};
+
+/// RecyclableBuffer recycles unused objects to avoid too much allocation of objects.
+template <typename T>
+class RecyclableBuffer
+{
+public:
+    explicit RecyclableBuffer(size_t limit)
+        : capacity(limit)
+    {
+        /// init empty objects
+        for (size_t i = 0; i < limit; ++i)
+        {
+            empty_objects.push(std::make_shared<T>());
+        }
+    }
+    bool hasEmpty() const
+    {
+        assert(!isOverflow(empty_objects));
+        return !empty_objects.empty();
+    }
+    bool hasObjects() const
+    {
+        assert(!isOverflow(objects));
+        return !objects.empty();
+    }
+    bool canPushEmpty() const
+    {
+        assert(!isOverflow(empty_objects));
+        return !isFull(empty_objects);
+    }
+    bool canPush() const
+    {
+        assert(!isOverflow(objects));
+        return !isFull(objects);
+    }
+
+    void popEmpty(std::shared_ptr<T> & t)
+    {
+        assert(!empty_objects.empty() && !isOverflow(empty_objects));
+        t = empty_objects.front();
+        empty_objects.pop();
+    }
+    void popObject(std::shared_ptr<T> & t)
+    {
+        assert(!objects.empty() && !isOverflow(objects));
+        t = objects.front();
+        objects.pop();
+    }
+    void pushObject(const std::shared_ptr<T> & t)
+    {
+        assert(!isFullOrOverflow(objects));
+        objects.push(t);
+    }
+    void pushEmpty(const std::shared_ptr<T> & t)
+    {
+        assert(!isFullOrOverflow(empty_objects));
+        empty_objects.push(t);
+    }
+    void pushEmpty(std::shared_ptr<T> && t)
+    {
+        assert(!isFullOrOverflow(empty_objects));
+        empty_objects.push(std::move(t));
+    }
+
+private:
+    bool isFullOrOverflow(const std::queue<std::shared_ptr<T>> & q) const
+    {
+        return q.size() >= capacity;
+    }
+    bool isOverflow(const std::queue<std::shared_ptr<T>> & q) const
+    {
+        return q.size() > capacity;
+    }
+    bool isFull(const std::queue<std::shared_ptr<T>> & q) const
+    {
+        return q.size() == capacity;
+    }
+
+    std::queue<std::shared_ptr<T>> empty_objects;
+    std::queue<std::shared_ptr<T>> objects;
+    size_t capacity;
+};
+
 template <typename RPCContext>
 class ExchangeReceiverBase
 {
@@ -168,18 +261,19 @@ public:
     static constexpr bool is_streaming_reader = true;
 
 private:
+
     std::shared_ptr<RPCContext> rpc_context;
     const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
     const ::mpp::TaskMeta task_meta;
+    const size_t max_streams;
     const size_t max_buffer_size;
+
     std::vector<std::thread> workers;
     DAGSchema schema;
-
-    // TODO: should be a concurrency bounded queue.
     std::mutex mu;
     std::condition_variable cv;
-    std::queue<ExchangeReceiverResult> result_buffer;
+    RecyclableBuffer<ReceivedPacket> res_buffer;
     Int32 live_connections;
     State state;
     String err_msg;
@@ -188,7 +282,7 @@ private:
 
     void setUpConnection()
     {
-        for (size_t index = 0; index < source_num; ++index)
+        for (int index = 0; index < pb_exchange_receiver.encoded_task_meta_size(); index++)
         {
             std::thread t(&ExchangeReceiverBase::ReadLoop, this, index);
             workers.push_back(std::move(t));
@@ -214,26 +308,53 @@ private:
             {
                 auto reader = rpc_context->makeReader(req);
                 reader->initialize();
-                mpp::MPPDataPacket packet;
+                std::shared_ptr<ReceivedPacket> packet;
                 bool has_data = false;
                 for (;;)
                 {
                     LOG_TRACE(log, "begin next ");
-                    bool success = reader->read(&packet);
+                    {
+                        std::unique_lock<std::mutex> lock(mu);
+                        cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != NORMAL; });
+                        if (state == NORMAL)
+                        {
+                            res_buffer.popEmpty(packet);
+                            cv.notify_all();
+                        }
+                        else
+                        {
+                            meet_error = true;
+                            local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from ReadLoop";
+                            LOG_WARNING(log, local_err_msg);
+                            break;
+                        }
+                    }
+                    packet->req_info = req_info;
+                    packet->source_index = source_index;
+                    bool success = reader->read(packet->packet.get());
                     if (!success)
                         break;
                     else
                         has_data = true;
-                    if (packet.has_error())
+                    if (packet->packet->has_error())
                     {
-                        throw Exception("Exchange receiver meet error : " + packet.error().msg());
+                        throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
                     }
-                    if (!decodePacket(packet, source_index, req_info))
                     {
-                        meet_error = true;
-                        local_err_msg = "Decode packet meet error";
-                        LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
-                        break;
+                        std::unique_lock<std::mutex> lock(mu);
+                        cv.wait(lock, [&] { return res_buffer.canPush() || state != NORMAL; });
+                        if (state == NORMAL)
+                        {
+                            res_buffer.pushObject(packet);
+                            cv.notify_all();
+                        }
+                        else
+                        {
+                            meet_error = true;
+                            local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from ReadLoop";
+                            LOG_WARNING(log, local_err_msg);
+                            break;
+                        }
                     }
                 }
                 // if meet error, such as decode packect fails, it will not retry.
@@ -249,9 +370,8 @@ private:
                 }
                 else
                 {
-                    LOG_WARNING(
-                        log,
-                        "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                    LOG_WARNING(log,
+                                "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
                     // if we have received some data, we should not retry.
                     if (has_data)
                         break;
@@ -281,48 +401,41 @@ private:
             meet_error = true;
             local_err_msg = "fatal error";
         }
-        std::lock_guard<std::mutex> lock(mu);
-        live_connections--;
+        Int32 copy_live_conn = -1;
+        {
+            std::unique_lock<std::mutex> lock(mu);
+            live_connections--;
+            if (meet_error && state == NORMAL)
+                state = ERROR;
+            if (meet_error && err_msg.empty())
+                err_msg = local_err_msg;
+            copy_live_conn = live_connections;
+            cv.notify_all();
+        }
+        LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
 
-        // avoid concurrent conflict
-        Int32 live_conn_copy = live_connections;
-
-        if (meet_error && state == NORMAL)
-            state = ERROR;
-        if (meet_error && err_msg.empty())
-            err_msg = local_err_msg;
-        cv.notify_all();
-
-        LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, live_conn_copy));
-
-        if (live_conn_copy == 0)
+        if (copy_live_conn == 0)
             LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
+        else if (copy_live_conn < 0)
+            throw Exception("live_connections should not be less than 0!");
     }
 
-    bool decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
+
+    static String getReceiverStateStr(const State & s)
     {
-        bool ret = true;
-        std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(p.data()))
+        switch (s)
         {
-            resp_ptr = nullptr;
-            ret = false;
+        case NORMAL:
+            return "NORMAL";
+        case ERROR:
+            return "ERROR";
+        case CANCELED:
+            return "CANCELED";
+        case CLOSED:
+            return "CLOSED";
+        default:
+            return "UNKNOWN";
         }
-        std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || state != NORMAL; });
-        if (state == NORMAL)
-        {
-            if (resp_ptr != nullptr)
-                result_buffer.emplace(resp_ptr, source_index, req_info);
-            else
-                result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
-        }
-        else
-        {
-            ret = false;
-        }
-        cv.notify_all();
-        return ret;
     }
 
 public:
@@ -330,13 +443,15 @@ public:
         std::shared_ptr<RPCContext> rpc_context_,
         const ::tipb::ExchangeReceiver & exc,
         const ::mpp::TaskMeta & meta,
-        size_t max_buffer_size_,
+        size_t max_streams_,
         const LogWithPrefixPtr & log_ = nullptr)
         : rpc_context(std::move(rpc_context_))
         , pb_exchange_receiver(exc)
         , source_num(pb_exchange_receiver.encoded_task_meta_size())
         , task_meta(meta)
-        , max_buffer_size(max_buffer_size_)
+        , max_streams(max_streams_)
+        , max_buffer_size(max_streams_ * 2)
+        , res_buffer(max_buffer_size)
         , live_connections(source_num)
         , state(NORMAL)
     {
@@ -359,6 +474,7 @@ public:
             state = CLOSED;
             cv.notify_all();
         }
+
         for (auto & worker : workers)
         {
             worker.join();
@@ -376,31 +492,58 @@ public:
 
     ExchangeReceiverResult nextResult()
     {
-        std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || state != NORMAL; });
-        ExchangeReceiverResult result;
-        if (state != NORMAL)
+        std::shared_ptr<ReceivedPacket> packet;
         {
-            String msg;
-            if (state == CANCELED)
-                msg = "Query canceled";
-            else if (state == CLOSED)
-                msg = "ExchangeReceiver closed";
-            else if (!err_msg.empty())
-                msg = err_msg;
-            else
-                msg = "Unknown error";
-            result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
+            std::unique_lock<std::mutex> lock(mu);
+            cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != NORMAL; });
+
+            if (state != NORMAL)
+            {
+                String msg;
+                if (state == CANCELED)
+                    msg = "query canceled";
+                else if (state == CLOSED)
+                    msg = "ExchangeReceiver closed";
+                else if (!err_msg.empty())
+                    msg = err_msg;
+                else
+                    msg = "Unknown error";
+                return {nullptr, 0, "ExchangeReceiver", true, msg, false};
+            }
+            else if (res_buffer.hasObjects())
+            {
+                res_buffer.popObject(packet);
+                cv.notify_all();
+            }
+            else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
+            {
+                return {nullptr, 0, "ExchangeReceiver", false, "", true};
+            }
         }
-        else if (result_buffer.empty())
+        assert(packet != nullptr && packet->packet != nullptr);
+        ExchangeReceiverResult result;
+        if (packet->packet->has_error())
         {
-            result = {nullptr, 0, "ExchangeReceiver", false, "", true};
+            result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
         }
         else
         {
-            result = result_buffer.front();
-            result_buffer.pop();
+            auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+            if (!resp_ptr->ParseFromString(packet->packet->data()))
+            {
+                result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
+            }
+            else
+            {
+                result = {resp_ptr, packet->source_index, packet->req_info};
+            }
+            if (resp_ptr->chunks_size() == 0)
+                throw Exception("Exchange receiver find empty response: ");
         }
+        packet->packet->Clear();
+        std::unique_lock<std::mutex> lock(mu);
+        cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
+        res_buffer.pushEmpty(std::move(packet));
         cv.notify_all();
         return result;
     }
