@@ -3022,6 +3022,45 @@ private:
     const Context & context;
 };
 
+class FunctionFormat : public IFunction {
+public:
+    static constexpr auto name = "format";
+    explicit FunctionFormat(const Context & context_)
+    : context(context_)
+    {}
+
+    static FunctionPtr create(const Context & context_)
+    {
+        return std::make_shared<FunctionFormat>(context_);
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+    size_t getNumberOfArguments() const override { return 0; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        size_t number_of_arguments = arguments.size();
+
+        if (number_of_arguments != 2 || number_of_arguments != 3) {
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
+            + toString(number_of_arguments) + ", should be 2 or 3",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
+
+        return std::make_shared<DataTypeString>();
+    }
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+
+    }
+
+private:
+    const Context & context;
+};
+
 
 struct NameEmpty
 {
