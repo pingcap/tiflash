@@ -18,7 +18,7 @@ message EmbeddedChecksum {
     required bytes checksum = 2;
 }
 
-message DebugInfo {
+message ChecksumDebugInfo {
     required string name = 1;
     required string content = 2;
 }
@@ -30,5 +30,5 @@ message ChecksumConfig {
     // checksum of the above field
     required bytes data_field_checksum = 4;
     // additional information
-    repeated DebugInfo debug_info = 5;
+    repeated ChecksumDebugInfo debug_info = 5;
 }

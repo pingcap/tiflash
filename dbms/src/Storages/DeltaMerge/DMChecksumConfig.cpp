@@ -65,8 +65,8 @@ DMChecksumConfig::DMChecksumConfig(std::istream & input)
     }
 
     {
-        const auto & debugInfoArray = configuration.debug_info();
-        for (const auto & var : debugInfoArray)
+        const auto & debug_info_array = configuration.debug_info();
+        for (const auto & var : debug_info_array)
         {
             debug_info.emplace(var.name(), var.content());
         }
