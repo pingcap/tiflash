@@ -610,6 +610,33 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
+void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    auto default_profile_name = config.getString("default_profile", "default");
+    String elem = "profiles." + default_profile_name;
+    if (!config.has(elem))
+    {
+        return;
+    }
+    Poco::Util::AbstractConfiguration::Keys config_keys;
+    config.keys(elem, config_keys);
+    String dt_config_reload_log = "reload delta tree ";
+    for (const std::string & key : config_keys)
+    {
+        if (startsWith(key, "dt"))
+        {
+            String config_value = config.getString(elem + "." + key);
+            if (settings.get(key) == config_value)
+            {
+                continue;
+            }
+            dt_config_reload_log += fmt::format("config name: {}, old: {}, new: {}; ", key, settings.get(key), config_value);
+            settings.set(key, config_value);
+        }
+    }
+    LOG_INFO(shared->log, dt_config_reload_log);
+}
+
 void Context::calculateUserSettings()
 {
     auto lock = getLock();
@@ -740,7 +767,6 @@ bool Context::isTableExist(const String & database_name, const String & table_na
     return shared->databases.end() != it
         && it->second->isTableExist(*this, table_name);
 }
-
 
 bool Context::isDatabaseExist(const String & database_name) const
 {

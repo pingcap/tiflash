@@ -1,37 +1,37 @@
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsArithmetic.h>
-
-#include "registerFunctionAbs.h"
-#include "registerFunctionBitAnd.h"
-#include "registerFunctionBitNot.h"
-#include "registerFunctionBitOr.h"
-#include "registerFunctionBitRotateLeft.h"
-#include "registerFunctionBitRotateRight.h"
-#include "registerFunctionBitShiftLeft.h"
-#include "registerFunctionBitShiftRight.h"
-#include "registerFunctionBitTest.h"
-#include "registerFunctionBitTestAll.h"
-#include "registerFunctionBitTestAny.h"
-#include "registerFunctionBitXor.h"
-#include "registerFunctionDivideFloating.h"
-#include "registerFunctionDivideIntegral.h"
-#include "registerFunctionDivideIntegralOrZero.h"
-#include "registerFunctionGCD.h"
-#include "registerFunctionGreatest.h"
-#include "registerFunctionIntExp10.h"
-#include "registerFunctionIntExp2.h"
-#include "registerFunctionLCM.h"
-#include "registerFunctionLeast.h"
-#include "registerFunctionMinus.h"
-#include "registerFunctionModulo.h"
-#include "registerFunctionMultiply.h"
-#include "registerFunctionNegate.h"
-#include "registerFunctionPlus.h"
-#include "registerFunctionTiDBDivideFloating.h"
-
 
 namespace DB
 {
+class FunctionFactory;
+
+void registerFunctionPlus(FunctionFactory & factory);
+void registerFunctionMinus(FunctionFactory & factory);
+void registerFunctionMultiply(FunctionFactory & factory);
+void registerFunctionDivideFloating(FunctionFactory & factory);
+void registerFunctionTiDBDivideFloating(FunctionFactory & factory);
+void registerFunctionDivideIntegral(FunctionFactory & factory);
+void registerFunctionDivideIntegralOrZero(FunctionFactory & factory);
+void registerFunctionModulo(FunctionFactory & factory);
+void registerFunctionNegate(FunctionFactory & factory);
+void registerFunctionAbs(FunctionFactory & factory);
+void registerFunctionBitAnd(FunctionFactory & factory);
+void registerFunctionBitOr(FunctionFactory & factory);
+void registerFunctionBitXor(FunctionFactory & factory);
+void registerFunctionBitNot(FunctionFactory & factory);
+void registerFunctionBitShiftLeft(FunctionFactory & factory);
+void registerFunctionBitShiftRight(FunctionFactory & factory);
+void registerFunctionBitRotateLeft(FunctionFactory & factory);
+void registerFunctionBitRotateRight(FunctionFactory & factory);
+void registerFunctionLeast(FunctionFactory & factory);
+void registerFunctionGreatest(FunctionFactory & factory);
+void registerFunctionBitTest(FunctionFactory & factory);
+void registerFunctionBitTestAny(FunctionFactory & factory);
+void registerFunctionBitTestAll(FunctionFactory & factory);
+void registerFunctionGCD(FunctionFactory & factory);
+void registerFunctionLCM(FunctionFactory & factory);
+void registerFunctionIntExp2(FunctionFactory & factory);
+void registerFunctionIntExp10(FunctionFactory & factory);
+
 void registerFunctionsArithmetic(FunctionFactory & factory)
 {
     registerFunctionPlus(factory);

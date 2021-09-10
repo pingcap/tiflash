@@ -2,21 +2,19 @@
 
 #include <Common/HashTable/Hash.h>
 #include <Common/LRUCache.h>
-#include <Common/SipHash.h>
 #include <Common/ProfileEvents.h>
+#include <Common/SipHash.h>
 #include <IO/BufferWithOwnMemory.h>
 
 namespace ProfileEvents
 {
-    extern const Event UncompressedCacheHits;
-    extern const Event UncompressedCacheMisses;
-    extern const Event UncompressedCacheWeightLost;
-}
+extern const Event UncompressedCacheHits;
+extern const Event UncompressedCacheMisses;
+extern const Event UncompressedCacheWeightLost;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
-
 struct UncompressedCacheCell
 {
     Memory data;
@@ -41,7 +39,8 @@ private:
 
 public:
     UncompressedCache(size_t max_size_in_bytes)
-        : Base(max_size_in_bytes) {}
+        : Base(max_size_in_bytes)
+    {}
 
     /// Calculate key from path to file and offset.
     static UInt128 hash(const String & path_to_file, size_t offset)
@@ -77,4 +76,4 @@ private:
 
 using UncompressedCachePtr = std::shared_ptr<UncompressedCache>;
 
-}
+} // namespace DB

@@ -1,32 +1,28 @@
 #pragma once
 
-#include <Core/Field.h>
-#include <IO/WriteHelpers.h>
-#include <Poco/Timespan.h>
-
-#include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/FieldVisitors.h>
-
+#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Core/Field.h>
 #include <DataStreams/SizeLimits.h>
-
 #include <IO/CompressedStream.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Poco/Timespan.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TYPE_MISMATCH;
-    extern const int UNKNOWN_LOAD_BALANCING;
-    extern const int UNKNOWN_OVERFLOW_MODE;
-    extern const int ILLEGAL_OVERFLOW_MODE;
-    extern const int UNKNOWN_TOTALS_MODE;
-    extern const int UNKNOWN_COMPRESSION_METHOD;
-    extern const int UNKNOWN_DISTRIBUTED_PRODUCT_MODE;
-    extern const int UNKNOWN_GLOBAL_SUBQUERIES_METHOD;
-}
+extern const int TYPE_MISMATCH;
+extern const int UNKNOWN_LOAD_BALANCING;
+extern const int UNKNOWN_OVERFLOW_MODE;
+extern const int ILLEGAL_OVERFLOW_MODE;
+extern const int UNKNOWN_TOTALS_MODE;
+extern const int UNKNOWN_COMPRESSION_METHOD;
+extern const int UNKNOWN_DISTRIBUTED_PRODUCT_MODE;
+extern const int UNKNOWN_GLOBAL_SUBQUERIES_METHOD;
+} // namespace ErrorCodes
 
 
 /** One setting for any type.
@@ -39,22 +35,34 @@ namespace ErrorCodes
 template <typename IntType>
 struct SettingInt
 {
-    IntType value;
+public:
     bool changed = false;
 
-    SettingInt(IntType x = 0) : value(x) {}
+    SettingInt(IntType x = 0)
+        : value(x)
+    {}
+    SettingInt(const SettingInt & setting) { value.store(setting.value.load()); }
 
-    operator IntType() const { return value; }
-    SettingInt & operator= (IntType x) { set(x); return *this; }
+    operator IntType() const { return value.load(); }
+    SettingInt & operator=(IntType x)
+    {
+        set(x);
+        return *this;
+    }
+    SettingInt & operator=(const SettingInt & setting)
+    {
+        set(setting.value.load());
+        return *this;
+    }
 
     String toString() const
     {
-        return DB::toString(value);
+        return DB::toString(value.load());
     }
 
     void set(IntType x)
     {
-        value = x;
+        value.store(x);
         changed = true;
     }
 
@@ -75,10 +83,18 @@ struct SettingInt
         set(x);
     }
 
+    IntType get() const
+    {
+        return value.load();
+    }
+
     void write(WriteBuffer & buf) const
     {
-        writeVarT(value, buf);
+        writeVarT(value.load(), buf);
     }
+
+private:
+    std::atomic<IntType> value;
 };
 
 using SettingUInt64 = SettingInt<UInt64>;
@@ -92,14 +108,21 @@ using SettingBool = SettingUInt64;
   */
 struct SettingMaxThreads
 {
-    UInt64 value;
+public:
     bool is_auto;
     bool changed = false;
 
-    SettingMaxThreads(UInt64 x = 0) : value(x ? x : getAutoValue()), is_auto(x == 0) {}
+    SettingMaxThreads(UInt64 x = 0)
+        : is_auto(x == 0)
+        , value(x ? x : getAutoValue())
+    {}
 
     operator UInt64() const { return value; }
-    SettingMaxThreads & operator= (UInt64 x) { set(x); return *this; }
+    SettingMaxThreads & operator=(UInt64 x)
+    {
+        set(x);
+        return *this;
+    }
 
     String toString() const
     {
@@ -159,18 +182,32 @@ struct SettingMaxThreads
     {
         return getNumberOfPhysicalCPUCores();
     }
+
+    UInt64 get() const
+    {
+        return value;
+    }
+
+private:
+    UInt64 value;
 };
 
 
 struct SettingSeconds
 {
-    Poco::Timespan value;
+public:
     bool changed = false;
 
-    SettingSeconds(UInt64 seconds = 0) : value(seconds, 0) {}
+    SettingSeconds(UInt64 seconds = 0)
+        : value(seconds, 0)
+    {}
 
     operator Poco::Timespan() const { return value; }
-    SettingSeconds & operator= (const Poco::Timespan & x) { set(x); return *this; }
+    SettingSeconds & operator=(const Poco::Timespan & x)
+    {
+        set(x);
+        return *this;
+    }
 
     Poco::Timespan::TimeDiff totalSeconds() const { return value.totalSeconds(); }
 
@@ -211,18 +248,32 @@ struct SettingSeconds
     {
         writeVarUInt(value.totalSeconds(), buf);
     }
+
+    Poco::Timespan get() const
+    {
+        return value;
+    }
+
+private:
+    Poco::Timespan value;
 };
 
 
 struct SettingMilliseconds
 {
-    Poco::Timespan value;
+public:
     bool changed = false;
 
-    SettingMilliseconds(UInt64 milliseconds = 0) : value(milliseconds * 1000) {}
+    SettingMilliseconds(UInt64 milliseconds = 0)
+        : value(milliseconds * 1000)
+    {}
 
     operator Poco::Timespan() const { return value; }
-    SettingMilliseconds & operator= (const Poco::Timespan & x) { set(x); return *this; }
+    SettingMilliseconds & operator=(const Poco::Timespan & x)
+    {
+        set(x);
+        return *this;
+    }
 
     Poco::Timespan::TimeDiff totalMilliseconds() const { return value.totalMilliseconds(); }
 
@@ -263,27 +314,46 @@ struct SettingMilliseconds
     {
         writeVarUInt(value.totalMilliseconds(), buf);
     }
+
+    Poco::Timespan get() const
+    {
+        return value;
+    }
+
+private:
+    Poco::Timespan value;
 };
 
 
 struct SettingFloat
 {
-    float value;
+public:
     bool changed = false;
 
-    SettingFloat(float x = 0) : value(x) {}
-
-    operator float() const { return value; }
-    SettingFloat & operator= (float x) { set(x); return *this; }
+    SettingFloat(float x = 0)
+        : value(x)
+    {}
+    SettingFloat(const SettingFloat & setting) { value.store(setting.value.load()); }
+    operator float() const { return value.load(); }
+    SettingFloat & operator=(float x)
+    {
+        set(x);
+        return *this;
+    }
+    SettingFloat & operator=(const SettingFloat & setting)
+    {
+        set(setting.value.load());
+        return *this;
+    }
 
     String toString() const
     {
-        return DB::toString(value);
+        return DB::toString(value.load());
     }
 
     void set(float x)
     {
-        value = x;
+        value.store(x);
         changed = true;
     }
 
@@ -321,8 +391,91 @@ struct SettingFloat
     {
         writeBinary(toString(), buf);
     }
+
+    float get() const
+    {
+        return value.load();
+    }
+
+private:
+    std::atomic<float> value;
 };
 
+struct SettingDouble
+{
+public:
+    bool changed = false;
+
+    SettingDouble(double x = 0)
+        : value(x)
+    {}
+    SettingDouble(const SettingDouble & setting) { value.store(setting.value.load()); }
+    operator double() const { return value.load(); }
+    SettingDouble & operator=(double x)
+    {
+        set(x);
+        return *this;
+    }
+    SettingDouble & operator=(const SettingDouble & setting)
+    {
+        set(setting.value.load());
+        return *this;
+    }
+
+    String toString() const
+    {
+        return DB::toString(value.load());
+    }
+
+    void set(double x)
+    {
+        value.store(x);
+        changed = true;
+    }
+
+    void set(const Field & x)
+    {
+        if (x.getType() == Field::Types::UInt64)
+        {
+            set(safeGet<UInt64>(x));
+        }
+        else if (x.getType() == Field::Types::Int64)
+        {
+            set(safeGet<Int64>(x));
+        }
+        else if (x.getType() == Field::Types::Float64)
+        {
+            set(safeGet<Float64>(x));
+        }
+        else
+            throw Exception(std::string("Bad type of setting. Expected UInt64, Int64 or Float64, got ") + x.getTypeName(), ErrorCodes::TYPE_MISMATCH);
+    }
+
+    void set(const String & x)
+    {
+        set(parse<double>(x));
+    }
+
+    void set(ReadBuffer & buf)
+    {
+        String x;
+        readBinary(x, buf);
+        set(x);
+    }
+
+    void write(WriteBuffer & buf) const
+    {
+        writeBinary(toString(), buf);
+    }
+
+    double get() const
+    {
+        return value.load();
+    }
+
+private:
+    std::atomic<double> value;
+};
 
 enum class LoadBalancing
 {
@@ -337,22 +490,31 @@ enum class LoadBalancing
 
 struct SettingLoadBalancing
 {
-    LoadBalancing value;
+public:
     bool changed = false;
 
-    SettingLoadBalancing(LoadBalancing x) : value(x) {}
+    SettingLoadBalancing(LoadBalancing x)
+        : value(x)
+    {}
 
     operator LoadBalancing() const { return value; }
-    SettingLoadBalancing & operator= (LoadBalancing x) { set(x); return *this; }
+    SettingLoadBalancing & operator=(LoadBalancing x)
+    {
+        set(x);
+        return *this;
+    }
 
     static LoadBalancing getLoadBalancing(const String & s)
     {
-        if (s == "random")                 return LoadBalancing::RANDOM;
-        if (s == "nearest_hostname")     return LoadBalancing::NEAREST_HOSTNAME;
-        if (s == "in_order")             return LoadBalancing::IN_ORDER;
+        if (s == "random")
+            return LoadBalancing::RANDOM;
+        if (s == "nearest_hostname")
+            return LoadBalancing::NEAREST_HOSTNAME;
+        if (s == "in_order")
+            return LoadBalancing::IN_ORDER;
 
         throw Exception("Unknown load balancing mode: '" + s + "', must be one of 'random', 'nearest_hostname', 'in_order'",
-            ErrorCodes::UNKNOWN_LOAD_BALANCING);
+                        ErrorCodes::UNKNOWN_LOAD_BALANCING);
     }
 
     String toString() const
@@ -390,37 +552,59 @@ struct SettingLoadBalancing
     {
         writeBinary(toString(), buf);
     }
+
+    LoadBalancing get() const
+    {
+        return value;
+    }
+
+private:
+    LoadBalancing value;
 };
 
 
 /// Which rows should be included in TOTALS.
 enum class TotalsMode
 {
-    BEFORE_HAVING            = 0, /// Count HAVING for all read rows;
-                                  ///  including those not in max_rows_to_group_by
-                                  ///  and have not passed HAVING after grouping.
-    AFTER_HAVING_INCLUSIVE    = 1, /// Count on all rows except those that have not passed HAVING;
-                                   ///  that is, to include in TOTALS all the rows that did not pass max_rows_to_group_by.
-    AFTER_HAVING_EXCLUSIVE    = 2, /// Include only the rows that passed and max_rows_to_group_by, and HAVING.
-    AFTER_HAVING_AUTO         = 3, /// Automatically select between INCLUSIVE and EXCLUSIVE,
+    /// Count HAVING for all read rows;
+    ///  including those not in max_rows_to_group_by
+    ///  and have not passed HAVING after grouping.
+    BEFORE_HAVING = 0,
+    /// Count on all rows except those that have not passed HAVING;
+    ///  that is, to include in TOTALS all the rows that did not pass max_rows_to_group_by.
+    AFTER_HAVING_INCLUSIVE = 1,
+    /// Include only the rows that passed and max_rows_to_group_by, and HAVING.
+    AFTER_HAVING_EXCLUSIVE = 2,
+    /// Automatically select between INCLUSIVE and EXCLUSIVE,
+    AFTER_HAVING_AUTO = 3,
 };
 
 struct SettingTotalsMode
 {
-    TotalsMode value;
+public:
     bool changed = false;
 
-    SettingTotalsMode(TotalsMode x) : value(x) {}
+    SettingTotalsMode(TotalsMode x)
+        : value(x)
+    {}
 
     operator TotalsMode() const { return value; }
-    SettingTotalsMode & operator= (TotalsMode x) { set(x); return *this; }
+    SettingTotalsMode & operator=(TotalsMode x)
+    {
+        set(x);
+        return *this;
+    }
 
     static TotalsMode getTotalsMode(const String & s)
     {
-        if (s == "before_having")             return TotalsMode::BEFORE_HAVING;
-        if (s == "after_having_exclusive")    return TotalsMode::AFTER_HAVING_EXCLUSIVE;
-        if (s == "after_having_inclusive")    return TotalsMode::AFTER_HAVING_INCLUSIVE;
-        if (s == "after_having_auto")        return TotalsMode::AFTER_HAVING_AUTO;
+        if (s == "before_having")
+            return TotalsMode::BEFORE_HAVING;
+        if (s == "after_having_exclusive")
+            return TotalsMode::AFTER_HAVING_EXCLUSIVE;
+        if (s == "after_having_inclusive")
+            return TotalsMode::AFTER_HAVING_INCLUSIVE;
+        if (s == "after_having_auto")
+            return TotalsMode::AFTER_HAVING_AUTO;
 
         throw Exception("Unknown totals mode: '" + s + "', must be one of 'before_having', 'after_having_exclusive', 'after_having_inclusive', 'after_having_auto'", ErrorCodes::UNKNOWN_TOTALS_MODE);
     }
@@ -429,13 +613,17 @@ struct SettingTotalsMode
     {
         switch (value)
         {
-            case TotalsMode::BEFORE_HAVING:                return "before_having";
-            case TotalsMode::AFTER_HAVING_EXCLUSIVE:    return "after_having_exclusive";
-            case TotalsMode::AFTER_HAVING_INCLUSIVE:    return "after_having_inclusive";
-            case TotalsMode::AFTER_HAVING_AUTO:            return "after_having_auto";
+        case TotalsMode::BEFORE_HAVING:
+            return "before_having";
+        case TotalsMode::AFTER_HAVING_EXCLUSIVE:
+            return "after_having_exclusive";
+        case TotalsMode::AFTER_HAVING_INCLUSIVE:
+            return "after_having_inclusive";
+        case TotalsMode::AFTER_HAVING_AUTO:
+            return "after_having_auto";
 
-            default:
-                throw Exception("Unknown TotalsMode enum value", ErrorCodes::UNKNOWN_TOTALS_MODE);
+        default:
+            throw Exception("Unknown TotalsMode enum value", ErrorCodes::UNKNOWN_TOTALS_MODE);
         }
     }
 
@@ -466,25 +654,42 @@ struct SettingTotalsMode
     {
         writeBinary(toString(), buf);
     }
+
+    TotalsMode get() const
+    {
+        return value;
+    }
+
+private:
+    TotalsMode value;
 };
 
 
 template <bool enable_mode_any>
 struct SettingOverflowMode
 {
-    OverflowMode value;
+public:
     bool changed = false;
 
-    SettingOverflowMode(OverflowMode x = OverflowMode::THROW) : value(x) {}
+    SettingOverflowMode(OverflowMode x = OverflowMode::THROW)
+        : value(x)
+    {}
 
     operator OverflowMode() const { return value; }
-    SettingOverflowMode & operator= (OverflowMode x) { set(x); return *this; }
+    SettingOverflowMode & operator=(OverflowMode x)
+    {
+        set(x);
+        return *this;
+    }
 
     static OverflowMode getOverflowModeForGroupBy(const String & s)
     {
-        if (s == "throw")     return OverflowMode::THROW;
-        if (s == "break")     return OverflowMode::BREAK;
-        if (s == "any")        return OverflowMode::ANY;
+        if (s == "throw")
+            return OverflowMode::THROW;
+        if (s == "break")
+            return OverflowMode::BREAK;
+        if (s == "any")
+            return OverflowMode::ANY;
 
         throw Exception("Unknown overflow mode: '" + s + "', must be one of 'throw', 'break', 'any'", ErrorCodes::UNKNOWN_OVERFLOW_MODE);
     }
@@ -501,7 +706,7 @@ struct SettingOverflowMode
 
     String toString() const
     {
-        const char * strings[] = { "throw", "break", "any" };
+        const char * strings[] = {"throw", "break", "any"};
 
         if (value < OverflowMode::THROW || value > OverflowMode::ANY)
             throw Exception("Unknown overflow mode", ErrorCodes::UNKNOWN_OVERFLOW_MODE);
@@ -536,17 +741,31 @@ struct SettingOverflowMode
     {
         writeBinary(toString(), buf);
     }
+
+    OverflowMode get() const
+    {
+        return value;
+    }
+
+private:
+    OverflowMode value;
 };
 
 struct SettingCompressionMethod
 {
-    CompressionMethod value;
+public:
     bool changed = false;
 
-    SettingCompressionMethod(CompressionMethod x = CompressionMethod::LZ4) : value(x) {}
+    SettingCompressionMethod(CompressionMethod x = CompressionMethod::LZ4)
+        : value(x)
+    {}
 
     operator CompressionMethod() const { return value; }
-    SettingCompressionMethod & operator= (CompressionMethod x) { set(x); return *this; }
+    SettingCompressionMethod & operator=(CompressionMethod x)
+    {
+        set(x);
+        return *this;
+    }
 
     static CompressionMethod getCompressionMethod(const String & s)
     {
@@ -562,7 +781,7 @@ struct SettingCompressionMethod
 
     String toString() const
     {
-        const char * strings[] = { nullptr, "lz4", "lz4hc", "zstd" };
+        const char * strings[] = {nullptr, "lz4", "lz4hc", "zstd"};
 
         if (value < CompressionMethod::LZ4 || value > CompressionMethod::ZSTD)
             throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
@@ -597,36 +816,54 @@ struct SettingCompressionMethod
     {
         writeBinary(toString(), buf);
     }
+
+    CompressionMethod get() const
+    {
+        return value;
+    }
+
+private:
+    CompressionMethod value;
 };
 
 /// The setting for executing distributed subqueries inside IN or JOIN sections.
 enum class DistributedProductMode
 {
-    DENY = 0,    /// Disable
-    LOCAL,       /// Convert to local query
-    GLOBAL,      /// Convert to global query
-    ALLOW        /// Enable
+    DENY = 0, /// Disable
+    LOCAL, /// Convert to local query
+    GLOBAL, /// Convert to global query
+    ALLOW /// Enable
 };
 
 struct SettingDistributedProductMode
 {
-    DistributedProductMode value;
+public:
     bool changed = false;
 
-    SettingDistributedProductMode(DistributedProductMode x) : value(x) {}
+    SettingDistributedProductMode(DistributedProductMode x)
+        : value(x)
+    {}
 
     operator DistributedProductMode() const { return value; }
-    SettingDistributedProductMode & operator= (DistributedProductMode x) { set(x); return *this; }
+    SettingDistributedProductMode & operator=(DistributedProductMode x)
+    {
+        set(x);
+        return *this;
+    }
 
     static DistributedProductMode getDistributedProductMode(const String & s)
     {
-        if (s == "deny")     return DistributedProductMode::DENY;
-        if (s == "local")     return DistributedProductMode::LOCAL;
-        if (s == "global")     return DistributedProductMode::GLOBAL;
-        if (s == "allow")    return DistributedProductMode::ALLOW;
+        if (s == "deny")
+            return DistributedProductMode::DENY;
+        if (s == "local")
+            return DistributedProductMode::LOCAL;
+        if (s == "global")
+            return DistributedProductMode::GLOBAL;
+        if (s == "allow")
+            return DistributedProductMode::ALLOW;
 
         throw Exception("Unknown distributed product mode: '" + s + "', must be one of 'deny', 'local', 'global', 'allow'",
-            ErrorCodes::UNKNOWN_DISTRIBUTED_PRODUCT_MODE);
+                        ErrorCodes::UNKNOWN_DISTRIBUTED_PRODUCT_MODE);
     }
 
     String toString() const
@@ -664,18 +901,32 @@ struct SettingDistributedProductMode
     {
         writeBinary(toString(), buf);
     }
+
+    DistributedProductMode get() const
+    {
+        return value;
+    }
+
+private:
+    DistributedProductMode value;
 };
 
 
 struct SettingString
 {
-    String value;
+public:
     bool changed = false;
 
-    SettingString(const String & x = String{}) : value(x) {}
+    SettingString(const String & x = String{})
+        : value(x)
+    {}
 
     operator String() const { return value; }
-    SettingString & operator= (const String & x) { set(x); return *this; }
+    SettingString & operator=(const String & x)
+    {
+        set(x);
+        return *this;
+    }
 
     String toString() const
     {
@@ -704,6 +955,14 @@ struct SettingString
     {
         writeBinary(value, buf);
     }
+
+    String get() const
+    {
+        return value;
+    }
+
+private:
+    String value;
 };
 
-}
+} // namespace DB

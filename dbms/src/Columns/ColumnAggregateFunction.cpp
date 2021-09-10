@@ -5,6 +5,7 @@
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteBufferFromArena.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -18,7 +19,7 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 ColumnAggregateFunction::~ColumnAggregateFunction()
 {
     if (!func->hasTrivialDestructor() && !src)
-        for (auto val : data)
+        for (auto * val : data)
             func->destroy(val);
 }
 
@@ -72,7 +73,7 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues() const
     MutableColumnPtr res = function->getReturnType()->createColumn();
     res->reserve(getData().size());
 
-    for (auto val : getData())
+    for (auto * val : getData())
         function->insertResultInto(val, *res, nullptr);
 
     return res;
@@ -84,12 +85,13 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
     const ColumnAggregateFunction & from_concrete = static_cast<const ColumnAggregateFunction &>(from);
 
     if (start + length > from_concrete.getData().size())
-        throw Exception("Parameters start = " + toString(start) + ", length = " + toString(length)
-                            + " are out of bound in ColumnAggregateFunction::insertRangeFrom method"
-                              " (data.size() = "
-                            + toString(from_concrete.getData().size())
-                            + ").",
-                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
+        throw Exception(
+            fmt::format(
+                "Parameters start = {}, length = {} are out of bound in ColumnAggregateFunction::insertRangeFrom method (data.size() = {}).",
+                start,
+                length,
+                from_concrete.getData().size()),
+            ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     if (!empty() && src.get() != &from_concrete)
     {
@@ -184,7 +186,9 @@ void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash, const TiDB::Ti
 {
     auto s = data.size();
     if (hash.getData().size() != data.size())
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
 
     auto & hash_data = hash.getData();
 
@@ -275,9 +279,9 @@ void ColumnAggregateFunction::insertMergeFrom(ConstAggregateDataPtr __restrict p
     func->merge(getData().back(), place, &createOrGetArena());
 }
 
-void ColumnAggregateFunction::insertMergeFrom(const IColumn & src, size_t n)
+void ColumnAggregateFunction::insertMergeFrom(const IColumn & src_, size_t n)
 {
-    insertMergeFrom(static_cast<const ColumnAggregateFunction &>(src).getData()[n]);
+    insertMergeFrom(static_cast<const ColumnAggregateFunction &>(src_).getData()[n]);
 }
 
 Arena & ColumnAggregateFunction::createOrGetArena()
@@ -331,7 +335,7 @@ const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char *
 
     /** We will read from src_arena.
       * There is no limit for reading - it is assumed, that we can read all that we need after src_arena pointer.
-      * Buf ReadBufferFromMemory requires some bound. We will use arbitary big enough number, that will not overflow pointer.
+      * Buf ReadBufferFromMemory requires some bound. We will use arbitrary big enough number, that will not overflow pointer.
       * NOTE Technically, this is not compatible with C++ standard,
       *  as we cannot legally compare pointers after last element + 1 of some valid memory region.
       *  Probably this will not work under UBSan.
@@ -390,7 +394,7 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
     size_t num_rows = size();
 
     {
-        size_t reserve_size = num_rows / num_columns * 1.1; /// 1.1 is just a guess. Better to use n-sigma rule.
+        size_t reserve_size = 1.1 * num_rows / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
 
         if (reserve_size > 1)
             for (auto & column : columns)
