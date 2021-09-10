@@ -1,19 +1,17 @@
 #pragma once
 
-#include <iostream>
-
 #include <Common/Exception.h>
-
-#include <IO/WriteBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/WriteBuffer.h>
+
+#include <iostream>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_WRITE_TO_OSTREAM;
+extern const int CANNOT_WRITE_TO_OSTREAM;
 }
 
 class WriteBufferFromOStream : public BufferWithOwnMemory<WriteBuffer>
@@ -35,11 +33,13 @@ private:
 
 public:
     WriteBufferFromOStream(
-            std::ostream & ostr_,
-            size_t size = DBMS_DEFAULT_BUFFER_SIZE,
-            char * existing_memory = nullptr,
-            size_t alignment = 0)
-        : BufferWithOwnMemory<WriteBuffer>(size, existing_memory, alignment), ostr(ostr_) {}
+        std::ostream & ostr_,
+        size_t size = DBMS_DEFAULT_BUFFER_SIZE,
+        char * existing_memory = nullptr,
+        size_t alignment = 0)
+        : BufferWithOwnMemory<WriteBuffer>(size, existing_memory, alignment)
+        , ostr(ostr_)
+    {}
 
     ~WriteBufferFromOStream() override
     {
@@ -54,4 +54,4 @@ public:
     }
 };
 
-}
+} // namespace DB

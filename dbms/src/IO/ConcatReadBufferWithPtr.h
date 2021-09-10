@@ -1,13 +1,12 @@
 #pragma once
 
-#include <vector>
-
 #include <IO/ReadBuffer.h>
+
+#include <vector>
 
 
 namespace DB
 {
-
 /** Reads from the concatenation of multiple ReadBuffers
   */
 class ConcatReadBufferWithPtr : public ReadBuffer
@@ -51,7 +50,11 @@ protected:
     }
 
 public:
-    ConcatReadBufferWithPtr(const ReadBuffers & buffers_) : ReadBuffer(nullptr, 0), buffers(buffers_), current(buffers.begin()) {}
+    ConcatReadBufferWithPtr(const ReadBuffers & buffers_)
+        : ReadBuffer(nullptr, 0)
+        , buffers(buffers_)
+        , current(buffers.begin())
+    {}
 };
 
 } // namespace DB

@@ -148,7 +148,7 @@ public:
         return 1;
     }
 
-    bool isInjective(const Block &) override
+    bool isInjective(const Block &) const override
     {
         return is_injective;
     }
@@ -165,7 +165,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))

@@ -1,24 +1,23 @@
 #include <IO/InterserverWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
-
-#include <Poco/Version.h>
-#include <Poco/URI.h>
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
-
+#include <Poco/URI.h>
+#include <Poco/Version.h>
 #include <common/logger_useful.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_WRITE_TO_OSTREAM;
-    extern const int RECEIVED_ERROR_FROM_REMOTE_IO_SERVER;
-}
+extern const int CANNOT_WRITE_TO_OSTREAM;
+extern const int RECEIVED_ERROR_FROM_REMOTE_IO_SERVER;
+} // namespace ErrorCodes
 
-InterserverWriteBuffer::InterserverWriteBuffer(const std::string & host_, int port_,
+InterserverWriteBuffer::InterserverWriteBuffer(
+    const std::string & host_,
+    int port_,
     const std::string & endpoint_,
     const std::string & path_,
     bool compress_,
@@ -26,7 +25,10 @@ InterserverWriteBuffer::InterserverWriteBuffer(const std::string & host_, int po
     const Poco::Timespan & connection_timeout,
     const Poco::Timespan & send_timeout,
     const Poco::Timespan & receive_timeout)
-    : WriteBuffer(nullptr, 0), host(host_), port(port_), path(path_)
+    : WriteBuffer(nullptr, 0)
+    , host(host_)
+    , port(port_)
+    , path(path_)
 {
     std::string encoded_path;
     Poco::URI::encode(path, "&#", encoded_path);
@@ -55,8 +57,8 @@ InterserverWriteBuffer::InterserverWriteBuffer(const std::string & host_, int po
     session.setTimeout(connection_timeout, send_timeout, receive_timeout);
 #else
     session.setTimeout(connection_timeout);
-    static_cast <void> (send_timeout);
-    static_cast <void> (receive_timeout);
+    static_cast<void>(send_timeout);
+    static_cast<void>(receive_timeout);
 #endif
 
     Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_POST, uri_str, Poco::Net::HTTPRequest::HTTP_1_1);
@@ -108,4 +110,4 @@ void InterserverWriteBuffer::cancel()
     finalized = true;
 }
 
-}
+} // namespace DB

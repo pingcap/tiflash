@@ -1,10 +1,10 @@
 #include <IO/HashingWriteBuffer.h>
+
 #include <iomanip>
 
 
 namespace DB
 {
-
 /// computation of the hash depends on the partitioning of blocks
 /// so you need to compute a hash of n complete pieces and one incomplete
 template <typename Buffer>
@@ -51,4 +51,4 @@ void IHashingBuffer<Buffer>::calculateHash(DB::BufferBase::Position data, size_t
 template class IHashingBuffer<DB::ReadBuffer>;
 template class IHashingBuffer<DB::WriteBuffer>;
 
-}
+} // namespace DB
