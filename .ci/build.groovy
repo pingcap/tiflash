@@ -50,7 +50,7 @@ catchError {
                 stage("Static Analysis") {
                     timeout(time: 360, unit: 'MINUTES') {
                         container("builder") {
-                            sh "NPROC=5 /build/tics/release-centos7/build/static-analysis.sh"
+                            echo "NPROC=5 /build/tics/release-centos7/build/static-analysis.sh"
                         }
                     }
                 }
