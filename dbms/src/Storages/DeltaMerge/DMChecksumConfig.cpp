@@ -6,15 +6,15 @@
 #include <dmfile.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Storages/DeltaMerge/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 
 namespace DB::DM
 {
-DMConfiguration::DMConfiguration(std::istream & input)
+DMChecksumConfig::DMChecksumConfig(std::istream & input)
     : embedded_checksum()
     , debug_info()
 {
-    dtpb::Configuration configuration;
+    dtpb::ChecksumConfig configuration;
     if (unlikely(!configuration.ParseFromIstream(&input)))
     {
         throw TiFlashException("failed to parse configuration proto from input stream", Errors::Checksum::IOFailure);
@@ -73,9 +73,9 @@ DMConfiguration::DMConfiguration(std::istream & input)
     }
 }
 
-std::ostream & operator<<(std::ostream & output, const DMConfiguration & config)
+std::ostream & operator<<(std::ostream & output, const DMChecksumConfig & config)
 {
-    dtpb::Configuration configuration;
+    dtpb::ChecksumConfig configuration;
     DB::UnifiedDigestBaseBox digest = config.createUnifiedDigest();
 
     configuration.set_checksum_algorithm(static_cast<uint64_t>(config.checksum_algorithm));

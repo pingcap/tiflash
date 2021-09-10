@@ -23,7 +23,7 @@ message DebugInfo {
     required string content = 2;
 }
 
-message Configuration {
+message ChecksumConfig {
     required uint64 checksum_algorithm = 1;
     required uint64 checksum_frame_length = 2;
     repeated EmbeddedChecksum embedded_checksum = 3;

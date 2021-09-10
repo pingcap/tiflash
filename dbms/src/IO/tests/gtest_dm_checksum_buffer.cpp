@@ -14,7 +14,7 @@
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/Page/PageUtil.h>
 
 #include <random>
@@ -203,7 +203,7 @@ template <ChecksumAlgo D>
 void runStackingTest()
 {
     auto [limiter, provider] = prepareIO();
-    auto config = DM::DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+    auto config = DM::DMChecksumConfig{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
     for (auto size = 1024; size <= 4096 * 1024; size <<= 1)
     {
         auto [data, seed] = randomData(size);
@@ -252,7 +252,7 @@ void runStackedSeekingTest()
 {
     auto local_engine = std::mt19937_64{seed};
     auto [limiter, provider] = prepareIO();
-    auto config = DM::DMConfiguration{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+    auto config = DM::DMChecksumConfig{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
     size_t size = 1024 * 1024 * 1024;
     std::vector<std::tuple<std::vector<char>, size_t, size_t>> slices;
     auto [data, seed] = randomData(size);

@@ -8,12 +8,12 @@
 
 namespace DB::DM
 {
-class DMConfiguration
+class DMChecksumConfig
 {
 public:
-    explicit DMConfiguration(std::istream & input);
+    explicit DMChecksumConfig(std::istream & input);
 
-    explicit DMConfiguration(std::map<std::string, std::string> embedded_checksum_ = {},
+    explicit DMChecksumConfig(std::map<std::string, std::string> embedded_checksum_ = {},
                              size_t checksum_frame_length_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
                              DB::ChecksumAlgo checksum_algorithm_ = DB::ChecksumAlgo::XXH3,
                              std::map<std::string, std::string> debug_info_ = {{"creation_commit_hash", TIFLASH_GIT_HASH},
@@ -28,7 +28,7 @@ public:
     {
     }
 
-    friend std::ostream & operator<<(std::ostream &, const DMConfiguration &);
+    friend std::ostream & operator<<(std::ostream &, const DMChecksumConfig &);
 
     [[nodiscard]] size_t getChecksumFrameLength() const { return checksum_frame_length; }
     [[nodiscard]] size_t getChecksumHeaderLength() const
@@ -81,7 +81,7 @@ private:
 };
 
 
-std::ostream & operator<<(std::ostream & output, const DMConfiguration & config);
+std::ostream & operator<<(std::ostream & output, const DMChecksumConfig & config);
 
-using DMConfigurationOpt = std::optional<DMConfiguration>;
+using DMConfigurationOpt = std::optional<DMChecksumConfig>;
 } // namespace DB::DM

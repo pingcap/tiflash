@@ -3,19 +3,19 @@
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
 #include <Common/Checksum.h>
-#include <Storages/DeltaMerge/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 namespace DB::DM
 {
 
 template <ChecksumAlgo algo>
 void runSerializationTest()
 {
-    DMConfiguration original{{{"abc", "abc"}, {"123", "123"}}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, algo};
+    DMChecksumConfig original{{{"abc", "abc"}, {"123", "123"}}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, algo};
 
     std::stringstream ss;
     ss << original;
 
-    DMConfiguration deserialized(ss);
+    DMChecksumConfig deserialized(ss);
 
     ASSERT_EQ(original.getChecksumAlgorithm(), deserialized.getChecksumAlgorithm());
     ASSERT_EQ(original.getChecksumFrameLength(), deserialized.getChecksumFrameLength());
