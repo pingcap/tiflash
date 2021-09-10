@@ -1,9 +1,5 @@
 #include <Functions/FunctionFactory.h>
 
-#include "registerFunctionBitTestAll.h"
-#include "registerFunctionBitTestAny.h"
-
-
 namespace DB
 {
 class FunctionFactory;
@@ -29,6 +25,8 @@ void registerFunctionBitRotateRight(FunctionFactory & factory);
 void registerFunctionLeast(FunctionFactory & factory);
 void registerFunctionGreatest(FunctionFactory & factory);
 void registerFunctionBitTest(FunctionFactory & factory);
+void registerFunctionBitTestAny(FunctionFactory & factory);
+void registerFunctionBitTestAll(FunctionFactory & factory);
 void registerFunctionGCD(FunctionFactory & factory);
 void registerFunctionLCM(FunctionFactory & factory);
 void registerFunctionIntExp2(FunctionFactory & factory);
