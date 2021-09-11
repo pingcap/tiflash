@@ -1,16 +1,20 @@
-#include <Interpreters/ExpressionActions.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
+#include <Interpreters/ExpressionActions.h>
 
 
 namespace DB
 {
-ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const std::shared_ptr<LogWithPrefix> & log_)
-    : expression(expression_), log(getLogWithPrefix(log_, getName()))
+ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const LogWithPrefixPtr & log_)
+    : expression(expression_)
+    , log(getMPPTaskLog(log_, getName()))
 {
     children.push_back(input);
 }
 
-String ExpressionBlockInputStream::getName() const { return "Expression"; }
+String ExpressionBlockInputStream::getName() const
+{
+    return "Expression";
+}
 
 Block ExpressionBlockInputStream::getTotals()
 {
@@ -39,4 +43,4 @@ Block ExpressionBlockInputStream::readImpl()
     return res;
 }
 
-}
+} // namespace DB

@@ -21,7 +21,7 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const std::shared_ptr<LogWithPrefix> & log_)
+InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const LogWithPrefixPtr & log_)
     : context(context_)
     , dag(dag_)
     , keep_session_timezone_info(
@@ -47,7 +47,15 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
         input_streams_vec.push_back(child_streams);
     }
-    DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag, subqueriesForSets, mpp_exchange_receiver_maps, log);
+    DAGQueryBlockInterpreter query_block_interpreter(
+        context,
+        input_streams_vec,
+        query_block,
+        keep_session_timezone_info,
+        dag,
+        subqueriesForSets,
+        mpp_exchange_receiver_maps,
+        log);
     return query_block_interpreter.execute();
 }
 
@@ -86,7 +94,12 @@ BlockIO InterpreterDAG::execute()
     if (!subqueriesForSets.empty())
     {
         const Settings & settings = context.getSettingsRef();
-        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), std::move(subqueriesForSets), SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode), dag.getDAGContext().getMPPTaskId());
+        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
+            pipeline.firstStream(),
+            std::move(subqueriesForSets),
+            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
+            dag.getDAGContext().getMPPTaskId(),
+            log);
     }
 
     BlockIO res;

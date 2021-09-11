@@ -1,39 +1,39 @@
-#include <DataStreams/AddingConstColumnBlockInputStream.h>
-#include <DataStreams/narrowBlockInputStreams.h>
-#include <DataStreams/LazyBlockInputStream.h>
-#include <DataStreams/NullBlockInputStream.h>
-#include <DataStreams/ConvertingBlockInputStream.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <DataStreams/ConcatBlockInputStream.h>
-#include <DataStreams/materializeBlock.h>
-#include <Storages/RegionQueryInfo.h>
-#include <Storages/StorageMerge.h>
-#include <Storages/StorageFactory.h>
-#include <Storages/VirtualColumnUtils.h>
-#include <Storages/VirtualColumnFactory.h>
-#include <Interpreters/InterpreterAlterQuery.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/evaluateConstantExpression.h>
-#include <Interpreters/InterpreterSelectQuery.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTExpressionList.h>
-#include <DataTypes/DataTypeString.h>
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/AddingConstColumnBlockInputStream.h>
+#include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/ConvertingBlockInputStream.h>
+#include <DataStreams/LazyBlockInputStream.h>
+#include <DataStreams/NullBlockInputStream.h>
+#include <DataStreams/OneBlockInputStream.h>
+#include <DataStreams/materializeBlock.h>
+#include <DataStreams/narrowBlockInputStreams.h>
+#include <DataTypes/DataTypeString.h>
 #include <Databases/IDatabase.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/InterpreterAlterQuery.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Storages/RegionQueryInfo.h>
+#include <Storages/StorageFactory.h>
+#include <Storages/StorageMerge.h>
+#include <Storages/VirtualColumnFactory.h>
+#include <Storages/VirtualColumnUtils.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_PREWHERE;
-    extern const int INCOMPATIBLE_SOURCE_TABLES;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int ILLEGAL_PREWHERE;
+extern const int INCOMPATIBLE_SOURCE_TABLES;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 StorageMerge::StorageMerge(
@@ -42,9 +42,11 @@ StorageMerge::StorageMerge(
     const String & source_database_,
     const String & table_name_regexp_,
     const Context & context_)
-    : IStorage{columns_},
-    name(name_), source_database(source_database_),
-    table_name_regexp(table_name_regexp_), context(context_)
+    : IStorage{columns_}
+    , name(name_)
+    , source_database(source_database_)
+    , table_name_regexp(table_name_regexp_)
+    , context(context_)
 {
 }
 
@@ -87,29 +89,29 @@ bool StorageMerge::isRemote() const
 
 namespace
 {
-    using NodeHashToSet = std::map<IAST::Hash, SetPtr>;
+using NodeHashToSet = std::map<IAST::Hash, SetPtr>;
 
-    void relinkSetsImpl(const ASTPtr & query, const NodeHashToSet & node_hash_to_set, PreparedSets & new_sets)
-    {
-        auto hash = query->getTreeHash();
-        auto it = node_hash_to_set.find(hash);
-        if (node_hash_to_set.end() != it)
-            new_sets[query.get()] = it->second;
+void relinkSetsImpl(const ASTPtr & query, const NodeHashToSet & node_hash_to_set, PreparedSets & new_sets)
+{
+    auto hash = query->getTreeHash();
+    auto it = node_hash_to_set.find(hash);
+    if (node_hash_to_set.end() != it)
+        new_sets[query.get()] = it->second;
 
-        for (const auto & child : query->children)
-            relinkSetsImpl(child, node_hash_to_set, new_sets);
-    }
-
-    /// Re-link prepared sets onto cloned and modified AST.
-    void relinkSets(const ASTPtr & query, const PreparedSets & old_sets, PreparedSets & new_sets)
-    {
-        NodeHashToSet node_hash_to_set;
-        for (const auto & node_set : old_sets)
-            node_hash_to_set.emplace(node_set.first->getTreeHash(), node_set.second);
-
-        relinkSetsImpl(query, node_hash_to_set, new_sets);
-    }
+    for (const auto & child : query->children)
+        relinkSetsImpl(child, node_hash_to_set, new_sets);
 }
+
+/// Re-link prepared sets onto cloned and modified AST.
+void relinkSets(const ASTPtr & query, const PreparedSets & old_sets, PreparedSets & new_sets)
+{
+    NodeHashToSet node_hash_to_set;
+    for (const auto & node_set : old_sets)
+        node_hash_to_set.emplace(node_set.first->getTreeHash(), node_set.second);
+
+    relinkSetsImpl(query, node_hash_to_set, new_sets);
+}
+} // namespace
 
 
 bool StorageMerge::mayBenefitFromIndexForIn(const ASTPtr & left_in_operand) const
@@ -181,7 +183,7 @@ BlockInputStreams StorageMerge::read(
         auto values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_table");
 
         /// Remove unused tables from the list
-        selected_tables.remove_if([&] (const auto & elem) { return values.find(elem.first->getTableName()) == values.end(); });
+        selected_tables.remove_if([&](const auto & elem) { return values.find(elem.first->getTableName()) == values.end(); });
     }
 
     /** Just in case, turn off optimization "transfer to PREWHERE",
@@ -231,30 +233,31 @@ BlockInputStreams StorageMerge::read(
                 processed_stage_in_source_tables.emplace(processed_stage_in_source_table);
             else if (processed_stage_in_source_table != *processed_stage_in_source_tables)
                 throw Exception("Source tables for Merge table are processing data up to different stages",
-                    ErrorCodes::INCOMPATIBLE_SOURCE_TABLES);
+                                ErrorCodes::INCOMPATIBLE_SOURCE_TABLES);
 
             if (!header)
             {
                 switch (processed_stage_in_source_table)
                 {
-                    case QueryProcessingStage::FetchColumns:
-                        header = getSampleBlockForColumns(column_names);
-                        break;
-                    case QueryProcessingStage::WithMergeableState:
-                        header = materializeBlock(InterpreterSelectQuery(query_info.query, context, {}, QueryProcessingStage::WithMergeableState, 0,
-                            std::make_shared<OneBlockInputStream>(getSampleBlockForColumns(column_names)), true).getSampleBlock());
-                        break;
-                    case QueryProcessingStage::Complete:
-                        header = materializeBlock(InterpreterSelectQuery(query_info.query, context, {}, QueryProcessingStage::Complete, 0,
-                            std::make_shared<OneBlockInputStream>(getSampleBlockForColumns(column_names)), true).getSampleBlock());
-                        break;
+                case QueryProcessingStage::FetchColumns:
+                    header = getSampleBlockForColumns(column_names);
+                    break;
+                case QueryProcessingStage::WithMergeableState:
+                    header = materializeBlock(InterpreterSelectQuery(query_info.query, context, {}, QueryProcessingStage::WithMergeableState, 0, std::make_shared<OneBlockInputStream>(getSampleBlockForColumns(column_names)), true).getSampleBlock());
+                    break;
+                case QueryProcessingStage::Complete:
+                    header = materializeBlock(InterpreterSelectQuery(query_info.query, context, {}, QueryProcessingStage::Complete, 0, std::make_shared<OneBlockInputStream>(getSampleBlockForColumns(column_names)), true).getSampleBlock());
+                    break;
                 }
             }
 
             if (has_table_virtual_column)
                 for (auto & stream : source_streams)
                     stream = std::make_shared<AddingConstColumnBlockInputStream<String>>(
-                        stream, std::make_shared<DataTypeString>(), table->getTableName(), "_table");
+                        stream,
+                        std::make_shared<DataTypeString>(),
+                        table->getTableName(),
+                        "_table");
 
             /// Subordinary tables could have different but convertible types, like numeric types of different width.
             /// We must return streams with structure equals to structure of Merge table.
@@ -267,8 +270,7 @@ BlockInputStreams StorageMerge::read(
                 throw Exception("Logical error: unknown processed stage in source tables", ErrorCodes::LOGICAL_ERROR);
 
             /// If many streams, initialize it lazily, to avoid long delay before start of query processing.
-            source_streams.emplace_back(std::make_shared<LazyBlockInputStream>(header, [=]() -> BlockInputStreamPtr
-            {
+            source_streams.emplace_back(std::make_shared<LazyBlockInputStream>(header, [=]() -> BlockInputStreamPtr {
                 QueryProcessingStage::Enum processed_stage_in_source_table = processed_stage;
                 BlockInputStreams streams = table->read(
                     real_column_names,
@@ -280,7 +282,7 @@ BlockInputStreams StorageMerge::read(
 
                 if (processed_stage_in_source_table != *processed_stage_in_source_tables)
                     throw Exception("Source tables for Merge table are processing data up to different stages",
-                        ErrorCodes::INCOMPATIBLE_SOURCE_TABLES);
+                                    ErrorCodes::INCOMPATIBLE_SOURCE_TABLES);
 
                 if (streams.empty())
                 {
@@ -288,11 +290,14 @@ BlockInputStreams StorageMerge::read(
                 }
                 else
                 {
-                    BlockInputStreamPtr stream = streams.size() > 1 ? std::make_shared<ConcatBlockInputStream>(streams) : streams[0];
+                    BlockInputStreamPtr stream = streams.size() > 1 ? std::make_shared<ConcatBlockInputStream>(streams, context.getDAGContext()->mpp_task_log) : streams[0];
 
                     if (has_table_virtual_column)
                         stream = std::make_shared<AddingConstColumnBlockInputStream<String>>(
-                            stream, std::make_shared<DataTypeString>(), table->getTableName(), "_table");
+                            stream,
+                            std::make_shared<DataTypeString>(),
+                            table->getTableName(),
+                            "_table");
 
                     return std::make_shared<ConvertingBlockInputStream>(context, stream, header, ConvertingBlockInputStream::MatchColumnsMode::Name);
                 }
@@ -363,8 +368,7 @@ void StorageMerge::alter(const TableLockHolder &, const AlterCommands & params, 
 
 void registerStorageMerge(StorageFactory & factory)
 {
-    factory.registerStorage("Merge", [](const StorageFactory::Arguments & args)
-    {
+    factory.registerStorage("Merge", [](const StorageFactory::Arguments & args) {
         /** In query, the name of database is specified as table engine argument which contains source tables,
           *  as well as regex for source-table names.
           */
@@ -373,8 +377,8 @@ void registerStorageMerge(StorageFactory & factory)
 
         if (engine_args.size() != 2)
             throw Exception("Storage Merge requires exactly 2 parameters"
-                " - name of source database and regexp for table names.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                            " - name of source database and regexp for table names.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         engine_args[0] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[0], args.local_context);
         engine_args[1] = evaluateConstantExpressionAsLiteral(engine_args[1], args.local_context);
@@ -383,9 +387,12 @@ void registerStorageMerge(StorageFactory & factory)
         String table_name_regexp = static_cast<const ASTLiteral &>(*engine_args[1]).value.safeGet<String>();
 
         return StorageMerge::create(
-            args.table_name, args.columns,
-            source_database, table_name_regexp, args.context);
+            args.table_name,
+            args.columns,
+            source_database,
+            table_name_regexp,
+            args.context);
     });
 }
 
-}
+} // namespace DB

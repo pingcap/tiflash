@@ -74,7 +74,7 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     , limit(limit_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_)
     , tmp_path(tmp_path_)
-    , log(getLogWithPrefix(log_))
+    , log(getMPPTaskLog(log_, getName()))
 {
     children.push_back(input);
     header = children.at(0)->getHeader();
@@ -119,7 +119,7 @@ Block MergeSortingBlockInputStream::readImpl()
                 WriteBufferFromFile file_buf(path);
                 CompressedWriteBuffer compressed_buf(file_buf);
                 NativeBlockOutputStream block_out(compressed_buf, 0, header_without_constants);
-                MergeSortingBlocksBlockInputStream block_in(blocks, description, max_merged_block_size, limit);
+                MergeSortingBlocksBlockInputStream block_in(blocks, description, nullptr, max_merged_block_size, limit);
 
                 LOG_INFO(log, "Sorting and writing part of data into temporary file " + path);
                 ProfileEvents::increment(ProfileEvents::ExternalSortWritePart);
@@ -136,7 +136,7 @@ Block MergeSortingBlockInputStream::readImpl()
 
         if (temporary_files.empty())
         {
-            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, max_merged_block_size, limit);
+            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, nullptr, max_merged_block_size, limit);
         }
         else
         {
@@ -154,7 +154,12 @@ Block MergeSortingBlockInputStream::readImpl()
 
             /// Rest of blocks in memory.
             if (!blocks.empty())
-                inputs_to_merge.emplace_back(std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, max_merged_block_size, limit));
+                inputs_to_merge.emplace_back(std::make_shared<MergeSortingBlocksBlockInputStream>(
+                    blocks,
+                    description,
+                    nullptr,
+                    max_merged_block_size,
+                    limit));
 
             /// Will merge that sorted streams.
             impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, description, max_merged_block_size, limit);
@@ -171,15 +176,15 @@ Block MergeSortingBlockInputStream::readImpl()
 MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
     Blocks & blocks_,
     SortDescription & description_,
+    const LogWithPrefixPtr & log_,
     size_t max_merged_block_size_,
-    size_t limit_,
-    const LogWithPrefixPtr & log_)
+    size_t limit_)
     : blocks(blocks_)
     , header(blocks.at(0).cloneEmpty())
     , description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
-    , log(getLogWithPrefix(log_))
+    , log(getMPPTaskLog(log_, getName()))
 {
     Blocks nonempty_blocks;
     for (const auto & block : blocks)

@@ -15,15 +15,12 @@
 
 namespace DB
 {
-
 /// Serializes the stream of blocks in TiDB DAG response format.
 template <class StreamWriterPtr>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
 public:
-    StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, TiDB::TiDBCollators collators_,
-        tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
+    StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, TiDB::TiDBCollators collators_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encodeType_, std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, const LogWithPrefixPtr & log_ = nullptr);
     void write(const Block & block) override;
     void finishWrite() override;
 
@@ -42,7 +39,7 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     ThreadPool thread_pool;
-    std::shared_ptr<LogWithPrefix> log;
+    LogWithPrefixPtr log;
 };
 
 } // namespace DB

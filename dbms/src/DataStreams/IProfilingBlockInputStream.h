@@ -1,9 +1,9 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/Progress.h>
 #include <Interpreters/SettingsCommon.h>
 #include <common/logger_useful.h>
@@ -194,17 +194,6 @@ protected:
     {
         std::unique_lock lock(children_mutex);
         children.push_back(child);
-    }
-
-    const std::shared_ptr<LogWithPrefix> getLogWithPrefix(const std::shared_ptr<LogWithPrefix> & log, const String & name = "name: N/A", Int64 mpp_task_id_ = -1)
-    {
-        if (log == nullptr)
-        {
-            String prefix = mpp_task_id_ == -1 ? "[task: N/A query: N/A] " : fmt::format("[task: {} query: N/A] ", mpp_task_id_);
-            return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), prefix);
-        }
-
-        return log;
     }
 
 private:

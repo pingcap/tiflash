@@ -7,9 +7,9 @@ SquashingBlockInputStream::SquashingBlockInputStream(
     const BlockInputStreamPtr & src,
     size_t min_block_size_rows,
     size_t min_block_size_bytes,
-    const std::shared_ptr<LogWithPrefix> & log_)
+    const LogWithPrefixPtr & log_)
     : transform(min_block_size_rows, min_block_size_bytes)
-    , log(getLogWithPrefix(log_, getName()))
+    , log(getMPPTaskLog(log_, getName()))
 {
     children.emplace_back(src);
 }

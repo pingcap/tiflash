@@ -954,7 +954,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
             dm_context,
             read_task_pool,
             after_segment_read,
@@ -963,7 +963,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             MAX_UINT64,
             DEFAULT_BLOCK_SIZE,
             true,
-            db_settings.dt_raw_filter_range);
+            db_settings.dt_raw_filter_range,
+            nullptr);
         res.push_back(stream);
     }
     return res;
@@ -996,7 +997,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
             dm_context,
             read_task_pool,
             after_segment_read,
@@ -1005,7 +1006,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             max_version,
             expected_block_size,
             false,
-            db_settings.dt_raw_filter_range);
+            db_settings.dt_raw_filter_range,
+            nullptr);
         res.push_back(stream);
     }
 

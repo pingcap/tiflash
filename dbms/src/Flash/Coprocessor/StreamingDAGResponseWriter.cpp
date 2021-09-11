@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNSUPPORTED_PARAMETER;
@@ -17,18 +16,16 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 template <class StreamWriterPtr>
-StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_,
-    TiDB::TiDBCollators collators_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, const std::shared_ptr<LogWithPrefix> & log_)
-    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_),
-      exchange_type(exchange_type_),
-      writer(writer_),
-      partition_col_ids(std::move(partition_col_ids_)),
-      collators(std::move(collators_)),
-      thread_pool(dag_context.final_concurrency)
+StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, TiDB::TiDBCollators collators_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, const LogWithPrefixPtr & log_)
+    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
+    , exchange_type(exchange_type_)
+    , writer(writer_)
+    , partition_col_ids(std::move(partition_col_ids_))
+    , collators(std::move(collators_))
+    , thread_pool(dag_context.final_concurrency)
 {
     log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), "");
-    
+
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
 }
@@ -63,7 +60,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 
 template <class StreamWriterPtr>
 ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
-    std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
+    std::vector<Block> & input_blocks,
+    tipb::SelectResponse & response) const
 {
     /// todo find a way to avoid copying input_blocks
     return [this, input_blocks, response]() mutable {
@@ -134,7 +132,8 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
 template <class StreamWriterPtr>
 template <bool for_last_response>
 ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionTask(
-    std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
+    std::vector<Block> & input_blocks,
+    tipb::SelectResponse & response) const
 {
     /// todo find a way to avoid copying input_blocks
     return [this, input_blocks, response]() mutable {
@@ -208,7 +207,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
                 selector[row] = hash_data[row]; /// [0, 2^32)
                 selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
-                selector[row] >>= 32u;          /// [0, partition_num)
+                selector[row] >>= 32u; /// [0, partition_num)
             }
 
             for (size_t col_id = 0; col_id < block.columns(); ++col_id)

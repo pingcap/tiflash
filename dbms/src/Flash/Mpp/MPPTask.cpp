@@ -45,7 +45,9 @@ String MPPTaskId::toString() const
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
-    , log(std::make_shared<LogWithPrefix>(&Poco::Logger::get("MPPTask"), fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
+    , log(std::make_shared<LogWithPrefix>(
+          &Poco::Logger::get("MPPTask"),
+          fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
@@ -208,6 +210,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
 
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
+    dag_context->mpp_task_log = log;
     context.setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())

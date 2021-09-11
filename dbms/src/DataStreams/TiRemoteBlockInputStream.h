@@ -39,7 +39,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    const std::shared_ptr<LogWithPrefix> log;
+    const LogWithPrefixPtr log;
 
     uint64_t total_rows;
 
@@ -168,12 +168,12 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const LogWithPrefixPtr & log_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
         , execution_summaries_inited(source_num)
-        , log(getLogWithPrefix(log_, getName()))
+        , log(getMPPTaskLog(log_, getName()))
         , total_rows(0)
     {
         // generate sample block
