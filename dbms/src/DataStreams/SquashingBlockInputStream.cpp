@@ -1,4 +1,5 @@
 #include <DataStreams/SquashingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB

@@ -2,6 +2,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>

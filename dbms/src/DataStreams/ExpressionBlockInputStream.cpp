@@ -1,4 +1,5 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ExpressionActions.h>
 
 

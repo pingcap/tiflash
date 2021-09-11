@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/Progress.h>
 #include <Interpreters/SettingsCommon.h>
 #include <common/logger_useful.h>
