@@ -62,7 +62,9 @@ struct BitAndImpl<A, B, true>
 struct NameBitAnd               { static constexpr auto name = "bitAnd"; };
 // clang-format on
 
-using FunctionBitAnd = FunctionBinaryArithmetic<BitAndImpl, NameBitAnd>;
+template <typename A, typename B>
+using BitAndImpl_t = BitAndImpl<A, B>;
+using FunctionBitAnd = FunctionBinaryArithmetic<BitAndImpl_t, NameBitAnd>;
 
 } // namespace
 
