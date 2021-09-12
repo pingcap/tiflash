@@ -691,7 +691,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
     }
 
     // second check, remove same data in current region and handle map. remove deleted data by add a record with DelFlag.
-    for (auto & ele : handle_map)
+    for (const auto & ele : handle_map)
     {
         const auto & handle = ele.first;
         const auto & [ori_ts, ori_del] = ele.second;
