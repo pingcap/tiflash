@@ -186,7 +186,7 @@ public:
         , res_buffer(max_buffer_size)
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
         , state(NORMAL)
-        , log(getMPPTaskLog(context_.getDAGContext()->mpp_task_log, "ExchangeReceiver"))
+        , log(getMPPTaskLog(context_.getDAGContext() ? context_.getDAGContext()->mpp_task_log : nullptr, "ExchangeReceiver"))
     {
         for (int i = 0; i < exc.field_types_size(); i++)
         {
