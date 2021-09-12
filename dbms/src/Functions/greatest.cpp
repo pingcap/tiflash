@@ -62,7 +62,7 @@ namespace
 struct NameGreatest             { static constexpr auto name = "greatest"; };
 // clang-format on
 
-using FunctionGreatest = FunctionBinaryArithmetic<GreatestImpl_t, NameGreatest>;
+using FunctionGreatest = FunctionBinaryArithmetic<GreatestImpl, NameGreatest>;
 
 } // namespace
 
