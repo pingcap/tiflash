@@ -43,6 +43,6 @@ struct PlusImpl<A, B, true>
 struct NamePlus                 { static constexpr auto name = "plus"; };
 // clang-format on
 
-using FunctionPlus = FunctionBinaryArithmetic<PlusImpl, NamePlus>;
+using FunctionPlus = FunctionBinaryArithmetic<PlusImpl_t, NamePlus>;
 
 } // namespace DB

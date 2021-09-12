@@ -50,7 +50,9 @@ struct GCDImpl<A, B, true>
 struct NameGCD                  { static constexpr auto name = "gcd"; };
 // clang-format on
 
-using FunctionGCD = FunctionBinaryArithmetic<GCDImpl, NameGCD>;
+template <typename A, typename B>
+using GCDImpl_t = GCDImpl<A, B>;
+using FunctionGCD = FunctionBinaryArithmetic<GCDImpl_t, NameGCD>;
 
 } // namespace
 
