@@ -49,7 +49,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
     , keep_session_timezone_info(keep_session_timezone_info_)
-    , rqst(dag.getDAGRequest())
+    , rqst(dag_.getDAGRequest())
     , dag(dag_)
     , subqueriesForSets(subqueriesForSets_)
     , exchange_receiver_map(exchange_receiver_map_)
