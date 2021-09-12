@@ -44,7 +44,8 @@ private:
     ColumnString() = default;
 
     ColumnString(const ColumnString & src)
-        : offsets(src.offsets.begin(), src.offsets.end())
+        : COWPtrHelper<IColumn, ColumnString>(src)
+        , offsets(src.offsets.begin(), src.offsets.end())
         , chars(src.chars.begin(), src.chars.end()){};
 
 public:
@@ -276,7 +277,7 @@ public:
     void insertDefault() override
     {
         chars.push_back(0);
-        offsets.push_back(offsets.size() == 0 ? 1 : (offsets.back() + 1));
+        offsets.push_back(offsets.empty() ? 1 : (offsets.back() + 1));
     }
 
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int /*nan_direction_hint*/) const override
