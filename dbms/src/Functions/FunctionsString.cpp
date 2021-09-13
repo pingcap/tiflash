@@ -7,6 +7,7 @@
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <IO/WriteHelpers.h>
+#include <fmt/format.h>
 
 #include <ext/range.h>
 #include <thread>
@@ -3022,11 +3023,12 @@ private:
     const Context & context;
 };
 
-class FunctionFormat : public IFunction {
+class FunctionFormat : public IFunction
+{
 public:
     static constexpr auto name = "format";
     explicit FunctionFormat(const Context & context_)
-    : context(context_)
+        : context(context_)
     {}
 
     static FunctionPtr create(const Context & context_)
@@ -3042,102 +3044,67 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        size_t number_of_arguments = arguments.size();
+        auto number_of_arguments = arguments.size();
 
-        if (number_of_arguments != 2 || number_of_arguments != 3) {
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-            + toString(number_of_arguments) + ", should be 2 or 3",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        }
+        if (number_of_arguments != 2 && number_of_arguments != 3)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2 or 3", getName(), number_of_arguments),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = arguments[0];
+        if (!first_argument->isFloatingPoint() || !first_argument->isInteger() || !first_argument->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (!arguments[1]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (number_of_arguments == 3 && !arguments[2]->isStringOrFixedString())
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
+
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        auto number_of_arguments = arguments.size();
+        if (number_of_arguments == 2) {
+            
+        } else { // number_of_arguments == 3
 
+        }
     }
 
 private:
     const Context & context;
 };
 
-
-struct NameEmpty
-{
-    static constexpr auto name = "empty";
-};
-struct NameNotEmpty
-{
-    static constexpr auto name = "notEmpty";
-};
-struct NameLength
-{
-    static constexpr auto name = "length";
-};
-struct NameLengthUTF8
-{
-    static constexpr auto name = "lengthUTF8";
-};
-struct NameLower
-{
-    static constexpr auto name = "lower";
-};
-struct NameUpper
-{
-    static constexpr auto name = "upper";
-};
-struct NameReverseUTF8
-{
-    static constexpr auto name = "reverseUTF8";
-};
-struct NameTrim
-{
-    static constexpr auto name = "trim";
-};
-struct NameLTrim
-{
-    static constexpr auto name = "ltrim";
-};
-struct NameRTrim
-{
-    static constexpr auto name = "rtrim";
-};
-struct NameTrimUTF8
-{
-    static constexpr auto name = "trimUTF8";
-};
-struct NameLTrimUTF8
-{
-    static constexpr auto name = "ltrimUTF8";
-};
-struct NameRTrimUTF8
-{
-    static constexpr auto name = "rtrimUTF8";
-};
-struct NameLPad
-{
-    static constexpr auto name = "lpad";
-};
-struct NameLPadUTF8
-{
-    static constexpr auto name = "lpadUTF8";
-};
-struct NameRPad
-{
-    static constexpr auto name = "rpad";
-};
-struct NameRPadUTF8
-{
-    static constexpr auto name = "rpadUTF8";
-};
-struct NameConcat
-{
-    static constexpr auto name = "concat";
-};
-struct NameConcatAssumeInjective
-{
-    static constexpr auto name = "concatAssumeInjective";
-};
+// clang-format off
+struct NameEmpty                 { static constexpr auto name = "empty"; };
+struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
+struct NameLength                { static constexpr auto name = "length"; };
+struct NameLengthUTF8            { static constexpr auto name = "lengthUTF8"; };
+struct NameLower                 { static constexpr auto name = "lower"; };
+struct NameUpper                 { static constexpr auto name = "upper"; };
+struct NameReverseUTF8           { static constexpr auto name = "reverseUTF8"; };
+struct NameTrim                  { static constexpr auto name = "trim"; };
+struct NameLTrim                 { static constexpr auto name = "ltrim"; };
+struct NameRTrim                 { static constexpr auto name = "rtrim"; };
+struct NameTrimUTF8              { static constexpr auto name = "trimUTF8"; };
+struct NameLTrimUTF8             { static constexpr auto name = "ltrimUTF8"; };
+struct NameRTrimUTF8             { static constexpr auto name = "rtrimUTF8"; };
+struct NameLPad                  { static constexpr auto name = "lpad"; };
+struct NameLPadUTF8              { static constexpr auto name = "lpadUTF8"; };
+struct NameRPad                  { static constexpr auto name = "rpad"; };
+struct NameRPadUTF8              { static constexpr auto name = "rpadUTF8"; };
+struct NameConcat                { static constexpr auto name = "concat"; };
+struct NameConcatAssumeInjective { static constexpr auto name = "concatAssumeInjective"; };
+// clang-format on
 
 using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, UInt8>;
 using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty, UInt8>;
@@ -3183,5 +3150,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionRightUTF8>();
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
+    factory.registerFunction<FunctionFormat>()
 }
 } // namespace DB
