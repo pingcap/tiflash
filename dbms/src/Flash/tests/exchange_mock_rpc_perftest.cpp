@@ -1,21 +1,23 @@
 #include <Common/ConcurrentBoundedQueue.h>
+#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Interpreters/Join.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <fmt/core.h>
+
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <atomic>
 #include <chrono>
-#include <fmt/core.h>
 #include <random>
 
 namespace DB::tests
 {
 namespace
 {
-
 std::random_device rd;
 
 using Packet = mpp::MPPDataPacket;
@@ -233,13 +235,11 @@ void sendBlock(
 
 void readBlock(BlockInputStreamPtr stream)
 {
-    auto get_rate = [](auto count, auto duration)
-    {
+    auto get_rate = [](auto count, auto duration) {
         return count * 1000 / duration.count();
     };
 
-    auto get_mib = [](auto v)
-    {
+    auto get_mib = [](auto v) {
         return v / 1024 / 1024;
     };
 
@@ -261,11 +261,11 @@ void readBlock(BlockInputStreamPtr stream)
                 Int64 data_size = received_data_size.load();
                 std::cout
                     << fmt::format(
-                        "Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
-                        block_count,
-                        get_mib(data_size),
-                        get_rate(block_count - last_block_count, duration),
-                        get_mib(get_rate(data_size - last_data_size, duration)))
+                           "Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
+                           block_count,
+                           get_mib(data_size),
+                           get_rate(block_count - last_block_count, duration),
+                           get_mib(get_rate(data_size - last_data_size, duration)))
                     << std::endl;
                 second_ago = cur;
                 last_block_count = block_count;
@@ -279,11 +279,11 @@ void readBlock(BlockInputStreamPtr stream)
         Int64 data_size = received_data_size.load();
         std::cout
             << fmt::format(
-                "End. Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
-                block_count,
-                get_mib(data_size),
-                get_rate(block_count, duration),
-                get_mib(get_rate(data_size, duration)))
+                   "End. Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
+                   block_count,
+                   get_mib(data_size),
+                   get_rate(block_count, duration),
+                   get_mib(get_rate(data_size, duration)))
             << std::endl;
     }
     catch (const Exception & e)
@@ -304,11 +304,11 @@ void testOnlyReceiver(int concurrency, int source_num, int block_rows, int secon
 {
     std::cout
         << fmt::format(
-                "receiver. concurrency = {}. source_num = {}. block_rows = {}. seconds = {}",
-                concurrency,
-                source_num,
-                block_rows,
-                seconds)
+               "receiver. concurrency = {}. source_num = {}. block_rows = {}. seconds = {}",
+               concurrency,
+               source_num,
+               block_rows,
+               seconds)
         << std::endl;
 
     tipb::ExchangeReceiver pb_exchange_receiver;
@@ -375,15 +375,16 @@ void testOnlyReceiver(int concurrency, int source_num, int block_rows, int secon
         thread.join();
 }
 
+template <bool with_join>
 void testSenderReceiver(int concurrency, int source_num, int block_rows, int seconds)
 {
     std::cout
         << fmt::format(
-                "sender_receiver. concurrency = {}. source_num = {}. block_rows = {}. seconds = {}",
-                concurrency,
-                source_num,
-                block_rows,
-                seconds)
+               "sender_receiver. concurrency = {}. source_num = {}. block_rows = {}. seconds = {}",
+               concurrency,
+               source_num,
+               block_rows,
+               seconds)
         << std::endl;
 
     tipb::ExchangeReceiver pb_exchange_receiver;
@@ -436,6 +437,34 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
     std::vector<BlockInputStreamPtr> streams;
     for (int i = 0; i < concurrency; ++i)
         streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
+
+    auto receiver_header = streams.front()->getHeader();
+
+    std::shared_ptr<Join> join_ptr;
+    if constexpr (with_join)
+    {
+        auto key_name = receiver_header.getByPosition(0).name;
+
+        join_ptr = std::make_shared<Join>(
+            Names{key_name},
+            Names{key_name},
+            true,
+            SizeLimits(0, 0, OverflowMode::THROW),
+            ASTTableJoin::Kind::Inner,
+            ASTTableJoin::Strictness::All,
+            concurrency,
+            TiDB::TiDBCollators{nullptr},
+            "",
+            "",
+            "",
+            "",
+            nullptr,
+            65536);
+
+        for (int i = 0; i < concurrency; ++i)
+            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i);
+    }
+
     auto union_input_stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency);
 
     auto mock_writer = std::make_shared<MockWriter>(queues);
@@ -458,6 +487,12 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
     BlockOutputStreamPtr output_stream = std::make_shared<DAGBlockOutputStream>(union_input_stream->getHeader(), std::move(response_writer));
     output_stream = std::make_shared<SquashingBlockOutputStream>(output_stream, 20000, 0);
 
+    if constexpr (with_join)
+    {
+        if (join_ptr)
+            join_ptr->setSampleBlock(receiver_header);
+    }
+
     auto write_thread = std::thread(sendBlock, std::cref(blocks), output_stream, mock_writer, std::ref(stop_flag));
     auto read_thread = std::thread(readBlock, union_input_stream);
 
@@ -467,6 +502,15 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
     write_thread.join();
     mock_writer->finish();
     read_thread.join();
+
+    if constexpr (with_join)
+    {
+        if (join_ptr)
+        {
+            join_ptr->setFinishBuildTable(true);
+            std::cout << fmt::format("Hash table size: {} bytes", join_ptr->getTotalByteCount()) << std::endl;
+        }
+    }
 }
 
 } // namespace
@@ -486,14 +530,19 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
     int block_rows = argc >= 5 ? atoi(argv[4]) : 5000;
     int seconds = argc >= 6 ? atoi(argv[5]) : 10;
 
-    if (method == "receiver")
-        DB::tests::testOnlyReceiver(concurrency, source_num, block_rows, seconds);
-    else if (method == "sender_receiver")
-        DB::tests::testSenderReceiver(concurrency, source_num, block_rows, seconds);
+    using TestHandler = std::function<void(int concurrency, int source_num, int block_rows, int seconds)>;
+    std::unordered_map<String, TestHandler> handlers = {
+        {"receiver", DB::tests::testOnlyReceiver},
+        {"sender_receiver", DB::tests::testSenderReceiver<false>},
+        {"sender_receiver_join", DB::tests::testSenderReceiver<true>},
+    };
+
+    auto it = handlers.find(method);
+    if (it != handlers.end())
+        it->second(concurrency, source_num, block_rows, seconds);
     else
     {
         std::cerr << "Unknown method: " << method << std::endl;
         exit(1);
     }
 }
-
