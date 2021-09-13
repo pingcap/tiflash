@@ -300,8 +300,17 @@ void readBlock(BlockInputStreamPtr stream)
     }
 }
 
-void testOnlyReceiver(int source_num, int block_rows, int seconds)
+void testOnlyReceiver(int concurrency, int source_num, int block_rows, int seconds)
 {
+    std::cout
+        << fmt::format(
+                "receiver. concurrency = {}. source_num = {}. block_rows = {}. seconds = {}",
+                concurrency,
+                source_num,
+                block_rows,
+                seconds)
+        << std::endl;
+
     tipb::ExchangeReceiver pb_exchange_receiver;
     pb_exchange_receiver.set_tp(tipb::PassThrough);
     for (int i = 0; i < source_num; ++i)
@@ -351,15 +360,13 @@ void testOnlyReceiver(int source_num, int block_rows, int seconds)
 
     using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
     std::vector<BlockInputStreamPtr> streams;
-    for (int i = 0; i < source_num; ++i)
+    for (int i = 0; i < concurrency; ++i)
         streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
     auto union_input_stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, source_num);
 
     std::vector<std::thread> threads;
-    for (int i = 0; i < source_num; ++i)
-    {
-        threads.emplace_back(sendPacket, std::cref(packets), queues[i], std::ref(stop_flag));
-    }
+    for (const auto & queue : queues)
+        threads.emplace_back(sendPacket, std::cref(packets), queue, std::ref(stop_flag));
     threads.emplace_back(readBlock, union_input_stream);
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
@@ -368,8 +375,17 @@ void testOnlyReceiver(int source_num, int block_rows, int seconds)
         thread.join();
 }
 
-void testSenderReceiver(int source_num, int block_rows, int seconds)
+void testSenderReceiver(int concurrency, int source_num, int block_rows, int seconds)
 {
+    std::cout
+        << fmt::format(
+                "sender_receiver. concurrency = {}. source_num = {}. block_rows = {}. seconds = {}",
+                concurrency,
+                source_num,
+                block_rows,
+                seconds)
+        << std::endl;
+
     tipb::ExchangeReceiver pb_exchange_receiver;
     pb_exchange_receiver.set_tp(tipb::PassThrough);
     for (int i = 0; i < source_num; ++i)
@@ -418,14 +434,14 @@ void testSenderReceiver(int source_num, int block_rows, int seconds)
 
     using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
     std::vector<BlockInputStreamPtr> streams;
-    for (int i = 0; i < source_num; ++i)
+    for (int i = 0; i < concurrency; ++i)
         streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
-    auto union_input_stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, source_num);
+    auto union_input_stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency);
 
     auto mock_writer = std::make_shared<MockWriter>(queues);
 
     DAGContext dag_context(tipb::DAGRequest{});
-    dag_context.final_concurrency = source_num;
+    dag_context.final_concurrency = concurrency;
     dag_context.is_mpp_task = true;
     dag_context.is_root_mpp_task = false;
     std::unique_ptr<DAGResponseWriter> response_writer(
@@ -458,32 +474,22 @@ void testSenderReceiver(int source_num, int block_rows, int seconds)
 
 int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
 {
-    if (argc != 4 && argc != 5)
+    if (argc < 2 || argc > 6)
     {
-        std::cerr << fmt::format("Usage: {} <source_num> <block_rows> <seconds> [receiver|sender_receiver]", argv[0]) << std::endl;
+        std::cerr << fmt::format("Usage: {} [receiver|sender_receiver] <concurrency=5> <source_num=2> <block_rows=5000> <seconds=10>", argv[0]) << std::endl;
         exit(1);
     }
 
-    int source_num = atoi(argv[1]);
-    int block_rows = atoi(argv[2]);
-    int seconds = atoi(argv[3]);
-    String method = "receiver";
-    if (argc == 5)
-        method = argv[4];
-
-    if (source_num <= 0)
-        source_num = 5;
-
-    if (block_rows <= 0)
-        block_rows = 20000;
-
-    if (seconds <= 0)
-        seconds = 30;
+    String method = argv[1];
+    int concurrency = argc >= 3 ? atoi(argv[2]) : 5;
+    int source_num = argc >= 4 ? atoi(argv[3]) : 2;
+    int block_rows = argc >= 5 ? atoi(argv[4]) : 5000;
+    int seconds = argc >= 6 ? atoi(argv[5]) : 10;
 
     if (method == "receiver")
-        DB::tests::testOnlyReceiver(source_num, block_rows, seconds);
+        DB::tests::testOnlyReceiver(concurrency, source_num, block_rows, seconds);
     else if (method == "sender_receiver")
-        DB::tests::testSenderReceiver(source_num, block_rows, seconds);
+        DB::tests::testSenderReceiver(concurrency, source_num, block_rows, seconds);
     else
     {
         std::cerr << "Unknown method: " << method << std::endl;
