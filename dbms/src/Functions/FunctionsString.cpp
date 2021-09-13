@@ -8,8 +8,8 @@
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <IO/WriteHelpers.h>
+#include <fmt/printf.h>
 
-#include <boost/algorithm/string.hpp>
 #include <ext/range.h>
 #include <thread>
 
@@ -3042,8 +3042,8 @@ template <typename Impl>
 class FunctionSubStringIndex : public IFunction
 {
 public:
-    static constexpr auto name = "substring_index";
-    FunctionSubStringIndex(const Context & context_)
+    static constexpr auto name = "substringIndex";
+    explicit FunctionSubStringIndex(const Context & context_)
         : context(context_)
     {}
 
@@ -3058,25 +3058,21 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 3)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be 3.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        printf("???????test1");
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be {}.", getName(), toString(arguments.size()), 3),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isStringOrFixedString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        printf("???????test2");
         if (!arguments[1]->isStringOrFixedString())
             throw Exception(
-                "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        printf("???????test3");
         if (!arguments[2]->isInteger())
             throw Exception(
-                "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        printf("???????test4");
         return std::make_shared<DataTypeString>();
     }
 
@@ -3108,14 +3104,15 @@ private:
         const ColumnNumbers & arguments,
         const size_t result)
     {
-        const ColumnPtr & column_str = block.getByPosition(arguments[0]).column;
-        const ColumnPtr & column_delim = block.getByPosition(arguments[1]).column;
-        const ColumnPtr & column_count = block.getByPosition(arguments[2]).column;
+        ColumnPtr & column_str = block.getByPosition(arguments[0]).column;
+        ColumnPtr & column_delim = block.getByPosition(arguments[1]).column;
+        ColumnPtr & column_count = block.getByPosition(arguments[2]).column;
         ColumnWithTypeAndName & column_result = block.getByPosition(result);
 
         bool delim_const = column_delim->isColumnConst();
         bool count_const = column_count->isColumnConst();
 
+        column_str = column_str->isColumnConst() ? column_str->convertToFullColumnIfConst() : column_str;
         if (delim_const && count_const)
         {
             auto col_res = ColumnString::create();
@@ -3126,7 +3123,7 @@ private:
             {
                 return false;
             }
-            Impl::vector_const_const(
+            Impl::vectorConstConst(
                 str_col->getChars(),
                 str_col->getOffsets(),
                 delim_col->getField().get<String>(),
@@ -3137,15 +3134,17 @@ private:
         }
         else
         {
+            column_delim = column_delim->isColumnConst() ? column_delim->convertToFullColumnIfConst() : column_delim;
+            column_count = column_count->isColumnConst() ? column_count->convertToFullColumnIfConst() : column_count;
             auto col_res = ColumnString::create();
-            const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str->convertToFullColumnIfConst().get());
-            const ColumnString * delim_col = checkAndGetColumn<ColumnString>(column_delim->convertToFullColumnIfConst().get());
-            const ColumnVector<IntType> * count_col = checkAndGetColumn<ColumnVector<IntType>>(column_count->convertToFullColumnIfConst().get());
+            const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
+            const ColumnString * delim_col = checkAndGetColumn<ColumnString>(column_delim.get());
+            const ColumnVector<IntType> * count_col = checkAndGetColumn<ColumnVector<IntType>>(column_count.get());
             if (str_col == nullptr || delim_col == nullptr || count_col == nullptr)
             {
                 return false;
             }
-            Impl::vector_vector_vector(
+            Impl::vectorVectorVector(
                 str_col->getChars(),
                 str_col->getOffsets(),
                 delim_col->getChars(),
@@ -3162,7 +3161,7 @@ private:
 
 struct SubStringIndexImpl
 {
-    static void vector_const_const(
+    static void vectorConstConst(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & delim,
@@ -3170,79 +3169,35 @@ struct SubStringIndexImpl
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        res_offsets.reserve(offsets.size());
+        ColumnString::Offset res_offset = 0;
+        res_offsets.resize(offsets.size());
         if (delim.empty() || needCount == 0 || (needCount < 0 && -needCount < 0))
         {
             // All result is ""
-            res_data.resize(0);
+            res_data.reserve(offsets.size());
             for (size_t i = 0; i < offsets.size(); ++i)
             {
-                res_offsets[i] = 0;
+                res_data[res_offset] = '\0';
+                res_offset++;
+                res_offsets[i] = res_offset;
             }
             return;
         }
 
         res_data.reserve(data.size());
-        ColumnString::Offset res_offset = 0;
-        std::vector<const UInt8 *> delim_pos;
+
         for (size_t i = 0; i < offsets.size(); ++i)
         {
             auto data_offset = offsetAt(offsets, i);
-            auto data_size = sizeAt(offsets, i);
+            auto data_size = sizeAt(offsets, i) - 1;
 
-            const UInt8 * begin = &data[data_offset];
-            const UInt8 * pos = begin;
-            const UInt8 * end = pos + data_size;
-            Volnitsky searcher(delim.c_str(), delim.size(), data_size);
-            Int64 count = needCount;
-            if (count > 0)
-            {
-                while (pos < end)
-                {
-                    const UInt8 * match = searcher.search(pos, end - pos);
-                    count--;
-                    if (match == end || count == 0)
-                    {
-                        // Find the postition.
-                        res_data.resize(res_data.size() + (match - begin));
-                        memcpy(&res_data[res_offset], begin, match - begin);
-                        res_offset += match - begin;
-                        break;
-                    }
-                    pos = match + delim.size();
-                }
-            }
-            else
-            {
-                count = -count;
-                // When count is negative, we need split string by delim.
-                delim_pos.clear();
-                while (pos < end)
-                {
-                    const UInt8 * match = searcher.search(pos, end - pos);
-                    if (match == end)
-                    {
-                        break;
-                    }
-                    delim_pos.push_back(match);
-                    pos = match + delim.size();
-                }
-
-                if (count <= static_cast<Int64>(delim_pos.size()))
-                {
-                    auto delim_count = delim_pos.size();
-                    begin = delim_pos[delim_count - count] + delim.size();
-                }
-                res_data.resize(res_data.size() + (end - begin));
-                memcpy(&res_data[res_offset], begin, end - begin);
-                res_offset += end - begin;
-            }
+            subStringIndex(&data[data_offset], data_size, reinterpret_cast<const UInt8 *>(delim.c_str()), delim.size(), needCount, res_data, res_offset);
             res_offsets[i] = res_offset;
         }
     }
 
     template <typename IntType>
-    static void vector_vector_vector(
+    static void vectorVectorVector(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const ColumnString::Chars_t & delim_data,
@@ -3252,66 +3207,89 @@ struct SubStringIndexImpl
         ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
-        res_offsets.reserve(offsets.size());
+        res_offsets.resize(offsets.size());
         ColumnString::Offset res_offset = 0;
-        std::vector<UInt8> delim_pos;
+
         for (size_t i = 0; i < offsets.size(); ++i)
         {
             auto data_offset = offsetAt(offsets, i);
-            auto data_size = sizeAt(offsets, i);
+            auto data_size = sizeAt(offsets, i) - 1;
 
             auto delim_offset = offsetAt(delim_offsets, i);
-            auto delim_size = sizeAt(delim_offsets, i);
-
-            const UInt8 * begin = &data[data_offset];
-            const UInt8 * pos = begin;
-            const UInt8 * end = pos + data_size;
-            Volnitsky searcher(reinterpret_cast<const char *>(&delim_data[delim_offset]), delim_size, data_size);
+            auto delim_size = sizeAt(delim_offsets, i) - 1; // ignore the trailing zero.
             Int64 count = needCount[i];
-            if (count > 0)
-            {
-                while (pos < end)
-                {
-                    const UInt8 * match = searcher.search(pos, end - pos);
-                    count--;
-                    if (match == end || count == 0)
-                    {
-                        // Find the postition.
-                        res_data.resize(res_data.size() + (match - begin));
-                        memcpy(&res_data[res_offset], begin, match - begin);
-                        res_offset += match - begin;
-                        break;
-                    }
-                    pos = match + delim_size;
-                }
-            }
-            else
-            {
-                count = -count;
-                // When count is negative, we need split string by delim.
-                delim_pos.clear();
-                while (pos < end)
-                {
-                    const UInt8 * match = searcher.search(pos, end - pos);
-                    if (match == end)
-                    {
-                        break;
-                    }
-                    delim_pos.push_back(*match);
-                    pos = match + delim_size;
-                }
 
-                if (count <= static_cast<Int64>(delim_pos.size()))
-                {
-                    auto delim_count = delim_pos.size();
-                    const UInt8 * match = reinterpret_cast<const UInt8 *>(delim_pos[delim_count - count]);
-                    begin = match + delim_size;
-                }
-                res_data.resize(res_data.size() + (end - begin));
-                memcpy(&res_data[res_offset], begin, end - begin);
-                res_offset += end - begin;
+            if (delim_size == 0 || count == 0 || (count < 0 && -count < 0))
+            {
+                res_data.resize(res_data.size() + 1);
+                res_data[res_offset] = '\0';
+                res_offset++;
+                res_offsets[i] = res_offset;
+                continue;
             }
+
+            subStringIndex(&data[data_offset], data_size, &delim_data[delim_offset], delim_size, count, res_data, res_offset);
             res_offsets[i] = res_offset;
+        }
+    }
+
+    static void subStringIndex(
+        const UInt8 * data_begin,
+        size_t data_size,
+        const UInt8 * delim_begin,
+        size_t delim_size,
+        Int64 count,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset)
+    {
+        const UInt8 * begin = data_begin;
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data_size;
+        Volnitsky searcher(reinterpret_cast<const char *>(delim_begin), delim_size, data_size);
+        if (count > 0)
+        {
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+                count--;
+                if (match == end || count == 0)
+                {
+                    // Find the postition.
+                    res_data.resize(res_data.size() + (match - begin + 1));
+                    memcpy(&res_data[res_offset], begin, match - begin);
+                    res_data[res_offset + (match - begin)] = '\0';
+                    res_offset += match - begin + 1;
+                    break;
+                }
+                pos = match + delim_size;
+            }
+        }
+        else
+        {
+            std::vector<const UInt8 *> delim_pos;
+            count = -count;
+            // When count is negative, we need split string by delim.
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+                if (match == end)
+                {
+                    break;
+                }
+                delim_pos.push_back(match);
+                pos = match + delim_size;
+            }
+
+            if (count <= static_cast<Int64>(delim_pos.size()))
+            {
+                auto delim_count = delim_pos.size();
+                const UInt8 * match = reinterpret_cast<const UInt8 *>(delim_pos[delim_count - count]);
+                begin = match + delim_size;
+            }
+            res_data.resize(res_data.size() + (end - begin + 1));
+            memcpy(&res_data[res_offset], begin, end - begin);
+            res_data[res_offset + (end - begin)] = '\0';
+            res_offset += end - begin + 1;
         }
     }
 };
