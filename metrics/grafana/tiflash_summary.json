@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1631516543795,
+  "iteration": 1631518930264,
   "links": [],
   "panels": [
     {
@@ -4935,7 +4935,7 @@
           "grid": {},
           "gridPos": {
             "h": 7,
-            "w": 12,
+            "w": 24,
             "x": 0,
             "y": 20
           },
@@ -5044,7 +5044,7 @@
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             },
             {
@@ -5080,8 +5080,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 12,
-            "y": 20
+            "x": 0,
+            "y": 27
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5142,12 +5142,78 @@
           },
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Duration of applying Raft write logs",
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 27
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 93,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "expr": "sum(delta(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"admin\"}[1m])) by (le)",
+              "format": "heatmap",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Apply Raft admin logs Duration [Heatmap]",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "s",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of pre-decode when applying region snapshot",
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 27
+            "y": 34
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5213,7 +5279,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 27
+            "y": 34
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5272,7 +5338,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 34
+            "y": 41
           },
           "height": "",
           "id": 71,
@@ -5376,7 +5442,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 34
+            "y": 41
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5442,7 +5508,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 41
+            "y": 48
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5508,7 +5574,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 41
+            "y": 48
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5574,7 +5640,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 48
+            "y": 55
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5635,7 +5701,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 48
+            "y": 55
           },
           "id": 91,
           "legend": {
@@ -5740,72 +5806,6 @@
             "align": false,
             "alignLevel": null
           }
-        },
-        {
-          "cards": {
-            "cardPadding": null,
-            "cardRound": null
-          },
-          "color": {
-            "cardColor": "#b4ff00",
-            "colorScale": "sqrt",
-            "colorScheme": "interpolateSpectral",
-            "exponent": 0.5,
-            "min": 0,
-            "mode": "spectrum"
-          },
-          "dataFormat": "tsbuckets",
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "Duration of applying Raft write logs",
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 55
-          },
-          "heatmap": {},
-          "hideZeroBuckets": true,
-          "highlightCards": true,
-          "id": 93,
-          "legend": {
-            "show": true
-          },
-          "links": [],
-          "reverseYBuckets": false,
-          "targets": [
-            {
-              "expr": "sum(delta(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"admin\"}[1m])) by (le)",
-              "format": "heatmap",
-              "intervalFactor": 2,
-              "legendFormat": "{{le}}",
-              "refId": "B"
-            }
-          ],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Apply Raft admin logs Duration [Heatmap]",
-          "tooltip": {
-            "show": true,
-            "showHistogram": true
-          },
-          "type": "heatmap",
-          "xAxis": {
-            "show": true
-          },
-          "xBucketNumber": null,
-          "xBucketSize": null,
-          "yAxis": {
-            "decimals": 0,
-            "format": "s",
-            "logBase": 1,
-            "max": null,
-            "min": null,
-            "show": true,
-            "splitFactor": null
-          },
-          "yBucketBound": "upper",
-          "yBucketNumber": null,
-          "yBucketSize": null
         }
       ],
       "repeat": null,
