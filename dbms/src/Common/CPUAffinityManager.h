@@ -18,9 +18,7 @@ public:
     void setSelfWriteThread() const;
     std::string toString() const;
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
 
     void initCPUSet();
     int getCPUCores() const;
