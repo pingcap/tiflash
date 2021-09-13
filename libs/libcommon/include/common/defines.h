@@ -122,6 +122,12 @@
 #define TIFLASH_MACRO_ARGS(...) __VA_ARGS__
 
 #define TIFLASH_MACRO_CONCAT_IMPL(X, Y) X ## Y
+/// \name TIFLASH_MACRO_CONCAT
+/// \details Concat two language terms (macro expanded).
+/// If you concern about why do we need two levels of macros,
+/// please check: https://gcc.gnu.org/onlinedocs/cpp/Argument-Prescan.html
+/// TL;DR, concatenation operation in macro will forbid pre-scanning
+/// and hence stop the macro in the operands being expanded.
 #define TIFLASH_MACRO_CONCAT(X, Y) TIFLASH_MACRO_CONCAT_IMPL(X, Y)
 // clang-format on
 
@@ -131,6 +137,29 @@ constexpr void UNUSED(Args &&... args [[maybe_unused]])
 {
 }
 
+/// \name TIFLASH_NO_OPTIMIZE
+/// \tparam T arbitrary type
+/// \param var universal variable reference
+/// \details stop the compiler from optimizing out a variable; this
+/// can be useful in debug or benchmark
+/// \example
+/// \code{.cpp}
+/// for (size_t i = 0; i < loop_times; ++i) {
+///     TIFLASH_NO_OPTIMIZE(i);
+/// } // the loop will not be optimized out
+/// \endcode
+/// the code will yield
+/// \code{.asm}
+///        cmp     w0, 0
+///        ble     .L1
+///        mov     w1, 0
+///.L3:
+///        add     w1, w1, 1
+///        cmp     w0, w1
+///        bne     .L3
+///.L1:
+///        ret
+/// \endcode
 template <typename T>
 static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
 {
