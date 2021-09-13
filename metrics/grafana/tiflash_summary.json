@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1629195111449,
+  "iteration": 1631516543795,
   "links": [],
   "panels": [
     {
@@ -4962,56 +4962,56 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "legendFormat": " 99%-{{type}}",
-              "interval": "",
               "exemplar": true,
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
+              "interval": "",
               "intervalFactor": 2,
+              "legendFormat": " 99%-{{type}}",
               "metric": "",
               "refId": "A",
               "step": 4
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "legendFormat": "95%-{{type}}",
-              "interval": "",
               "exemplar": true,
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
+              "interval": "",
               "intervalFactor": 2,
+              "legendFormat": "95%-{{type}}",
               "refId": "B",
               "step": 4
             },
             {
-              "expr": "sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"}[1m])) ",
-              "legendFormat": "avg-write",
-              "interval": "",
               "exemplar": true,
+              "expr": "sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"}[1m])) ",
               "format": "time_series",
+              "interval": "",
               "intervalFactor": 2,
+              "legendFormat": "avg-write",
               "refId": "C",
               "step": 4
             },
             {
-              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "legendFormat": " 100%-{{type}}",
-              "interval": "",
               "exemplar": true,
+              "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
+              "interval": "",
               "intervalFactor": 2,
+              "legendFormat": " 100%-{{type}}",
               "refId": "D",
               "step": 4
             },
             {
-              "expr": "sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"admin\"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"admin\"}[1m])) ",
-              "legendFormat": "avg-admin",
-              "interval": "",
               "exemplar": true,
+              "expr": "sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"admin\"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"admin\"}[1m])) ",
               "format": "time_series",
+              "hide": false,
+              "interval": "",
               "intervalFactor": 2,
+              "legendFormat": "avg-admin",
               "refId": "E",
-              "step": 4,
-              "hide": false
+              "step": 4
             }
           ],
           "thresholds": [],
@@ -5232,7 +5232,7 @@
           "stack": false,
           "steppedLine": false,
           "targets": [
-		    {
+            {
               "expr": "histogram_quantile(1.00, sum(rate(tiflash_raft_upstream_latency_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
