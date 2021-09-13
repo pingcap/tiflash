@@ -27,8 +27,7 @@ struct EngineStoreServerWrap
     std::atomic<EngineStoreServerStatus> status{EngineStoreServerStatus::Idle};
 };
 
-using BatchReadIndexRes = std::unique_ptr<std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>>;
-static_assert(std::is_same_v<BatchReadIndexRes::pointer, BatchReadIndexRes::element_type *>);
+using BatchReadIndexRes = std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>;
 
 struct FileEncryptionInfo;
 
@@ -81,10 +80,9 @@ RawCppPtr PreHandleSnapshot(
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
-void GcRawCppPtr(EngineStoreServerWrap *, void * ptr, RawCppPtrType type);
-RawVoidPtr GenBatchReadIndexRes(uint64_t cap);
+void GcRawCppPtr(void * ptr, RawCppPtrType type);
 void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
 void SetServerInfoResp(BaseBuffView, RawVoidPtr);
-BaseBuffView strIntoView(const std::string & view);
+BaseBuffView strIntoView(const std::string * str_ptr);
 }
 } // namespace DB
