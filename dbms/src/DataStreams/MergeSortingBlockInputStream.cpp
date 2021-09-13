@@ -119,7 +119,7 @@ Block MergeSortingBlockInputStream::readImpl()
                 WriteBufferFromFile file_buf(path);
                 CompressedWriteBuffer compressed_buf(file_buf);
                 NativeBlockOutputStream block_out(compressed_buf, 0, header_without_constants);
-                MergeSortingBlocksBlockInputStream block_in(blocks, description, nullptr, max_merged_block_size, limit);
+                MergeSortingBlocksBlockInputStream block_in(blocks, description, log, max_merged_block_size, limit);
 
                 LOG_INFO(log, "Sorting and writing part of data into temporary file " + path);
                 ProfileEvents::increment(ProfileEvents::ExternalSortWritePart);
@@ -136,7 +136,7 @@ Block MergeSortingBlockInputStream::readImpl()
 
         if (temporary_files.empty())
         {
-            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, nullptr, max_merged_block_size, limit);
+            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log, max_merged_block_size, limit);
         }
         else
         {
@@ -157,7 +157,7 @@ Block MergeSortingBlockInputStream::readImpl()
                 inputs_to_merge.emplace_back(std::make_shared<MergeSortingBlocksBlockInputStream>(
                     blocks,
                     description,
-                    nullptr,
+                    log,
                     max_merged_block_size,
                     limit));
 

@@ -38,7 +38,7 @@ public:
         const tipb::TableScan & ts,
         const std::vector<const tipb::Expr *> & conditions_,
         size_t max_streams_,
-        const LogWithPrefixPtr & log_ = nullptr);
+        const LogWithPrefixPtr & log_);
 
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
     DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
