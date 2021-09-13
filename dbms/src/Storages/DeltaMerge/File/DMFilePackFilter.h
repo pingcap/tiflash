@@ -26,13 +26,13 @@ public:
     static DMFilePackFilter loadFrom(const DMFilePtr & dmfile,
                                      const MinMaxIndexCachePtr & index_cache,
                                      UInt64 hash_salt,
-                                     const RowKeyRange & rowkey_range,
+                                     const RowKeyRanges & rowkey_ranges,
                                      const RSOperatorPtr & filter,
                                      const IdSetPtr & read_packs,
                                      const FileProviderPtr & file_provider,
                                      const ReadLimiterPtr & read_limiter)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_range, filter, read_packs, file_provider, read_limiter);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_ranges, filter, read_packs, file_provider, read_limiter);
         pack_filter.init();
         return pack_filter;
     }
@@ -85,7 +85,7 @@ private:
     DMFilePackFilter(const DMFilePtr & dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
                      UInt64 hash_salt_,
-                     const RowKeyRange & rowkey_range_, // filter by handle range
+                     const RowKeyRanges & rowkey_ranges_, // filter by handle range
                      const RSOperatorPtr & filter_, // filter by push down where clause
                      const IdSetPtr & read_packs_, // filter by pack index
                      const FileProviderPtr & file_provider_,
@@ -93,7 +93,7 @@ private:
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , hash_salt(hash_salt_)
-        , rowkey_range(rowkey_range_)
+        , rowkey_ranges(rowkey_ranges_)
         , filter(filter_)
         , read_packs(read_packs_)
         , file_provider(file_provider_)
@@ -107,13 +107,45 @@ private:
     void init()
     {
         size_t pack_count = dmfile->getPacks();
-        if (!rowkey_range.all())
+        if (!isAll(rowkey_ranges))
         {
             tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
-            auto handle_filter = toFilter(rowkey_range);
+            std::vector<RSOperatorPtr> handle_filters;
+            for (auto & rowkey_range : rowkey_ranges)
+                handle_filters.emplace_back(toFilter(rowkey_range));
             for (size_t i = 0; i < pack_count; ++i)
             {
-                handle_res[i] = handle_filter->roughCheck(i, param);
+                bool checked = false;
+                for (auto handle_filter : handle_filters)
+                {
+                    if (!checked)
+                    {
+                        checked = true;
+                        handle_res[i] = handle_filter->roughCheck(i, param);
+                        if (handle_res[i] == RSResult::All)
+                            break;
+                    }
+                    else
+                    {
+                        auto res = handle_filter->roughCheck(i, param);
+                        // if res is `All`, no need to check other handle_filter
+                        if (res == RSResult::All)
+                        {
+                            handle_res[i] = res;
+                            break;
+                        }
+                            // if res is not `All` and handle_res[i] is `Some`, no need to update handle_res[i]
+                        else if (handle_res[i] == RSResult::Some)
+                        {
+                            continue;
+                        }
+                        else
+                        {
+                            handle_res[i] = res;
+                        }
+                    }
+                }
+
             }
         }
 
@@ -170,7 +202,7 @@ private:
         LOG_DEBUG(log,
                   "RSFilter exclude rate: " << ((after_read_packs == 0) ? "nan" : DB::toString(filter_rate, 2))
                                             << ", after_pk: " << after_pk << ", after_read_packs: " << after_read_packs
-                                            << ", after_filter: " << after_filter << ", handle_range: " << rowkey_range.toDebugString()
+                                            << ", after_filter: " << after_filter << ", handle_ranges: " << toDebugString(rowkey_ranges)
                                             << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
                                             << ", pack_count: " << pack_count);
     }
@@ -225,7 +257,7 @@ private:
     DMFilePtr dmfile;
     MinMaxIndexCachePtr index_cache;
     UInt64 hash_salt;
-    RowKeyRange rowkey_range;
+    RowKeyRanges rowkey_ranges;
     RSOperatorPtr filter;
     IdSetPtr read_packs;
     FileProviderPtr file_provider;
