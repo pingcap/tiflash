@@ -85,6 +85,7 @@ Block CHBlockChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & sch
     const String & row_data = chunk.rows_data();
     ReadBufferFromString read_buffer(row_data);
     std::vector<String> output_names;
+    output_names.reserve(schema.size());
     for (const auto & c : schema)
         output_names.push_back(c.first);
     NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names));

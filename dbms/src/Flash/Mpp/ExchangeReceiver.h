@@ -163,11 +163,7 @@ struct GRPCReceiverContext
 
 struct ReceivedPacket
 {
-    ReceivedPacket()
-    {
-        packet = std::make_shared<mpp::MPPDataPacket>();
-    }
-    std::shared_ptr<mpp::MPPDataPacket> packet;
+    mpp::MPPDataPacket packet;
     size_t source_index = 0;
     String req_info;
 };
@@ -254,6 +250,195 @@ private:
     size_t capacity;
 };
 
+template <typename T>
+struct SingleElementQueue
+{
+    std::unique_ptr<T> obj;
+    std::mutex mu;
+    std::condition_variable cv;
+};
+
+template <typename T>
+class MPMCQueue
+{
+public:
+    enum Status
+    {
+        NORMAL,
+        CANCELLED,
+        FINISHED,
+    };
+
+    explicit MPMCQueue(Int64 capacity_)
+        : capacity(capacity_)
+        , objs(capacity)
+    {}
+
+    std::unique_ptr<T> popOne()
+    {
+        Int64 ticket = getReadTicket();
+        if (ticket < 0)
+            return {};
+
+        std::unique_ptr<T> res = popObj(ticket);
+
+        if (res)
+            finishRead(ticket);
+        return res;
+    }
+
+    bool pushOne(std::unique_ptr<T> v)
+    {
+        Int64 ticket = getWriteTicket();
+        if (ticket < 0)
+            return {};
+
+        bool res = pushObj(ticket, std::move(v));
+
+        if (res)
+            finishWrite(ticket);
+        return res;
+    }
+
+    void cancel()
+    {
+        cancelled.store(true, std::memory_order_relaxed);
+        read_cv.notify_all();
+        write_cv.notify_all();
+        for (auto & obj : objs)
+            obj.cv.notify_all();
+    }
+
+    void finish()
+    {
+        finished.store(true, std::memory_order_relaxed);
+        read_cv.notify_all();
+        write_cv.notify_all();
+        for (auto & obj : objs)
+            obj.cv.notify_all();
+    }
+
+    Status getStatus() const
+    {
+        if (isCancelled())
+            return CANCELLED;
+        if (isFinished())
+            return FINISHED;
+        return NORMAL;
+    }
+private:
+    Int64 getReadTicket()
+    {
+        Int64 ticket = -1;
+        {
+            std::unique_lock lock(read_mu);
+            read_cv.wait(lock, [&] { return read_allocated - read_finished < capacity || isCancelled() || readPassFinishedPoint(); });
+            if (!isCancelled() && !readPassFinishedPoint() && read_allocated - read_finished < capacity)
+                ticket = read_allocated++;
+        }
+        read_cv.notify_all();
+        return ticket;
+    }
+
+    Int64 getWriteTicket()
+    {
+        Int64 ticket = -1;
+        {
+            std::unique_lock lock(write_mu);
+            write_cv.wait(lock, [&] { return write_allocated - write_finished < capacity || finishedOrCancelled(); });
+            if (!finishedOrCancelled() && write_allocated - write_finished < capacity)
+                ticket = write_allocated++;
+        }
+        write_cv.notify_all();
+        return ticket;
+    }
+
+    std::unique_ptr<T> popObj(Int64 ticket)
+    {
+        SingleElementQueue<T> & queue = objs[ticket % capacity];
+        std::unique_ptr<T> res;
+        {
+            std::unique_lock lock(queue.mu);
+            queue.cv.wait(lock, [&] { return queue.obj || isCancelled(); });
+            if (queue.obj)
+                res = std::move(queue.obj);
+        }
+        if (res)
+            queue.cv.notify_all();
+        return res;
+    }
+
+    bool pushObj(Int64 ticket, std::unique_ptr<T> && v)
+    {
+        SingleElementQueue<T> & queue = objs[ticket % capacity];
+        {
+            std::unique_lock lock(queue.mu);
+            queue.cv.wait(lock, [&] { return !queue.obj || isCancelled(); });
+            if (queue.obj) /// cancelled
+                return false;
+            queue.obj = std::move(v);
+        }
+        queue.cv.notify_all();
+        return true;
+    }
+
+    void bumpFinished(Int64 ticket, std::mutex & mu, std::condition_variable & cv, Int64 & finished)
+    {
+        {
+            std::unique_lock lock(mu);
+            cv.wait(lock, [&] { return finished == ticket || isCancelled(); });
+            ++finished; // when cancelled it's ok to bump finished.
+        }
+        cv.notify_all();
+    }
+
+    void finishRead(Int64 ticket)
+    {
+        bumpFinished(ticket, read_mu, read_cv, read_finished);
+    }
+
+    void finishWrite(Int64 ticket)
+    {
+        bumpFinished(ticket, write_mu, write_cv, write_finished);
+    }
+
+    bool finishedOrCancelled() const
+    {
+        return isFinished() || isCancelled();
+    }
+
+    /// must call under protection of `read_mu`.
+    bool readPassFinishedPoint() const
+    {
+        return isFinished() && read_allocated > write_allocated;
+    }
+
+    bool isFinished() const
+    {
+        return finished.load(std::memory_order_relaxed);
+    }
+
+    bool isCancelled() const
+    {
+        return cancelled.load(std::memory_order_relaxed);
+    }
+private:
+    const Int64 capacity;
+
+    std::mutex read_mu;
+    std::mutex write_mu;
+    std::condition_variable read_cv;
+    std::condition_variable write_cv;
+    Int64 read_finished = 0;
+    Int64 read_allocated = 0;
+    Int64 write_finished = 0;
+    Int64 write_allocated = 0;
+    std::atomic<bool> cancelled = false;
+    std::atomic<bool> finished = false;
+
+    std::vector<SingleElementQueue<T>> objs;
+};
+
 template <typename RPCContext>
 class ExchangeReceiverBase
 {
@@ -273,7 +458,8 @@ private:
     DAGSchema schema;
     std::mutex mu;
     std::condition_variable cv;
-    RecyclableBuffer<ReceivedPacket> res_buffer;
+    MPMCQueue<ReceivedPacket> received_packets;
+    MPMCQueue<ReceivedPacket> empty_received_packets;
     Int32 live_connections;
     State state;
     String err_msg;
@@ -313,48 +499,32 @@ private:
                 for (;;)
                 {
                     LOG_TRACE(log, "begin next ");
+                    std::unique_ptr<ReceivedPacket> packet = empty_received_packets.popOne();
+                    if (!packet)
                     {
-                        std::unique_lock<std::mutex> lock(mu);
-                        cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != NORMAL; });
-                        if (state == NORMAL)
-                        {
-                            res_buffer.popEmpty(packet);
-                            cv.notify_all();
-                        }
-                        else
-                        {
-                            meet_error = true;
-                            local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from ReadLoop";
-                            LOG_WARNING(log, local_err_msg);
-                            break;
-                        }
+                        meet_error = true;
+                        local_err_msg = "receiver's state is " + getReceiverStateStr(getState()) + ", exit from ReadLoop";
+                        LOG_WARNING(log, local_err_msg);
+                        break;
                     }
                     packet->req_info = req_info;
                     packet->source_index = source_index;
-                    bool success = reader->read(packet->packet.get());
+                    bool success = reader->read(&packet->packet);
                     if (!success)
                         break;
                     else
                         has_data = true;
-                    if (packet->packet->has_error())
+                    if (packet->packet.has_error())
                     {
-                        throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                        throw Exception("Exchange receiver meet error : " + packet->packet.error().msg());
                     }
+                    bool push_res = received_packets.pushOne(std::move(packet));
+                    if (!push_res)
                     {
-                        std::unique_lock<std::mutex> lock(mu);
-                        cv.wait(lock, [&] { return res_buffer.canPush() || state != NORMAL; });
-                        if (state == NORMAL)
-                        {
-                            res_buffer.pushObject(packet);
-                            cv.notify_all();
-                        }
-                        else
-                        {
-                            meet_error = true;
-                            local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from ReadLoop";
-                            LOG_WARNING(log, local_err_msg);
-                            break;
-                        }
+                        meet_error = true;
+                        local_err_msg = "receiver's state is " + getReceiverStateStr(getState()) + ", exit from ReadLoop";
+                        LOG_WARNING(log, local_err_msg);
+                        break;
                     }
                 }
                 // if meet error, such as decode packect fails, it will not retry.
@@ -405,21 +575,26 @@ private:
         {
             std::unique_lock<std::mutex> lock(mu);
             live_connections--;
-            if (meet_error && state == NORMAL)
+            if (unlikely(meet_error && state == NORMAL))
                 state = ERROR;
-            if (meet_error && err_msg.empty())
+            if (unlikely(meet_error && err_msg.empty()))
                 err_msg = local_err_msg;
             copy_live_conn = live_connections;
-            cv.notify_all();
         }
         LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
 
-        if (copy_live_conn == 0)
+        if (meet_error)
+        {
+            received_packets.cancel();
+        }
+        else if (copy_live_conn == 0)
+        {
             LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
+            received_packets.finish();
+        }
         else if (copy_live_conn < 0)
             throw Exception("live_connections should not be less than 0!");
     }
-
 
     static String getReceiverStateStr(const State & s)
     {
@@ -438,6 +613,12 @@ private:
         }
     }
 
+    State getState()
+    {
+        std::unique_lock lock(mu);
+        return state;
+    }
+
 public:
     ExchangeReceiverBase(
         std::shared_ptr<RPCContext> rpc_context_,
@@ -451,7 +632,8 @@ public:
         , task_meta(meta)
         , max_streams(max_streams_)
         , max_buffer_size(max_streams_ * 2)
-        , res_buffer(max_buffer_size)
+        , received_packets(max_buffer_size)
+        , empty_received_packets(max_buffer_size)
         , live_connections(source_num)
         , state(NORMAL)
     {
@@ -464,16 +646,15 @@ public:
             schema.push_back(std::make_pair(name, info));
         }
 
+        for (size_t i = 0; i < max_buffer_size; ++i)
+            empty_received_packets.pushOne(std::make_unique<ReceivedPacket>());
+
         setUpConnection();
     }
 
     ~ExchangeReceiverBase()
     {
-        {
-            std::unique_lock<std::mutex> lk(mu);
-            state = CLOSED;
-            cv.notify_all();
-        }
+        cancel();
 
         for (auto & worker : workers)
         {
@@ -485,51 +666,41 @@ public:
     {
         std::unique_lock<std::mutex> lk(mu);
         state = CANCELED;
-        cv.notify_all();
+        received_packets.cancel();
+        empty_received_packets.cancel();
     }
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
     ExchangeReceiverResult nextResult()
     {
-        std::shared_ptr<ReceivedPacket> packet;
+        std::unique_ptr<ReceivedPacket> packet = received_packets.popOne();
+        if (!packet)
         {
-            std::unique_lock<std::mutex> lock(mu);
-            cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != NORMAL; });
-
-            if (state != NORMAL)
-            {
-                String msg;
-                if (state == CANCELED)
-                    msg = "query canceled";
-                else if (state == CLOSED)
-                    msg = "ExchangeReceiver closed";
-                else if (!err_msg.empty())
-                    msg = err_msg;
-                else
-                    msg = "Unknown error";
-                return {nullptr, 0, "ExchangeReceiver", true, msg, false};
-            }
-            else if (res_buffer.hasObjects())
-            {
-                res_buffer.popObject(packet);
-                cv.notify_all();
-            }
-            else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
-            {
+            String msg;
+            std::unique_lock lock(mu);
+            if (state == NORMAL)
                 return {nullptr, 0, "ExchangeReceiver", false, "", true};
-            }
+            if (state == CANCELED)
+                msg = "query canceled";
+            else if (state == CLOSED)
+                msg = "ExchangeReceiver closed";
+            else if (!err_msg.empty())
+                msg = err_msg;
+            else
+                msg = "Unknown error";
+            return {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
-        assert(packet != nullptr && packet->packet != nullptr);
+        assert(packet != nullptr);
         ExchangeReceiverResult result;
-        if (packet->packet->has_error())
+        if (packet->packet.has_error())
         {
-            result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
+            result = {nullptr, packet->source_index, packet->req_info, true, packet->packet.error().msg(), false};
         }
         else
         {
             auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-            if (!resp_ptr->ParseFromString(packet->packet->data()))
+            if (!resp_ptr->ParseFromString(packet->packet.data()))
             {
                 result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
             }
@@ -538,11 +709,8 @@ public:
                 result = {resp_ptr, packet->source_index, packet->req_info};
             }
         }
-        packet->packet->Clear();
-        std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
-        res_buffer.pushEmpty(std::move(packet));
-        cv.notify_all();
+        packet->packet.Clear();
+        empty_received_packets.pushOne(std::move(packet));
         return result;
     }
 
