@@ -4,6 +4,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsString.h>
+#include <Functions/castTypeToEither.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <IO/WriteHelpers.h>
@@ -3040,19 +3041,19 @@ public:
     {
         return name;
     }
-    size_t getNumberOfArguments() const override { return 0; }
+
+    size_t getNumberOfArguments() const override { return 2; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         auto number_of_arguments = arguments.size();
-
-        if (number_of_arguments != 2 && number_of_arguments != 3)
+        if (number_of_arguments != 2)
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2 or 3", getName(), number_of_arguments),
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2", getName(), number_of_arguments),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         auto first_argument = arguments[0];
-        if (!first_argument->isFloatingPoint() || !first_argument->isInteger() || !first_argument->isDecimal())
+        if (!first_argument->isFloatingPoint() || !first_argument->isDecimal())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -3060,11 +3061,6 @@ public:
         if (!arguments[1]->isInteger())
             throw Exception(
                 fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        if (number_of_arguments == 3 && !arguments[2]->isStringOrFixedString())
-            throw Exception(
-                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
@@ -3072,16 +3068,92 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        auto number_of_arguments = arguments.size();
-        if (number_of_arguments == 2) {
-            
-        } else { // number_of_arguments == 3
+        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const auto c0_type = block.getByPosition(arguments[0]).type;
 
+        const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
+        const auto c1_type = block.getByPosition(arguments[1]).type;
+        if (c1_type->getTypeId() != TypeIndex::UInt64 && c1_type->getTypeId() != TypeIndex::Int64)
+            throw Exception("The second argument of function " + getName() + " must have UInt/Int type.");
+        Field c1_field;
+
+        auto col_res = ColumnString::create();
+        int val_num = c0_col->size();
+        col_res->reserve(val_num);
+
+        if (c0_type->isDecimal())
+        {
+            getDecimalType(c0_type, [&](const auto & decimal_type, bool decimal_nullable [[maybe_unused]]) {
+                using DecimalType = std::decay_t<decltype(decimal_type)>;
+                using T0 = typename DecimalType::FieldType;
+                using ColVecT0 = ColumnDecimal<T0>;
+                const auto * c0_raw = block.getByPosition(arguments[0]).column.get();
+
+                const auto scale = decimal_type.getScale();
+
+                if (auto col0_const = checkAndGetColumnConst<ColVecT0>(c0_raw, decimal_nullable))
+                {
+                    const T0 & const_decimal = col0_const->template getValue<T0>();
+                    const std::string decimal_str = const_decimal.toString(scale);
+                    for (int i = 0; i < val_num; i++)
+                    {
+                        c1_col->get(i, c1_field);
+                        auto c1_int = getFormatDecimals(c1_field);
+                        if (decimal_str.find('.') != std::string::npos) {
+                            
+                        }
+                    }
+                }
+                else if (auto col0_column = checkAndGetColumn<ColVecT0>(c0_raw))
+                {
+
+                }
+                else
+                {
+                    return false;
+                }
+            });
+        }
+        else // c0_type->isFloatingPoint()
+        {
+            for (int i = 0; i < val_num; i++)
+            {
+
+            }
         }
     }
 
 private:
     const Context & context;
+    const Int64 formatMaxDecimals = 30;
+
+    template <typename F>
+    void getDecimalType(DataTypePtr type, F && f) const
+    {
+        if (!(castTypeToEither<
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256>(
+                type.get(), std::forward<F>(f))))
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+    Int64 getFormatDecimals(const Field & field) const
+    {
+        auto c1_int = field.get<Int64>();
+        if (c1_int < 0)
+        {
+            c1_int = 0;
+        }
+        else if (c1_int > formatMaxDecimals)
+        {
+            c1_int = formatMaxDecimals;
+        }
+        return c1_int;
+    }
 };
 
 // clang-format off
@@ -3150,6 +3222,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionRightUTF8>();
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
-    factory.registerFunction<FunctionFormat>()
+    factory.registerFunction<FunctionFormat>();
 }
 } // namespace DB

@@ -1130,7 +1130,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Substring3Args, "cast"},
     //{tipb::ScalarFuncSig::SubstringIndex, "cast"},
     {tipb::ScalarFuncSig::Format, "format"},
-    {tipb::ScalarFuncSig::FormatWithLocale, "format"},
+    {tipb::ScalarFuncSig::FormatWithLocale, "formatWithLocale"},
 
     //{tipb::ScalarFuncSig::ToBase64, "cast"},
     {tipb::ScalarFuncSig::Trim1Arg, "trim"},
