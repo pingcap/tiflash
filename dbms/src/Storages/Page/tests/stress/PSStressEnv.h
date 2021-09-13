@@ -15,10 +15,12 @@ using PSPtr = std::shared_ptr<DB::PageStorage>;
 
 enum StressEnvStat
 {
+    // Below status are defined as fail
     STATUS_EXCEPTION = -1,
+    STATUS_INTERRUPT = -2,
+    // Below status are defined as success
     STATUS_LOOP = 1,
-    STATUS_INTERRUPT = 2,
-    STATUS_TIMEOUT = 3,
+    STATUS_TIMEOUT = 2,
 };
 
 class StressEnvStatus
