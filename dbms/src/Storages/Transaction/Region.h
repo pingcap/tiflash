@@ -102,7 +102,7 @@ public:
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
-    void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
+    void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
     void remove(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.
