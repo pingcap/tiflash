@@ -44,7 +44,7 @@ public:
         metapb::Region region,
         raft_serverpb::RaftApplyState apply_state_);
 
-    RegionMeta(RegionMeta && meta);
+    RegionMeta(RegionMeta && rhs);
 
     RegionID regionId() const;
     UInt64 peerId() const;
@@ -76,7 +76,7 @@ public:
     raft_serverpb::PeerState peerState() const;
     void setPeerState(const raft_serverpb::PeerState peer_state_);
 
-    void assignRegionMeta(RegionMeta && other);
+    void assignRegionMeta(RegionMeta && rhs);
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2);
 
