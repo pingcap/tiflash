@@ -118,9 +118,18 @@ public:
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter = nullptr);
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter = nullptr);
+        // Should only be called by `createFrom`
+        explicit MetaMergingReader(PageFile & page_file_);
+
+        static MetaMergingReaderPtr createFrom(
+            PageFile & page_file,
+            size_t max_meta_offset,
+            size_t meta_file_buffer_size,
+            const ReadLimiterPtr & read_limiter = nullptr);
+        static MetaMergingReaderPtr createFrom(
+            PageFile & page_file,
+            size_t meta_file_buffer_size,
+            const ReadLimiterPtr & read_limiter = nullptr);
 
         ~MetaMergingReader();
 
@@ -169,7 +178,10 @@ public:
     private:
         void close();
 
-        void initialize(std::optional<size_t> max_meta_offset, size_t meta_file_buffer_size, const ReadLimiterPtr & read_limiter);
+        void initialize(
+            std::optional<size_t> max_meta_offset,
+            size_t meta_file_buffer_size,
+            const ReadLimiterPtr & read_limiter);
 
     private:
         PageFile & page_file;

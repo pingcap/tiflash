@@ -130,11 +130,18 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         if (auto iter = writing_files.find(page_file.fileIdLevel()); iter != writing_files.end())
         {
             // create reader with max meta reading offset
-            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), iter->second.meta_offset, config.meta_file_reading_buf_size, read_limiter);
+            reader = PageFile::MetaMergingReader::createFrom(
+                const_cast<PageFile &>(page_file),
+                iter->second.meta_offset,
+                config.meta_file_reading_buf_size,
+                read_limiter);
         }
         else
         {
-            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), config.meta_file_reading_buf_size, read_limiter);
+            reader = PageFile::MetaMergingReader::createFrom(
+                const_cast<PageFile &>(page_file),
+                config.meta_file_reading_buf_size,
+                read_limiter);
         }
         if (reader->hasNext())
         {
