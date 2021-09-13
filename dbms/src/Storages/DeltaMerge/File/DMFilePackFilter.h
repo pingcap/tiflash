@@ -131,7 +131,7 @@ private:
                             handle_res[i] = res;
                             break;
                         }
-                            // if res is not `All` and handle_res[i] is `Some`, no need to update handle_res[i]
+                        // if res is not `All` and handle_res[i] is `Some`, no need to update handle_res[i]
                         else if (handle_res[i] == RSResult::Some)
                         {
                             continue;
@@ -142,7 +142,6 @@ private:
                         }
                     }
                 }
-
             }
         }
 
