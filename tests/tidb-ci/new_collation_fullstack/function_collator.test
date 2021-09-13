@@ -9,7 +9,7 @@ mysql> insert into test.t2 values('abc','b');
 func> wait_table test t1
 func> wait_table test t2
 
-set @@tidb_isolation_read_engines='tiflash'; select * from test.t1 where t1.col_varchar_20_key_signed not in (select col_char_20_key_signed from test.t2 where t1.col_varchar_20_key_signed not in (  t1.col_varbinary_20_key_signed,  t1.col_varbinary_20_undef_signed,col_varchar_20_undef_signed,col_char_20_key_signed));
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t1 where t1.col_varchar_20_key_signed not in (select col_char_20_key_signed from test.t2 where t1.col_varchar_20_key_signed not in (  t1.col_varbinary_20_key_signed,  t1.col_varbinary_20_undef_signed,col_varchar_20_undef_signed,col_char_20_key_signed));
 
 mysql> drop table if exists test.t1;
 mysql> drop table if exists test.t2;
