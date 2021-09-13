@@ -42,6 +42,6 @@ struct MinusImpl<A, B, true>
 struct NameMinus                { static constexpr auto name = "minus"; };
 // clang-format on
 
-using FunctionMinus = FunctionBinaryArithmetic<MinusImpl, NameMinus>;
+using FunctionMinus = FunctionBinaryArithmetic<MinusImpl_t, NameMinus>;
 
 } // namespace DB
