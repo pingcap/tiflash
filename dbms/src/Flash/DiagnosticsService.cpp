@@ -25,11 +25,12 @@ namespace DB
 {
 using diagnosticspb::LogLevel;
 using diagnosticspb::SearchLogResponse;
+
+/*
 using diagnosticspb::ServerInfoItem;
 using diagnosticspb::ServerInfoPair;
 using diagnosticspb::ServerInfoResponse;
 using diagnosticspb::ServerInfoType;
-/*
 namespace ErrorCodes
 {
 extern const int UNKNOWN_EXCEPTION;
