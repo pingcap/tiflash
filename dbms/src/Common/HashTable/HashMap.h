@@ -22,17 +22,17 @@ struct PairNoInit
     First first;
     Second second;
 
-    PairNoInit() {}
+    PairNoInit() = default;
 
-    template <typename First_>
-    PairNoInit(First_ && first_, NoInitTag)
-        : first(std::forward<First_>(first_))
+    template <typename FirstType>
+    PairNoInit(FirstType && first_, NoInitTag)
+        : first(std::forward<FirstType>(first_))
     {}
 
-    template <typename First_, typename Second_>
-    PairNoInit(First_ && first_, Second_ && second_)
-        : first(std::forward<First_>(first_))
-        , second(std::forward<Second_>(second_))
+    template <typename FirstType, typename SecondType>
+    PairNoInit(FirstType && first_, SecondType && second_)
+        : first(std::forward<FirstType>(first_))
+        , second(std::forward<SecondType>(second_))
     {}
 };
 
