@@ -32,6 +32,7 @@ public:
 
     ::grpc::Status server_info(::grpc::ServerContext * grpc_context, const ::diagnosticspb::ServerInfoRequest * request, ::diagnosticspb::ServerInfoResponse * response) override;
 
+    /*
 public:
     struct AvgLoad
     {
@@ -185,18 +186,18 @@ public:
 
 public:
     void cpuLoadInfo(std::optional<LinuxCpuTime> prev_cpu_time, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    static void memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    static void nicLoadInfo(const NICInfo & prev_nic, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    static void ioLoadInfo(const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void nicLoadInfo(const NICInfo & prev_nic, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void ioLoadInfo(const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void loadInfo(std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, const NICInfo & prev_nic, const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    static void cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    static void memHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void memHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void diskHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    static void nicHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void nicHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void hardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    static void systemInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-    static void processInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-
+    void systemInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    void processInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
+    */
 private:
     Poco::Logger * log;
 

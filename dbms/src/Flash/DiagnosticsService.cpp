@@ -2,20 +2,11 @@
 #include <Flash/DiagnosticsService.h>
 #include <Flash/LogSearch.h>
 #include <Poco/Path.h>
-#include <Storages/PathPool.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <fmt/core.h>
-#include <re2/re2.h>
 
 #include <memory>
-
-#ifdef __linux__
-
-#include <sys/statvfs.h>
-
-#endif
 
 #define USE_PROXY_ENV_INFO
 
@@ -26,7 +17,8 @@ using diagnosticspb::SearchLogResponse;
 using diagnosticspb::ServerInfoItem;
 using diagnosticspb::ServerInfoPair;
 using diagnosticspb::ServerInfoResponse;
-
+using diagnosticspb::ServerInfoType;
+/*
 namespace ErrorCodes
 {
 extern const int UNKNOWN_EXCEPTION;
@@ -355,20 +347,21 @@ static void getCacheSize(const uint & level [[maybe_unused]], size_t & size, siz
     size = 0;
     line_size = 0;
 #endif
+    return;
 }
 
 struct CPUArchHelper
 {
-    CPUArchHelper() { arch = execOrElse("uname -m", "Unknown"); }
-    const std::string & get() const { return arch; }
+    CPUArchHelper() { arch_ = execOrElse("uname -m", "Unknown"); }
+    const std::string & get() const { return arch_; }
 
 protected:
-    static std::string execOrElse(const char * cmd [[maybe_unused]], const char * otherwise)
+    std::string execOrElse(const char * cmd [[maybe_unused]], const char * otherwise)
     {
 #if defined(__unix__)
         std::array<char, 128> buffer;
         std::string result;
-        auto * pipe = popen(cmd, "r"); // NOLINT(cert-env33-c)
+        auto pipe = popen(cmd, "r");
         if (!pipe)
             throw Exception("Can not execute command " + std::string(cmd) + "!", ErrorCodes::LOGICAL_ERROR);
         while (!feof(pipe))
@@ -386,7 +379,7 @@ protected:
         return otherwise;
 #endif
     }
-    std::string arch;
+    std::string arch_;
 };
 
 static std::string getCPUArch()
@@ -574,7 +567,7 @@ void DiagnosticsService::cpuLoadInfo(
         ServerInfoItem item;
         for (auto & pair : pairs)
         {
-            auto * added_pair = item.add_pairs();
+            auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
             added_pair->set_value(pair.value());
         }
@@ -634,7 +627,7 @@ void DiagnosticsService::cpuLoadInfo(
         item.set_name("usage");
         for (auto & pair : pairs)
         {
-            auto * added_pair = item.add_pairs();
+            auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
             added_pair->set_value(pair.value());
         }
@@ -694,7 +687,7 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
         item.set_tp("memory");
         for (auto & pair : pairs)
         {
-            auto * added_pair = item.add_pairs();
+            auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
             added_pair->set_value(pair.value());
         }
@@ -717,7 +710,7 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
         item.set_tp("memory");
         for (auto & pair : pairs)
         {
-            auto * added_pair = item.add_pairs();
+            auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
             added_pair->set_value(pair.value());
         }
@@ -757,7 +750,7 @@ void DiagnosticsService::nicLoadInfo(const NICInfo & prev_nic, std::vector<diagn
         ServerInfoItem item;
         for (auto & pair : pairs)
         {
-            auto * added_pair = item.add_pairs();
+            auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
             added_pair->set_value(pair.value());
         }
@@ -804,7 +797,7 @@ void DiagnosticsService::ioLoadInfo(
         ServerInfoItem item;
         for (auto & pair : pairs)
         {
-            auto * added_pair = item.add_pairs();
+            auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
             added_pair->set_value(pair.value());
         }
@@ -847,7 +840,7 @@ void DiagnosticsService::cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
     ServerInfoItem item;
     for (auto & info : infos)
     {
-        auto * pair = item.add_pairs();
+        auto pair = item.add_pairs();
         pair->set_key(info.first);
         pair->set_value(info.second);
     }
@@ -862,7 +855,7 @@ void DiagnosticsService::memHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
     size_t total_mem = mem_info.at("MemTotal");
 
     ServerInfoItem item;
-    auto * pair = item.add_pairs();
+    auto pair = item.add_pairs();
     pair->set_key("capacity");
     pair->set_value(std::to_string(total_mem * KB));
     item.set_name("memory");
@@ -926,7 +919,7 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
         ServerInfoItem item;
         for (auto & info : infos)
         {
-            auto * added_pair = item.add_pairs();
+            auto added_pair = item.add_pairs();
             added_pair->set_key(info.first);
             added_pair->set_value(info.second);
         }
@@ -957,6 +950,7 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
 {
     (void)server_info_items;
 }
+*/
 
 ::grpc::Status DiagnosticsService::server_info(
     ::grpc::ServerContext * context,
@@ -978,6 +972,7 @@ try
         LOG_ERROR(log, "TiFlashRaftProxyHelper is nullptr");
     }
 #else
+    /*
     auto tp = request->tp();
     std::vector<ServerInfoItem> items;
 
@@ -1042,6 +1037,7 @@ try
             added_pair->set_value(pair.value());
         }
     }
+    */
 #endif
     return ::grpc::Status::OK;
 }
