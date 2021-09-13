@@ -55,9 +55,10 @@ RowsAndBytes Segment::getRowsAndBytesInRange(DMContext & dm_context,
 
     size_t exact_rows = 0;
     {
+        RowKeyRanges real_ranges{real_range};
         BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
                                                           *read_info.read_columns,
-                                                          real_range,
+                                                          real_ranges,
                                                           EMPTY_FILTER,
                                                           segment_snap->stable,
                                                           delta_reader,
@@ -65,7 +66,7 @@ RowsAndBytes Segment::getRowsAndBytesInRange(DMContext & dm_context,
                                                           read_info.index_end,
                                                           dm_context.stable_pack_rows);
 
-        data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, rowkey_range, 0);
+        data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, real_ranges, 0);
         data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             data_stream,
             *read_info.read_columns,

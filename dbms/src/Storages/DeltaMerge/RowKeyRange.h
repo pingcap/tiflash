@@ -746,4 +746,10 @@ inline RowKeyRange mergeRanges(const RowKeyRanges & ranges, bool is_common_handl
     return range;
 }
 
+inline bool isAll(const RowKeyRanges & ranges)
+{
+    return (ranges.size() == 1 && ranges[0].all()) ||
+        (!ranges.empty() && mergeRanges(ranges, ranges[0].is_common_handle, ranges[0].rowkey_column_size).all());
+}
+
 } // namespace DB::DM
