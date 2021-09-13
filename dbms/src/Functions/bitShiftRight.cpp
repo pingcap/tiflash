@@ -62,7 +62,9 @@ struct BitShiftRightImpl<A, B, true>
 struct NameBitShiftRight        { static constexpr auto name = "bitShiftRight"; };
 // clang-format on
 
-using FunctionBitShiftRight = FunctionBinaryArithmetic<BitShiftRightImpl, NameBitShiftRight>;
+template <typename A, typename B>
+using BitShiftRightImpl_t = BitShiftRightImpl<A, B>;
+using FunctionBitShiftRight = FunctionBinaryArithmetic<BitShiftRightImpl_t, NameBitShiftRight>;
 
 } // namespace
 

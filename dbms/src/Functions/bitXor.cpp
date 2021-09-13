@@ -62,7 +62,9 @@ struct BitXorImpl<A, B, true>
 struct NameBitXor               { static constexpr auto name = "bitXor"; };
 // clang-format on
 
-using FunctionBitXor = FunctionBinaryArithmetic<BitXorImpl, NameBitXor>;
+template <typename A, typename B>
+using BitXorImpl_t = BitXorImpl<A, B>;
+using FunctionBitXor = FunctionBinaryArithmetic<BitXorImpl_t, NameBitXor>;
 
 } // namespace
 

@@ -42,6 +42,6 @@ struct MultiplyImpl<A, B, true>
 struct NameMultiply             { static constexpr auto name = "multiply"; };
 // clang-format on
 
-using FunctionMultiply = FunctionBinaryArithmetic<MultiplyImpl, NameMultiply>;
+using FunctionMultiply = FunctionBinaryArithmetic<MultiplyImpl_t, NameMultiply>;
 
 } // namespace DB
