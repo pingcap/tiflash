@@ -1256,6 +1256,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         tmt_context.setStatusRunning();
+        
+        // Set and check CPU affinity after all threads started.
+        global_context->getCPUAffinityManager().setThreadCPUAffinity();
+        global_context->getCPUAffinityManager().checkThreadCPUAffinity();
+
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 

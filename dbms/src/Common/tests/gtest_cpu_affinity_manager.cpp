@@ -4,6 +4,8 @@
 #include <Common/CPUAffinityManager.h>
 #undef private
 
+#include <unistd.h>
+
 namespace DB
 {
 namespace tests
@@ -26,6 +28,13 @@ TEST(CPUAffinityManager_test, CPUAffinityManager)
     ASSERT_EQ(s, read_cpu);
 
     std::cout << cpu_affinity.toString() << std::endl;
+}
+
+TEST(CPUAffinityManager_test, getThreads)
+{
+    CPUAffinityManager cpu_affinity(80, 38);
+    cpu_affinity.setThreadCPUAffinity();
+    cpu_affinity.checkThreadCPUAffinity();
 }
 }
 }

@@ -2,7 +2,12 @@
 
 #include <vector>
 #include <string>
+#include <unordered_map>
 
+namespace Poco
+{
+class Logger;
+}
 namespace DB
 {
 
@@ -17,7 +22,8 @@ public:
     void setSelfReadThread() const;
     void setSelfWriteThread() const;
     std::string toString() const;
-
+    void setThreadCPUAffinity() const;
+    void checkThreadCPUAffinity() const;
 private:
 
     void initCPUSet();
@@ -29,13 +35,18 @@ private:
     void setAffinity(pid_t tid, const cpu_set_t & cpu_set) const;
     bool enable() const;
     std::string cpuSetToString(const cpu_set_t & cpu_set) const;
+    std::vector<int> cpuSetToVec(const cpu_set_t & cpu_set) const;
+    
+    std::unordered_map<pid_t, std::string> getThreads(pid_t pid) const;
+    std::vector<pid_t> getThreadIDs(const std::string & dir) const;
+    std::string getThreadName(const std::string & fname) const;
+    std::string getShortFilename(const std::string & path) const;
 
     int read_cpu_percent;
     int cpu_cores;
     cpu_set_t read_cpu_set;
     cpu_set_t write_cpu_set;
+
+    Poco::Logger * log;
 };
-
-//using CPUAffinityManagerPtr = std::shared_ptr<CPUAffinityManager>;
-
 } // namespace DB

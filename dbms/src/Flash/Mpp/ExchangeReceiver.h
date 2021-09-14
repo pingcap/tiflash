@@ -7,7 +7,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
-
+#include <Common/CPUAffinityManager.h>
 #include <chrono>
 #include <mutex>
 #include <thread>
@@ -71,6 +71,7 @@ private:
     State state;
     String err_msg;
     Logger * log;
+    CPUAffinityManager cpu_affinity_mgr;
 
     void setUpConnection();
 
@@ -111,7 +112,8 @@ public:
           max_buffer_size(max_buffer_size_),
           live_connections(pb_exchange_receiver.encoded_task_meta_size()),
           state(NORMAL),
-          log(&Logger::get("exchange_receiver"))
+          log(&Logger::get("exchange_receiver")),
+          cpu_affinity_mgr(context_.getCPUAffinityManager())
     {
         for (int i = 0; i < exc.field_types_size(); i++)
         {
