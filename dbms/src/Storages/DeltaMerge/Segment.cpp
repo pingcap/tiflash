@@ -3,6 +3,7 @@
 #include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Poco/Logger.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -19,6 +20,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 #include <numeric>
@@ -139,20 +141,20 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
                                     WriteBatches &              wbs,
                                     bool                        need_rate_limit)
 {
-    auto delegate   = context.path_pool.getStableDiskDelegator();
-    auto store_path = delegate.choosePath();
+    auto delegator  = context.path_pool.getStableDiskDelegator();
+    auto store_path = delegator.choosePath();
 
     DMFileBlockOutputStream::Flags flags;
     flags.setRateLimit(need_rate_limit);
     flags.setSingleFile(context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
 
-    PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, flags);
+    PageId dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto   dtfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path, flags);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
-    stable->setFiles({dmfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
+    stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
-    wbs.data.putExternal(dmfile_id, 0);
-    delegate.addDTFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
+    wbs.data.putExternal(dtfile_id, 0);
+    delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
 
     return stable;
 }
@@ -875,8 +877,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         auto file_id          = dmfile->fileId();
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto my_dmfile_id    = storage_pool.newDataPageId();
-        auto other_dmfile_id = storage_pool.newDataPageId();
+        auto my_dmfile_id    = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto other_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
         wbs.data.putRefPage(my_dmfile_id, file_id);
         wbs.data.putRefPage(other_dmfile_id, file_id);
@@ -1495,7 +1497,7 @@ bool Segment::placeDelete(const DMContext &           dm_context,
     {
         RowKeyValueRef first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
         auto           place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
-                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+                                                            : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
         auto compacted_index = update_delta_tree.getCompactedEntries();
 
