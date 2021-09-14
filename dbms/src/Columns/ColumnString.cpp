@@ -2,7 +2,6 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
-#include <Core/Defines.h>
 #include <DataStreams/ColumnGathererStream.h>
 
 /// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
@@ -98,7 +97,7 @@ void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t len
 
 ColumnPtr ColumnString::filter(const Filter & filt, ssize_t result_size_hint) const
 {
-    if (offsets.size() == 0)
+    if (offsets.empty())
         return ColumnString::create();
 
     auto res = ColumnString::create();
