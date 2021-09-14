@@ -150,8 +150,8 @@ struct TMTSortCursor
         auto compare = [](auto x, auto compare_next) __attribute__((always_inline))
         {
             return [x = std::move(x), compare_next = std::move(compare_next)]() { // we have to explicitly set the capture here
-                return x > 0 || (x == 0 && compare_next());                       // otherwise, GCC will complain about the
-                                                                                  // initialization of closures
+                return x > 0 || (x == 0 && compare_next()); // otherwise, GCC will complain about the
+                    // initialization of closures
             };
         };
         //        return res.diffs[0] > 0

@@ -1,25 +1,27 @@
 #pragma once
 
-#include <map>
-#include <list>
-#include <string>
-#include <set>
-#include <initializer_list>
-
-#include <DataTypes/IDataType.h>
 #include <Core/Names.h>
+#include <DataTypes/IDataType.h>
+
+#include <initializer_list>
+#include <list>
+#include <map>
+#include <set>
+#include <string>
 
 
 namespace DB
 {
-
 struct NameAndTypePair
 {
     String name;
     DataTypePtr type;
 
     NameAndTypePair() = default;
-    NameAndTypePair(const String & name_, const DataTypePtr & type_) : name(name_), type(type_) {}
+    NameAndTypePair(const String & name_, const DataTypePtr & type_)
+        : name(name_)
+        , type(type_)
+    {}
 
     bool operator<(const NameAndTypePair & rhs) const
     {
@@ -41,10 +43,14 @@ public:
 
     NamesAndTypesList() = default;
 
-    NamesAndTypesList(std::initializer_list<NameAndTypePair> init) : std::list<NameAndTypePair>(init) {}
+    NamesAndTypesList(std::initializer_list<NameAndTypePair> init)
+        : std::list<NameAndTypePair>(init)
+    {}
 
     template <typename Iterator>
-    NamesAndTypesList(Iterator begin, Iterator end) : std::list<NameAndTypePair>(begin, end) {}
+    NamesAndTypesList(Iterator begin, Iterator end)
+        : std::list<NameAndTypePair>(begin, end)
+    {}
 
 
     void readText(ReadBuffer & buf);
@@ -75,4 +81,4 @@ public:
     bool contains(const String & name) const;
 };
 
-}
+} // namespace DB
