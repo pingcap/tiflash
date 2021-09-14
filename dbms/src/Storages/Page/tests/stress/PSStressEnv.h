@@ -29,6 +29,7 @@ private:
     StressEnvStatus() = default;
     ~StressEnvStatus() = default;
 
+    std::atomic<StressEnvStat> status = STATUS_LOOP;
 public:
     static StressEnvStatus & getInstance()
     {
@@ -36,11 +37,20 @@ public:
         return instance;
     }
 
-    std::atomic<StressEnvStat> status = STATUS_LOOP;
-    bool stat() const;
-    int isSuccess() const;
+    bool isRunning() const 
+    {
+        return status == STATUS_LOOP;
+    }
+    int isSuccess() const
+    {
+        auto code = status.load();
+        return code > 0 ? 0 : static_cast<int>(code);
+    }
 
-    void setStat(enum StressEnvStat status_);
+    void setStat(enum StressEnvStat status_)
+    {
+        status = status_;
+    }
 };
 
 struct StressEnv

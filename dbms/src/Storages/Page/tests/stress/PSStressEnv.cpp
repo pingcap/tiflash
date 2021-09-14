@@ -14,22 +14,6 @@
 
 #include <boost/program_options.hpp>
 
-int StressEnvStatus::isSuccess() const
-{
-    auto code = status.load();
-    return code > 0 ? 0 : static_cast<int>(code);
-}
-
-bool StressEnvStatus::stat() const
-{
-    return status == STATUS_LOOP;
-}
-
-void StressEnvStatus::setStat(enum StressEnvStat status_)
-{
-    status = status_;
-}
-
 Poco::Logger * StressEnv::logger;
 void StressEnv::initGlobalLogger()
 {

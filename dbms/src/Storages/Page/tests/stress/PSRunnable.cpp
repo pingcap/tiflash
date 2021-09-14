@@ -16,7 +16,7 @@ void PSRunnable::run()
     tracker.setDescription(nullptr);
     current_memory_tracker = &tracker;
     // If runImpl() return false, means it need break itself
-    while (StressEnvStatus::getInstance().stat() && runImpl())
+    while (StressEnvStatus::getInstance().isRunning() && runImpl())
     {
         /*Just for no warning*/
     }
