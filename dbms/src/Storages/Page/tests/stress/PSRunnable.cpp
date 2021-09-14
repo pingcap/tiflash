@@ -145,7 +145,8 @@ void PSCommonWriter::setBatchBufferPageRange(size_t max_page_id_)
 
 DB::PageId PSCommonWriter::genRandomPageId()
 {
-    return static_cast<DB::PageId>(rand() % max_page_id);
+    std::uniform_int_distribution<> dist(0, max_page_id);
+    return static_cast<DB::PageId>(dist(gen));
 }
 
 void PSCommonWriter::setBatchBufferRange(size_t min, size_t max)
@@ -159,10 +160,11 @@ void PSCommonWriter::setBatchBufferRange(size_t min, size_t max)
 
 size_t PSCommonWriter::genBufferSize()
 {
-    // If set min/max size set, use the range. Otherwise , use batch_buffer_size.
+    // If set min/max size set, use the range. Otherwise, use batch_buffer_size.
     if (buffer_size_min <= buffer_size_max && buffer_size_max > 0)
     {
-        return (rand() % (buffer_size_max - buffer_size_min) + buffer_size_min);
+        std::uniform_int_distribution<> dist(buffer_size_min, buffer_size_max);
+        return dist(gen);
     }
     return batch_buffer_size;
 }
