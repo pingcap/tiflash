@@ -2,6 +2,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
 
@@ -156,7 +157,7 @@ protected:
             while (true)
             {
                 //std::cerr << "popping\n";
-                output_queue.pop(res);
+                res = output_queue.pop().value();
 
                 if (res.exception)
                 {
@@ -207,7 +208,9 @@ protected:
 
         /// We will wait until the next block is ready or an exception is thrown.
         //std::cerr << "popping\n";
-        output_queue.pop(received_payload);
+        auto res = output_queue.pop();
+        assert(res.has_value());
+        received_payload = res.value();
 
         if (received_payload.exception)
         {
@@ -247,7 +250,7 @@ private:
 
 private:
     using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
-    using OutputQueue = ConcurrentBoundedQueue<Payload>;
+    using OutputQueue = MPMCQueue<Payload>;
 
 private:
     /** The queue of the finished blocks. Also, you can put an exception instead of a block.
@@ -291,7 +294,7 @@ private:
             ///  when before exception, an empty block (end of data) will be put into the queue,
             ///  and the exception is lost.
 
-            parent.output_queue.push(exception);
+            parent.output_queue.emplace(exception);
             parent.cancel(false); /// Does not throw exceptions.
         }
 

@@ -1,0 +1,489 @@
+#pragma once
+
+#include <common/defines.h>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <optional>
+
+namespace DB
+{
+namespace detail
+{
+template <typename T, bool is_nothrow_move_assignable = std::is_nothrow_move_assignable_v<T>>
+struct MoveOrCopyIfThrow;
+
+template <typename T>
+struct MoveOrCopyIfThrow<T, true>
+{
+    void operator()(T && src, T & dst) const
+    {
+        dst = std::forward<T>(src);
+    }
+};
+
+template <typename T>
+struct MoveOrCopyIfThrow<T, false>
+{
+    void operator()(T && src, T & dst) const
+    {
+        dst = src;
+    }
+};
+
+template <typename T>
+void moveOrCopyIfThrow(T && src, T & dst)
+{
+    MoveOrCopyIfThrow<T>()(std::forward<T>(src), dst);
+}
+
+template <typename T>
+struct OptionalObject
+{
+    using Type = std::optional<T>;
+    Type obj;
+
+    bool has_value() const
+    {
+        return obj.has_value();
+    }
+
+    void assign(const T & x)
+    {
+        obj = x;
+    }
+
+    void assign(T && x)
+    {
+        obj = std::move(x);
+    }
+
+    template <typename... Args>
+    void emplace(Args &&... args)
+    {
+        obj.emplace(std::forward<Args>(args)...);
+    }
+
+    void reset()
+    {
+        obj.reset();
+    }
+};
+
+template <typename T>
+struct OptionalObject<std::unique_ptr<T>>
+{
+    using Type = std::unique_ptr<T>;
+    Type obj;
+
+    bool has_value() const
+    {
+        return static_cast<bool>(obj);
+    }
+
+    void assign(std::unique_ptr<T> x)
+    {
+        obj = std::move(x);
+    }
+
+    template <typename... Args>
+    void emplace(Args &&... args)
+    {
+        obj = std::make_unique<T>(std::forward<Args>(args)...);
+    }
+
+    void reset()
+    {
+        obj.reset();
+    }
+};
+
+template <typename T>
+struct OptionalObject<std::shared_ptr<T>>
+{
+    using Type = std::shared_ptr<T>;
+    Type obj;
+
+    bool has_value() const
+    {
+        return static_cast<bool>(obj);
+    }
+
+    void assign(std::unique_ptr<T> x)
+    {
+        obj = std::move(x);
+    }
+
+    void assign(std::shared_ptr<T> x)
+    {
+        obj = std::move(x);
+    }
+
+    template <typename... Args>
+    void emplace(Args &&... args)
+    {
+        obj = std::make_shared<T>(std::forward<Args>(args)...);
+    }
+
+    void reset()
+    {
+        obj.reset();
+    }
+};
+
+template <typename T>
+struct SingleElementQueue
+{
+    OptionalObject<T> obj;
+    std::mutex mu;
+    std::condition_variable cv;
+    std::atomic<bool> cancelled = false;
+
+    bool isCancelled() const
+    {
+        return cancelled.load(std::memory_order_relaxed);
+    }
+
+    void cancel()
+    {
+        cancelled.store(true, std::memory_order_relaxed);
+    }
+};
+} // namespace detail
+
+template <typename T>
+class MPMCQueue
+{
+public:
+    using OptionalObject = detail::OptionalObject<T>;
+
+    enum Status
+    {
+        NORMAL,
+        CANCELLED,
+        FINISHED,
+    };
+
+    explicit MPMCQueue(Int64 capacity_)
+        : capacity(capacity_)
+        , objs(capacity)
+        , read_finished_cvs(capacity)
+        , write_finished_cvs(capacity)
+    {}
+
+    typename OptionalObject::Type pop()
+    {
+        Int64 ticket = getReadTicket();
+        if (ticket < 0)
+            return {};
+
+        OptionalObject res = popObj(ticket);
+
+        if (res.has_value())
+            finishRead(ticket);
+        return std::move(res.obj);
+    }
+
+    template <typename Duration>
+    typename OptionalObject::Type tryPop(const Duration & timeout)
+    {
+        /// std::condition_variable::wait_until will always use system_clock.
+        auto deadline = std::chrono::system_clock::now() + timeout;
+        Int64 ticket = getReadTicket(&deadline);
+        if (ticket < 0)
+            return {};
+
+        OptionalObject res = popObj(ticket, &deadline);
+
+        if (res.has_value())
+            finishRead(ticket);
+        return std::move(res.obj);
+    }
+
+    template <typename U>
+    bool push(U && u)
+    {
+        Int64 ticket = getWriteTicket();
+        if (ticket < 0)
+            return {};
+
+        bool res = pushObj(ticket, std::forward<U>(u));
+
+        if (res)
+            finishWrite(ticket);
+        return res;
+    }
+
+    template <typename U, typename Duration>
+    bool tryPush(U && u, const Duration & timeout)
+    {
+        /// std::condition_variable::wait_until will always use system_clock.
+        auto deadline = std::chrono::system_clock::now() + timeout;
+        Int64 ticket = getWriteTicket(&deadline);
+        if (ticket < 0)
+            return {};
+
+        bool res = pushObj(ticket, std::forward<U>(u), &deadline);
+
+        if (res)
+            finishWrite(ticket);
+        return res;
+    }
+
+    template <typename... Args>
+    bool emplace(Args &&... args)
+    {
+        Int64 ticket = getWriteTicket();
+        if (ticket < 0)
+            return {};
+
+        bool res = emplaceObj(ticket, nullptr, std::forward<Args>(args)...);
+
+        if (res)
+            finishWrite(ticket);
+        return res;
+    }
+
+    template <typename... Args, typename Duration>
+    bool tryEmplace(Args &&... args, const Duration & timeout)
+    {
+        /// std::condition_variable::wait_until will always use system_clock.
+        auto deadline = std::chrono::system_clock::now() + timeout;
+        Int64 ticket = getWriteTicket(&deadline);
+        if (ticket < 0)
+            return {};
+
+        bool res = emplaceObj(ticket, &deadline, std::forward<Args>(args)...);
+
+        if (res)
+            finishWrite(ticket);
+        return res;
+    }
+
+    void cancel()
+    {
+        bool changed = false;
+        {
+            std::unique_lock read_lock(read_mu);
+            std::unique_lock write_lock(write_mu);
+            if (!finished && !cancelled)
+            {
+                cancelled = true;
+                changed = true;
+            }
+        }
+        if (changed)
+        {
+            read_cv.notify_all();
+            write_cv.notify_all();
+            for (auto & obj : objs)
+            {
+                obj.cancel();
+                obj.cv.notify_all();
+            }
+            for (auto & cv : read_finished_cvs)
+                cv.notify_all();
+            for (auto & cv : write_finished_cvs)
+                cv.notify_all();
+        }
+    }
+
+    void finish()
+    {
+        bool changed = false;
+        Int64 local_read_allocated = -1;
+        Int64 local_write_allocated = -1;
+        {
+            std::unique_lock read_lock(read_mu);
+            std::unique_lock write_lock(write_mu);
+            if (!finished && !cancelled)
+            {
+                finished = true;
+                changed = true;
+                local_read_allocated = read_allocated;
+                local_write_allocated = write_allocated;
+            }
+        }
+        if (changed)
+        {
+            /// cancel all readers waiting for tickets that won't check forever
+            for (Int64 i = local_write_allocated; i < local_read_allocated; ++i)
+                objs[i % capacity].cancel();
+
+            read_cv.notify_all();
+            write_cv.notify_all();
+            for (auto & obj : objs)
+                obj.cv.notify_all();
+            for (auto & cv : read_finished_cvs)
+                cv.notify_all();
+            for (auto & cv : write_finished_cvs)
+                cv.notify_all();
+        }
+    }
+
+    Status getStatus() const
+    {
+        {
+            std::unique_lock read_lock(read_mu);
+            std::unique_lock write_lock(write_mu);
+            if (unlikely(cancelled))
+                return CANCELLED;
+            if (unlikely(finished))
+                return FINISHED;
+        }
+        return NORMAL;
+    }
+private:
+    using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
+
+    Int64 getReadTicket(const TimePoint * deadline = nullptr)
+    {
+        Int64 ticket = -1;
+        bool timeouted = false;
+        auto pred = [&] { return read_allocated - read_finished < capacity || cancelled || readFinished(); };
+        {
+            std::unique_lock lock(read_mu);
+            if (deadline)
+                timeouted = !read_cv.wait_until(lock, *deadline, pred);
+            else
+                read_cv.wait(lock, pred);
+            if (!timeouted && !cancelled && !readFinished() && read_allocated - read_finished < capacity)
+                ticket = read_allocated++;
+        }
+        return ticket;
+    }
+
+    Int64 getWriteTicket(const TimePoint * deadline = nullptr)
+    {
+        Int64 ticket = -1;
+        bool timeouted = false;
+        auto pred = [&] { return write_allocated - write_finished < capacity || finished || cancelled; };
+        {
+            std::unique_lock lock(write_mu);
+            if (deadline)
+                timeouted = !write_cv.wait_until(lock, *deadline, pred);
+            else
+                write_cv.wait(lock, pred);
+            if (!timeouted && !finished && !cancelled && write_allocated - write_finished < capacity)
+                ticket = write_allocated++;
+        }
+        return ticket;
+    }
+
+    OptionalObject popObj(Int64 ticket, const TimePoint * deadline = nullptr)
+    {
+        detail::SingleElementQueue<T> & queue = objs[ticket % capacity];
+        OptionalObject res;
+        bool timeouted = false;
+        auto pred = [&] { return queue.obj.has_value() || queue.isCancelled(); };
+        {
+            std::unique_lock lock(queue.mu);
+            if (deadline)
+                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
+            else
+                queue.cv.wait(lock, pred);
+            if (!timeouted && queue.obj.has_value())
+                res = std::move(queue.obj);
+            queue.obj.reset();
+        }
+        if (res.has_value())
+            queue.cv.notify_all();
+        return res;
+    }
+
+    template <typename U>
+    bool pushObj(Int64 ticket, U && u, const TimePoint * deadline = nullptr)
+    {
+        detail::SingleElementQueue<T> & queue = objs[ticket % capacity];
+        bool timeouted = false;
+        auto pred = [&] { return !queue.obj.has_value() || queue.isCancelled(); };
+        {
+            std::unique_lock lock(queue.mu);
+            if (deadline)
+                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
+            else
+                queue.cv.wait(lock, pred);
+            if (timeouted || queue.obj.has_value()) /// cancelled
+                return false;
+            queue.obj.assign(std::forward<U>(u));
+        }
+        queue.cv.notify_one();
+        return true;
+    }
+
+    template <typename... Args>
+    bool emplaceObj(Int64 ticket, const TimePoint * deadline, Args &&... args)
+    {
+        detail::SingleElementQueue<T> & queue = objs[ticket % capacity];
+        bool timeouted = false;
+        auto pred = [&] { return !queue.obj.has_value() || queue.isCancelled(); };
+        {
+            std::unique_lock lock(queue.mu);
+            if (deadline)
+                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
+            else
+                queue.cv.wait(lock, pred);
+            if (timeouted || queue.obj.has_value()) /// cancelled
+                return false;
+            queue.obj.emplace(std::forward<Args>(args)...);
+        }
+        queue.cv.notify_one();
+        return true;
+    }
+
+    void bumpFinished(Int64 ticket, std::mutex & mu, std::vector<std::condition_variable> & cvs, Int64 & finished_ticket)
+    {
+        Int64 pos = ticket % capacity;
+        auto & cv = cvs[pos];
+        {
+            std::unique_lock lock(mu);
+            cv.wait(lock, [&] { return finished_ticket == ticket || cancelled; });
+            ++finished_ticket; // when cancelled it's ok to bump finished.
+        }
+        Int64 next_pos = (pos + 1) % capacity;
+        cvs[next_pos].notify_one();
+    }
+
+    void finishRead(Int64 ticket)
+    {
+        bumpFinished(ticket, read_mu, read_finished_cvs, read_finished);
+        read_cv.notify_one();
+    }
+
+    void finishWrite(Int64 ticket)
+    {
+        bumpFinished(ticket, write_mu, write_finished_cvs, write_finished);
+        write_cv.notify_one();
+    }
+
+    /// must call under protection of `read_mu`.
+    bool readFinished() const
+    {
+        /// it's safe to visit write_allocated here
+        /// since after `finished` is set to true `write_allocated` won't change
+        /// and the change of `finished` is always under `read_mu`.
+        return finished && read_allocated >= write_allocated;
+    }
+private:
+    const Int64 capacity;
+
+    std::mutex read_mu;
+    std::mutex write_mu;
+    std::condition_variable read_cv;
+    std::condition_variable write_cv;
+    Int64 read_finished = 0;
+    Int64 read_allocated = 0;
+    Int64 write_finished = 0;
+    Int64 write_allocated = 0;
+    bool cancelled = false;
+    bool finished = false;
+
+    std::vector<detail::SingleElementQueue<T>> objs;
+    std::vector<std::condition_variable> read_finished_cvs;
+    std::vector<std::condition_variable> write_finished_cvs;
+};
+
+} // namespace DB
+

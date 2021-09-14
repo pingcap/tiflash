@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/LogWithPrefix.h>
+#include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -250,302 +251,6 @@ private:
     size_t capacity;
 };
 
-template <typename T>
-struct SingleElementQueue
-{
-    std::shared_ptr<T> obj;
-    std::mutex mu;
-    std::condition_variable cv;
-    std::atomic<bool> cancelled = false;
-
-    bool isCancelled() const
-    {
-        return cancelled.load(std::memory_order_relaxed);
-    }
-
-    void cancel()
-    {
-        cancelled.store(true, std::memory_order_relaxed);
-    }
-};
-
-template <typename T>
-class MPMCQueue
-{
-public:
-    enum Status
-    {
-        NORMAL,
-        CANCELLED,
-        FINISHED,
-    };
-
-    explicit MPMCQueue(Int64 capacity_)
-        : capacity(capacity_)
-        , objs(capacity)
-        , read_finished_cvs(capacity)
-        , write_finished_cvs(capacity)
-    {}
-
-    std::shared_ptr<T> pop()
-    {
-        Int64 ticket = getReadTicket();
-        if (ticket < 0)
-            return {};
-
-        std::shared_ptr<T> res = popObj(ticket);
-
-        if (res)
-            finishRead(ticket);
-        return res;
-    }
-
-    template <typename Rep, typename Period>
-    std::shared_ptr<T> tryPop(const std::chrono::duration<Rep, Period> & timeout)
-    {
-        /// std::condition_variable::wait_until will always use system_clock.
-        auto deadline = std::chrono::system_clock::now() + timeout;
-        Int64 ticket = getReadTicket(&deadline);
-        if (ticket < 0)
-            return {};
-
-        std::shared_ptr<T> res = popObj(ticket, &deadline);
-
-        if (res)
-            finishRead(ticket);
-        return res;
-    }
-
-    bool push(std::shared_ptr<T> v)
-    {
-        Int64 ticket = getWriteTicket();
-        if (ticket < 0)
-            return {};
-
-        bool res = pushObj(ticket, std::move(v));
-
-        if (res)
-            finishWrite(ticket);
-        return res;
-    }
-
-    template <typename Rep, typename Period>
-    bool tryPush(std::shared_ptr<T> v, const std::chrono::duration<Rep, Period> & timeout)
-    {
-        /// std::condition_variable::wait_until will always use system_clock.
-        auto deadline = std::chrono::system_clock::now() + timeout;
-        Int64 ticket = getWriteTicket(&deadline);
-        if (ticket < 0)
-            return {};
-
-        bool res = pushObj(ticket, std::move(v), &deadline);
-
-        if (res)
-            finishWrite(ticket);
-        return res;
-    }
-
-    void cancel()
-    {
-        bool changed = false;
-        {
-            std::unique_lock read_lock(read_mu);
-            std::unique_lock write_lock(write_mu);
-            if (!finished && !cancelled)
-            {
-                cancelled = true;
-                changed = true;
-            }
-        }
-        if (changed)
-        {
-            read_cv.notify_all();
-            write_cv.notify_all();
-            for (auto & obj : objs)
-            {
-                obj.cancel();
-                obj.cv.notify_all();
-            }
-            for (auto & cv : read_finished_cvs)
-                cv.notify_all();
-            for (auto & cv : write_finished_cvs)
-                cv.notify_all();
-        }
-    }
-
-    void finish()
-    {
-        bool changed = false;
-        Int64 local_read_allocated = -1;
-        Int64 local_write_allocated = -1;
-        {
-            std::unique_lock read_lock(read_mu);
-            std::unique_lock write_lock(write_mu);
-            if (!finished && !cancelled)
-            {
-                finished = true;
-                changed = true;
-                local_read_allocated = read_allocated;
-                local_write_allocated = write_allocated;
-            }
-        }
-        if (changed)
-        {
-            /// cancel all readers waiting for tickets that won't check forever
-            for (Int64 i = local_write_allocated; i < local_read_allocated; ++i)
-                objs[i % capacity].cancel();
-
-            read_cv.notify_all();
-            write_cv.notify_all();
-            for (auto & obj : objs)
-                obj.cv.notify_all();
-            for (auto & cv : read_finished_cvs)
-                cv.notify_all();
-            for (auto & cv : write_finished_cvs)
-                cv.notify_all();
-        }
-    }
-
-    Status getStatus() const
-    {
-        {
-            std::unique_lock read_lock(read_mu);
-            std::unique_lock write_lock(write_mu);
-            if (unlikely(cancelled))
-                return CANCELLED;
-            if (unlikely(finished))
-                return FINISHED;
-        }
-        return NORMAL;
-    }
-private:
-    using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
-
-    Int64 getReadTicket(const TimePoint * deadline = nullptr)
-    {
-        Int64 ticket = -1;
-        bool timeouted = false;
-        auto pred = [&] { return read_allocated - read_finished < capacity || cancelled || readFinished(); };
-        {
-            std::unique_lock lock(read_mu);
-            if (deadline)
-                timeouted = !read_cv.wait_until(lock, *deadline, pred);
-            else
-                read_cv.wait(lock, pred);
-            if (!timeouted && !cancelled && !readFinished() && read_allocated - read_finished < capacity)
-                ticket = read_allocated++;
-        }
-        return ticket;
-    }
-
-    Int64 getWriteTicket(const TimePoint * deadline = nullptr)
-    {
-        Int64 ticket = -1;
-        bool timeouted = false;
-        auto pred = [&] { return write_allocated - write_finished < capacity || finished || cancelled; };
-        {
-            std::unique_lock lock(write_mu);
-            if (deadline)
-                timeouted = !write_cv.wait_until(lock, *deadline, pred);
-            else
-                write_cv.wait(lock, pred);
-            if (!timeouted && !finished && !cancelled && write_allocated - write_finished < capacity)
-                ticket = write_allocated++;
-        }
-        return ticket;
-    }
-
-    std::shared_ptr<T> popObj(Int64 ticket, const TimePoint * deadline = nullptr)
-    {
-        SingleElementQueue<T> & queue = objs[ticket % capacity];
-        std::shared_ptr<T> res;
-        bool timeouted = false;
-        auto pred = [&] { return queue.obj || queue.isCancelled(); };
-        {
-            std::unique_lock lock(queue.mu);
-            if (deadline)
-                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
-            else
-                queue.cv.wait(lock, pred);
-            if (!timeouted && queue.obj)
-                res = std::move(queue.obj);
-        }
-        if (res)
-            queue.cv.notify_all();
-        return res;
-    }
-
-    bool pushObj(Int64 ticket, std::shared_ptr<T> && v, const TimePoint * deadline = nullptr)
-    {
-        SingleElementQueue<T> & queue = objs[ticket % capacity];
-        bool timeouted = false;
-        auto pred = [&] { return !queue.obj || queue.isCancelled(); };
-        {
-            std::unique_lock lock(queue.mu);
-            if (deadline)
-                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
-            else
-                queue.cv.wait(lock, pred);
-            if (timeouted || queue.obj) /// cancelled
-                return false;
-            queue.obj = std::move(v);
-        }
-        queue.cv.notify_all();
-        return true;
-    }
-
-    void bumpFinished(Int64 ticket, std::mutex & mu, std::vector<std::condition_variable> & cvs, Int64 & finished_ticket)
-    {
-        Int64 pos = ticket % capacity;
-        auto & cv = cvs[pos];
-        {
-            std::unique_lock lock(mu);
-            cv.wait(lock, [&] { return finished_ticket == ticket || cancelled; });
-            ++finished_ticket; // when cancelled it's ok to bump finished.
-        }
-        Int64 next_pos = (pos + 1) % capacity;
-        cvs[next_pos].notify_all();
-    }
-
-    void finishRead(Int64 ticket)
-    {
-        bumpFinished(ticket, read_mu, read_finished_cvs, read_finished);
-        read_cv.notify_one();
-    }
-
-    void finishWrite(Int64 ticket)
-    {
-        bumpFinished(ticket, write_mu, write_finished_cvs, write_finished);
-        write_cv.notify_one();
-    }
-
-    /// must call under protection of `read_mu`.
-    bool readFinished() const
-    {
-        /// it's safe to visit write_allocated here
-        /// since after `finished` is set to true `write_allocated` won't change
-        /// and the change of `finished` is always under `read_mu`.
-        return finished && read_allocated >= write_allocated;
-    }
-private:
-    const Int64 capacity;
-
-    std::mutex read_mu;
-    std::mutex write_mu;
-    std::condition_variable read_cv;
-    std::condition_variable write_cv;
-    Int64 read_finished = 0;
-    Int64 read_allocated = 0;
-    Int64 write_finished = 0;
-    Int64 write_allocated = 0;
-    bool cancelled = false;
-    bool finished = false;
-
-    std::vector<SingleElementQueue<T>> objs;
-    std::vector<std::condition_variable> read_finished_cvs;
-    std::vector<std::condition_variable> write_finished_cvs;
-};
-
 template <typename RPCContext>
 class ExchangeReceiverBase
 {
@@ -565,8 +270,8 @@ private:
     DAGSchema schema;
     std::mutex mu;
     std::condition_variable cv;
-    MPMCQueue<ReceivedPacket> received_packets;
-    MPMCQueue<ReceivedPacket> empty_received_packets;
+    MPMCQueue<std::unique_ptr<ReceivedPacket>> received_packets;
+    MPMCQueue<std::unique_ptr<ReceivedPacket>> empty_received_packets;
     Int32 live_connections;
     State state;
     String err_msg;
@@ -606,7 +311,7 @@ private:
                 for (;;)
                 {
                     LOG_TRACE(log, "begin next ");
-                    std::shared_ptr<ReceivedPacket> packet = empty_received_packets.pop();
+                    std::unique_ptr<ReceivedPacket> packet = empty_received_packets.pop();
                     if (!packet)
                     {
                         meet_error = true;
@@ -754,7 +459,7 @@ public:
         }
 
         for (size_t i = 0; i < max_buffer_size; ++i)
-            empty_received_packets.push(std::make_shared<ReceivedPacket>());
+            empty_received_packets.emplace();
 
         setUpConnection();
     }
@@ -781,7 +486,7 @@ public:
 
     ExchangeReceiverResult nextResult()
     {
-        std::shared_ptr<ReceivedPacket> packet = received_packets.pop();
+        std::unique_ptr<ReceivedPacket> packet = received_packets.pop();
         if (!packet)
         {
             String msg;

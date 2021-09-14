@@ -22,7 +22,7 @@ std::random_device rd;
 
 using Packet = mpp::MPPDataPacket;
 using PacketPtr = std::shared_ptr<Packet>;
-using PacketQueue = MPMCQueue<Packet>;
+using PacketQueue = MPMCQueue<PacketPtr>;
 using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
 std::atomic<Int64> received_data_size{0};
