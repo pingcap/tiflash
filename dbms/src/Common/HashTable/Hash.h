@@ -102,7 +102,7 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
     }
     else if constexpr (std::is_same_v<T, DB::Int128>)
     {
-        auto * begin = reinterpret_cast<const DB::UInt64 *>(&x);
+        const auto * begin = reinterpret_cast<const DB::UInt64 *>(&x);
         updated_value = intHashCRC32(unalignedLoad<DB::UInt64>(begin), updated_value);
         updated_value = intHashCRC32(unalignedLoad<DB::UInt64>(begin + 1), updated_value);
         return updated_value;
@@ -216,7 +216,7 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
     }
     else if constexpr (std::is_same_v<T, DB::Int128>)
     {
-        auto * begin = reinterpret_cast<const DB::UInt64 *>(&key);
+        const auto * begin = reinterpret_cast<const DB::UInt64 *>(&key);
         return CityHash_v1_0_2::Hash128to64({unalignedLoad<DB::UInt64>(begin),
                                              unalignedLoad<DB::UInt64>(begin + 1)});
     }

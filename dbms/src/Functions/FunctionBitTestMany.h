@@ -55,7 +55,7 @@ public:
                     + toString(arguments.size()) + ", should be at least 2.",
                 ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 
-        const auto first_arg = arguments.front().get();
+        const auto * const first_arg = arguments.front().get();
 
         if (!first_arg->isInteger())
             throw Exception{
@@ -65,7 +65,7 @@ public:
 
         for (const auto i : ext::range(1, arguments.size()))
         {
-            const auto pos_arg = arguments[i].get();
+            const auto * const pos_arg = arguments[i].get();
 
             if (!pos_arg->isUnsignedInteger())
                 throw Exception{
@@ -78,7 +78,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        const auto value_col = block.getByPosition(arguments.front()).column.get();
+        const auto * const value_col = block.getByPosition(arguments.front()).column.get();
 
         if (!execute<UInt8>(block, arguments, result, value_col)
             && !execute<UInt16>(block, arguments, result, value_col)
@@ -187,7 +187,7 @@ private:
 
         for (const auto i : ext::range(1, arguments.size()))
         {
-            const auto pos_col = block.getByPosition(arguments[i]).column.get();
+            const auto * const pos_col = block.getByPosition(arguments[i]).column.get();
 
             if (!addToMaskImpl<UInt8>(mask, pos_col)
                 && !addToMaskImpl<UInt16>(mask, pos_col)
@@ -227,32 +227,5 @@ private:
         return false;
     }
 };
-
-
-struct BitTestAnyImpl
-{
-    template <typename A, typename B>
-    static inline UInt8 apply(A a, B b)
-    {
-        return (a & b) != 0;
-    };
-};
-
-struct BitTestAllImpl
-{
-    template <typename A, typename B>
-    static inline UInt8 apply(A a, B b)
-    {
-        return (a & b) == b;
-    };
-};
-
-// clang-format off
-struct NameBitTestAny           { static constexpr auto name = "bitTestAny"; };
-struct NameBitTestAll           { static constexpr auto name = "bitTestAll"; };
-// clang-format on
-
-using FunctionBitTestAny = FunctionBitTestMany<BitTestAnyImpl, NameBitTestAny>;
-using FunctionBitTestAll = FunctionBitTestMany<BitTestAllImpl, NameBitTestAll>;
 
 } // namespace DB

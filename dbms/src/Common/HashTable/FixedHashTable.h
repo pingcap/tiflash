@@ -19,12 +19,12 @@ struct FixedHashTableCell
     using mapped_type = VoidMapped;
     bool full;
 
-    FixedHashTableCell() {} //-V730
+    FixedHashTableCell() = default;
     FixedHashTableCell(const Key &, const State &)
         : full(true)
     {}
 
-    const VoidKey getKey() const { return {}; }
+    VoidKey getKey() const { return {}; }
     VoidMapped getMapped() const { return {}; }
 
     bool isZero(const State &) const { return !full; }
@@ -41,7 +41,7 @@ struct FixedHashTableCell
     {
         Key key;
 
-        const VoidKey getKey() const { return {}; }
+        VoidKey getKey() const { return {}; }
         VoidMapped getMapped() const { return {}; }
         const value_type & getValue() const { return key; }
         void update(Key && key_, FixedHashTableCell *) { key = key_; }
@@ -143,7 +143,7 @@ protected:
 
 
     template <typename Derived, bool is_const>
-    class iterator_base
+    class iterator_base // NOLINT(readability-identifier-naming)
     {
         using Container = std::conditional_t<is_const, const Self, Self>;
         using cell_type = std::conditional_t<is_const, const Cell, Cell>;
@@ -154,7 +154,7 @@ protected:
         friend class FixedHashTable;
 
     public:
-        iterator_base() {}
+        iterator_base() = default;
         iterator_base(Container * container_, cell_type * ptr_)
             : container(container_)
             , ptr(ptr_)
@@ -240,7 +240,7 @@ public:
     class Reader final : private Cell::State
     {
     public:
-        Reader(DB::ReadBuffer & in_)
+        explicit Reader(DB::ReadBuffer & in_)
             : in(in_)
         {}
 
@@ -286,13 +286,13 @@ public:
     };
 
 
-    class iterator : public iterator_base<iterator, false>
+    class iterator : public iterator_base<iterator, false> // NOLINT(readability-identifier-naming)
     {
     public:
         using iterator_base<iterator, false>::iterator_base;
     };
 
-    class const_iterator : public iterator_base<const_iterator, true>
+    class const_iterator : public iterator_base<const_iterator, true> // NOLINT(readability-identifier-naming)
     {
     public:
         using iterator_base<const_iterator, true>::iterator_base;
@@ -343,8 +343,6 @@ public:
         return iterator(this, buf ? buf + NUM_CELLS : buf);
     }
 
-
-public:
     /// The last parameter is unused but exists for compatibility with HashTable interface.
     void ALWAYS_INLINE emplace(const Key & x, LookupResult & it, bool & inserted, size_t /* hash */ = 0)
     {
