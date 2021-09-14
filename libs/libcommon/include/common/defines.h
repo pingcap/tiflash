@@ -168,3 +168,14 @@ static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
                  : "r,m"(var)
                  : "memory");
 }
+
+/*!
+ * \def TIFLASH_DUMMY_FUNCTION_DEFINITION
+ * Clang shows warning when there aren't any objects to apply pragma.
+ * To prevent this warning we define this function inside every macros with pragmas.
+ */
+#ifdef __clang__
+#define TIFLASH_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void TIFLASH_MACRO_CONCAT(__dummy_function_definition_, __LINE__)();
+#else
+#define TIFLASH_DUMMY_FUNCTION_DEFINITION
+#endif

@@ -42,11 +42,6 @@
         _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt\"))),apply_to=function)")
 #   define TIFLASH_END_TARGET_SPECIFIC_CODE \
         _Pragma("clang attribute pop")
-
-/* Clang shows warning when there aren't any objects to apply pragma.
- * To prevent this warning we define this function inside every macros with pragmas.
- */
-#   define TIFLASH_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void TIFLASH_MACRO_CONCAT(__dummy_function_definition_, __LINE__)();
 #else
 #   define TIFLASH_BEGIN_AVX512_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
@@ -59,7 +54,6 @@
         _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,tune=native\")")
 #   define TIFLASH_END_TARGET_SPECIFIC_CODE \
         _Pragma("GCC pop_options")
-#   define TIFLASH_DUMMY_FUNCTION_DEFINITION
 #endif
 // clang-format on
 
@@ -122,7 +116,6 @@ struct AVXChecker
         using ReturnType = RETURN;                                                           \
         using Checker = ::DB::TargetSpecific::AVX512Checker;                                 \
         static constexpr size_t WORD_SIZE = ::DB::TargetSpecific::Detail::AVX512::WORD_SIZE; \
-        ;                                                                                    \
         using SimdWord = ::DB::TargetSpecific::Detail::AVX512::Word<WORD_SIZE>;              \
         TIFLASH_DUMMY_FUNCTION_DEFINITION                                                    \
         static __attribute__((noinline)) ReturnType invoke __VA_ARGS__                       \
