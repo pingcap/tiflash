@@ -94,11 +94,14 @@ struct MinCounterType
 template <UInt8 precision, int max_rank, typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode, typename Enable = void>
 class __attribute__((packed)) Denominator;
 
+namespace details
+{
 /// Returns true if rank storage is big.
 constexpr bool isBigRankStore(UInt8 precision)
 {
     return precision >= 12;
 }
+} // namespace detail
 
 /// Used to deduce denominator type depending on options provided.
 template <typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode, typename Enable = void>
@@ -323,7 +326,7 @@ public:
 
         double final_estimate = fixRawEstimate(raw_estimate);
 
-        return static_cast<UInt64>(std::lround(final_estimate));
+        return static_cast<UInt64>(std::llround(final_estimate));
     }
 
     void merge(const HyperLogLogCounter & rhs)
