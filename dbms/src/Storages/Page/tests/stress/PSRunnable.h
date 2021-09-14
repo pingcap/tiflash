@@ -45,6 +45,7 @@ public:
 protected:
     virtual DB::PageId genRandomPageId();
 
+protected:
     PSPtr ps;
     DB::UInt32 index = 0;
     std::mt19937 gen;

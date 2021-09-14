@@ -110,7 +110,7 @@ public:
         LOG_WARNING(StressEnv::logger, fmt::format("GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000));
     }
 
-
+private:
     UInt64 gc_time_ms = 0;
 };
 
