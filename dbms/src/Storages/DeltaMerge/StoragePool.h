@@ -10,6 +10,7 @@ namespace DB
 struct Settings;
 class Context;
 class StoragePathPool;
+class StableDiskDelegator;
 
 namespace DM
 {
@@ -33,8 +34,9 @@ public:
     PageId maxMetaPageId() { return max_meta_page_id; }
 
     PageId newLogPageId() { return ++max_log_page_id; }
-    PageId newDataPageId() { return ++max_data_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
+
+    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
 
     PageStorage & log() { return log_storage; }
     PageStorage & data() { return data_storage; }
@@ -57,6 +59,8 @@ private:
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     std::mutex mutex;
+
+    const Context & global_context;
 };
 
 struct StorageSnapshot : private boost::noncopyable
