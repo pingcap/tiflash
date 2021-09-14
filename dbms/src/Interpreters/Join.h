@@ -153,14 +153,19 @@ public:
     /// Reference to the row in block.
     struct RowRef
     {
-        const Block * block;
+        const Block * block = nullptr;
         size_t row_num;
 
-        RowRef() {}
+        RowRef() = default;
         RowRef(const Block * block_, size_t row_num_)
             : block(block_)
             , row_num(row_num_)
         {}
+
+        bool valid() const
+        {
+            return block != nullptr;
+        }
     };
 
     /// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
@@ -168,7 +173,7 @@ public:
     {
         RowRefList * next = nullptr;
 
-        RowRefList() {}
+        RowRefList() = default;
         RowRefList(const Block * block_, size_t row_num_)
             : RowRef(block_, row_num_)
         {}

@@ -260,7 +260,8 @@ TEST_P(JoinBenchmark, Run)
             "{}: "
             "num_repeat = {}, "
             "build = [threads = {}, rows = {}, columns = {}], "
-            "probe = [threads = {}, rows = {}, columns = {}]",
+            "probe = [threads = {}, rows = {}, columns = {}], "
+            "result = [rows = {}]",
             data_folder,
             num_repeat,
             num_build_threads,
@@ -268,7 +269,8 @@ TEST_P(JoinBenchmark, Run)
             dataset.getBuildSampleBlock().columns(),
             num_probe_threads,
             dataset.getNumProbeRows(),
-            dataset.getProbeSampleBlock().columns()));
+            dataset.getProbeSampleBlock().columns(),
+            dataset.getNumResultRows()));
 
     for (size_t round = 0; round < num_repeat; ++round)
     {
