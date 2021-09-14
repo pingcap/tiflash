@@ -321,3 +321,17 @@ DB::PageIds PSWindowReader::genRandomPageIds()
 
     return pageIds;
 }
+
+bool PSSnapshotReader::runImpl()
+{
+    assert(ps != nullptr);
+    snapshots.emplace_back(ps->getSnapshot());
+    usleep(snapshot_get_interval_ms * 1000);
+    return true;
+}
+
+
+void PSSnapshotReader::setSnapshotGetIntervalMs(size_t snapshot_get_interval_ms_)
+{
+    snapshot_get_interval_ms = snapshot_get_interval_ms_;
+}

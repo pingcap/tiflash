@@ -1,17 +1,17 @@
 #include <PSWorkload.h>
 
-class HeavySkewWriteRead : public StressWorkload
-    , public StressWorkloadFunc<HeavySkewWriteRead>
+class HoldSnapshotsLongTime : public StressWorkload
+    , public StressWorkloadFunc<HoldSnapshotsLongTime>
 {
 public:
     static String name()
     {
-        return "HeavySkewWriteRead";
+        return "HoldSnapshotsLongTime";
     }
 
     static UInt64 mask()
     {
-        return 1 << 4;
+        return 1 << 6;
     }
 
 private:
@@ -20,7 +20,7 @@ private:
         return fmt::format("Some of options will be ignored"
                            "`paths` will only used first one. which is {}. Data will store in {}"
                            "Please cleanup folder after this test."
-                           "The current workload will elapse near 60 seconds",
+                           "The current workload will  // todo",
                            options.paths[0],
                            options.paths[0] + "/" + name());
     }
@@ -36,6 +36,11 @@ private:
 
         stress_time = std::make_shared<StressTimeout>(60);
         stress_time->start();
+
+        scanner = std::make_shared<PSScanner>(ps);
+        scanner->start();
+
+        // 90-100 snapshots will be generated.
         {
             stop_watch.start();
             startWriter<PSWindowWriter>(options.num_writers, [](std::shared_ptr<PSWindowWriter> writer) -> void {
@@ -45,19 +50,22 @@ private:
                 writer->setNormalDistributionSigma(13);
             });
 
-            auto num_writers = options.num_writers;
-
-            startReader<PSWindowReader>(options.num_readers, [num_writers](std::shared_ptr<PSWindowReader> reader) -> void {
-                reader->setPageReadOnce(5);
-                reader->setReadDelay(0);
-                reader->setWriterNums(num_writers);
-                reader->setWindowSize(100);
-                reader->setNormalDistributionSigma(9);
+            startReader<PSSnapshotReader>(1, [](std::shared_ptr<PSSnapshotReader> reader) -> void {
+                reader->setSnapshotGetIntervalMs(600);
             });
 
             pool.joinAll();
             stop_watch.stop();
         }
+
+        gc = std::make_shared<PSGc>(ps);
+        // Normal GC
+        gc->doGcOnce();
+
+        readers.clear();
+
+        // Skip GC
+        gc->doGcOnce();
     }
 
     bool verify() override
@@ -66,4 +74,4 @@ private:
     }
 };
 
-REGISTER_WORKLOAD(HeavySkewWriteRead)
+REGISTER_WORKLOAD(HoldSnapshotsLongTime)

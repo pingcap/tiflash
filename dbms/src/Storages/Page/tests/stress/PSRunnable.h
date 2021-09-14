@@ -201,3 +201,23 @@ protected:
     size_t writer_nums = 0;
     std::mt19937 gen;
 };
+
+// PSStuckReader is specially designed for holding snapshots.
+// To verify the issue: https://github.com/pingcap/tics/issues/2726
+// Please run it as single thread
+class PSSnapshotReader : public PSReader
+{
+public:
+    PSSnapshotReader(const PSPtr & ps_, DB::UInt32 index_)
+        : PSReader(ps_, index_)
+    {}
+
+    virtual bool runImpl() override;
+
+    void setSnapshotGetIntervalMs(size_t snapshot_get_interval_ms_);
+
+protected:
+    size_t snapshots_hold_num;
+    size_t snapshot_get_interval_ms = 0;
+    std::list<DB::PageStorage::SnapshotPtr> snapshots;
+};

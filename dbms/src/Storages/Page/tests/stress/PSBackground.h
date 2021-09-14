@@ -10,20 +10,19 @@ public:
     PSMetricsDumper(size_t status_interval_)
         : status_interval(status_interval_)
     {
-        timer_status.setStartInterval(1000);
-        timer_status.setPeriodicInterval(status_interval * 1000);
-
 #define REGISTER_METRICS(metric, desc) \
     metrics.insert(metrics.end(), std::pair<CurrentMetrics::Metric, MetricInfo>(metric, {desc}));
         REGISTER_METRICS(CurrentMetrics::MemoryTracking, "Memory");
         REGISTER_METRICS(CurrentMetrics::PSMVCCSnapshotsList, "SnapshotsList");
 
 #undef REGISTER_METRICS
+        timer_status.setStartInterval(1000);
+        timer_status.setPeriodicInterval(status_interval * 1000);
     };
 
     void onTime(Poco::Timer & timer);
 
-    String toString()
+    String toString() const
     {
         String str;
         for (auto & metric : metrics)
@@ -38,7 +37,7 @@ public:
 
     void start();
 
-    UInt32 getMemoryPeak()
+    UInt32 getMemoryPeak() const
     {
         auto info = metrics.find(CurrentMetrics::MemoryTracking);
         if (info != metrics.end())
