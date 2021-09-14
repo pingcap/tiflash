@@ -301,7 +301,7 @@ public:
     }
 
     template <class T>
-    Field & operator=(T && rhs)
+    Field & operator=(T && rhs) // NOLINT(misc-unconventional-assign-operator) there is still a false-positive here
     {
         if constexpr (std::is_same_v<std::decay_t<T>, Field>)
         {
