@@ -157,7 +157,7 @@ protected:
             while (true)
             {
                 //std::cerr << "popping\n";
-                res = output_queue.pop().value();
+                res = std::move(output_queue.pop().value());
 
                 if (res.exception)
                 {
@@ -210,7 +210,7 @@ protected:
         //std::cerr << "popping\n";
         auto res = output_queue.pop();
         assert(res.has_value());
-        received_payload = res.value();
+        received_payload = std::move(res.value());
 
         if (received_payload.exception)
         {

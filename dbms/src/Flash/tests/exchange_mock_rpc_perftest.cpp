@@ -67,10 +67,10 @@ struct MockReceiverContext
 
         bool read(mpp::MPPDataPacket * packet [[maybe_unused]]) const
         {
-            PacketPtr ptr = queue->pop();
-            if (!ptr)
+            auto res = queue->pop();
+            if (!res.has_value() || !res.value())
                 return false;
-            *packet = *ptr;
+            *packet = *res.value();
             received_data_size.fetch_add(packet->ByteSizeLong());
             return true;
         }

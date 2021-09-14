@@ -12,131 +12,10 @@ namespace DB
 {
 namespace detail
 {
-template <typename T, bool is_nothrow_move_assignable = std::is_nothrow_move_assignable_v<T>>
-struct MoveOrCopyIfThrow;
-
-template <typename T>
-struct MoveOrCopyIfThrow<T, true>
-{
-    void operator()(T && src, T & dst) const
-    {
-        dst = std::forward<T>(src);
-    }
-};
-
-template <typename T>
-struct MoveOrCopyIfThrow<T, false>
-{
-    void operator()(T && src, T & dst) const
-    {
-        dst = src;
-    }
-};
-
-template <typename T>
-void moveOrCopyIfThrow(T && src, T & dst)
-{
-    MoveOrCopyIfThrow<T>()(std::forward<T>(src), dst);
-}
-
-template <typename T>
-struct OptionalObject
-{
-    using Type = std::optional<T>;
-    Type obj;
-
-    bool has_value() const
-    {
-        return obj.has_value();
-    }
-
-    void assign(const T & x)
-    {
-        obj = x;
-    }
-
-    void assign(T && x)
-    {
-        obj = std::move(x);
-    }
-
-    template <typename... Args>
-    void emplace(Args &&... args)
-    {
-        obj.emplace(std::forward<Args>(args)...);
-    }
-
-    void reset()
-    {
-        obj.reset();
-    }
-};
-
-template <typename T>
-struct OptionalObject<std::unique_ptr<T>>
-{
-    using Type = std::unique_ptr<T>;
-    Type obj;
-
-    bool has_value() const
-    {
-        return static_cast<bool>(obj);
-    }
-
-    void assign(std::unique_ptr<T> x)
-    {
-        obj = std::move(x);
-    }
-
-    template <typename... Args>
-    void emplace(Args &&... args)
-    {
-        obj = std::make_unique<T>(std::forward<Args>(args)...);
-    }
-
-    void reset()
-    {
-        obj.reset();
-    }
-};
-
-template <typename T>
-struct OptionalObject<std::shared_ptr<T>>
-{
-    using Type = std::shared_ptr<T>;
-    Type obj;
-
-    bool has_value() const
-    {
-        return static_cast<bool>(obj);
-    }
-
-    void assign(std::unique_ptr<T> x)
-    {
-        obj = std::move(x);
-    }
-
-    void assign(std::shared_ptr<T> x)
-    {
-        obj = std::move(x);
-    }
-
-    template <typename... Args>
-    void emplace(Args &&... args)
-    {
-        obj = std::make_shared<T>(std::forward<Args>(args)...);
-    }
-
-    void reset()
-    {
-        obj.reset();
-    }
-};
-
 template <typename T>
 struct SingleElementQueue
 {
-    OptionalObject<T> obj;
+    std::optional<T> obj;
     std::mutex mu;
     std::condition_variable cv;
     std::atomic<bool> cancelled = false;
@@ -157,8 +36,6 @@ template <typename T>
 class MPMCQueue
 {
 public:
-    using OptionalObject = detail::OptionalObject<T>;
-
     enum Status
     {
         NORMAL,
@@ -173,21 +50,21 @@ public:
         , write_finished_cvs(capacity)
     {}
 
-    typename OptionalObject::Type pop()
+    std::optional<T> pop()
     {
         Int64 ticket = getReadTicket();
         if (ticket < 0)
             return {};
 
-        OptionalObject res = popObj(ticket);
+        auto res = popObj(ticket);
 
         if (res.has_value())
             finishRead(ticket);
-        return std::move(res.obj);
+        return res;
     }
 
     template <typename Duration>
-    typename OptionalObject::Type tryPop(const Duration & timeout)
+    std::optional<T> tryPop(const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -195,11 +72,11 @@ public:
         if (ticket < 0)
             return {};
 
-        OptionalObject res = popObj(ticket, &deadline);
+        auto res = popObj(ticket, &deadline);
 
         if (res.has_value())
             finishRead(ticket);
-        return std::move(res.obj);
+        return res;
     }
 
     template <typename U>
@@ -372,10 +249,10 @@ private:
         return ticket;
     }
 
-    OptionalObject popObj(Int64 ticket, const TimePoint * deadline = nullptr)
+    std::optional<T> popObj(Int64 ticket, const TimePoint * deadline = nullptr)
     {
         detail::SingleElementQueue<T> & queue = objs[ticket % capacity];
-        OptionalObject res;
+        std::optional<T> res;
         bool timeouted = false;
         auto pred = [&] { return queue.obj.has_value() || queue.isCancelled(); };
         {
@@ -385,8 +262,10 @@ private:
             else
                 queue.cv.wait(lock, pred);
             if (!timeouted && queue.obj.has_value())
+            {
                 res = std::move(queue.obj);
-            queue.obj.reset();
+                queue.obj.reset();
+            }
         }
         if (res.has_value())
             queue.cv.notify_all();
@@ -407,7 +286,7 @@ private:
                 queue.cv.wait(lock, pred);
             if (timeouted || queue.obj.has_value()) /// cancelled
                 return false;
-            queue.obj.assign(std::forward<U>(u));
+            queue.obj = std::forward<U>(u);
         }
         queue.cv.notify_one();
         return true;
