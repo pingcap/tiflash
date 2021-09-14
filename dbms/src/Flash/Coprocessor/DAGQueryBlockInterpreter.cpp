@@ -610,7 +610,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
             fmt::join(right_key_names, ", "),
             settings.max_rows_in_join,
             settings.max_bytes_in_join,
-            static_cast<int>(settings.join_overflow_mode.value),
+            static_cast<int>(settings.join_overflow_mode.get()),
             kind,
             strictness,
             join_build_concurrency,
