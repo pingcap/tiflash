@@ -272,6 +272,8 @@ public:
     explicit MPMCQueue(Int64 capacity_)
         : capacity(capacity_)
         , objs(capacity)
+        , read_finished_cvs(capacity)
+        , write_finished_cvs(capacity)
     {}
 
     std::unique_ptr<T> popOne()
@@ -302,7 +304,12 @@ public:
 
     void cancel()
     {
-        cancelled.store(true, std::memory_order_relaxed);
+        {
+            std::unique_lock read_lock(read_mu);
+            std::unique_lock write_lock(write_mu);
+            if (!finished && !cancelled)
+                cancelled = true;
+        }
         read_cv.notify_all();
         write_cv.notify_all();
         for (auto & obj : objs)
@@ -311,19 +318,32 @@ public:
 
     void finish()
     {
-        finished.store(true, std::memory_order_relaxed);
+        {
+            std::unique_lock read_lock(read_mu);
+            std::unique_lock write_lock(write_mu);
+            if (!finished && !cancelled)
+                finished = true;
+        }
         read_cv.notify_all();
         write_cv.notify_all();
         for (auto & obj : objs)
             obj.cv.notify_all();
+        for (auto & cv : read_finished_cvs)
+            cv.notify_all();
+        for (auto & cv : write_finished_cvs)
+            cv.notify_all();
     }
 
     Status getStatus() const
     {
-        if (isCancelled())
-            return CANCELLED;
-        if (isFinished())
-            return FINISHED;
+        {
+            std::unique_lock read_lock(read_mu);
+            std::unique_lock write_lock(read_mu);
+            if (unlikely(cancelled))
+                return CANCELLED;
+            if (unlikely(finished))
+                return FINISHED;
+        }
         return NORMAL;
     }
 private:
@@ -332,11 +352,10 @@ private:
         Int64 ticket = -1;
         {
             std::unique_lock lock(read_mu);
-            read_cv.wait(lock, [&] { return read_allocated - read_finished < capacity || isCancelled() || readPassFinishedPoint(); });
-            if (!isCancelled() && !readPassFinishedPoint() && read_allocated - read_finished < capacity)
+            read_cv.wait(lock, [&] { return read_allocated - read_finished < capacity || cancelled || readFinished(); });
+            if (!cancelled && !readFinished() && read_allocated - read_finished < capacity)
                 ticket = read_allocated++;
         }
-        read_cv.notify_all();
         return ticket;
     }
 
@@ -345,11 +364,10 @@ private:
         Int64 ticket = -1;
         {
             std::unique_lock lock(write_mu);
-            write_cv.wait(lock, [&] { return write_allocated - write_finished < capacity || finishedOrCancelled(); });
-            if (!finishedOrCancelled() && write_allocated - write_finished < capacity)
+            write_cv.wait(lock, [&] { return write_allocated - write_finished < capacity || finished || cancelled; });
+            if (!finished && !cancelled && write_allocated - write_finished < capacity)
                 ticket = write_allocated++;
         }
-        write_cv.notify_all();
         return ticket;
     }
 
@@ -359,7 +377,7 @@ private:
         std::unique_ptr<T> res;
         {
             std::unique_lock lock(queue.mu);
-            queue.cv.wait(lock, [&] { return queue.obj || isCancelled(); });
+            queue.cv.wait(lock, [&] { return queue.obj || cancelled; });
             if (queue.obj)
                 res = std::move(queue.obj);
         }
@@ -373,7 +391,7 @@ private:
         SingleElementQueue<T> & queue = objs[ticket % capacity];
         {
             std::unique_lock lock(queue.mu);
-            queue.cv.wait(lock, [&] { return !queue.obj || isCancelled(); });
+            queue.cv.wait(lock, [&] { return !queue.obj || cancelled; });
             if (queue.obj) /// cancelled
                 return false;
             queue.obj = std::move(v);
@@ -382,45 +400,38 @@ private:
         return true;
     }
 
-    void bumpFinished(Int64 ticket, std::mutex & mu, std::condition_variable & cv, Int64 & finished)
+    void bumpFinished(Int64 ticket, std::mutex & mu, std::vector<std::condition_variable> & cvs, Int64 & finished_ticket)
     {
+        Int64 pos = ticket % capacity;
+        auto & cv = cvs[pos];
         {
             std::unique_lock lock(mu);
-            cv.wait(lock, [&] { return finished == ticket || isCancelled(); });
-            ++finished; // when cancelled it's ok to bump finished.
+            cv.wait(lock, [&] { return finished_ticket == ticket || cancelled; });
+            ++finished_ticket; // when cancelled it's ok to bump finished.
         }
-        cv.notify_all();
+        Int64 next_pos = (pos + 1) % capacity;
+        cvs[next_pos].notify_all();
     }
 
     void finishRead(Int64 ticket)
     {
-        bumpFinished(ticket, read_mu, read_cv, read_finished);
+        bumpFinished(ticket, read_mu, read_finished_cvs, read_finished);
+        read_cv.notify_one();
     }
 
     void finishWrite(Int64 ticket)
     {
-        bumpFinished(ticket, write_mu, write_cv, write_finished);
-    }
-
-    bool finishedOrCancelled() const
-    {
-        return isFinished() || isCancelled();
+        bumpFinished(ticket, write_mu, write_finished_cvs, write_finished);
+        write_cv.notify_one();
     }
 
     /// must call under protection of `read_mu`.
-    bool readPassFinishedPoint() const
+    bool readFinished() const
     {
-        return isFinished() && read_allocated > write_allocated;
-    }
-
-    bool isFinished() const
-    {
-        return finished.load(std::memory_order_relaxed);
-    }
-
-    bool isCancelled() const
-    {
-        return cancelled.load(std::memory_order_relaxed);
+        /// it's safe to visit write_allocated here
+        /// since after `finished` is set to true `write_allocated` won't change
+        /// and the change of `finished` is always under `read_mu`.
+        return finished && read_allocated >= write_allocated;
     }
 private:
     const Int64 capacity;
@@ -433,10 +444,12 @@ private:
     Int64 read_allocated = 0;
     Int64 write_finished = 0;
     Int64 write_allocated = 0;
-    std::atomic<bool> cancelled = false;
-    std::atomic<bool> finished = false;
+    bool cancelled = false;
+    bool finished = false;
 
     std::vector<SingleElementQueue<T>> objs;
+    std::vector<std::condition_variable> read_finished_cvs;
+    std::vector<std::condition_variable> write_finished_cvs;
 };
 
 template <typename RPCContext>
