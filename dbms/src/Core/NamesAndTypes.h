@@ -18,7 +18,7 @@ struct NameAndTypePair
     String name;
     DataTypePtr type;
 
-    NameAndTypePair() {}
+    NameAndTypePair() = default;
     NameAndTypePair(const String & name_, const DataTypePtr & type_) : name(name_), type(type_) {}
 
     bool operator<(const NameAndTypePair & rhs) const
@@ -39,7 +39,7 @@ class NamesAndTypesList : public std::list<NameAndTypePair>
 public:
     using Iterator = std::list<NameAndTypePair>::iterator;
 
-    NamesAndTypesList() {}
+    NamesAndTypesList() = default;
 
     NamesAndTypesList(std::initializer_list<NameAndTypePair> init) : std::list<NameAndTypePair>(init) {}
 

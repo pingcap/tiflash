@@ -60,10 +60,10 @@ public:
         , scale(scale_)
     {}
 
-    operator T() const { return dec; }
+    operator T() const { return dec; } // NOLINT(google-explicit-constructor)
 
     template <typename U, std::enable_if_t<std::is_floating_point_v<U>> * = nullptr>
-    operator U() const
+    operator U() const // NOLINT(google-explicit-constructor)
     {
         U v = static_cast<U>(dec.value);
         for (ScaleType i = 0; i < scale; i++)
@@ -74,7 +74,7 @@ public:
     }
 
     template <typename U, std::enable_if_t<std::is_integral_v<U> || std::is_same_v<U, Int128> || std::is_same_v<U, Int256>> * = nullptr>
-    operator U() const
+    operator U() const // NOLINT(google-explicit-constructor)
     {
         Int256 v = dec.value;
         for (ScaleType i = 0; i < scale; i++)
@@ -262,7 +262,7 @@ public:
     Field(Field && rhs) { create(std::move(rhs)); }
 
     template <typename T>
-    Field(T && rhs, std::integral_constant<int, Field::TypeToEnum<std::decay_t<T>>::value> * = nullptr)
+    Field(T && rhs, std::integral_constant<int, Field::TypeToEnum<std::decay_t<T>>::value> * = nullptr) // NOLINT(google-explicit-constructor)
     {
         createConcrete(std::forward<T>(rhs));
     }
@@ -300,33 +300,35 @@ public:
         return *this;
     }
 
-    Field & operator=(Field && rhs)
+    template <class T>
+    Field & operator=(T && rhs)
     {
-        if (this != &rhs)
+        if constexpr (std::is_same_v<std::decay_t<T>, Field>)
         {
-            if (which != rhs.which)
+            if (this != &rhs)
             {
-                destroy();
-                create(std::move(rhs));
+                if (which != rhs.which)
+                {
+                    destroy();
+                    create(std::forward<T>(rhs));
+                }
+                else
+                    assign(std::forward<T>(rhs));
             }
-            else
-                assign(std::move(rhs));
-        }
-        return *this;
-    }
-
-    template <typename T>
-    std::enable_if_t<!std::is_same_v<std::decay_t<T>, Field>, Field &> operator=(T && rhs)
-    {
-        if (which != TypeToEnum<std::decay_t<T>>::value)
-        {
-            destroy();
-            createConcrete(std::forward<T>(rhs));
+            return *this;
         }
         else
-            assignConcrete(std::forward<T>(rhs));
+        {
+            if (which != TypeToEnum<std::decay_t<T>>::value)
+            {
+                destroy();
+                createConcrete(std::forward<T>(rhs));
+            }
+            else
+                assignConcrete(std::forward<T>(rhs));
 
-        return *this;
+            return *this;
+        }
     }
 
     ~Field() { destroy(); }

@@ -1,20 +1,18 @@
 #pragma once
 
-#include <vector>
-#include <list>
-#include <map>
-#include <initializer_list>
-
 #include <Core/BlockInfo.h>
-#include <Core/NamesAndTypes.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Core/NamesAndTypes.h>
 
+#include <initializer_list>
+#include <list>
+#include <map>
+#include <vector>
 
 
 namespace DB
 {
-
 /** Container for set of columns for bunch of rows in memory.
   * This is unit of data processing.
   * Also contains metadata - data types of columns and their names
@@ -38,7 +36,7 @@ public:
 
     Block() = default;
     Block(std::initializer_list<ColumnWithTypeAndName> il);
-    Block(const ColumnsWithTypeAndName & data_);
+    explicit Block(const ColumnsWithTypeAndName & data_);
 
     /// insert the column at the specified position
     void insert(size_t position, const ColumnWithTypeAndName & elem);
@@ -97,13 +95,13 @@ public:
     /// Approximate number of allocated bytes in memory - for profiling and limits.
     size_t allocatedBytes() const;
 
-    operator bool() const { return !data.empty(); }
+    explicit operator bool() const { return !data.empty(); }
     bool operator!() const { return data.empty(); }
 
     /** Get a list of column names separated by commas. */
     std::string dumpNames() const;
 
-     /** List of names, types and lengths of columns. Designed for debugging. */
+    /** List of names, types and lengths of columns. Designed for debugging. */
     std::string dumpStructure() const;
 
     /** Get the same block, but empty. */
@@ -157,8 +155,8 @@ void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out
   */
 struct BlockExtraInfo
 {
-    BlockExtraInfo() {}
-    operator bool() const { return is_valid; }
+    BlockExtraInfo() = default;
+    explicit operator bool() const { return is_valid; }
     bool operator!() const { return !is_valid; }
 
     std::string host;
@@ -169,4 +167,4 @@ struct BlockExtraInfo
     bool is_valid = false;
 };
 
-}
+} // namespace DB

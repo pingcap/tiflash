@@ -20,7 +20,7 @@ class OrderedNameSet : public Names
 public:
     bool has(const std::string & name) const
     {
-        for (auto it : *this)
+        for (const auto& it : *this)
             if (it == name)
                 return true;
         return false;

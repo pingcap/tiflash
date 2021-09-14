@@ -113,7 +113,7 @@ public:
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
     void setTotals(const Block & block) { totals = block; }
-    bool hasTotals() const { return totals; };
+    bool hasTotals() const { return static_cast<bool>(totals); };
 
     void joinTotals(Block & block) const;
 

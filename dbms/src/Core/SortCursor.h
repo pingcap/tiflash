@@ -87,12 +87,12 @@ struct SortCursor
 {
     SortCursorImpl * impl = nullptr;
 
-    SortCursor() {}
-    SortCursor(SortCursorImpl * impl_) : impl(impl_) {}
-    SortCursorImpl * operator-> () { return impl; }
+    SortCursor() = default;
+    explicit SortCursor(SortCursorImpl * impl_) : impl(impl_) {}
+    SortCursorImpl * operator-> () { return impl; }  // NOLINT(readability-make-member-function-const)
     const SortCursorImpl * operator-> () const { return impl; }
 
-    bool none() { return !impl; }
+    bool none() const { return !impl; }
     bool operator==(const SortCursor & other) const { return impl == other.impl; }
     bool operator!=(const SortCursor & other) const { return impl != other.impl; }
 
@@ -180,12 +180,12 @@ struct SortCursorWithCollation
 {
     SortCursorImpl * impl = nullptr;
 
-    SortCursorWithCollation() {}
-    SortCursorWithCollation(SortCursorImpl * impl_) : impl(impl_) {}
-    SortCursorImpl * operator-> () { return impl; }
+    SortCursorWithCollation() = default;
+    explicit SortCursorWithCollation(SortCursorImpl * impl_) : impl(impl_) {}
+    SortCursorImpl * operator-> () { return impl; } // NOLINT(readability-make-member-function-const)
     const SortCursorImpl * operator-> () const { return impl; }
 
-    bool none() { return !impl; }
+    bool none() const { return !impl; }
     bool operator==(const SortCursor & other) const { return impl == other.impl; }
     bool operator!=(const SortCursor & other) const { return impl != other.impl; }
 
