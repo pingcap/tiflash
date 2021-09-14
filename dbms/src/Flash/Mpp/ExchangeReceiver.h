@@ -256,6 +256,17 @@ struct SingleElementQueue
     std::unique_ptr<T> obj;
     std::mutex mu;
     std::condition_variable cv;
+    std::atomic<bool> cancelled = false;
+
+    bool isCancelled() const
+    {
+        return cancelled.load(std::memory_order_relaxed);
+    }
+
+    void cancel()
+    {
+        cancelled.store(true, std::memory_order_relaxed);
+    }
 };
 
 template <typename T>
@@ -304,41 +315,70 @@ public:
 
     void cancel()
     {
+        bool changed = false;
         {
             std::unique_lock read_lock(read_mu);
             std::unique_lock write_lock(write_mu);
             if (!finished && !cancelled)
+            {
                 cancelled = true;
+                changed = true;
+            }
         }
-        read_cv.notify_all();
-        write_cv.notify_all();
-        for (auto & obj : objs)
-            obj.cv.notify_all();
+        if (changed)
+        {
+            read_cv.notify_all();
+            write_cv.notify_all();
+            for (auto & obj : objs)
+            {
+                obj.cancel();
+                obj.cv.notify_all();
+            }
+            for (auto & cv : read_finished_cvs)
+                cv.notify_all();
+            for (auto & cv : write_finished_cvs)
+                cv.notify_all();
+        }
     }
 
     void finish()
     {
+        bool changed = false;
+        Int64 local_read_allocated = -1;
+        Int64 local_write_allocated = -1;
         {
             std::unique_lock read_lock(read_mu);
             std::unique_lock write_lock(write_mu);
             if (!finished && !cancelled)
+            {
                 finished = true;
+                changed = true;
+                local_read_allocated = read_allocated;
+                local_write_allocated = write_allocated;
+            }
         }
-        read_cv.notify_all();
-        write_cv.notify_all();
-        for (auto & obj : objs)
-            obj.cv.notify_all();
-        for (auto & cv : read_finished_cvs)
-            cv.notify_all();
-        for (auto & cv : write_finished_cvs)
-            cv.notify_all();
+        if (changed)
+        {
+            /// cancel all readers waiting for tickets that won't check forever
+            for (Int64 i = local_write_allocated; i < local_read_allocated; ++i)
+                objs[i % capacity].cancel();
+
+            read_cv.notify_all();
+            write_cv.notify_all();
+            for (auto & obj : objs)
+                obj.cv.notify_all();
+            for (auto & cv : read_finished_cvs)
+                cv.notify_all();
+            for (auto & cv : write_finished_cvs)
+                cv.notify_all();
+        }
     }
 
     Status getStatus() const
     {
         {
             std::unique_lock read_lock(read_mu);
-            std::unique_lock write_lock(read_mu);
+            std::unique_lock write_lock(write_mu);
             if (unlikely(cancelled))
                 return CANCELLED;
             if (unlikely(finished))
@@ -377,7 +417,7 @@ private:
         std::unique_ptr<T> res;
         {
             std::unique_lock lock(queue.mu);
-            queue.cv.wait(lock, [&] { return queue.obj || cancelled; });
+            queue.cv.wait(lock, [&] { return queue.obj || queue.isCancelled(); });
             if (queue.obj)
                 res = std::move(queue.obj);
         }
@@ -391,7 +431,7 @@ private:
         SingleElementQueue<T> & queue = objs[ticket % capacity];
         {
             std::unique_lock lock(queue.mu);
-            queue.cv.wait(lock, [&] { return !queue.obj || cancelled; });
+            queue.cv.wait(lock, [&] { return !queue.obj || queue.isCancelled(); });
             if (queue.obj) /// cancelled
                 return false;
             queue.obj = std::move(v);
