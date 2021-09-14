@@ -503,7 +503,7 @@ int MyTimeBase::weekDay() const
 bool checkFormatValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
     return (year >= 0 && year <= 9999) && (month >= 1 && month <= 12) && (day >= 1 && day <= 31) && (hour >= 0 && hour <= 23) && (minute >= 0 && minute <= 59)
-           && (second >= 0 && second <= 59);
+        && (second >= 0 && second <= 59);
 }
 
 Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t fsp)
