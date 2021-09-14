@@ -17,8 +17,8 @@ add_check(gtests_page_storage)
 
 # non googletest
 add_headers_and_sources(page_stress_testing stress)
-add_headers_and_sources(page_stress_testing_worload stress/workload)
-add_executable(page_stress_testing EXCLUDE_FROM_ALL ${page_stress_testing_sources} ${page_stress_testing_worload_sources} )
+add_headers_and_sources(page_stress_testing stress/workload)
+add_executable(page_stress_testing EXCLUDE_FROM_ALL ${page_stress_testing_sources})
 target_link_libraries(page_stress_testing page_storage)
 target_include_directories(page_stress_testing PRIVATE stress)
 target_compile_options(page_stress_testing PRIVATE -Wno-format -lc++) # turn off printf format check

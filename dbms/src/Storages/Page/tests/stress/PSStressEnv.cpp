@@ -1,33 +1,18 @@
 
-#include "PSStressEnv.h"
-
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <PSStressEnv.h>
 #include <PSWorkload.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <signal.h>
 
 #include <boost/program_options.hpp>
-
-int StressEnvStatus::isSuccess()
-{
-    return status > 0 ? 0 : (int)status;
-}
-
-bool StressEnvStatus::stat()
-{
-    return status == STATUS_LOOP;
-}
-
-void StressEnvStatus::setStat(enum StressEnvStat status_)
-{
-    status = status_;
-}
 
 Poco::Logger * StressEnv::logger;
 void StressEnv::initGlobalLogger()
@@ -58,7 +43,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
         ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable") //
         ("status_interval,S", value<UInt32>()->default_value(1), "Status statistics interval. 0 means no statistics") //
-        ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially,example -M 0x2"); //
+        ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially, example -M 2"); //
 
     po::variables_map options;
     po::store(po::parse_command_line(argc, argv, desc), options);
