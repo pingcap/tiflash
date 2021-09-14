@@ -20,7 +20,8 @@ private:
         return fmt::format("Some of options will be ignored"
                            "`paths` will only used first one. which is {}. Data will store in {}"
                            "Please cleanup folder after this test."
-                           "The current workload will  // todo",
+                           "The current workload will elapse near 60 seconds and generator 100 snapshot in memory."
+                           "Then do NORMAL GC + SKIP GC at the last.",
                            options.paths[0],
                            options.paths[0] + "/" + name());
     }
