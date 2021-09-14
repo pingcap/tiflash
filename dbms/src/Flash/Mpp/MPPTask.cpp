@@ -45,7 +45,7 @@ String MPPTaskId::toString() const
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
-    , log(std::make_shared<LogWithPrefix>(&Poco::Logger::get(fmt::format("task {}", meta_.task_id())), fmt::format("[task {} query {}]", meta.task_id(), meta.start_ts())))
+    , log(std::make_shared<LogWithPrefix>(&Poco::Logger::get("MPPTask"), fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
@@ -56,11 +56,11 @@ MPPTask::~MPPTask()
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
     current_memory_tracker = memory_tracker;
-    closeAllTunnel("");
+    closeAllTunnels("");
     LOG_DEBUG(log, "finish MPPTask: " << id.toString());
 }
 
-void MPPTask::closeAllTunnel(const String & reason)
+void MPPTask::closeAllTunnels(const String & reason)
 {
     for (auto & it : tunnel_map)
     {
@@ -305,12 +305,12 @@ void MPPTask::preprocess()
 
 void MPPTask::runImpl()
 {
-    auto old_status = static_cast<Int32>(INITIALIZING);
-    if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
+    if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
+
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
@@ -398,14 +398,18 @@ void MPPTask::runImpl()
     }
     else
     {
-        writeErrToAllTunnel(err_msg);
+        writeErrToAllTunnels(err_msg);
     }
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     unregisterTask();
-    status = FINISHED;
+
+    if (switchStatus(RUNNING, FINISHED))
+        LOG_INFO(log, "finish task");
+    else
+        LOG_WARNING(log, "finish task which was cancelled before");
 }
 
-void MPPTask::writeErrToAllTunnel(const String & e)
+void MPPTask::writeErrToAllTunnels(const String & e)
 {
     for (auto & it : tunnel_map)
     {
@@ -424,23 +428,36 @@ void MPPTask::writeErrToAllTunnel(const String & e)
 
 void MPPTask::cancel(const String & reason)
 {
-    auto current_status = status.exchange(CANCELLED);
-    if (current_status == FINISHED || current_status == CANCELLED)
-    {
-        if (current_status == FINISHED)
-            status = FINISHED;
-        return;
-    }
     LOG_WARNING(log, "Begin cancel task: " + id.toString());
-    /// step 1. cancel query streams if it is running
-    if (current_status == RUNNING)
-        context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
-    /// step 2. write Error msg and close the tunnel.
-    /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
-    /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
-    /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
-    closeAllTunnel(reason);
-    LOG_WARNING(log, "Finish cancel task: " + id.toString());
+    while (true)
+    {
+        auto previous_status = status.load();
+        if (previous_status == FINISHED || previous_status == CANCELLED)
+        {
+            LOG_WARNING(log, "task already " << (previous_status == FINISHED ? "finished" : "cancelled"));
+            return;
+        }
+        else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, CANCELLED))
+        {
+            closeAllTunnels(reason);
+            unregisterTask();
+            LOG_WARNING(log, "Finish cancel task from uninitialized");
+            return;
+        }
+        else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
+        {
+            context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
+            closeAllTunnels(reason);
+            /// runImpl is running, leave remaining work to runImpl
+            LOG_WARNING(log, "Finish cancel task from running");
+            return;
+        }
+    }
+}
+
+bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
+{
+    return status.compare_exchange_strong(from, to);
 }
 
 } // namespace DB

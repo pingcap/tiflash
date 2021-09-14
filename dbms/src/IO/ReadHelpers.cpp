@@ -1,24 +1,23 @@
-#include <Core/Defines.h>
-#include <Common/hex.h>
 #include <Common/PODArray.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/WriteHelpers.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/readFloatText.h>
+#include <Common/hex.h>
+#include <Core/Defines.h>
 #include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+#include <IO/readFloatText.h>
 #include <common/find_symbols.h>
 #include <stdlib.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
-    extern const int CANNOT_PARSE_ESCAPE_SEQUENCE;
-    extern const int CANNOT_PARSE_QUOTED_STRING;
-    extern const int INCORRECT_DATA;
-}
+extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
+extern const int CANNOT_PARSE_ESCAPE_SEQUENCE;
+extern const int CANNOT_PARSE_QUOTED_STRING;
+extern const int INCORRECT_DATA;
+} // namespace ErrorCodes
 
 template <typename IteratorSrc, typename IteratorDst>
 void parseHex(IteratorSrc src, IteratorDst dst, const size_t num_bytes)
@@ -61,7 +60,7 @@ void parseUUID(const UInt8 * src36, std::reverse_iterator<UInt8 *> dst16)
 static void __attribute__((__noinline__)) throwAtAssertionFailed(const char * s, ReadBuffer & buf)
 {
     WriteBufferFromOwnString out;
-    out <<  "Cannot parse input: expected " << escape << s;
+    out << "Cannot parse input: expected " << escape << s;
 
     if (buf.eof())
         out << " at end of stream.";
@@ -163,7 +162,7 @@ static void appendToStringOrVector(T & s, const char * begin, const char * end)
 template <>
 inline void appendToStringOrVector(PaddedPODArray<UInt8> & s, const char * begin, const char * end)
 {
-    s.insert(begin, end);    /// TODO memcpySmall
+    s.insert(begin, end); /// TODO memcpySmall
 }
 
 
@@ -175,7 +174,7 @@ void readStringInto(Vector & s, ReadBuffer & buf)
         const char * next_pos = find_first_symbols<'\t', '\n'>(buf.position(), buf.buffer().end());
 
         appendToStringOrVector(s, buf.position(), next_pos);
-        buf.position() += next_pos - buf.position();    /// Code looks complicated, because "buf.position() = next_pos" doens't work due to const-ness.
+        buf.position() += next_pos - buf.position(); /// Code looks complicated, because "buf.position() = next_pos" doens't work due to const-ness.
 
         if (buf.hasPendingData())
             return;
@@ -252,8 +251,7 @@ static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
 {
     static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
-    auto error = [](const char * message, int code)
-    {
+    auto error = [](const char * message, int code) {
         if (throw_exception)
             throw Exception(message, code);
         return ReturnType(false);
@@ -265,96 +263,96 @@ static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
 
     switch (*buf.position())
     {
-        case '"':
-            s.push_back('"');
-            break;
-        case '\\':
-            s.push_back('\\');
-            break;
-        case '/':
-            s.push_back('/');
-            break;
-        case 'b':
-            s.push_back('\b');
-            break;
-        case 'f':
-            s.push_back('\f');
-            break;
-        case 'n':
-            s.push_back('\n');
-            break;
-        case 'r':
-            s.push_back('\r');
-            break;
-        case 't':
-            s.push_back('\t');
-            break;
-        case 'u':
+    case '"':
+        s.push_back('"');
+        break;
+    case '\\':
+        s.push_back('\\');
+        break;
+    case '/':
+        s.push_back('/');
+        break;
+    case 'b':
+        s.push_back('\b');
+        break;
+    case 'f':
+        s.push_back('\f');
+        break;
+    case 'n':
+        s.push_back('\n');
+        break;
+    case 'r':
+        s.push_back('\r');
+        break;
+    case 't':
+        s.push_back('\t');
+        break;
+    case 'u':
+    {
+        ++buf.position();
+
+        char hex_code[4];
+        if (4 != buf.read(hex_code, 4))
+            return error("Cannot parse escape sequence: less than four bytes after \\u", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
+
+        /// \u0000 - special case
+        if (0 == memcmp(hex_code, "0000", 4))
         {
-            ++buf.position();
+            s.push_back(0);
+            return ReturnType(true);
+        }
 
-            char hex_code[4];
-            if (4 != buf.read(hex_code, 4))
-                return error("Cannot parse escape sequence: less than four bytes after \\u", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
+        UInt16 code_point = unhex4(hex_code);
 
-            /// \u0000 - special case
-            if (0 == memcmp(hex_code, "0000", 4))
+        if (code_point <= 0x7F)
+        {
+            s.push_back(code_point);
+        }
+        else if (code_point <= 0x07FF)
+        {
+            s.push_back(((code_point >> 6) & 0x1F) | 0xC0);
+            s.push_back((code_point & 0x3F) | 0x80);
+        }
+        else
+        {
+            /// Surrogate pair.
+            if (code_point >= 0xD800 && code_point <= 0xDBFF)
             {
-                s.push_back(0);
-                return ReturnType(true);
-            }
+                if (!checkString("\\u", buf))
+                    return error("Cannot parse escape sequence: missing second part of surrogate pair", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
 
-            UInt16 code_point = unhex4(hex_code);
+                char second_hex_code[4];
+                if (4 != buf.read(second_hex_code, 4))
+                    return error("Cannot parse escape sequence: less than four bytes after \\u of second part of surrogate pair",
+                                 ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
 
-            if (code_point <= 0x7F)
-            {
-                s.push_back(code_point);
-            }
-            else if (code_point <= 0x07FF)
-            {
-                s.push_back(((code_point >> 6) & 0x1F) | 0xC0);
-                s.push_back((code_point & 0x3F) | 0x80);
+                UInt16 second_code_point = unhex4(second_hex_code);
+
+                if (second_code_point >= 0xDC00 && second_code_point <= 0xDFFF)
+                {
+                    UInt32 full_code_point = 0x10000 + (code_point - 0xD800) * 1024 + (second_code_point - 0xDC00);
+
+                    s.push_back(((full_code_point >> 18) & 0x07) | 0xF0);
+                    s.push_back(((full_code_point >> 12) & 0x3F) | 0x80);
+                    s.push_back(((full_code_point >> 6) & 0x3F) | 0x80);
+                    s.push_back((full_code_point & 0x3F) | 0x80);
+                }
+                else
+                    return error("Incorrect surrogate pair of unicode escape sequences in JSON", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
             }
             else
             {
-                /// Surrogate pair.
-                if (code_point >= 0xD800 && code_point <= 0xDBFF)
-                {
-                    if (!checkString("\\u", buf))
-                        return error("Cannot parse escape sequence: missing second part of surrogate pair", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
-
-                    char second_hex_code[4];
-                    if (4 != buf.read(second_hex_code, 4))
-                        return error("Cannot parse escape sequence: less than four bytes after \\u of second part of surrogate pair",
-                            ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
-
-                    UInt16 second_code_point = unhex4(second_hex_code);
-
-                    if (second_code_point >= 0xDC00 && second_code_point <= 0xDFFF)
-                    {
-                        UInt32 full_code_point = 0x10000 + (code_point - 0xD800) * 1024 + (second_code_point - 0xDC00);
-
-                        s.push_back(((full_code_point >> 18) & 0x07) | 0xF0);
-                        s.push_back(((full_code_point >> 12) & 0x3F) | 0x80);
-                        s.push_back(((full_code_point >> 6) & 0x3F) | 0x80);
-                        s.push_back((full_code_point & 0x3F) | 0x80);
-                    }
-                    else
-                        return error("Incorrect surrogate pair of unicode escape sequences in JSON", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
-                }
-                else
-                {
-                    s.push_back(((code_point >> 12) & 0x0F) | 0xE0);
-                    s.push_back(((code_point >> 6) & 0x3F) | 0x80);
-                    s.push_back((code_point & 0x3F) | 0x80);
-                }
+                s.push_back(((code_point >> 12) & 0x0F) | 0xE0);
+                s.push_back(((code_point >> 6) & 0x3F) | 0x80);
+                s.push_back((code_point & 0x3F) | 0x80);
             }
-
-            return ReturnType(true);
         }
-        default:
-            s.push_back(*buf.position());
-            break;
+
+        return ReturnType(true);
+    }
+    default:
+        s.push_back(*buf.position());
+        break;
     }
 
     ++buf.position();
@@ -370,7 +368,7 @@ void readEscapedStringInto(Vector & s, ReadBuffer & buf)
         const char * next_pos = find_first_symbols<'\t', '\n', '\\'>(buf.position(), buf.buffer().end());
 
         appendToStringOrVector(s, buf.position(), next_pos);
-        buf.position() += next_pos - buf.position();    /// Code looks complicated, because "buf.position() = next_pos" doens't work due to const-ness.
+        buf.position() += next_pos - buf.position(); /// Code looks complicated, because "buf.position() = next_pos" doens't work due to const-ness.
 
         if (!buf.hasPendingData())
             continue;
@@ -404,7 +402,7 @@ static void readAnyQuotedStringInto(Vector & s, ReadBuffer & buf)
 {
     if (buf.eof() || *buf.position() != quote)
         throw Exception("Cannot parse quoted string: expected opening quote",
-            ErrorCodes::CANNOT_PARSE_QUOTED_STRING);
+                        ErrorCodes::CANNOT_PARSE_QUOTED_STRING);
     ++buf.position();
 
     while (!buf.eof())
@@ -436,7 +434,7 @@ static void readAnyQuotedStringInto(Vector & s, ReadBuffer & buf)
     }
 
     throw Exception("Cannot parse quoted string: expected closing quote",
-        ErrorCodes::CANNOT_PARSE_QUOTED_STRING);
+                    ErrorCodes::CANNOT_PARSE_QUOTED_STRING);
 }
 
 template <bool enable_sql_style_quoting, typename Vector>
@@ -551,7 +549,7 @@ void readCSVStringInto(Vector & s, ReadBuffer & buf, const char delimiter)
         {
             const char * next_pos = buf.position();
             while (next_pos < buf.buffer().end()
-                && *next_pos != delimiter && *next_pos != '\r' && *next_pos != '\n')    /// NOTE You can make a SIMD version.
+                   && *next_pos != delimiter && *next_pos != '\r' && *next_pos != '\n') /// NOTE You can make a SIMD version.
                 ++next_pos;
 
             appendToStringOrVector(s, buf.position(), next_pos);
@@ -566,7 +564,7 @@ void readCSVStringInto(Vector & s, ReadBuffer & buf, const char delimiter)
               */
             size_t size = s.size();
             while (size > 0
-                && (s[size - 1] == ' ' || s[size - 1] == '\t'))
+                   && (s[size - 1] == ' ' || s[size - 1] == '\t'))
                 --size;
 
             s.resize(size);
@@ -589,8 +587,7 @@ ReturnType readJSONStringInto(Vector & s, ReadBuffer & buf)
 {
     static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
-    auto error = [](const char * message, int code)
-    {
+    auto error = [](const char * message, int code) {
         if (throw_exception)
             throw Exception(message, code);
         return ReturnType(false);
@@ -803,7 +800,8 @@ void readException(Exception & e, ReadBuffer & buf, const String & additional_me
         out << name << ". ";
 
     out << message
-        << ". Stack trace:\n\n" << stack_trace;
+        << ". Stack trace:\n\n"
+        << stack_trace;
 
     if (has_nested)
     {
@@ -872,4 +870,4 @@ void skipToUnescapedNextLineOrEOF(ReadBuffer & buf)
     }
 }
 
-}
+} // namespace DB

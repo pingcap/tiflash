@@ -1,37 +1,31 @@
-#include <errno.h>
-#include <time.h>
-#include <optional>
+#include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
-#include <Common/Exception.h>
-#include <Common/CurrentMetrics.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteHelpers.h>
+#include <errno.h>
+#include <time.h>
+
+#include <optional>
 
 
 namespace ProfileEvents
 {
-    extern const Event ReadBufferFromFileDescriptorRead;
-    extern const Event ReadBufferFromFileDescriptorReadFailed;
-    extern const Event ReadBufferFromFileDescriptorReadBytes;
-    extern const Event Seek;
-}
-
-namespace CurrentMetrics
-{
-    extern const Metric Read;
-}
+extern const Event ReadBufferFromFileDescriptorRead;
+extern const Event ReadBufferFromFileDescriptorReadFailed;
+extern const Event ReadBufferFromFileDescriptorReadBytes;
+extern const Event Seek;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int CANNOT_SEEK_THROUGH_FILE;
-    extern const int CANNOT_SELECT;
-}
+extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int CANNOT_SEEK_THROUGH_FILE;
+extern const int CANNOT_SELECT;
+} // namespace ErrorCodes
 
 
 std::string ReadBufferFromFileDescriptor::getFileName() const
@@ -53,7 +47,6 @@ bool ReadBufferFromFileDescriptor::nextImpl()
 
         ssize_t res = 0;
         {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
             res = ::read(fd, internal_buffer.begin(), internal_buffer.size());
         }
         if (!res)
@@ -124,7 +117,8 @@ off_t ReadBufferFromFileDescriptor::doSeek(off_t offset, int whence)
     }
 }
 
-off_t ReadBufferFromFileDescriptor::doSeekInFile(off_t offset, int whence) {
+off_t ReadBufferFromFileDescriptor::doSeekInFile(off_t offset, int whence)
+{
     return ::lseek(fd, offset, whence);
 }
 
@@ -135,7 +129,7 @@ bool ReadBufferFromFileDescriptor::poll(size_t timeout_microseconds)
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(fd, &fds);
-    timeval timeout = { time_t(timeout_microseconds / 1000000), suseconds_t(timeout_microseconds % 1000000) };
+    timeval timeout = {time_t(timeout_microseconds / 1000000), suseconds_t(timeout_microseconds % 1000000)};
 
     int res = select(1, &fds, 0, 0, &timeout);
 
@@ -145,4 +139,4 @@ bool ReadBufferFromFileDescriptor::poll(size_t timeout_microseconds)
     return res > 0;
 }
 
-}
+} // namespace DB

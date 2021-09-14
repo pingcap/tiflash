@@ -12,6 +12,8 @@
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #endif
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+
 #include <boost/multiprecision/cpp_int.hpp>
 #pragma GCC diagnostic pop
 

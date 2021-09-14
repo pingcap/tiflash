@@ -1,13 +1,13 @@
 #pragma once
 
-#include <Poco/File.h>
+//#include <Poco/File.h>
 #include <Server/IServer.h>
 #include <common/logger_useful.h>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+//#include <boost/algorithm/string.hpp>
+//#include <boost/algorithm/string/predicate.hpp>
 #include <boost/noncopyable.hpp>
-#include <fstream>
+//#include <fstream>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -32,6 +32,7 @@ public:
 
     ::grpc::Status server_info(::grpc::ServerContext * grpc_context, const ::diagnosticspb::ServerInfoRequest * request, ::diagnosticspb::ServerInfoResponse * response) override;
 
+    /*
 public:
     struct AvgLoad
     {
@@ -196,7 +197,7 @@ public:
     void hardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void systemInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void processInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
-
+    */
 private:
     Poco::Logger * log;
 

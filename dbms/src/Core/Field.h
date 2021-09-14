@@ -41,6 +41,11 @@ bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
 template <typename T>
 bool decimalLessOrEqual(T x, T y, UInt32 x_scale, UInt32 y_scale);
 
+#pragma GCC diagnostic push
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#endif
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized" // this one should be a false positive
 template <typename T>
 class DecimalField
 {
@@ -156,10 +161,10 @@ public:
 
 
 private:
-    T dec;
-    UInt32 scale;
+    T dec{};
+    UInt32 scale{};
 };
-
+#pragma GCC diagnostic pop
 /** Discriminated union of several types.
   * Made for replacement of `boost::variant`
   *  is not generalized,
@@ -519,6 +524,11 @@ private:
 
 
     /// Assuming there was no allocated state or it was deallocated (see destroy).
+#pragma GCC diagnostic push
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#endif
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
     template <typename T>
     void createConcrete(T && x)
     {
@@ -527,6 +537,7 @@ private:
         new (ptr) JustT(std::forward<T>(x));
         which = TypeToEnum<JustT>::value;
     }
+#pragma GCC diagnostic pop
 
     /// Assuming same types.
     template <typename T>

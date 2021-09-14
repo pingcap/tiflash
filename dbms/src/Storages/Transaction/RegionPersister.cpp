@@ -208,7 +208,11 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 bool RegionPersister::gc()
 {
     if (page_storage)
+    {
+        PageStorage::Config config = getConfigFromSettings(global_context.getSettingsRef());
+        page_storage->reloadSettings(config);
         return page_storage->gc();
+    }
     else
         return stable_page_storage->gc();
 }

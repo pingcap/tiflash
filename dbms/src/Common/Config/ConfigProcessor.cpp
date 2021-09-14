@@ -3,15 +3,15 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
-
-#include <Common/Config/cpptoml.h>
-
+#include <cpptoml.h>
 #if !__clang__
 #pragma GCC diagnostic pop
 #endif
 
+#include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/TOMLConfiguration.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <string.h>
 #include <sys/utsname.h>
 
 #include <algorithm>
@@ -19,8 +19,6 @@
 #include <cstring>
 #include <functional>
 #include <iostream>
-
-#include "ConfigProcessor.h"
 
 #define PREPROCESSED_SUFFIX "-preprocessed"
 

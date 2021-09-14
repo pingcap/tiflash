@@ -8,6 +8,26 @@ error = '''
 Number of columns to read exceeds limit.
 '''
 
+["FLASH:Checksum:DataCorruption"]
+error = '''
+Checksum hash mismatch was detected.
+'''
+
+["FLASH:Checksum:IOFailure"]
+error = '''
+There are failed IO operations during checksum loading or writing.
+'''
+
+["FLASH:Checksum:Internal"]
+error = '''
+Checksum internal error.
+'''
+
+["FLASH:Checksum:Missing"]
+error = '''
+Checksum info for disk I/O checksum was expected but not found.
+'''
+
 ["FLASH:Coprocessor:BadRequest"]
 error = '''
 Bad TiDB coprocessor request.
@@ -21,6 +41,11 @@ TiFlash Coprocessor internal error.
 ["FLASH:Coprocessor:MemoryLimitExceeded"]
 error = '''
 TiFlash memory limit exceeded.
+'''
+
+["FLASH:Coprocessor:RegionError"]
+error = '''
+Region is unavailable.
 '''
 
 ["FLASH:Coprocessor:Unimplemented"]
@@ -41,6 +66,11 @@ TiFlash DDL internal error.
 ["FLASH:DDL:MissingTable"]
 error = '''
 Table information is missing in TiFlash or TiKV.
+'''
+
+["FLASH:DDL:StaleSchema"]
+error = '''
+Schema is stale and need to reload all schema.
 '''
 
 ["FLASH:DDL:TableTypeNotMatch"]

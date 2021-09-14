@@ -76,7 +76,12 @@ namespace DB
             "better providing information about your cluster(log, topology information etc.).",                                      \
             "");                                                                                                                     \
         E(MemoryLimitExceeded, "TiFlash memory limit exceeded.",                                                                     \
-            "Please modify the config parameters 'max_memory_usage' and 'max_memory_usage_for_all_queries'.", "");)                  \
+            "Please modify the config parameters 'max_memory_usage' and 'max_memory_usage_for_all_queries'.", "");                   \
+        E(RegionError, "Region is unavailable.",                                                                                     \
+            "A certain Raft Group is not available, such as the number of replicas is not enough.\n"                                 \
+            "This error usually occurs when the TiFlash server is busy or the TiFlash node is down.\n",                              \
+            "");                                                                                                                     \
+        )                                                                                                                            \
     C(Table,                                                                                                                         \
         E(SchemaVersionError, "Schema version of target table in TiFlash is different from that in query.",                          \
             "TiFlash will sync the newest schema from TiDB before processing every query. \n"                                        \

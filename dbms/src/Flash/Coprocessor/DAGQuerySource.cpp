@@ -51,6 +51,12 @@ void DAGQuerySource::analyzeDAGEncodeType()
         encode_type = tipb::EncodeType::TypeCHBlock;
         return;
     }
+    if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
+    {
+        encode_type = dag_request.encode_type();
+        assert(encode_type == tipb::EncodeType::TypeCHBlock);
+        return;
+    }
     encode_type = dag_request.encode_type();
     if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
         encode_type = tipb::EncodeType::TypeDefault;
@@ -75,7 +81,7 @@ String DAGQuerySource::str(size_t)
 
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
-    return std::make_unique<InterpreterDAG>(context, *this);
+    return std::make_unique<InterpreterDAG>(context, *this, log);
 }
 
 } // namespace DB

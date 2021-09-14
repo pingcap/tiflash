@@ -2,32 +2,35 @@
 
 #if !(defined(__FreeBSD__) || defined(__APPLE__) || defined(_MSC_VER))
 
-#include <IO/WriteBufferFromFileBase.h>
-#include <IO/WriteBuffer.h>
-#include <IO/BufferWithOwnMemory.h>
-#include <Core/Defines.h>
 #include <Common/AIO.h>
 #include <Common/CurrentMetrics.h>
+#include <Core/Defines.h>
+#include <IO/BufferWithOwnMemory.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromFileBase.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <string>
-#include <unistd.h>
-#include <fcntl.h>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric OpenFileForWrite;
+extern const Metric OpenFileForWrite;
 }
 
 namespace DB
 {
-
 /** Class for asynchronous data writing.
   */
 class WriteBufferAIO : public WriteBufferFromFileBase
 {
 public:
-    WriteBufferAIO(const std::string & filename_, size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE, int flags_ = -1, mode_t mode_ = 0666,
+    explicit WriteBufferAIO(
+        const std::string & filename_,
+        size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
+        int flags_ = -1,
+        mode_t mode_ = 0666,
         char * existing_memory_ = nullptr);
     ~WriteBufferAIO() override;
 
@@ -98,6 +101,6 @@ private:
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
 };
 
-}
+} // namespace DB
 
 #endif

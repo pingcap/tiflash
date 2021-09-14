@@ -1,14 +1,14 @@
 #pragma once
-#include <functional>
 #include <IO/WriteBuffer.h>
+
+#include <functional>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CURRENT_WRITE_BUFFER_IS_EXHAUSTED;
+extern const int CURRENT_WRITE_BUFFER_IS_EXHAUSTED;
 }
 
 /* The buffer is similar to ConcatReadBuffer, but writes data
@@ -27,9 +27,8 @@ namespace ErrorCodes
 class CascadeWriteBuffer : public WriteBuffer
 {
 public:
-
     using WriteBufferPtrs = std::vector<WriteBufferPtr>;
-    using WriteBufferConstructor = std::function<WriteBufferPtr (const WriteBufferPtr & prev_buf)>;
+    using WriteBufferConstructor = std::function<WriteBufferPtr(const WriteBufferPtr & prev_buf)>;
     using WriteBufferConstructors = std::vector<WriteBufferConstructor>;
 
     CascadeWriteBuffer(WriteBufferPtrs && prepared_sources_, WriteBufferConstructors && lazy_sources_ = {});
@@ -47,7 +46,6 @@ public:
     ~CascadeWriteBuffer();
 
 private:
-
     WriteBuffer * setNextBuffer();
 
     WriteBufferPtrs prepared_sources;
@@ -59,4 +57,4 @@ private:
     size_t curr_buffer_num;
 };
 
-}
+} // namespace DB

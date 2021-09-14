@@ -26,9 +26,8 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, 
     , dag(dag_)
     , keep_session_timezone_info(
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
+    , log(log_)
 {
-    log = log_ != nullptr ? log : std::make_shared<LogWithPrefix>(&Poco::Logger::get("InterpreterDAG"), "");
-
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())
         max_streams = settings.max_threads;
@@ -60,12 +59,11 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     }
     if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        /// use max_streams * 5 as the default receiver buffer size, maybe make it more configurable
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
             context,
             dag_query_block.source->exchange_receiver(),
             dag.getDAGContext().getMPPTaskMeta(),
-            max_streams * 5);
+            max_streams);
     }
 }
 
@@ -84,7 +82,7 @@ BlockIO InterpreterDAG::execute()
     DAGPipeline pipeline;
     pipeline.streams = streams;
 
-    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
+    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
     if (!subqueriesForSets.empty())
     {
         const Settings & settings = context.getSettingsRef();

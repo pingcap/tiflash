@@ -43,6 +43,15 @@ mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_all
 |  3 | NULL                                           |
 +----+------------------------------------------------+
 
+mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(score,nscore order by 1,2, birth,nbirth, name) from t group by id;
++----+-------------------------------------------------------------+
+| id | group_concat(score,nscore order by 1,2, birth,nbirth, name) |
++----+-------------------------------------------------------------+
+|  1 | 1.11.2,1.11.2,1.11.2,1.11.2                                 |
+|  2 | NULL                                                        |
+|  3 | NULL                                                        |
++----+-------------------------------------------------------------+
+
 mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; select id, group_concat(name,nname order by 2.1,1,2) from t group by id;
 +----+-------------------------------------------+
 | id | group_concat(name,nname order by 2.1,1,2) |
@@ -530,7 +539,7 @@ mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_all
 +-----------------------------------------------+
 | group_concat(nname order by 1 separator '#' ) |
 +-----------------------------------------------+
-| 1#11                                          |
+| 11#1                                          |
 +-----------------------------------------------+
 
 mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;set @@group_concat_max_len=0; select group_concat(distinct nname order by 1 separator '#') from t ;

@@ -1,14 +1,13 @@
 #pragma once
 
-#include <string>
-
 #include <Common/BitHelpers.h>
 #include <IO/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 
+#include <string>
+
 namespace DB
 {
-
 /** Writes the data to a string.
   * Note: before using the resulting string, destroy this object.
   * Use 15 as initial_size to fit the local buffer of gcc's std::string.
@@ -23,13 +22,16 @@ class StringHolder
 protected:
     std::string value;
 };
-}
+} // namespace detail
 
 /// Creates the string by itself and allows to get it.
-class WriteBufferFromOwnString : public detail::StringHolder, public WriteBufferFromString
+class WriteBufferFromOwnString : public detail::StringHolder
+    , public WriteBufferFromString
 {
 public:
-    WriteBufferFromOwnString() : WriteBufferFromString(value) {}
+    WriteBufferFromOwnString()
+        : WriteBufferFromString(value)
+    {}
 
     WriteBufferFromOwnString(WriteBufferFromOwnString && rhs) = delete;
     WriteBufferFromOwnString & operator=(WriteBufferFromOwnString && rhs) = delete;
@@ -50,4 +52,4 @@ public:
     }
 };
 
-}
+} // namespace DB
