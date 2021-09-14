@@ -416,7 +416,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
                              EXTRA_HANDLE_COLUMN_INT_TYPE,
                              EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
             // Fill the new handle column with data in column[handle_pos] by applying cast.
-            FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
+            DefaultExecutable(FunctionToInt64::create(db_context)).execute(block, {handle_pos}, block.columns() - 1);
         }
         else
         {

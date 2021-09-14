@@ -344,7 +344,8 @@ private:
         size_t delta_value_space_offset,
         Block && block,
         DeltaTree & delta_tree,
-        const RowKeyRange & relevant_range) const;
+        const RowKeyRange & relevant_range,
+        bool relevant_place) const;
     /// Reference the deletes by delta tree.
     /// Returns fully placed or not. Some rows not match relevant_range are not placed.
     template <bool skippable_place>
@@ -354,7 +355,8 @@ private:
         const DeltaValueReaderPtr & delta_reader,
         const RowKeyRange & delete_range,
         DeltaTree & delta_tree,
-        const RowKeyRange & relevant_range) const;
+        const RowKeyRange & relevant_range,
+        bool relevant_place) const;
 
 private:
     const UInt64 epoch; // After split / merge / merge delta, epoch got increased by 1.

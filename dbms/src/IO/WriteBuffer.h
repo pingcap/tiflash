@@ -1,20 +1,19 @@
 #pragma once
 
-#include <algorithm>
-#include <cstring>
-#include <memory>
-#include <iostream>
-
 #include <Common/Exception.h>
 #include <IO/BufferBase.h>
+
+#include <algorithm>
+#include <cstring>
+#include <iostream>
+#include <memory>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int CANNOT_WRITE_AFTER_END_OF_BUFFER;
+extern const int CANNOT_WRITE_AFTER_END_OF_BUFFER;
 }
 
 
@@ -27,7 +26,9 @@ namespace ErrorCodes
 class WriteBuffer : public BufferBase
 {
 public:
-    WriteBuffer(Position ptr, size_t size) : BufferBase(ptr, size, 0) {}
+    WriteBuffer(Position ptr, size_t size)
+        : BufferBase(ptr, size, 0)
+    {}
     void set(Position ptr, size_t size) { BufferBase::set(ptr, size, 0); }
 
     /** write the data in the buffer (from the beginning of the buffer to the current position);
@@ -101,4 +102,4 @@ private:
 using WriteBufferPtr = std::shared_ptr<WriteBuffer>;
 
 
-}
+} // namespace DB

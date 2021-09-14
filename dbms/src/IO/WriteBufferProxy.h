@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 /*!
  * WriteBufferProxy class. This class provides a transparent layer above the underlying buffer (no extra memcpy and memory allocation).
  * One can utilize this layer to get precise bytes count and other statistics.
@@ -22,7 +21,9 @@ private:
     }
 
 public:
-    explicit WriteBufferProxy(DB::WriteBuffer & out_) : DB::WriteBuffer(nullptr, 0), out(out_)
+    explicit WriteBufferProxy(DB::WriteBuffer & out_)
+        : DB::WriteBuffer(nullptr, 0)
+        , out(out_)
     {
         out.next(); /// flush away data before us.
         working_buffer = out.buffer();
