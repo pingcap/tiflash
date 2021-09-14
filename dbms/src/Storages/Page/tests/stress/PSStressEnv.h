@@ -30,6 +30,7 @@ private:
     ~StressEnvStatus() = default;
 
     std::atomic<StressEnvStat> status = STATUS_LOOP;
+
 public:
     static StressEnvStatus & getInstance()
     {
@@ -37,7 +38,7 @@ public:
         return instance;
     }
 
-    bool isRunning() const 
+    bool isRunning() const
     {
         return status == STATUS_LOOP;
     }
