@@ -253,7 +253,7 @@ private:
 template <typename T>
 struct SingleElementQueue
 {
-    std::unique_ptr<T> obj;
+    std::shared_ptr<T> obj;
     std::mutex mu;
     std::condition_variable cv;
     std::atomic<bool> cancelled = false;
@@ -287,13 +287,13 @@ public:
         , write_finished_cvs(capacity)
     {}
 
-    std::unique_ptr<T> pop()
+    std::shared_ptr<T> pop()
     {
         Int64 ticket = getReadTicket();
         if (ticket < 0)
             return {};
 
-        std::unique_ptr<T> res = popObj(ticket);
+        std::shared_ptr<T> res = popObj(ticket);
 
         if (res)
             finishRead(ticket);
@@ -301,7 +301,7 @@ public:
     }
 
     template <typename Rep, typename Period>
-    std::unique_ptr<T> tryPop(const std::chrono::duration<Rep, Period> & timeout)
+    std::shared_ptr<T> tryPop(const std::chrono::duration<Rep, Period> & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -309,14 +309,14 @@ public:
         if (ticket < 0)
             return {};
 
-        std::unique_ptr<T> res = popObj(ticket, &deadline);
+        std::shared_ptr<T> res = popObj(ticket, &deadline);
 
         if (res)
             finishRead(ticket);
         return res;
     }
 
-    bool push(std::unique_ptr<T> v)
+    bool push(std::shared_ptr<T> v)
     {
         Int64 ticket = getWriteTicket();
         if (ticket < 0)
@@ -330,7 +330,7 @@ public:
     }
 
     template <typename Rep, typename Period>
-    bool tryPush(std::unique_ptr<T> v, const std::chrono::duration<Rep, Period> & timeout)
+    bool tryPush(std::shared_ptr<T> v, const std::chrono::duration<Rep, Period> & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -455,10 +455,10 @@ private:
         return ticket;
     }
 
-    std::unique_ptr<T> popObj(Int64 ticket, const TimePoint * deadline = nullptr)
+    std::shared_ptr<T> popObj(Int64 ticket, const TimePoint * deadline = nullptr)
     {
         SingleElementQueue<T> & queue = objs[ticket % capacity];
-        std::unique_ptr<T> res;
+        std::shared_ptr<T> res;
         bool timeouted = false;
         auto pred = [&] { return queue.obj || queue.isCancelled(); };
         {
@@ -475,7 +475,7 @@ private:
         return res;
     }
 
-    bool pushObj(Int64 ticket, std::unique_ptr<T> && v, const TimePoint * deadline = nullptr)
+    bool pushObj(Int64 ticket, std::shared_ptr<T> && v, const TimePoint * deadline = nullptr)
     {
         SingleElementQueue<T> & queue = objs[ticket % capacity];
         bool timeouted = false;
@@ -606,7 +606,7 @@ private:
                 for (;;)
                 {
                     LOG_TRACE(log, "begin next ");
-                    std::unique_ptr<ReceivedPacket> packet = empty_received_packets.pop();
+                    std::shared_ptr<ReceivedPacket> packet = empty_received_packets.pop();
                     if (!packet)
                     {
                         meet_error = true;
@@ -754,7 +754,7 @@ public:
         }
 
         for (size_t i = 0; i < max_buffer_size; ++i)
-            empty_received_packets.push(std::make_unique<ReceivedPacket>());
+            empty_received_packets.push(std::make_shared<ReceivedPacket>());
 
         setUpConnection();
     }
@@ -781,7 +781,7 @@ public:
 
     ExchangeReceiverResult nextResult()
     {
-        std::unique_ptr<ReceivedPacket> packet = received_packets.pop();
+        std::shared_ptr<ReceivedPacket> packet = received_packets.pop();
         if (!packet)
         {
             String msg;

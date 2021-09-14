@@ -22,8 +22,8 @@ std::random_device rd;
 
 using Packet = mpp::MPPDataPacket;
 using PacketPtr = std::shared_ptr<Packet>;
-using PacketQueue = ConcurrentBoundedQueue<PacketPtr>;
-using PacketQueuePtr = std::shared_ptr<ConcurrentBoundedQueue<PacketPtr>>;
+using PacketQueue = MPMCQueue<Packet>;
+using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
 std::atomic<Int64> received_data_size{0};
 
@@ -67,8 +67,7 @@ struct MockReceiverContext
 
         bool read(mpp::MPPDataPacket * packet [[maybe_unused]]) const
         {
-            PacketPtr ptr;
-            queue->pop(ptr);
+            PacketPtr ptr = queue->pop();
             if (!ptr)
                 return false;
             *packet = *ptr;
@@ -123,20 +122,20 @@ struct MockWriter
         auto packet = std::make_shared<Packet>();
         response.SerializeToString(packet->mutable_data());
         for (const auto & queue : queues)
-            queue->push(packet);
+            queue->push(std::move(packet));
     }
 
     void write(tipb::SelectResponse & response, int16_t i)
     {
         auto packet = std::make_shared<Packet>();
         response.SerializeToString(packet->mutable_data());
-        queues[i]->push(packet);
+        queues[i]->push(std::move(packet));
     }
 
     void finish()
     {
         for (const auto & queue : queues)
-            queue->push(PacketPtr{});
+            queue->finish();
     }
 
     uint16_t getPartitionNum() const
@@ -207,9 +206,9 @@ void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & q
     while (!stop_flag.load())
     {
         int i = dist(mt);
-        queue->tryPush(packets[i], 10);
+        queue->tryPush(packets[i], std::chrono::milliseconds(10));
     }
-    queue->push(PacketPtr());
+    queue->finish();
 }
 
 using BlockWriter = StreamingDAGResponseWriter<std::shared_ptr<MockWriter>>;
@@ -343,7 +342,7 @@ void testOnlyReceiver(int concurrency, int source_num, int block_rows, int secon
     auto chunk_codec_stream = CHBlockChunkCodec().newCodecStream({f0, f1, f2});
     std::vector<PacketPtr> packets;
     for (int i = 0; i < 100; ++i)
-        packets.push_back(std::make_shared<mpp::MPPDataPacket>(makePacket(*chunk_codec_stream, block_rows)));
+        packets.push_back(std::make_shared<Packet>(makePacket(*chunk_codec_stream, block_rows)));
 
     std::vector<PacketQueuePtr> queues;
     for (int i = 0; i < source_num; ++i)
