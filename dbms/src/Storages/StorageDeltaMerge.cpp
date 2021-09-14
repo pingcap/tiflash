@@ -26,7 +26,6 @@
 #include <Storages/PrimaryKeyNotMatchException.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -90,7 +89,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
     const ColumnsDescription & columns = getColumns();
 
     LOG_INFO(log,
-        __FILE__ << " " << __func__ << " TableName " << getTableName() << " ordinary " << columns.ordinary.toString() << " materialized "
+        __FILE__ << " " << __func__ << " TableName " << table_column_info->table_name << " ordinary " << columns.ordinary.toString() << " materialized "
                  << columns.materialized.toString());
 
     auto & pk_expr_ast = table_column_info->pk_expr_ast;
@@ -267,7 +266,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
     {
         _store->drop();
     }
@@ -665,6 +664,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             }
             else
             {
+#if 0
                 // Query from ch client
                 auto create_attr_by_column_id = [this](const String & col_name) -> Attr {
                     const ColumnDefines & defines = this->getAndMaybeInitStore()->getTableColumns();
@@ -677,6 +677,7 @@ BlockInputStreams StorageDeltaMerge::read( //
                         return Attr{.col_name = col_name, .col_id = 0, .type = DataTypePtr{}};
                 };
                 rs_operator = FilterParser::parseSelectQuery(select_query, std::move(create_attr_by_column_id), log);
+#endif
             }
             if (likely(rs_operator != DM::EMPTY_FILTER))
                 LOG_DEBUG(log, "Rough set filter: " << rs_operator->toDebugString());
@@ -727,7 +728,7 @@ void StorageDeltaMerge::ingestFiles(
 
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
 {
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
     {
         return _store->onSyncGc(limit);
     }
@@ -922,13 +923,16 @@ try
         tidb_table_info = table_info.value();
     }
 
-    if (store_inited.load(std::memory_order_acquire))
     {
-        _store->applyAlters(commands, table_info, max_column_id_used, context);
-    }
-    else
-    {
-        updateTableColumnInfo();
+        std::lock_guard lock(store_mutex);  // Avoid concurrent init store and DDL.
+        if (storeInited())
+        {
+            _store->applyAlters(commands, table_info, max_column_id_used, context);
+        }
+        else
+        {
+            updateTableColumnInfo();
+        }
     }
 
     SortDescription pk_desc = getPrimarySortDescription();
@@ -954,7 +958,12 @@ catch (Exception & e)
 
 ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const
 {
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
+    {
+        return _store->getTableColumns();
+    }
+    std::lock_guard lock(store_mutex);
+    if (storeInited())
     {
         return _store->getTableColumns();
     }
@@ -983,7 +992,13 @@ void StorageDeltaMerge::rename(
     bool clean_rename = !data_path_contains_database_name && getTableName() == new_table_name;
     if (likely(clean_rename))
     {
-        if (store_inited.load(std::memory_order_acquire))
+        if (storeInited())
+        {
+            _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+            return;
+        }
+        std::lock_guard lock(store_mutex);
+        if (storeInited())
         {
             _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
         }
@@ -1024,7 +1039,12 @@ void StorageDeltaMerge::rename(
 
 String StorageDeltaMerge::getTableName() const
 {
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
+    {
+        return _store->getTableName();
+    }
+    std::lock_guard lock(store_mutex);
+    if (storeInited())
     {
         return _store->getTableName();
     }
@@ -1033,7 +1053,12 @@ String StorageDeltaMerge::getTableName() const
 
 String StorageDeltaMerge::getDatabaseName() const
 {
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
+    {
+        return _store->getDatabaseName();
+    }
+    std::lock_guard lock(store_mutex);
+    if (storeInited())
     {
         return _store->getDatabaseName();
     }
@@ -1147,7 +1172,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto & value_col = columns[1];
 
     DeltaMergeStoreStat stat;
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
     {
         stat = _store->getStat();
     }
@@ -1244,7 +1269,7 @@ void StorageDeltaMerge::shutdown()
     bool v = false;
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
     {
         _store->shutdown();
     }
@@ -1262,7 +1287,12 @@ StorageDeltaMerge::~StorageDeltaMerge() { shutdown(); }
 
 DataTypePtr StorageDeltaMerge::getPKTypeImpl() const
 {
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
+    {
+        return _store->getPKDataType();
+    }
+    std::lock_guard lock(store_mutex);
+    if (storeInited())
     {
         return _store->getPKDataType();
     }
@@ -1271,11 +1301,15 @@ DataTypePtr StorageDeltaMerge::getPKTypeImpl() const
 
 SortDescription StorageDeltaMerge::getPrimarySortDescription() const
 {
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
     {
         return _store->getPrimarySortDescription();
     }
-
+    std::lock_guard lock(store_mutex);
+    if (storeInited())
+    {
+        return _store->getPrimarySortDescription();
+    }
     SortDescription desc;
     desc.emplace_back(table_column_info->handle_column_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
     return desc;
@@ -1283,7 +1317,7 @@ SortDescription StorageDeltaMerge::getPrimarySortDescription() const
 
 DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
 {
-    if (store_inited.load(std::memory_order_acquire))
+    if (storeInited())
     {
         return _store;
     }
@@ -1306,7 +1340,7 @@ bool StorageDeltaMerge::initStoreIfDataDirExist()
         return false;
     }
     // If store is inited, we don't need to check data dir.
-    if (store_inited.load(std::memory_order_relaxed))
+    if (storeInited())
     {
         return true;
     }
@@ -1324,7 +1358,7 @@ bool StorageDeltaMerge::dataDirExist()
     {
         std::lock_guard<std::mutex> lock(store_mutex);
         // store is inited after lock acquired.
-        if (store_inited.load(std::memory_order_acquire))
+        if (storeInited())
         {
             return true;
         }

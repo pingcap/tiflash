@@ -33,7 +33,6 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
@@ -64,6 +63,7 @@ namespace FailPoints
 extern const char region_exception_after_read_from_storage_some_error[];
 extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_after_learner_read[];
+extern const char pause_after_copr_streams_acquired[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
@@ -229,7 +229,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
             catch (const RegionException & e)
             {
-                if (tmt.getTerminated())
+                if (tmt.checkShuttingDown())
                     throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
@@ -383,6 +383,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
             }
         });
     }
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 }
 
 void DAGQueryBlockInterpreter::readFromLocalStorage( //
