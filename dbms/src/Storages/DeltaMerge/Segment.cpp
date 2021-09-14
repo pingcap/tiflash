@@ -353,7 +353,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
-    RowKeyRanges real_ranges(read_ranges.size());
+    RowKeyRanges real_ranges;
     for (const auto & read_range : read_ranges)
     {
         auto real_range = rowkey_range.shrink(read_range);
