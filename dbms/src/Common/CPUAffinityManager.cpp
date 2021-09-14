@@ -5,7 +5,8 @@
 #include <common/logger_useful.h>
 #include <errno.h>
 #include <unistd.h>
-
+#include <Poco/Util/LayeredConfiguration.h>
+#include <Common/Config/cpptoml.h>
 #include <cstring>
 #include <fstream>
 namespace DB
@@ -16,7 +17,7 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int CPUID_ERROR;
 } // namespace ErrorCodes
 
-CPUAffinityManager::CPUAffinityManager(int read_cpu_percent_, int cpu_cores_)
+CPUAffinityManager::CPUAffinityManager(int read_cpu_percent_, int cpu_cores_, Poco::Util::LayeredConfiguration & config)
     : read_cpu_percent(read_cpu_percent_)
     , cpu_cores(cpu_cores_)
     , log(&Poco::Logger::get("CPUAffinityManager"))
@@ -27,9 +28,47 @@ CPUAffinityManager::CPUAffinityManager(int read_cpu_percent_, int cpu_cores_)
     {
         initCPUSet();
     }
+    initReadThreadNames(config);
 }
 
-void CPUAffinityManager::setReadThread(pid_t tid) const
+// Threads of MPP request should call `bindSelfReadThread` when it is created.
+void CPUAffinityManager::initReadThreadNames(Poco::Util::LayeredConfiguration & config)
+{
+    if (config.has("flash.cpu"))
+    {
+        std::string cpu_config = config.getString("flash.cpu");
+        std::istringstream ss(cpu_config);
+        cpptoml::parser p(ss);
+        auto table = p.parse();
+        if (auto threads = table->get_qualified_array_of<std::string>("cpu.read_threads"); threads)
+        {
+            for (const auto & name : *threads)
+            {
+                read_threads.push_back(name);
+            }
+        }
+    }
+    
+    // Default threads
+    if (read_threads.empty())
+    {
+        read_threads = {"cop-pool", "batch-cop-pool"};
+    }
+}
+
+bool CPUAffinityManager::isReadThread(const std::string & name) const
+{
+    for (const auto & t : read_threads)
+    {
+        if (name.find(t) == 0)  // t is name's prefix.
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void CPUAffinityManager::bindReadThread(pid_t tid) const
 {
     if (enable())
     {
@@ -37,7 +76,7 @@ void CPUAffinityManager::setReadThread(pid_t tid) const
     }
 }
 
-void CPUAffinityManager::setWriteThread(pid_t tid) const
+void CPUAffinityManager::bindWriteThread(pid_t tid) const
 {
     if (enable())
     {
@@ -45,22 +84,16 @@ void CPUAffinityManager::setWriteThread(pid_t tid) const
     }
 }
 
-void CPUAffinityManager::setBackgroundThread(pid_t tid) const
-{
-    // Currently, read threads and background threads are running on the same cpu set.
-    setReadThread(tid);
-}
-
-void CPUAffinityManager::setSelfReadThread() const
+void CPUAffinityManager::bindSelfReadThread() const
 {
     // If tid is zero, then the calling thread is used.
-    setReadThread(0);
+    bindReadThread(0);
 }
 
-void CPUAffinityManager::setSelfWriteThread() const
+void CPUAffinityManager::bindSelfWriteThread() const
 {
     // If tid is zero, then the calling thread is used.
-    setWriteThread(0);
+    bindWriteThread(0);
 }
 
 std::string CPUAffinityManager::toString() const
@@ -204,139 +237,25 @@ std::unordered_map<pid_t, std::string> CPUAffinityManager::getThreads(pid_t pid)
     return threads;
 }
 
-bool isGrpcThread(const std::string & name)
-{
-    return name.find("grpcpp_sync_ser") == 0 || name.find("grpc_global_tim") == 0 || name.find("grpc-server") == 0;
-}
-
-bool shouldBindOnReadCPUSet(const std::string & name)
-{
-    // clang-format off
-    return name.find("BkgPool") == 0 ||
-        name.find("sst-importer") == 0 ||
-        name.find("status-server") == 0 ||
-        name.find("pd-worker") == 0 ||
-        name.find("stats-monitor") == 0 ||
-        name.find("time updater") == 0||
-        name.find("steady-timer") == 0 ||
-        name.find("cleanup-worker") == 0 ||
-        name.find("pdmonitor") == 0 ||
-        name.find("resolver-execut") == 0 ||
-        name.find("default-executo") == 0 ||
-        name.find("SignalListener") == 0 ||
-        name.find("tso-worker") == 0 ||
-        name.find("sched-hi-pri") == 0 ||
-        name.find("sched-wkr") == 0 ||
-        name.find("unf-rd-pool") == 0 ||
-        name.find("rocksdb:dump_st") == 0 ||
-        name.find("rocksdb:pst_st") == 0 ||
-        name.find("rocksdb:high") == 0 ||
-        name.find("snap-sender") == 0 ||
-        name.find("jemalloc_bg_thd") == 0 ||
-        name.find("rocksdb:low") == 0 ||
-        name.find("slogger") == 0 ||
-        name.find("time-monitor") == 0 ||
-        name.find("backtrace-loade") == 0 ||
-        name.find("gc-worker") == 0 ||
-        name.find("background") == 0 ||
-        name.find("debugger") == 0 ||
-        name.find("region-collecto") == 0 ||
-        name.find("HTTPServer") == 0 ||
-        name.find("transport-stats") == 0 ||
-        name.find("PDLeaderLoop") == 0 ||
-        name.find("snap-handler") == 0 ||
-        name.find("PDUpdateTS") == 0 ||
-        name.find("CfgReloader") == 0 ||
-        name.find("TiFlashMain") == 0 ||
-        name.find("AsyncMetrics") == 0 ||
-        name.find("Prometheus") == 0 ||
-        name.find("UserCfgReloader") == 0 ||
-        name.find("civetweb-master") == 0 ||
-        name.find("civetweb-worker") == 0 ||
-        name.find("SessionCleaner") == 0 ||
-        name.find("ClusterManager") == 0 ||
-        name.find("timer") == 0 ||
-        name.find("cop-pool") == 0 ||
-        name.find("batch-cop-pool") == 0;
-        // clang-format on
-}
-
-bool shouldBindOnWriteCPUSet(const std::string & name)
-{
-    // clang-format off
-    return name.find("apply") == 0 ||
-        name.find("region-task") == 0 ||
-        name.find("region-worker") == 0 ||
-        name.find("raft-stream") == 0 ||
-        name.find("RaftStoreProxy") == 0 ||
-        name.find("raftstore") == 0 ||
-        name.find("readindex-timer") == 0 ||
-        name.find("TCPServer") == 0 ||
-        isGrpcThread(name);
-    // clang-format on
-}
-
-/*
-std::vector<std::string> CPUAffinityManager::getShouldBindOnReadCPUSetThreadNames(Poco::Util::LayeredConfiguration & config)
-{
-    std::vector<std::string> threads;
-    if (config.has("flash.cpu"))
-    {
-        std::string cpu_config = config.getString("flash.cpu");
-        std::istringstream ss(cpu_config);
-        cpptoml::parser p(ss);
-        auto table = p.parse();
-        if (auto read_threads = table->get_qualified_array_of<std::string>("cpu.read_threads"); read_threads)
-        {
-            for (const auto & name : *read_threads)
-            {
-                threads.push_back(name);
-            }
-        }
-    }
-    
-    // Default threads
-    if (threads.empty())
-    {
-        threads = {"cop-pool", "batch-cop-pool", "BkgPool"};
-    }
-
-    return threads;
-}*/
-
-void CPUAffinityManager::setThreadCPUAffinity() const
+void CPUAffinityManager::bindThreadCPUAffinity() const
 {
     auto threads = getThreads(getpid());
     for (const auto & t : threads)
     {
-        cpu_set_t cpu_set;
-        int ret = sched_getaffinity(t.first, sizeof(cpu_set), &cpu_set);
-        if (ret != 0)
+        if (isReadThread(t.second))
         {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " sched_getaffinity ret " << ret << " error " << strerror(errno));
-            continue;
-        }
-        if (shouldBindOnWriteCPUSet(t.second))
-        {
-            if (!CPU_EQUAL(&cpu_set, &write_cpu_set))
-            {
-                LOG_INFO(log, "Thread: " << t.first << " " << t.second << " setWriteThread.");
-                setWriteThread(t.first);
-            }
-        }
-        else if (shouldBindOnReadCPUSet(t.second))
-        {
-            if (!CPU_EQUAL(&cpu_set, &read_cpu_set))
-            {
-                LOG_INFO(log, "Thread: " << t.first << " " << t.second << " setReadThread.");
-                setReadThread(t.first);
-            }
+            LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindReadThread.");
+            bindReadThread(t.first);
         }
         else
-        {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << "not recognized.");
+        { 
+            LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindWriteThread.");
+            bindWriteThread(t.first);
         }
     }
+    
+    // Log threads cpu bind info.
+    checkThreadCPUAffinity();    
 }
 
 void CPUAffinityManager::checkThreadCPUAffinity() const
@@ -352,13 +271,13 @@ void CPUAffinityManager::checkThreadCPUAffinity() const
             continue;
         }
         LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bind on CPU: " << cpuSetToString(cpu_set));
-        if ((shouldBindOnWriteCPUSet(t.second) && !CPU_EQUAL(&cpu_set, &write_cpu_set)) || (shouldBindOnReadCPUSet(t.second) && !CPU_EQUAL(&cpu_set, &read_cpu_set)))
+        if (isReadThread(t.second) && !CPU_EQUAL(&cpu_set, &read_cpu_set))
         {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " bind CPU info is error.");
+            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is read thread and bind CPU info is error.");
         }
-        else if (!shouldBindOnWriteCPUSet(t.second) && !shouldBindOnReadCPUSet(t.second))
+        else if (!isReadThread(t.second) && !CPU_EQUAL(&cpu_set, &write_cpu_set))
         {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << "not recognized.");
+            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is write thread and bind CPU info is error.");
         }
     }
 }

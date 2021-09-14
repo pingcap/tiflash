@@ -192,25 +192,9 @@ RegionMap & KVStore::regionsMut() { return region_manager.regions; }
 const RegionMap & KVStore::regions() const { return region_manager.regions; }
 KVStore::RegionManageLock KVStore::genRegionManageLock() const { return RegionManageLock(region_manager.mutex); }
 
-#if __APPLE__ && __clang__  
-    static __thread bool has_set_cpu_affinity = false;
-#else
-    static thread_local bool has_set_cpu_affinity = false;
-#endif
-
-void KVStore::setCPUAffinity()
-{
-    if (unlikely(!has_set_cpu_affinity))
-    {
-        global_context.getCPUAffinityManager().setSelfWriteThread();
-        has_set_cpu_affinity = true;   
-    }
-}
-
 EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    setCPUAffinity();
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;
     std::vector<WriteCmdType> cmd_types;

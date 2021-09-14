@@ -29,6 +29,10 @@ namespace Net
 {
 class IPAddress;
 }
+namespace Util
+{
+class LayeredConfiguration;
+}
 } // namespace Poco
 
 namespace zkutil
@@ -494,7 +498,7 @@ public:
     const TimezoneInfo & getTimezoneInfo() const { return timezone_info; };
     TimezoneInfo & getTimezoneInfo() { return timezone_info; };
 
-    void initCPUAffinityManager();
+    void initCPUAffinityManager(Poco::Util::LayeredConfiguration & config);
     const CPUAffinityManager & getCPUAffinityManager() const;
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;

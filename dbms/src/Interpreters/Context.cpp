@@ -6,6 +6,7 @@
 #include <Poco/File.h>
 #include <Poco/UUID.h>
 #include <Poco/Net/IPAddress.h>
+#include <Poco/Util/LayeredConfiguration.h>
 
 #include <common/logger_useful.h>
 #include <pcg_random.hpp>
@@ -1968,19 +1969,9 @@ SharedQueriesPtr Context::getSharedQueries()
     return shared->shared_queries;
 }
 
-void Context::initCPUAffinityManager()
+void Context::initCPUAffinityManager(Poco::Util::LayeredConfiguration & config)
 {
-    shared->cpu_affinity = std::make_shared<CPUAffinityManager>(getSettingsRef().cpu_affinity_read_percent, std::thread::hardware_concurrency());
-    auto tids = getBackgroundPool().getThreadIds();
-    for (auto & tid : tids)
-    {
-        shared->cpu_affinity->setBackgroundThread(tid);
-    }
-    auto blockable_tids = getBlockableBackgroundPool().getThreadIds();
-    for (auto & tid : blockable_tids)
-    {
-        shared->cpu_affinity->setBackgroundThread(tid);
-    }
+    shared->cpu_affinity = std::make_shared<CPUAffinityManager>(getSettingsRef().cpu_affinity_read_percent, std::thread::hardware_concurrency(), config);
 }
 
 const CPUAffinityManager & Context::getCPUAffinityManager() const { return *(shared->cpu_affinity); }

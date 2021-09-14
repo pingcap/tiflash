@@ -7,7 +7,12 @@
 namespace Poco
 {
 class Logger;
+namespace Util
+{
+class LayeredConfiguration;
 }
+}
+
 namespace DB
 {
 
@@ -15,14 +20,17 @@ namespace DB
 class CPUAffinityManager
 {
 public:
-    CPUAffinityManager(int read_cpu_pencent_, int cpu_cores_);
-    void setReadThread(pid_t tid) const;
-    void setWriteThread(pid_t tid) const;
-    void setBackgroundThread(pid_t tid) const;
-    void setSelfReadThread() const;
-    void setSelfWriteThread() const;
+    CPUAffinityManager(int read_cpu_pencent_, int cpu_cores_, Poco::Util::LayeredConfiguration & config);
+
+    void bindReadThread(pid_t tid) const;
+    void bindWriteThread(pid_t tid) const;
+    
+    void bindSelfReadThread() const;
+    void bindSelfWriteThread() const;
+
     std::string toString() const;
-    void setThreadCPUAffinity() const;
+
+    void bindThreadCPUAffinity() const;
     void checkThreadCPUAffinity() const;
 private:
 
@@ -31,9 +39,11 @@ private:
     int getReadCPUCores() const;
     int getWriteCPUCores() const;
     void initCPUSet(cpu_set_t & cpu_set, int start, int count);
+
     // Bind thread t on cpu_set.
     void setAffinity(pid_t tid, const cpu_set_t & cpu_set) const;
     bool enable() const;
+
     std::string cpuSetToString(const cpu_set_t & cpu_set) const;
     std::vector<int> cpuSetToVec(const cpu_set_t & cpu_set) const;
     
@@ -42,11 +52,14 @@ private:
     std::string getThreadName(const std::string & fname) const;
     std::string getShortFilename(const std::string & path) const;
 
+    void initReadThreadNames(Poco::Util::LayeredConfiguration & config);
+    bool isReadThread(const std::string & name) const;
+
     int read_cpu_percent;
     int cpu_cores;
     cpu_set_t read_cpu_set;
     cpu_set_t write_cpu_set;
-
+    std::vector<std::string> read_threads;
     Poco::Logger * log;
 };
 } // namespace DB

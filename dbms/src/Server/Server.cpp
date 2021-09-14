@@ -857,7 +857,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setCurrentDatabase(default_database);
 
     global_context->initializeSchemaSyncService();
-    global_context->initCPUAffinityManager();
+    global_context->initCPUAffinityManager(config());
     LOG_INFO(log, "CPUAffinity: " << global_context->getCPUAffinityManager().toString());
     SCOPE_EXIT({
         /** Ask to cancel background jobs all table engines,
@@ -1257,9 +1257,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         tmt_context.setStatusRunning();
         
-        // Set and check CPU affinity after all threads started.
-        global_context->getCPUAffinityManager().setThreadCPUAffinity();
-        global_context->getCPUAffinityManager().checkThreadCPUAffinity();
+        // Bind CPU affinity after all threads started.
+        global_context->getCPUAffinityManager().bindThreadCPUAffinity();
 
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();

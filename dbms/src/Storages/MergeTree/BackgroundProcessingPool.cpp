@@ -119,9 +119,6 @@ void BackgroundProcessingPool::threadFunction()
         static std::atomic_uint64_t tid{0};
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
-        #ifdef __linux__
-        addThreadId(syscall(SYS_gettid));
-        #endif
     }
 
     MemoryTracker memory_tracker;
@@ -231,18 +228,6 @@ void BackgroundProcessingPool::threadFunction()
     }
 
     current_memory_tracker = nullptr;
-}
-
-std::vector<pid_t> BackgroundProcessingPool::getThreadIds()
-{
-    std::lock_guard lock(thread_ids_mtx);
-    return thread_ids;
-}
-
-void BackgroundProcessingPool::addThreadId(pid_t tid)
-{
-    std::lock_guard lock(thread_ids_mtx);
-    thread_ids.push_back(tid);
 }
 
 }
