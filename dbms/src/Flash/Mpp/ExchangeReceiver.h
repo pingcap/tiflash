@@ -287,7 +287,7 @@ public:
         , write_finished_cvs(capacity)
     {}
 
-    std::unique_ptr<T> popOne()
+    std::unique_ptr<T> pop()
     {
         Int64 ticket = getReadTicket();
         if (ticket < 0)
@@ -300,13 +300,45 @@ public:
         return res;
     }
 
-    bool pushOne(std::unique_ptr<T> v)
+    template <typename Rep, typename Period>
+    std::unique_ptr<T> tryPop(const std::chrono::duration<Rep, Period> & timeout)
+    {
+        /// std::condition_variable::wait_until will always use system_clock.
+        auto deadline = std::chrono::system_clock::now() + timeout;
+        Int64 ticket = getReadTicket(&deadline);
+        if (ticket < 0)
+            return {};
+
+        std::unique_ptr<T> res = popObj(ticket, &deadline);
+
+        if (res)
+            finishRead(ticket);
+        return res;
+    }
+
+    bool push(std::unique_ptr<T> v)
     {
         Int64 ticket = getWriteTicket();
         if (ticket < 0)
             return {};
 
         bool res = pushObj(ticket, std::move(v));
+
+        if (res)
+            finishWrite(ticket);
+        return res;
+    }
+
+    template <typename Rep, typename Period>
+    bool tryPush(std::unique_ptr<T> v, const std::chrono::duration<Rep, Period> & timeout)
+    {
+        /// std::condition_variable::wait_until will always use system_clock.
+        auto deadline = std::chrono::system_clock::now() + timeout;
+        Int64 ticket = getWriteTicket(&deadline);
+        if (ticket < 0)
+            return {};
+
+        bool res = pushObj(ticket, std::move(v), &deadline);
 
         if (res)
             finishWrite(ticket);
@@ -387,38 +419,55 @@ public:
         return NORMAL;
     }
 private:
-    Int64 getReadTicket()
+    using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
+
+    Int64 getReadTicket(const TimePoint * deadline = nullptr)
     {
         Int64 ticket = -1;
+        bool timeouted = false;
+        auto pred = [&] { return read_allocated - read_finished < capacity || cancelled || readFinished(); };
         {
             std::unique_lock lock(read_mu);
-            read_cv.wait(lock, [&] { return read_allocated - read_finished < capacity || cancelled || readFinished(); });
-            if (!cancelled && !readFinished() && read_allocated - read_finished < capacity)
+            if (deadline)
+                timeouted = !read_cv.wait_until(lock, *deadline, pred);
+            else
+                read_cv.wait(lock, pred);
+            if (!timeouted && !cancelled && !readFinished() && read_allocated - read_finished < capacity)
                 ticket = read_allocated++;
         }
         return ticket;
     }
 
-    Int64 getWriteTicket()
+    Int64 getWriteTicket(const TimePoint * deadline = nullptr)
     {
         Int64 ticket = -1;
+        bool timeouted = false;
+        auto pred = [&] { return write_allocated - write_finished < capacity || finished || cancelled; };
         {
             std::unique_lock lock(write_mu);
-            write_cv.wait(lock, [&] { return write_allocated - write_finished < capacity || finished || cancelled; });
-            if (!finished && !cancelled && write_allocated - write_finished < capacity)
+            if (deadline)
+                timeouted = !write_cv.wait_until(lock, *deadline, pred);
+            else
+                write_cv.wait(lock, pred);
+            if (!timeouted && !finished && !cancelled && write_allocated - write_finished < capacity)
                 ticket = write_allocated++;
         }
         return ticket;
     }
 
-    std::unique_ptr<T> popObj(Int64 ticket)
+    std::unique_ptr<T> popObj(Int64 ticket, const TimePoint * deadline = nullptr)
     {
         SingleElementQueue<T> & queue = objs[ticket % capacity];
         std::unique_ptr<T> res;
+        bool timeouted = false;
+        auto pred = [&] { return queue.obj || queue.isCancelled(); };
         {
             std::unique_lock lock(queue.mu);
-            queue.cv.wait(lock, [&] { return queue.obj || queue.isCancelled(); });
-            if (queue.obj)
+            if (deadline)
+                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
+            else
+                queue.cv.wait(lock, pred);
+            if (!timeouted && queue.obj)
                 res = std::move(queue.obj);
         }
         if (res)
@@ -426,13 +475,18 @@ private:
         return res;
     }
 
-    bool pushObj(Int64 ticket, std::unique_ptr<T> && v)
+    bool pushObj(Int64 ticket, std::unique_ptr<T> && v, const TimePoint * deadline = nullptr)
     {
         SingleElementQueue<T> & queue = objs[ticket % capacity];
+        bool timeouted = false;
+        auto pred = [&] { return !queue.obj || queue.isCancelled(); };
         {
             std::unique_lock lock(queue.mu);
-            queue.cv.wait(lock, [&] { return !queue.obj || queue.isCancelled(); });
-            if (queue.obj) /// cancelled
+            if (deadline)
+                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
+            else
+                queue.cv.wait(lock, pred);
+            if (timeouted || queue.obj) /// cancelled
                 return false;
             queue.obj = std::move(v);
         }
@@ -552,7 +606,7 @@ private:
                 for (;;)
                 {
                     LOG_TRACE(log, "begin next ");
-                    std::unique_ptr<ReceivedPacket> packet = empty_received_packets.popOne();
+                    std::unique_ptr<ReceivedPacket> packet = empty_received_packets.pop();
                     if (!packet)
                     {
                         meet_error = true;
@@ -571,7 +625,7 @@ private:
                     {
                         throw Exception("Exchange receiver meet error : " + packet->packet.error().msg());
                     }
-                    bool push_res = received_packets.pushOne(std::move(packet));
+                    bool push_res = received_packets.push(std::move(packet));
                     if (!push_res)
                     {
                         meet_error = true;
@@ -700,7 +754,7 @@ public:
         }
 
         for (size_t i = 0; i < max_buffer_size; ++i)
-            empty_received_packets.pushOne(std::make_unique<ReceivedPacket>());
+            empty_received_packets.push(std::make_unique<ReceivedPacket>());
 
         setUpConnection();
     }
@@ -727,7 +781,7 @@ public:
 
     ExchangeReceiverResult nextResult()
     {
-        std::unique_ptr<ReceivedPacket> packet = received_packets.popOne();
+        std::unique_ptr<ReceivedPacket> packet = received_packets.pop();
         if (!packet)
         {
             String msg;
@@ -763,7 +817,7 @@ public:
             }
         }
         packet->packet.Clear();
-        empty_received_packets.pushOne(std::move(packet));
+        empty_received_packets.push(std::move(packet));
         return result;
     }
 
