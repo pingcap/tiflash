@@ -1085,6 +1085,14 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_where, log);
             }
         }
+        for (auto & stream : pipeline.streams_with_non_joined_data)
+        {
+            /// execute selection if needed
+            if (res.has_where)
+                stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name, log);
+            if (res.project_after_where)
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_where, log);
+        }
     }
     if (res.has_where)
     {
