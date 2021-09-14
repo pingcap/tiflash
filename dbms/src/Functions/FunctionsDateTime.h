@@ -87,6 +87,17 @@ inline void fromDayNum(MyDateTime & t, int day_num)
     static const int ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR[] = {30, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
     bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
     fillMonthAndDay(day_num, month, day, is_leap_year ? ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR : ACCUMULATED_DAYS_PER_MONTH);
+    if (year < 0 || year > 9999)
+    {
+        throw Exception("datetime overflow");
+    }
+    else if (year == 0)
+    {
+        t.year = 0;
+        t.month = 0;
+        t.day = 0;
+        return;
+    }
     t.year = year;
     t.month = month + 1;
     t.day = day + 1;
@@ -906,20 +917,34 @@ static inline void addMonths(MyDateTime & t, Int64 months)
     // month in my_time start from 1
     Int64 current_month = t.month - 1;
     current_month += months;
+    Int64 current_year = 0;
+    Int64 year = (Int64)t.year;
     if (current_month >= 0)
     {
-        Int64 year = current_month / 12;
+        current_year = current_month / 12;
         current_month = current_month % 12;
-        t.year += year;
+        year += current_year;
     }
     else
     {
-        Int64 year = (-current_month) / 12;
+        current_year = (-current_month) / 12;
         if ((-current_month) % 12 != 0)
-            year++;
-        current_month += year * 12;
-        t.year -= year;
+            current_year++;
+        current_month += current_year * 12;
+        year -= current_year;
     }
+    if (year < 0 || year > 9999)
+    {
+        throw Exception("datetime overflow");
+    }
+    else if (year == 0)
+    {
+        t.year = 0;
+        t.month = 0;
+        t.day = 0;
+        return;
+    }
+    t.year = year;
     static const int day_num_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     static const int day_num_in_month_leap_year[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     int max_day = 0;
@@ -977,6 +1002,15 @@ struct AddSecondsImpl
         my_time.second = current_second % 60;
         return my_time.toPackedUInt();
     }
+
+    static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        Field packed_uint_value = parseMyDateTime(str);
+        UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+        UInt64 result = AddSecondsImpl::execute(packed_uint, delta, time_zone);
+        MyDateTime myDateTime(result);
+        return myDateTime.toString(myDateTime.micro_second == 0 ? 0 : 6);
+    }
 };
 
 struct AddMinutesImpl
@@ -995,6 +1029,11 @@ struct AddMinutesImpl
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return AddSecondsImpl::execute(t, delta * 60, time_zone);
+    }
+
+    static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return AddSecondsImpl::execute(str, delta * 60, time_zone);
     }
 };
 
@@ -1015,6 +1054,11 @@ struct AddHoursImpl
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return AddSecondsImpl::execute(t, delta * 3600, time_zone);
+    }
+
+    static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return AddSecondsImpl::execute(str, delta * 3600, time_zone);
     }
 };
 
@@ -1042,6 +1086,21 @@ struct AddDaysImpl
         addDays(my_time, delta);
         return my_time.toPackedUInt();
     }
+
+    static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        bool is_date;
+        Field packed_uint_value = parseMyDateTimeAndJudgeIsDate(str, is_date);
+        UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+        UInt64 result = AddDaysImpl::execute(packed_uint, delta, time_zone);
+        if (is_date)
+            return MyDate(result).toString();
+        else
+        {
+            MyDateTime myDateTime(result);
+            return myDateTime.toString(myDateTime.micro_second == 0 ? 0 : 6);
+        }
+    }
 };
 
 struct AddWeeksImpl
@@ -1061,6 +1120,12 @@ struct AddWeeksImpl
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return AddDaysImpl::execute(t, delta * 7, time_zone);
+    }
+
+    static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return AddDaysImpl::execute(str, delta * 7, time_zone);
+        ;
     }
 };
 
@@ -1088,6 +1153,21 @@ struct AddMonthsImpl
         addMonths(my_time, delta);
         return my_time.toPackedUInt();
     }
+
+    static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        bool is_date;
+        Field packed_uint_value = parseMyDateTimeAndJudgeIsDate(str, is_date);
+        UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+        UInt64 result = AddMonthsImpl::execute(packed_uint, delta, time_zone);
+        if (is_date)
+            return MyDate(result).toString();
+        else
+        {
+            MyDateTime myDateTime(result);
+            return myDateTime.toString(myDateTime.micro_second == 0 ? 0 : 6);
+        }
+    }
 };
 
 struct AddYearsImpl
@@ -1108,6 +1188,11 @@ struct AddYearsImpl
     {
         return AddMonthsImpl::execute(t, delta * 12, time_zone);
     }
+
+    static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return AddMonthsImpl::execute(str, delta * 12, time_zone);
+    }
 };
 
 
@@ -1127,6 +1212,11 @@ struct SubtractIntervalImpl
     static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return Transform::execute(t, -delta, time_zone);
+    }
+
+    static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return Transform::execute(str, -delta, time_zone);
     }
 };
 
@@ -1232,6 +1322,117 @@ struct DateTimeAddIntervalImpl
     }
 };
 
+template <typename Transform, bool use_utc_timezone>
+struct DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, use_utc_timezone>
+{
+    static void execute(Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        ColumnUInt8::MutablePtr col_null_map_to;
+        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+
+        const DateLUTImpl & time_zone = use_utc_timezone ? DateLUT::instance("UTC") : extractTimeZoneFromFunctionArguments(block, arguments, 2, 0);
+
+        const ColumnPtr source_col = block.getByPosition(arguments[0]).column;
+
+        auto col_to = ColumnString::create();
+        ColumnString::Chars_t & data_to = col_to->getChars();
+        ColumnString::Offsets & offsets_to = col_to->getOffsets();
+        const IColumn & delta_column = *block.getByPosition(arguments[1]).column;
+
+        if (const auto * col_from_string = checkAndGetColumn<ColumnString>(source_col.get()))
+        {
+            const ColumnString::Chars_t * data_from = &col_from_string->getChars();
+            const IColumn::Offsets * offsets_from = &col_from_string->getOffsets();
+            size_t size = source_col->size();
+            col_null_map_to = ColumnUInt8::create(col_from_string->size(), 0);
+            vec_null_map_to = &col_null_map_to->getData();
+            offsets_to.resize(size);
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            size_t current_offset = 0;
+
+            // string date add const int interval
+            if (const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column))
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
+                    size_t next_offset = (*offsets_from)[i];
+                    size_t org_length = next_offset - current_offset - 1;
+                    size_t byte_length = org_length;
+                    String date_str(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
+                    try
+                    {
+                        String result_str = Transform::execute(date_str, delta_const_column->getInt(0), time_zone);
+                        write_buffer.write(reinterpret_cast<const char *>(&(result_str)[0]), result_str.size());
+                    }
+                    catch (const Exception &)
+                    {
+                        (*vec_null_map_to)[i] = 1;
+                    }
+                    writeChar(0, write_buffer);
+                    offsets_to[i] = write_buffer.count();
+                    current_offset = next_offset;
+                }
+            }
+            // string date add vector int interval
+            else
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
+                    size_t next_offset = (*offsets_from)[i];
+                    size_t org_length = next_offset - current_offset - 1;
+                    size_t byte_length = org_length;
+                    String date_str(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
+                    try
+                    {
+                        String result_str = Transform::execute(date_str, delta_column.getInt(i), time_zone);
+                        write_buffer.write(reinterpret_cast<const char *>(&(result_str)[0]), result_str.size());
+                    }
+                    catch (const Exception &)
+                    {
+                        (*vec_null_map_to)[i] = 1;
+                    }
+                    writeChar(0, write_buffer);
+                    offsets_to[i] = write_buffer.count();
+                    current_offset = next_offset;
+                }
+            }
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
+        }
+        // const string date add vector int interval
+        else if (const auto * col_from_string = checkAndGetColumnConst<ColumnString>(source_col.get()))
+        {
+            size_t size = delta_column.size();
+            col_null_map_to = ColumnUInt8::create(col_from_string->size(), 0);
+            vec_null_map_to = &col_null_map_to->getData();
+            String date_str = col_from_string->template getValue<String>();
+            offsets_to.resize(size);
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            for (size_t i = 0; i < size; ++i)
+            {
+                try
+                {
+                    String result_str = Transform::execute(date_str, delta_column.getInt(i), time_zone);
+                    write_buffer.write(reinterpret_cast<const char *>(&(result_str)[0]), result_str.size());
+                }
+                catch (const Exception &)
+                {
+                    (*vec_null_map_to)[i] = 1;
+                }
+
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
+        }
+        else
+        {
+            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                                + " of first argument of function " + Transform::name,
+                            ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+};
+
 
 template <typename Transform>
 class FunctionDateOrDateTimeAddInterval : public IFunction
@@ -1262,9 +1463,9 @@ public:
 
         if (arguments.size() == 2)
         {
-            if (!arguments[0].type->isDateOrDateTime())
+            if (!arguments[0].type->isDateOrDateTime() && !arguments[0].type->isString())
                 throw Exception{
-                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be a date or a date with time",
+                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be a date or a date with time or string",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
         else
@@ -1294,6 +1495,10 @@ public:
             else
                 return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, 2, 0));
         }
+        else if (checkDataType<DataTypeString>(arguments[0].type.get()))
+        {
+            return std::make_shared<DataTypeString>();
+        }
         else
         {
             // for MyDate and MyDateTime, according to TiDB implementation the return type is always return MyDateTime
@@ -1319,6 +1524,8 @@ public:
             DateTimeAddIntervalImpl<DataTypeDateTime::FieldType, Transform, false>::execute(block, arguments, result);
         else if (checkDataType<DataTypeMyDate>(from_type) || checkDataType<DataTypeMyDateTime>(from_type))
             DateTimeAddIntervalImpl<DataTypeMyTimeBase::FieldType, Transform, true>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeString>(from_type))
+            DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, true>::execute(block, arguments, result);
         else
             throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);

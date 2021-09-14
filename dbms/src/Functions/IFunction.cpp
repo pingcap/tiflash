@@ -252,6 +252,15 @@ DataTypePtr IFunctionBuilder::getReturnType(const ColumnsWithTypeAndName & argum
             auto return_type = getReturnTypeImpl(ColumnsWithTypeAndName(nested_block.begin(), nested_block.end()));
             return makeNullable(return_type);
         }
+
+        for (auto argument : arguments)
+        {
+            if (!argument.column.get()->isColumnConst())
+            {
+                break;
+            }
+            return makeNullable(getReturnTypeImpl(arguments));
+        }
     }
 
     return getReturnTypeImpl(arguments);
