@@ -1,7 +1,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
-#include <Common/CPUAffinityManager.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>

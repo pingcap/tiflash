@@ -1,7 +1,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
-#include <Common/CPUAffinityManager.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
@@ -26,8 +25,7 @@ extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
-    : global_context(context),
-      region_persister(context, region_manager),
+    : region_persister(context, region_manager),
       raft_cmd_res(std::make_unique<RaftCommandResult>()),
       snapshot_apply_method(snapshot_apply_method_),
       log(&Logger::get("KVStore"))
