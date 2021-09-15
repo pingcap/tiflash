@@ -1,6 +1,7 @@
 #pragma once
 
 #include <common/defines.h>
+#include <common/types.h>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -10,7 +11,7 @@
 
 namespace DB
 {
-namespace detail
+namespace MPMCQueueDetail
 {
 template <typename T>
 struct SingleElementQueue
@@ -18,7 +19,9 @@ struct SingleElementQueue
     std::optional<T> obj;
     std::mutex mu;
     std::condition_variable cv;
-    std::atomic<bool> cancelled = false;
+    bool last_pop_timeouted = false;
+
+    std::atomic<bool> cancelled = false; /// allow to cancel from outside without acquire lock
 
     bool isCancelled() const
     {
@@ -30,19 +33,26 @@ struct SingleElementQueue
         cancelled.store(true, std::memory_order_relaxed);
     }
 };
-} // namespace detail
+
+enum class OPStatus
+{
+    SUCCEEDED,
+    FAILED,
+    NEED_RETRY
+};
+} // namespace MPMCQueueDetail
+
+enum class MPMCQueueStatus
+{
+    NORMAL,
+    CANCELLED,
+    FINISHED,
+};
 
 template <typename T>
 class MPMCQueue
 {
 public:
-    enum Status
-    {
-        NORMAL,
-        CANCELLED,
-        FINISHED,
-    };
-
     explicit MPMCQueue(Int64 capacity_)
         : capacity(capacity_)
         , objs(capacity)
@@ -57,10 +67,8 @@ public:
             return {};
 
         auto res = popObj(ticket);
-
-        if (res.has_value())
-            finishRead(ticket);
-        return res;
+        finishRead(ticket);
+        return std::move(res);
     }
 
     template <typename Duration>
@@ -73,24 +81,25 @@ public:
             return {};
 
         auto res = popObj(ticket, &deadline);
-
-        if (res.has_value())
-            finishRead(ticket);
-        return res;
+        finishRead(ticket);
+        return std::move(res);
     }
 
     template <typename U>
     bool push(U && u)
     {
-        Int64 ticket = getWriteTicket();
-        if (ticket < 0)
-            return {};
+        while (true)
+        {
+            Int64 ticket = getWriteTicket();
+            if (ticket < 0)
+                return {};
 
-        bool res = pushObj(ticket, std::forward<U>(u));
-
-        if (res)
+            auto res = pushObj(ticket, std::forward<U>(u));
             finishWrite(ticket);
-        return res;
+            if (res != OPStatus::NEED_RETRY)
+                return res == OPStatus::SUCCEEDED;
+        }
+        __builtin_unreachable();
     }
 
     template <typename U, typename Duration>
@@ -98,29 +107,35 @@ public:
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
-        Int64 ticket = getWriteTicket(&deadline);
-        if (ticket < 0)
-            return {};
+        while (true)
+        {
+            Int64 ticket = getWriteTicket(&deadline);
+            if (ticket < 0)
+                return {};
 
-        bool res = pushObj(ticket, std::forward<U>(u), &deadline);
-
-        if (res)
+            auto res = pushObj(ticket, std::forward<U>(u), &deadline);
             finishWrite(ticket);
-        return res;
+            if (res != OPStatus::NEED_RETRY)
+                return res == OPStatus::SUCCEEDED;
+        }
+        __builtin_unreachable();
     }
 
     template <typename... Args>
     bool emplace(Args &&... args)
     {
-        Int64 ticket = getWriteTicket();
-        if (ticket < 0)
-            return {};
+        while (true)
+        {
+            Int64 ticket = getWriteTicket();
+            if (ticket < 0)
+                return {};
 
-        bool res = emplaceObj(ticket, nullptr, std::forward<Args>(args)...);
-
-        if (res)
+            auto res = emplaceObj(ticket, nullptr, std::forward<Args>(args)...);
             finishWrite(ticket);
-        return res;
+            if (res != OPStatus::NEED_RETRY)
+                return res == OPStatus::SUCCEEDED;
+        }
+        __builtin_unreachable();
     }
 
     template <typename... Args, typename Duration>
@@ -128,15 +143,18 @@ public:
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
-        Int64 ticket = getWriteTicket(&deadline);
-        if (ticket < 0)
-            return {};
+        while (true)
+        {
+            Int64 ticket = getWriteTicket(&deadline);
+            if (ticket < 0)
+                return {};
 
-        bool res = emplaceObj(ticket, &deadline, std::forward<Args>(args)...);
-
-        if (res)
+            auto res = emplaceObj(ticket, &deadline, std::forward<Args>(args)...);
             finishWrite(ticket);
-        return res;
+            if (res != OPStatus::NEED_RETRY)
+                return res == OPStatus::SUCCEEDED;
+        }
+        __builtin_unreachable();
     }
 
     void cancel()
@@ -200,20 +218,21 @@ public:
         }
     }
 
-    Status getStatus() const
+    MPMCQueueStatus getStatus() const
     {
         {
-            std::unique_lock read_lock(read_mu);
+            /// both write_mu and read_mu are ok
             std::unique_lock write_lock(write_mu);
             if (unlikely(cancelled))
-                return CANCELLED;
+                return MPMCQueueStatus::CANCELLED;
             if (unlikely(finished))
-                return FINISHED;
+                return MPMCQueueStatus::FINISHED;
         }
-        return NORMAL;
+        return MPMCQueueStatus::NORMAL;
     }
 private:
     using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
+    using OPStatus = MPMCQueueDetail::OPStatus;
 
     Int64 getReadTicket(const TimePoint * deadline = nullptr)
     {
@@ -251,65 +270,80 @@ private:
 
     std::optional<T> popObj(Int64 ticket, const TimePoint * deadline = nullptr)
     {
-        detail::SingleElementQueue<T> & queue = objs[ticket % capacity];
+        auto & queue = objs[ticket % capacity];
         std::optional<T> res;
-        bool timeouted = false;
         auto pred = [&] { return queue.obj.has_value() || queue.isCancelled(); };
         {
+            bool timeouted = false;
             std::unique_lock lock(queue.mu);
             if (deadline)
                 timeouted = !queue.cv.wait_until(lock, *deadline, pred);
             else
                 queue.cv.wait(lock, pred);
-            if (!timeouted && queue.obj.has_value())
+            if (timeouted)
             {
+                queue.last_pop_timeouted = true;
+            }
+            else if (!queue.obj.has_value()) /// cancelled
+            {
+                /// do nothing
+            }
+            else
+            {
+                queue.last_pop_timeouted = false;
                 res = std::move(queue.obj);
                 queue.obj.reset();
             }
         }
-        if (res.has_value())
-            queue.cv.notify_all();
+        queue.cv.notify_one();
+        return std::move(res);
+    }
+
+    template <typename F>
+    OPStatus assignObj(Int64 ticket, const TimePoint * deadline, F && assigner)
+    {
+        auto & queue = objs[ticket % capacity];
+        OPStatus res = OPStatus::FAILED;
+        auto pred = [&] { return queue.last_pop_timeouted || !queue.obj.has_value() || queue.isCancelled(); };
+        {
+            bool timeouted = false;
+            std::unique_lock lock(queue.mu);
+            if (deadline)
+                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
+            else
+                queue.cv.wait(lock, pred);
+            if (timeouted)
+            {
+                res = OPStatus::FAILED;
+            }
+            else if (queue.obj.has_value()) /// cancelled
+            {
+                res = OPStatus::FAILED;
+            }
+            else if (queue.last_pop_timeouted)
+            {
+                res = OPStatus::NEED_RETRY;
+            }
+            else
+            {
+                assigner(queue.obj);
+                res = OPStatus::SUCCEEDED;
+            }
+        }
+        queue.cv.notify_one();
         return res;
     }
 
     template <typename U>
-    bool pushObj(Int64 ticket, U && u, const TimePoint * deadline = nullptr)
+    OPStatus pushObj(Int64 ticket, U && u, const TimePoint * deadline = nullptr)
     {
-        detail::SingleElementQueue<T> & queue = objs[ticket % capacity];
-        bool timeouted = false;
-        auto pred = [&] { return !queue.obj.has_value() || queue.isCancelled(); };
-        {
-            std::unique_lock lock(queue.mu);
-            if (deadline)
-                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
-            else
-                queue.cv.wait(lock, pred);
-            if (timeouted || queue.obj.has_value()) /// cancelled
-                return false;
-            queue.obj = std::forward<U>(u);
-        }
-        queue.cv.notify_one();
-        return true;
+        return assignObj(ticket, deadline, [&](auto & obj) { obj = std::forward<U>(u); });
     }
 
     template <typename... Args>
-    bool emplaceObj(Int64 ticket, const TimePoint * deadline, Args &&... args)
+    OPStatus emplaceObj(Int64 ticket, const TimePoint * deadline, Args &&... args)
     {
-        detail::SingleElementQueue<T> & queue = objs[ticket % capacity];
-        bool timeouted = false;
-        auto pred = [&] { return !queue.obj.has_value() || queue.isCancelled(); };
-        {
-            std::unique_lock lock(queue.mu);
-            if (deadline)
-                timeouted = !queue.cv.wait_until(lock, *deadline, pred);
-            else
-                queue.cv.wait(lock, pred);
-            if (timeouted || queue.obj.has_value()) /// cancelled
-                return false;
-            queue.obj.emplace(std::forward<Args>(args)...);
-        }
-        queue.cv.notify_one();
-        return true;
+        return assignObj(ticket, deadline, [&](auto & obj) { obj.emplace(std::forward<Args>(args)...); });
     }
 
     void bumpFinished(Int64 ticket, std::mutex & mu, std::vector<std::condition_variable> & cvs, Int64 & finished_ticket)
@@ -348,8 +382,8 @@ private:
 private:
     const Int64 capacity;
 
-    std::mutex read_mu;
-    std::mutex write_mu;
+    mutable std::mutex read_mu;
+    mutable std::mutex write_mu;
     std::condition_variable read_cv;
     std::condition_variable write_cv;
     Int64 read_finished = 0;
@@ -359,7 +393,7 @@ private:
     bool cancelled = false;
     bool finished = false;
 
-    std::vector<detail::SingleElementQueue<T>> objs;
+    std::vector<MPMCQueueDetail::SingleElementQueue<T>> objs;
     std::vector<std::condition_variable> read_finished_cvs;
     std::vector<std::condition_variable> write_finished_cvs;
 };
