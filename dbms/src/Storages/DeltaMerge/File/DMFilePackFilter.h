@@ -107,7 +107,7 @@ private:
     void init()
     {
         size_t pack_count = dmfile->getPacks();
-        if (!isAll(rowkey_ranges))
+        if (!(rowkey_ranges.size() == 1 && rowkey_ranges.begin().all()) )
         {
             tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
             std::vector<RSOperatorPtr> handle_filters;
