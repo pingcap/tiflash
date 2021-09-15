@@ -27,6 +27,7 @@ public:
         size_t bytes_written = 0; // written bytes of migrate file
     };
 
+
 public:
     DataCompactor(const PageStorage & storage,
                   PageStorage::Config gc_config,
@@ -62,7 +63,16 @@ private:
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
-    std::tuple<PageFileSet, PageFileSet, size_t, size_t, long> //
+    struct CompactCandidates
+    {
+        PageFileSet compact_candidates;
+        PageFileSet files_without_valid_pages;
+        size_t total_valid_bytes;
+        size_t num_migrate_pages;
+        long high_vaild_big_pf_index = -1;
+    };
+
+    CompactCandidates
     selectCandidateFiles(const PageFileSet & page_files,
                          const ValidPages & files_valid_pages,
                          const WritingFilesSnapshot & writing_files) const;
@@ -91,6 +101,7 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+
 
     const String & storage_name;
 

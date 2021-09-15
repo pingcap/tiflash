@@ -46,16 +46,17 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
 
     // Select gc candidate files
     Result result;
-    PageFileSet candidates;
     PageFileSet files_without_valid_pages;
-    long high_vaild_big_pf_index = -1;
 
-    std::tie(candidates, files_without_valid_pages, result.bytes_migrate, result.num_migrate_pages, high_vaild_big_pf_index)
-        = selectCandidateFiles(page_files, valid_pages, writing_files);
+    const auto candidates = selectCandidateFiles(page_files, valid_pages, writing_files);
 
-    result.candidate_size = candidates.size();
+    // std::tie(candidates, files_without_valid_pages, result.bytes_migrate, result.num_migrate_pages, high_vaild_big_pf_index)
+
+    result.candidate_size = candidates.compact_candidates.size();
+    result.bytes_migrate = candidates.total_valid_bytes;
+    result.num_migrate_pages = candidates.num_migrate_pages;
     result.do_compaction = result.candidate_size >= config.gc_min_files
-        || (candidates.size() >= GC_NUM_CANDIDATE_SIZE_LOWER_BOUND && result.bytes_migrate >= config.gc_min_bytes);
+        || (result.candidate_size >= GC_NUM_CANDIDATE_SIZE_LOWER_BOUND && result.bytes_migrate >= config.gc_min_bytes);
 
     // Scan over all `candidates` and do migrate.
     PageEntriesEdit migrate_entries_edit;
@@ -65,17 +66,17 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
             snapshot,
             valid_pages,
             page_files,
-            candidates,
-            files_without_valid_pages,
+            candidates.compact_candidates,
+            candidates.files_without_valid_pages,
             result.num_migrate_pages,
-            high_vaild_big_pf_index);
+            candidates.high_vaild_big_pf_index);
     }
     else
     {
         LOG_DEBUG(log,
                   storage_name << " DataCompactor::tryMigrate exit without compaction [candidates size=" //
                                << result.candidate_size << "] [total byte size=" << result.bytes_migrate << "], [files without valid page="
-                               << files_without_valid_pages.size() << "] Config{ " << config.toDebugString() << " }");
+                               << candidates.files_without_valid_pages.size() << "] Config{ " << config.toDebugString() << " }");
     }
 
     return {result, std::move(migrate_entries_edit)};
@@ -103,7 +104,7 @@ DataCompactor<SnapshotPtr>::collectValidPagesInPageFile(const SnapshotPtr & snap
 }
 
 template <typename SnapshotPtr>
-std::tuple<PageFileSet, PageFileSet, size_t, size_t, long> //
+typename DataCompactor<SnapshotPtr>::CompactCandidates //
 DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     const PageFileSet & page_files,
     const ValidPages & files_valid_pages,
@@ -230,7 +231,13 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
             break;
         }
     }
-    return {candidates, files_without_valid_pages, candidate_total_size, num_migrate_pages, high_vaild_big_pf_index};
+    struct CompactCandidates compact_candidates = {
+        candidates,
+        files_without_valid_pages,
+        candidate_total_size,
+        num_migrate_pages,
+        high_vaild_big_pf_index};
+    return compact_candidates;
 }
 
 template <typename SnapshotPtr>
