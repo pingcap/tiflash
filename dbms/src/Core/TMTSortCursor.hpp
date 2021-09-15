@@ -149,19 +149,14 @@ struct TMTSortCursor
     {
         auto compare = [](auto x, auto compare_next) __attribute__((always_inline))
         {
+            // we have to explicitly set the capture here
+            // otherwise, GCC will complain about the
+            // initialization of closures
             return [ x = std::move(x), compare_next = std::move(compare_next) ]() __attribute__((always_inline))
-            { // we have to explicitly set the capture here
-                return x > 0 || (x == 0 && compare_next()); // otherwise, GCC will complain about the
-                    // initialization of closures
+            {
+                return x > 0 || (x == 0 && compare_next());
             };
         };
-        //        return res.diffs[0] > 0
-        //            ? true
-        //            : (res.diffs[0] < 0
-        //                      ? false
-        //                      : (res.diffs[1] > 0
-        //                                ? true
-        //                                : (res.diffs[1] < 0 ? false : (res.diffs[2] > 0 ? true : (res.diffs[2] < 0 ? false : (lorder > rorder))))));
         return compare(res.diffs[0], compare(res.diffs[1], compare(res.diffs[2], [=] { return lorder > rorder; })))();
     }
 
@@ -174,9 +169,6 @@ struct TMTSortCursor
                 return x < 0 || (x == 0 && compare_next());
             };
         };
-        //        return res.diffs[0] < 0
-        //            ? true
-        //            : (res.diffs[0] > 0 ? false : (res.diffs[1] < 0 ? true : (res.diffs[1] > 0 ? false : (res.diffs[2] < 0 ? true : false))));
         return compare(res.diffs[0], compare(res.diffs[1], compare(res.diffs[2], [] { return false; })))();
     }
 
