@@ -189,7 +189,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -235,7 +235,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -353,7 +353,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -426,7 +426,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -513,7 +513,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::fromHandleRange(range), // Filtered by read_range
+            RowKeyRanges{RowKeyRange::fromHandleRange(range)}, // Filtered by read_range
             EMPTY_FILTER,
             column_cache_,
             IdSetPtr{});
@@ -628,7 +628,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             filter, // Filtered by rough set filter
             column_cache_,
             IdSetPtr{});
@@ -734,7 +734,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             filter, // Filtered by rough set filter
             column_cache_,
             IdSetPtr{});
@@ -825,7 +825,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
             column_cache_,
             id_set_ptr);
@@ -932,7 +932,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -1002,7 +1002,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -1072,7 +1072,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -1251,7 +1251,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(is_common_handle, rowkey_column_size),
+            RowKeyRanges{RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -1345,7 +1345,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            range.range, // Filtered by read_range
+            RowKeyRanges{range.range}, // Filtered by read_range
             EMPTY_FILTER,
             column_cache_,
             IdSetPtr{});
@@ -1461,7 +1461,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols_after_ddl,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -1554,7 +1554,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols_after_ddl,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -1624,7 +1624,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols_after_ddl,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -1694,7 +1694,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols_after_ddl,
-            RowKeyRange::newAll(false, 1),
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
