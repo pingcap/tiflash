@@ -3073,9 +3073,8 @@ public:
 
         const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
         const auto c1_type = block.getByPosition(arguments[1]).type;
-        if (c1_type->getTypeId() != TypeIndex::UInt64 && c1_type->getTypeId() != TypeIndex::Int64)
-            throw Exception("The second argument of function " + getName() + " must have UInt/Int type.");
-        Field c1_field;
+        if (c1_type->getTypeId() != TypeIndex::UInt64)
+            throw Exception("The second argument of function " + getName() + " must have Int type.");
 
         auto col_res = ColumnString::create();
         int val_num = c0_col->size();
@@ -3088,23 +3087,55 @@ public:
                 using T0 = typename DecimalType::FieldType;
                 using ColVecT0 = ColumnDecimal<T0>;
                 const auto * c0_raw = block.getByPosition(arguments[0]).column.get();
-
                 const auto scale = decimal_type.getScale();
 
-                if (auto col0_const = checkAndGetColumnConst<ColVecT0>(c0_raw, decimal_nullable))
+                using ColVecT1 = ColumnVector<Int64>;
+                const auto * c1_raw = block.getByPosition(arguments[1]).column.get();
+
+                if (const auto * col0_const = checkAndGetColumnConst<ColVecT0>(c0_raw, decimal_nullable))
                 {
                     const T0 & const_decimal = col0_const->template getValue<T0>();
-                    const std::string decimal_str = const_decimal.toString(scale);
-                    for (int i = 0; i < val_num; i++)
+                    const std::string decimal_str{const_decimal.toString(scale)};
+
+                    if (const auto * col1_column = checkAndGetColumn<ColVecT1>(c1_raw))
                     {
-                        c1_col->get(i, c1_field);
-                        auto maxNumDecimals = getFormatDecimals(c1_field);
-                        std::string xStr = roundFormatArgs(decimal_str, maxNumDecimals);
+                        const auto & int_array = col1_column->getData();
+                        for (int i = 0; i < val_num; i++)
+                        {
+                            size_t max_num_decimals = getMaxNumDecimals(int_array[i]);
+                            std::string x_str = roundFormatArgs(decimal_str, max_num_decimals);
+                            col_res->insert(formatENUS(x_str, max_num_decimals));
+                        }
+                    }
+                    else if (const auto * col1_const = checkAndGetColumnConst<ColVecT1>(c1_raw))
+                    {
+                        throw Exception("The second argument of function " + getName() + " must have UInt/Int type.");
                     }
                 }
-                else if (auto col0_column = checkAndGetColumn<ColVecT0>(c0_raw))
+                else if (const auto * col0_column = checkAndGetColumn<ColVecT0>(c0_raw))
                 {
-
+                    if (const auto * col1_const = checkAndGetColumnConst<ColVecT1>(c1_raw))
+                    {
+                        size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<Int64>());
+                        for (const auto &decimal : col0_column->getData())
+                        {
+                            const std::string decimal_str{decimal.toString(scale)};
+                            std::string x_str = roundFormatArgs(decimal_str, max_num_decimals);
+                            col_res->insert(formatENUS(x_str, max_num_decimals));
+                        }
+                    }
+                    else if (const auto * col1_column = checkAndGetColumn<ColVecT1>(c1_raw))
+                    {
+                        const auto & decimal_array = col0_column->getData();
+                        const auto & int_array = col1_column->getData();
+                        for (int i = 0; i < val_num; i++)
+                        {
+                            const std::string decimal_str{decimal_array[i].toString(scale)};
+                            size_t max_num_decimals = getMaxNumDecimals(int_array[i]);
+                            std::string x_str = roundFormatArgs(decimal_str, max_num_decimals);
+                            col_res->insert(formatENUS(x_str, max_num_decimals));
+                        }
+                    }
                 }
                 else
                 {
@@ -3112,7 +3143,7 @@ public:
                 }
             });
         }
-        else // c0_type->isFloatingPoint()
+        else // c0_type->isFloatingPoint(), co_type == DataTypeFloat64.
         {
             for (int i = 0; i < val_num; i++)
             {
@@ -3139,9 +3170,8 @@ private:
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    Int64 getFormatDecimals(const Field & field) const
+    size_t getMaxNumDecimals(Int64 c1_int) const
     {
-        auto c1_int = field.get<Int64>();
         if (c1_int < 0)
         {
             c1_int = 0;
@@ -3186,12 +3216,8 @@ private:
 
             bool sign = x_str[0] == '-';
             x_str.clear();
-            if (sign) {
-                x_str += '-';
-            }
-            if (carry) {
-                x_str += '1';
-            }
+            if (sign) x_str += '-';
+            if (carry) x_str += '1';
             x_str += integer_part;
             x_str += '.';
             x_str += decimal_part;
@@ -3199,6 +3225,11 @@ private:
         } else {
             return x_str;
         }
+    }
+
+    static std::string formatENUS(std::string number, size_t precision)
+    {
+        return number;
     }
 };
 
