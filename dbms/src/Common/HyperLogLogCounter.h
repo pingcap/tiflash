@@ -101,7 +101,7 @@ constexpr bool isBigRankStore(UInt8 precision)
 {
     return precision >= 12;
 }
-} // namespace detail
+} // namespace details
 
 /// Used to deduce denominator type depending on options provided.
 template <typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode, typename Enable = void>
