@@ -1,3 +1,4 @@
+#include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageFile.h>
@@ -219,5 +220,63 @@ TEST(PageFile_test, PageFileLink)
     ASSERT_EQ(sequence, sid);
 }
 
+
+TEST(PageFile_test, EncryptedPageFileLink)
+{
+    // try {
+    Poco::Logger * log = &Poco::Logger::get("EncryptedPageFileLink");
+    PageId page_id = 55;
+    UInt64 tag = 0;
+    const String path = TiFlashTestEnv::getTemporaryPath("EncryptedPageFileLink/");
+    {
+        if (Poco::File p(path); p.exists())
+        {
+            Poco::File file(Poco::Path(path).parent());
+            file.remove(true);
+        }
+    }
+
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
+    const auto file_provider = std::make_shared<FileProvider>(key_manager, true);
+    PageFile pf0 = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
+    auto writer = pf0.createWriter(true, true);
+
+    WriteBatch batch;
+    {
+        const size_t buf_sz = 1024;
+        char c_buff1[buf_sz], c_buff2[buf_sz];
+
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            c_buff1[i] = i & 0xff;
+            c_buff2[i] = i & 0xff;
+        }
+
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(c_buff1, sizeof(c_buff1));
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
+        batch.putPage(page_id, tag, buff1, buf_sz);
+        batch.putPage(page_id + 1, tag, buff2, buf_sz);
+    }
+
+    PageEntriesEdit edit;
+
+    ASSERT_GT(writer->write(batch, edit), 0);
+    PageFile pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
+    WriteBatch::SequenceID sid = 100;
+    ASSERT_TRUE(pf1.linkPage(pf0, sid, edit));
+
+    auto reader = PageFile::MetaMergingReader::createFrom(pf1);
+    while (reader->hasNext())
+    {
+        reader->moveNext();
+    }
+
+    auto sequence = reader->writeBatchSequence();
+    ASSERT_EQ(sequence, sid);
+
+    // } catch (Exception & e){
+    //    std::cout << e.displayText() << std::endl;
+    // }
+}
 } // namespace tests
 } // namespace DB

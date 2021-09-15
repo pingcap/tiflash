@@ -728,7 +728,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
-        ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_force_hardlink_rate, 0.8);
+        ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_force_hardlink_rate, 0.7);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_open_file_max_idle_seconds, 20);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_page_gc_low_write_prob, 0.2);
         verifyPersisterReloadConfig(persister);
@@ -752,7 +752,6 @@ dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
 dt_storage_pool_data_gc_min_bytes = 256
 dt_storage_pool_data_gc_max_valid_rate = 0.5
-dt_storage_pool_data_gc_force_hardlink_rate = 0.7
 dt_open_file_max_idle_seconds = 20
 dt_page_gc_low_write_prob = 0.2
         )"};
@@ -768,7 +767,6 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_NE(storage_pool->data().config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(storage_pool->data().config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(storage_pool->data().config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(persister.page_storage->config.gc_force_hardlink_rate, settings.dt_storage_pool_data_gc_force_hardlink_rate);
         EXPECT_NE(storage_pool->data().config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_NE(storage_pool->data().config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
@@ -778,7 +776,6 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_EQ(storage_pool->data().config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_EQ(storage_pool->data().config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_DOUBLE_EQ(storage_pool->data().config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_DOUBLE_EQ(storage_pool->data().config.gc_force_hardlink_rate, settings.dt_storage_pool_data_gc_force_hardlink_rate);
         EXPECT_EQ(storage_pool->data().config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_EQ(storage_pool->data().config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
@@ -801,7 +798,6 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
-        ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_force_hardlink_rate, 0.7);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_open_file_max_idle_seconds, 20);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_page_gc_low_write_prob, 0.2);
         verifyStoragePoolReloadConfig(storage_pool);
