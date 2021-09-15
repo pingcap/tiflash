@@ -29,7 +29,7 @@ public:
         friend class PageFile;
 
     public:
-        Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
+        Writer(PageFile &, bool sync_on_write, bool truncate_if_exists = true);
         ~Writer();
 
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
@@ -37,6 +37,8 @@ public:
 
         const String & parentPath() const;
         PageFileIdAndLevel fileIdLevel() const;
+
+        void pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     private:
         void closeFd();
@@ -186,6 +188,34 @@ public:
         size_t data_file_offset = 0;
     };
 
+    class MetaLinkingReader;
+    using MetaLinkingReaderPtr = std::shared_ptr<MetaLinkingReader>;
+
+    class MetaLinkingReader : private boost::noncopyable
+    {
+    public:
+        static MetaLinkingReaderPtr createFrom(PageFile & page_file);
+
+        MetaLinkingReader(PageFile & page_file_); // should only called by `createFrom`
+
+        ~MetaLinkingReader();
+
+        bool hasNext() const;
+
+        void linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level);
+
+        std::pair<char *, size_t> getMetaInfo() { return {meta_buffer, meta_size}; };
+
+    private:
+        bool initialize();
+
+    private:
+        PageFile & page_file;
+        char * meta_buffer = nullptr;
+        size_t meta_size = 0;
+        size_t meta_file_offset = 0;
+    };
+
     struct MergingPtrComparator
     {
         bool operator()(const MetaMergingReaderPtr & lhs, const MetaMergingReaderPtr & rhs) const
@@ -298,6 +328,8 @@ public:
 
     String parentPath() const { return parent_path; }
     String folderPath() const;
+
+    bool linkPage(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     void createEncryptionInfo() const
     {
