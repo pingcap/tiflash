@@ -160,18 +160,18 @@ template <typename Mapped>
 struct StringHashTableLookupResult
 {
     Mapped * mapped_ptr;
-    StringHashTableLookupResult() {}
-    StringHashTableLookupResult(Mapped * mapped_ptr_)
+    StringHashTableLookupResult() = default;
+    StringHashTableLookupResult(Mapped * mapped_ptr_) // NOLINT(google-explicit-constructor)
         : mapped_ptr(mapped_ptr_)
     {}
-    StringHashTableLookupResult(std::nullptr_t) {}
-    const VoidKey getKey() const { return {}; }
+    StringHashTableLookupResult(std::nullptr_t) {} // NOLINT(google-explicit-constructor)
+    VoidKey getKey() const { return {}; }
     auto & getMapped() { return *mapped_ptr; }
     auto & operator*() { return *this; }
     auto & operator*() const { return *this; }
     auto * operator->() { return this; }
     auto * operator->() const { return this; }
-    operator bool() const { return mapped_ptr; }
+    operator bool() const { return mapped_ptr; } // NOLINT(google-explicit-constructor)
     friend bool operator==(const StringHashTableLookupResult & a, const std::nullptr_t &) { return !a.mapped_ptr; }
     friend bool operator==(const std::nullptr_t &, const StringHashTableLookupResult & b) { return !b.mapped_ptr; }
     friend bool operator!=(const StringHashTableLookupResult & a, const std::nullptr_t &) { return a.mapped_ptr; }
@@ -216,7 +216,7 @@ public:
 
     StringHashTable() = default;
 
-    StringHashTable(size_t reserve_for_num_elements)
+    explicit StringHashTable(size_t reserve_for_num_elements)
         : m1{reserve_for_num_elements / 4}
         , m2{reserve_for_num_elements / 4}
         , m3{reserve_for_num_elements / 4}
@@ -234,7 +234,6 @@ public:
 
     ~StringHashTable() = default;
 
-public:
     // Dispatch is written in a way that maximizes the performance:
     // 1. Always memcpy 8 times bytes
     // 2. Use switch case extension to generate fast dispatching table

@@ -1,9 +1,14 @@
 #include <PSWorkload.h>
 
-class HighValidBigFileGCWorkload : public StressWorkload
+class HighValidBigFileGCWorkload
+    : public StressWorkload
     , public StressWorkloadFunc<HighValidBigFileGCWorkload>
 {
 public:
+    explicit HighValidBigFileGCWorkload(const StressEnv & options_)
+        : StressWorkload(options_)
+    {}
+
     static String name()
     {
         return "HighValidBigPageFileGCWorkload";
@@ -14,7 +19,6 @@ public:
         return 1 << 0;
     }
 
-private:
     String desc() override
     {
         return fmt::format("Some of options will be ignored"
@@ -52,7 +56,7 @@ private:
 
             pool.joinAll();
             stop_watch.stop();
-            result();
+            onDumpResult();
         }
 
         LOG_INFO(StressEnv::logger, "Already generator an 8G page file");
@@ -73,7 +77,7 @@ private:
 
             pool.joinAll();
             stop_watch.stop();
-            result();
+            onDumpResult();
         }
 
         gc = std::make_shared<PSGc>(ps);
@@ -90,7 +94,7 @@ private:
 
             pool.joinAll();
             stop_watch.stop();
-            result();
+            onDumpResult();
         }
 
         gc->doGcOnce();
@@ -99,12 +103,12 @@ private:
     bool verify() override
     {
         return (gc_time_ms < 1 * 1000);
-    };
+    }
 
-    void failed() override
+    void onFailed() override
     {
         LOG_WARNING(StressEnv::logger, fmt::format("GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000));
-    };
+    }
 
 private:
     UInt64 gc_time_ms = 0;

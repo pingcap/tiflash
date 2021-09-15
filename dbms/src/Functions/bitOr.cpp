@@ -62,7 +62,9 @@ struct BitOrImpl<A, B, true>
 struct NameBitOr                { static constexpr auto name = "bitOr"; };
 // clang-format on
 
-using FunctionBitOr = FunctionBinaryArithmetic<BitOrImpl, NameBitOr>;
+template <typename A, typename B>
+using BitOrImpl_t = BitOrImpl<A, B>;
+using FunctionBitOr = FunctionBinaryArithmetic<BitOrImpl_t, NameBitOr>;
 
 } // namespace
 

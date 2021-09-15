@@ -76,7 +76,7 @@ public:
     class Reader final : private Cell::State
     {
     public:
-        Reader(DB::ReadBuffer & in_)
+        explicit Reader(DB::ReadBuffer & in_)
             : in(in_)
         {
         }
@@ -126,7 +126,7 @@ public:
         bool is_initialized = false;
     };
 
-    class iterator
+    class iterator // NOLINT(readability-identifier-naming)
     {
         Self * container = nullptr;
         Cell * ptr = nullptr;
@@ -134,7 +134,7 @@ public:
         friend class SmallTable;
 
     public:
-        iterator() {}
+        iterator() = default;
         iterator(Self * container_, Cell * ptr_)
             : container(container_)
             , ptr(ptr_)
@@ -156,7 +156,7 @@ public:
     };
 
 
-    class const_iterator
+    class const_iterator // NOLINT(readability-identifier-naming)
     {
         const Self * container = nullptr;
         const Cell * ptr = nullptr;
@@ -164,12 +164,12 @@ public:
         friend class SmallTable;
 
     public:
-        const_iterator() {}
+        const_iterator() = default;
         const_iterator(const Self * container_, const Cell * ptr_)
             : container(container_)
             , ptr(ptr_)
         {}
-        const_iterator(const iterator & rhs)
+        explicit const_iterator(const iterator & rhs)
             : container(rhs.container)
             , ptr(rhs.ptr)
         {}
