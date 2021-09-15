@@ -1,6 +1,7 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Config/cpptoml.h>
 #include <Common/Exception.h>
+#include <Common/setThreadName.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
@@ -41,7 +42,7 @@ void CPUAffinityManager::initReadThreadNames(Poco::Util::LayeredConfiguration & 
         std::istringstream ss(cpu_config);
         cpptoml::parser p(ss);
         auto table = p.parse();
-        if (auto threads = table->get_qualified_array_of<std::string>("cpu.read_threads"); threads)
+        if (auto threads = table->get_qualified_array_of<std::string>("read_threads"); threads)
         {
             for (const auto & name : *threads)
             {
@@ -87,12 +88,14 @@ void CPUAffinityManager::bindWriteThread(pid_t tid) const
 
 void CPUAffinityManager::bindSelfReadThread() const
 {
+    LOG_INFO(log, "Thread: " << ::getThreadName() << " bindReadThread.");
     // If tid is zero, then the calling thread is used.
     bindReadThread(0);
 }
 
 void CPUAffinityManager::bindSelfWriteThread() const
 {
+    LOG_INFO(log, "Thread: " << ::getThreadName() << " bindWriteThread.");
     // If tid is zero, then the calling thread is used.
     bindWriteThread(0);
 }
