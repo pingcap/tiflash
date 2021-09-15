@@ -107,20 +107,6 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
         return {};
 
     return cutBlock(std::move(block), combined_offset_and_limits);
-    //    if (blocks.empty())
-    //        return {};
-    //
-    //    for (size_t i = 1; i < blocks.size(); i++)
-    //    {
-    //        for (size_t j = 0; j < block.columns(); j++)
-    //        {
-    //            auto & dst_column = blocks[0].getByPosition(j);
-    //            auto & src_column = blocks[i].getByPosition(j);
-    //            auto mutate_col = (*std::move(dst_column.column)).mutate();
-    //            mutate_col->insertRangeFrom(*src_column.column, 0, src_column.column->size());
-    //        }
-    //    }
-    //    return blocks[0];
 }
 
 inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, size_t handle_pos)
