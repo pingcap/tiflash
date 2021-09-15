@@ -3098,10 +3098,8 @@ public:
                     for (int i = 0; i < val_num; i++)
                     {
                         c1_col->get(i, c1_field);
-                        auto c1_int = getFormatDecimals(c1_field);
-                        if (decimal_str.find('.') != std::string::npos) {
-                            
-                        }
+                        auto maxNumDecimals = getFormatDecimals(c1_field);
+                        std::string xStr = roundFormatArgs(decimal_str, maxNumDecimals);
                     }
                 }
                 else if (auto col0_column = checkAndGetColumn<ColVecT0>(c0_raw))
@@ -3125,7 +3123,7 @@ public:
 
 private:
     const Context & context;
-    const Int64 formatMaxDecimals = 30;
+    const Int64 format_max_decimals = 30;
 
     template <typename F>
     void getDecimalType(DataTypePtr type, F && f) const
@@ -3148,11 +3146,59 @@ private:
         {
             c1_int = 0;
         }
-        else if (c1_int > formatMaxDecimals)
+        else if (c1_int > format_max_decimals)
         {
-            c1_int = formatMaxDecimals;
+            c1_int = format_max_decimals;
         }
         return c1_int;
+    }
+
+    static std::string roundFormatArgs(std::string x_str, size_t max_num_decimals)
+    {
+        auto point_index = x_str.find('.');
+        if (point_index == std::string::npos)
+        {
+            return x_str;
+        }
+
+        const auto decimal_part_size = x_str.size() - point_index;
+        if (decimal_part_size > max_num_decimals) {
+            bool carry = x_str[max_num_decimals] >= '5';
+            std::string decimal_part(x_str.substr(point_index + 1));
+            for (auto i = max_num_decimals - 1; i >= 0 && carry; i--) {
+                if (decimal_part[i] == '9')
+                {
+                    decimal_part[i] = '0';
+                } else {
+                    decimal_part[i] = decimal_part[i] + 1;
+                    carry = false;
+                }
+            }
+            std::string integer_part(x_str.substr(0, point_index));
+            for (auto i = point_index - 1; i >= 0 && carry; i--) {
+                if (integer_part[i] == '9') {
+                    integer_part[i] = '0';
+                } else {
+                    integer_part[i] = integer_part[i] + 1;
+                    carry = false;
+                }
+            }
+
+            bool sign = x_str[0] == '-';
+            x_str.clear();
+            if (sign) {
+                x_str += '-';
+            }
+            if (carry) {
+                x_str += '1';
+            }
+            x_str += integer_part;
+            x_str += '.';
+            x_str += decimal_part;
+            return x_str;
+        } else {
+            return x_str;
+        }
     }
 };
 
