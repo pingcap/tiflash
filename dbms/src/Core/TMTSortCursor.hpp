@@ -149,7 +149,8 @@ struct TMTSortCursor
     {
         auto compare = [](auto x, auto compare_next) __attribute__((always_inline))
         {
-            return [x = std::move(x), compare_next = std::move(compare_next)]() { // we have to explicitly set the capture here
+            return [ x = std::move(x), compare_next = std::move(compare_next) ]() __attribute__((always_inline))
+            { // we have to explicitly set the capture here
                 return x > 0 || (x == 0 && compare_next()); // otherwise, GCC will complain about the
                     // initialization of closures
             };
@@ -166,16 +167,17 @@ struct TMTSortCursor
 
     static inline bool lessAtIgnOrder(const TMTCmpOptimizedRes res)
     {
-        auto compare = [&](size_t idx, auto compare_next) __attribute__((always_inline))
+        auto compare = [&](auto x, auto compare_next) __attribute__((always_inline))
         {
-            return [&]() {
-                return res.diffs[idx] < 0 || (res.diffs[idx] == 0 && compare_next());
+            return [ x = std::move(x), compare_next = std::move(compare_next) ]() __attribute__((always_inline))
+            {
+                return x < 0 || (x == 0 && compare_next());
             };
         };
         //        return res.diffs[0] < 0
         //            ? true
         //            : (res.diffs[0] > 0 ? false : (res.diffs[1] < 0 ? true : (res.diffs[1] > 0 ? false : (res.diffs[2] < 0 ? true : false))));
-        return compare(0, compare(1, compare(2, [] { return false; })))();
+        return compare(res.diffs[0], compare(res.diffs[1], compare(res.diffs[2], [] { return false; })))();
     }
 
     bool totallyLessOrEquals(const TMTSortCursor & rhs) const
