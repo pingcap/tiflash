@@ -1,40 +1,35 @@
 #pragma once
 
-#include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <fmt/format.h>
 
 #include <atomic>
 
-namespace DB
+namespace Poco
 {
-// Define is_background_thread for Pagestorage
-
-namespace FailPoints
-{
-extern const char random_slow_page_storage_remove_expired_snapshots[];
-extern const char random_slow_page_storage_list_all_live_files[];
-} // namespace FailPoints
-
-} // namespace DB
-
+class Logger;
+}
 
 using PSPtr = std::shared_ptr<DB::PageStorage>;
 
 enum StressEnvStat
 {
+    // Below status are defined as fail
     STATUS_EXCEPTION = -1,
+    STATUS_INTERRUPT = -2,
+    // Below status are defined as success
     STATUS_LOOP = 1,
-    STATUS_INTERRUPT = 2,
-    STATUS_TIMEOUT = 3,
+    STATUS_TIMEOUT = 2,
 };
 
 class StressEnvStatus
 {
 private:
-    StressEnvStatus(){};
-    ~StressEnvStatus(){};
+    StressEnvStatus() = default;
+    ~StressEnvStatus() = default;
+
+    std::atomic<StressEnvStat> status = STATUS_LOOP;
 
 public:
     static StressEnvStatus & getInstance()
@@ -43,12 +38,20 @@ public:
         return instance;
     }
 
-    std::atomic<StressEnvStat> status = STATUS_LOOP;
-    int isSuccess();
+    bool isRunning() const
+    {
+        return status == STATUS_LOOP;
+    }
+    int isSuccess() const
+    {
+        auto code = status.load();
+        return code > 0 ? 0 : static_cast<int>(code);
+    }
 
-    bool stat();
-
-    void setStat(enum StressEnvStat status_);
+    void setStat(enum StressEnvStat status_)
+    {
+        status = status_;
+    }
 };
 
 struct StressEnv
@@ -72,26 +75,28 @@ struct StressEnv
 
     String toDebugString() const
     {
-        return fmt::format("{{ num_writers: {}, num_readers: {}, clean_before_run: {}" //
-                           ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
-                           ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}]"
-                           ", status_interval: {}, situation_mask : {} }}",
-                           num_writers,
-                           num_readers,
-                           clean_before_run,
-                           timeout_s,
-                           read_delay_ms,
-                           num_writer_slots,
-                           avg_page_size_mb,
-                           rand_seed,
-                           fmt::join(paths.begin(), paths.end(), ","),
-                           fmt::join(failpoints.begin(), failpoints.end(), ","),
-                           status_interval,
-                           situation_mask
-                           //
+        return fmt::format(
+            "{{ "
+            "num_writers: {}, num_readers: {}, clean_before_run: {}"
+            ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
+            ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}]"
+            ", status_interval: {}, situation_mask : {}"
+            " }}",
+            num_writers,
+            num_readers,
+            clean_before_run,
+            timeout_s,
+            read_delay_ms,
+            num_writer_slots,
+            avg_page_size_mb,
+            rand_seed,
+            fmt::join(paths.begin(), paths.end(), ","),
+            fmt::join(failpoints.begin(), failpoints.end(), ","),
+            status_interval,
+            situation_mask
+            //
         );
     }
-
 
     static void initGlobalLogger();
 

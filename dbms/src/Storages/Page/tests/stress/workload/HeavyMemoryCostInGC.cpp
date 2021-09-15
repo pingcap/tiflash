@@ -1,9 +1,14 @@
 #include <PSWorkload.h>
 
-class HeavyMemoryCostInGC : public StressWorkload
+class HeavyMemoryCostInGC
+    : public StressWorkload
     , public StressWorkloadFunc<HeavyMemoryCostInGC>
 {
 public:
+    explicit HeavyMemoryCostInGC(const StressEnv & options_)
+        : StressWorkload(options_)
+    {}
+
     static String name()
     {
         return "HeavyMemoryCostInGCWorkload";
@@ -14,7 +19,6 @@ public:
         return 1 << 1;
     }
 
-private:
     String desc() override
     {
         return fmt::format("Some of options will be ignored"
@@ -53,13 +57,13 @@ private:
     bool verify() override
     {
         return (metrics_dumper->getMemoryPeak() < 5UL * 1024 * 1024);
-    };
+    }
 
-    void failed() override
+    void onFailed() override
     {
         LOG_WARNING(StressEnv::logger,
                     fmt::format("Memory Peak is {} , it should not bigger than {} ", metrics_dumper->getMemoryPeak(), 5 * 1024 * 1024));
-    };
+    }
 };
 
 REGISTER_WORKLOAD(HeavyMemoryCostInGC)
