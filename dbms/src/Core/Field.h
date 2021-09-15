@@ -315,7 +315,6 @@ public:
                 else
                     assign(std::forward<T>(rhs));
             }
-            return *this;
         }
         else
         {
@@ -326,9 +325,9 @@ public:
             }
             else
                 assignConcrete(std::forward<T>(rhs));
-
-            return *this;
         }
+
+        return *this;
     }
 
     ~Field() { destroy(); }
