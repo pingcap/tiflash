@@ -508,7 +508,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         else
             LOG_INFO(log, "encryption is disabled");
     }
-    // TODO: get grpc thread of proxy.
+
     SCOPE_EXIT({
         if (!proxy_conf.is_proxy_runnable)
         {

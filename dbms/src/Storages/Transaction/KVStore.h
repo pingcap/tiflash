@@ -147,7 +147,6 @@ private:
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 
 private:
-
     RegionManager region_manager;
 
     RegionPersister region_persister;
