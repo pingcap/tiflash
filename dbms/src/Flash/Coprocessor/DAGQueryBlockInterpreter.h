@@ -53,7 +53,7 @@ private:
     void executeRemoteQuery(DAGPipeline & pipeline);
     void executeImpl(DAGPipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
-    void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, int id = 0);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
