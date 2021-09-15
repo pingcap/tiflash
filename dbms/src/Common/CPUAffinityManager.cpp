@@ -49,7 +49,7 @@ void CPUAffinityManager::initReadThreadNames(Poco::Util::LayeredConfiguration & 
         }
     }
     
-    // Default threads
+    // Default read threads
     if (read_threads.empty())
     {
         read_threads = {"cop-pool", "batch-cop-pool"};
@@ -98,11 +98,15 @@ void CPUAffinityManager::bindSelfWriteThread() const
 
 std::string CPUAffinityManager::toString() const
 {
+// clang-format off
 #ifdef __linux__
-    return "enable " + std::to_string(enable()) + " read_cpu_percent " + std::to_string(read_cpu_percent) + " cpu_cores " + std::to_string(cpu_cores) + " read_cpu_set " + cpuSetToString(read_cpu_set) + " write_cpu_set " + cpuSetToString(write_cpu_set);
+    return "enable " + std::to_string(enable()) + " read_cpu_percent " + std::to_string(read_cpu_percent) +
+        " cpu_cores " + std::to_string(cpu_cores) + " read_cpu_set " + cpuSetToString(read_cpu_set) +
+        " write_cpu_set " + cpuSetToString(write_cpu_set);
 #elif
     return "not support";
 #endif
+// clang-format on
 }
 
 void CPUAffinityManager::initCPUSet()
