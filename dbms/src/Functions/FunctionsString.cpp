@@ -7,6 +7,7 @@
 #include <Functions/FunctionsString.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
+#include <Functions/StringUtil.h>
 #include <IO/WriteHelpers.h>
 #include <fmt/printf.h>
 
@@ -3024,21 +3025,6 @@ private:
     const Context & context;
 };
 
-namespace
-{
-/// Same as ColumnString's private offsetAt and sizeAt.
-size_t offsetAt(const ColumnString::Offsets & offsets, size_t i)
-{
-    return i == 0 ? 0 : offsets[i - 1];
-}
-
-size_t sizeAt(const ColumnString::Offsets & offsets, size_t i)
-{
-    return i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
-}
-} // namespace
-
-template <typename Impl>
 class FunctionSubStringIndex : public IFunction
 {
 public:
@@ -3054,6 +3040,7 @@ public:
 
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 3; }
+    bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -3061,11 +3048,11 @@ public:
             throw Exception(
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be {}.", getName(), toString(arguments.size()), 3),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        if (!arguments[0]->isStringOrFixedString())
+        if (!arguments[0]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if (!arguments[1]->isStringOrFixedString())
+        if (!arguments[1]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -3078,20 +3065,20 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
-        if (executeSubString<UInt8>(block, arguments, result)
-            || executeSubString<UInt16>(block, arguments, result)
-            || executeSubString<UInt32>(block, arguments, result)
-            || executeSubString<UInt64>(block, arguments, result)
-            || executeSubString<Int8>(block, arguments, result)
-            || executeSubString<Int16>(block, arguments, result)
-            || executeSubString<Int32>(block, arguments, result)
-            || executeSubString<Int64>(block, arguments, result))
+        if (executeSubStringIndex<UInt8>(block, arguments, result)
+            || executeSubStringIndex<UInt16>(block, arguments, result)
+            || executeSubStringIndex<UInt32>(block, arguments, result)
+            || executeSubStringIndex<UInt64>(block, arguments, result)
+            || executeSubStringIndex<Int8>(block, arguments, result)
+            || executeSubStringIndex<Int16>(block, arguments, result)
+            || executeSubStringIndex<Int32>(block, arguments, result)
+            || executeSubStringIndex<Int64>(block, arguments, result))
         {
             return;
         }
         else
         {
-            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal argument of function  {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 
@@ -3099,7 +3086,7 @@ private:
     const Context & context;
 
     template <typename IntType>
-    bool executeSubString(
+    bool executeSubStringIndex(
         Block & block,
         const ColumnNumbers & arguments,
         const size_t result)
@@ -3123,11 +3110,11 @@ private:
             {
                 return false;
             }
-            Impl::vectorConstConst(
+            vector_const_const(
                 str_col->getChars(),
                 str_col->getOffsets(),
-                delim_col->getField().get<String>(),
-                count_col->getField().get<IntType>(),
+                delim_col->getValue<String>(),
+                count_col->getValue<IntType>(),
                 col_res->getChars(),
                 col_res->getOffsets());
             column_result.column = std::move(col_res);
@@ -3144,7 +3131,7 @@ private:
             {
                 return false;
             }
-            Impl::vectorVectorVector(
+            vector_vector_vector(
                 str_col->getChars(),
                 str_col->getOffsets(),
                 delim_col->getChars(),
@@ -3157,11 +3144,8 @@ private:
 
         return true;
     }
-};
 
-struct SubStringIndexImpl
-{
-    static void vectorConstConst(
+    static void vector_const_const(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & delim,
@@ -3184,20 +3168,20 @@ struct SubStringIndexImpl
             return;
         }
 
+        Volnitsky searcher(reinterpret_cast<const char *>(delim.c_str()), delim.size(), 0);
         res_data.reserve(data.size());
-
         for (size_t i = 0; i < offsets.size(); ++i)
         {
-            auto data_offset = offsetAt(offsets, i);
-            auto data_size = sizeAt(offsets, i) - 1;
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i) - 1;
 
-            subStringIndex(&data[data_offset], data_size, reinterpret_cast<const UInt8 *>(delim.c_str()), delim.size(), needCount, res_data, res_offset);
+            subStringIndex(&data[data_offset], data_size, &searcher, delim.size(), needCount, res_data, res_offset);
             res_offsets[i] = res_offset;
         }
     }
 
     template <typename IntType>
-    static void vectorVectorVector(
+    static void vector_vector_vector(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const ColumnString::Chars_t & delim_data,
@@ -3212,11 +3196,10 @@ struct SubStringIndexImpl
 
         for (size_t i = 0; i < offsets.size(); ++i)
         {
-            auto data_offset = offsetAt(offsets, i);
-            auto data_size = sizeAt(offsets, i) - 1;
-
-            auto delim_offset = offsetAt(delim_offsets, i);
-            auto delim_size = sizeAt(delim_offsets, i) - 1; // ignore the trailing zero.
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i) - 1;
+            auto delim_offset = StringUtil::offsetAt(delim_offsets, i);
+            auto delim_size = StringUtil::sizeAt(delim_offsets, i) - 1; // ignore the trailing zero.
             Int64 count = needCount[i];
 
             if (delim_size == 0 || count == 0 || (count < 0 && -count < 0))
@@ -3227,8 +3210,8 @@ struct SubStringIndexImpl
                 res_offsets[i] = res_offset;
                 continue;
             }
-
-            subStringIndex(&data[data_offset], data_size, &delim_data[delim_offset], delim_size, count, res_data, res_offset);
+            Volnitsky searcher(reinterpret_cast<const char *>(&delim_data[delim_offset]), delim_size, data_size);
+            subStringIndex(&data[data_offset], data_size, &searcher, delim_size, count, res_data, res_offset);
             res_offsets[i] = res_offset;
         }
     }
@@ -3236,7 +3219,7 @@ struct SubStringIndexImpl
     static void subStringIndex(
         const UInt8 * data_begin,
         size_t data_size,
-        const UInt8 * delim_begin,
+        Volnitsky * delim_searcher,
         size_t delim_size,
         Int64 count,
         ColumnString::Chars_t & res_data,
@@ -3245,12 +3228,11 @@ struct SubStringIndexImpl
         const UInt8 * begin = data_begin;
         const UInt8 * pos = begin;
         const UInt8 * end = pos + data_size;
-        Volnitsky searcher(reinterpret_cast<const char *>(delim_begin), delim_size, data_size);
         if (count > 0)
         {
             while (pos < end)
             {
-                const UInt8 * match = searcher.search(pos, end - pos);
+                const UInt8 * match = delim_searcher->search(pos, end - pos);
                 count--;
                 if (match == end || count == 0)
                 {
@@ -3271,7 +3253,7 @@ struct SubStringIndexImpl
             // When count is negative, we need split string by delim.
             while (pos < end)
             {
-                const UInt8 * match = searcher.search(pos, end - pos);
+                const UInt8 * match = delim_searcher->search(pos, end - pos);
                 if (match == end)
                 {
                     break;
@@ -3293,7 +3275,6 @@ struct SubStringIndexImpl
         }
     }
 };
-
 
 struct NameEmpty
 {
@@ -3416,6 +3397,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionRightUTF8>();
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
-    factory.registerFunction<FunctionSubStringIndex<SubStringIndexImpl>>();
+    factory.registerFunction<FunctionSubStringIndex>();
 }
 } // namespace DB

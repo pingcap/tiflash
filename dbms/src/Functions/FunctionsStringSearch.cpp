@@ -6,6 +6,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsStringSearch.h>
 #include <Functions/Regexps.h>
+#include <Functions/StringUtil.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/UTF8String.h>
 #include <re2/re2.h>
@@ -27,20 +28,6 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 }
-
-namespace
-{
-/// Same as ColumnString's private offsetAt and sizeAt.
-size_t offsetAt(const ColumnString::Offsets & offsets, size_t i)
-{
-    return i == 0 ? 0 : offsets[i - 1];
-}
-
-size_t sizeAt(const ColumnString::Offsets & offsets, size_t i)
-{
-    return i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
-}
-} // namespace
 
 /** Implementation details for functions of 'position' family depending on ASCII/UTF8 and case sensitiveness.
   */
@@ -967,11 +954,11 @@ struct ReplaceStringImpl
 
         for (size_t i = 0; i < offsets.size(); ++i)
         {
-            auto data_offset = offsetAt(offsets, i);
-            auto data_size = sizeAt(offsets, i);
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i);
 
-            auto needle_offset = offsetAt(needle_offsets, i);
-            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
             const UInt8 * begin = &data[data_offset];
             const UInt8 * pos = begin;
@@ -1077,8 +1064,8 @@ struct ReplaceStringImpl
             /// Is it true that this line no longer needs to perform transformations.
             bool can_finish_current_string = false;
 
-            auto replacement_offset = offsetAt(replacement_offsets, i);
-            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
             /// We check that the entry does not go through the boundaries of strings.
             if (match + needle.size() < begin + offsets[i])
@@ -1124,14 +1111,14 @@ struct ReplaceStringImpl
 
         for (size_t i = 0; i < offsets.size(); ++i)
         {
-            auto data_offset = offsetAt(offsets, i);
-            auto data_size = sizeAt(offsets, i);
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i);
 
-            auto needle_offset = offsetAt(needle_offsets, i);
-            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
-            auto replacement_offset = offsetAt(replacement_offsets, i);
-            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
             const UInt8 * begin = &data[data_offset];
             const UInt8 * pos = begin;
@@ -1306,8 +1293,8 @@ struct ReplaceStringImpl
         pos = end;                                  \
     } while (false)
 
-            auto needle_offset = offsetAt(needle_offsets, i);
-            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
             if (needle_size == 0)
             {
                 COPY_REST_OF_CURRENT_STRING();
@@ -1418,8 +1405,8 @@ struct ReplaceStringImpl
             /// We check that the entry does not pass through the boundaries of strings.
             if (match + needle.size() <= begin + n * (i + 1))
             {
-                auto replacement_offset = offsetAt(replacement_offsets, i);
-                auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+                auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+                auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
                 res_data.resize(res_data.size() + replacement_size);
                 memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
@@ -1475,11 +1462,11 @@ struct ReplaceStringImpl
         pos = end;                                  \
     } while (false)
 
-            auto needle_offset = offsetAt(needle_offsets, i);
-            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
-            auto replacement_offset = offsetAt(replacement_offsets, i);
-            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
             if (needle_size == 0)
             {
