@@ -88,7 +88,7 @@ void writeBinary(const Array & x, WriteBuffer & buf)
     DB::writeBinary(type, buf);
     DB::writeBinary(size, buf);
 
-    for (const auto & it : x)
+    for (const auto & i : x)
     {
         switch (type)
         {
@@ -96,37 +96,37 @@ void writeBinary(const Array & x, WriteBuffer & buf)
             break;
         case Field::Types::UInt64:
         {
-            DB::writeVarUInt(get<UInt64>(it), buf);
+            DB::writeVarUInt(get<UInt64>(i), buf);
             break;
         }
         case Field::Types::UInt128:
         {
-            DB::writeBinary(get<UInt128>(it), buf);
+            DB::writeBinary(get<UInt128>(i), buf);
             break;
         }
         case Field::Types::Int64:
         {
-            DB::writeVarInt(get<Int64>(it), buf);
+            DB::writeVarInt(get<Int64>(i), buf);
             break;
         }
         case Field::Types::Float64:
         {
-            DB::writeFloatBinary(get<Float64>(it), buf);
+            DB::writeFloatBinary(get<Float64>(i), buf);
             break;
         }
         case Field::Types::String:
         {
-            DB::writeStringBinary(get<std::string>(it), buf);
+            DB::writeStringBinary(get<std::string>(i), buf);
             break;
         }
         case Field::Types::Array:
         {
-            DB::writeBinary(get<Array>(it), buf);
+            DB::writeBinary(get<Array>(i), buf);
             break;
         }
         case Field::Types::Tuple:
         {
-            DB::writeBinary(get<Tuple>(it), buf);
+            DB::writeBinary(get<Tuple>(i), buf);
             break;
         }
         };
@@ -216,9 +216,9 @@ void writeBinary(const Tuple & x_def, WriteBuffer & buf)
     const size_t size = x.size();
     DB::writeBinary(size, buf);
 
-    for (const auto & it : x)
+    for (const auto & i : x)
     {
-        const UInt8 type = it.getType();
+        const UInt8 type = i.getType();
         DB::writeBinary(type, buf);
 
         switch (type)
@@ -227,37 +227,37 @@ void writeBinary(const Tuple & x_def, WriteBuffer & buf)
             break;
         case Field::Types::UInt64:
         {
-            DB::writeVarUInt(get<UInt64>(it), buf);
+            DB::writeVarUInt(get<UInt64>(i), buf);
             break;
         }
         case Field::Types::UInt128:
         {
-            DB::writeBinary(get<UInt128>(it), buf);
+            DB::writeBinary(get<UInt128>(i), buf);
             break;
         }
         case Field::Types::Int64:
         {
-            DB::writeVarInt(get<Int64>(it), buf);
+            DB::writeVarInt(get<Int64>(i), buf);
             break;
         }
         case Field::Types::Float64:
         {
-            DB::writeFloatBinary(get<Float64>(it), buf);
+            DB::writeFloatBinary(get<Float64>(i), buf);
             break;
         }
         case Field::Types::String:
         {
-            DB::writeStringBinary(get<std::string>(it), buf);
+            DB::writeStringBinary(get<std::string>(i), buf);
             break;
         }
         case Field::Types::Array:
         {
-            DB::writeBinary(get<Array>(it), buf);
+            DB::writeBinary(get<Array>(i), buf);
             break;
         }
         case Field::Types::Tuple:
         {
-            DB::writeBinary(get<Tuple>(it), buf);
+            DB::writeBinary(get<Tuple>(i), buf);
             break;
         }
         };
