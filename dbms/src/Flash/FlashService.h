@@ -17,6 +17,7 @@ namespace DB
 class IServer;
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
+class CPUAffinityManager;
 
 class FlashService final : public tikvpb::Tikv::Service, public std::enable_shared_from_this<FlashService>, private boost::noncopyable
 {
@@ -59,6 +60,8 @@ private:
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
+
+    const CPUAffinityManager & cpu_affinity_mgr;
 };
 
 } // namespace DB

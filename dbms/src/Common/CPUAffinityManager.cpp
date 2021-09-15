@@ -1,12 +1,13 @@
 #include <Common/CPUAffinityManager.h>
+#include <Common/Config/cpptoml.h>
 #include <Common/Exception.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Logger.h>
+#include <Poco/Util/LayeredConfiguration.h>
 #include <common/logger_useful.h>
 #include <errno.h>
 #include <unistd.h>
-#include <Poco/Util/LayeredConfiguration.h>
-#include <Common/Config/cpptoml.h>
+
 #include <cstring>
 #include <fstream>
 namespace DB
@@ -48,11 +49,11 @@ void CPUAffinityManager::initReadThreadNames(Poco::Util::LayeredConfiguration & 
             }
         }
     }
-    
+
     // Default read threads
     if (read_threads.empty())
     {
-        read_threads = {"cop-pool", "batch-cop-pool"};
+        read_threads = {"cop-pool", "batch-cop-pool", "grpcpp_sync_ser"};
     }
 }
 
@@ -60,7 +61,7 @@ bool CPUAffinityManager::isReadThread(const std::string & name) const
 {
     for (const auto & t : read_threads)
     {
-        if (name.find(t) == 0)  // t is name's prefix.
+        if (name.find(t) == 0) // t is name's prefix.
         {
             return true;
         }
@@ -96,6 +97,21 @@ void CPUAffinityManager::bindSelfWriteThread() const
     bindWriteThread(0);
 }
 
+void CPUAffinityManager::bindSelfGrpcThread() const
+{
+#if __APPLE__ && __clang__
+    static __thread bool is_binding = false;
+#else
+    static thread_local bool is_binding = false;
+#endif
+
+    if (!is_binding)
+    {
+        bindSelfReadThread();
+        is_binding = true;
+    }
+}
+
 std::string CPUAffinityManager::toString() const
 {
 // clang-format off
@@ -106,7 +122,7 @@ std::string CPUAffinityManager::toString() const
 #elif
     return "not support";
 #endif
-// clang-format on
+    // clang-format on
 }
 
 void CPUAffinityManager::initCPUSet()
@@ -243,6 +259,10 @@ std::unordered_map<pid_t, std::string> CPUAffinityManager::getThreads(pid_t pid)
 
 void CPUAffinityManager::bindThreadCPUAffinity() const
 {
+    if (!enable())
+    {
+        return;
+    }
     auto threads = getThreads(getpid());
     for (const auto & t : threads)
     {
@@ -252,14 +272,14 @@ void CPUAffinityManager::bindThreadCPUAffinity() const
             bindReadThread(t.first);
         }
         else
-        { 
+        {
             LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindWriteThread.");
             bindWriteThread(t.first);
         }
     }
-    
+
     // Log threads cpu bind info.
-    checkThreadCPUAffinity();    
+    checkThreadCPUAffinity();
 }
 
 void CPUAffinityManager::checkThreadCPUAffinity() const

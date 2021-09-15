@@ -71,7 +71,7 @@ private:
     State state;
     String err_msg;
     Logger * log;
-    CPUAffinityManager cpu_affinity_mgr;
+    const CPUAffinityManager & cpu_affinity_mgr;
 
     void setUpConnection();
 
