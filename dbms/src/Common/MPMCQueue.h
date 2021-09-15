@@ -13,34 +13,6 @@ namespace DB
 {
 namespace MPMCQueueDetail
 {
-template <typename T>
-struct SingleElementQueue
-{
-    std::optional<T> obj;
-    std::mutex mu;
-    std::condition_variable cv;
-    bool last_pop_timeouted = false;
-
-    std::atomic<bool> cancelled = false; /// allow to cancel from outside without acquire lock
-
-    bool isCancelled() const
-    {
-        return cancelled.load(std::memory_order_relaxed);
-    }
-
-    void cancel()
-    {
-        cancelled.store(true, std::memory_order_relaxed);
-    }
-};
-
-enum class OPStatus
-{
-    SUCCEEDED,
-    FAILED,
-    NEED_RETRY
-};
-
 struct WaitingNode
 {
     WaitingNode * next = nullptr;
@@ -138,9 +110,9 @@ public:
         if (!finished && !cancelled)
         {
             cancelled = true;
-            for (auto * p = &read_head; p->next != &read_head; p = p->next)
+            for (auto * p = &reader_head; p->next != &reader_head; p = p->next)
                 p->next->cv.notify_one();
-            for (auto * p = &write_head; p->next != &write_head; p = p->next)
+            for (auto * p = &writer_head; p->next != &writer_head; p = p->next)
                 p->next->cv.notify_one();
         }
     }
@@ -151,9 +123,9 @@ public:
         if (!finished && !cancelled)
         {
             finished = true;
-            for (auto * p = &read_head; p->next != &read_head; p = p->next)
+            for (auto * p = &reader_head; p->next != &reader_head; p = p->next)
                 p->next->cv.notify_one();
-            for (auto * p = &write_head; p->next != &write_head; p = p->next)
+            for (auto * p = &writer_head; p->next != &writer_head; p = p->next)
                 p->next->cv.notify_one();
         }
     }
@@ -187,7 +159,7 @@ private:
 
             if (read_pos >= write_pos)
             {
-                read_head.pushBack(node);
+                reader_head.pushBack(node);
                 if (deadline)
                     !node.cv.wait_until(lock, *deadline, pred);
                 else
@@ -198,8 +170,8 @@ private:
             {
                 res = std::move(objs[read_pos % capacity]);
                 ++read_pos;
-                auto * next_writer = write_head.next;
-                if (next_writer != &write_head)
+                auto * next_writer = writer_head.next;
+                if (next_writer != &writer_head)
                     next_writer->cv.notify_one();
             }
         }
@@ -219,7 +191,7 @@ private:
 
             if (write_pos - read_pos >= capacity)
             {
-                write_head.pushBack(node);
+                writer_head.pushBack(node);
                 if (deadline)
                     !node.cv.wait_until(lock, *deadline, pred);
                 else
@@ -230,8 +202,8 @@ private:
             {
                 assigner(objs[write_pos % capacity]);
                 ++write_pos;
-                auto * next_reader = read_head.next;
-                if (next_reader != &read_head)
+                auto * next_reader = reader_head.next;
+                if (next_reader != &reader_head)
                     next_reader->cv.notify_one();
                 return true;
             }
@@ -255,8 +227,8 @@ private:
     const Int64 capacity;
 
     mutable std::mutex mu;
-    WaitingNode read_head;
-    WaitingNode write_head;
+    WaitingNode reader_head;
+    WaitingNode writer_head;
     Int64 read_pos = 0;
     Int64 write_pos = 0;
     bool cancelled = false;
