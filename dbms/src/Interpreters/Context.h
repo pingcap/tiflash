@@ -29,10 +29,6 @@ namespace Net
 {
 class IPAddress;
 }
-namespace Util
-{
-class LayeredConfiguration;
-}
 } // namespace Poco
 
 namespace zkutil

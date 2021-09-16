@@ -6,7 +6,6 @@
 #include <Poco/File.h>
 #include <Poco/UUID.h>
 #include <Poco/Net/IPAddress.h>
-#include <Poco/Util/LayeredConfiguration.h>
 
 #include <common/logger_useful.h>
 #include <pcg_random.hpp>
@@ -170,6 +169,7 @@ struct ContextShared
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
     RateLimiterPtr rate_limiter;                            /// Rate Limiter.
+     
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash

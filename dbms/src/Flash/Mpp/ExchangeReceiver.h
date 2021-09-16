@@ -7,7 +7,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
-#include <Common/CPUAffinityManager.h>
 #include <chrono>
 #include <mutex>
 #include <thread>
