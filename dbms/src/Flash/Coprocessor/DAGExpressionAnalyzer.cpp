@@ -549,7 +549,7 @@ String DAGExpressionAnalyzer::applyFunction(
     const String & func_name,
     const Names & arg_names,
     ExpressionActionsPtr & actions,
-    const TiDB::TiDBCollatorPtr & collator)
+    const std::shared_ptr<TiDB::ITiDBCollator> & collator)
 
 {
     String result_name = genFuncString(func_name, arg_names, {collator});
