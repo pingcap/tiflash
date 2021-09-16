@@ -55,8 +55,6 @@ public:
 
     void linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const;
 
-    void linkEncryptionPath(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const;
-
     bool isFileEncrypted(const EncryptionPath & encryption_path_) const;
 
     bool isEncryptionEnabled() const;
