@@ -4,6 +4,10 @@ class HoldSnapshotsLongTime : public StressWorkload
     , public StressWorkloadFunc<HoldSnapshotsLongTime>
 {
 public:
+    explicit HoldSnapshotsLongTime(const StressEnv & options_)
+        : StressWorkload(options_)
+    {}
+
     static String name()
     {
         return "HoldSnapshotsLongTime";

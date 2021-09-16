@@ -4,6 +4,10 @@ class HeavyRead : public StressWorkload
     , public StressWorkloadFunc<HeavyRead>
 {
 public:
+    explicit HeavyRead(const StressEnv & options_)
+        : StressWorkload(options_)
+    {}
+
     static String name()
     {
         return "HeavyRead";

@@ -4,6 +4,10 @@ class HeavySkewWriteRead : public StressWorkload
     , public StressWorkloadFunc<HeavySkewWriteRead>
 {
 public:
+    explicit HeavySkewWriteRead(const StressEnv & options_)
+        : StressWorkload(options_)
+    {}
+
     static String name()
     {
         return "HeavySkewWriteRead";

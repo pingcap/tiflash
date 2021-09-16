@@ -4,6 +4,10 @@ class PageStorageInMemoryCapacity : public StressWorkload
     , public StressWorkloadFunc<PageStorageInMemoryCapacity>
 {
 public:
+    explicit PageStorageInMemoryCapacity(const StressEnv & options_)
+        : StressWorkload(options_)
+    {}
+
     static String name()
     {
         return "PageStorageInMemoryCapacity";
@@ -27,39 +31,6 @@ private:
 
     void run() override
     {
-        pool.addCapacity(1 + options.num_writers);
-        DB::PageStorage::Config config;
-        initPageStorage(config, name());
-
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
-
-        // 90-100 snapshots will be generated.
-        {
-            stop_watch.start();
-            startWriter<PSWindowWriter>(options.num_writers, [](std::shared_ptr<PSWindowWriter> writer) -> void {
-                writer->setBatchBufferNums(1);
-                writer->setBatchBufferSize(10 * 1024);
-                writer->setBatchBufferLimit(1ULL * DB::GB);
-                writer->setBatchBufferPageRange(1000000);
-            });
-
-            startReader<PSSnapshotReader>(1, [](std::shared_ptr<PSSnapshotReader> reader) -> void {
-                reader->setSnapshotGetIntervalMs(600);
-            });
-
-            pool.joinAll();
-            stop_watch.stop();
-        }
-
-        gc = std::make_shared<PSGc>(ps);
-        // Normal GC
-        gc->doGcOnce();
-
-        readers.clear();
-
-        // Skip GC
-        gc->doGcOnce();
     }
 
     bool verify() override

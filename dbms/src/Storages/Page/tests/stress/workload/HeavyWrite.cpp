@@ -4,6 +4,10 @@ class HeavyWrite : public StressWorkload
     , public StressWorkloadFunc<HeavyWrite>
 {
 public:
+    explicit HeavyWrite(const StressEnv & options_)
+        : StressWorkload(options_)
+    {}
+
     static String name()
     {
         return "HeavyWrite";
