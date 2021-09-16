@@ -112,35 +112,15 @@ private:
                 handle_filters.emplace_back(toFilter(rowkey_range));
             for (size_t i = 0; i < pack_count; ++i)
             {
-                bool checked = false;
-                for (auto handle_filter : handle_filters)
+                handle_res[i] = RSResult::None;
+            }
+            for (size_t i = 0; i < pack_count; ++i)
+            {
+                for (auto & handle_filter : handle_filters)
                 {
-                    if (!checked)
-                    {
-                        checked = true;
-                        handle_res[i] = handle_filter->roughCheck(i, param);
-                        if (handle_res[i] == RSResult::All)
-                            break;
-                    }
-                    else
-                    {
-                        auto res = handle_filter->roughCheck(i, param);
-                        // if res is `All`, no need to check other handle_filter
-                        if (res == RSResult::All)
-                        {
-                            handle_res[i] = res;
-                            break;
-                        }
-                        // if res is not `All` and handle_res[i] is `Some`, no need to update handle_res[i]
-                        else if (handle_res[i] == RSResult::Some)
-                        {
-                            continue;
-                        }
-                        else
-                        {
-                            handle_res[i] = res;
-                        }
-                    }
+                    handle_res[i] = handle_res[i] || handle_filter->roughCheck(i, param);
+                    if (handle_res[i] == RSResult::All)
+                        break;
                 }
             }
         }
