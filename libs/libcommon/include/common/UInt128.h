@@ -46,34 +46,34 @@ struct UInt128
     bool operator>=(const UInt128 & rhs) const { return !(*this < rhs); }
 
     template <typename T>
-    bool operator==(T && rhs) const
+    bool operator==(T rhs) const
     {
-        return *this == UInt128(std::forward<T>(rhs));
+        return *this == UInt128(rhs);
     }
     template <typename T>
-    bool operator!=(T && rhs) const
+    bool operator!=(T rhs) const
     {
-        return *this != UInt128(std::forward<T>(rhs));
+        return *this != UInt128(rhs);
     }
     template <typename T>
-    bool operator>=(T && rhs) const
+    bool operator>=(T rhs) const
     {
-        return *this >= UInt128(std::forward<T>(rhs));
+        return *this >= UInt128(rhs);
     }
     template <typename T>
-    bool operator>(T && rhs) const
+    bool operator>(T rhs) const
     {
-        return *this > UInt128(std::forward<T>(rhs));
+        return *this > UInt128(rhs);
     }
     template <typename T>
-    bool operator<=(T && rhs) const
+    bool operator<=(T rhs) const
     {
-        return *this <= UInt128(std::forward<T>(rhs));
+        return *this <= UInt128(rhs);
     }
     template <typename T>
-    bool operator<(T && rhs) const
+    bool operator<(T rhs) const
     {
-        return *this < UInt128(std::forward<T>(rhs));
+        return *this < UInt128(rhs);
     }
 
     template <typename T>
