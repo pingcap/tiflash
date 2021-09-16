@@ -108,6 +108,53 @@ public:
         return applyWithScale(a, b, shift);
     }
 
+    template <bool scale_left, bool scale_right>
+    static NO_INLINE UInt8 apply(A a, B b, CompareInt scale [[maybe_unused]])
+    {
+        CompareInt x = static_cast<CompareInt>(a);
+        CompareInt y = static_cast<CompareInt>(b);
+
+        if constexpr (_check_overflow)
+        {
+            bool invalid = false;
+
+            if constexpr (sizeof(A) > sizeof(CompareInt))
+                invalid |= (A(x) != a);
+            if constexpr (sizeof(B) > sizeof(CompareInt))
+                invalid |= (B(y) != b);
+            if constexpr (std::is_unsigned_v<A>)
+                invalid |= (x < 0);
+            if constexpr (std::is_unsigned_v<B>)
+                invalid |= (y < 0);
+
+            if (invalid)
+                throw Exception("Can't compare", ErrorCodes::DECIMAL_OVERFLOW);
+        }
+
+        if constexpr (scale_left && scale_right)
+            throw DB::Exception("Assumption broken: there should only one side need to be multiplied in decimal comparison.", ErrorCodes::LOGICAL_ERROR);
+        if constexpr (!scale_left && !scale_right)
+            return Op::apply(x, y);
+
+        // overflow means absolute value must be greater.
+        // we use this variable to mark whether the right side is greater than left side by overflow.
+        int right_side_greater_by_overflow = 0;
+        if constexpr (scale_left)
+        {
+            int sign = boost::math::sign(x);
+            right_side_greater_by_overflow = -sign * common::mulOverflow(x, scale, x); // x will be changed.
+        }
+        if constexpr (scale_right)
+        {
+            int sign = boost::math::sign(y);
+            right_side_greater_by_overflow = sign * common::mulOverflow(y, scale, y); // y will be changed.
+        }
+
+        if (right_side_greater_by_overflow)
+            return Op::apply(0, right_side_greater_by_overflow);
+        return Op::apply(x, y);
+    }
+
 private:
     struct Shift
     {
@@ -262,53 +309,6 @@ private:
         }
 
         return c_res;
-    }
-
-    template <bool scale_left, bool scale_right>
-    static NO_INLINE UInt8 apply(A a, B b, CompareInt scale [[maybe_unused]])
-    {
-        CompareInt x = static_cast<CompareInt>(a);
-        CompareInt y = static_cast<CompareInt>(b);
-
-        if constexpr (_check_overflow)
-        {
-            bool overflow = false;
-
-            if constexpr (sizeof(A) > sizeof(CompareInt))
-                overflow |= (A(x) != a);
-            if constexpr (sizeof(B) > sizeof(CompareInt))
-                overflow |= (B(y) != b);
-            if constexpr (std::is_unsigned_v<A>)
-                overflow |= (x < 0);
-            if constexpr (std::is_unsigned_v<B>)
-                overflow |= (y < 0);
-
-            if constexpr (scale_left)
-            {
-                if constexpr (std::is_same_v<CompareInt, Int256>)
-                    x = x * scale;
-                else
-                    overflow |= common::mulOverflow(x, scale, x);
-            }
-            if constexpr (scale_right)
-            {
-                if constexpr (std::is_same_v<CompareInt, Int256>)
-                    y = y * scale;
-                else
-                    overflow |= common::mulOverflow(y, scale, y);
-            }
-            if (overflow)
-                throw Exception("Can't compare", ErrorCodes::DECIMAL_OVERFLOW);
-        }
-        else
-        {
-            if constexpr (scale_left)
-                x *= scale;
-            if constexpr (scale_right)
-                y *= scale;
-        }
-
-        return Op::apply(x, y);
     }
 
     template <bool scale_left, bool scale_right>
