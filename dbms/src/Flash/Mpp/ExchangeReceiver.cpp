@@ -1,3 +1,4 @@
+#include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
@@ -85,6 +86,7 @@ static inline String getReceiverStateStr(const ExchangeReceiverState & s)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 {
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
 
