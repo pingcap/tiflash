@@ -17,7 +17,6 @@
 #include <Common/setThreadName.h>
 #include <Common/Stopwatch.h>
 #include <Common/formatReadable.h>
-#include <Common/CPUAffinityManager.h>
 #include <Debug/DBGInvoker.h>
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
@@ -171,7 +170,6 @@ struct ContextShared
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
     RateLimiterPtr rate_limiter;                            /// Rate Limiter.
-    CPUAffinityManagerPtr cpu_affinity;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -1968,14 +1966,6 @@ SharedQueriesPtr Context::getSharedQueries()
         shared->shared_queries = std::make_shared<SharedQueries>();
     return shared->shared_queries;
 }
-
-void Context::initCPUAffinityManager(Poco::Util::LayeredConfiguration & config)
-{
-    auto cpu_config = CPUAffinityManager::readConfig(config);
-    shared->cpu_affinity = std::make_shared<CPUAffinityManager>(cpu_config);
-}
-
-const CPUAffinityManager & Context::getCPUAffinityManager() const { return *(shared->cpu_affinity); }
 
 SessionCleaner::~SessionCleaner()
 {

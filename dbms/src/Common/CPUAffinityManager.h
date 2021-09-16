@@ -1,9 +1,9 @@
 #pragma once
 
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
-#include <thread>
 
 namespace Poco
 {
@@ -18,7 +18,10 @@ namespace DB
 {
 struct CPUAffinityConfig
 {
-    CPUAffinityConfig() : query_cpu_percent(80), cpu_cores(std::thread::hardware_concurrency()) {}
+    CPUAffinityConfig()
+        : query_cpu_percent(80)
+        , cpu_cores(std::thread::hardware_concurrency())
+    {}
     // About {cpu_cores * query_cpu_percent / 100} cpu cores are used for running query threads.
     int query_cpu_percent;
     int cpu_cores;
@@ -29,6 +32,7 @@ struct CPUAffinityConfig
     std::vector<std::string> query_threads = {"cop-pool", "batch-cop-pool", "grpcpp_sync_ser"};
 };
 
+// CPUAffinityManager is a singleton.
 // CPUAffinityManager is use to bind thread on logical CPU core by the linux system call sched_setaffinity.
 // The main purpose of bind different threads on different CPUs is to isolating heavy query requests and other requests.
 // So CPUAffinityManager simply divide cpu cores and threads into two categories:
@@ -37,9 +41,11 @@ struct CPUAffinityConfig
 class CPUAffinityManager
 {
 public:
+    static void initCPUAffinityManager(Poco::Util::LayeredConfiguration & config);
     static CPUAffinityConfig readConfig(Poco::Util::LayeredConfiguration & config);
+    static CPUAffinityManager & getInstance();
 
-    CPUAffinityManager(const CPUAffinityConfig & config);
+    void init(const CPUAffinityConfig & config);
 
     void bindQueryThread(pid_t tid) const;
     void bindOtherThread(pid_t tid) const;
@@ -53,6 +59,8 @@ public:
     void bindThreadCPUAffinity() const;
 
 private:
+    CPUAffinityManager();
+
     void initCPUSet();
     int getCPUCores() const;
     int getQueryCPUCores() const;

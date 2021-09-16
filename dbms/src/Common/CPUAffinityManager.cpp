@@ -5,11 +5,11 @@
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
-#include <boost/algorithm/string.hpp>
 #include <common/logger_useful.h>
 #include <errno.h>
 #include <unistd.h>
 
+#include <boost/algorithm/string.hpp>
 #include <cstring>
 #include <fstream>
 namespace DB
@@ -19,6 +19,12 @@ namespace ErrorCodes
 extern const int UNKNOWN_EXCEPTION;
 extern const int CPUID_ERROR;
 } // namespace ErrorCodes
+
+void CPUAffinityManager::initCPUAffinityManager(Poco::Util::LayeredConfiguration & config)
+{
+    auto cpu_config = readConfig(config);
+    CPUAffinityManager::getInstance().init(cpu_config);
+}
 
 CPUAffinityConfig CPUAffinityManager::readConfig(Poco::Util::LayeredConfiguration & config)
 {
@@ -37,12 +43,23 @@ CPUAffinityConfig CPUAffinityManager::readConfig(Poco::Util::LayeredConfiguratio
     return cpu_config;
 }
 
-CPUAffinityManager::CPUAffinityManager(const CPUAffinityConfig & config)
-    : query_cpu_percent(config.query_cpu_percent)
-    , cpu_cores(config.cpu_cores)
-    , query_threads(config.query_threads)
-    , log(&Poco::Logger::get("CPUAffinityManager"))
+CPUAffinityManager & CPUAffinityManager::getInstance()
 {
+    static CPUAffinityManager cpu_affinity_mgr;
+    return cpu_affinity_mgr;
+}
+
+CPUAffinityManager::CPUAffinityManager()
+    : query_cpu_percent(0)
+    , cpu_cores(0)
+    , log(&Poco::Logger::get("CPUAffinityManager"))
+{}
+
+void CPUAffinityManager::init(const CPUAffinityConfig & config)
+{
+    query_cpu_percent = config.query_cpu_percent;
+    cpu_cores = config.cpu_cores;
+    query_threads = config.query_threads;
     CPU_ZERO(&query_cpu_set);
     CPU_ZERO(&other_cpu_set);
     if (enable())

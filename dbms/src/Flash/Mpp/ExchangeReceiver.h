@@ -71,7 +71,6 @@ private:
     State state;
     String err_msg;
     Logger * log;
-    const CPUAffinityManager & cpu_affinity_mgr;
 
     void setUpConnection();
 
@@ -112,8 +111,7 @@ public:
           max_buffer_size(max_buffer_size_),
           live_connections(pb_exchange_receiver.encoded_task_meta_size()),
           state(NORMAL),
-          log(&Logger::get("exchange_receiver")),
-          cpu_affinity_mgr(context_.getCPUAffinityManager())
+          log(&Logger::get("exchange_receiver"))
     {
         for (int i = 0; i < exc.field_types_size(); i++)
         {
