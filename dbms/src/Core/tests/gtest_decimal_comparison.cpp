@@ -1,5 +1,3 @@
-#define private public // hack compiler for test
-
 #include <Core/DecimalComparison.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <common/arithmeticOverflow.h>
@@ -157,5 +155,3 @@ CATCH
 } // namespace tests
 
 } // namespace DB
-
-#undef private
