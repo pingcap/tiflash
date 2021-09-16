@@ -20,7 +20,7 @@ struct RegionLearnerReadSnapshot : RegionPtr
         : RegionPtr(region)
         , snapshot_event_flag(region->getSnapshotEventFlag())
     {}
-    bool operator!=(const RegionPtr & tar) const { return (tar != *this) || (tar && snapshot_event_flag != tar->getSnapshotEventFlag()); }
+    bool operator!=(const RegionPtr & rhs) const { return (rhs != *this) || (rhs && snapshot_event_flag != rhs->getSnapshotEventFlag()); }
 };
 using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
 

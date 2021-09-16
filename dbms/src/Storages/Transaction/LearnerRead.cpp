@@ -5,11 +5,14 @@
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
 #include <common/ThreadPool.h>
 #include <common/likely.h>
+#include <fmt/format.h>
 
 #include <ext/scope_guard.h>
 
@@ -176,7 +179,7 @@ LearnerReadSnapshot doLearnerRead(
     UnavailableRegions unavailable_regions;
     const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
         Stopwatch batch_wait_data_watch;
-        Stopwatch batch_wait_index_watch;
+        Stopwatch watch;
 
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
         const size_t ori_batch_region_size = region_end_idx - region_begin_idx;
@@ -243,19 +246,20 @@ LearnerReadSnapshot doLearnerRead(
         }();
 
         {
-            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(batch_wait_index_watch.elapsedSeconds());
+            auto read_index_elapsed_ms = watch.elapsedMilliseconds();
+            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
             const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
             LOG_DEBUG(
                 log,
                 "Batch read index, original size " << ori_batch_region_size << ", send & get " << batch_read_index_req.size()
-                                                   << " message, cost " << batch_wait_index_watch.elapsedMilliseconds() << "ms";
+                                                   << " message, cost " << read_index_elapsed_ms << "ms";
                 do {
                     if (cached_size)
                     {
                         oss_internal_rare << ", " << std::to_string(cached_size) << " in cache";
                     }
                 } while (0));
-            batch_wait_index_watch.restart();
+            watch.restart(); // restart to count the elapsed of wait index
         }
 
         // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
@@ -304,6 +308,8 @@ LearnerReadSnapshot doLearnerRead(
                     GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
                 }
             }
+
+            // Try to resolve locks and flush data into storage layer
             if (mvcc_query_info->resolve_locks)
             {
                 auto res = RegionTable::resolveLocksAndWriteRegion(
@@ -333,10 +339,14 @@ LearnerReadSnapshot doLearnerRead(
                            res);
             }
         }
-        GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds());
+        GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
+        auto wait_index_elapsed_ms = watch.elapsedMilliseconds();
         LOG_DEBUG(log,
-                  "Finish wait index | resolve locks | check memory cache for " << batch_read_index_req.size() << " regions, cost "
-                                                                                << batch_wait_index_watch.elapsedMilliseconds() << "ms");
+                  fmt::format(
+                      "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions",
+                      batch_read_index_req.size(),
+                      wait_index_elapsed_ms,
+                      unavailable_regions.size()));
     };
 
     auto start_time = Clock::now();

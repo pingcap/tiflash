@@ -28,9 +28,16 @@ struct RegionMetaSnapshot
 class RegionMeta
 {
 public:
-    RegionMeta(metapb::Peer peer_, raft_serverpb::RaftApplyState apply_state_, const UInt64 applied_term_, raft_serverpb::RegionLocalState region_state_);
+    RegionMeta(
+        metapb::Peer peer_,
+        raft_serverpb::RaftApplyState apply_state_,
+        const UInt64 applied_term_,
+        raft_serverpb::RegionLocalState region_state_);
 
-    RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_);
+    RegionMeta(
+        metapb::Peer peer_,
+        metapb::Region region,
+        raft_serverpb::RaftApplyState apply_state_);
 
     RegionMeta(RegionMeta && rhs);
 
@@ -116,7 +123,8 @@ inline raft_serverpb::RaftApplyState initialApplyState()
     return state;
 }
 
-class MetaRaftCommandDelegate : public RegionMeta
+class MetaRaftCommandDelegate
+    : public RegionMeta
     , private boost::noncopyable
 {
     friend class RegionRaftCommandDelegate;
@@ -127,10 +135,25 @@ class MetaRaftCommandDelegate : public RegionMeta
     const raft_serverpb::RaftApplyState & applyState() const;
     const RegionState & regionState() const;
 
-    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
-    void execPrepareMerge(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
-    void execCommitMerge(const RegionMergeResult & result, UInt64 index, UInt64 term, const MetaRaftCommandDelegate & source_meta, const raft_cmdpb::AdminResponse & response);
-    RegionMergeResult checkBeforeCommitMerge(const raft_cmdpb::AdminRequest & request, const MetaRaftCommandDelegate & source_meta) const;
+    void execChangePeer(
+        const raft_cmdpb::AdminRequest & request,
+        const raft_cmdpb::AdminResponse & response,
+        UInt64 index,
+        UInt64 term);
+    void execPrepareMerge(
+        const raft_cmdpb::AdminRequest & request,
+        const raft_cmdpb::AdminResponse & response,
+        UInt64 index,
+        UInt64 term);
+    void execCommitMerge(
+        const RegionMergeResult & result,
+        UInt64 index,
+        UInt64 term,
+        const MetaRaftCommandDelegate & source_meta,
+        const raft_cmdpb::AdminResponse & response);
+    RegionMergeResult checkBeforeCommitMerge(
+        const raft_cmdpb::AdminRequest & request,
+        const MetaRaftCommandDelegate & source_meta) const;
     void execRollbackMerge(
         const raft_cmdpb::AdminRequest & request,
         const raft_cmdpb::AdminResponse & response,

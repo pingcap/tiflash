@@ -296,7 +296,12 @@ void MetaRaftCommandDelegate::execRollbackMerge(
     CheckRegionForMergeCmd(response, region_state);
 }
 
-void MetaRaftCommandDelegate::execCommitMerge(const RegionMergeResult & res, UInt64 index, UInt64 term, const MetaRaftCommandDelegate & source_meta, const raft_cmdpb::AdminResponse & response)
+void MetaRaftCommandDelegate::execCommitMerge(
+    const RegionMergeResult & res,
+    UInt64 index,
+    UInt64 term,
+    const MetaRaftCommandDelegate & source_meta,
+    const raft_cmdpb::AdminResponse & response)
 {
     std::lock_guard<std::mutex> lock(mutex);
     region_state.setVersion(res.version);
