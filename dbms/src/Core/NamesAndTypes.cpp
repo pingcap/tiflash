@@ -1,20 +1,20 @@
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+
 #include <sparsehash/dense_hash_map>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int THERE_IS_NO_COLUMN;
+extern const int THERE_IS_NO_COLUMN;
 }
 
 
@@ -148,4 +148,4 @@ bool NamesAndTypesList::contains(const String & name) const
     return false;
 }
 
-}
+} // namespace DB
