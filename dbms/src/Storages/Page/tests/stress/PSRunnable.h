@@ -29,7 +29,7 @@ public:
         : ps(ps_)
         , index(index_)
     {
-        gen.seed(time(0));
+        gen.seed(time(nullptr));
     }
 
     virtual String description() override
@@ -135,13 +135,36 @@ protected:
     size_t sigma = 9;
 };
 
+class PSIncreaseWriter : public PSCommonWriter
+{
+public:
+    PSIncreaseWriter(const PSPtr & ps_, DB::UInt32 index_)
+        : PSCommonWriter(ps_, index_)
+    {}
+
+    String description() override { return fmt::format("(Stress Test Increase Writer {})", index); }
+
+    virtual bool runImpl() override;
+
+    void setPageRange(size_t page_range);
+
+protected:
+    virtual DB::PageId genRandomPageId() override;
+
+protected:
+    size_t begin_page_id = 1;
+    size_t end_page_id = 1;
+};
+
 class PSReader : public PSRunnable
 {
 public:
     PSReader(const PSPtr & ps_, DB::UInt32 index_)
         : ps(ps_)
         , index(index_)
-    {}
+    {
+        gen.seed(time(nullptr));
+    }
 
     virtual String description() override { return fmt::format("(Stress Test PSReader {})", index); }
 
@@ -160,6 +183,7 @@ protected:
 
 protected:
     PSPtr ps;
+    std::mt19937 gen;
     size_t heavy_read_delay_ms = 0;
     size_t page_read_once = 5;
     DB::UInt32 index = 0;

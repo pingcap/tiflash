@@ -1,4 +1,5 @@
 #include <PSWorkload.h>
+#include <sys/resource.h>
 
 class PageStorageInMemoryCapacity : public StressWorkload
     , public StressWorkloadFunc<PageStorageInMemoryCapacity>
@@ -31,6 +32,28 @@ private:
 
     void run() override
     {
+        pool.addCapacity(1 + options.num_writers + options.num_readers);
+        DB::PageStorage::Config config;
+        initPageStorage(config, name());
+
+        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
+        metrics_dumper->start();
+
+        stress_time = std::make_shared<StressTimeout>(60);
+        stress_time->start();
+        {
+            stop_watch.start();
+            startWriter<PSIncreaseWriter>(options.num_writers, [](std::shared_ptr<PSIncreaseWriter> writer) -> void {
+                writer->setBatchBufferNums(1);
+                writer->setBatchBufferSize(10 * 1024);
+                writer->setPageRange(50000);
+            });
+
+            pool.joinAll();
+            stop_watch.stop();
+        }
+
+        // todo
     }
 
     bool verify() override

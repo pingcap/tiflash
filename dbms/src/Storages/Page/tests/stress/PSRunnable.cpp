@@ -45,7 +45,7 @@ void PSWriter::setApproxPageSize(size_t size_mb)
 DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder & holder)
 {
     // fill page with random bytes
-    const size_t buff_sz = approx_page_mb * DB::MB + random() % 3000;
+    const size_t buff_sz = approx_page_mb * DB::MB + arc4random() % 3000;
     char * buff = static_cast<char *>(malloc(buff_sz));
     const char buff_ch = pageId % 0xFF;
     memset(buff, buff_ch, buff_sz);
@@ -72,7 +72,6 @@ void PSWriter::fillAllPages(const PSPtr & ps)
 
 bool PSWriter::runImpl()
 {
-    assert(ps != nullptr);
     const DB::PageId page_id = genRandomPageId();
 
     DB::MemHolder holder;
@@ -108,7 +107,6 @@ DB::PageId writing_page[1000];
 
 bool PSCommonWriter::runImpl()
 {
-    assert(ps != nullptr);
     const DB::PageId page_id = genRandomPageId();
 
     DB::WriteBatch wb;
@@ -180,23 +178,18 @@ size_t PSCommonWriter::genBufferSize()
 
 DB::PageIds PSReader::genRandomPageIds()
 {
-    DB::PageIds pageIds;
+    DB::PageIds page_ids;
     for (size_t i = 0; i < page_read_once; ++i)
     {
-        pageIds.emplace_back(random() % max_page_id);
+        std::uniform_int_distribution<> dist(0, max_page_id);
+        page_ids.emplace_back(static_cast<DB::PageId>(dist(gen)));
     }
-    return pageIds;
+    return page_ids;
 }
 
 bool PSReader::runImpl()
 {
-    assert(ps != nullptr);
-
-    DB::PageIds page_ids;
-    for (size_t i = 0; i < page_read_once; ++i)
-    {
-        page_ids.emplace_back(random() % max_page_id);
-    }
+    DB::PageIds page_ids = genRandomPageIds();
 
     DB::PageHandler handler = [&](DB::PageId page_id, const DB::Page & page) {
         (void)page_id;
@@ -243,18 +236,18 @@ void PSWindowWriter::setNormalDistributionSigma(size_t sigma_)
 }
 
 UInt64 pageid_boundary = 0;
-std::mutex _page_id_mutex;
+std::mutex page_id_mutex;
 
 DB::PageId PSWindowWriter::genRandomPageId()
 {
-    std::lock_guard<std::mutex> _lock(_page_id_mutex);
+    std::lock_guard<std::mutex> page_id_lock(page_id_mutex);
     if (pageid_boundary < (window_size / 2))
     {
         return static_cast<DB::PageId>(pageid_boundary++);
     }
 
     // Generate a random number in the window
-    std::normal_distribution<> distribution{(double)window_size, (double)sigma};
+    std::normal_distribution<> distribution{static_cast<double>(window_size), static_cast<double>(sigma)};
     auto random = std::round(distribution(gen));
     // Move this "random" near the pageid_boundary, If "random" is still negative, then make it positive
     random = std::abs(random + pageid_boundary);
@@ -278,21 +271,22 @@ void PSWindowReader::setWriterNums(size_t writer_nums_)
 
 DB::PageIds PSWindowReader::genRandomPageIds()
 {
-    std::vector<DB::PageId> pageIds;
+    std::vector<DB::PageId> page_ids;
 
     if (pageid_boundary <= (writer_nums + page_read_once))
     {
         // Nothing to read
-        return pageIds;
+        return page_ids;
     }
 
     size_t read_boundary = pageid_boundary - writer_nums - page_read_once;
     if (read_boundary < window_size)
     {
-        return pageIds;
+        return page_ids;
     }
 
-    std::normal_distribution<> distribution{(double)window_size, (double)sigma};
+    std::normal_distribution<> distribution{static_cast<double>(window_size),
+                                            static_cast<double>(sigma)};
     auto random = std::round(distribution(gen));
 
     random = read_boundary - window_size + random;
@@ -320,22 +314,36 @@ DB::PageIds PSWindowReader::genRandomPageIds()
             }
         }
         if (!writing)
-            pageIds.emplace_back(i);
+            page_ids.emplace_back(i);
     }
 
-    return pageIds;
+    return page_ids;
 }
 
 bool PSSnapshotReader::runImpl()
 {
-    assert(ps != nullptr);
     snapshots.emplace_back(ps->getSnapshot());
     usleep(snapshot_get_interval_ms * 1000);
     return true;
 }
 
-
 void PSSnapshotReader::setSnapshotGetIntervalMs(size_t snapshot_get_interval_ms_)
 {
     snapshot_get_interval_ms = snapshot_get_interval_ms_;
+}
+
+bool PSIncreaseWriter::runImpl()
+{
+    return PSCommonWriter::runImpl() && begin_page_id < end_page_id;
+}
+
+void PSIncreaseWriter::setPageRange(size_t page_range)
+{
+    begin_page_id = index * page_range + 1;
+    end_page_id = (index + 1) * page_range + 1;
+}
+
+DB::PageId PSIncreaseWriter::genRandomPageId()
+{
+    return static_cast<DB::PageId>(begin_page_id++);
 }
