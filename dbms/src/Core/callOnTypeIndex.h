@@ -4,7 +4,6 @@
 #include <Core/Types.h>
 
 #include <utility>
-
 namespace DB
 {
 template <typename T, typename U>

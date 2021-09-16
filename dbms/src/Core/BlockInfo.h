@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class ReadBuffer;
 class WriteBuffer;
 
@@ -26,8 +25,8 @@ struct BlockInfo
       */
 
 #define APPLY_FOR_BLOCK_INFO_FIELDS(M) \
-    M(bool,     is_overflows,     false,     1) \
-    M(Int32,    bucket_num,     -1,     2)
+    M(bool, is_overflows, false, 1)    \
+    M(Int32, bucket_num, -1, 2)
 
 #define DECLARE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) \
     TYPE NAME = DEFAULT;
@@ -43,4 +42,4 @@ struct BlockInfo
     void read(ReadBuffer & in);
 };
 
-}
+} // namespace DB
