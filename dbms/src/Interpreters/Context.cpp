@@ -1971,7 +1971,8 @@ SharedQueriesPtr Context::getSharedQueries()
 
 void Context::initCPUAffinityManager(Poco::Util::LayeredConfiguration & config)
 {
-    shared->cpu_affinity = std::make_shared<CPUAffinityManager>(getSettingsRef().cpu_affinity_read_percent, std::thread::hardware_concurrency(), config);
+    auto cpu_config = CPUAffinityManager::readConfig(config);
+    shared->cpu_affinity = std::make_shared<CPUAffinityManager>(cpu_config);
 }
 
 const CPUAffinityManager & Context::getCPUAffinityManager() const { return *(shared->cpu_affinity); }

@@ -254,7 +254,7 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl()
 {
-    context.getCPUAffinityManager().bindSelfReadThread();
+    context.getCPUAffinityManager().bindSelfQueryThread();
     auto old_status = static_cast<Int32>(INITIALIZING);
     if (!status.compare_exchange_strong(old_status, static_cast<Int32>(RUNNING)))
     {
@@ -389,7 +389,7 @@ bool MPPTask::isTaskHanging()
 
 void MPPTask::cancel(const String & reason)
 {
-    context.getCPUAffinityManager().bindSelfReadThread();
+    context.getCPUAffinityManager().bindSelfQueryThread();
     auto current_status = status.exchange(CANCELLED);
     if (current_status == FINISHED || current_status == CANCELLED)
     {

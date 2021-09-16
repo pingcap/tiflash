@@ -5,6 +5,7 @@
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
+#include <boost/algorithm/string.hpp>
 #include <common/logger_useful.h>
 #include <errno.h>
 #include <unistd.h>
@@ -19,50 +20,43 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int CPUID_ERROR;
 } // namespace ErrorCodes
 
-CPUAffinityManager::CPUAffinityManager(int read_cpu_percent_, int cpu_cores_, Poco::Util::LayeredConfiguration & config)
-    : read_cpu_percent(read_cpu_percent_)
-    , cpu_cores(cpu_cores_)
+CPUAffinityConfig CPUAffinityManager::readConfig(Poco::Util::LayeredConfiguration & config)
+{
+    CPUAffinityConfig cpu_config;
+    if (config.has("flash.cpu"))
+    {
+        std::string s = config.getString("flash.cpu");
+        std::istringstream ss(s);
+        cpptoml::parser p(ss);
+        auto table = p.parse();
+        if (auto query_cpu_pct = table->get_qualified_as<int>("query_cpu_percent"); query_cpu_pct)
+        {
+            cpu_config.query_cpu_percent = *query_cpu_pct;
+        }
+    }
+    return cpu_config;
+}
+
+CPUAffinityManager::CPUAffinityManager(const CPUAffinityConfig & config)
+    : query_cpu_percent(config.query_cpu_percent)
+    , cpu_cores(config.cpu_cores)
+    , query_threads(config.query_threads)
     , log(&Poco::Logger::get("CPUAffinityManager"))
 {
-    CPU_ZERO(&write_cpu_set);
-    CPU_ZERO(&read_cpu_set);
+    CPU_ZERO(&query_cpu_set);
+    CPU_ZERO(&other_cpu_set);
     if (enable())
     {
         initCPUSet();
     }
-    initReadThreadNames(config);
 }
 
-// Threads of MPP request should call `bindSelfReadThread` when it is created.
-void CPUAffinityManager::initReadThreadNames(Poco::Util::LayeredConfiguration & config)
+bool CPUAffinityManager::isQueryThread(const std::string & name) const
 {
-    if (config.has("flash.cpu"))
+    for (const auto & t : query_threads)
     {
-        std::string cpu_config = config.getString("flash.cpu");
-        std::istringstream ss(cpu_config);
-        cpptoml::parser p(ss);
-        auto table = p.parse();
-        if (auto threads = table->get_qualified_array_of<std::string>("read_threads"); threads)
-        {
-            for (const auto & name : *threads)
-            {
-                read_threads.push_back(name);
-            }
-        }
-    }
-
-    // Default read threads
-    if (read_threads.empty())
-    {
-        read_threads = {"cop-pool", "batch-cop-pool", "grpcpp_sync_ser"};
-    }
-}
-
-bool CPUAffinityManager::isReadThread(const std::string & name) const
-{
-    for (const auto & t : read_threads)
-    {
-        if (name.find(t) == 0) // t is name's prefix.
+        // if (name.find(t) == 0) // t is name's prefix.
+        if (boost::algorithm::starts_with(name, t))
         {
             return true;
         }
@@ -70,34 +64,34 @@ bool CPUAffinityManager::isReadThread(const std::string & name) const
     return false;
 }
 
-void CPUAffinityManager::bindReadThread(pid_t tid) const
+void CPUAffinityManager::bindQueryThread(pid_t tid) const
 {
     if (enable())
     {
-        setAffinity(tid, read_cpu_set);
+        setAffinity(tid, query_cpu_set);
     }
 }
 
-void CPUAffinityManager::bindWriteThread(pid_t tid) const
+void CPUAffinityManager::bindOtherThread(pid_t tid) const
 {
     if (enable())
     {
-        setAffinity(tid, write_cpu_set);
+        setAffinity(tid, other_cpu_set);
     }
 }
 
-void CPUAffinityManager::bindSelfReadThread() const
+void CPUAffinityManager::bindSelfQueryThread() const
 {
-    LOG_INFO(log, "Thread: " << ::getThreadName() << " bindReadThread.");
+    LOG_INFO(log, "Thread: " << ::getThreadName() << " bindQueryThread.");
     // If tid is zero, then the calling thread is used.
-    bindReadThread(0);
+    bindQueryThread(0);
 }
 
-void CPUAffinityManager::bindSelfWriteThread() const
+void CPUAffinityManager::bindSelfOtherThread() const
 {
-    LOG_INFO(log, "Thread: " << ::getThreadName() << " bindWriteThread.");
+    LOG_INFO(log, "Thread: " << ::getThreadName() << " bindOtherThread.");
     // If tid is zero, then the calling thread is used.
-    bindWriteThread(0);
+    bindOtherThread(0);
 }
 
 void CPUAffinityManager::bindSelfGrpcThread() const
@@ -110,7 +104,7 @@ void CPUAffinityManager::bindSelfGrpcThread() const
 
     if (!is_binding)
     {
-        bindSelfReadThread();
+        bindSelfQueryThread();
         is_binding = true;
     }
 }
@@ -119,9 +113,9 @@ std::string CPUAffinityManager::toString() const
 {
 // clang-format off
 #ifdef __linux__
-    return "enable " + std::to_string(enable()) + " read_cpu_percent " + std::to_string(read_cpu_percent) +
-        " cpu_cores " + std::to_string(cpu_cores) + " read_cpu_set " + cpuSetToString(read_cpu_set) +
-        " write_cpu_set " + cpuSetToString(write_cpu_set);
+    return "enable " + std::to_string(enable()) + " query_cpu_percent " + std::to_string(query_cpu_percent) +
+        " cpu_cores " + std::to_string(cpu_cores) + " query_cpu_set " + cpuSetToString(query_cpu_set) +
+        " other_cpu_set " + cpuSetToString(other_cpu_set);
 #elif
     return "not support";
 #endif
@@ -130,12 +124,12 @@ std::string CPUAffinityManager::toString() const
 
 void CPUAffinityManager::initCPUSet()
 {
-    int read_cpu_cores = getReadCPUCores();
-    int write_cpu_cores = getWriteCPUCores();
-    // [0, write_cpu_cores) is for write threads.
-    initCPUSet(write_cpu_set, 0, write_cpu_cores);
-    // [write_cpu_cores, write_cpu_cores + read_cpu_cores) is for read threads.
-    initCPUSet(read_cpu_set, write_cpu_cores, read_cpu_cores);
+    int query_cpu_cores = getQueryCPUCores();
+    int other_cpu_cores = getOtherCPUCores();
+    // [0, other_cpu_cores) is for other threads.
+    initCPUSet(other_cpu_set, 0, other_cpu_cores);
+    // [other_cpu_cores, other_cpu_cores + query_cpu_cores) is for query threads.
+    initCPUSet(query_cpu_set, other_cpu_cores, query_cpu_cores);
 }
 
 int CPUAffinityManager::getCPUCores() const
@@ -143,14 +137,14 @@ int CPUAffinityManager::getCPUCores() const
     return cpu_cores;
 }
 
-int CPUAffinityManager::getReadCPUCores() const
+int CPUAffinityManager::getQueryCPUCores() const
 {
-    return getCPUCores() * read_cpu_percent / 100;
+    return getCPUCores() * query_cpu_percent / 100;
 }
 
-int CPUAffinityManager::getWriteCPUCores() const
+int CPUAffinityManager::getOtherCPUCores() const
 {
-    return getCPUCores() - getReadCPUCores();
+    return getCPUCores() - getQueryCPUCores();
 }
 
 void CPUAffinityManager::initCPUSet(cpu_set_t & cpu_set, int start, int count)
@@ -174,7 +168,7 @@ void CPUAffinityManager::setAffinity(pid_t tid, const cpu_set_t & cpu_set) const
 
 bool CPUAffinityManager::enable() const
 {
-    return 0 < read_cpu_percent && read_cpu_percent < 100 && cpu_cores > 1;
+    return 0 < query_cpu_percent && query_cpu_percent < 100 && cpu_cores > 1;
 }
 
 std::string CPUAffinityManager::cpuSetToString(const cpu_set_t & cpu_set) const
@@ -269,15 +263,15 @@ void CPUAffinityManager::bindThreadCPUAffinity() const
     auto threads = getThreads(getpid());
     for (const auto & t : threads)
     {
-        if (isReadThread(t.second))
+        if (isQueryThread(t.second))
         {
-            LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindReadThread.");
-            bindReadThread(t.first);
+            LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindQueryThread.");
+            bindQueryThread(t.first);
         }
         else
         {
-            LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindWriteThread.");
-            bindWriteThread(t.first);
+            LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindOtherThread.");
+            bindOtherThread(t.first);
         }
     }
 
@@ -298,13 +292,13 @@ void CPUAffinityManager::checkThreadCPUAffinity() const
             continue;
         }
         LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bind on CPU: " << cpuSetToString(cpu_set));
-        if (isReadThread(t.second) && !CPU_EQUAL(&cpu_set, &read_cpu_set))
+        if (isQueryThread(t.second) && !CPU_EQUAL(&cpu_set, &query_cpu_set))
         {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is read thread and bind CPU info is error.");
+            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is query thread and bind CPU info is error.");
         }
-        else if (!isReadThread(t.second) && !CPU_EQUAL(&cpu_set, &write_cpu_set))
+        else if (!isQueryThread(t.second) && !CPU_EQUAL(&cpu_set, &other_cpu_set))
         {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is write thread and bind CPU info is error.");
+            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is other thread and bind CPU info is error.");
         }
     }
 }

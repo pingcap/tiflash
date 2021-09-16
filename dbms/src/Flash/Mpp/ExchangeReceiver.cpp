@@ -40,7 +40,7 @@ void ExchangeReceiver::setUpConnection()
 
 void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
-    cpu_affinity_mgr.bindSelfReadThread();
+    cpu_affinity_mgr.bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
     try
