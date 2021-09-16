@@ -13,6 +13,10 @@ namespace DB
 {
 namespace MPMCQueueDetail
 {
+/// WaitingNode is used to construct a double-linked waiting list so that 
+/// every time a push/pop succeeds, it can notify next reader/writer in fifo.
+/// 
+/// Double link is to support remove self from the mid of the list when timeout.
 struct WaitingNode
 {
     WaitingNode * next = nullptr;
@@ -53,6 +57,13 @@ enum class MPMCQueueStatus
     FINISHED,
 };
 
+/// MPMCQueue is a FIFO queue which supports concurrent operations from
+/// multiple producers and consumers.
+///
+/// It is inspired by MCSLock that all blocking readers/writers construct a
+/// waiting list and everyone only wait on its own condition_variable.
+///
+/// This can significantly reduce contentions and avoid "thundering herd" problem.
 template <typename T>
 class MPMCQueue
 {
@@ -63,11 +74,16 @@ public:
     {
     }
 
+    /// Block util:
+    /// 1. Pop succeeds with a valid T.
+    /// 2. The queue is cancelled. Then it will return a std::nullopt_t.
+    /// 3. The queue has finished, all pushed values have been poped out. Then it will return a std::nullopt_t.
     std::optional<T> pop()
     {
         return popObj();
     }
 
+    /// Besides all conditions mentioned before `pop`, `tryPop` will return a std::nullopt_t if `timeout` is exceeded.
     template <typename Duration>
     std::optional<T> tryPop(const Duration & timeout)
     {
@@ -76,12 +92,17 @@ public:
         return popObj(&deadline);
     }
 
+    /// Block util:
+    /// 1. Push succeeds and return true.
+    /// 2. The queue is cancelled and return false.
+    /// 3. The queue has finished and return false.
     template <typename U>
     ALWAYS_INLINE bool push(U && u)
     {
         return pushObj(std::forward<U>(u));
     }
 
+    /// Besides all conditions mentioned before `push`, `tryPush` will return false if `timeout` is exceeded.
     template <typename U, typename Duration>
     ALWAYS_INLINE bool tryPush(U && u, const Duration & timeout)
     {
@@ -90,12 +111,14 @@ public:
         return pushObj(std::forward<U>(u), &deadline);
     }
 
+    /// The same as `push` except it will construct the object in place.
     template <typename... Args>
     ALWAYS_INLINE bool emplace(Args &&... args)
     {
         return emplaceObj(nullptr, std::forward<Args>(args)...);
     }
 
+    /// The same as `tryPush` except it will construct the object in place.
     template <typename... Args, typename Duration>
     ALWAYS_INLINE bool tryEmplace(Args &&... args, const Duration & timeout)
     {
@@ -104,6 +127,9 @@ public:
         return emplaceObj(&deadline, std::forward<Args>(args)...);
     }
 
+    /// Cancel a NORMAL queue will wake up all blocking readers and writers.
+    /// After `cancel()` the queue can't be pushed or poped any more.
+    /// That means some objects may leave at the queue without poped.
     void cancel()
     {
         std::unique_lock read_lock(mu);
@@ -114,6 +140,9 @@ public:
         }
     }
 
+    /// Finish a NORMAL queue will wake up all blocking readers and writers.
+    /// After `finish()` the queue can't be pushed any more while `pop` is allowed
+    /// the queue is empty.
     void finish()
     {
         std::unique_lock read_lock(mu);
@@ -157,6 +186,7 @@ private:
             !node.cv.wait_until(lock, *deadline, pred);
         else
             node.cv.wait(lock, pred);
+        /// removeSelfFromList is adaptive for both conditions.
         node.removeSelfFromList();
     }
 
@@ -172,6 +202,7 @@ private:
         thread_local WaitingNode node;
         std::optional<T> res;
         {
+            /// read_pos < write_pos means the queue isn't empty
             auto pred = [&] { return read_pos < write_pos || unlikely(cancelled || finished); };
 
             std::unique_lock lock(mu);
@@ -187,8 +218,15 @@ private:
                 ++read_pos;
 
                 res = std::move(obj);
+                /// Should manually reset a `std::optional` since `std::move` may not reset it.
                 obj.reset();
 
+                /// Notify next writer within the critical area because:
+                /// 1. If we remove the next writer node and notify it later,
+                ///    it may find itself can't obtain the lock while not being in the list.
+                ///    This need carefully procesing in `assignObj`.
+                /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
+                ///    deadlock can be possible because different readers may notify one writer.
                 notifyNext(writer_head);
             }
         }
@@ -215,6 +253,7 @@ private:
         assigner(objs[write_pos % capacity]);
         ++write_pos;
 
+        /// See comments in `popObj`.
         notifyNext(reader_head);
         return true;
     }
