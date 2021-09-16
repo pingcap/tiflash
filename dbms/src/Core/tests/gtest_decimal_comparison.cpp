@@ -29,8 +29,8 @@ try
         // case 2: original issue case, 1*10^64 <= 0.1 ?
         using A = Decimal256;
         using B = Decimal32;
-        boost::multiprecision::checked_int256_t xa{"12345678911234567891123456789112345678911234567891123456789112345"};
-        A a(xa);
+        boost::multiprecision::checked_int256_t origin_a{"12345678911234567891123456789112345678911234567891123456789112345"};
+        A a(origin_a);
         B b(1);
         int res = DecimalComparison<A, B, LessOrEqualsOp, true>::apply<true, false>(a, b, 10);
         ASSERT_EQ(res, 0);
@@ -131,6 +131,25 @@ try
         Type::CompareInt b_promoted = static_cast<Type::CompareInt>(b);
         int overflowed = common::mulOverflow(b_promoted, scale, b_promoted);
         ASSERT_EQ(overflowed, 0);
+    }
+
+    {
+        // case 9: path check, overflow of int256.
+        using A = Decimal256;
+        using B = Decimal256;
+        using Type = DecimalComparison<A, B, LessOp, true>;
+        boost::multiprecision::checked_int256_t origin_a{"-12345678911234567891123456789112345678911234567891123456789112345"};
+        boost::multiprecision::checked_int256_t origin_b{"114514"};
+        A a(origin_a);
+        B b(origin_b);
+        Type::CompareInt scale = 1'000'000'000;
+
+        int res = Type::apply<true, false>(a, b, scale);
+        ASSERT_EQ(res, 1);
+
+        Type::CompareInt a_promoted = static_cast<Type::CompareInt>(a);
+        int overflowed = common::mulOverflow(a_promoted, scale, a_promoted);
+        ASSERT_EQ(overflowed, 1);
     }
 }
 CATCH
