@@ -272,13 +272,13 @@ private:
         int right_side_greater_by_overflow = 0;
         if constexpr (scale_left)
         {
-            right_side_greater_by_overflow = -boost::math::sign(x);
-            right_side_greater_by_overflow *= common::mulOverflow(x, scale, x); // x will be changed.
+            int sign = boost::math::sign(x);
+            right_side_greater_by_overflow = -sign * common::mulOverflow(x, scale, x); // x will be changed.
         }
         if constexpr (scale_right)
         {
-            right_side_greater_by_overflow = boost::math::sign(y);
-            right_side_greater_by_overflow *= common::mulOverflow(y, scale, y); // y will be changed.
+            int sign = boost::math::sign(y);
+            right_side_greater_by_overflow = sign * common::mulOverflow(y, scale, y); // y will be changed.
         }
 
         if (right_side_greater_by_overflow)
