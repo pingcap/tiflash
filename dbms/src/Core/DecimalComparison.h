@@ -119,22 +119,22 @@ public:
             bool invalid = false;
 
             if constexpr (sizeof(A) > sizeof(CompareInt))
-            invalid |= (A(x) != a);
+                invalid |= (A(x) != a);
             if constexpr (sizeof(B) > sizeof(CompareInt))
-            invalid |= (B(y) != b);
+                invalid |= (B(y) != b);
             if constexpr (std::is_unsigned_v<A>)
-            invalid |= (x < 0);
+                invalid |= (x < 0);
             if constexpr (std::is_unsigned_v<B>)
-            invalid |= (y < 0);
+                invalid |= (y < 0);
 
             if (invalid)
                 throw Exception("Can't compare", ErrorCodes::DECIMAL_OVERFLOW);
         }
 
         if constexpr (scale_left && scale_right)
-        throw DB::Exception("Assumption broken: there should only one side need to be multiplied in decimal comparison.", ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception("Assumption broken: there should only one side need to be multiplied in decimal comparison.", ErrorCodes::LOGICAL_ERROR);
         if constexpr (!scale_left && !scale_right)
-        return Op::apply(x, y);
+            return Op::apply(x, y);
 
         // overflow means absolute value must be greater.
         // we use this variable to mark whether the right side is greater than left side by overflow.
