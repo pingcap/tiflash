@@ -1,4 +1,5 @@
 #include <Common/CurrentMetrics.h>
+#include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Poco/File.h>
@@ -108,7 +109,7 @@ DMFileReader::Stream::Stream(
             estimated_size += (*mark_with_sizes)[i].mark_size;
         }
     }
-    else
+    else if (!reader.dmfile->configuration)
     {
         for (size_t i = 0; i < packs;)
         {
@@ -143,6 +144,14 @@ DMFileReader::Stream::Stream(
             i = end;
         }
     }
+    else
+    {
+        auto filename = reader.dmfile->colDataFileName(file_name_base);
+        auto iterator = reader.dmfile->sub_file_stats.find(filename);
+        estimated_size = iterator != reader.dmfile->sub_file_stats.end()
+            ? iterator->second.size
+            : reader.dmfile->configuration->getChecksumFrameLength();
+    }
 
     buffer_size = std::min(buffer_size, max_read_buffer_size);
 
@@ -166,7 +175,7 @@ DMFileReader::Stream::Stream(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
             reader.dmfile->encryptionDataPath(file_name_base),
-            reader.dmfile->configuration->getChecksumFrameLength(), // here the estimated size is not good
+            estimated_size,
             read_limiter,
             reader.dmfile->configuration->getChecksumAlgorithm(),
             reader.dmfile->configuration->getChecksumFrameLength());
