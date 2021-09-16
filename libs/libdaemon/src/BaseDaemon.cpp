@@ -21,7 +21,9 @@
 #endif
 #include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
+#include <Common/MutableSplitterChannel.h>
 #include <Common/TiFlashBuildInfo.h>
+#include <Common/TiflashLogFileChannel.h>
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
@@ -54,6 +56,7 @@
 #include <common/ErrorHandlers.h>
 #include <common/logger_useful.h>
 #include <daemon/OwnPatternFormatter.h>
+#include <fmt/format.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <ucontext.h>
@@ -725,7 +728,6 @@ void BaseDaemon::wakeup()
     wakeup_event.set();
 }
 
-
 void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
 {
     auto current_logger = config.getString("logger");
@@ -736,9 +738,10 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     bool is_daemon = config.getBool("application.runAsDaemon", false);
 
     // Split log and error log.
-    Poco::AutoPtr<SplitterChannel> split = new SplitterChannel;
+    Poco::AutoPtr<DB::MutableSplitterChannel> split = new DB::MutableSplitterChannel;
 
     auto log_level = normalize(config.getString("logger.level", "debug"));
+    auto rotation = config.getRawString("logger.size", "100M");
     const auto log_path = config.getString("logger.log", "");
     if (!log_path.empty())
     {
@@ -749,10 +752,11 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> log = new FormattingChannel(pf);
-        log_file = new FileChannel;
+        log_file = new DB::TiflashLogFileChannel;
         log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(log_path).absolute().toString());
         log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
-        log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "number");
+        log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
+        log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
         log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, config.getRawString("logger.compress", "true"));
         log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
         log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
@@ -772,10 +776,11 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> errorlog = new FormattingChannel(pf);
-        error_log_file = new FileChannel;
+        error_log_file = new DB::TiflashLogFileChannel;
         error_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(errorlog_path).absolute().toString());
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
-        error_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "number");
+        error_log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
+        error_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
         error_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, config.getRawString("logger.compress", "true"));
         error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
         error_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
@@ -822,7 +827,23 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     std::vector<std::string> names;
     Logger::root().names(names);
     for (const auto & name : names)
-        Logger::root().get(name).setLevel(log_level);
+    {
+        Logger & cur_logger = Logger::root().get(name);
+        cur_logger.setLevel(log_level);
+        if (!cur_logger.getChannel())
+        {
+            continue;
+        }
+        Poco::Channel & cur_logger_channel = *cur_logger.getChannel();
+        logger().information(fmt::format("logger name:{}, type:{}", name, typeid(cur_logger_channel).name()));
+        // only loggers created after buildLoggers() need to change properties, types of channel in them must be MutableSplitterChannel
+        // typeid should be applied to a polymorphic class type but not a pointer, see https://stackoverflow.com/questions/17010884/typeid-for-polymorphic-pointers
+        if (typeid(cur_logger_channel) == typeid(DB::MutableSplitterChannel))
+        {
+            DB::MutableSplitterChannel * splitter_channel = dynamic_cast<DB::MutableSplitterChannel *>(&cur_logger_channel);
+            splitter_channel->changeProperties(logger(), config);
+        }
+    }
 
     // Attach to the root logger.
     Logger::root().setLevel(log_level);
