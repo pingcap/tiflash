@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 STRONG_TYPEDEF(UInt128, UUID);
 
 }
