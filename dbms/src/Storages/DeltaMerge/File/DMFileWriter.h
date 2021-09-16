@@ -8,7 +8,7 @@
 #include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/WriteBufferProxy.h>
-#include <Storages/DeltaMerge/File/DMConfiguration.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
@@ -23,20 +23,21 @@ public:
 
     struct Stream
     {
-        Stream(const DMFilePtr &      dmfile,
-               const String &         file_base_name,
-               const DataTypePtr &    type,
-               CompressionSettings    compression_settings,
-               size_t                 max_compress_block_size,
-               FileProviderPtr &      file_provider,
+        Stream(const DMFilePtr & dmfile,
+               const String & file_base_name,
+               const DataTypePtr & type,
+               CompressionSettings compression_settings,
+               size_t max_compress_block_size,
+               FileProviderPtr & file_provider,
                const WriteLimiterPtr & write_limiter_,
-               bool                   do_index)
+               bool do_index)
             : plain_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                                              dmfile->colDataPath(file_base_name),
                                                                                              dmfile->encryptionDataPath(file_base_name),
                                                                                              false,
                                                                                              write_limiter_,
-                                                                                             *dmfile->configuration)
+                                                                                             dmfile->configuration->getChecksumAlgorithm(),
+                                                                                             dmfile->configuration->getChecksumFrameLength())
                                                : createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                                              dmfile->colDataPath(file_base_name),
                                                                                              dmfile->encryptionDataPath(file_base_name),
@@ -44,19 +45,20 @@ public:
                                                                                              write_limiter_,
                                                                                              0,
                                                                                              0,
-                                                                                             max_compress_block_size)),
-              plain_layer(*plain_file),
-              compressed_buf(dmfile->configuration
+                                                                                             max_compress_block_size))
+            , plain_layer(*plain_file)
+            , compressed_buf(dmfile->configuration
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(plain_layer, compression_settings))
-                                 : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(plain_layer, compression_settings))),
-              original_layer(*compressed_buf),
-              minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                 : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(plain_layer, compression_settings)))
+            , original_layer(*compressed_buf)
+            , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
+            , mark_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                                             dmfile->colMarkPath(file_base_name),
                                                                                             dmfile->encryptionMarkPath(file_base_name),
                                                                                             false,
                                                                                             write_limiter_,
-                                                                                            *dmfile->configuration)
+                                                                                            dmfile->configuration->getChecksumAlgorithm(),
+                                                                                            dmfile->configuration->getChecksumFrameLength())
                                               : std::make_unique<WriteBufferFromFileProvider>(file_provider,
                                                                                               dmfile->colMarkPath(file_base_name),
                                                                                               dmfile->encryptionMarkPath(file_base_name),
@@ -84,11 +86,11 @@ public:
 
         /// original_layer -> compressed_buf -> plain_layer -> plain_file
         WriteBufferFromFileBasePtr plain_file;
-        WriteBufferProxy           plain_layer;
-        WriteBufferPtr             compressed_buf;
-        WriteBufferProxy           original_layer;
+        WriteBufferProxy plain_layer;
+        WriteBufferPtr compressed_buf;
+        WriteBufferProxy original_layer;
 
-        MinMaxIndexPtr             minmaxes;
+        MinMaxIndexPtr minmaxes;
         WriteBufferFromFileBasePtr mark_file;
     };
     using StreamPtr = std::unique_ptr<Stream>;

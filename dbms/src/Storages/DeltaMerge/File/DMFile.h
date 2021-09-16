@@ -10,8 +10,8 @@
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/File/DMConfiguration.h>
 #include <Storages/FormatVersion.h>
 #include <common/logger_useful.h>
 
@@ -250,20 +250,20 @@ public:
     DMConfigurationOpt & getConfiguration() { return configuration; }
 
 private:
-    DMFile(UInt64             file_id_,
-           UInt64             ref_id_,
-           String             parent_path_,
-           Mode               mode_,
-           Status             status_,
-           Logger *           log_,
+    DMFile(UInt64 file_id_,
+           UInt64 ref_id_,
+           String parent_path_,
+           Mode mode_,
+           Status status_,
+           Poco::Logger * log_,
            DMConfigurationOpt configuration_ = std::nullopt)
-        : file_id(file_id_),
-          ref_id(ref_id_),
-          parent_path(std::move(parent_path_)),
-          mode(mode_),
-          status(status_),
-          configuration(std::move(configuration_)),
-          log(log_)
+        : file_id(file_id_)
+        , ref_id(ref_id_)
+        , parent_path(std::move(parent_path_))
+        , mode(mode_)
+        , status(status_)
+        , configuration(std::move(configuration_))
+        , log(log_)
     {
     }
 

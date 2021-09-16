@@ -66,9 +66,13 @@ DMFileReader::Stream::Stream(DMFileReader & reader,
             if (reader.dmfile->configuration)
             {
                 auto buffer = createReadBufferFromFileBaseByFileProvider(
-                    reader.file_provider, reader.dmfile->colMarkPath(file_name_base), reader.dmfile->encryptionMarkPath(file_name_base),
-                    reader.dmfile->getConfiguration()->getChecksumFrameLength(), read_limiter, *reader.dmfile->getConfiguration()
-                );
+                    reader.file_provider,
+                    reader.dmfile->colMarkPath(file_name_base),
+                    reader.dmfile->encryptionMarkPath(file_name_base),
+                    reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+                    read_limiter,
+                    reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
+                    reader.dmfile->getConfiguration()->getChecksumFrameLength());
                 buffer->readBig(reinterpret_cast<char *>(res->data()), size);
             }
             else
@@ -163,7 +167,8 @@ DMFileReader::Stream::Stream(DMFileReader & reader,
             reader.dmfile->encryptionDataPath(file_name_base),
             reader.dmfile->configuration->getChecksumFrameLength(), // here the estimated size is not good
             read_limiter,
-            *reader.dmfile->configuration);
+            reader.dmfile->configuration->getChecksumAlgorithm(),
+            reader.dmfile->configuration->getChecksumFrameLength());
     }
 }
 
