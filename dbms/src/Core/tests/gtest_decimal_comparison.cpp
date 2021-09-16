@@ -138,9 +138,10 @@ try
         using Type = DecimalComparison<A, B, LessOp, true>;
         boost::multiprecision::checked_int256_t origin_a{"-12345678911234567891123456789112345678911234567891123456789112345"};
         boost::multiprecision::checked_int256_t origin_b{"114514"};
+        boost::multiprecision::checked_int256_t origin_scale{"1000000000000000000000000000000000000000000000000"};
         A a(origin_a);
         B b(origin_b);
-        Type::CompareInt scale = 1'000'000'000;
+        Type::CompareInt scale(origin_scale);
 
         int res = Type::apply<true, false>(a, b, scale);
         ASSERT_EQ(res, 1);
