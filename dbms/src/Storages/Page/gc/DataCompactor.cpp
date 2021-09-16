@@ -148,13 +148,8 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
             valid_page_count = it->second.second.size();
         }
 
-        std::cout << "pagefile id : " << page_file.getFileId() << ", valid_rate :" << valid_rate << std::endl;
-        std::cout << "valid_size : " << valid_size << "file_size : " << file_size << std::endl;
         if (likely(config.gc_force_hardlink_rate < 1.0) && valid_rate > config.gc_force_hardlink_rate && file_size > config.file_max_size)
         {
-            std::cout << "-----------------------" << std::endl;
-            std::cout << "page_file : " << page_file.getFileId() << std::endl;
-            std::cout << "-----------------------" << std::endl;
             invalid_candidates.emplace(page_file);
             continue;
         }
@@ -315,7 +310,6 @@ DataCompactor<SnapshotPtr>::migratePages( //
         // To keep the order of all PageFiles' meta, `compact_seq` should be maximum of all candidates.
         for (auto & page_file : candidates)
         {
-            std::cout << "page_file id : " << page_file.getFileId() << " page_file.level : " << page_file.getLevel() << std::endl;
             if (page_file.getType() != PageFile::Type::Formal)
             {
                 throw Exception("Try to migrate pages from invalid type PageFile: " + page_file.toString()
