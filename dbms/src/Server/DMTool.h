@@ -34,11 +34,11 @@ struct CLIService : public BaseDaemon
         std::unordered_map<std::string, std::string> val_map;
         bool is_proxy_runnable = false;
 
-        const char * ENGINE_STORE_VERSION = "engine-version";
-        const char * ENGINE_STORE_GIT_HASH = "engine-git-hash";
-        const char * ENGINE_STORE_ADDRESS = "engine-addr";
-        const char * ENGINE_STORE_ADVERTISE_ADDRESS = "advertise-engine-addr";
-        const char * PD_ENDPOINTS = "pd-endpoints";
+        static constexpr char ENGINE_STORE_VERSION[] = "engine-version";
+        static constexpr char ENGINE_STORE_GIT_HASH[] = "engine-git-hash";
+        static constexpr char ENGINE_STORE_ADDRESS[] = "engine-addr";
+        static constexpr char ENGINE_STORE_ADVERTISE_ADDRESS[] = "advertise-engine-addr";
+        static constexpr char PD_ENDPOINTS[] = "pd-endpoints";
 
         TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
         {
@@ -89,7 +89,9 @@ struct CLIService : public BaseDaemon
             size_t stack_size = 1024 * 1024 * 20;
         };
 
-        RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_) : parms(std::move(parms_)) {}
+        RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_)
+            : parms(std::move(parms_))
+        {}
 
         void join()
         {
@@ -126,7 +128,9 @@ struct CLIService : public BaseDaemon
     const Args & args;
     std::unique_ptr<DB::Context> global_context;
 
-    explicit CLIService(Func func_, const Args & args_, const std::string & config_file) : func(std::move(func_)), args(args_)
+    explicit CLIService(Func func_, const Args & args_, const std::string & config_file)
+        : func(std::move(func_))
+        , args(args_)
     {
         config_path = config_file;
         ConfigProcessor config_processor(config_file);
@@ -160,9 +164,8 @@ struct CLIService : public BaseDaemon
             .fn_handle_http_request = HandleHttpRequest,
             .fn_check_http_uri_available = CheckHttpUriAvailable,
             .fn_gc_raw_cpp_ptr = GcRawCppPtr,
-            .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
             .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
-            .fn_set_server_info_resp = SetSetverInfoResp,
+            .fn_set_server_info_resp = SetServerInfoResp,
         };
 
         typename RaftStoreProxyRunner::RunRaftStoreProxyParms parms{&helper, proxy_conf};

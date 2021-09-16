@@ -35,7 +35,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         while (t.readBig(black_hole, DBMS_DEFAULT_BUFFER_SIZE) != 0) {}
     };
     auto fp = context.getFileProvider();
-    auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir);
+    auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
     std::cout << "bytes on disk: " << dmfile->getBytesOnDisk() << std::endl;
     std::cout << "single file: " << dmfile->isSingleFileMode() << std::endl;
     if (auto conf = dmfile->getConfiguration())
@@ -43,21 +43,21 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         std::cout << "with new checksum: true" << std::endl;
         switch (conf->getChecksumAlgorithm())
         {
-            case DB::ChecksumAlgo::None:
-                std::cout << "checksum algorithm: none" << std::endl;
-                break;
-            case DB::ChecksumAlgo::CRC32:
-                std::cout << "checksum algorithm: crc32" << std::endl;
-                break;
-            case DB::ChecksumAlgo::CRC64:
-                std::cout << "checksum algorithm: crc64" << std::endl;
-                break;
-            case DB::ChecksumAlgo::City128:
-                std::cout << "checksum algorithm: city128" << std::endl;
-                break;
-            case DB::ChecksumAlgo::XXH3:
-                std::cout << "checksum algorithm: xxh3" << std::endl;
-                break;
+        case DB::ChecksumAlgo::None:
+            std::cout << "checksum algorithm: none" << std::endl;
+            break;
+        case DB::ChecksumAlgo::CRC32:
+            std::cout << "checksum algorithm: crc32" << std::endl;
+            break;
+        case DB::ChecksumAlgo::CRC64:
+            std::cout << "checksum algorithm: crc64" << std::endl;
+            break;
+        case DB::ChecksumAlgo::City128:
+            std::cout << "checksum algorithm: city128" << std::endl;
+            break;
+        case DB::ChecksumAlgo::XXH3:
+            std::cout << "checksum algorithm: xxh3" << std::endl;
+            break;
         }
         for (const auto & [name, msg] : conf->getDebugInfo())
         {
@@ -87,12 +87,23 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 if (dmfile->getConfiguration())
                 {
                     consume(*DB::createReadBufferFromFileBaseByFileProvider(
-                        fp, full_path, DB::EncryptionPath(full_path, i), DBMS_DEFAULT_BUFFER_SIZE, nullptr, *dmfile->getConfiguration()));
+                        fp,
+                        full_path,
+                        DB::EncryptionPath(full_path, i),
+                        dmfile->getConfiguration()->getChecksumFrameLength(),
+                        nullptr,
+                        dmfile->getConfiguration()->getChecksumAlgorithm(),
+                        dmfile->getConfiguration()->getChecksumFrameLength()));
                 }
                 else
                 {
                     consume(*DB::createReadBufferFromFileBaseByFileProvider(
-                        fp, full_path, DB::EncryptionPath(full_path, i), DBMS_DEFAULT_BUFFER_SIZE, 0, nullptr));
+                        fp,
+                        full_path,
+                        DB::EncryptionPath(full_path, i),
+                        DBMS_DEFAULT_BUFFER_SIZE,
+                        0,
+                        nullptr));
                 }
                 std::cout << "[success]" << std::endl;
             }
@@ -122,7 +133,7 @@ int inspectEntry(const std::vector<std::string> & opts)
                    .options(options)
                    .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
                    .run(),
-        vm);
+               vm);
 
     try
     {
@@ -141,7 +152,8 @@ int inspectEntry(const std::vector<std::string> & opts)
     }
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)
     {
-        std::cerr << exception.what() << std::endl << INSPECT_HELP << std::endl;
+        std::cerr << exception.what() << std::endl
+                  << INSPECT_HELP << std::endl;
         return -EINVAL;
     }
 

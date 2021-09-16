@@ -43,7 +43,8 @@ struct DirLock
     flock lock{};
     std::string workdir_lock;
 
-    explicit DirLock(const std::string & workdir_) : workdir_lock(workdir_ + "/LOCK")
+    explicit DirLock(const std::string & workdir_)
+        : workdir_lock(workdir_ + "/LOCK")
     {
         dir = ::open(workdir_lock.c_str(), O_RDWR | O_CREAT | O_EXCL);
         if (dir == -1)
@@ -84,7 +85,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
     DirLock _lock{args.workdir};
     auto migrate_path = args.workdir + "/" + "dmf_" + DB::toString(args.file_id) + ".migrate/";
     auto fp = context.getFileProvider();
-    auto src_file = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir);
+    auto src_file = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
     std::cout << "source version: " << (src_file->getConfiguration() ? 2 : 1) << std::endl;
     std::cout << "source bytes: " << (src_file->getBytesOnDisk()) << std::endl;
     std::cout << "creating migration temporary directory" << std::endl;
@@ -177,30 +178,43 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
                 DB::ReadBufferPtr read_buffer;
                 if (src_file->getConfiguration())
                 {
-                    read_buffer = DB::createReadBufferFromFileBaseByFileProvider(fp,
+                    read_buffer = DB::createReadBufferFromFileBaseByFileProvider(
+                        fp,
                         source_path,
                         DB::EncryptionPath(source_path, i),
                         src_file->getConfiguration()->getChecksumFrameLength(),
                         nullptr,
-                        *src_file->getConfiguration());
+                        src_file->getConfiguration()->getChecksumAlgorithm(),
+                        src_file->getConfiguration()->getChecksumFrameLength());
                 }
                 else
                 {
                     read_buffer = DB::createReadBufferFromFileBaseByFileProvider(
-                        fp, source_path, DB::EncryptionPath(source_path, i), DBMS_DEFAULT_BUFFER_SIZE, 0, nullptr);
+                        fp,
+                        source_path,
+                        DB::EncryptionPath(source_path, i),
+                        DBMS_DEFAULT_BUFFER_SIZE,
+                        0,
+                        nullptr);
                 }
                 DB::WriteBufferPtr write_buffer;
                 size_t buffer_size;
                 if (option)
                 {
-                    write_buffer = DB::createWriteBufferFromFileBaseByFileProvider(fp, target_path,
+                    write_buffer = DB::createWriteBufferFromFileBaseByFileProvider(
+                        fp,
+                        target_path,
                         DB::EncryptionPath(source_path, i), // use original path
-                        false, nullptr, *option);
+                        false,
+                        nullptr,
+                        option->getChecksumAlgorithm(),
+                        option->getChecksumFrameLength());
                     buffer_size = option->getChecksumFrameLength();
                 }
                 else
                 {
-                    write_buffer = DB::createWriteBufferFromFileBaseByFileProvider(fp,
+                    write_buffer = DB::createWriteBufferFromFileBaseByFileProvider(
+                        fp,
                         target_path,
                         DB::EncryptionPath(source_path, i), // use original path
                         false,
@@ -267,7 +281,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
     std::cout << "checking meta status for " << original_path << std::endl;
     if (!args.dry_mode)
     {
-        DB::DM::DMFile::restore(fp, args.file_id, 1, args.workdir);
+        DB::DM::DMFile::restore(fp, args.file_id, 1, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
     }
 
     std::cout << "migration finished" << std::endl;
@@ -300,7 +314,7 @@ int migrateEntry(const std::vector<std::string> & opts)
                    .options(options)
                    .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
                    .run(),
-        vm);
+               vm);
 
     try
     {
@@ -357,7 +371,8 @@ int migrateEntry(const std::vector<std::string> & opts)
     }
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)
     {
-        std::cerr << exception.what() << std::endl << MIGRATE_HELP << std::endl;
+        std::cerr << exception.what() << std::endl
+                  << MIGRATE_HELP << std::endl;
         return 1;
     }
 }

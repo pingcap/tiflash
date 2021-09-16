@@ -4,9 +4,9 @@
 #include <Poco/Path.h>
 #include <Server/DMTool.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMConfiguration.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
@@ -77,7 +77,12 @@ void initializeGlobalContext(String tmp_path, bool encryption)
     global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
 
     global_context->setPathPool(
-        {abs_path}, {abs_path}, Strings{}, true, global_context->getPathCapacity(), global_context->getFileProvider());
+        {abs_path},
+        {abs_path},
+        Strings{},
+        true,
+        global_context->getPathCapacity(),
+        global_context->getFileProvider());
     TiFlashRaftConfig raft_config;
 
     raft_config.ignore_databases = {"default", "system"};
@@ -193,7 +198,10 @@ DB::Block createBlock(size_t column_number, size_t start, size_t row_number, std
     for (size_t i = 0; i < int_num; ++i)
     {
         ColumnWithTypeAndName int_col(
-            nullptr, DB::DataTypeFactory::instance().get("Int64"), fmt::format("int_{}", i), static_cast<ColId>(3 + i));
+            nullptr,
+            DB::DataTypeFactory::instance().get("Int64"),
+            fmt::format("int_{}", i),
+            static_cast<ColId>(3 + i));
         IColumn::MutablePtr m_col = int_col.type->createColumn();
         auto & column_data = typeid_cast<ColumnVector<Int64> &>(*m_col).getData();
         column_data.resize(row_number);
@@ -209,7 +217,10 @@ DB::Block createBlock(size_t column_number, size_t start, size_t row_number, std
     for (size_t i = 0; i < str_num; ++i)
     {
         ColumnWithTypeAndName str_col(
-            nullptr, DB::DataTypeFactory::instance().get("String"), fmt::format("str_{}", i), static_cast<ColId>(3 + int_num + i));
+            nullptr,
+            DB::DataTypeFactory::instance().get("String"),
+            fmt::format("str_{}", i),
+            static_cast<ColId>(3 + int_num + i));
         IColumn::MutablePtr m_col = str_col.type->createColumn();
         for (size_t j = 0; j < row_number; j++)
         {
@@ -250,7 +261,7 @@ int benchEntry(const std::vector<std::string> & opts)
                    .options(options)
                    .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
                    .run(),
-        vm);
+               vm);
 
     bpo::notify(vm);
 
@@ -436,7 +447,10 @@ int benchEntry(const std::vector<std::string> & opts)
                     DB::DM::IdSetPtr{});
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
-                    asm volatile("" : : "r,m"(stream.read()) : "memory");
+                    asm volatile(""
+                                 :
+                                 : "r,m"(stream.read())
+                                 : "memory");
                 }
                 stream.readSuffix();
             }
