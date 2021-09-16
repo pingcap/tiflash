@@ -631,25 +631,50 @@ struct RowKeyRange
         return {start_index, end_index - start_index};
     }
 
-    static RowKeyRange fromHandleRange(const HandleRange & handle_range)
+    static RowKeyRange fromHandleRange(const HandleRange & handle_range, bool is_common_handle = false)
     {
-        if (handle_range.all())
+        if (is_common_handle)
         {
-            return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, /*is_common_handle=*/false, 1);
-        }
-        std::stringstream ss;
-        DB::EncodeInt64(handle_range.start, ss);
-        String start = ss.str();
+            if (handle_range.all())
+            {
+                return RowKeyRange(RowKeyValue::COMMON_HANDLE_MIN_KEY, RowKeyValue::COMMON_HANDLE_MAX_KEY, /*is_common_handle=*/is_common_handle, 1);
+            }
+            WriteBufferFromOwnString ss;
+            DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
+            DB::EncodeInt64(handle_range.start, ss);
+            String start = ss.releaseStr();
 
-        ss.str(std::string());
-        DB::EncodeInt64(handle_range.end, ss);
-        String end = ss.str();
-        /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
-        return RowKeyRange(RowKeyValue(false, std::make_shared<String>(start), handle_range.start),
-                           handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY
-                                                                : RowKeyValue(false, std::make_shared<String>(end), handle_range.end),
-                           /*is_common_handle=*/false,
-                           1);
+            ss.restart();
+            DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
+            DB::EncodeInt64(handle_range.end, ss);
+            String end = ss.releaseStr();
+            /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
+            return RowKeyRange(RowKeyValue(is_common_handle, std::make_shared<String>(start)),
+                               handle_range.end == HandleRange::MAX ? RowKeyValue::COMMON_HANDLE_MAX_KEY
+                                                                    : RowKeyValue(is_common_handle, std::make_shared<String>(end)),
+                               /*is_common_handle=*/is_common_handle,
+                               1);
+        }
+        else
+        {
+            if (handle_range.all())
+            {
+                return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, /*is_common_handle=*/is_common_handle, 1);
+            }
+            WriteBufferFromOwnString ss;
+            DB::EncodeInt64(handle_range.start, ss);
+            String start = ss.releaseStr();
+
+            ss.restart();
+            DB::EncodeInt64(handle_range.end, ss);
+            String end = ss.releaseStr();
+            /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
+            return RowKeyRange(RowKeyValue(is_common_handle, std::make_shared<String>(start), handle_range.start),
+                               handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY
+                                                                    : RowKeyValue(is_common_handle, std::make_shared<String>(end), handle_range.end),
+                               /*is_common_handle=*/false,
+                               1);
+        }
     }
 
     static RowKeyRange fromRegionRange(const std::shared_ptr<const RegionRangeKeys> & region_range,
