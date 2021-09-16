@@ -648,12 +648,7 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log); });
 }
 
-void DAGQueryBlockInterpreter::executeAggregation(
-    DAGPipeline & pipeline,
-    const ExpressionActionsPtr & expr,
-    Names & key_names,
-    TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregates)
+void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names, TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr, log); });
 

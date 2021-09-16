@@ -511,13 +511,14 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
                     else
                     {
-                        auto [wait_res, time_cost] = region->waitIndex(read_index_result.read_index, tmt);
-                        if (wait_res != WaitIndexResult::Finished)
+                        Stopwatch wait_index_watch;
+                        if (region->waitIndex(read_index_result.read_index, tmt))
                         {
                             region_status = RegionException::RegionReadStatus::NOT_FOUND;
                             continue;
                         }
-                        GET_METRIC(tiflash_raft_wait_index_duration_seconds).Observe(time_cost);
+                        GET_METRIC(tiflash_raft_wait_index_duration_seconds)
+                            .Observe(wait_index_watch.elapsedSeconds());
                     }
 
                     auto block_status = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read, kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.bypass_lock_ts, regions_executor_data[region_index].range_scan_filter);

@@ -8,6 +8,7 @@
 
 namespace DB
 {
+
 std::tuple<size_t, UInt64> RegionMeta::serialize(WriteBuffer & buf) const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -29,10 +30,7 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
     return RegionMeta(std::move(peer), std::move(apply_state), applied_term, std::move(region_state));
 }
 
-RegionID RegionMeta::regionId() const
-{
-    return region_id;
-}
+RegionID RegionMeta::regionId() const { return region_id; }
 
 UInt64 RegionMeta::peerId() const
 {
@@ -85,10 +83,7 @@ void RegionMeta::doSetApplied(UInt64 index, UInt64 term)
     applied_term = term;
 }
 
-void RegionMeta::notifyAll() const
-{
-    cv.notify_all();
-}
+void RegionMeta::notifyAll() const { cv.notify_all(); }
 
 UInt64 RegionMeta::appliedIndex() const
 {
@@ -102,8 +97,7 @@ UInt64 RegionMeta::appliedTerm() const
     return applied_term;
 }
 
-RegionMeta::RegionMeta(RegionMeta && rhs)
-    : region_id(rhs.regionId())
+RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
     std::lock_guard<std::mutex> lock(rhs.mutex);
 
@@ -150,41 +144,19 @@ void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
     region_state.setState(peer_state_);
 }
 
-WaitIndexResult RegionMeta::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running) const
+TerminateWaitIndex RegionMeta::waitIndex(UInt64 index, std::function<bool(void)> && check_running) const
 {
     std::unique_lock<std::mutex> lock(mutex);
-    WaitIndexResult status = WaitIndexResult::Finished;
-    if (timeout_ms != 0)
-    {
-        // wait for applied index with a timeout
-        auto timeout_timepoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
-        if (!cv.wait_until(lock, timeout_timepoint, [&] {
-                if (!check_running())
-                {
-                    status = WaitIndexResult::Terminated;
-                    return true;
-                }
-                return doCheckIndex(index);
-            }))
+    TerminateWaitIndex res = false;
+    cv.wait(lock, [&] {
+        if (!check_running())
         {
-            // not terminated && not reach the `index` => timeout
-            status = WaitIndexResult::Timeout;
+            res = true;
+            return true;
         }
-    }
-    else
-    {
-        // wait infinitely
-        cv.wait(lock, [&] {
-            if (!check_running())
-            {
-                status = WaitIndexResult::Terminated;
-                return true;
-            }
-            return doCheckIndex(index);
-        });
-    }
-
-    return status;
+        return doCheckIndex(index);
+    });
+    return res;
 }
 
 bool RegionMeta::checkIndex(UInt64 index) const
@@ -224,10 +196,7 @@ void RegionMeta::assignRegionMeta(RegionMeta && rhs)
 }
 
 void MetaRaftCommandDelegate::execChangePeer(
-    const raft_cmdpb::AdminRequest &,
-    const raft_cmdpb::AdminResponse & response,
-    UInt64 index,
-    UInt64 term)
+    const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -243,23 +212,22 @@ void MetaRaftCommandDelegate::execChangePeer(
 }
 
 RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
-    const raft_cmdpb::AdminRequest & request,
-    const MetaRaftCommandDelegate & source_meta) const
+    const raft_cmdpb::AdminRequest & request, const MetaRaftCommandDelegate & source_meta) const
 {
     const auto & commit_merge_request = request.commit_merge();
     const auto & source_region = commit_merge_request.source();
 
     switch (auto state = source_meta.region_state.getState())
     {
-    case raft_serverpb::PeerState::Merging:
-    case raft_serverpb::PeerState::Normal:
-        break;
-    default:
-    {
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": " + toString(false)
-                            + " unexpected state of source region: " + raft_serverpb::PeerState_Name(state),
-                        ErrorCodes::LOGICAL_ERROR);
-    }
+        case raft_serverpb::PeerState::Merging:
+        case raft_serverpb::PeerState::Normal:
+            break;
+        default:
+        {
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": " + toString(false)
+                    + " unexpected state of source region: " + raft_serverpb::PeerState_Name(state),
+                ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     if (!(source_region == source_meta.region_state.getRegion()))
@@ -287,26 +255,23 @@ static void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, c
 {
     if (response.has_split() && !(response.split().left() == region_state.getRegion()))
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": current region:\n" + region_state.getRegion().ShortDebugString()
-                            + "\nexpect:\n" + response.split().left().ShortDebugString() + "\nshould not happen",
-                        ErrorCodes::LOGICAL_ERROR);
+                + "\nexpect:\n" + response.split().left().ShortDebugString() + "\nshould not happen",
+            ErrorCodes::LOGICAL_ERROR);
 }
 #pragma GCC diagnostic pop
 
 void MetaRaftCommandDelegate::execRollbackMerge(
-    const raft_cmdpb::AdminRequest & request,
-    const raft_cmdpb::AdminResponse & response,
-    const UInt64 index,
-    const UInt64 term)
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     const auto & rollback_request = request.rollback_merge();
 
     if (region_state.getState() != raft_serverpb::PeerState::Merging)
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": region state is " + raft_serverpb::PeerState_Name(region_state.getState()),
-                        ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR);
     if (region_state.getMergeState().commit() != rollback_request.commit())
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": merge commit index " + DB::toString(region_state.getMergeState().commit())
-                            + " != " + DB::toString(rollback_request.commit()),
-                        ErrorCodes::LOGICAL_ERROR);
+                + " != " + DB::toString(rollback_request.commit()),
+            ErrorCodes::LOGICAL_ERROR);
 
     std::lock_guard<std::mutex> lock(mutex);
     const auto version = region_state.getVersion() + 1;
@@ -318,12 +283,8 @@ void MetaRaftCommandDelegate::execRollbackMerge(
     CheckRegionForMergeCmd(response, region_state);
 }
 
-void MetaRaftCommandDelegate::execCommitMerge(
-    const RegionMergeResult & res,
-    UInt64 index,
-    UInt64 term,
-    const MetaRaftCommandDelegate & source_meta,
-    const raft_cmdpb::AdminResponse & response)
+void MetaRaftCommandDelegate::execCommitMerge(const RegionMergeResult & res, UInt64 index, UInt64 term,
+    const MetaRaftCommandDelegate & source_meta, const raft_cmdpb::AdminResponse & response)
 {
     std::lock_guard<std::mutex> lock(mutex);
     region_state.setVersion(res.version);
@@ -340,10 +301,7 @@ void MetaRaftCommandDelegate::execCommitMerge(
 }
 
 void MetaRaftCommandDelegate::execPrepareMerge(
-    const raft_cmdpb::AdminRequest & request,
-    const raft_cmdpb::AdminResponse & response,
-    UInt64 index,
-    UInt64 term)
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     const auto & prepare_merge_request = request.prepare_merge();
     const auto & target = prepare_merge_request.target();
@@ -401,32 +359,24 @@ MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()
     return static_cast<MetaRaftCommandDelegate &>(*this);
 }
 
-const metapb::Peer & MetaRaftCommandDelegate::getPeer() const
-{
-    return peer;
-}
-const raft_serverpb::RaftApplyState & MetaRaftCommandDelegate::applyState() const
-{
-    return apply_state;
-}
-const RegionState & MetaRaftCommandDelegate::regionState() const
-{
-    return region_state;
-}
+const metapb::Peer & MetaRaftCommandDelegate::getPeer() const { return peer; }
+const raft_serverpb::RaftApplyState & MetaRaftCommandDelegate::applyState() const { return apply_state; }
+const RegionState & MetaRaftCommandDelegate::regionState() const { return region_state; }
 
-RegionMeta::RegionMeta(metapb::Peer peer_, raft_serverpb::RaftApplyState apply_state_, const UInt64 applied_term_, raft_serverpb::RegionLocalState region_state_)
-    : peer(std::move(peer_))
-    , apply_state(std::move(apply_state_))
-    , applied_term(applied_term_)
-    , region_state(std::move(region_state_))
-    , region_id(region_state.getRegion().id())
+RegionMeta::RegionMeta(metapb::Peer peer_, raft_serverpb::RaftApplyState apply_state_, const UInt64 applied_term_,
+    raft_serverpb::RegionLocalState region_state_)
+    : peer(std::move(peer_)),
+      apply_state(std::move(apply_state_)),
+      applied_term(applied_term_),
+      region_state(std::move(region_state_)),
+      region_id(region_state.getRegion().id())
 {}
 
 RegionMeta::RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_)
-    : peer(std::move(peer_))
-    , apply_state(std::move(apply_state_))
-    , applied_term(apply_state.truncated_state().term())
-    , region_id(region.id())
+    : peer(std::move(peer_)),
+      apply_state(std::move(apply_state_)),
+      applied_term(apply_state.truncated_state().term()),
+      region_id(region.id())
 {
     region_state.setRegion(std::move(region));
 }
