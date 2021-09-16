@@ -77,13 +77,13 @@ public:
     }
 
     template <typename U>
-    bool push(U && u)
+    ALWAYS_INLINE bool push(U && u)
     {
         return pushObj(std::forward<U>(u));
     }
 
     template <typename U, typename Duration>
-    bool tryPush(U && u, const Duration & timeout)
+    ALWAYS_INLINE bool tryPush(U && u, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -91,13 +91,13 @@ public:
     }
 
     template <typename... Args>
-    bool emplace(Args &&... args)
+    ALWAYS_INLINE bool emplace(Args &&... args)
     {
         return emplaceObj(nullptr, std::forward<Args>(args)...);
     }
 
     template <typename... Args, typename Duration>
-    bool tryEmplace(Args &&... args, const Duration & timeout)
+    ALWAYS_INLINE bool tryEmplace(Args &&... args, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -110,10 +110,7 @@ public:
         if (!finished && !cancelled)
         {
             cancelled = true;
-            for (auto * p = &reader_head; p->next != &reader_head; p = p->next)
-                p->next->cv.notify_one();
-            for (auto * p = &writer_head; p->next != &writer_head; p = p->next)
-                p->next->cv.notify_one();
+            notifyAll();
         }
     }
 
@@ -123,10 +120,7 @@ public:
         if (!finished && !cancelled)
         {
             finished = true;
-            for (auto * p = &reader_head; p->next != &reader_head; p = p->next)
-                p->next->cv.notify_one();
-            for (auto * p = &writer_head; p->next != &writer_head; p = p->next)
-                p->next->cv.notify_one();
+            notifyAll();
         }
     }
 
@@ -146,33 +140,56 @@ private:
     using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
     using WaitingNode = MPMCQueueDetail::WaitingNode;
 
+    void notifyAll()
+    {
+        for (auto * p = &reader_head; p->next != &reader_head; p = p->next)
+            p->next->cv.notify_one();
+        for (auto * p = &writer_head; p->next != &writer_head; p = p->next)
+            p->next->cv.notify_one();
+    }
+
+    template <typename Pred>
+    ALWAYS_INLINE void wait(
+        std::unique_lock<std::mutex> & lock, WaitingNode & head, WaitingNode & node, Pred pred, const TimePoint * deadline)
+    {
+        head.pushBack(node);
+        if (deadline)
+            !node.cv.wait_until(lock, *deadline, pred);
+        else
+            node.cv.wait(lock, pred);
+        node.removeSelfFromList();
+    }
+
+    ALWAYS_INLINE void notifyNext(WaitingNode & head)
+    {
+        auto * next = head.next;
+        if (next != &head)
+            next->cv.notify_one();
+    }
+
     std::optional<T> popObj(const TimePoint * deadline = nullptr)
     {
         thread_local WaitingNode node;
         std::optional<T> res;
         {
-            auto pred = [&] { return read_pos < write_pos || cancelled || finished; };
+            auto pred = [&] { return read_pos < write_pos || unlikely(cancelled || finished); };
 
             std::unique_lock lock(mu);
-            if (cancelled)
+            if (unlikely(cancelled))
                 return res;
 
             if (read_pos >= write_pos)
+                wait(lock, reader_head, node, pred, deadline);
+
+            if (likely(!cancelled && read_pos < write_pos))
             {
-                reader_head.pushBack(node);
-                if (deadline)
-                    !node.cv.wait_until(lock, *deadline, pred);
-                else
-                    node.cv.wait(lock, pred);
-            }
-            node.removeSelfFromList();
-            if (!cancelled && read_pos < write_pos)
-            {
-                res = std::move(objs[read_pos % capacity]);
+                auto & obj = objs[read_pos % capacity];
                 ++read_pos;
-                auto * next_writer = writer_head.next;
-                if (next_writer != &writer_head)
-                    next_writer->cv.notify_one();
+
+                res = std::move(obj);
+                obj.reset();
+
+                notifyNext(writer_head);
             }
         }
         return res;
@@ -183,28 +200,21 @@ private:
     {
         thread_local WaitingNode node;
         {
-            auto pred = [&] { return write_pos - read_pos < capacity || cancelled || finished; };
+            auto pred = [&] { return write_pos - read_pos < capacity || unlikely(cancelled || finished); };
 
             std::unique_lock lock(mu);
-            if (cancelled || finished)
+            if (unlikely(cancelled || finished))
                 return false;
 
             if (write_pos - read_pos >= capacity)
-            {
-                writer_head.pushBack(node);
-                if (deadline)
-                    !node.cv.wait_until(lock, *deadline, pred);
-                else
-                    node.cv.wait(lock, pred);
-            }
-            node.removeSelfFromList();
-            if (!cancelled && write_pos - read_pos < capacity)
+                wait(lock, writer_head, node, pred, deadline);
+
+            if (likely(!cancelled && write_pos - read_pos < capacity))
             {
                 assigner(objs[write_pos % capacity]);
                 ++write_pos;
-                auto * next_reader = reader_head.next;
-                if (next_reader != &reader_head)
-                    next_reader->cv.notify_one();
+
+                notifyNext(reader_head);
                 return true;
             }
         }
@@ -212,13 +222,13 @@ private:
     }
 
     template <typename U>
-    bool pushObj(U && u, const TimePoint * deadline = nullptr)
+    ALWAYS_INLINE bool pushObj(U && u, const TimePoint * deadline = nullptr)
     {
         return assignObj(deadline, [&](auto & obj) { obj = std::forward<U>(u); });
     }
 
     template <typename... Args>
-    bool emplaceObj(const TimePoint * deadline, Args &&... args)
+    ALWAYS_INLINE bool emplaceObj(const TimePoint * deadline, Args &&... args)
     {
         return assignObj(deadline, [&](auto & obj) { obj.emplace(std::forward<Args>(args)...); });
     }
