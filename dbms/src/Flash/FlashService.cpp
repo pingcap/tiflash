@@ -1,6 +1,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
+#include <Common/CPUAffinityManager.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
@@ -48,6 +49,7 @@ FlashService::FlashService(IServer & server_)
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
@@ -82,6 +84,7 @@ grpc::Status FlashService::Coprocessor(
 ::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request,
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
@@ -116,6 +119,7 @@ grpc::Status FlashService::Coprocessor(
 ::grpc::Status FlashService::DispatchMPPTask(
     ::grpc::ServerContext * grpc_context, const ::mpp::DispatchTaskRequest * request, ::mpp::DispatchTaskResponse * response)
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling mpp dispatch request: " << request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
@@ -144,6 +148,7 @@ grpc::Status FlashService::Coprocessor(
 ::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]],
     const ::mpp::IsAliveRequest * request [[maybe_unused]], ::mpp::IsAliveResponse * response [[maybe_unused]])
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -163,6 +168,7 @@ grpc::Status FlashService::Coprocessor(
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
     const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling establish mpp connection request: " << request->DebugString());
@@ -228,6 +234,7 @@ grpc::Status FlashService::Coprocessor(
 ::grpc::Status FlashService::CancelMPPTask(
     ::grpc::ServerContext * grpc_context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": cancel mpp task request: " << request->DebugString());
 
@@ -262,6 +269,7 @@ grpc::Status FlashService::Coprocessor(
 grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
