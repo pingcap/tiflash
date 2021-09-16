@@ -11,6 +11,7 @@
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
+#include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
@@ -23,9 +24,6 @@
 
 namespace DB
 {
-
-std::tuple<std::shared_ptr<StorageDeltaMerge>, bool, DM::ColumnDefinesPtr> //
-AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
 
 namespace FailPoints
 {
@@ -328,8 +326,8 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
             // Will return the storage even if it is tombstoned.
-            auto [dm_storage, is_common_handle, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
-            if (unlikely(dm_storage == nullptr))
+            const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
+            if (unlikely(storage == nullptr))
             {
                 // The storage must be physically dropped, throw exception and do cleanup.
                 throw Exception("", ErrorCodes::TABLE_IS_DROPPED);
@@ -346,15 +344,17 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
-                new_region, snaps, proxy_helper, dm_storage, schema_snap, gc_safepoint, force_decode, tmt, expected_block_size);
-            auto bounded_stream
-                = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, is_common_handle);
-            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(bounded_stream, snapshot_apply_method, job_type, tmt);
+                new_region, snaps, proxy_helper, schema_snap, gc_safepoint, force_decode, tmt, expected_block_size);
+            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
+            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
+                bounded_stream, storage, schema_snap, snapshot_apply_method, job_type, tmt);
 
             stream->writePrefix();
             stream->write();
             stream->writeSuffix();
             ids = stream->ingestIds();
+
+            (void)table_drop_lock; // the table should not be dropped during ingesting file
             break;
         }
         catch (DB::Exception & e)
@@ -376,6 +376,9 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 }
 
                 // Update schema and try to decode again
+                LOG_INFO(log,
+                    "Decoding Region snapshot data meet error, sync schema and try to decode again " //
+                        << new_region->toString(true) << " [error=" << e.displayText() << "]");
                 auto metrics = context.getTiFlashMetrics();
                 GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);
@@ -387,9 +390,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
             {
                 // We can ignore if storage is dropped.
-                LOG_INFO(log,
-                    "Pre-handle snapshot to DTFiles is ignored because the table is dropped. [region=" << new_region->toString(true)
-                                                                                                       << "]");
+                LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped " << new_region->toString(true));
                 try_clean_up();
                 break;
             }

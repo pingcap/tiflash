@@ -1048,10 +1048,10 @@ public:
 
     std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
     {
-        auto file_id      = context.storage_pool.newDataPageId();
+        auto delegator = context.path_pool.getStableDiskDelegator();
+        auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        auto delegate     = context.path_pool.getStableDiskDelegator();
-        auto store_path   = delegate.choosePath();
+        auto store_path = delegator.choosePath();
 
         DMFileBlockOutputStream::Flags flags;
         flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
@@ -1059,11 +1059,11 @@ public:
         auto dmfile
             = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
 
-        delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
+        delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
-        auto &      pk_column = block.getByPosition(0).column;
-        auto        min_pk    = pk_column->getInt(0);
-        auto        max_pk    = pk_column->getInt(block.rows() - 1);
+        auto & pk_column = block.getByPosition(0).column;
+        auto min_pk = pk_column->getInt(0);
+        auto max_pk = pk_column->getInt(block.rows() - 1);
         HandleRange range(min_pk, max_pk + 1);
 
         return {RowKeyRange::fromHandleRange(range), {file_id}};
@@ -1095,7 +1095,6 @@ try
                 auto file_parent_path  = delegate.getDTFilePath(file_id);
                 auto file              = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
                 auto pack              = std::make_shared<DeltaPackFile>(dmContext(), file, range);
-                delegate.addDTFile(file_id, file->getBytesOnDisk(), file_parent_path);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
