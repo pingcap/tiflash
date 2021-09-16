@@ -22,6 +22,7 @@ add_executable(page_stress_testing EXCLUDE_FROM_ALL ${page_stress_testing_source
 target_link_libraries(page_stress_testing page_storage)
 target_include_directories(page_stress_testing PRIVATE stress)
 target_compile_options(page_stress_testing PRIVATE -Wno-format -lc++) # turn off printf format check
+target_compile_definitions(page_stress_testing PRIVATE PAGE_STORAGE_UTIL_DEBUGGGING DBMS_PUBLIC_GTEST)
 
 # FIXME: mock disk full by FailPoint, and move this test into a unittest case.
 add_executable(test_page_storage_write_disk_full test_page_storage_write_disk_full.cpp)
