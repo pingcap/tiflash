@@ -24,42 +24,92 @@ static auto loadConfigFromString(const std::string & s)
     return config;
 }
 
+TEST(CPUAffinityManager_test, readConfig)
+{
+    std::vector<std::string> vs = {
+R"(
+[flash.cpu]
+)",
+R"(
+[flash.cpu]
+query_cpu_percent=55
+)",
+R"(
+[flash.cpu]
+query_cpu_percent=77
+)",
+    };
+    std::vector<int> vi = { /*default*/ 80, 55, 77 };
+
+    for (size_t i = 0; i < vs.size(); i++)
+    {
+        const auto & s = vs[i];
+        auto config = CPUAffinityManager::readConfig(*loadConfigFromString(s));
+        ASSERT_EQ(config.query_cpu_percent, vi[i]);
+        ASSERT_EQ(config.cpu_cores, static_cast<int>(std::thread::hardware_concurrency()));
+        auto default_query_threads = std::vector<std::string>{"cop-pool", "batch-cop-pool", "grpcpp_sync_ser"};
+        ASSERT_EQ(config.query_threads, default_query_threads);
+    }
+}
+
+#ifdef __linux__
 TEST(CPUAffinityManager_test, CPUAffinityManager)
 {
-    auto config = loadConfigFromString("");
-    CPUAffinityManager cpu_affinity(80, 38, *config);
+    auto & cpu_affinity = CPUAffinityManager::getInstance();
+
+    ASSERT_FALSE(cpu_affinity.enable());
+
+    cpu_set_t cpu_set;
+    int ret = sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
+    ASSERT_EQ(ret , 0) << strerror(errno);
+
+    cpu_affinity.bindSelfQueryThread();
+    cpu_set_t cpu_set0;
+    ret = sched_getaffinity(0, sizeof(cpu_set0), &cpu_set0);
+    ASSERT_EQ(ret , 0) << strerror(errno);
+    ASSERT_TRUE(CPU_EQUAL(&cpu_set0, &cpu_set));
+
+    cpu_affinity.bindSelfOtherThread();
+    cpu_set_t cpu_set1;
+    ret = sched_getaffinity(0, sizeof(cpu_set1), &cpu_set1);
+    ASSERT_EQ(ret , 0) << strerror(errno);
+    ASSERT_TRUE(CPU_EQUAL(&cpu_set1, &cpu_set));
+
+    CPUAffinityConfig config;
+    config.query_cpu_percent = 60;
+    config.cpu_cores = 40;
+    cpu_affinity.init(config);
 
     ASSERT_TRUE(cpu_affinity.enable());
-    ASSERT_EQ(cpu_affinity.getWriteCPUCores(), 8);
-    ASSERT_EQ(cpu_affinity.getReadCPUCores(), 30);
+    ASSERT_EQ(cpu_affinity.getOtherCPUCores(), 16);
+    ASSERT_EQ(cpu_affinity.getQueryCPUCores(), 24);
 
-    auto s = cpu_affinity.cpuSetToString(cpu_affinity.write_cpu_set);
-    boost::algorithm::trim(s);
-    std::string write_cpu{"0 1 2 3 4 5 6 7"};
-    ASSERT_EQ(s, write_cpu);   
+    std::vector<int> except_other_cpu_set{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    auto other_cpu_set = cpu_affinity.cpuSetToVec(cpu_affinity.other_cpu_set);
+    ASSERT_EQ(other_cpu_set, except_other_cpu_set);   
 
-    s = cpu_affinity.cpuSetToString(cpu_affinity.read_cpu_set);
-    boost::algorithm::trim(s);
-    std::string read_cpu{"8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37"};
-    ASSERT_EQ(s, read_cpu);
+    std::vector<int> except_query_cpu_set{16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39};
+    auto query_cpu_set = cpu_affinity.cpuSetToVec(cpu_affinity.query_cpu_set);
+    ASSERT_EQ(query_cpu_set, except_query_cpu_set);
+
+    cpu_affinity.bindSelfQueryThread();
+    cpu_set_t cpu_set2;
+    ret = sched_getaffinity(0, sizeof(cpu_set2), &cpu_set2);
+    ASSERT_EQ(ret , 0) << strerror(errno);
+    ASSERT_TRUE(CPU_EQUAL(&cpu_set2, &(cpu_affinity.query_cpu_set)));
+
+    cpu_affinity.bindSelfOtherThread();
+    cpu_set_t cpu_set3;
+    ret = sched_getaffinity(0, sizeof(cpu_set3), &cpu_set3);
+    ASSERT_EQ(ret , 0) << strerror(errno);
+    ASSERT_TRUE(CPU_EQUAL(&cpu_set3, &(cpu_affinity.other_cpu_set)));
+
+    ASSERT_TRUE(cpu_affinity.isQueryThread("cop-pool0"));
+    ASSERT_FALSE(cpu_affinity.isQueryThread("cop-po"));
+    ASSERT_TRUE(cpu_affinity.isQueryThread("grpcpp_sync_server"));
+    ASSERT_FALSE(cpu_affinity.isQueryThread("grpcpp_sync"));
 }
-
-TEST(CPUAffinityManager_test, Threads)
-{
-    std::string s = R"(
-[flash.cpu]
-read_threads=["BkgPool", "cop-pool"]
-    )";
-    auto config = loadConfigFromString(s);
-    CPUAffinityManager cpu_affinity(80, 38, *config);
-
-    ASSERT_EQ(cpu_affinity.read_threads.size(), 2ul);
-    ASSERT_EQ(cpu_affinity.read_threads[0], "BkgPool");
-    ASSERT_EQ(cpu_affinity.read_threads[1], "cop-pool");
-    ASSERT_TRUE(cpu_affinity.isReadThread("BkgPool-0"));
-    ASSERT_TRUE(cpu_affinity.isReadThread("BkgPool"));
-    ASSERT_FALSE(cpu_affinity.isReadThread("apply"));
-}
+#endif
 
 }
 }
