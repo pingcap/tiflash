@@ -80,7 +80,7 @@ private:
 
 public:
     UnionBlockInputStream(BlockInputStreams inputs, BlockInputStreamPtr additional_input_at_end, size_t max_threads, const LogWithPrefixPtr & log_ = nullptr, ExceptionCallback exception_callback_ = ExceptionCallback())
-        : output_queue(std::min(inputs.size(), max_threads))
+        : output_queue(std::min(inputs.size(), max_threads) * 5)
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)

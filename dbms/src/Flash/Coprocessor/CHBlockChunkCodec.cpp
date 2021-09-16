@@ -88,7 +88,7 @@ Block CHBlockChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & sch
     output_names.reserve(schema.size());
     for (const auto & c : schema)
         output_names.push_back(c.first);
-    NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names));
+    NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names), &cached_data_types);
     return block_in.read();
 }
 

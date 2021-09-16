@@ -19,10 +19,15 @@ extern const int CANNOT_READ_ALL_DATA;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, std::vector<String> && output_names_)
+NativeBlockInputStream::NativeBlockInputStream(
+    ReadBuffer & istr_,
+    UInt64 server_revision_,
+    std::vector<String> && output_names_,
+    std::map<String, DataTypePtr> * cached_data_types_)
     : istr(istr_)
     , server_revision(server_revision_)
     , output_names(std::move(output_names_))
+    , cached_data_types(cached_data_types_)
 {
 }
 
@@ -142,7 +147,19 @@ Block NativeBlockInputStream::readImpl()
         /// Type
         String type_name;
         readBinary(type_name, istr);
-        column.type = data_type_factory.get(type_name);
+        if (cached_data_types)
+        {
+            auto it = cached_data_types->find(type_name);
+            if (it != end(*cached_data_types))
+                column.type = it->second;
+            else
+            {
+                column.type = data_type_factory.get(type_name);
+                cached_data_types->emplace(type_name, column.type);
+            }
+        }
+        else
+            column.type = data_type_factory.get(type_name);
 
         if (use_index)
         {
