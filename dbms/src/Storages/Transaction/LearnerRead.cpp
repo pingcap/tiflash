@@ -15,7 +15,6 @@
 
 namespace DB
 {
-
 class LockWrap
 {
     mutable std::mutex mutex;
@@ -86,7 +85,9 @@ private:
     std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND};
 };
 
-class MvccQueryInfoWrap : boost::noncopyable, public LockWrap
+class MvccQueryInfoWrap
+    : boost::noncopyable
+    , public LockWrap
 {
     using Base = MvccQueryInfo;
     Base & inner;
@@ -94,7 +95,8 @@ class MvccQueryInfoWrap : boost::noncopyable, public LockWrap
     Base::RegionsQueryInfo * regions_info_ptr;
 
 public:
-    MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID table_id) : inner(mvcc_query_info)
+    MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID table_id)
+        : inner(mvcc_query_info)
     {
         if (likely(!inner.regions_query_info.empty()))
         {
@@ -133,9 +135,12 @@ public:
     }
 };
 
-LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
-    MvccQueryInfo & mvcc_query_info_,                           //
-    size_t num_streams, TMTContext & tmt, Poco::Logger * log)
+LearnerReadSnapshot doLearnerRead(
+    const TiDB::TableID table_id,
+    MvccQueryInfo & mvcc_query_info_,
+    size_t num_streams,
+    TMTContext & tmt,
+    Poco::Logger * log)
 {
     assert(log != nullptr);
 
@@ -301,14 +306,14 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             }
             if (mvcc_query_info->resolve_locks)
             {
-                auto res = RegionTable::resolveLocksAndWriteRegion( //
-                    tmt,                                            //
-                    table_id,                                       //
-                    region,                                         //
-                    mvcc_query_info->read_tso,                      //
-                    region_to_query.bypass_lock_ts,                 //
-                    region_to_query.version,                        //
-                    region_to_query.conf_version,                   //
+                auto res = RegionTable::resolveLocksAndWriteRegion(
+                    tmt,
+                    table_id,
+                    region,
+                    mvcc_query_info->read_tso,
+                    region_to_query.bypass_lock_ts,
+                    region_to_query.version,
+                    region_to_query.conf_version,
                     log);
 
                 std::visit(variant_op::overloaded{
@@ -317,21 +322,21 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                                    if (status != RegionException::RegionReadStatus::OK)
                                    {
                                        LOG_WARNING(log,
-                                           "Check memory cache, region "
-                                               << region_to_query.region_id << ", version " << region_to_query.version << ", handle range "
-                                               << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table)
-                                               << ", status " << RegionException::RegionReadStatusString(status));
+                                                   "Check memory cache, region "
+                                                       << region_to_query.region_id << ", version " << region_to_query.version << ", handle range "
+                                                       << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table)
+                                                       << ", status " << RegionException::RegionReadStatusString(status));
                                        unavailable_regions.add(region->id(), status);
                                    }
                                },
                            },
-                    res);
+                           res);
             }
         }
         GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds());
         LOG_DEBUG(log,
-            "Finish wait index | resolve locks | check memory cache for " << batch_read_index_req.size() << " regions, cost "
-                                                                          << batch_wait_index_watch.elapsedMilliseconds() << "ms");
+                  "Finish wait index | resolve locks | check memory cache for " << batch_read_index_req.size() << " regions, cost "
+                                                                                << batch_wait_index_watch.elapsedMilliseconds() << "ms");
     };
 
     auto start_time = Clock::now();
@@ -355,16 +360,19 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
 
     auto end_time = Clock::now();
     LOG_DEBUG(log,
-        "[Learner Read] batch read index | wait index cost "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
-            << " ms totally, regions_num=" << num_regions << ", concurrency=" << concurrent_num);
+              "[Learner Read] batch read index | wait index cost "
+                  << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
+                  << " ms totally, regions_num=" << num_regions << ", concurrency=" << concurrent_num);
 
     return regions_snapshot;
 }
 
 /// Ensure regions' info after read.
 void validateQueryInfo(
-    const MvccQueryInfo & mvcc_query_info, const LearnerReadSnapshot & regions_snapshot, TMTContext & tmt, Poco::Logger * log)
+    const MvccQueryInfo & mvcc_query_info,
+    const LearnerReadSnapshot & regions_snapshot,
+    TMTContext & tmt,
+    Poco::Logger * log)
 {
     RegionException::UnavailableRegions fail_region_ids;
     RegionException::RegionReadStatus fail_status = RegionException::RegionReadStatus::OK;
@@ -390,10 +398,10 @@ void validateQueryInfo(
             fail_region_ids.emplace(region_query_info.region_id);
             fail_status = status;
             LOG_WARNING(log,
-                "Check after read from Storage, region "
-                    << region_query_info.region_id << ", version " << region_query_info.version //
-                    << ", handle range " << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table)
-                    << ", status " << RegionException::RegionReadStatusString(status));
+                        "Check after read from Storage, region "
+                            << region_query_info.region_id << ", version " << region_query_info.version //
+                            << ", handle range " << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table)
+                            << ", status " << RegionException::RegionReadStatusString(status));
         }
     }
 
