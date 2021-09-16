@@ -2,6 +2,7 @@
 
 #include <common/defines.h>
 #include <common/types.h>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -13,9 +14,9 @@ namespace DB
 {
 namespace MPMCQueueDetail
 {
-/// WaitingNode is used to construct a double-linked waiting list so that 
+/// WaitingNode is used to construct a double-linked waiting list so that
 /// every time a push/pop succeeds, it can notify next reader/writer in fifo.
-/// 
+///
 /// Double link is to support remove self from the mid of the list when timeout.
 struct WaitingNode
 {
@@ -83,7 +84,7 @@ public:
         return popObj();
     }
 
-    /// Besides all conditions mentioned before `pop`, `tryPop` will return a std::nullopt_t if `timeout` is exceeded.
+    /// Besides all conditions mentioned at `pop`, `tryPop` will return a std::nullopt_t if `timeout` is exceeded.
     template <typename Duration>
     std::optional<T> tryPop(const Duration & timeout)
     {
@@ -102,7 +103,7 @@ public:
         return pushObj(std::forward<U>(u));
     }
 
-    /// Besides all conditions mentioned before `push`, `tryPush` will return false if `timeout` is exceeded.
+    /// Besides all conditions mentioned at `push`, `tryPush` will return false if `timeout` is exceeded.
     template <typename U, typename Duration>
     ALWAYS_INLINE bool tryPush(U && u, const Duration & timeout)
     {
@@ -156,7 +157,6 @@ public:
     MPMCQueueStatus getStatus() const
     {
         {
-            /// both write_mu and read_mu are ok
             std::unique_lock write_lock(mu);
             if (unlikely(cancelled))
                 return MPMCQueueStatus::CANCELLED;
@@ -165,6 +165,7 @@ public:
         }
         return MPMCQueueStatus::NORMAL;
     }
+
 private:
     using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
     using WaitingNode = MPMCQueueDetail::WaitingNode;
@@ -179,7 +180,11 @@ private:
 
     template <typename Pred>
     ALWAYS_INLINE void wait(
-        std::unique_lock<std::mutex> & lock, WaitingNode & head, WaitingNode & node, Pred pred, const TimePoint * deadline)
+        std::unique_lock<std::mutex> & lock,
+        WaitingNode & head,
+        WaitingNode & node,
+        Pred pred,
+        const TimePoint * deadline)
     {
         head.pushBack(node);
         if (deadline)
@@ -203,7 +208,9 @@ private:
         std::optional<T> res;
         {
             /// read_pos < write_pos means the queue isn't empty
-            auto pred = [&] { return read_pos < write_pos || unlikely(cancelled || finished); };
+            auto pred = [&] {
+                return read_pos < write_pos || unlikely(cancelled || finished);
+            };
 
             std::unique_lock lock(mu);
             if (unlikely(cancelled))
@@ -237,7 +244,9 @@ private:
     bool assignObj(const TimePoint * deadline, F && assigner)
     {
         thread_local WaitingNode node;
-        auto pred = [&] { return write_pos - read_pos < capacity || unlikely(cancelled || finished); };
+        auto pred = [&] {
+            return write_pos - read_pos < capacity || unlikely(cancelled || finished);
+        };
 
         std::unique_lock lock(mu);
         if (unlikely(cancelled || finished))
@@ -285,4 +294,3 @@ private:
 };
 
 } // namespace DB
-

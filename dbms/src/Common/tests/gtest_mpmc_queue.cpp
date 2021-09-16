@@ -12,8 +12,7 @@ namespace DB
 {
 namespace tests
 {
-
-class TestMPMCQueue: public ::testing::Test
+class TestMPMCQueue : public ::testing::Test
 {
 protected:
     std::random_device rd;
@@ -152,8 +151,7 @@ protected:
         std::vector<std::thread> readers;
         std::vector<UInt8> reader_results(reader_cnt, -1);
 
-        auto read_func = [&](int i)
-        {
+        auto read_func = [&](int i) {
             auto res = queue.pop();
             reader_results[i] = res.has_value();
         };
@@ -190,8 +188,7 @@ protected:
         std::vector<std::thread> readers;
         std::vector<UInt8> reader_results(reader_cnt, -1);
 
-        auto read_func = [&](int i)
-        {
+        auto read_func = [&](int i) {
             auto res = queue.pop();
             reader_results[i] = res.has_value();
         };
@@ -228,8 +225,7 @@ protected:
         std::vector<std::thread> threads;
         std::vector<int> reader_results(reader_cnt, 0);
 
-        auto read_func = [&](int i)
-        {
+        auto read_func = [&](int i) {
             auto res = queue.pop();
             reader_results[i] += res.has_value();
         };
@@ -259,8 +255,7 @@ protected:
         std::vector<std::thread> threads;
         std::vector<int> writer_results(writer_cnt, 0);
 
-        auto write_func = [&](int i)
-        {
+        auto write_func = [&](int i) {
             auto res = queue.push(ValueHelper<T>::make(i));
             writer_results[i] += res;
         };
@@ -301,8 +296,7 @@ protected:
         std::vector<int> reader_results;
         std::vector<std::vector<int>> writer_results(writer_cnt);
 
-        auto read_func = [&]
-        {
+        auto read_func = [&] {
             while (true)
             {
                 auto res = queue.pop();
@@ -313,9 +307,8 @@ protected:
             }
         };
 
-        auto write_func = [&](int i)
-        {
-            for (int x = i; ; x += writer_cnt)
+        auto write_func = [&](int i) {
+            for (int x = i;; x += writer_cnt)
             {
                 auto res = queue.push(ValueHelper<T>::make(x));
                 if (res)
@@ -349,8 +342,7 @@ protected:
         std::vector<std::vector<int>> reader_results(reader_writer_cnt);
         std::vector<std::vector<int>> writer_results(reader_writer_cnt);
 
-        auto read_func = [&](int i)
-        {
+        auto read_func = [&](int i) {
             while (true)
             {
                 auto res = queue.pop();
@@ -361,9 +353,8 @@ protected:
             }
         };
 
-        auto write_func = [&](int i)
-        {
-            for (int x = i; ; x += reader_writer_cnt)
+        auto write_func = [&](int i) {
+            for (int x = i;; x += reader_writer_cnt)
             {
                 auto res = queue.push(ValueHelper<T>::make(x));
                 if (res)
@@ -444,16 +435,16 @@ struct TestMPMCQueue::ValueHelper<std::shared_ptr<int>>
 };
 
 #define ADD_TEST_FOR(type_name, type, test_name, ...) \
-    TEST_F(TestMPMCQueue, type_name ## _ ## test_name)\
-    try\
-    {\
-        test ## test_name<type>(__VA_ARGS__);\
-    }\
+    TEST_F(TestMPMCQueue, type_name##_##test_name)    \
+    try                                               \
+    {                                                 \
+        test##test_name<type>(__VA_ARGS__);           \
+    }                                                 \
     CATCH
 
-#define ADD_TEST(test_name, ...) \
-    ADD_TEST_FOR(Int, int, test_name, __VA_ARGS__)\
-    ADD_TEST_FOR(UniquePtr_Int, std::unique_ptr<int>, test_name, __VA_ARGS__)\
+#define ADD_TEST(test_name, ...)                                              \
+    ADD_TEST_FOR(Int, int, test_name, __VA_ARGS__)                            \
+    ADD_TEST_FOR(UniquePtr_Int, std::unique_ptr<int>, test_name, __VA_ARGS__) \
     ADD_TEST_FOR(SharedPtr_Int, std::shared_ptr<int>, test_name, __VA_ARGS__)
 
 ADD_TEST(Initialize, 10);
@@ -469,4 +460,3 @@ ADD_TEST(CancelConcurrentPush, 4);
 
 } // namespace tests
 } // namespace DB
-
