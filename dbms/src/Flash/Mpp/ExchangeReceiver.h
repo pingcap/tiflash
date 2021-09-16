@@ -184,7 +184,7 @@ struct GRPCReceiverContext
         Int64 send_task_id = -1;
         std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
 
-        String DebugString() const
+        String debugString() const
         {
             return req->DebugString();
         }

@@ -42,7 +42,7 @@ void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
         send_task_id = req.send_task_id;
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
-        LOG_DEBUG(log, "begin start and read : " << req.DebugString());
+        LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
         for (int i = 0; i < 10; i++)
         {
@@ -105,7 +105,7 @@ void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
             status = reader->finish();
             if (status.ok())
             {
-                LOG_DEBUG(log, "finish read : " << req.DebugString());
+                LOG_DEBUG(log, "finish read : " << req.debugString());
                 break;
             }
             else
