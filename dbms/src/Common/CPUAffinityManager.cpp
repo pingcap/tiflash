@@ -72,7 +72,6 @@ bool CPUAffinityManager::isQueryThread(const std::string & name) const
 {
     for (const auto & t : query_threads)
     {
-        // if (name.find(t) == 0) // t is name's prefix.
         if (boost::algorithm::starts_with(name, t))
         {
             return true;
@@ -298,6 +297,7 @@ void CPUAffinityManager::bindThreadCPUAffinity() const
 
 void CPUAffinityManager::checkThreadCPUAffinity() const
 {
+#ifdef __linux__
     auto threads = getThreads(getpid());
     for (const auto & t : threads)
     {
@@ -318,6 +318,7 @@ void CPUAffinityManager::checkThreadCPUAffinity() const
             LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is other thread and bind CPU info is error.");
         }
     }
+#endif
 }
 
 } // namespace DB
