@@ -20,13 +20,14 @@ extern const int LOGICAL_ERROR;
 }
 namespace DM
 {
-DMFileReader::Stream::Stream(DMFileReader & reader,
-                             ColId col_id,
-                             const String & file_name_base,
-                             size_t aio_threshold,
-                             size_t max_read_buffer_size,
-                             Poco::Logger * log,
-                             const ReadLimiterPtr & read_limiter)
+DMFileReader::Stream::Stream(
+    DMFileReader & reader,
+    ColId col_id,
+    const String & file_name_base,
+    size_t aio_threshold,
+    size_t max_read_buffer_size,
+    Poco::Logger * log,
+    const ReadLimiterPtr & read_limiter)
     : single_file_mode(reader.single_file_mode)
     , avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
@@ -172,27 +173,28 @@ DMFileReader::Stream::Stream(DMFileReader & reader,
     }
 }
 
-DMFileReader::DMFileReader(const DMFilePtr & dmfile_,
-                           const ColumnDefines & read_columns_,
-                           // clean read
-                           bool enable_clean_read_,
-                           UInt64 max_read_version_,
-                           // filters
-                           const RowKeyRanges & rowkey_ranges_,
-                           const RSOperatorPtr & filter_,
-                           const IdSetPtr & read_packs_,
-                           // caches
-                           UInt64 hash_salt_,
-                           const MarkCachePtr & mark_cache_,
-                           const MinMaxIndexCachePtr & index_cache_,
-                           bool enable_column_cache_,
-                           const ColumnCachePtr & column_cache_,
-                           size_t aio_threshold,
-                           size_t max_read_buffer_size,
-                           const FileProviderPtr & file_provider_,
-                           const ReadLimiterPtr & read_limiter,
-                           size_t rows_threshold_per_read_,
-                           bool read_one_pack_every_time_)
+DMFileReader::DMFileReader(
+    const DMFilePtr & dmfile_,
+    const ColumnDefines & read_columns_,
+    // clean read
+    bool enable_clean_read_,
+    UInt64 max_read_version_,
+    // filters
+    const RowKeyRange & rowkey_range_,
+    const RSOperatorPtr & filter_,
+    const IdSetPtr & read_packs_,
+    // caches
+    UInt64 hash_salt_,
+    const MarkCachePtr & mark_cache_,
+    const MinMaxIndexCachePtr & index_cache_,
+    bool enable_column_cache_,
+    const ColumnCachePtr & column_cache_,
+    size_t aio_threshold,
+    size_t max_read_buffer_size,
+    const FileProviderPtr & file_provider_,
+    const ReadLimiterPtr & read_limiter,
+    size_t rows_threshold_per_read_,
+    bool read_one_pack_every_time_)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , enable_clean_read(enable_clean_read_)
