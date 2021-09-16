@@ -1,11 +1,10 @@
+#include <Common/hex.h>
 #include <IO/WriteHelpers.h>
 #include <inttypes.h>
-#include <Common/hex.h>
 
 
 namespace DB
 {
-
 template <typename IteratorSrc, typename IteratorDst>
 void formatHex(IteratorSrc src, IteratorDst dst, const size_t num_bytes)
 {
@@ -48,7 +47,6 @@ void formatUUID(std::reverse_iterator<const UInt8 *> src16, UInt8 * dst36)
 }
 
 
-
 void writeException(const Exception & e, WriteBuffer & buf)
 {
     writeBinary(e.code(), buf);
@@ -71,4 +69,4 @@ void writePointerHex(const void * ptr, WriteBuffer & buf)
     buf.write(hex_str, 2 * sizeof(ptr));
 }
 
-}
+} // namespace DB

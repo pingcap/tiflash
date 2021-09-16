@@ -1,11 +1,14 @@
+#include <Common/MemoryTracker.h>
+#include <Encryption/MockKeyManager.h>
 #include <PSWorkload.h>
+#include <Poco/Logger.h>
+#include <TestUtils/MockDiskDelegator.h>
 
-
-void StressWorkload::result()
+void StressWorkload::onDumpResult()
 {
-    UInt64 timeInterval = stop_watch.elapsedMilliseconds();
-    fmt::print(stdout, "result in {}ms\n", timeInterval);
-    double seconds_run = 1.0 * timeInterval / 1000;
+    UInt64 time_interval = stop_watch.elapsedMilliseconds();
+    LOG_INFO(options.logger, fmt::format("result in {}ms", time_interval));
+    double seconds_run = 1.0 * time_interval / 1000;
 
     size_t total_pages_written = 0;
     size_t total_bytes_written = 0;
@@ -25,20 +28,22 @@ void StressWorkload::result()
         total_bytes_read += reader->bytes_used;
     }
 
-    fmt::print(stdout,
-               "W: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
-               total_pages_written,
-               (double)total_bytes_written / DB::GB,
-               (double)total_bytes_written / DB::GB / seconds_run);
-    fmt::print(stdout,
-               "R: {} pages, {:.4f} GB, {:.4f} GB/s\n", //
-               total_pages_read,
-               (double)total_bytes_read / DB::GB,
-               (double)total_bytes_read / DB::GB / seconds_run);
+    LOG_INFO(options.logger,
+             fmt::format(
+                 "W: {} pages, {:.4f} GB, {:.4f} GB/s",
+                 total_pages_written,
+                 static_cast<double>(total_bytes_written) / DB::GB,
+                 static_cast<double>(total_bytes_written) / DB::GB / seconds_run));
+    LOG_INFO(options.logger,
+             fmt::format(
+                 "R: {} pages, {:.4f} GB, {:.4f} GB/s",
+                 total_pages_read,
+                 static_cast<double>(total_bytes_read) / DB::GB,
+                 static_cast<double>(total_bytes_read) / DB::GB / seconds_run));
 
     if (options.status_interval != 0)
     {
-        fmt::print(stdout, metrics_dumper->toString());
+        LOG_INFO(options.logger, metrics_dumper->toString());
     }
 }
 
@@ -46,7 +51,7 @@ void StressWorkload::initPageStorage(DB::PageStorage::Config & config, String pa
 {
     DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(std::make_shared<DB::MockKeyManager>(false), false);
 
-    if (path_prefix.size() == 0)
+    if (path_prefix.empty())
     {
         // FIXME: running with `MockDiskDelegatorMulti` is not well-testing
         if (options.paths.empty())
@@ -76,20 +81,24 @@ void StressWorkload::initPageStorage(DB::PageStorage::Config & config, String pa
 
 void StressWorkload::startBackgroundTimer()
 {
+    // A background thread that do GC
     gc = std::make_shared<PSGc>(ps);
     gc->start();
 
+    // A background thread that scan all pages
     scanner = std::make_shared<PSScanner>(ps);
     scanner->start();
 
     if (options.status_interval > 0)
     {
+        // Dump metrics periodically
         metrics_dumper = std::make_shared<PSMetricsDumper>(options.status_interval);
         metrics_dumper->start();
     }
 
     if (options.timeout_s > 0)
     {
+        // Expected timeout for testing
         stress_time = std::make_shared<StressTimeout>(options.timeout_s);
         stress_time->start();
     }
@@ -100,39 +109,37 @@ void StressWorkloadManger::runWorkload()
     if (options.situation_mask == NORMAL_WORKLOAD)
     {
         String name;
-        workload_func func;
+        WorkloadCreator func;
         std::tie(name, func) = get(NORMAL_WORKLOAD);
-        auto workload = std::shared_ptr<StressWorkload>(func());
-        workload->init(options);
+        auto workload = std::shared_ptr<StressWorkload>(func(options));
         LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
         workload->run();
-        workload->result();
+        workload->onDumpResult();
         return;
     }
 
     // skip NORMAL_WORKLOAD
     funcs.erase(funcs.find(NORMAL_WORKLOAD));
-    fmt::print(stdout, toWorkloadSelctedString());
+    LOG_INFO(options.logger, toWorkloadSelctedString());
 
     for (auto & it : funcs)
     {
         if (options.situation_mask & it.first)
         {
             auto & name = it.second.first;
-            auto & func = it.second.second;
-            auto workload = std::shared_ptr<StressWorkload>(func());
-            workload->init(options);
+            auto & creator = it.second.second;
+            auto workload = creator(options);
             LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
             workload->run();
             if (!workload->verify())
             {
                 LOG_WARNING(StressEnv::logger, fmt::format("work load : {} failed.", name));
-                workload->failed();
+                workload->onFailed();
                 break;
             }
             else
             {
-                workload->result();
+                workload->onDumpResult();
             }
         }
     }

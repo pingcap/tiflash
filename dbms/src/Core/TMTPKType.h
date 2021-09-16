@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 enum TMTPKType
 {
     INT64,

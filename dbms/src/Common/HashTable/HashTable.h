@@ -163,7 +163,7 @@ struct HashTableCell
 
     Key key;
 
-    HashTableCell() {}
+    HashTableCell() = default;
 
     /// Create a cell with the given key / key and value.
     HashTableCell(const Key & key_, const State &)
@@ -618,7 +618,7 @@ protected:
 
 
     template <typename Derived, bool is_const>
-    class iterator_base
+    class iterator_base // NOLINT(readability-identifier-naming)
     {
         using Container = std::conditional_t<is_const, const Self, Self>;
         using cell_type = std::conditional_t<is_const, const Cell, Cell>;
@@ -629,7 +629,7 @@ protected:
         friend class HashTable;
 
     public:
-        iterator_base() {}
+        iterator_base() = default;
         iterator_base(Container * container_, cell_type * ptr_)
             : container(container_)
             , ptr(ptr_)
@@ -680,7 +680,7 @@ protected:
           * compatibility with std find(). Unfortunately, now is not the time to
           * do this.
           */
-        operator Cell *() const { return nullptr; }
+        operator Cell *() const { return nullptr; } // NOLINT(google-explicit-constructor)
     };
 
 
@@ -707,7 +707,7 @@ public:
         alloc(grower);
     }
 
-    HashTable(size_t reserve_for_num_elements)
+    explicit HashTable(size_t reserve_for_num_elements)
     {
         if (Cell::need_zero_value_storage)
         {
@@ -751,7 +751,7 @@ public:
     class Reader final : private Cell::State
     {
     public:
-        Reader(DB::ReadBuffer & in_)
+        explicit Reader(DB::ReadBuffer & in_)
             : in(in_)
         {
         }
@@ -798,13 +798,13 @@ public:
     };
 
 
-    class iterator : public iterator_base<iterator, false>
+    class iterator : public iterator_base<iterator, false> // NOLINT(readability-identifier-naming)
     {
     public:
         using iterator_base<iterator, false>::iterator_base;
     };
 
-    class const_iterator : public iterator_base<const_iterator, true>
+    class const_iterator : public iterator_base<const_iterator, true> // NOLINT(readability-identifier-naming)
     {
     public:
         using iterator_base<const_iterator, true>::iterator_base;
@@ -1356,8 +1356,8 @@ public:
     /// in TiFlash is concurrent insert(when building join hash table), I think just keep using mutex is ok.
     using IteratorWithLock = std::pair<typename HashTableType::LookupResult, std::unique_ptr<std::lock_guard<std::mutex>>>;
     using ConstIteratorWithLock = std::pair<typename HashTableType::ConstLookupResult, std::unique_ptr<std::lock_guard<std::mutex>>>;
-    HashTableWithLock() {}
-    HashTableWithLock(size_t reserve_for_num_elements)
+    HashTableWithLock() = default;
+    explicit HashTableWithLock(size_t reserve_for_num_elements)
         : hash_table(reserve_for_num_elements)
     {}
     std::mutex & getMutex() { return mutex; }
@@ -1436,7 +1436,7 @@ public:
     using Cell = typename HashTableType::Cell;
     using Hash = typename HashTableType::Hash;
 
-    ConcurrentHashTable(size_t segment_size_)
+    explicit ConcurrentHashTable(size_t segment_size_)
         : segment_size(segment_size_)
     {
         for (size_t i = 0; i < segment_size; i++)

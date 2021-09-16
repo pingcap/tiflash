@@ -12,7 +12,6 @@ namespace mem_utils
 {
 namespace _detail
 {
-
 using ConstBytePtr = char const *;
 
 /// @attention one should not use these loop functions directly in the first place,

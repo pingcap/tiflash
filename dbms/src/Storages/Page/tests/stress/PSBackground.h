@@ -7,7 +7,7 @@
 class PSMetricsDumper
 {
 public:
-    PSMetricsDumper(size_t status_interval_)
+    explicit PSMetricsDumper(size_t status_interval_)
         : status_interval(status_interval_)
     {
 #define REGISTER_METRICS(metric, desc) \
@@ -18,7 +18,7 @@ public:
 #undef REGISTER_METRICS
         timer_status.setStartInterval(1000);
         timer_status.setPeriodicInterval(status_interval * 1000);
-    };
+    }
 
     void onTime(Poco::Timer & timer);
 
@@ -78,7 +78,7 @@ class PSGc
     PSPtr ps;
 
 public:
-    PSGc(const PSPtr & ps_)
+    explicit PSGc(const PSPtr & ps_)
         : ps(ps_)
     {
         assert(ps != nullptr);
@@ -108,7 +108,7 @@ class PSScanner
     PSPtr ps;
 
 public:
-    PSScanner(const PSPtr & ps_)
+    explicit PSScanner(const PSPtr & ps_)
         : ps(ps_)
     {
         assert(ps != nullptr);
@@ -129,12 +129,12 @@ using PSScannerPtr = std::shared_ptr<PSScanner>;
 class StressTimeout
 {
 public:
-    StressTimeout(size_t timeout_s)
+    explicit StressTimeout(size_t timeout_s)
     {
         StressEnvStatus::getInstance().setStat(STATUS_LOOP);
         LOG_INFO(StressEnv::logger, fmt::format("Timeout: {}s", timeout_s));
         timeout_timer.setStartInterval(timeout_s * 1000);
-    };
+    }
 
     void onTime(Poco::Timer & timer);
     void start();

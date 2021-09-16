@@ -1,12 +1,11 @@
-#include <Core/Types.h>
-#include <Common/hex.h>
 #include <Common/Exception.h>
+#include <Common/hex.h>
+#include <Core/Types.h>
 #include <IO/HexWriteBuffer.h>
 
 
 namespace DB
 {
-
 void HexWriteBuffer::nextImpl()
 {
     if (!offset())
@@ -32,4 +31,4 @@ HexWriteBuffer::~HexWriteBuffer()
     }
 }
 
-}
+} // namespace DB

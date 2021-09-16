@@ -137,7 +137,7 @@ namespace
 {
 [[maybe_unused]] void loadBooleanConfig(Poco::Logger * log, bool & target, const char * name)
 {
-    auto config = getenv(name);
+    auto * config = getenv(name);
     if (config)
     {
         LOG_INFO(log, "Got environment variable " << name << " = " << config);
@@ -217,13 +217,13 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
-    const char * ENGINE_STORE_VERSION = "engine-version";
-    const char * ENGINE_STORE_GIT_HASH = "engine-git-hash";
-    const char * ENGINE_STORE_ADDRESS = "engine-addr";
-    const char * ENGINE_STORE_ADVERTISE_ADDRESS = "advertise-engine-addr";
-    const char * PD_ENDPOINTS = "pd-endpoints";
+    const char * engine_store_version = "engine-version";
+    const char * engine_store_git_hash = "engine-git-hash";
+    const char * engine_store_address = "engine-addr";
+    const char * engine_store_advertise_address = "advertise-engine-addr";
+    const char * pd_endpoints = "pd-endpoints";
 
-    TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
+    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         if (!config.has(config_prefix))
             return;
@@ -237,13 +237,13 @@ struct TiFlashProxyConfig
                 const auto k = config_prefix + "." + key;
                 args_map[key] = config.getString(k);
             }
-            args_map[PD_ENDPOINTS] = config.getString("raft.pd_addr");
-            args_map[ENGINE_STORE_VERSION] = TiFlashBuildInfo::getReleaseVersion();
-            args_map[ENGINE_STORE_GIT_HASH] = TiFlashBuildInfo::getGitHash();
-            if (!args_map.count(ENGINE_STORE_ADDRESS))
-                args_map[ENGINE_STORE_ADDRESS] = config.getString("flash.service_addr");
+            args_map[pd_endpoints] = config.getString("raft.pd_addr");
+            args_map[engine_store_version] = TiFlashBuildInfo::getReleaseVersion();
+            args_map[engine_store_git_hash] = TiFlashBuildInfo::getGitHash();
+            if (!args_map.count(engine_store_address))
+                args_map[engine_store_address] = config.getString("flash.service_addr");
             else
-                args_map[ENGINE_STORE_ADVERTISE_ADDRESS] = args_map[ENGINE_STORE_ADDRESS];
+                args_map[engine_store_advertise_address] = args_map[engine_store_address];
 
             for (auto && [k, v] : args_map)
             {
@@ -344,7 +344,7 @@ void UpdateMallocConfig([[maybe_unused]] Poco::Logger * log)
     RUN_FAIL_RETURN(je_mallctl("version", &version, &sz_ver, nullptr, 0));
     LOG_INFO(log, "Got jemalloc version: " << version);
 
-    auto malloc_conf = getenv("MALLOC_CONF");
+    auto * malloc_conf = getenv("MALLOC_CONF");
     if (malloc_conf)
     {
         LOG_INFO(log, "Got environment variable MALLOC_CONF: " << malloc_conf);
@@ -417,7 +417,7 @@ struct RaftStoreProxyRunner : boost::noncopyable
         , log(log_)
     {}
 
-    void join()
+    void join() const
     {
         if (!parms.conf.is_proxy_runnable)
             return;
@@ -432,20 +432,19 @@ struct RaftStoreProxyRunner : boost::noncopyable
         pthread_attr_init(&attribute);
         pthread_attr_setstacksize(&attribute, parms.stack_size);
         LOG_INFO(log, "start raft store proxy");
-        pthread_create(&thread, &attribute, RunRaftStoreProxyFFI, &parms);
+        pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
         pthread_attr_destroy(&attribute);
     }
 
 private:
-    static void * RunRaftStoreProxyFFI(void * pv)
+    static void * runRaftStoreProxyFFI(void * pv)
     {
         setThreadName("RaftStoreProxy");
-        auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
-        run_raftstore_proxy_ffi((int)parms.conf.args.size(), parms.conf.args.data(), parms.helper);
+        const auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
+        run_raftstore_proxy_ffi(static_cast<int>(parms.conf.args.size()), parms.conf.args.data(), parms.helper);
         return nullptr;
     }
 
-private:
     RunRaftStoreProxyParms parms;
     pthread_t thread;
     Poco::Logger * log;
@@ -563,7 +562,7 @@ public:
         auto & security_config = server.security_config;
 
         Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
-        Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+        Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
         http_params->setTimeout(settings.receive_timeout);
         http_params->setKeepAliveTimeout(keep_alive_timeout);
 
@@ -604,7 +603,7 @@ public:
             return socket_address;
         };
 
-        auto socket_bind_listen = [&](auto & socket, const std::string & host, UInt16 port, bool secure = 0) {
+        auto socket_bind_listen = [&](auto & socket, const std::string & host, UInt16 port, bool secure = false) {
             auto address = make_socket_address(host, port);
 #if !POCO_CLICKHOUSE_PATCH || POCO_VERSION <= 0x02000000 // TODO: fill correct version
             if (secure)
@@ -886,7 +885,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_http_request = HandleHttpRequest,
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
-        .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
         .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
         .fn_set_server_info_resp = SetServerInfoResp,
     };
@@ -972,9 +970,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (!fast_paths.empty())
         {
             Poco::StringTokenizer string_tokens(fast_paths, ",");
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+            for (const auto & string_token : string_tokens)
             {
-                all_fast_path.emplace_back(getNormalizedPath(std::string(*it)));
+                all_fast_path.emplace_back(getNormalizedPath(std::string(string_token)));
                 LOG_DEBUG(log, "Fast data part candidate path: " << all_fast_path.back());
             }
         }
@@ -1142,6 +1140,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
+            global_context->reloadDeltaTreeConfig(*config);
         },
         /* already_loaded = */ true);
 
@@ -1173,8 +1172,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (!persisted_cache_path.empty())
         global_context->setPersistedCache(persisted_cache_size, persisted_cache_path);
 
-    bool use_L0_opt = config().getBool("l0_optimize", false);
-    global_context->setUseL0Opt(use_L0_opt);
+    bool use_l0_opt = config().getBool("l0_optimize", false);
+    global_context->setUseL0Opt(use_l0_opt);
 
     /// Load global settings from default_profile and system_profile.
     global_context->setDefaultProfiles(config());
@@ -1229,7 +1228,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (!upgrader.needUpgrade())
                 break;
             upgrader.doUpgrade();
-        } while (0);
+        } while (false);
 
         /// Then, load remaining databases
         loadMetadata(*global_context);
@@ -1281,7 +1280,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flashGrpcServerHolder(*this, raft_config, log);
+    FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);

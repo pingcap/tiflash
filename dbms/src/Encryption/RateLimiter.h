@@ -140,7 +140,12 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter final : public WriteLimiter
 {
 public:
-    ReadLimiter(std::function<Int64()> getIOStatistic_, Int64 rate_limit_per_sec_, LimiterType type_, Int64 get_io_stat_period_us = 2000, UInt64 refill_period_ms_ = 100);
+    ReadLimiter(
+        std::function<Int64()> getIOStatistic_,
+        Int64 rate_limit_per_sec_,
+        LimiterType type_,
+        Int64 get_io_stat_period_us = 2000,
+        UInt64 refill_period_ms_ = 100);
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
@@ -160,7 +165,7 @@ private:
     std::function<Int64()> getIOStatistic;
     Int64 last_stat_bytes;
     using TimePoint = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
-    TimePoint now() { return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now()); }
+    static TimePoint now() { return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now()); }
     TimePoint last_stat_time;
     Poco::Logger * log;
 
@@ -203,7 +208,11 @@ public:
 
         std::string toString() const
         {
-            return fmt::format("total_write_bytes {} total_read_bytes {} bg_write_bytes {} bg_read_bytes {}", total_write_bytes, total_read_bytes, bg_write_bytes, bg_read_bytes);
+            return fmt::format("total_write_bytes {} total_read_bytes {} bg_write_bytes {} bg_read_bytes {}",
+                               total_write_bytes,
+                               total_read_bytes,
+                               bg_write_bytes,
+                               bg_read_bytes);
         }
     };
 
@@ -292,7 +301,12 @@ using LimiterStatUPtr = std::unique_ptr<LimiterStat>;
 class IOLimitTuner
 {
 public:
-    IOLimitTuner(LimiterStatUPtr bg_write_stat_, LimiterStatUPtr fg_write_stat_, LimiterStatUPtr bg_read_stat_, LimiterStatUPtr fg_read_stat_, const StorageIORateLimitConfig & io_config_);
+    IOLimitTuner(
+        LimiterStatUPtr bg_write_stat_,
+        LimiterStatUPtr fg_write_stat_,
+        LimiterStatUPtr bg_read_stat_,
+        LimiterStatUPtr fg_read_stat_,
+        const StorageIORateLimitConfig & io_config_);
 
     String toString() const
     {
@@ -395,7 +409,12 @@ private:
     // Retunes <bg, fg, has_tune>
     std::tuple<Int64, Int64, bool> tuneWrite(Int64 max_bytes_per_sec) const;
     // <bg, fg, has_tune>
-    std::tuple<Int64, Int64, bool> tuneBgFg(Int64 max_bytes_per_sec, const LimiterStatUPtr & bg, Int64 config_bg_max_bytes_per_sec, const LimiterStatUPtr & fg, Int64 config_fg_max_bytes_per_sec) const;
+    std::tuple<Int64, Int64, bool> tuneBgFg(
+        Int64 max_bytes_per_sec,
+        const LimiterStatUPtr & bg,
+        Int64 config_bg_max_bytes_per_sec,
+        const LimiterStatUPtr & fg,
+        Int64 config_fg_max_bytes_per_sec) const;
     // Returns true if to_add and to_sub are changed.
     bool calculate(Int64 & to_add, Int64 & to_sub, Int64 delta) const;
 
