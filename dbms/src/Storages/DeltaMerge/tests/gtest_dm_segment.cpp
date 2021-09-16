@@ -197,6 +197,109 @@ try
 }
 CATCH
 
+TEST_F(Segment_test, WriteReadMultiRange)
+try
+{
+    const size_t num_rows_write = 100;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        // write to segment
+        segment->write(dmContext(), block);
+        // estimate segment
+        auto estimatedRows = segment->getEstimatedRows();
+        ASSERT_EQ(estimatedRows, block.rows());
+
+        auto estimatedBytes = segment->getEstimatedBytes();
+        ASSERT_EQ(estimatedBytes, block.bytes());
+    }
+
+    {
+        // check segment
+        segment->check(dmContext(), "test");
+    }
+
+    RowKeyRanges read_ranges;
+    read_ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(0, 10)));
+    read_ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(20, 30)));
+    read_ranges.emplace_back(RowKeyRange::fromHandleRange(HandleRange(110, 130)));
+    const size_t expect_read_rows = 20;
+    { // Round 1
+        {
+            // read written data (only in delta)
+
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, expect_read_rows);
+        }
+
+        {
+            // flush segment
+            segment = segment->mergeDelta(dmContext(), tableColumns());
+        }
+
+        {
+            // read written data (only in stable)
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, expect_read_rows);
+        }
+    }
+
+    const size_t num_rows_write_2 = 55;
+    const size_t expect_read_rows_2 = 40;
+
+    {
+        // write more rows to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_2, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    { // Round 2
+        {
+            // read written data (both in delta and stable)
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, expect_read_rows_2);
+        }
+
+        {
+            // flush segment
+            segment = segment->mergeDelta(dmContext(), tableColumns());
+        }
+
+        {
+            // read written data (only in stable)
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, expect_read_rows_2);
+        }
+    }
+}
+CATCH
 
 TEST_F(Segment_test, ReadWithMoreAdvacedDeltaIndex)
 try
