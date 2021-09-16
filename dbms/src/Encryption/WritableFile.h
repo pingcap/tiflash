@@ -26,6 +26,8 @@ public:
     virtual bool isClosed() = 0;
 
     virtual int fsync() = 0;
+
+    virtual void hardLink(const char * link_file) = 0;
 };
 
 using WritableFilePtr = std::shared_ptr<WritableFile>;

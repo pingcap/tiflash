@@ -65,14 +65,14 @@ void PosixWritableFile::close()
 ssize_t PosixWritableFile::write(char * buf, size_t size)
 {
     if (write_limiter)
-        write_limiter->request((UInt64)size);
+        write_limiter->request(static_cast<UInt64>(size));
     return ::write(fd, buf, size);
 }
 
 ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const
 {
     if (write_limiter)
-        write_limiter->request((UInt64)size);
+        write_limiter->request(static_cast<UInt64>(size));
     return ::pwrite(fd, buf, size, offset);
 }
 
@@ -119,6 +119,34 @@ int PosixWritableFile::fsync()
 {
     ProfileEvents::increment(ProfileEvents::FileFSync);
     return ::fsync(fd);
+}
+
+void PosixWritableFile::hardLink(const char * link_file)
+{
+    int rc;
+
+    if (link_file == nullptr || strlen(link_file) == 0)
+    {
+        throwFromErrno("Link file does not exist.", ErrorCodes::FILE_DOESNT_EXIST);
+    }
+
+    if (getFileName().empty())
+    {
+        throwFromErrno("File does not exist.", ErrorCodes::FILE_DOESNT_EXIST);
+    }
+
+    close();
+    rc = ::remove(getFileName().c_str());
+    if (rc != 0)
+    {
+        throwFromErrno("Can't remove file : " + getFileName());
+    }
+
+    rc = ::link(link_file, getFileName().c_str());
+    if (rc != 0)
+    {
+        throwFromErrno("Can't link file : " + getFileName() + " to file : " + link_file);
+    }
 }
 
 } // namespace DB

@@ -34,6 +34,8 @@ public:
 
     int fsync() override { return file->fsync(); }
 
+    void hardLink(const char * link_file) override { file->hardLink(link_file); };
+
 private:
     WritableFilePtr file;
     // logic file_offset for EncryptedWritableFile, should be same as the underlying plaintext file
