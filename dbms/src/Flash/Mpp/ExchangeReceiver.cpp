@@ -1,5 +1,5 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
-
+#include <Common/CPUAffinityManager.h>
 namespace pingcap
 {
 namespace kv
@@ -40,6 +40,7 @@ void ExchangeReceiver::setUpConnection()
 
 void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
     try
