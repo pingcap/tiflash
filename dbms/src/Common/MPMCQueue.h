@@ -61,6 +61,8 @@ enum class MPMCQueueStatus
 /// MPMCQueue is a FIFO queue which supports concurrent operations from
 /// multiple producers and consumers.
 ///
+/// MPMCQueue is thread-safe and exception-safe.
+///
 /// It is inspired by MCSLock that all blocking readers/writers construct a
 /// waiting list and everyone only wait on its own condition_variable.
 ///
@@ -69,6 +71,8 @@ template <typename T>
 class MPMCQueue
 {
 public:
+    using Status = MPMCQueueStatus;
+
     explicit MPMCQueue(Int64 capacity_)
         : capacity(capacity_)
         , objs(capacity)
@@ -129,14 +133,14 @@ public:
     }
 
     /// Cancel a NORMAL queue will wake up all blocking readers and writers.
-    /// After `cancel()` the queue can't be pushed or poped any more.
+    /// After `cancel()` the queue can't be pushed or popped any more.
     /// That means some objects may leave at the queue without poped.
     void cancel()
     {
-        std::unique_lock read_lock(mu);
-        if (!finished && !cancelled)
+        std::unique_lock lock(mu);
+        if (isNormal())
         {
-            cancelled = true;
+            status = Status::CANCELLED;
             notifyAll();
         }
     }
@@ -146,24 +150,25 @@ public:
     /// the queue is empty.
     void finish()
     {
-        std::unique_lock read_lock(mu);
-        if (!finished && !cancelled)
+        std::unique_lock lock(mu);
+        if (isNormal())
         {
-            finished = true;
+            status = Status::FINISHED;
             notifyAll();
         }
     }
 
     MPMCQueueStatus getStatus() const
     {
-        {
-            std::unique_lock write_lock(mu);
-            if (unlikely(cancelled))
-                return MPMCQueueStatus::CANCELLED;
-            if (unlikely(finished))
-                return MPMCQueueStatus::FINISHED;
-        }
-        return MPMCQueueStatus::NORMAL;
+        std::unique_lock lock(mu);
+        return status;
+    }
+
+    size_t size() const
+    {
+        std::unique_lock lock(mu);
+        assert(write_pos >= read_pos);
+        return static_cast<size_t>(write_pos - read_pos);
     }
 
 private:
@@ -188,7 +193,7 @@ private:
     {
         head.pushBack(node);
         if (deadline)
-            !node.cv.wait_until(lock, *deadline, pred);
+            node.cv.wait_until(lock, *deadline, pred);
         else
             node.cv.wait(lock, pred);
         /// removeSelfFromList is adaptive for both conditions.
@@ -209,24 +214,28 @@ private:
         {
             /// read_pos < write_pos means the queue isn't empty
             auto pred = [&] {
-                return read_pos < write_pos || unlikely(cancelled || finished);
+                return read_pos < write_pos || !isNormal();
             };
 
             std::unique_lock lock(mu);
-            if (unlikely(cancelled))
+            if (isCancelled())
                 return res;
 
             if (read_pos >= write_pos)
                 wait(lock, reader_head, node, pred, deadline);
 
-            if (likely(!cancelled && read_pos < write_pos))
+            /// double check status after potential wait
+            /// check read_pos because timeouted will also reach here.
+            if (!isCancelled() && read_pos < write_pos)
             {
                 auto & obj = objs[read_pos % capacity];
-                ++read_pos;
-
+                assert(obj.has_value());
                 res = std::move(obj);
                 /// Should manually reset a `std::optional` since `std::move` may not reset it.
                 obj.reset();
+
+                /// update pos only after all operations that may throw an exception.
+                ++read_pos;
 
                 /// Notify next writer within the critical area because:
                 /// 1. If we remove the next writer node and notify it later,
@@ -245,26 +254,32 @@ private:
     {
         thread_local WaitingNode node;
         auto pred = [&] {
-            return write_pos - read_pos < capacity || unlikely(cancelled || finished);
+            return write_pos - read_pos < capacity || !isNormal();
         };
 
         std::unique_lock lock(mu);
-        if (unlikely(cancelled || finished))
+        if (!isNormal())
             return false;
 
         if (write_pos - read_pos >= capacity)
             wait(lock, writer_head, node, pred, deadline);
 
-        /// double check after potential wait
-        if (unlikely(cancelled || finished || write_pos - read_pos >= capacity))
-            return false;
+        /// double check status after potential wait
+        /// check write_pos because timeouted will also reach here.
+        if (isNormal() && write_pos - read_pos < capacity)
+        {
+            auto & obj = objs[write_pos % capacity];
+            assert(!obj.has_value());
+            assigner(obj);
 
-        assigner(objs[write_pos % capacity]);
-        ++write_pos;
+            /// update pos only after all operations that may throw an exception.
+            ++write_pos;
 
-        /// See comments in `popObj`.
-        notifyNext(reader_head);
-        return true;
+            /// See comments in `popObj`.
+            notifyNext(reader_head);
+            return true;
+        }
+        return false;
     }
 
     template <typename U>
@@ -279,6 +294,16 @@ private:
         return assignObj(deadline, [&](auto & obj) { obj.emplace(std::forward<Args>(args)...); });
     }
 
+    ALWAYS_INLINE bool isNormal() const
+    {
+        return likely(status == Status::NORMAL);
+    }
+
+    ALWAYS_INLINE bool isCancelled() const
+    {
+        return unlikely(status == Status::CANCELLED);
+    }
+
 private:
     const Int64 capacity;
 
@@ -287,8 +312,7 @@ private:
     WaitingNode writer_head;
     Int64 read_pos = 0;
     Int64 write_pos = 0;
-    bool cancelled = false;
-    bool finished = false;
+    Status status = Status::NORMAL;
 
     std::vector<std::optional<T>> objs;
 };

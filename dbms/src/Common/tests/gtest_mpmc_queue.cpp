@@ -25,6 +25,7 @@ protected:
     {
         MPMCQueue<T> queue(capacity);
         ASSERT_EQ(queue.getStatus(), MPMCQueueStatus::NORMAL);
+        ASSERT_EQ(queue.size(), 0);
         testCannotTryPop(queue); /// will block if call `pop`
 
         queue.cancel();
@@ -69,40 +70,60 @@ protected:
     template <typename T>
     void testCannotPush(MPMCQueue<T> & queue)
     {
+        auto old_size = queue.size();
         auto res = queue.push(ValueHelper<T>::make(-1));
+        auto new_size = queue.size();
         if (res)
             throw TiFlashTestException("Should push fail");
+        if (old_size != new_size)
+            throw TiFlashTestException(fmt::format("Size changed from {} to {} without push", old_size, new_size));
     }
 
     template <typename T>
     void testCannotTryPush(MPMCQueue<T> & queue)
     {
+        auto old_size = queue.size();
         auto res = queue.tryPush(ValueHelper<T>::make(-1), std::chrono::microseconds(1));
+        auto new_size = queue.size();
         if (res)
             throw TiFlashTestException("Should push fail");
+        if (old_size != new_size)
+            throw TiFlashTestException(fmt::format("Size changed from {} to {} without push", old_size, new_size));
     }
 
     template <typename T>
     void testCannotPop(MPMCQueue<T> & queue)
     {
+        auto old_size = queue.size();
         auto res = queue.pop();
+        auto new_size = queue.size();
         if (res.has_value())
             throw TiFlashTestException("Should pop fail");
+        if (old_size != new_size)
+            throw TiFlashTestException(fmt::format("Size changed from {} to {} without pop", old_size, new_size));
     }
 
     template <typename T>
     void testCannotTryPop(MPMCQueue<T> & queue)
     {
+        auto old_size = queue.size();
         auto res = queue.tryPop(std::chrono::microseconds(1));
+        auto new_size = queue.size();
         if (res.has_value())
             throw TiFlashTestException("Should pop fail");
+        if (old_size != new_size)
+            throw TiFlashTestException(fmt::format("Size changed from {} to {} without pop", old_size, new_size));
     }
 
     template <typename T>
     int testPushN(MPMCQueue<T> & queue, Int64 n, int start, bool full_after_push)
     {
+        auto old_size = queue.size();
         for (int i = 0; i < n; ++i)
             queue.push(ValueHelper<T>::make(start++));
+        auto new_size = queue.size();
+        if (old_size + n != new_size)
+            throw TiFlashTestException(fmt::format("Size mismatch: expect {} but found {}", old_size + n, new_size));
         if (full_after_push)
             testCannotTryPush(queue);
         return start;
@@ -111,6 +132,7 @@ protected:
     template <typename T>
     int testPopN(MPMCQueue<T> & queue, int n, int start, bool empty_after_pop)
     {
+        auto old_size = queue.size();
         for (int i = 0; i < n; ++i)
         {
             auto res = queue.pop();
@@ -121,6 +143,9 @@ protected:
             if (actual != expect)
                 throw TiFlashTestException(fmt::format("Value mismatch! actual: {}, expect: {}", actual, expect));
         }
+        auto new_size = queue.size();
+        if (old_size - n != new_size)
+            throw TiFlashTestException(fmt::format("Size mismatch: expect {} but found {}", old_size - n, new_size));
         if (empty_after_pop)
             testCannotTryPop(queue);
         return start;
@@ -167,6 +192,8 @@ protected:
             readers[i].join();
             ASSERT_EQ(reader_results[i], 0);
         }
+
+        ASSERT_EQ(queue.size(), 0);
 
         for (int i = 0; i < 10; ++i)
         {
@@ -286,6 +313,8 @@ protected:
         queue.finish();
 
         testPopN<T>(queue, capacity, 0, true);
+
+        ASSERT_EQ(queue.size(), 0);
     }
 
     template <typename T>
@@ -327,6 +356,8 @@ protected:
 
         for (auto & thread : threads)
             thread.join();
+
+        ASSERT_EQ(queue.size(), 0);
 
         std::vector<int> all_writer_results = collect(writer_results);
 
@@ -375,6 +406,8 @@ protected:
         for (auto & thread : threads)
             thread.join();
 
+        ASSERT_EQ(queue.size(), 0);
+
         std::vector<int> all_reader_results = collect(reader_results);
         std::vector<int> all_writer_results = collect(writer_results);
 
@@ -411,6 +444,45 @@ protected:
         sort(begin(b), end(b));
         ASSERT_EQ(a, b);
     }
+
+    struct ThrowInjectable
+    {
+        ThrowInjectable() = default;
+        ThrowInjectable(const ThrowInjectable &) = delete;
+        ThrowInjectable(ThrowInjectable && rhs)
+        {
+            throwOrMove(std::move(rhs));
+        }
+
+        ThrowInjectable & operator=(const ThrowInjectable &) = delete;
+        ThrowInjectable & operator=(ThrowInjectable && rhs)
+        {
+            if (this != &rhs)
+                throwOrMove(std::move(rhs));
+            return *this;
+        }
+
+        explicit ThrowInjectable(int /* just avoid potential overload resolution error */, bool throw_when_construct)
+        {
+            if (throw_when_construct)
+                throw TiFlashTestException("Throw when construct");
+        }
+
+        explicit ThrowInjectable(std::atomic<bool> * throw_when_move_)
+            : throw_when_move(throw_when_move_)
+        {
+        }
+
+        void throwOrMove(ThrowInjectable && rhs)
+        {
+            if (rhs.throw_when_move && rhs.throw_when_move->load())
+                throw TiFlashTestException("Throw when move");
+            throw_when_move = rhs.throw_when_move;
+            rhs.throw_when_move = nullptr;
+        }
+
+        std::atomic<bool> * throw_when_move = nullptr;
+    };
 };
 
 template <>
@@ -457,6 +529,61 @@ ADD_TEST(PopAfterFinish, 100);
 ADD_TEST(CancelEmpty, 4, 4);
 ADD_TEST(CancelConcurrentPop, 4);
 ADD_TEST(CancelConcurrentPush, 4);
+
+TEST_F(TestMPMCQueue, ExceptionSafe)
+try
+{
+    MPMCQueue<ThrowInjectable> queue(10);
+
+    std::atomic<bool> throw_when_move = true;
+    ThrowInjectable x(&throw_when_move);
+
+    try
+    {
+        queue.push(std::move(x));
+        ASSERT_TRUE(false); // should throw
+    }
+    catch (const TiFlashTestException &)
+    {
+    }
+
+    ASSERT_EQ(queue.size(), 0);
+
+    throw_when_move.store(false);
+    queue.push(std::move(x));
+    ASSERT_EQ(queue.size(), 1);
+
+    throw_when_move.store(true);
+    try
+    {
+        queue.pop();
+        ASSERT_TRUE(false); // should throw
+    }
+    catch (const TiFlashTestException &)
+    {
+    }
+    ASSERT_EQ(queue.size(), 1);
+
+    throw_when_move.store(false);
+    auto res = queue.pop();
+    ASSERT_TRUE(res.has_value());
+    ASSERT_EQ(res.value().throw_when_move, &throw_when_move);
+    ASSERT_EQ(queue.size(), 0);
+
+    try
+    {
+        queue.emplace(0, true);
+        ASSERT_TRUE(false); // should throw
+    }
+    catch (const TiFlashTestException &)
+    {
+    }
+    ASSERT_EQ(queue.size(), 0);
+
+    queue.emplace(0, false);
+    ASSERT_EQ(queue.size(), 1);
+}
+CATCH
 
 } // namespace tests
 } // namespace DB
