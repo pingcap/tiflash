@@ -3110,11 +3110,12 @@ private:
             {
                 return false;
             }
+            IntType count = count_col->getValue<IntType>();
             vector_const_const(
                 str_col->getChars(),
                 str_col->getOffsets(),
                 delim_col->getValue<String>(),
-                count_col->getValue<IntType>(),
+                count > INT64_MAX ? INT64_MAX : count,
                 col_res->getChars(),
                 col_res->getOffsets());
             column_result.column = std::move(col_res);
@@ -3200,7 +3201,7 @@ private:
             auto data_size = StringUtil::sizeAt(offsets, i) - 1;
             auto delim_offset = StringUtil::offsetAt(delim_offsets, i);
             auto delim_size = StringUtil::sizeAt(delim_offsets, i) - 1; // ignore the trailing zero.
-            Int64 count = needCount[i];
+            Int64 count = needCount[i] > INT64_MAX ? INT64_MAX : needCount[i];
 
             if (delim_size == 0 || count == 0 || (count < 0 && -count < 0))
             {

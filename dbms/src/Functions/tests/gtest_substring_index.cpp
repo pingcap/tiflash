@@ -102,6 +102,33 @@ try
             createColumn<Nullable<String>>({"aaa", "aaa", "aaa", "aaa"}),
             createColumn<Nullable<Int64>>({-1, -2, -3, -4})));
 
+    // Test Uint64
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"aaa.bbb.ccc.ddd.eee.fff", "aaa.bbb.ccc.ddd.eee.fff", "aaa.bbb.ccc.ddd.eee.fff", "aaa.bbb.ccc.ddd.eee.fff"}),
+        executeFunction(
+            "substringIndex",
+            createConstColumn<Nullable<String>>(4, "aaa.bbb.ccc.ddd.eee.fff"),
+            createColumn<Nullable<String>>({".", ".", ".", "."}),
+            createColumn<Nullable<UInt64>>({18446744073709551615llu, 18446744073709551614llu, 18446744073709551613llu, 18446744073709551612llu})));
+
+    // Test Int8
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"begin" + std::string(INT8_MAX - 1, '.'), "begin" + std::string(INT8_MAX - 2, '.'), std::string(INT8_MAX, '.') + "end", std::string(INT8_MAX - 1, '.') + "end"}),
+        executeFunction(
+            "substringIndex",
+            createConstColumn<Nullable<String>>(4, "begin" + std::string(300, '.') + "end"),
+            createColumn<Nullable<String>>({".", ".", ".", "."}),
+            createColumn<Nullable<Int8>>({INT8_MAX, INT8_MAX - 1, INT8_MIN, INT8_MIN + 1})));
+
+    // Test UInt8
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"begin" + std::string(UINT8_MAX - 1, '.'), "begin" + std::string(UINT8_MAX - 2, '.')}),
+        executeFunction(
+            "substringIndex",
+            createConstColumn<Nullable<String>>(2, "begin" + std::string(300, '.') + "end"),
+            createColumn<Nullable<String>>({".", "."}),
+            createColumn<Nullable<UInt8>>({UINT8_MAX, UINT8_MAX - 1})));
+
     // Test vector_const_const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"www.pingcap", "www.", "中文.测", "www.www"}),
@@ -110,6 +137,61 @@ try
             createColumn<Nullable<String>>({"www.pingcap.com", "www...www", "中文.测.试。。。", "www.www"}),
             createConstColumn<Nullable<String>>(4, "."),
             createConstColumn<Nullable<Int64>>(4, 2)));
+
+    // Test type/nullable/const
+    auto data_string_col = createColumn<String>({"www.pingcap.com", "www.pingcap.com", "www.pingcap.com", "www.pingcap.com"});
+    auto data_nullable_string_col = createColumn<Nullable<String>>({"www.pingcap.com", "www.pingcap.com", "www.pingcap.com", "www.pingcap.com"});
+    auto data_const_col = createConstColumn<String>(4, "www.pingcap.com");
+
+    auto delim_string_col = createColumn<String>({".", ".", ".", "."});
+    auto delim_nullable_string_col = createColumn<Nullable<String>>({".", ".", ".", "."});
+    auto delim_const_col = createConstColumn<String>(4, ".");
+
+    auto count_int64_col = createColumn<Int64>({2, 2, 2, 2});
+    auto count_nullable_int64_col = createColumn<Nullable<Int64>>({2, 2, 2, 2});
+    auto count_const_col = createConstColumn<Int64>(4, 2);
+
+    auto result_string_col = createColumn<String>({"www.pingcap", "www.pingcap", "www.pingcap", "www.pingcap"});
+    auto result_nullable_string_col = createColumn<Nullable<String>>({"www.pingcap", "www.pingcap", "www.pingcap", "www.pingcap"});
+    auto result_const_col = createConstColumn<String>(4, "www.pingcap");
+    // Test type, type, type/nullable/const
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction("substringIndex", data_string_col, delim_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_string_col, delim_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction("substringIndex", data_string_col, delim_string_col, count_const_col));
+    // Test type, nullable, type/nullable/const
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_string_col, delim_nullable_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_string_col, delim_nullable_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_string_col, delim_nullable_string_col, count_const_col));
+    // Test type, const, type/nullable/const
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction("substringIndex", data_string_col, delim_const_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_string_col, delim_const_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction("substringIndex", data_string_col, delim_const_col, count_const_col));
+
+    // Test nullable, type, type/nullable/const
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_string_col, count_const_col));
+    // Test nullable, nullable, type/nullable/const
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_nullable_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_nullable_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_nullable_string_col, count_const_col));
+    // Test nullable, const, type/nullable/const
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_const_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_const_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_nullable_string_col, delim_const_col, count_const_col));
+
+    // Test const, type, type/nullable/const
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction("substringIndex", data_const_col, delim_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_const_col, delim_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction("substringIndex", data_const_col, delim_string_col, count_const_col));
+    // Test const, nullable, type/nullable/const
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_const_col, delim_nullable_string_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_const_col, delim_nullable_string_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_const_col, delim_nullable_string_col, count_const_col));
+    // Test const, const, type/nullable/const
+    ASSERT_COLUMN_EQ(result_string_col, executeFunction("substringIndex", data_const_col, delim_const_col, count_int64_col));
+    ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_const_col, delim_const_col, count_nullable_int64_col));
+    ASSERT_COLUMN_EQ(result_const_col, executeFunction("substringIndex", data_const_col, delim_const_col, count_const_col));
 }
 CATCH
 
