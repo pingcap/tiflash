@@ -199,26 +199,24 @@ private:
     bool assignObj(const TimePoint * deadline, F && assigner)
     {
         thread_local WaitingNode node;
-        {
-            auto pred = [&] { return write_pos - read_pos < capacity || unlikely(cancelled || finished); };
+        auto pred = [&] { return write_pos - read_pos < capacity || unlikely(cancelled || finished); };
 
-            std::unique_lock lock(mu);
-            if (unlikely(cancelled || finished))
-                return false;
+        std::unique_lock lock(mu);
+        if (unlikely(cancelled || finished))
+            return false;
 
-            if (write_pos - read_pos >= capacity)
-                wait(lock, writer_head, node, pred, deadline);
+        if (write_pos - read_pos >= capacity)
+            wait(lock, writer_head, node, pred, deadline);
 
-            if (likely(!cancelled && write_pos - read_pos < capacity))
-            {
-                assigner(objs[write_pos % capacity]);
-                ++write_pos;
+        /// double check after potential wait
+        if (unlikely(cancelled || finished || write_pos - read_pos >= capacity))
+            return false;
 
-                notifyNext(reader_head);
-                return true;
-            }
-        }
-        return false;
+        assigner(objs[write_pos % capacity]);
+        ++write_pos;
+
+        notifyNext(reader_head);
+        return true;
     }
 
     template <typename U>

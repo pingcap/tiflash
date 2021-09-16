@@ -19,41 +19,84 @@ protected:
     std::random_device rd;
 
     template <typename T>
+    struct ValueHelper;
+
+    template <typename T>
     void testInitialize(Int64 capacity)
     {
         MPMCQueue<T> queue(capacity);
-        EXPECT_EQ(queue.getStatus(), MPMCQueueStatus::NORMAL);
+        ASSERT_EQ(queue.getStatus(), MPMCQueueStatus::NORMAL);
         testCannotTryPop(queue); /// will block if call `pop`
 
         queue.cancel();
-        EXPECT_EQ(queue.getStatus(), MPMCQueueStatus::CANCELLED);
+        ASSERT_EQ(queue.getStatus(), MPMCQueueStatus::CANCELLED);
         testCannotPop(queue); /// won't block
 
         MPMCQueue<T> queue2(capacity);
         queue2.finish();
-        EXPECT_EQ(queue2.getStatus(), MPMCQueueStatus::FINISHED);
+        ASSERT_EQ(queue2.getStatus(), MPMCQueueStatus::FINISHED);
         testCannotPop(queue2); /// won't block
+    }
+
+    template <typename T>
+    void testDuplicateFinishCancel()
+    {
+        {
+            MPMCQueue<T> queue(1);
+            queue.cancel();
+            queue.finish();
+            ASSERT_EQ(queue.getStatus(), MPMCQueueStatus::CANCELLED);
+        }
+        {
+            MPMCQueue<T> queue(1);
+            queue.finish();
+            queue.finish();
+            ASSERT_EQ(queue.getStatus(), MPMCQueueStatus::FINISHED);
+        }
+        {
+            MPMCQueue<T> queue(1);
+            queue.finish();
+            queue.cancel();
+            ASSERT_EQ(queue.getStatus(), MPMCQueueStatus::FINISHED);
+        }
+        {
+            MPMCQueue<T> queue(1);
+            queue.cancel();
+            queue.cancel();
+            ASSERT_EQ(queue.getStatus(), MPMCQueueStatus::CANCELLED);
+        }
+    }
+
+    template <typename T>
+    void testCannotPush(MPMCQueue<T> & queue)
+    {
+        auto res = queue.push(ValueHelper<T>::make(-1));
+        if (res)
+            throw TiFlashTestException("Should push fail");
     }
 
     template <typename T>
     void testCannotTryPush(MPMCQueue<T> & queue)
     {
         auto res = queue.tryPush(ValueHelper<T>::make(-1), std::chrono::microseconds(1));
-        EXPECT_TRUE(!res);
+        if (res)
+            throw TiFlashTestException("Should push fail");
     }
 
     template <typename T>
     void testCannotPop(MPMCQueue<T> & queue)
     {
         auto res = queue.pop();
-        EXPECT_TRUE(!res.has_value());
+        if (res.has_value())
+            throw TiFlashTestException("Should pop fail");
     }
 
     template <typename T>
     void testCannotTryPop(MPMCQueue<T> & queue)
     {
         auto res = queue.tryPop(std::chrono::microseconds(1));
-        EXPECT_TRUE(!res.has_value());
+        if (res.has_value())
+            throw TiFlashTestException("Should pop fail");
     }
 
     template <typename T>
@@ -72,8 +115,12 @@ protected:
         for (int i = 0; i < n; ++i)
         {
             auto res = queue.pop();
-            EXPECT_TRUE(res.has_value());
-            EXPECT_TRUE(ValueHelper<T>::equal(res.value(), start++));
+            if (!res.has_value())
+                throw TiFlashTestException("Should pop a value");
+            int expect = start++;
+            int actual = ValueHelper<T>::extract(res.value());
+            if (actual != expect)
+                throw TiFlashTestException(fmt::format("Value mismatch! actual: {}, expect: {}", actual, expect));
         }
         if (empty_after_pop)
             testCannotTryPop(queue);
@@ -95,75 +142,330 @@ protected:
             write_start = testPushN<T>(queue, pop_cnt, write_start, true);
         }
         read_start = testPopN(queue, capacity, read_start, true);
-        EXPECT_EQ(read_start, write_start);
+        ASSERT_EQ(read_start, write_start);
     }
 
     template <typename T>
-    struct ValueHelper;
+    void testFinishEmpty(Int64 capacity, int reader_cnt)
+    {
+        MPMCQueue<T> queue(capacity);
+        std::vector<std::thread> readers;
+        std::vector<UInt8> reader_results(reader_cnt, -1);
+
+        auto read_func = [&](int i)
+        {
+            auto res = queue.pop();
+            reader_results[i] = res.has_value();
+        };
+
+        for (int i = 0; i < reader_cnt; ++i)
+            readers.emplace_back(read_func, i);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        queue.finish();
+
+        for (int i = 0; i < reader_cnt; ++i)
+        {
+            readers[i].join();
+            ASSERT_EQ(reader_results[i], 0);
+        }
+
+        for (int i = 0; i < 10; ++i)
+        {
+            auto res = queue.pop();
+            ASSERT_TRUE(!res.has_value());
+        }
+
+        for (int i = 0; i < 10; ++i)
+        {
+            auto res = queue.push(ValueHelper<T>::make(i));
+            ASSERT_TRUE(!res);
+        }
+    }
+
+    template <typename T>
+    void testCancelEmpty(Int64 capacity, int reader_cnt)
+    {
+        MPMCQueue<T> queue(capacity);
+        std::vector<std::thread> readers;
+        std::vector<UInt8> reader_results(reader_cnt, -1);
+
+        auto read_func = [&](int i)
+        {
+            auto res = queue.pop();
+            reader_results[i] = res.has_value();
+        };
+
+        for (int i = 0; i < reader_cnt; ++i)
+            readers.emplace_back(read_func, i);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        queue.cancel();
+
+        for (int i = 0; i < reader_cnt; ++i)
+        {
+            readers[i].join();
+            ASSERT_EQ(reader_results[i], 0);
+        }
+
+        for (int i = 0; i < 10; ++i)
+        {
+            auto res = queue.pop();
+            ASSERT_TRUE(!res.has_value());
+        }
+
+        for (int i = 0; i < 10; ++i)
+        {
+            auto res = queue.push(ValueHelper<T>::make(i));
+            ASSERT_TRUE(!res);
+        }
+    }
+
+    template <typename T>
+    void testCancelConcurrentPop(int reader_cnt)
+    {
+        MPMCQueue<T> queue(1);
+        std::vector<std::thread> threads;
+        std::vector<int> reader_results(reader_cnt, 0);
+
+        auto read_func = [&](int i)
+        {
+            auto res = queue.pop();
+            reader_results[i] += res.has_value();
+        };
+
+        for (int i = 0; i < reader_cnt; ++i)
+            threads.emplace_back(read_func, i);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        queue.cancel();
+
+        for (int i = 0; i < reader_cnt; ++i)
+        {
+            threads[i].join();
+            ASSERT_EQ(reader_results[i], 0);
+        }
+
+        testCannotPop(queue);
+        testCannotPush(queue);
+    }
+
+    template <typename T>
+    void testCancelConcurrentPush(int writer_cnt)
+    {
+        MPMCQueue<T> queue(1);
+        queue.push(ValueHelper<T>::make(0));
+
+        std::vector<std::thread> threads;
+        std::vector<int> writer_results(writer_cnt, 0);
+
+        auto write_func = [&](int i)
+        {
+            auto res = queue.push(ValueHelper<T>::make(i));
+            writer_results[i] += res;
+        };
+
+        for (int i = 0; i < writer_cnt; ++i)
+            threads.emplace_back(write_func, i);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        queue.cancel();
+
+        for (int i = 0; i < writer_cnt; ++i)
+        {
+            threads[i].join();
+            ASSERT_EQ(writer_results[i], 0);
+        }
+
+        testCannotPop(queue);
+        testCannotPush(queue);
+    }
+
+    template <typename T>
+    void testPopAfterFinish(Int64 capacity)
+    {
+        MPMCQueue<T> queue(capacity);
+
+        testPushN<T>(queue, capacity, 0, true);
+
+        queue.finish();
+
+        testPopN<T>(queue, capacity, 0, true);
+    }
+
+    template <typename T>
+    void testConcurrentPush(Int64 capacity, int writer_cnt)
+    {
+        MPMCQueue<T> queue(capacity);
+        std::vector<std::thread> threads;
+        std::vector<int> reader_results;
+        std::vector<std::vector<int>> writer_results(writer_cnt);
+
+        auto read_func = [&]
+        {
+            while (true)
+            {
+                auto res = queue.pop();
+                if (res.has_value())
+                    reader_results.push_back(ValueHelper<T>::extract(res.value()));
+                else
+                    break;
+            }
+        };
+
+        auto write_func = [&](int i)
+        {
+            for (int x = i; ; x += writer_cnt)
+            {
+                auto res = queue.push(ValueHelper<T>::make(x));
+                if (res)
+                    writer_results[i].push_back(x);
+                else
+                    break;
+            }
+        };
+
+        threads.emplace_back(read_func);
+        for (int i = 0; i < writer_cnt; ++i)
+            threads.emplace_back(write_func, i);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        queue.finish();
+
+        for (auto & thread : threads)
+            thread.join();
+
+        std::vector<int> all_writer_results = collect(writer_results);
+
+        expectMonotonic(reader_results, writer_cnt);
+        expectEqualAfterSort(reader_results, all_writer_results);
+    }
+
+    template <typename T>
+    void testConcurrentPushPop(Int64 capacity, int reader_writer_cnt)
+    {
+        MPMCQueue<T> queue(capacity);
+        std::vector<std::thread> threads;
+        std::vector<std::vector<int>> reader_results(reader_writer_cnt);
+        std::vector<std::vector<int>> writer_results(reader_writer_cnt);
+
+        auto read_func = [&](int i)
+        {
+            while (true)
+            {
+                auto res = queue.pop();
+                if (res.has_value())
+                    reader_results[i].push_back(ValueHelper<T>::extract(res.value()));
+                else
+                    break;
+            }
+        };
+
+        auto write_func = [&](int i)
+        {
+            for (int x = i; ; x += reader_writer_cnt)
+            {
+                auto res = queue.push(ValueHelper<T>::make(x));
+                if (res)
+                    writer_results[i].push_back(x);
+                else
+                    break;
+            }
+        };
+
+        for (int i = 0; i < reader_writer_cnt; ++i)
+            threads.emplace_back(read_func, i);
+        for (int i = 0; i < reader_writer_cnt; ++i)
+            threads.emplace_back(write_func, i);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        queue.finish();
+
+        for (auto & thread : threads)
+            thread.join();
+
+        std::vector<int> all_reader_results = collect(reader_results);
+        std::vector<int> all_writer_results = collect(writer_results);
+
+        expectEqualAfterSort(all_reader_results, all_writer_results);
+    }
+
+    static std::vector<int> collect(const std::vector<std::vector<int>> & vs)
+    {
+        std::vector<int> res;
+        for (const auto & v : vs)
+            for (int x : v)
+                res.push_back(x);
+        return res;
+    }
+
+    static void expectMonotonic(const std::vector<int> & data, int stream_cnt)
+    {
+        std::vector<std::vector<int>> streams(stream_cnt);
+        for (int x : data)
+        {
+            int p = x % stream_cnt;
+            if (streams[p].empty())
+                ASSERT_EQ(x, p);
+            else
+                ASSERT_EQ(x, streams[p].back() + stream_cnt);
+            streams[p].push_back(x);
+        }
+    }
+
+    static void expectEqualAfterSort(std::vector<int> & a, std::vector<int> & b)
+    {
+        ASSERT_EQ(a.size(), b.size());
+        sort(begin(a), end(a));
+        sort(begin(b), end(b));
+        ASSERT_EQ(a, b);
+    }
 };
 
 template <>
 struct TestMPMCQueue::ValueHelper<int>
 {
     static int make(int v) { return v; }
-    static bool equal(int a, int b) { return a == b; }
+    static int extract(int v) { return v; }
 };
 
 template <>
 struct TestMPMCQueue::ValueHelper<std::unique_ptr<int>>
 {
     static std::unique_ptr<int> make(int v) { return std::make_unique<int>(v); }
-    static bool equal(const std::unique_ptr<int> & a, int b) { return a && *a == b; }
+    static int extract(std::unique_ptr<int> & v) { return *v; }
 };
 
 template <>
 struct TestMPMCQueue::ValueHelper<std::shared_ptr<int>>
 {
     static std::shared_ptr<int> make(int v) { return std::make_shared<int>(v); }
-    static bool equal(const std::shared_ptr<int> & a, int b) { return a && *a == b; }
+    static int extract(std::shared_ptr<int> & v) { return *v; }
 };
 
-TEST_F(TestMPMCQueue, Int_Initialize)
-try
-{
-    testInitialize<int>(10);
-}
-CATCH
+#define ADD_TEST_FOR(type_name, type, test_name, ...) \
+    TEST_F(TestMPMCQueue, type_name ## _ ## test_name)\
+    try\
+    {\
+        test ## test_name<type>(__VA_ARGS__);\
+    }\
+    CATCH
 
-TEST_F(TestMPMCQueue, UniquePtr_Int_Initialize)
-try
-{
-    testInitialize<std::unique_ptr<int>>(10);
-}
-CATCH
+#define ADD_TEST(test_name, ...) \
+    ADD_TEST_FOR(Int, int, test_name, __VA_ARGS__)\
+    ADD_TEST_FOR(UniquePtr_Int, std::unique_ptr<int>, test_name, __VA_ARGS__)\
+    ADD_TEST_FOR(SharedPtr_Int, std::shared_ptr<int>, test_name, __VA_ARGS__)
 
-TEST_F(TestMPMCQueue, SharedPtr_Int_Initialize)
-try
-{
-    testInitialize<std::shared_ptr<int>>(10);
-}
-CATCH
-
-TEST_F(TestMPMCQueue, Int_SequentialPushPop)
-try
-{
-    testSequentialPushPop<int>(100);
-}
-CATCH
-
-TEST_F(TestMPMCQueue, UniquePtr_Int_SequentialPushPop)
-try
-{
-    testSequentialPushPop<std::unique_ptr<int>>(100);
-}
-CATCH
-
-TEST_F(TestMPMCQueue, SharedPtr_Int_SequentialPushPop)
-try
-{
-    testSequentialPushPop<std::shared_ptr<int>>(100);
-}
-CATCH
+ADD_TEST(Initialize, 10);
+ADD_TEST(DuplicateFinishCancel);
+ADD_TEST(SequentialPushPop, 100);
+ADD_TEST(FinishEmpty, 100, 4);
+ADD_TEST(ConcurrentPush, 2, 4);
+ADD_TEST(ConcurrentPushPop, 2, 4);
+ADD_TEST(PopAfterFinish, 100);
+ADD_TEST(CancelEmpty, 4, 4);
+ADD_TEST(CancelConcurrentPop, 4);
+ADD_TEST(CancelConcurrentPush, 4);
 
 } // namespace tests
 } // namespace DB
