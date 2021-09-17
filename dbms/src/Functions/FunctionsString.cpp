@@ -3095,7 +3095,8 @@ public:
                     else // DataTypeFloat64
                     {
                         std::ostringstream float64_format_stream;
-                        float64_format_stream << std::fixed << std::setprecision(15) << value;
+                        float64_format_stream << std::fixed << std::setprecision(15);
+                        float64_format_stream << value;
                         return float64_format_stream.str();
                     }
                 };
@@ -3113,7 +3114,7 @@ public:
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
                             std::string x_str = roundFormatArgs(number_str, max_num_decimals);
-                            col_res->insert(formatENUS(x_str, max_num_decimals));
+                            col_res->insert(toField(formatENUS(x_str, max_num_decimals)));
                         }
                     }
                     else if (const auto * col1_const = checkAndGetColumnConst<ColVecT1>(c1_raw))
@@ -3121,7 +3122,7 @@ public:
                         size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<T1>());
                         std::string x_str = roundFormatArgs(number_str, max_num_decimals);
                         std::string const_result = formatENUS(x_str, max_num_decimals);
-                        col_res->insert(const_result);
+                        col_res->insert(toField(const_result));
                         block.getByPosition(result).column = ColumnConst::create(std::move(col_res), val_num);
                         return true;
                     }
@@ -3136,7 +3137,7 @@ public:
                         {
                             const std::string number_str{number_to_str(number)};
                             std::string x_str = roundFormatArgs(number_str, max_num_decimals);
-                            col_res->insert(formatENUS(x_str, max_num_decimals));
+                            col_res->insert(toField(formatENUS(x_str, max_num_decimals)));
                         }
                     }
                     else if (const auto * col1_column = checkAndGetColumn<ColVecT1>(c1_raw))
@@ -3149,7 +3150,7 @@ public:
                             const std::string number_str{number_to_str(number_array[i])};
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
                             std::string x_str = roundFormatArgs(number_str, max_num_decimals);
-                            col_res->insert(formatENUS(x_str, max_num_decimals));
+                            col_res->insert(toField(formatENUS(x_str, max_num_decimals)));
                         }
                     }
                 }
@@ -3210,12 +3211,12 @@ private:
         if (point_index == std::string::npos)
             return x_str;
 
-        const auto decimal_part_size = x_str.size() - point_index;
+        const auto decimal_part_size = x_str.size() - point_index - 1;
         if (decimal_part_size > max_num_decimals)
         {
             bool carry = x_str[max_num_decimals] >= '5';
-            std::string decimal_part(x_str.substr(point_index + 1));
-            for (auto i = max_num_decimals - 1; i >= 0 && carry; i--)
+            std::string decimal_part{x_str.substr(point_index + 1)};
+            for (auto i = max_num_decimals - 1; i >= 0 && carry; --i)
             {
                 if (decimal_part[i] == '9')
                     decimal_part[i] = '0';
@@ -3226,7 +3227,7 @@ private:
                 }
             }
             std::string integer_part(x_str.substr(0, point_index));
-            for (auto i = point_index - 1; i >= 0 && carry; i--)
+            for (auto i = point_index - 1; i >= 0 && carry; --i)
             {
                 if (integer_part[i] == '9')
                     integer_part[i] = '0';
@@ -3274,11 +3275,12 @@ private:
             ++index;
         }
 
+        const auto expect_point_index = index + 1;
         for (; index != number.size(); ++index)
         {
             if (!std::isdigit(number[index])
-                || (index == 1 && number[1] == '.')
-                || (number[index] == '.' && number[1] != '.'))
+                || (index == expect_point_index && number[expect_point_index] == '.')
+                || (number[index] == '.' && number[expect_point_index] != '.'))
             {
                 number = number.substr(0, index);
                 break;
@@ -3287,11 +3289,12 @@ private:
 
         auto point_index = number.find('.');
         if (point_index == std::string::npos) point_index = number.size();
+        const auto remainder = point_index % 3;
         auto pos = number.cbegin();
-        if (point_index % 3 != 0)
+        if (remainder != 0)
         {
-            buffer.append(pos, pos + (point_index % 3));
-            pos += (point_index % 3);
+            buffer.append(pos, pos + remainder);
+            pos += remainder;
         }
         auto integer_end = number.cbegin() + point_index;
         for (; pos != integer_end; pos += 3)
@@ -3299,14 +3302,15 @@ private:
 
         if (precision > 0)
         {
-            const auto decimal_part_size = number.size() - point_index;
             buffer += '.';
-            if (decimal_part_size == 0)
+            if (point_index == number.size())
                 buffer.append(precision, '0');
-            else if (decimal_part_size >= precision)
-                buffer.append(number.cbegin() + point_index, number.cbegin() + point_index + precision);
+            const auto decimal_part_size = number.size() - point_index - 1;
+            auto decimal_part_start = number.cbegin() + point_index + 1;
+            if (decimal_part_size >= precision)
+                buffer.append(decimal_part_start, decimal_part_start + precision);
             else
-                buffer.append(number.cbegin() + point_index, number.cend()).append(precision - decimal_part_size, '0');
+                buffer.append(decimal_part_start, number.cend()).append(precision - decimal_part_size, '0');
         }
 
         return buffer;
