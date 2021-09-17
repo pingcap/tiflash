@@ -3230,17 +3230,19 @@ private:
         const UInt8 * end = pos + data_size;
         if (count > 0)
         {
+            // Fast exit when count * delim_size > data_size
+            if (static_cast<Int64>(data_size / delim_size) < count)
+            {
+                copyDataToResult(res_data, res_offset, begin, end);
+                return;
+            }
             while (pos < end)
             {
                 const UInt8 * match = delim_searcher->search(pos, end - pos);
                 count--;
                 if (match == end || count == 0)
                 {
-                    // Find the postition.
-                    res_data.resize(res_data.size() + (match - begin + 1));
-                    memcpy(&res_data[res_offset], begin, match - begin);
-                    res_data[res_offset + (match - begin)] = '\0';
-                    res_offset += match - begin + 1;
+                    copyDataToResult(res_data, res_offset, begin, match);
                     break;
                 }
                 pos = match + delim_size;
@@ -3250,6 +3252,12 @@ private:
         {
             std::vector<const UInt8 *> delim_pos;
             count = -count;
+            // Fast exit when count * delim_size > data_size
+            if (static_cast<Int64>(data_size / delim_size) < count)
+            {
+                copyDataToResult(res_data, res_offset, begin, end);
+                return;
+            }
             // When count is negative, we need split string by delim.
             while (pos < end)
             {
@@ -3268,11 +3276,20 @@ private:
                 const UInt8 * match = reinterpret_cast<const UInt8 *>(delim_pos[delim_count - count]);
                 begin = match + delim_size;
             }
-            res_data.resize(res_data.size() + (end - begin + 1));
-            memcpy(&res_data[res_offset], begin, end - begin);
-            res_data[res_offset + (end - begin)] = '\0';
-            res_offset += end - begin + 1;
+            copyDataToResult(res_data, res_offset, begin, end);
         }
+    }
+
+    static inline void copyDataToResult(
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset,
+        const UInt8 * begin,
+        const UInt8 * end)
+    {
+        res_data.resize(res_data.size() + (end - begin + 1));
+        memcpy(&res_data[res_offset], begin, end - begin);
+        res_data[res_offset + (end - begin)] = '\0';
+        res_offset += end - begin + 1;
     }
 };
 
