@@ -444,13 +444,17 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
             }
             else
             {
-                toCaseImpl<
-                    not_case_lower_bound,
-                    not_case_upper_bound,
-                    ascii_upper_bound,
-                    flip_case_mask,
-                    to_case,
-                    cyrillic_to_case>(src, src + WORD_SIZE, dst);
+                auto expected_end = src + WORD_SIZE;
+                while (src < expected_end)
+                {
+                    toCaseImpl<
+                        not_case_lower_bound,
+                        not_case_upper_bound,
+                        ascii_upper_bound,
+                        flip_case_mask,
+                        to_case,
+                        cyrillic_to_case>(src, src_end, dst);
+                }
             }
         }
         while (src < src_end)
