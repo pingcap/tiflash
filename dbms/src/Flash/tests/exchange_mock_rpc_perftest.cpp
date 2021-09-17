@@ -1,10 +1,12 @@
 #include <Common/ConcurrentBoundedQueue.h>
+#include <DataStreams/ExchangeSender.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/MPPTunnel.h>
 #include <Interpreters/Join.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <fmt/core.h>
@@ -114,37 +116,21 @@ using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
 
 struct MockWriter
 {
-    explicit MockWriter(const std::vector<PacketQueuePtr> & queues_)
-        : queues(queues_)
+    explicit MockWriter(PacketQueuePtr queue_)
+        : queue(std::move(queue_))
     {}
 
-    void write(tipb::SelectResponse & response)
+    void Write(const Packet & packet)
     {
-        auto packet = std::make_shared<Packet>();
-        response.SerializeToString(packet->mutable_data());
-        for (const auto & queue : queues)
-            queue->push(std::move(packet));
+        queue->push(std::make_shared<Packet>(packet));
     }
 
-    void write(tipb::SelectResponse & response, int16_t i)
+    void Write(Packet && packet)
     {
-        auto packet = std::make_shared<Packet>();
-        response.SerializeToString(packet->mutable_data());
-        queues[i]->push(std::move(packet));
+        queue->push(std::make_shared<Packet>(std::move(packet)));
     }
 
-    void finish()
-    {
-        for (const auto & queue : queues)
-            queue->finish();
-    }
-
-    uint16_t getPartitionNum() const
-    {
-        return queues.size();
-    }
-
-    std::vector<PacketQueuePtr> queues;
+    PacketQueuePtr queue;
 };
 
 struct MockBlockInputStream : public IProfilingBlockInputStream
@@ -237,6 +223,7 @@ void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & q
     queue->finish();
 }
 
+using MockTunnel = MPPTunnelBase<MockWriter>;
 using BlockWriter = StreamingDAGResponseWriter<std::shared_ptr<MockWriter>>;
 using BlockWriterPtr = std::shared_ptr<BlockWriter>;
 

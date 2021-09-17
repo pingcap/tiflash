@@ -4,8 +4,6 @@
 
 namespace DB
 {
-namespace
-{
 inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & response)
 {
     mpp::MPPDataPacket packet;
@@ -13,7 +11,6 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
         throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
     return packet;
 }
-} // namespace
 
 void MPPTunnelSet::clearExecutionSummaries(tipb::SelectResponse & response)
 {
