@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -16,20 +16,22 @@
 
 namespace DB
 {
-class MPPTask;
 using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
 
-class MPPTunnel : private boost::noncopyable
+using TaskCancelledCallback = std::function<bool()>;
+
+template <typename Writer>
+class MPPTunnelBase : private boost::noncopyable
 {
 public:
-    MPPTunnel(
+    MPPTunnelBase(
         const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
         const std::chrono::seconds timeout_,
-        const std::shared_ptr<MPPTask> & current_task_,
+        TaskCancelledCallback callback,
         int input_steams_num_);
 
-    ~MPPTunnel();
+    ~MPPTunnelBase();
 
     const String & id() const { return tunnel_id; }
 
@@ -49,7 +51,7 @@ public:
     void close(const String & reason);
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
-    void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_);
+    void connect(Writer * writer_);
 
     // wait until all the data has been transferred.
     void waitForFinish();
@@ -68,11 +70,11 @@ private:
 
     std::atomic<bool> finished; // if the tunnel has finished its connection.
 
-    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
+    Writer * writer;
 
     std::chrono::seconds timeout;
 
-    std::weak_ptr<MPPTask> current_task;
+    TaskCancelledCallback task_cancelled_callback;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
@@ -81,11 +83,21 @@ private:
 
     std::unique_ptr<std::thread> send_thread;
 
-    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
+    MPMCQueue<MPPDataPacketPtr> send_queue;
 
     Poco::Logger * log;
+};
+
+class MPPTunnel : public MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>
+{
+public:
+    using Base = MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>;
+    using Base::Base;
 };
 
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
 
 } // namespace DB
+
+#include <Flash/Mpp/MPPTunnel.ipp>
+

@@ -24,6 +24,7 @@ using Packet = mpp::MPPDataPacket;
 using PacketPtr = std::shared_ptr<Packet>;
 using PacketQueue = MPMCQueue<PacketPtr>;
 using PacketQueuePtr = std::shared_ptr<PacketQueue>;
+using StopFlag = std::atomic<bool>;
 
 std::atomic<Int64> received_data_size{0};
 
@@ -146,18 +147,31 @@ struct MockWriter
     std::vector<PacketQueuePtr> queues;
 };
 
-/*
 struct MockBlockInputStream : public IProfilingBlockInputStream
 {
-    PacketQueuePtr queue;
+    const std::vector<Block> & blocks;
+    StopFlag & stop_flag;
+    Block header;
+    std::mt19937 mt;
+    std::uniform_int_distribution<int> dist;
 
-    explicit MockBlockInputStream(PacketQueuePtr queue_)
-        : queue(std::move(queue_))
+    MockBlockInputStream(const std::vector<Block> & blocks_, StopFlag & stop_flag_)
+        : blocks(blocks_)
+        , stop_flag(stop_flag_)
+        , header(blocks[0].cloneEmpty())
+        , mt(rd())
+        , dist(0, blocks.size() - 1)
     {}
 
     String getName() const override { return "MockBlockInputStream"; }
+    Block getHeader() const override { return header; }
+
+    Block readImpl() override
+    {
+        if (!stop_flag.load(std::memory_order_acquire))
+            return blocks[dist(mt)];
+    }
 };
-*/
 
 Block makeBlock(int row_num)
 {
@@ -191,7 +205,6 @@ Block makeBlock(int row_num)
     auto string_data_type = makeDataType<Nullable<String>>();
     ColumnWithTypeAndName string_column(makeColumn<Nullable<String>>(string_data_type, string_vec), string_data_type, "string");
 
-
     return Block({int64_column, string_column, int64_column2});
 }
 
@@ -211,7 +224,7 @@ mpp::MPPDataPacket makePacket(ChunkCodecStream & codec, int row_num)
     return packet;
 }
 
-void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & queue, std::atomic<bool> & stop_flag)
+void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & queue, StopFlag & stop_flag)
 {
     std::mt19937 mt(rd());
     std::uniform_int_distribution<int> dist(0, packets.size() - 1);
@@ -231,7 +244,7 @@ void sendBlock(
     const std::vector<Block> & blocks,
     const BlockOutputStreamPtr & out,
     const std::shared_ptr<MockWriter> & raw_writer [[maybe_unused]],
-    const std::atomic<bool> & stop_flag)
+    const StopFlag & stop_flag)
 {
     std::mt19937 mt(rd());
     std::uniform_int_distribution<int> dist(0, blocks.size() - 1);
@@ -362,7 +375,7 @@ void testOnlyReceiver(int concurrency, int source_num, int block_rows, int secon
         queues.push_back(std::make_shared<PacketQueue>(10));
 
     auto context = std::make_shared<MockReceiverContext>(queues);
-    std::atomic<bool> stop_flag(false);
+    StopFlag stop_flag(false);
 
     auto receiver = std::make_shared<MockExchangeReceiver>(
         context,
@@ -437,7 +450,7 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
         queues.push_back(std::make_shared<PacketQueue>(10));
 
     auto context = std::make_shared<MockReceiverContext>(queues);
-    std::atomic<bool> stop_flag(false);
+    StopFlag stop_flag(false);
 
     auto receiver = std::make_shared<MockExchangeReceiver>(
         context,
