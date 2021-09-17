@@ -118,6 +118,15 @@ try
             createColumn<Nullable<String>>({".", "."}),
             createColumn<Nullable<UInt8>>({UINT8_MAX, UINT8_MAX - 1})));
 
+    // Test Int64
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"ping.cap", "ping.cap", "ping.cap", "ping.cap"}),
+        executeFunction(
+            "substringIndex",
+            createConstColumn<Nullable<String>>(4, "ping.cap"),
+            createColumn<Nullable<String>>({".", ".", ".", "."}),
+            createColumn<Nullable<Int64>>({INT64_MAX, INT64_MAX - 1, INT64_MIN, INT64_MIN + 1})));
+
     // Test vector_const_const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"www.pingcap", "www.", "中文.测", "www.www"}),
