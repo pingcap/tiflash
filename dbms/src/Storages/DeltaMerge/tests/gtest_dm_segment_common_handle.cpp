@@ -282,6 +282,7 @@ try
                                                          is_common_handle,
                                                          rowkey_column_size);
         segment->write(dmContext(), std::move(block));
+        ASSERT_EQ(segment->getDelta()->getRows(), num_rows_write_2);
     }
 
     { // Round 2
@@ -301,6 +302,7 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
+            ASSERT_EQ(segment->getStable()->getRows(), num_rows_write + num_rows_write_2);
         }
 
         {
