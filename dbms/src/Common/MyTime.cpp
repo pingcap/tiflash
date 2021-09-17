@@ -500,10 +500,41 @@ int MyTimeBase::weekDay() const
     return diff;
 }
 
-bool checkFormatValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
+bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
-    return (year >= 0 && year <= 9999) && (month >= 1 && month <= 12) && (day >= 1 && day <= 31) && (hour >= 0 && hour <= 23) && (minute >= 0 && minute <= 59)
-        && (second >= 0 && second <= 59);
+    if (year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59)
+    {
+        return false;
+    }
+    switch (month)
+    {
+    case 4:
+    case 6:
+    case 9:
+    case 11:
+        if (day > 30)
+            return false;
+        break;
+    case 2:
+    {
+        bool is_leap_year = false;
+        if ((year & 0b0011) == 0)
+        {
+            if (year % 100 != 0)
+                is_leap_year = true;
+            else
+                is_leap_year = (year % 400 == 0);
+        }
+        if ((!is_leap_year && day > 28) || (is_leap_year && day > 29))
+        {
+            return false;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return true;
 }
 
 Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t fsp, bool checkFormat)
@@ -754,7 +785,7 @@ Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t f
         }
     }
 
-    if (checkFormat && !checkFormatValid(year, month, day, hour, minute, second))
+    if (checkFormat && !checkTimeValid(year, month, day, hour, minute, second))
     {
         throw Exception("Wrong datetime format");
     }
