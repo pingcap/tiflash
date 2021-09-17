@@ -63,7 +63,9 @@ struct BitRotateRightImpl<A, B, true>
 struct NameBitRotateRight       { static constexpr auto name = "bitRotateRight"; };
 // clang-format on
 
-using FunctionBitRotateRight = FunctionBinaryArithmetic<BitRotateRightImpl, NameBitRotateRight>;
+template <typename A, typename B>
+using BitRotateRightImpl_t = BitRotateRightImpl<A, B>;
+using FunctionBitRotateRight = FunctionBinaryArithmetic<BitRotateRightImpl_t, NameBitRotateRight>;
 
 } // namespace
 

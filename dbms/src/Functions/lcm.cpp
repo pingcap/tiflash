@@ -50,7 +50,9 @@ struct LCMImpl<A, B, true>
 struct NameLCM                  { static constexpr auto name = "lcm"; };
 // clang-format on
 
-using FunctionLCM = FunctionBinaryArithmetic<LCMImpl, NameLCM>;
+template <typename A, typename B>
+using LCMImpl_t = LCMImpl<A, B>;
+using FunctionLCM = FunctionBinaryArithmetic<LCMImpl_t, NameLCM>;
 
 } // namespace
 
