@@ -248,7 +248,9 @@ try
 
         {
             // flush segment
+            ASSERT_EQ(segment->getDelta()->getRows(), num_rows_write);
             segment = segment->mergeDelta(dmContext(), tableColumns());
+            ASSERT_EQ(segment->getStable()->getRows(), num_rows_write);
         }
 
         {
