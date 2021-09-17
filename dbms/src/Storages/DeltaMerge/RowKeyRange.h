@@ -639,12 +639,12 @@ struct RowKeyRange
             {
                 return RowKeyRange(RowKeyValue::COMMON_HANDLE_MIN_KEY, RowKeyValue::COMMON_HANDLE_MAX_KEY, /*is_common_handle=*/is_common_handle, 1);
             }
-            WriteBufferFromOwnString ss;
+            std::stringstream ss;
             DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
             DB::EncodeInt64(handle_range.start, ss);
             String start = ss.str();
 
-            ss.restart();
+            ss.str(std::string());
             DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
             DB::EncodeInt64(handle_range.end, ss);
             String end = ss.str();
@@ -661,11 +661,11 @@ struct RowKeyRange
             {
                 return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, /*is_common_handle=*/is_common_handle, 1);
             }
-            WriteBufferFromOwnString ss;
+            std::stringstream ss;
             DB::EncodeInt64(handle_range.start, ss);
             String start = ss.str();
 
-            ss.restart();
+            ss.str(std::string());
             DB::EncodeInt64(handle_range.end, ss);
             String end = ss.str();
             /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
