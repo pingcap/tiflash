@@ -879,7 +879,7 @@ public:
 
 private:
     template <typename T0, typename T1>
-    bool executeNumRightType(Block & block, size_t result, const ColumnVector<T0> * col_left, const IColumn * col_right_untyped)
+    bool executeNumRightType(Block & block, size_t result, const ColumnVector<T0> * col_left, const IColumn * col_right_untyped) const
     {
         if (const ColumnVector<T1> * col_right = checkAndGetColumn<ColumnVector<T1>>(col_right_untyped))
         {
@@ -908,7 +908,7 @@ private:
     }
 
     template <typename T0, typename T1>
-    bool executeNumConstRightType(Block & block, size_t result, const ColumnConst * col_left, const IColumn * col_right_untyped)
+    bool executeNumConstRightType(Block & block, size_t result, const ColumnConst * col_left, const IColumn * col_right_untyped) const
     {
         if (const ColumnVector<T1> * col_right = checkAndGetColumn<ColumnVector<T1>>(col_right_untyped))
         {
@@ -934,7 +934,7 @@ private:
     }
 
     template <typename T0>
-    bool executeNumLeftType(Block & block, size_t result, const IColumn * col_left_untyped, const IColumn * col_right_untyped)
+    bool executeNumLeftType(Block & block, size_t result, const IColumn * col_left_untyped, const IColumn * col_right_untyped) const
     {
         if (const ColumnVector<T0> * col_left = checkAndGetColumn<ColumnVector<T0>>(col_left_untyped))
         {
@@ -976,7 +976,17 @@ private:
         return false;
     }
 
-    bool executeStringWithoutCollator(Block & block, size_t result, const IColumn * c0, const IColumn * c1, const ColumnString * c0_string, const ColumnString * c1_string, const ColumnFixedString * c0_fixed_string, const ColumnFixedString * c1_fixed_string, const ColumnConst * c0_const, const ColumnConst * c1_const)
+    bool executeStringWithoutCollator(
+        Block & block,
+        size_t result,
+        const IColumn * c0,
+        const IColumn * c1,
+        const ColumnString * c0_string,
+        const ColumnString * c1_string,
+        const ColumnFixedString * c0_fixed_string,
+        const ColumnFixedString * c1_fixed_string,
+        const ColumnConst * c0_const,
+        const ColumnConst * c1_const) const
     {
         using StringImpl = StringComparisonImpl<Op<int, int>>;
 
@@ -1055,7 +1065,17 @@ private:
             return true;
         }
     }
-    bool executeStringWithCollator(Block & block, size_t result, const IColumn * c0, const IColumn * c1, const ColumnString * c0_string, const ColumnString * c1_string, const ColumnFixedString * c0_fixed_string, const ColumnFixedString * c1_fixed_string, const ColumnConst * c0_const, const ColumnConst * c1_const)
+    bool executeStringWithCollator(
+        Block & block,
+        size_t result,
+        const IColumn * c0,
+        const IColumn * c1,
+        const ColumnString * c0_string,
+        const ColumnString * c1_string,
+        const ColumnFixedString * c0_fixed_string,
+        const ColumnFixedString * c1_fixed_string,
+        const ColumnConst * c0_const,
+        const ColumnConst * c1_const) const
     {
         using StringImpl = StringComparisonWithCollatorImpl<Op<int, int>>;
 
@@ -1143,7 +1163,7 @@ private:
         }
     }
 
-    bool executeString(Block & block, size_t result, const IColumn * c0, const IColumn * c1)
+    bool executeString(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
         const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1);
@@ -1168,7 +1188,7 @@ private:
         const IColumn * col_right_untyped,
         const DataTypePtr & left_type,
         const DataTypePtr & right_type,
-        bool left_is_num)
+        bool left_is_num) const
     {
         /// This is no longer very special case - comparing dates, datetimes, and enumerations with a string constant.
         const IColumn * column_string_untyped = !left_is_num ? col_left_untyped : col_right_untyped;
@@ -1245,7 +1265,7 @@ private:
         const IColumn * column_number,
         const ColumnConst * column_string,
         const IDataType * type_untyped,
-        const bool left_is_num)
+        const bool left_is_num) const
     {
         const auto type = static_cast<const EnumType *>(type_untyped);
 
@@ -1255,7 +1275,7 @@ private:
         executeNumLeftType<typename EnumType::FieldType>(block, result, left_is_num ? column_number : enum_col.get(), left_is_num ? enum_col.get() : column_number);
     }
 
-    void executeTuple(Block & block, size_t result, const ColumnWithTypeAndName & c0, const ColumnWithTypeAndName & c1)
+    void executeTuple(Block & block, size_t result, const ColumnWithTypeAndName & c0, const ColumnWithTypeAndName & c1) const
     {
         /** We will lexicographically compare the tuples. This is done as follows:
           * x == y : x1 == y1 && x2 == y2 ...
@@ -1307,13 +1327,18 @@ private:
         executeTupleImpl(block, result, x, y, tuple_size);
     }
 
-    void executeTupleImpl(Block & block, size_t result, const ColumnsWithTypeAndName & x, const ColumnsWithTypeAndName & y, size_t tuple_size);
+    void executeTupleImpl(Block & block, size_t result, const ColumnsWithTypeAndName & x, const ColumnsWithTypeAndName & y, size_t tuple_size) const;
 
     template <typename ComparisonFunction, typename ConvolutionFunction>
-    void executeTupleEqualityImpl(Block & block, size_t result, const ColumnsWithTypeAndName & x, const ColumnsWithTypeAndName & y, size_t tuple_size)
+    void executeTupleEqualityImpl(
+        Block & block,
+        size_t result,
+        const ColumnsWithTypeAndName & x,
+        const ColumnsWithTypeAndName & y,
+        size_t tuple_size) const
     {
-        ComparisonFunction func_compare;
-        ConvolutionFunction func_convolution;
+        DefaultExecutable func_compare(std::make_shared<ComparisonFunction>());
+        DefaultExecutable func_convolution(std::make_shared<ConvolutionFunction>());
 
         Block tmp_block;
         for (size_t i = 0; i < tuple_size; ++i)
@@ -1338,13 +1363,18 @@ private:
     }
 
     template <typename HeadComparisonFunction, typename TailComparisonFunction>
-    void executeTupleLessGreaterImpl(Block & block, size_t result, const ColumnsWithTypeAndName & x, const ColumnsWithTypeAndName & y, size_t tuple_size)
+    void executeTupleLessGreaterImpl(
+        Block & block,
+        size_t result,
+        const ColumnsWithTypeAndName & x,
+        const ColumnsWithTypeAndName & y,
+        size_t tuple_size) const
     {
-        HeadComparisonFunction func_compare_head;
-        TailComparisonFunction func_compare_tail;
-        FunctionAnd func_and;
-        FunctionOr func_or;
-        FunctionComparison<EqualsOp, NameEquals> func_equals;
+        DefaultExecutable func_compare_head(std::make_shared<HeadComparisonFunction>());
+        DefaultExecutable func_compare_tail(std::make_shared<TailComparisonFunction>());
+        DefaultExecutable func_and(std::make_shared<FunctionAnd>());
+        DefaultExecutable func_or(std::make_shared<FunctionOr>());
+        DefaultExecutable func_equals(std::make_shared<FunctionComparison<EqualsOp, NameEquals>>());
 
         Block tmp_block;
 
@@ -1381,7 +1411,7 @@ private:
         block.getByPosition(result).column = tmp_block.getByPosition(tmp_block.columns() - 1).column;
     }
 
-    void executeGeneric(Block & block, size_t result, const IColumn * c0, const IColumn * c1)
+    void executeGeneric(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
         bool c0_const = c0->isColumnConst();
         bool c1_const = c1->isColumnConst();
@@ -1415,7 +1445,7 @@ private:
         const IColumn * col_left_untyped,
         const IColumn * col_right_untyped,
         const DataTypePtr & left_type,
-        const DataTypePtr & right_type)
+        const DataTypePtr & right_type) const
     {
         if ((checkDataType<DataTypeDate>(left_type.get()) && checkDataType<DataTypeDateTime>(right_type.get()))
             || (checkDataType<DataTypeDateTime>(left_type.get()) && checkDataType<DataTypeDate>(right_type.get())))
@@ -1434,7 +1464,7 @@ private:
     }
 
     template <typename T0, typename T1, bool is_left_date>
-    bool executeDateAndDateTimeCompare(Block & block, size_t result, const IColumn * c0, const IColumn * c1)
+    bool executeDateAndDateTimeCompare(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
         bool c0_const = c0->isColumnConst();
         bool c1_const = c1->isColumnConst();
@@ -1560,14 +1590,14 @@ public:
             {
                 ColumnsWithTypeAndName args = {{nullptr, left_tuple->getElements()[i], ""},
                                                {nullptr, right_tuple->getElements()[i], ""}};
-                getReturnType(args);
+                IFunction::getReturnTypeImpl(args);
             }
         }
 
         return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeDecimal(Block & block, size_t result, const ColumnWithTypeAndName & col_left, const ColumnWithTypeAndName & col_right)
+    void executeDecimal(Block & block, size_t result, const ColumnWithTypeAndName & col_left, const ColumnWithTypeAndName & col_right) const
     {
         TypeIndex left_number = col_left.type->getTypeId();
         TypeIndex right_number = col_right.type->getTypeId();
@@ -1586,7 +1616,7 @@ public:
                             ErrorCodes::LOGICAL_ERROR);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto & col_with_type_and_name_left = block.getByPosition(arguments[0]);
         const auto & col_with_type_and_name_right = block.getByPosition(arguments[1]);

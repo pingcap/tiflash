@@ -2,10 +2,15 @@
 
 namespace DB
 {
+void EncryptedWritableFile::open()
+{
+    file->open();
+}
 
-void EncryptedWritableFile::open() { file->open(); }
-
-void EncryptedWritableFile::close() { file->close(); }
+void EncryptedWritableFile::close()
+{
+    file->close();
+}
 
 ssize_t EncryptedWritableFile::write(char * buf, size_t size)
 {

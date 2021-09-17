@@ -15,13 +15,15 @@ func> wait_table test a
 func> wait_table test b
 
 
-mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_broadcast_join_threshold_size=0; select * from a left join b on a.id = b.id; 
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp = 1; set tidb_broadcast_join_threshold_count = 0; set tidb_broadcast_join_threshold_size=0; set tidb_opt_mpp_outer_join_fixed_build_side = 0; select * from a left join b on a.id = b.id; 
 +------+-------+------+-------+
 | id   | value | id   | value |
 +------+-------+------+-------+
 |    2 | b     |    2 | b     |
 |    0 | a     | NULL | NULL  |
 +------+-------+------+-------+
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp= 1; set tidb_broadcast_join_threshold_count = 0; set tidb_opt_mpp_outer_join_fixed_build_side = 0; set tidb_broadcast_join_threshold_size=0; select * from a left join b on a.id = b.id + 10 where a.id > 2 or b.id = 1; 
 
 # Clean up.
 mysql> drop table if exists test.a

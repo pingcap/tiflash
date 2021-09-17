@@ -31,21 +31,22 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 };
 
 
 /// Executes expression. Uses for lambda functions implementation. Can't be created from factory.
 class FunctionExpression : public IFunctionBase
-    , public IPreparedFunction
+    , public IExecutableFunction
     , public std::enable_shared_from_this<FunctionExpression>
 {
 public:
-    FunctionExpression(const ExpressionActionsPtr & expression_actions,
-                       const DataTypes & argument_types,
-                       const Names & argument_names,
-                       const DataTypePtr & return_type,
-                       const std::string & return_name)
+    FunctionExpression(
+        const ExpressionActionsPtr & expression_actions,
+        const DataTypes & argument_types,
+        const Names & argument_names,
+        const DataTypePtr & return_type,
+        const std::string & return_name)
         : expression_actions(expression_actions)
         , argument_types(argument_types)
         , argument_names(argument_names)
@@ -59,12 +60,14 @@ public:
     const DataTypes & getArgumentTypes() const override { return argument_types; }
     const DataTypePtr & getReturnType() const override { return return_type; }
 
-    PreparedFunctionPtr prepare(const Block &) const override
+    bool useDefaultImplementationForNulls() const override { return false; }
+
+    ExecutableFunctionPtr prepare(const Block &) const override
     {
         return std::const_pointer_cast<FunctionExpression>(shared_from_this());
     }
 
-    void execute(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         Block expr_block;
         for (size_t i = 0; i < arguments.size(); ++i)
@@ -92,8 +95,8 @@ private:
 /// For lambda(x, x + y) x is in lambda_arguments, y is in captured arguments, expression_actions is 'x + y'.
 ///  execute(y) returns ColumnFunction(FunctionExpression(x + y), y) with type Function(x) -> function_return_type.
 class FunctionCapture : public IFunctionBase
-    , public IPreparedFunction
-    , public FunctionBuilderImpl
+    , public IExecutableFunction
+    , public IFunctionBuilder
     , public std::enable_shared_from_this<FunctionCapture>
 {
 public:
@@ -145,12 +148,12 @@ public:
     const DataTypes & getArgumentTypes() const override { return captured_types; }
     const DataTypePtr & getReturnType() const override { return return_type; }
 
-    PreparedFunctionPtr prepare(const Block &) const override
+    ExecutableFunctionPtr prepare(const Block &) const override
     {
         return std::const_pointer_cast<FunctionCapture>(shared_from_this());
     }
 
-    void execute(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         ColumnsWithTypeAndName columns;
         columns.reserve(arguments.size());
