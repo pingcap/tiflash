@@ -293,7 +293,7 @@ BlockInputStreams StorageMerge::read(
                     BlockInputStreamPtr stream = streams.size() > 1
                         ? std::make_shared<ConcatBlockInputStream>(
                             streams,
-                            context_.getDAGContext() ? context_.getDAGContext()->mpp_task_log : nullptr)
+                            context.getDAGContext() ? context.getDAGContext()->mpp_task_log : nullptr)
                         : streams[0];
 
                     if (has_table_virtual_column)
