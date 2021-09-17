@@ -373,7 +373,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         root_tm.set_partition_id(-1);
         std::shared_ptr<ExchangeReceiver> exchange_receiver
             = std::make_shared<ExchangeReceiver>(context, tipb_exchange_receiver, root_tm, 10);
-        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver);
+        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, nullptr);
         return ret;
     }
     else

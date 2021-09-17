@@ -1,32 +1,30 @@
-#include <Interpreters/Context.h>
-#include <Interpreters/InterpreterCheckQuery.h>
-#include <Parsers/ASTCheckQuery.h>
-#include <Storages/StorageDistributed.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
-#include <Common/typeid_cast.h>
-
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCheckQuery.h>
+#include <Parsers/ASTCheckQuery.h>
+#include <Storages/StorageDistributed.h>
 #include <openssl/sha.h>
-#include <deque>
+
 #include <array>
+#include <deque>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int INVALID_BLOCK_EXTRA_INFO;
-    extern const int RECEIVED_EMPTY_DATA;
-}
+extern const int INVALID_BLOCK_EXTRA_INFO;
+extern const int RECEIVED_EMPTY_DATA;
+} // namespace ErrorCodes
 
 
 namespace
 {
-
 /// A helper structure for performing a response to a DESCRIBE TABLE query with a Distributed table.
 /// Contains information about the local table that was retrieved from a single replica.
 struct TableDescription
@@ -85,10 +83,11 @@ inline bool operator<(const TableDescription & lhs, const TableDescription & rhs
 
 using TableDescriptions = std::deque<TableDescription>;
 
-}
+} // namespace
 
 InterpreterCheckQuery::InterpreterCheckQuery(const ASTPtr & query_ptr_, const Context & context_)
-    : query_ptr(query_ptr_), context(context_)
+    : query_ptr(query_ptr_)
+    , context(context_)
 {
 }
 
@@ -112,7 +111,10 @@ BlockIO InterpreterCheckQuery::execute()
 
         BlockInputStreams streams = distributed_table->describe(context, settings);
         streams[0] = std::make_shared<UnionBlockInputStream<StreamUnionMode::ExtraInfo>>(
-            streams, nullptr, settings.max_distributed_connections);
+            streams,
+            nullptr,
+            settings.max_distributed_connections,
+            nullptr);
         streams.resize(1);
 
         auto stream_ptr = dynamic_cast<IProfilingBlockInputStream *>(&*streams[0]);
@@ -208,7 +210,7 @@ BlockIO InterpreterCheckQuery::execute()
     {
         auto column = ColumnUInt8::create();
         column->insert(UInt64(table->checkData()));
-        result = Block{{ std::move(column), std::make_shared<DataTypeUInt8>(), "result" }};
+        result = Block{{std::move(column), std::make_shared<DataTypeUInt8>(), "result"}};
 
         BlockIO res;
         res.in = std::make_shared<OneBlockInputStream>(result);
@@ -217,4 +219,4 @@ BlockIO InterpreterCheckQuery::execute()
     }
 }
 
-}
+} // namespace DB
