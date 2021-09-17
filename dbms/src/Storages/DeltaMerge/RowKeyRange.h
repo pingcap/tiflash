@@ -642,12 +642,12 @@ struct RowKeyRange
             WriteBufferFromOwnString ss;
             DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
             DB::EncodeInt64(handle_range.start, ss);
-            String start = ss.releaseStr();
+            String start = ss.str();
 
             ss.restart();
             DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
             DB::EncodeInt64(handle_range.end, ss);
-            String end = ss.releaseStr();
+            String end = ss.str();
             /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
             return RowKeyRange(RowKeyValue(is_common_handle, std::make_shared<String>(start)),
                                handle_range.end == HandleRange::MAX ? RowKeyValue::COMMON_HANDLE_MAX_KEY
@@ -663,11 +663,11 @@ struct RowKeyRange
             }
             WriteBufferFromOwnString ss;
             DB::EncodeInt64(handle_range.start, ss);
-            String start = ss.releaseStr();
+            String start = ss.str();
 
             ss.restart();
             DB::EncodeInt64(handle_range.end, ss);
-            String end = ss.releaseStr();
+            String end = ss.str();
             /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
             return RowKeyRange(RowKeyValue(is_common_handle, std::make_shared<String>(start), handle_range.start),
                                handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY
