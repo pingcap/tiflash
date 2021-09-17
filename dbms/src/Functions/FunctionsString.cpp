@@ -3099,6 +3099,7 @@ private:
         bool delim_const = column_delim->isColumnConst();
         bool count_const = column_count->isColumnConst();
 
+        // TODO: differentiate vector and const
         column_str = column_str->isColumnConst() ? column_str->convertToFullColumnIfConst() : column_str;
         if (delim_const && count_const)
         {
@@ -3154,20 +3155,20 @@ private:
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        ColumnString::Offset res_offset = 0;
         res_offsets.resize(offsets.size());
-        if (delim.empty() || needCount == 0 || needCount == std::numeric_limits<Int64>::min())
+        if (delim.empty() || needCount == 0)
         {
             // All result is ""
             res_data.resize(offsets.size());
             for (size_t i = 0; i < offsets.size(); ++i)
             {
-                res_data[res_offset] = '\0';
+                res_data[i] = '\0';
                 res_offsets[i] = i + 1;
             }
             return;
         }
 
+        ColumnString::Offset res_offset = 0;
         Volnitsky searcher(reinterpret_cast<const char *>(delim.c_str()), delim.size(), 0);
         res_data.reserve(data.size());
         for (size_t i = 0; i < offsets.size(); ++i)
@@ -3202,7 +3203,7 @@ private:
             auto delim_size = StringUtil::sizeAt(delim_offsets, i) - 1; // ignore the trailing zero.
             Int64 count = needCount[i] > INT64_MAX ? INT64_MAX : needCount[i];
 
-            if (delim_size == 0 || count == 0 || count == std::numeric_limits<Int64>::min())
+            if (delim_size == 0 || count == 0)
             {
                 res_data.resize(res_data.size() + 1);
                 res_data[res_offset] = '\0';

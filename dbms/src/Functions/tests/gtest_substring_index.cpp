@@ -181,6 +181,24 @@ try
     ASSERT_COLUMN_EQ(result_string_col, executeFunction("substringIndex", data_const_col, delim_const_col, count_int64_col));
     ASSERT_COLUMN_EQ(result_nullable_string_col, executeFunction("substringIndex", data_const_col, delim_const_col, count_nullable_int64_col));
     ASSERT_COLUMN_EQ(result_const_col, executeFunction("substringIndex", data_const_col, delim_const_col, count_const_col));
+
+    // Test vector, empty const, const
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"", "", "", ""}),
+        executeFunction(
+            "substringIndex",
+            createColumn<Nullable<String>>({"www.pingcap.com", "www...www", "中文.测.试。。。", "www.www"}),
+            createConstColumn<Nullable<String>>(4, ""),
+            createConstColumn<Nullable<Int64>>(4, 2)));
+
+    // Test vector, empty vector, vector
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"", "", "", ""}),
+        executeFunction(
+            "substringIndex",
+            createColumn<Nullable<String>>({"www.pingcap.com", "www...www", "中文.测.试。。。", "www.www"}),
+            createColumn<Nullable<String>>({"", "", "", ""}),
+            createColumn<Nullable<Int64>>({2, 2, 2, 2})));
 }
 CATCH
 
