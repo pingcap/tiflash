@@ -89,7 +89,7 @@ private:
 };
 
 class MvccQueryInfoWrap
-    : boost::noncopyable
+    : private boost::noncopyable
     , public LockWrap
 {
     using Base = MvccQueryInfo;
@@ -97,8 +97,10 @@ class MvccQueryInfoWrap
     std::optional<Base::RegionsQueryInfo> regions_info;
     Base::RegionsQueryInfo * regions_info_ptr;
 
+    size_t concurrent = 1;
+
 public:
-    MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID table_id)
+    MvccQueryInfoWrap(Base & mvcc_query_info, TMTContext & tmt, const TiDB::TableID table_id, size_t num_streams)
         : inner(mvcc_query_info)
     {
         if (likely(!inner.regions_query_info.empty()))
@@ -120,10 +122,40 @@ public:
                     RegionQueryInfo{id, region->version(), region->confVer(), region->getRange()->rawKeys(), {}});
             }
         }
+
+        // Adjust concurrency by the min of num of regions and num of streams * mvcc_query_info.concurrent
+        concurrent = std::min(static_cast<size_t>(num_streams * inner.concurrent), regions_info_ptr->size());
+        // We apply batch read index in the proxy side, limit the concurrency in the TiFlash side to reduce the overhead
+        concurrent = std::min(tmt.replicaReadMaxThread(), concurrent);
+        concurrent = std::max(1, concurrent);
     }
     Base * operator->() { return &inner; }
 
+    size_t getConcurrentNum() const { return concurrent; }
+
     const Base::RegionsQueryInfo & getRegionsInfo() const { return *regions_info_ptr; }
+
+
+    LearnerReadSnapshot getRegionsSnapshot(const KVStorePtr & kvstore, Poco::Logger * log)
+    {
+        // Check region is available in kvstore and get a snapshot.
+        LearnerReadSnapshot regions_snapshot;
+        for (const auto & info : *regions_info_ptr)
+        {
+            auto region = kvstore->getRegion(info.region_id);
+            if (region == nullptr)
+            {
+                LOG_WARNING(log, "[region " << info.region_id << "] is not found in KVStore, try again");
+                throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND);
+            }
+            regions_snapshot.emplace(info.region_id, std::move(region));
+        }
+        // make sure regions are not duplicated.
+        if (unlikely(regions_snapshot.size() != regions_info_ptr->size()))
+            throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
+        return regions_snapshot;
+    }
+
     void addReadIndexRes(RegionID region_id, UInt64 read_index)
     {
         auto lock = genLockGuard();
@@ -148,35 +180,15 @@ LearnerReadSnapshot doLearnerRead(
 {
     assert(log != nullptr);
 
-    MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id);
+    MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id, num_streams);
+    KVStorePtr & kvstore = tmt.getKVStore();
+    LearnerReadSnapshot regions_snapshot = mvcc_query_info.getRegionsSnapshot(kvstore, log);
+
+    const size_t num_regions = regions_snapshot.size();
+    const size_t concurrent_num = mvcc_query_info.getConcurrentNum();
+    const size_t batch_size = num_regions / concurrent_num;
     const auto & regions_info = mvcc_query_info.getRegionsInfo();
 
-    // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
-    size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info->concurrent), regions_info.size()));
-
-    // use single thread to do replica read by default because there is some overhead from thread pool itself.
-    concurrent_num = std::min(tmt.replicaReadMaxThread(), concurrent_num);
-
-    KVStorePtr & kvstore = tmt.getKVStore();
-    LearnerReadSnapshot regions_snapshot;
-    // check region is not null and store region map.
-    for (const auto & info : regions_info)
-    {
-        auto region = kvstore->getRegion(info.region_id);
-        if (region == nullptr)
-        {
-            LOG_WARNING(log, "[region " << info.region_id << "] is not found in KVStore, try again");
-            throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND);
-        }
-        regions_snapshot.emplace(info.region_id, std::move(region));
-    }
-    // make sure regions are not duplicated.
-    if (unlikely(regions_snapshot.size() != regions_info.size()))
-        throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
-
-    const size_t num_regions = regions_info.size();
-
-    const size_t batch_size = num_regions / concurrent_num;
     UnavailableRegions unavailable_regions;
     const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
         Stopwatch batch_wait_data_watch;
@@ -403,7 +415,7 @@ LearnerReadSnapshot doLearnerRead(
     return regions_snapshot;
 }
 
-/// Ensure regions' info after read.
+/// Ensure regions' info after getting streams from storage layer.
 void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info,
     const LearnerReadSnapshot & regions_snapshot,

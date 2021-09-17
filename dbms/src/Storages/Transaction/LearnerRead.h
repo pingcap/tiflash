@@ -11,22 +11,26 @@
 
 namespace DB
 {
-struct RegionLearnerReadSnapshot : RegionPtr
+struct RegionLearnerReadSnapshot : public RegionPtr
 {
-    UInt64 snapshot_event_flag{0};
-
-    RegionLearnerReadSnapshot() = default;
-    RegionLearnerReadSnapshot(const RegionPtr & region)
+    RegionLearnerReadSnapshot()
+        : RegionPtr(nullptr)
+        , snapshot_event_flag(0)
+    {}
+    explicit RegionLearnerReadSnapshot(const RegionPtr & region)
         : RegionPtr(region)
         , snapshot_event_flag(region->getSnapshotEventFlag())
     {}
     bool operator!=(const RegionPtr & rhs) const { return (rhs != *this) || (rhs && snapshot_event_flag != rhs->getSnapshotEventFlag()); }
+
+private:
+    const UInt64 snapshot_event_flag;
 };
 using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
 
 [[nodiscard]] LearnerReadSnapshot
 doLearnerRead(
-    const TiDB::TableID table_id,
+    TiDB::TableID table_id,
     MvccQueryInfo & mvcc_query_info,
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,

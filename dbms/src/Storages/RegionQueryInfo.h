@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
 struct RegionQueryInfo
@@ -42,7 +41,10 @@ struct MvccQueryInfo
     ReadIndexRes read_index_res;
 
 public:
-    MvccQueryInfo(const bool resolve_locks_ = false, const UInt64 read_tso_ = 0) : resolve_locks(resolve_locks_), read_tso(read_tso_) {}
+    explicit MvccQueryInfo(const bool resolve_locks_ = false, const UInt64 read_tso_ = 0)
+        : resolve_locks(resolve_locks_)
+        , read_tso(read_tso_)
+    {}
 };
 
 } // namespace DB
