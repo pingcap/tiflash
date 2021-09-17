@@ -1,9 +1,4 @@
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsString.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -11,12 +6,6 @@
 
 #include <string>
 #include <vector>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-#include <Poco/Types.h>
-
-#pragma GCC diagnostic pop
 
 namespace DB
 {
@@ -38,7 +27,7 @@ protected:
     }
 };
 
-TEST_F(SubStringIndex, str_string_index_str_Test)
+TEST_F(SubStringIndex, strStringIndexStrTest)
 try
 {
     // Test string

@@ -3089,7 +3089,7 @@ private:
     bool executeSubStringIndex(
         Block & block,
         const ColumnNumbers & arguments,
-        const size_t result)
+        const size_t result) const
     {
         ColumnPtr & column_str = block.getByPosition(arguments[0]).column;
         ColumnPtr & column_delim = block.getByPosition(arguments[1]).column;
@@ -3102,7 +3102,6 @@ private:
         column_str = column_str->isColumnConst() ? column_str->convertToFullColumnIfConst() : column_str;
         if (delim_const && count_const)
         {
-            auto col_res = ColumnString::create();
             const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
             const ColumnConst * delim_col = checkAndGetColumnConst<ColumnString>(column_delim.get());
             const ColumnConst * count_col = checkAndGetColumnConst<ColumnVector<IntType>>(column_count.get());
@@ -3110,8 +3109,9 @@ private:
             {
                 return false;
             }
+            auto col_res = ColumnString::create();
             IntType count = count_col->getValue<IntType>();
-            vector_const_const(
+            vectorConstConst(
                 str_col->getChars(),
                 str_col->getOffsets(),
                 delim_col->getValue<String>(),
@@ -3124,7 +3124,6 @@ private:
         {
             column_delim = column_delim->isColumnConst() ? column_delim->convertToFullColumnIfConst() : column_delim;
             column_count = column_count->isColumnConst() ? column_count->convertToFullColumnIfConst() : column_count;
-            auto col_res = ColumnString::create();
             const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
             const ColumnString * delim_col = checkAndGetColumn<ColumnString>(column_delim.get());
             const ColumnVector<IntType> * count_col = checkAndGetColumn<ColumnVector<IntType>>(column_count.get());
@@ -3132,7 +3131,8 @@ private:
             {
                 return false;
             }
-            vector_vector_vector(
+            auto col_res = ColumnString::create();
+            vectorVectorVector(
                 str_col->getChars(),
                 str_col->getOffsets(),
                 delim_col->getChars(),
@@ -3146,7 +3146,7 @@ private:
         return true;
     }
 
-    static void vector_const_const(
+    static void vectorConstConst(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & delim,
@@ -3156,15 +3156,14 @@ private:
     {
         ColumnString::Offset res_offset = 0;
         res_offsets.resize(offsets.size());
-        if (delim.empty() || needCount == 0 || (needCount < 0 && -needCount < 0))
+        if (delim.empty() || needCount == 0 || needCount == std::numeric_limits<Int64>::min())
         {
             // All result is ""
-            res_data.reserve(offsets.size());
+            res_data.resize(offsets.size());
             for (size_t i = 0; i < offsets.size(); ++i)
             {
                 res_data[res_offset] = '\0';
-                res_offset++;
-                res_offsets[i] = res_offset;
+                res_offsets[i] = i + 1;
             }
             return;
         }
@@ -3182,7 +3181,7 @@ private:
     }
 
     template <typename IntType>
-    static void vector_vector_vector(
+    static void vectorVectorVector(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const ColumnString::Chars_t & delim_data,
@@ -3203,7 +3202,7 @@ private:
             auto delim_size = StringUtil::sizeAt(delim_offsets, i) - 1; // ignore the trailing zero.
             Int64 count = needCount[i] > INT64_MAX ? INT64_MAX : needCount[i];
 
-            if (delim_size == 0 || count == 0 || (count < 0 && -count < 0))
+            if (delim_size == 0 || count == 0 || count == std::numeric_limits<Int64>::min())
             {
                 res_data.resize(res_data.size() + 1);
                 res_data[res_offset] = '\0';
