@@ -146,6 +146,19 @@ struct MockWriter
     std::vector<PacketQueuePtr> queues;
 };
 
+/*
+struct MockBlockInputStream : public IProfilingBlockInputStream
+{
+    PacketQueuePtr queue;
+
+    explicit MockBlockInputStream(PacketQueuePtr queue_)
+        : queue(std::move(queue_))
+    {}
+
+    String getName() const override { return "MockBlockInputStream"; }
+};
+*/
+
 Block makeBlock(int row_num)
 {
     std::mt19937 mt(rd());
