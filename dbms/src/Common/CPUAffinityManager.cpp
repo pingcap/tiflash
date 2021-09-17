@@ -29,9 +29,9 @@ void CPUAffinityManager::initCPUAffinityManager(Poco::Util::LayeredConfiguration
 CPUAffinityConfig CPUAffinityManager::readConfig(Poco::Util::LayeredConfiguration & config)
 {
     CPUAffinityConfig cpu_config;
-    if (config.has("flash.cpu"))
+    if (config.has("cpu"))
     {
-        std::string s = config.getString("flash.cpu");
+        std::string s = config.getString("cpu");
         std::istringstream ss(s);
         cpptoml::parser p(ss);
         auto table = p.parse();

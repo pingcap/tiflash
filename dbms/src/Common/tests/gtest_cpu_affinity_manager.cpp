@@ -28,14 +28,14 @@ TEST(CPUAffinityManager_test, readConfig)
 {
     std::vector<std::string> vs = {
 R"(
-[flash.cpu]
+[cpu]
 )",
 R"(
-[flash.cpu]
+[cpu]
 query_cpu_percent=55
 )",
 R"(
-[flash.cpu]
+[cpu]
 query_cpu_percent=77
 )",
     };
