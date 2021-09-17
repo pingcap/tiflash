@@ -243,7 +243,6 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
             size_t num_rows_read = 0;
             in->readPrefix();
@@ -283,6 +282,7 @@ try
         // write more rows to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_2, false);
         segment->write(dmContext(), std::move(block));
+        ASSERT_EQ(segment->getDelta()->getRows(), num_rows_write_2);
     }
 
     { // Round 2
@@ -302,6 +302,7 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
+            ASSERT_EQ(segment->getStable()->getRows(), num_rows_write + num_rows_write_2);
         }
 
         {
