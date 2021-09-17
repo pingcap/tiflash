@@ -16,6 +16,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "kvrpcpb.pb.h"
+
 namespace DB
 {
 class LockWrap
@@ -156,6 +158,41 @@ public:
         return regions_snapshot;
     }
 
+    using ReadIndexRequests = std::vector<kvrpcpb::ReadIndexRequest>;
+    using BatchReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
+    ReadIndexRequests genBatchReadIndexRequests(
+        const size_t region_begin_idx,
+        const size_t region_end_idx,
+        const LearnerReadSnapshot & regions_snapshot,
+        BatchReadIndexResult & batch_read_index_result)
+    {
+        ReadIndexRequests reqs;
+        reqs.reserve(region_end_idx - region_begin_idx); // TODO: eliminate it
+        const auto & regions_info = getRegionsInfo();
+        {
+            auto lock = genLockGuard();
+            for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
+            {
+                const auto & region_to_query = regions_info[region_idx];
+                const RegionID region_id = region_to_query.region_id;
+                if (auto it = inner.read_index_res.find(region_id); it != inner.read_index_res.end() && it->second != 0)
+                {
+                    // Get the cached read index result from `inner.read_index_res`
+                    auto resp = kvrpcpb::ReadIndexResponse();
+                    resp.set_read_index(it->second);
+                    batch_read_index_result.emplace(region_id, std::move(resp));
+                }
+                else
+                {
+                    // Generate a new read index requst
+                    const auto & region = regions_snapshot.find(region_id)->second;
+                    reqs.emplace_back(GenRegionReadIndexReq(*region, inner.read_tso));
+                }
+            }
+        }
+        return reqs;
+    }
+
     void addReadIndexRes(RegionID region_id, UInt64 read_index)
     {
         auto lock = genLockGuard();
@@ -169,6 +206,50 @@ public:
         return 0;
     }
 };
+
+using BatchReadIndexRequests = MvccQueryInfoWrap::ReadIndexRequests;
+using BatchReadIndexResult = MvccQueryInfoWrap::BatchReadIndexResult;
+BatchReadIndexResult doBatchReadIndex(const BatchReadIndexRequests & batch_read_index_req, TMTContext & tmt)
+{
+    const auto & make_default_batch_read_index_result = [&]() -> BatchReadIndexResult {
+        BatchReadIndexResult batch_read_index_result;
+        for (const auto & req : batch_read_index_req)
+        {
+            batch_read_index_result.emplace(req.context().region_id(), kvrpcpb::ReadIndexResponse());
+        }
+        return batch_read_index_result;
+    };
+
+    auto & kvstore = tmt.getKVStore();
+    if (!tmt.checkRunning(std::memory_order_relaxed))
+    {
+        return make_default_batch_read_index_result();
+    }
+
+    kvstore->addReadIndexEvent(1);
+    SCOPE_EXIT({ kvstore->addReadIndexEvent(-1); });
+    if (!tmt.checkRunning())
+    {
+        return make_default_batch_read_index_result();
+    }
+
+    const auto * proxy_helper = kvstore->getProxyHelper();
+    if (proxy_helper == nullptr)
+    {
+        return make_default_batch_read_index_result();
+    }
+
+    /// Blocking learner read. Note that learner read must be performed ahead of data read,
+    /// otherwise the desired index will be blocked by the lock of data read.
+    BatchReadIndexResult batch_read_index_result;
+    auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+    for (auto && [resp, region_id] : res)
+    {
+        GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
+        batch_read_index_result.emplace(region_id, std::move(resp));
+    }
+    return batch_read_index_result;
+}
 
 LearnerReadSnapshot doLearnerRead(
     const TiDB::TableID table_id,
@@ -198,29 +279,15 @@ LearnerReadSnapshot doLearnerRead(
         const size_t ori_batch_region_size = region_end_idx - region_begin_idx;
         std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse> batch_read_index_result;
 
-        std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
-        batch_read_index_req.reserve(ori_batch_region_size);
-
+        // FIXME: If proxy is not ready, `batch_read_index_result` would be full of Raft index "0".
+        // It will make trouble for later checks.
+        BatchReadIndexResult batch_read_index_result;
         {
-            for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
-            {
-                const auto & region_to_query = regions_info[region_idx];
-                const RegionID region_id = region_to_query.region_id;
-                if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
-                {
-                    auto resp = kvrpcpb::ReadIndexResponse();
-                    resp.set_read_index(ori_read_index);
-                    batch_read_index_result.emplace(region_id, std::move(resp));
-                }
-                else
-                {
-                    auto & region = regions_snapshot.find(region_id)->second;
-                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region, mvcc_query_info->read_tso));
-                }
-            }
-        }
-
-        GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
+            auto batch_read_index_req = mvcc_query_info.genBatchReadIndexRequests(
+                region_begin_idx,
+                region_end_idx,
+                regions_snapshot,
+                batch_read_index_result);
 
         const auto & make_default_batch_read_index_result = [&]() {
             for (const auto & req : batch_read_index_req)
@@ -246,6 +313,7 @@ LearnerReadSnapshot doLearnerRead(
             /// otherwise the desired index will be blocked by the lock of data read.
             if (const auto * proxy_helper = kvstore->getProxyHelper(); proxy_helper)
             {
+                GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
                 auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
                 for (auto && [resp, region_id] : res)
                 {
