@@ -13,36 +13,39 @@
 
 namespace DB
 {
-
 class Context;
+class MPPTunnelSet;
 
 struct ProfileStreamsInfo
 {
     UInt32 qb_id;
     BlockInputStreams input_streams;
 };
-
+using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
 public:
     explicit DAGContext(const tipb::DAGRequest & dag_request)
-        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
-          return_executor_id(dag_request.has_root_executor() || dag_request.executors(0).has_executor_id()),
-          is_mpp_task(false),
-          is_root_mpp_task(false),
-          flags(dag_request.flags()),
-          sql_mode(dag_request.sql_mode()),
-          warnings(std::numeric_limits<int>::max()) {}
+        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
+        , return_executor_id(dag_request.has_root_executor() || dag_request.executors(0).has_executor_id())
+        , is_mpp_task(false)
+        , is_root_mpp_task(false)
+        , tunnel_set(nullptr)
+        , flags(dag_request.flags())
+        , sql_mode(dag_request.sql_mode())
+        , warnings(std::numeric_limits<int>::max())
+    {}
 
     DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
-        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
-          return_executor_id(true),
-          is_mpp_task(true),
-          flags(dag_request.flags()),
-          sql_mode(dag_request.sql_mode()),
-          mpp_task_meta(meta_),
-          warnings(std::numeric_limits<int>::max())
+        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
+        , return_executor_id(true)
+        , is_mpp_task(true)
+        , tunnel_set(nullptr)
+        , flags(dag_request.flags())
+        , sql_mode(dag_request.sql_mode())
+        , mpp_task_meta(meta_)
+        , warnings(std::numeric_limits<int>::max())
     {
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
         const auto & exchangeSender = dag_request.root_executor().exchange_sender();
@@ -110,7 +113,7 @@ public:
     bool return_executor_id;
     bool is_mpp_task;
     bool is_root_mpp_task;
-
+    MPPTunnelSetPtr tunnel_set;
     RegionInfoList retry_regions;
 
 private:
