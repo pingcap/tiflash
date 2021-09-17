@@ -268,7 +268,7 @@ private:
     template <bool skippable_place = false, class IndexIterator = DeltaIndexIterator>
     static SkippableBlockInputStreamPtr getPlacedStream(const DMContext & dm_context,
                                                         const ColumnDefines & read_columns,
-                                                        const RowKeyRange & rowkey_range,
+                                                        const RowKeyRanges & rowkey_ranges,
                                                         const RSOperatorPtr & filter,
                                                         const StableSnapshotPtr & stable_snap,
                                                         const DeltaValueReaderPtr & delta_reader,

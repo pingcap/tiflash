@@ -61,7 +61,7 @@ public:
                  // The the MVCC filter version. Used by clean read check.
                  UInt64 max_data_version_,
                  // filters
-                 const RowKeyRange & rowkey_range_,
+                 const RowKeyRanges & rowkey_ranges_,
                  const RSOperatorPtr & filter_,
                  const IdSetPtr & read_packs_, // filter by pack index
                  // caches
