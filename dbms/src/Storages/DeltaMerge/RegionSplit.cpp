@@ -153,7 +153,7 @@ DeltaMergeStore::getRegionSplitPoint(DMContext & dm_context, const RowKeyRange &
             // Note that handle, version and tag columns will be loaded even if we do not specify here.
             streams.push_back(task->segment->getInputStreamForDataExport(dm_context, /*columns*/ {}, task->read_snapshot, check_range));
         }
-        ConcatBlockInputStream stream(streams);
+        ConcatBlockInputStream stream(streams, nullptr);
 
         stream.readPrefix();
         size_t next_index = check_step;

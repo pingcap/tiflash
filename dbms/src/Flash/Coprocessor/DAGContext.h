@@ -7,6 +7,7 @@
 #pragma GCC diagnostic pop
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Storages/Transaction/TiDB.h>
@@ -115,6 +116,8 @@ public:
     bool is_root_mpp_task;
     MPPTunnelSetPtr tunnel_set;
     RegionInfoList retry_regions;
+
+    LogWithPrefixPtr mpp_task_log;
 
 private:
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
