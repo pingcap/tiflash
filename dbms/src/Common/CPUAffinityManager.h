@@ -19,7 +19,7 @@ namespace DB
 struct CPUAffinityConfig
 {
     CPUAffinityConfig()
-        : query_cpu_percent(80)
+        : query_cpu_percent(0)
         , cpu_cores(std::thread::hardware_concurrency())
     {}
     // About {cpu_cores * query_cpu_percent / 100} cpu cores are used for running query threads.

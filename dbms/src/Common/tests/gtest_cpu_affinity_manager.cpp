@@ -39,7 +39,7 @@ R"(
 query_cpu_percent=77
 )",
     };
-    std::vector<int> vi = { /*default*/ 80, 55, 77 };
+    std::vector<int> vi = { /*default*/ 0, 55, 77 };
 
     for (size_t i = 0; i < vs.size(); i++)
     {

@@ -98,16 +98,22 @@ void CPUAffinityManager::bindOtherThread(pid_t tid) const
 
 void CPUAffinityManager::bindSelfQueryThread() const
 {
-    LOG_INFO(log, "Thread: " << ::getThreadName() << " bindQueryThread.");
-    // If tid is zero, then the calling thread is used.
-    bindQueryThread(0);
+    if (enable())
+    {
+        LOG_INFO(log, "Thread: " << ::getThreadName() << " bindQueryThread.");
+        // If tid is zero, then the calling thread is used.
+        bindQueryThread(0);
+    }
 }
 
 void CPUAffinityManager::bindSelfOtherThread() const
 {
-    LOG_INFO(log, "Thread: " << ::getThreadName() << " bindOtherThread.");
-    // If tid is zero, then the calling thread is used.
-    bindOtherThread(0);
+    if (enable())
+    {
+        LOG_INFO(log, "Thread: " << ::getThreadName() << " bindOtherThread.");
+        // If tid is zero, then the calling thread is used.
+        bindOtherThread(0);
+    }
 }
 
 void CPUAffinityManager::bindSelfGrpcThread() const
