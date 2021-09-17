@@ -3888,6 +3888,11 @@ using FunctionConcat = ConcatImpl<NameConcat, false>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
 using FunctionFormat = FormatImpl<NameFormat, FormatWithEnUS>;
 
+// export for tests
+template struct LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>;
+template struct LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>;
+template struct LowerUpperImpl<'A', 'Z'>;
+template struct LowerUpperImpl<'a', 'z'>;
 
 void registerFunctionsString(FunctionFactory & factory)
 {

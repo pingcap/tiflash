@@ -120,7 +120,9 @@ struct LowerUpperUTF8Impl
      *    `src` and `dst` are incremented by corresponding sequence lengths. */
     static void toCase(const UInt8 *& src, const UInt8 * src_end, UInt8 *& dst);
 
+#ifndef TIFLASH_GTEST_STRINGS_FLIP_CASE
 private:
+#endif
     static constexpr auto ascii_upper_bound = '\x7f';
     static constexpr auto flip_case_mask = 'A' ^ 'a';
 
