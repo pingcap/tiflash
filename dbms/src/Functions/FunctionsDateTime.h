@@ -1090,7 +1090,7 @@ struct AddDaysImpl
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
         bool is_date;
-        Field packed_uint_value = parseMyDateTimeAndJudgeIsDate(str, is_date, true);
+        Field packed_uint_value = parseMyDateTimeAndJudgeIsDate(str, is_date, 6, true);
         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
         UInt64 result = AddDaysImpl::execute(packed_uint, delta, time_zone);
         if (is_date)
@@ -1157,7 +1157,7 @@ struct AddMonthsImpl
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
         bool is_date;
-        Field packed_uint_value = parseMyDateTimeAndJudgeIsDate(str, is_date, true);
+        Field packed_uint_value = parseMyDateTimeAndJudgeIsDate(str, is_date, 6, true);
         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
         UInt64 result = AddMonthsImpl::execute(packed_uint, delta, time_zone);
         if (is_date)

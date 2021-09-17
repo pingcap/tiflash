@@ -537,7 +537,7 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
     return true;
 }
 
-Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t fsp, bool checkFormat)
+Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t fsp, bool needCheckTimeValid)
 {
     // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
     // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
@@ -785,7 +785,7 @@ Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t f
         }
     }
 
-    if (checkFormat && !checkTimeValid(year, month, day, hour, minute, second))
+    if (needCheckTimeValid && !checkTimeValid(year, month, day, hour, minute, second))
     {
         throw Exception("Wrong datetime format");
     }
@@ -828,10 +828,10 @@ Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t f
 }
 
 // TODO: support parse time from float string
-Field parseMyDateTime(const String & str, int8_t fsp, bool checkFormat)
+Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckTimeValid)
 {
     bool is_date;
-    return parseMyDateTimeAndJudgeIsDate(str, is_date, fsp, checkFormat);
+    return parseMyDateTimeAndJudgeIsDate(str, is_date, fsp, needCheckTimeValid);
 }
 
 String MyDateTime::toString(int fsp) const
