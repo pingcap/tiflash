@@ -15,6 +15,7 @@
 #include <fmt/format.h>
 #include <kvproto/kvrpcpb.pb.h>
 
+#include <boost/core/noncopyable.hpp>
 #include <ext/scope_guard.h>
 
 
@@ -137,7 +138,6 @@ public:
 
     const Base::RegionsQueryInfo & getRegionsInfo() const { return *regions_info_ptr; }
 
-
     LearnerReadSnapshot getRegionsSnapshot(const KVStorePtr & kvstore, Poco::Logger * log)
     {
         // Check region is available in kvstore and get a snapshot.
@@ -158,46 +158,75 @@ public:
         return regions_snapshot;
     }
 
-    using ReadIndexRequests = std::vector<kvrpcpb::ReadIndexRequest>;
+    friend struct BatchReadIndexDelegate;
+};
+
+struct BatchReadIndexDelegate : public MvccQueryInfoWrap
+{
+    using BatchReadIndexRequests = std::vector<kvrpcpb::ReadIndexRequest>;
     using BatchReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
-    ReadIndexRequests genBatchReadIndexRequests(
+
+    BatchReadIndexResult execute(
+        TMTContext & tmt,
         const size_t region_begin_idx,
         const size_t region_end_idx,
         const LearnerReadSnapshot & regions_snapshot,
-        BatchReadIndexResult & batch_read_index_result)
+        Stopwatch & watch,
+        UnavailableRegions & unavailable_regions,
+        Poco::Logger * log)
     {
-        ReadIndexRequests reqs;
-        reqs.reserve(region_end_idx - region_begin_idx); // TODO: eliminate it
-        const auto & regions_info = getRegionsInfo();
-        {
-            auto lock = genLockGuard();
-            for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
-            {
-                const auto & region_to_query = regions_info[region_idx];
-                const RegionID region_id = region_to_query.region_id;
-                if (auto it = inner.read_index_res.find(region_id); it != inner.read_index_res.end() && it->second != 0)
+        BatchReadIndexResult result;
+        BatchReadIndexRequests reqs;
+        prepare(region_begin_idx, region_end_idx, regions_snapshot, &reqs, &result);
+        executeImpl(tmt, reqs, &result);
+
+        // Log down time elapsed
+        const size_t cached_size = result.size() - reqs.size();
+        auto read_index_elapsed_ms = watch.elapsedMilliseconds();
+        GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
+        LOG_DEBUG(
+            log,
+            fmt::format("Batch read index, original size {}, send & get {} message, cost {}ms",
+                        result.size(),
+                        reqs.size(),
+                        read_index_elapsed_ms);
+            do {
+                if (cached_size)
                 {
-                    // Get the cached read index result from `inner.read_index_res`
-                    auto resp = kvrpcpb::ReadIndexResponse();
-                    resp.set_read_index(it->second);
-                    batch_read_index_result.emplace(region_id, std::move(resp));
+                    oss_internal_rare << fmt::format(", {} in cache", cached_size);
                 }
-                else
-                {
-                    // Generate a new read index requst
-                    const auto & region = regions_snapshot.find(region_id)->second;
-                    reqs.emplace_back(GenRegionReadIndexReq(*region, inner.read_tso));
-                }
-            }
-        }
-        return reqs;
+            } while (0));
+
+        // If there are region_error/unresolved transaction lock, mark those Region unavailable.
+        handleResultError(result, unavailable_regions);
+        return result;
     }
+
+    BatchReadIndexDelegate() = delete;
+
+private:
+    void prepare(
+        size_t region_begin_idx,
+        size_t region_end_idx,
+        const LearnerReadSnapshot & regions_snapshot,
+        BatchReadIndexRequests * reqs,
+        BatchReadIndexResult * result);
+
+    static void executeImpl(
+        TMTContext & tmt,
+        const BatchReadIndexRequests & reqs,
+        BatchReadIndexResult * result);
+
+    void handleResultError(
+        BatchReadIndexResult & result,
+        UnavailableRegions & unavailable_regions);
 
     void addReadIndexRes(RegionID region_id, UInt64 read_index)
     {
         auto lock = genLockGuard();
         inner.read_index_res[region_id] = read_index;
     }
+
     UInt64 getReadIndexRes(RegionID region_id) const
     {
         auto lock = genLockGuard();
@@ -207,17 +236,50 @@ public:
     }
 };
 
-using BatchReadIndexRequests = MvccQueryInfoWrap::ReadIndexRequests;
-using BatchReadIndexResult = MvccQueryInfoWrap::BatchReadIndexResult;
-BatchReadIndexResult doBatchReadIndex(const BatchReadIndexRequests & batch_read_index_req, TMTContext & tmt)
+using BatchReadIndexRequests = BatchReadIndexDelegate::BatchReadIndexRequests;
+using BatchReadIndexResult = BatchReadIndexDelegate::BatchReadIndexResult;
+void BatchReadIndexDelegate::prepare(
+    const size_t region_begin_idx,
+    const size_t region_end_idx,
+    const LearnerReadSnapshot & regions_snapshot,
+    BatchReadIndexRequests * reqs,
+    BatchReadIndexResult * result)
 {
-    const auto & make_default_batch_read_index_result = [&]() -> BatchReadIndexResult {
-        BatchReadIndexResult batch_read_index_result;
-        for (const auto & req : batch_read_index_req)
+    reqs->reserve(region_end_idx - region_begin_idx); // TODO: eliminate it
+    const auto & regions_info = getRegionsInfo();
+    {
+        auto lock = genLockGuard();
+        for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
         {
-            batch_read_index_result.emplace(req.context().region_id(), kvrpcpb::ReadIndexResponse());
+            const auto & region_to_query = regions_info[region_idx];
+            const RegionID region_id = region_to_query.region_id;
+            if (auto it = inner.read_index_res.find(region_id); it != inner.read_index_res.end() && it->second != 0)
+            {
+                // Get the cached read index result from `inner.read_index_res`
+                auto resp = kvrpcpb::ReadIndexResponse();
+                resp.set_read_index(it->second);
+                result->emplace(region_id, std::move(resp));
+            }
+            else
+            {
+                // Generate a new read index requst
+                const auto & region = regions_snapshot.find(region_id)->second;
+                reqs->emplace_back(GenRegionReadIndexReq(*region, inner.read_tso));
+            }
         }
-        return batch_read_index_result;
+    }
+}
+
+void BatchReadIndexDelegate::executeImpl(
+    TMTContext & tmt,
+    const BatchReadIndexRequests & reqs,
+    BatchReadIndexResult * result)
+{
+    const auto & make_default_batch_read_index_result = [&]() {
+        for (const auto & req : reqs)
+        {
+            result->emplace(req.context().region_id(), kvrpcpb::ReadIndexResponse());
+        }
     };
 
     auto & kvstore = tmt.getKVStore();
@@ -241,14 +303,39 @@ BatchReadIndexResult doBatchReadIndex(const BatchReadIndexRequests & batch_read_
 
     /// Blocking learner read. Note that learner read must be performed ahead of data read,
     /// otherwise the desired index will be blocked by the lock of data read.
-    BatchReadIndexResult batch_read_index_result;
-    auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
-    for (auto && [resp, region_id] : res)
+    auto resp = proxy_helper->batchReadIndex(reqs, tmt.batchReadIndexTimeout());
+    for (auto && [resp, region_id] : resp)
     {
-        GET_METRIC(tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
-        batch_read_index_result.emplace(region_id, std::move(resp));
+        GET_METRIC(tiflash_raft_read_index_count).Increment(reqs.size());
+        result->emplace(region_id, std::move(resp));
     }
-    return batch_read_index_result;
+}
+
+void BatchReadIndexDelegate::handleResultError(
+    BatchReadIndexResult & result,
+    UnavailableRegions & unavailable_regions)
+{
+    for (auto & [region_id, resp] : result)
+    {
+        if (resp.has_region_error())
+        {
+            const auto & region_error = resp.region_error();
+            auto region_status = RegionException::RegionReadStatus::NOT_FOUND;
+            if (region_error.has_epoch_not_match())
+                region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
+            unavailable_regions.add(region_id, region_status);
+        }
+        else if (resp.has_locked())
+        {
+            unavailable_regions.setRegionLock(region_id, LockInfoPtr(resp.release_locked()));
+        }
+        else
+        {
+            // cache read-index to avoid useless overhead about retry.
+            // FIXME: Not cache read index == 0
+            addReadIndexRes(region_id, resp.read_index());
+        }
+    }
 }
 
 LearnerReadSnapshot doLearnerRead(
@@ -282,54 +369,11 @@ LearnerReadSnapshot doLearnerRead(
         // It will make trouble for later checks.
         BatchReadIndexResult batch_read_index_result;
         {
-            auto batch_read_index_req = mvcc_query_info.genBatchReadIndexRequests(
-                region_begin_idx,
-                region_end_idx,
-                regions_snapshot,
-                batch_read_index_result);
-
-            batch_read_index_result = doBatchReadIndex(batch_read_index_req, tmt);
-            const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
-            auto read_index_elapsed_ms = watch.elapsedMilliseconds();
-            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
-            LOG_DEBUG(
-                log,
-                fmt::format("Batch read index, original size {}, send & get {} message, cost {}ms",
-                            ori_batch_region_size,
-                            batch_read_index_result.size(),
-                            read_index_elapsed_ms);
-                do {
-                    if (cached_size)
-                    {
-                        oss_internal_rare << fmt::format(", {} in cache", cached_size);
-                    }
-                } while (0));
+            static_assert(sizeof(MvccQueryInfoWrap) == sizeof(BatchReadIndexDelegate));
+            auto & delegate = static_cast<BatchReadIndexDelegate &>(mvcc_query_info);
+            batch_read_index_result = delegate.execute(tmt, region_begin_idx, region_end_idx, regions_snapshot, watch, unavailable_regions, log);
+            watch.restart(); // restart to count the elapsed of wait index
         }
-
-        // If there are region_error/unresolved transaction lock, mark those Region unavailable.
-        for (auto & [region_id, resp] : batch_read_index_result)
-        {
-            if (resp.has_region_error())
-            {
-                const auto & region_error = resp.region_error();
-                auto region_status = RegionException::RegionReadStatus::NOT_FOUND;
-                if (region_error.has_epoch_not_match())
-                    region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
-                unavailable_regions.add(region_id, region_status);
-            }
-            else if (resp.has_locked())
-            {
-                unavailable_regions.setRegionLock(region_id, LockInfoPtr(resp.release_locked()));
-            }
-            else
-            {
-                // cache read-index to avoid useless overhead about retry.
-                // FIXME: Not cache read index == 0
-                mvcc_query_info.addReadIndexRes(region_id, resp.read_index());
-            }
-        }
-
-        watch.restart(); // restart to count the elapsed of wait index
 
         auto handle_wait_timeout_region = [&unavailable_regions, wait_index_timeout_as_region_not_found](const DB::RegionID region_id) {
             if (wait_index_timeout_as_region_not_found)

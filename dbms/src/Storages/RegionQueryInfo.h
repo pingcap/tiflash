@@ -3,6 +3,9 @@
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
+#include <unordered_map>
+#include <vector>
+
 namespace DB
 {
 using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
@@ -37,14 +40,20 @@ struct MvccQueryInfo
     using RegionsQueryInfo = std::vector<RegionQueryInfo>;
     RegionsQueryInfo regions_query_info;
 
-    using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
-    ReadIndexRes read_index_res;
-
 public:
     explicit MvccQueryInfo(const bool resolve_locks_ = false, const UInt64 read_tso_ = 0)
         : resolve_locks(resolve_locks_)
         , read_tso(read_tso_)
     {}
+
+    friend struct BatchReadIndexDelegate;
+
+private:
+    // Cached read index result
+    // Only accessible for `BatchReadIndexDelegate` to reduce the overhead
+    // of applying retry for Regions.
+    using ReadIndexRes = std::unordered_map<RegionID, UInt64>;
+    ReadIndexRes read_index_res;
 };
 
 } // namespace DB
