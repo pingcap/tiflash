@@ -231,7 +231,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, this->shared_from_this());
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, shared_from_this(), context.getSettings().max_threads);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
@@ -240,7 +240,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
         }
     }
-
+    dag_context->tunnel_set = tunnel_set;
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task " << id.toString());
@@ -266,41 +266,6 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
-
-    // get partition column ids
-    const auto & exchangeSender = dag_req->root_executor().exchange_sender();
-    auto part_keys = exchangeSender.partition_keys();
-    std::vector<Int64> partition_col_id;
-    TiDB::TiDBCollators collators;
-    /// in case TiDB is an old version, it has not collation info
-    bool has_collator_info = exchangeSender.types_size() != 0;
-    if (has_collator_info && part_keys.size() != exchangeSender.types_size())
-    {
-        throw TiFlashException(std::string(__PRETTY_FUNCTION__)
-                                   + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
-                                     "enabled",
-                               Errors::Coprocessor::BadRequest);
-    }
-    for (int i = 0; i < part_keys.size(); i++)
-    {
-        const auto & expr = part_keys[i];
-        assert(isColumnExpr(expr));
-        auto column_index = decodeDAGInt64(expr.val());
-        partition_col_id.emplace_back(column_index);
-        if (has_collator_info && getDataTypeByFieldType(expr.field_type())->isString())
-        {
-            collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
-        }
-        else
-        {
-            collators.emplace_back(nullptr);
-        }
-    }
-    // construct writer
-    std::unique_ptr<DAGResponseWriter> response_writer
-        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, collators, exchangeSender.tp(), context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
-    BlockOutputStreamPtr squash_stream = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
-    io.out = std::make_shared<SquashingBlockOutputStream>(squash_stream, 20000, 0);
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
@@ -335,9 +300,7 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, maybe is cancelled");
         }
         auto from = io.in;
-        auto to = io.out;
         from->readPrefix();
-        to->writePrefix();
         LOG_DEBUG(log, "begin read ");
 
         size_t count = 0;
@@ -345,7 +308,6 @@ void MPPTask::runImpl()
         while (Block block = from->read())
         {
             count += block.rows();
-            to->write(block);
             FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
             if (dag_context->isRootMPPTask())
             {
@@ -357,21 +319,8 @@ void MPPTask::runImpl()
             }
         }
 
-        /// For outputting additional information in some formats.
-        if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(from.get()))
-        {
-            if (input->getProfileInfo().hasAppliedLimit())
-                to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
-
-            to->setTotals(input->getTotals());
-            to->setExtremes(input->getExtremes());
-        }
-
         from->readSuffix();
-        to->writeSuffix();
-
         finishWrite();
-
         LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
     }
     catch (Exception & e)

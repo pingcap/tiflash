@@ -175,6 +175,17 @@ public:
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
 
+    const std::shared_ptr<LogWithPrefix> static getLogWithPrefix(const std::shared_ptr<LogWithPrefix> & log, const String & name = "name: N/A", Int64 mpp_task_id_ = -1)
+    {
+        if (log == nullptr)
+        {
+            String prefix = mpp_task_id_ == -1 ? "[task: N/A query: N/A] " : fmt::format("[task: {} query: N/A] ", mpp_task_id_);
+            return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), prefix);
+        }
+
+        return log;
+    }
+
 protected:
     BlockStreamProfileInfo info;
     std::atomic<bool> is_cancelled{false};
