@@ -265,30 +265,34 @@ void BatchReadIndexDelegate::execute(
     const BatchReadIndexRequests & reqs,
     BatchReadIndexResult * result)
 {
-    const auto & make_default_batch_read_index_result = [&]() {
+    const auto & make_default_batch_read_index_result = [&](bool with_region_error) {
         for (const auto & req : reqs)
         {
-            result->emplace(req.context().region_id(), kvrpcpb::ReadIndexResponse());
+            auto resp = kvrpcpb::ReadIndexResponse();
+            if (with_region_error)
+                resp.mutable_region_error()->mutable_region_not_found();
+            result->emplace(req.context().region_id(), std::move(resp));
         }
     };
 
     auto & kvstore = tmt.getKVStore();
     if (!tmt.checkRunning(std::memory_order_relaxed))
     {
-        return make_default_batch_read_index_result();
+        return make_default_batch_read_index_result(true);
     }
 
     kvstore->addReadIndexEvent(1);
     SCOPE_EXIT({ kvstore->addReadIndexEvent(-1); });
     if (!tmt.checkRunning())
     {
-        return make_default_batch_read_index_result();
+        return make_default_batch_read_index_result(true);
     }
 
     const auto * proxy_helper = kvstore->getProxyHelper();
     if (proxy_helper == nullptr)
     {
-        return make_default_batch_read_index_result();
+        // Only in mock test, `proxy_helper` will be `nullptr`. Set `read_index` to 0 and skip waiting.
+        return make_default_batch_read_index_result(false);
     }
 
     /// Issue batch read index through the proxy

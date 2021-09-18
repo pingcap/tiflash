@@ -1,48 +1,17 @@
-#include <Flash/Mpp/ExchangeReceiver.h>
+#pragma once
+
 #include <fmt/core.h>
-
-namespace pingcap
-{
-namespace kv
-{
-template <>
-struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
-{
-    using RequestType = ::mpp::EstablishMPPConnectionRequest;
-    using ResultType = ::mpp::MPPDataPacket;
-    static std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req)
-    {
-        return client->stub->EstablishMPPConnection(context, req);
-    }
-    static std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> doAsyncRPCCall(grpc::ClientContext * context,
-                                                                                           std::shared_ptr<KvConnClient> client,
-                                                                                           const RequestType & req,
-                                                                                           grpc::CompletionQueue & cq,
-                                                                                           void * call)
-    {
-        return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call);
-    }
-};
-
-} // namespace kv
-} // namespace pingcap
 
 namespace DB
 {
-void ExchangeReceiver::setUpConnection()
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
-    for (int index = 0; index < pb_exchange_receiver.encoded_task_meta_size(); index++)
-    {
-        auto & meta = pb_exchange_receiver.encoded_task_meta(index);
-        std::thread t(&ExchangeReceiver::ReadLoop, this, std::ref(meta), index);
-        workers.push_back(std::move(t));
-    }
+    for (size_t index = 0; index < source_num; ++index)
+        workers.emplace_back(&ExchangeReceiverBase::ReadLoop, this, index);
 }
 
-String getReceiverStateStr(const State & s)
+inline String getReceiverStateStr(const State & s)
 {
     switch (s)
     {
@@ -59,7 +28,8 @@ String getReceiverStateStr(const State & s)
     }
 }
 
-void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
 {
     bool meet_error = false;
     String local_err_msg;
@@ -69,25 +39,16 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 
     try
     {
-        auto sender_task = new mpp::TaskMeta();
-        if (!sender_task->ParseFromString(meta_raw))
-        {
-            throw Exception("parse task meta error!");
-        }
-        send_task_id = sender_task->task_id();
-        auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-        req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
-        req->set_allocated_sender_meta(sender_task);
-        LOG_DEBUG(log, "begin start and read : " << req->DebugString());
-        ::grpc::Status status = ::grpc::Status::OK;
+        auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
+        send_task_id = req.send_task_id;
+        String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
+        LOG_DEBUG(log, "begin start and read : " << req.debugString());
+        auto status = RPCContext::getStatusOK();
         for (int i = 0; i < 10; i++)
         {
-            pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
-            grpc::ClientContext client_context;
-            auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
-            reader->WaitForInitialMetadata();
+            auto reader = rpc_context->makeReader(req);
+            reader->initialize();
             std::shared_ptr<ReceivedPacket> packet;
-            String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
             bool has_data = false;
             for (;;)
             {
@@ -110,7 +71,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
                 }
                 packet->req_info = req_info;
                 packet->source_index = source_index;
-                bool success = reader->Read(packet->packet.get());
+                bool success = reader->read(packet->packet.get());
                 if (!success)
                     break;
                 else
@@ -141,16 +102,17 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             {
                 break;
             }
-            status = reader->Finish();
+            status = reader->finish();
             if (status.ok())
             {
-                LOG_DEBUG(log, "finish read : " << req->DebugString());
+                LOG_DEBUG(log, "finish read : " << req.debugString());
                 break;
             }
             else
             {
-                LOG_WARNING(log,
-                            "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                LOG_WARNING(
+                    log,
+                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
@@ -199,7 +161,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         throw Exception("live_connections should not be less than 0!");
 }
 
-ExchangeReceiverResult ExchangeReceiver::nextResult()
+template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
 {
     std::shared_ptr<ReceivedPacket> packet;
     {
