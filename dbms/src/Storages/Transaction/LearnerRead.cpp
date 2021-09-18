@@ -174,7 +174,12 @@ public:
         }
         // make sure regions are not duplicated.
         if (unlikely(regions_snapshot.size() != regions_info_ptr->size()))
-            throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
+            throw TiFlashException(
+                fmt::format(
+                    "Found duplicate region id in the request. Request {} regions, {} unique regions",
+                    regions_info_ptr->size(),
+                    regions_snapshot.size()),
+                Errors::Coprocessor::BadRequest);
         return regions_snapshot;
     }
 
@@ -472,7 +477,8 @@ doLearnerRead(
             for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
             {
                 const auto & region_to_query = regions_info[region_idx];
-                // if region is unavailable, skip wait index.
+                // If region is unavailable, must skip wait index, cause the Raft index in `batch_read_index_result`
+                // could be invalid.
                 if (unavailable_regions.contains(region_to_query.region_id))
                     continue;
 
