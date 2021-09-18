@@ -25,7 +25,7 @@ public:
     String toString() const
     {
         String str;
-        for (auto & metric : metrics)
+        for (const auto & metric : metrics)
         {
             if (likely(metric.second.loop_times != 0))
             {
