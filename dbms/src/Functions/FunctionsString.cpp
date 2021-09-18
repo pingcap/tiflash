@@ -3281,7 +3281,7 @@ private:
         }
     }
 
-    static inline void copyDataToResult(
+    static void copyDataToResult(
         ColumnString::Chars_t & res_data,
         ColumnString::Offset & res_offset,
         const UInt8 * begin,
