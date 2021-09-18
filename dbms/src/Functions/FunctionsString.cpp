@@ -3063,7 +3063,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (executeSubStringIndex<UInt8>(block, arguments, result)
             || executeSubStringIndex<UInt16>(block, arguments, result)
