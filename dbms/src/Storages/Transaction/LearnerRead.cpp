@@ -208,7 +208,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             {
                 auto resp = kvrpcpb::ReadIndexResponse();
                 if (with_region_error)
-                    resp.mutable_region_error();
+                    resp.mutable_region_error()->mutable_region_not_found();
                 batch_read_index_result.emplace(req.context().region_id(), std::move(resp));
             }
         };
