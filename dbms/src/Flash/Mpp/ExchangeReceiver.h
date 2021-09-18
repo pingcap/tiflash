@@ -1,10 +1,11 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -282,7 +283,7 @@ private:
     State state;
     String err_msg;
 
-    std::shared_ptr<LogWithPrefix> log;
+    LogWithPrefixPtr log;
 
     void setUpConnection();
 
@@ -294,7 +295,7 @@ public:
         const ::tipb::ExchangeReceiver & exc,
         const ::mpp::TaskMeta & meta,
         size_t max_streams_,
-        const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+        const std::shared_ptr<LogWithPrefix> & log_)
         : rpc_context(std::move(rpc_context_))
         , pb_exchange_receiver(exc)
         , source_num(pb_exchange_receiver.encoded_task_meta_size())
@@ -304,9 +305,8 @@ public:
         , res_buffer(max_buffer_size)
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
         , state(NORMAL)
+        , log(getMPPTaskLog(log_, "ExchangeReceiver"))
     {
-        log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
-
         for (int i = 0; i < exc.field_types_size(); i++)
         {
             String name = "exchange_receiver_" + std::to_string(i);

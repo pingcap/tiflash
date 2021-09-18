@@ -21,7 +21,7 @@ public:
     ExpressionBlockInputStream(
         const BlockInputStreamPtr & input,
         const ExpressionActionsPtr & expression_,
-        const std::shared_ptr<LogWithPrefix> & log = nullptr);
+        const LogWithPrefixPtr & log);
 
     String getName() const override;
     Block getTotals() override;
@@ -32,7 +32,7 @@ protected:
 
 private:
     ExpressionActionsPtr expression;
-    const std::shared_ptr<LogWithPrefix> log;
+    const LogWithPrefixPtr log;
 };
 
 } // namespace DB
