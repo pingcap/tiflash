@@ -33,8 +33,10 @@ struct StringHashSetCell<StringKey16> : public HashTableCell<StringKey16, String
     // Zero means unoccupied cells in hash table. Use key with last word = 0 as
     // zero keys, because such keys are unrepresentable (no way to encode length).
     static bool isZero(const StringKey16 & key_, const HashTableNoState &)
-    { return key_.items[1] == 0; }
-    void setZero() { this->key.items[1] = 0; }
+    {
+        return key_ == 0;
+    }
+    void setZero() { this->key = 0; }
 };
 
 template <>
@@ -53,7 +55,9 @@ struct StringHashSetCell<StringKey24> : public HashTableCell<StringKey24, String
     // Zero means unoccupied cells in hash table. Use key with last word = 0 as
     // zero keys, because such keys are unrepresentable (no way to encode length).
     static bool isZero(const StringKey24 & key_, const HashTableNoState &)
-    { return key_.c == 0; }
+    {
+        return key_.c == 0;
+    }
     void setZero() { this->key.c = 0; }
 };
 
@@ -97,5 +101,4 @@ public:
         LookupResult it;
         Base::emplace(key_holder, it, inserted);
     }
-
 };

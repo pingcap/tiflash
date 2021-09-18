@@ -39,7 +39,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
             auto pack_filter = DMFilePackFilter::loadFrom(file,
                                                           index_cache,
                                                           hash_salt,
-                                                          range,
+                                                          {range},
                                                           EMPTY_FILTER,
                                                           {},
                                                           dm_context->db_context.getFileProvider(),
@@ -91,7 +91,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
         auto file_id = context.storage_pool.data().getNormalPageId(ref_id);
         auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
-        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path);
+        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
         stable->files.push_back(dmfile);
     }
 
@@ -195,7 +195,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                                                                        context.hash_salt,
                                                                                        file,
                                                                                        read_columns,
-                                                                                       rowkey_range,
+                                                                                       RowKeyRanges{rowkey_range},
                                                                                        nullptr,
                                                                                        nullptr,
                                                                                        IdSetPtr{},
@@ -228,7 +228,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         auto pack_filter = DMFilePackFilter::loadFrom(file,
                                                       context.db_context.getGlobalContext().getMinMaxIndexCache(),
                                                       context.hash_salt,
-                                                      rowkey_range,
+                                                      {rowkey_range},
                                                       EMPTY_FILTER,
                                                       {},
                                                       context.db_context.getFileProvider(),
@@ -310,7 +310,7 @@ void StableValueSpace::drop(const FileProviderPtr & file_provider)
 
 SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext & context, //
                                                                         const ColumnDefines & read_columns,
-                                                                        const RowKeyRange & rowkey_range,
+                                                                        const RowKeyRanges & rowkey_ranges,
                                                                         const RSOperatorPtr & filter,
                                                                         UInt64 max_data_version,
                                                                         size_t expected_block_size,
@@ -328,7 +328,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             context.hash_salt,
             stable->files[i],
             read_columns,
-            rowkey_range,
+            rowkey_ranges,
             filter,
             column_caches[i],
             IdSetPtr{},
@@ -356,7 +356,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
         auto filter = DMFilePackFilter::loadFrom(f, //
                                                  nullptr,
                                                  context.hash_salt,
-                                                 range,
+                                                 {range},
                                                  RSOperatorPtr{},
                                                  IdSetPtr{},
                                                  context.db_context.getFileProvider(),

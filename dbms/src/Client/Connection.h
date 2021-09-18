@@ -46,7 +46,17 @@ class Connection : private boost::noncopyable
     friend class MultiplexedConnections;
 
 public:
-    Connection(const String & host_, UInt16 port_, const String & default_database_, const String & user_, const String & password_, const ConnectionTimeouts & timeouts_, const String & client_name_ = "client", Protocol::Compression compression_ = Protocol::Compression::Enable, Protocol::Secure secure_ = Protocol::Secure::Disable, Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0))
+    Connection(
+        const String & host_,
+        UInt16 port_,
+        const String & default_database_,
+        const String & user_,
+        const String & password_,
+        const ConnectionTimeouts & timeouts_,
+        const String & client_name_ = "client",
+        Protocol::Compression compression_ = Protocol::Compression::Enable,
+        Protocol::Secure secure_ = Protocol::Secure::Disable,
+        Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0))
         : host(host_)
         , port(port_)
         , default_database(default_database_)
@@ -68,7 +78,18 @@ public:
         setDescription();
     }
 
-    Connection(const String & host_, UInt16 port_, const Poco::Net::SocketAddress & resolved_address_, const String & default_database_, const String & user_, const String & password_, const ConnectionTimeouts & timeouts_, const String & client_name_ = "client", Protocol::Compression compression_ = Protocol::Compression::Enable, Protocol::Secure secure_ = Protocol::Secure::Disable, Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0))
+    Connection(
+        const String & host_,
+        UInt16 port_,
+        const Poco::Net::SocketAddress & resolved_address_,
+        const String & default_database_,
+        const String & user_,
+        const String & password_,
+        const ConnectionTimeouts & timeouts_,
+        const String & client_name_ = "client",
+        Protocol::Compression compression_ = Protocol::Compression::Enable,
+        Protocol::Secure secure_ = Protocol::Secure::Disable,
+        Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0))
         : host(host_)
         , port(port_)
         , default_database(default_database_)

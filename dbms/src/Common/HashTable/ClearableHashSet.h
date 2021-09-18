@@ -1,7 +1,8 @@
 #pragma once
 
-#include <type_traits>
 #include <Common/HashTable/HashSet.h>
+
+#include <type_traits>
 
 
 /** A hash table that allows you to clear the table in O(1).
@@ -18,12 +19,12 @@ struct ClearableHashSetState
     UInt32 version = 1;
 
     /// Serialization, in binary and text form.
-    void write(DB::WriteBuffer & wb) const         { DB::writeBinary(version, wb); }
-    void writeText(DB::WriteBuffer & wb) const     { DB::writeText(version, wb); }
+    void write(DB::WriteBuffer & wb) const { DB::writeBinary(version, wb); }
+    void writeText(DB::WriteBuffer & wb) const { DB::writeText(version, wb); }
 
     /// Deserialization, in binary and text form.
-    void read(DB::ReadBuffer & rb)                 { DB::readBinary(version, rb); }
-    void readText(DB::ReadBuffer & rb)             { DB::readText(version, rb); }
+    void read(DB::ReadBuffer & rb) { DB::readBinary(version, rb); }
+    void readText(DB::ReadBuffer & rb) { DB::readText(version, rb); }
 };
 
 
@@ -44,17 +45,18 @@ struct ClearableHashTableCell : public BaseCell
     /// Do I need to store the zero key separately (that is, can a zero key be inserted into the hash table).
     static constexpr bool need_zero_value_storage = false;
 
-    ClearableHashTableCell() {} //-V730
-    ClearableHashTableCell(const Key & key_, const State & state) : BaseCell(key_, state), version(state.version) {}
+    ClearableHashTableCell() = default;
+    ClearableHashTableCell(const Key & key_, const State & state)
+        : BaseCell(key_, state)
+        , version(state.version)
+    {}
 };
 
-template
-<
+template <
     typename Key,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
+    typename Allocator = HashTableAllocator>
 class ClearableHashSet : public HashTable<Key, ClearableHashTableCell<Key, HashTableCell<Key, Hash, ClearableHashSetState>>, Hash, Grower, Allocator>
 {
 public:
@@ -68,14 +70,12 @@ public:
     }
 };
 
-template
-<
+template <
     typename Key,
     typename Hash = DefaultHash<Key>,
     typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
->
-class ClearableHashSetWithSavedHash: public HashTable<Key, ClearableHashTableCell<Key, HashSetCellWithSavedHash<Key, Hash, ClearableHashSetState>>, Hash, Grower, Allocator>
+    typename Allocator = HashTableAllocator>
+class ClearableHashSetWithSavedHash : public HashTable<Key, ClearableHashTableCell<Key, HashSetCellWithSavedHash<Key, Hash, ClearableHashSetState>>, Hash, Grower, Allocator>
 {
 public:
     void clear()

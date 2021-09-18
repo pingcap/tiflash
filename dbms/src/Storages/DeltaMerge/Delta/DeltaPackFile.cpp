@@ -22,7 +22,7 @@ void DeltaPackFile::calculateStat(const DMContext & context)
     auto hash_salt = context.hash_salt;
 
     auto pack_filter
-        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, segment_range, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
+        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, {segment_range}, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
@@ -54,7 +54,7 @@ DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext & context, //
     auto file_id = context.storage_pool.data().getNormalPageId(file_ref_id);
     auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
-    auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path);
+    auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
     auto dp_file = new DeltaPackFile(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<DeltaPackFile>(dp_file);
@@ -71,7 +71,7 @@ void DPFileReader::initStream()
                                                            context.hash_salt,
                                                            pack.getFile(),
                                                            *col_defs,
-                                                           pack.segment_range,
+                                                           RowKeyRanges{pack.segment_range},
                                                            RSOperatorPtr{},
                                                            ColumnCachePtr{},
                                                            IdSetPtr{});

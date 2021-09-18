@@ -6,13 +6,16 @@
 
 namespace DB
 {
-
 /** Merging consecutive blocks of stream to specified minimum size.
   */
 class SquashingBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    SquashingBlockInputStream(const BlockInputStreamPtr & src, size_t min_block_size_rows, size_t min_block_size_bytes);
+    SquashingBlockInputStream(
+        const BlockInputStreamPtr & src,
+        size_t min_block_size_rows,
+        size_t min_block_size_bytes,
+        const LogWithPrefixPtr & log_);
 
     String getName() const override { return "Squashing"; }
 
@@ -24,6 +27,7 @@ protected:
 private:
     SquashingTransform transform;
     bool all_read = false;
+    const LogWithPrefixPtr log;
 };
 
-}
+} // namespace DB

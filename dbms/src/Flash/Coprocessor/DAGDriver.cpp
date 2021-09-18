@@ -68,7 +68,7 @@ try
     auto start_time = Clock::now();
     DAGContext dag_context(dag_request);
     context.setDAGContext(&dag_context);
-    DAGQuerySource dag(context, regions, retry_regions, dag_request, batch);
+    DAGQuerySource dag(context, regions, retry_regions, dag_request, std::make_shared<LogWithPrefix>(&Poco::Logger::get("CoprocessorHandler"), ""), batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
@@ -106,16 +106,20 @@ try
             }
             writer->Write(response);
         }
+
         auto streaming_writer = std::make_shared<StreamWriter>(writer);
         TiDB::TiDBCollators collators;
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(streaming_writer,
-                                                                                                                           std::vector<Int64>(),
-                                                                                                                           collators,
-                                                                                                                           tipb::ExchangeType::PassThrough,
-                                                                                                                           context.getSettings().dag_records_per_chunk,
-                                                                                                                           dag.getEncodeType(),
-                                                                                                                           dag.getResultFieldTypes(),
-                                                                                                                           dag_context);
+
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(
+            streaming_writer,
+            std::vector<Int64>(),
+            collators,
+            tipb::ExchangeType::PassThrough,
+            context.getSettings().dag_records_per_chunk,
+            dag.getEncodeType(),
+            dag.getResultFieldTypes(),
+            dag_context,
+            nullptr);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }
@@ -137,10 +141,11 @@ try
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
-        LOG_DEBUG(log,
-                  __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
-                                      << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
-                                      << " bytes.");
+        LOG_DEBUG(
+            log,
+            __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
+                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
+                                << " bytes.");
 
         if constexpr (!batch)
         {

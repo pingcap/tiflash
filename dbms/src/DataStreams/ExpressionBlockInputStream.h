@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class ExpressionActions;
 
 /** Executes a certain expression over the block.
@@ -19,7 +18,10 @@ private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 public:
-    ExpressionBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_);
+    ExpressionBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const ExpressionActionsPtr & expression_,
+        const LogWithPrefixPtr & log);
 
     String getName() const override;
     Block getTotals() override;
@@ -30,6 +32,7 @@ protected:
 
 private:
     ExpressionActionsPtr expression;
+    const LogWithPrefixPtr log;
 };
 
-}
+} // namespace DB

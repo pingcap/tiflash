@@ -16,11 +16,16 @@ struct FixedClearableHashMapCell
     UInt32 version;
     Mapped mapped;
 
-    FixedClearableHashMapCell() {}
-    FixedClearableHashMapCell(const Key &, const State & state) : version(state.version) {}
-    FixedClearableHashMapCell(const value_type & value_, const State & state) : version(state.version), mapped(value_.second) {}
+    FixedClearableHashMapCell() = default;
+    FixedClearableHashMapCell(const Key &, const State & state)
+        : version(state.version)
+    {}
+    FixedClearableHashMapCell(const value_type & value_, const State & state)
+        : version(state.version)
+        , mapped(value_.second)
+    {}
 
-    const VoidKey getKey() const { return {}; }
+    VoidKey getKey() const { return {}; }
     Mapped & getMapped() { return mapped; }
     const Mapped & getMapped() const { return mapped; }
 
@@ -29,8 +34,11 @@ struct FixedClearableHashMapCell
 
     struct CellExt
     {
-        CellExt() {}
-        CellExt(Key && key_, FixedClearableHashMapCell * ptr_) : key(key_), ptr(ptr_) {}
+        CellExt() = default;
+        CellExt(Key && key_, FixedClearableHashMapCell * ptr_)
+            : key(key_)
+            , ptr(ptr_)
+        {}
         void update(Key && key_, FixedClearableHashMapCell * ptr_)
         {
             key = key_;
@@ -41,7 +49,7 @@ struct FixedClearableHashMapCell
         const Key & getKey() const { return key; }
         Mapped & getMapped() { return ptr->mapped; }
         const Mapped & getMapped() const { return *ptr->mapped; }
-        const value_type getValue() const { return {key, *ptr->mapped}; }
+        value_type getValue() const { return {key, *ptr->mapped}; }
     };
 };
 

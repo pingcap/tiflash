@@ -1,12 +1,11 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB
 {
-
-
 /** Combines several sources into one.
   * Unlike UnionBlockInputStream, it does this sequentially.
   * Blocks of different sources are not interleaved with each other.
@@ -14,7 +13,8 @@ namespace DB
 class ConcatBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ConcatBlockInputStream(BlockInputStreams inputs_)
+    ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_)
+        : log(getMPPTaskLog(log_, getName()))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -53,6 +53,8 @@ protected:
 
 private:
     BlockInputStreams::iterator current_stream;
+
+    LogWithPrefixPtr log;
 };
 
 } // namespace DB

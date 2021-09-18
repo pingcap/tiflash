@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Use ready file descriptor. Does not open or close a file.
   */
 class WriteBufferFromFileDescriptor : public WriteBufferFromFileBase
@@ -50,4 +49,4 @@ private:
     void doTruncate(off_t length) override;
 };
 
-}
+} // namespace DB

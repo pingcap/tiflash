@@ -373,7 +373,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         root_tm.set_partition_id(-1);
         std::shared_ptr<ExchangeReceiver> exchange_receiver
             = std::make_shared<ExchangeReceiver>(context, tipb_exchange_receiver, root_tm, 10);
-        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver);
+        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, nullptr);
         return ret;
     }
     else
@@ -1269,6 +1269,12 @@ struct Aggregation : public Executor
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeString);
                 ft->set_flag(1);
+            }
+            else if (func->name == "group_concat")
+            {
+                agg_func->set_tp(tipb::GroupConcat);
+                auto ft = agg_func->mutable_field_type();
+                ft->set_tp(TiDB::TypeString);
             }
             // TODO: Other agg func.
             else

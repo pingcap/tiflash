@@ -12,7 +12,7 @@ struct StringHashMapCell : public HashMapCell<Key, TMapped, StringHashTableHash,
     using Base::Base;
     static constexpr bool need_zero_value_storage = false;
     // external
-    const StringRef getKey() const { return toStringRef(this->value.first); }
+    StringRef getKey() const { return toStringRef(this->value.first); }
     // internal
     static const Key & getKey(const value_type & value_) { return value_.first; }
 };
@@ -32,7 +32,7 @@ struct StringHashMapCell<StringKey16, TMapped> : public HashMapCell<StringKey16,
     void setZero() { this->value.first.high = 0; }
 
     // external
-    const StringRef getKey() const { return toStringRef(this->value.first); }
+    StringRef getKey() const { return toStringRef(this->value.first); }
     // internal
     static const StringKey16 & getKey(const value_type & value_) { return value_.first; }
 };
@@ -49,11 +49,13 @@ struct StringHashMapCell<StringKey24, TMapped> : public HashMapCell<StringKey24,
     // Zero means unoccupied cells in hash table. Use key with last word = 0 as
     // zero keys, because such keys are unrepresentable (no way to encode length).
     static bool isZero(const StringKey24 & key, const HashTableNoState &)
-    { return key.c == 0; }
+    {
+        return key.c == 0;
+    }
     void setZero() { this->value.first.c = 0; }
 
     // external
-    const StringRef getKey() const { return toStringRef(this->value.first); }
+    StringRef getKey() const { return toStringRef(this->value.first); }
     // internal
     static const StringKey24 & getKey(const value_type & value_) { return value_.first; }
 };

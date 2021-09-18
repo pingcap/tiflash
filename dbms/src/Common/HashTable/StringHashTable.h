@@ -160,16 +160,18 @@ template <typename Mapped>
 struct StringHashTableLookupResult
 {
     Mapped * mapped_ptr;
-    StringHashTableLookupResult() {}
-    StringHashTableLookupResult(Mapped * mapped_ptr_) : mapped_ptr(mapped_ptr_) {}
-    StringHashTableLookupResult(std::nullptr_t) {}
-    const VoidKey getKey() const { return {}; }
+    StringHashTableLookupResult() = default;
+    StringHashTableLookupResult(Mapped * mapped_ptr_) // NOLINT(google-explicit-constructor)
+        : mapped_ptr(mapped_ptr_)
+    {}
+    StringHashTableLookupResult(std::nullptr_t) {} // NOLINT(google-explicit-constructor)
+    VoidKey getKey() const { return {}; }
     auto & getMapped() { return *mapped_ptr; }
     auto & operator*() { return *this; }
     auto & operator*() const { return *this; }
     auto * operator->() { return this; }
     auto * operator->() const { return this; }
-    operator bool() const { return mapped_ptr; }
+    operator bool() const { return mapped_ptr; } // NOLINT(google-explicit-constructor)
     friend bool operator==(const StringHashTableLookupResult & a, const std::nullptr_t &) { return !a.mapped_ptr; }
     friend bool operator==(const std::nullptr_t &, const StringHashTableLookupResult & b) { return !b.mapped_ptr; }
     friend bool operator!=(const StringHashTableLookupResult & a, const std::nullptr_t &) { return a.mapped_ptr; }
@@ -214,7 +216,7 @@ public:
 
     StringHashTable() = default;
 
-    StringHashTable(size_t reserve_for_num_elements)
+    explicit StringHashTable(size_t reserve_for_num_elements)
         : m1{reserve_for_num_elements / 4}
         , m2{reserve_for_num_elements / 4}
         , m3{reserve_for_num_elements / 4}
@@ -232,7 +234,6 @@ public:
 
     ~StringHashTable() = default;
 
-public:
     // Dispatch is written in a way that maximizes the performance:
     // 1. Always memcpy 8 times bytes
     // 2. Use switch case extension to generate fast dispatching table
@@ -269,45 +270,45 @@ public:
         };
         switch ((sz - 1) >> 3)
         {
-            case 0: // 1..8 bytes
-            {
-                // first half page
-                if ((reinterpret_cast<uintptr_t>(p) & 2048) == 0)
-                {
-                    memcpy(&n[0], p, 8);
-                    n[0] &= -1ul >> s;
-                }
-                else
-                {
-                    const char * lp = x.data + x.size - 8;
-                    memcpy(&n[0], lp, 8);
-                    n[0] >>= s;
-                }
-                keyHolderDiscardKey(key_holder);
-                return func(self.m1, k8, hash(k8));
-            }
-            case 1: // 9..16 bytes
+        case 0: // 1..8 bytes
+        {
+            // first half page
+            if ((reinterpret_cast<uintptr_t>(p) & 2048) == 0)
             {
                 memcpy(&n[0], p, 8);
-                const char * lp = x.data + x.size - 8;
-                memcpy(&n[1], lp, 8);
-                n[1] >>= s;
-                keyHolderDiscardKey(key_holder);
-                return func(self.m2, k16, hash(k16));
+                n[0] &= -1ul >> s;
             }
-            case 2: // 17..24 bytes
+            else
             {
-                memcpy(&n[0], p, 16);
                 const char * lp = x.data + x.size - 8;
-                memcpy(&n[2], lp, 8);
-                n[2] >>= s;
-                keyHolderDiscardKey(key_holder);
-                return func(self.m3, k24, hash(k24));
+                memcpy(&n[0], lp, 8);
+                n[0] >>= s;
             }
-            default: // >= 25 bytes
-            {
-                return func(self.ms, std::forward<KeyHolder>(key_holder), hash(x));
-            }
+            keyHolderDiscardKey(key_holder);
+            return func(self.m1, k8, hash(k8));
+        }
+        case 1: // 9..16 bytes
+        {
+            memcpy(&n[0], p, 8);
+            const char * lp = x.data + x.size - 8;
+            memcpy(&n[1], lp, 8);
+            n[1] >>= s;
+            keyHolderDiscardKey(key_holder);
+            return func(self.m2, k16, hash(k16));
+        }
+        case 2: // 17..24 bytes
+        {
+            memcpy(&n[0], p, 16);
+            const char * lp = x.data + x.size - 8;
+            memcpy(&n[2], lp, 8);
+            n[2] >>= s;
+            keyHolderDiscardKey(key_holder);
+            return func(self.m3, k24, hash(k24));
+        }
+        default: // >= 25 bytes
+        {
+            return func(self.ms, std::forward<KeyHolder>(key_holder), hash(x));
+        }
         }
     }
 
@@ -317,7 +318,9 @@ public:
         bool & inserted;
 
         EmplaceCallable(LookupResult & mapped_, bool & inserted_)
-            : mapped(mapped_), inserted(inserted_) {}
+            : mapped(mapped_)
+            , inserted(inserted_)
+        {}
 
         template <typename Map, typename KeyHolder>
         void ALWAYS_INLINE operator()(Map & map, KeyHolder && key_holder, size_t hash)

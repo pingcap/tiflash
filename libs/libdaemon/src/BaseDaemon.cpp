@@ -1,81 +1,79 @@
-#include <daemon/BaseDaemon.h>
-
 #include <Common/Config/ConfigProcessor.h>
-
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/fcntl.h>
-#include <sys/time.h>
-#include <errno.h>
-#include <string.h>
-#include <signal.h>
 #include <cxxabi.h>
+#include <daemon/BaseDaemon.h>
+#include <errno.h>
 #include <execinfo.h>
+#include <signal.h>
+#include <string.h>
+#include <sys/fcntl.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 #if USE_UNWIND
-    #define UNW_LOCAL_ONLY
-    #include <libunwind.h>
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
 #endif
 
 #ifdef __APPLE__
 // ucontext is not available without _XOPEN_SOURCE
 #define _XOPEN_SOURCE
 #endif
-#include <ucontext.h>
-
-#include <typeinfo>
-#include <common/logger_useful.h>
-#include <common/ErrorHandlers.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <memory>
-#include <Poco/Observer.h>
-#include <Poco/Logger.h>
-#include <Poco/AutoPtr.h>
-#include <Poco/SplitterChannel.h>
-#include <Poco/Ext/LevelFilterChannel.h>
-#include <Poco/Ext/ThreadNumber.h>
-#include <Poco/FormattingChannel.h>
-#include <Poco/PatternFormatter.h>
-#include <Poco/ConsoleChannel.h>
-#include <Poco/File.h>
-#include <Poco/Path.h>
-#include <Poco/Message.h>
-#include <Poco/String.h>
-#include <Poco/Util/AbstractConfiguration.h>
-#include <Poco/Util/XMLConfiguration.h>
-#include <Poco/Util/MapConfiguration.h>
-#include <Poco/Util/Application.h>
-#include <Poco/Exception.h>
-#include <Poco/ErrorHandler.h>
-#include <Poco/NumberFormatter.h>
-#include <Poco/Condition.h>
-#include <Poco/SyslogChannel.h>
-#include <Common/Exception.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Common/getMultipleKeysFromConfig.h>
-#include <Common/setThreadName.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/Exception.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <Common/getMultipleKeysFromConfig.h>
+#include <Common/setThreadName.h>
+#include <IO/ReadBufferFromFileDescriptor.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+#include <IO/WriteHelpers.h>
+#include <Poco/AutoPtr.h>
+#include <Poco/Condition.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/ErrorHandler.h>
+#include <Poco/Exception.h>
+#include <Poco/Ext/LevelFilterChannel.h>
+#include <Poco/Ext/ThreadNumber.h>
+#include <Poco/File.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
+#include <Poco/Message.h>
+#include <Poco/NumberFormatter.h>
+#include <Poco/Observer.h>
+#include <Poco/Path.h>
+#include <Poco/PatternFormatter.h>
+#include <Poco/SplitterChannel.h>
+#include <Poco/String.h>
+#include <Poco/SyslogChannel.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <Poco/Util/Application.h>
+#include <Poco/Util/MapConfiguration.h>
+#include <Poco/Util/XMLConfiguration.h>
+#include <common/ErrorHandlers.h>
+#include <common/logger_useful.h>
 #include <daemon/OwnPatternFormatter.h>
+#include <sys/resource.h>
+#include <sys/time.h>
+#include <ucontext.h>
+
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <typeinfo>
 
 
-using Poco::Logger;
 using Poco::AutoPtr;
-using Poco::Observer;
-using Poco::FormattingChannel;
-using Poco::SplitterChannel;
 using Poco::ConsoleChannel;
 using Poco::FileChannel;
-using Poco::Path;
+using Poco::FormattingChannel;
+using Poco::Logger;
 using Poco::Message;
+using Poco::Observer;
+using Poco::Path;
+using Poco::SplitterChannel;
 using Poco::Util::AbstractConfiguration;
 
 
@@ -146,7 +144,7 @@ static void call_default_signal_handler(int sig)
 using ThreadNumber = decltype(Poco::ThreadNumber::get());
 static const size_t buf_size = sizeof(int) + sizeof(siginfo_t) + sizeof(ucontext_t) + sizeof(ThreadNumber);
 
-using signal_function = void(int, siginfo_t*, void*);
+using signal_function = void(int, siginfo_t *, void *);
 
 static void writeSignalIDtoSignalPipe(int sig)
 {
@@ -213,9 +211,9 @@ size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, ucontext_t & co
     unw_context.uc_stack = context.uc_stack;
     unw_context.uc_sigmask = context.uc_sigmask;
     std::memcpy(&unw_context.uc_mcontext, &context.uc_mcontext, sizeof(unw_context.uc_mcontext));
-    unw_context_t* context_ptr = &unw_context;
+    unw_context_t * context_ptr = &unw_context;
 #else
-    ucontext_t* context_ptr = &context;
+    ucontext_t * context_ptr = &context;
 #endif
 
     if (unw_init_local2(&cursor, context_ptr, UNW_INIT_SIGNAL_FRAME) < 0)
@@ -226,7 +224,7 @@ size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, ucontext_t & co
     {
         unw_word_t ip;
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
-        out_frames[i] = reinterpret_cast<void*>(ip);
+        out_frames[i] = reinterpret_cast<void *>(ip);
 
         /// NOTE This triggers "AddressSanitizer: stack-buffer-overflow". Looks like false positive.
         /// It's Ok, because we use this method if the program is crashed nevertheless.
@@ -292,9 +290,7 @@ public:
 
                 onTerminate(message, thread_num);
             }
-            else if (sig == SIGINT ||
-                sig == SIGQUIT ||
-                sig == SIGTERM)
+            else if (sig == SIGINT || sig == SIGQUIT || sig == SIGTERM)
             {
                 daemon.handleSignal(sig);
             }
@@ -327,162 +323,163 @@ private:
     {
         LOG_ERROR(log, "########################################");
         LOG_ERROR(log, "(from thread " << thread_num << ") "
-            << "Received signal " << strsignal(sig) << " (" << sig << ")" << ".");
+                                       << "Received signal " << strsignal(sig) << " (" << sig << ")"
+                                       << ".");
 
         void * caller_address = nullptr;
 
 #if defined(__x86_64__)
-        /// Get the address at the time the signal was raised from the RIP (x86-64)
-        #if defined(__FreeBSD__)
+/// Get the address at the time the signal was raised from the RIP (x86-64)
+#if defined(__FreeBSD__)
         caller_address = reinterpret_cast<void *>(context.uc_mcontext.mc_rip);
-        #elif defined(__APPLE__)
+#elif defined(__APPLE__)
         caller_address = reinterpret_cast<void *>(context.uc_mcontext->__ss.__rip);
-        #else
+#else
         caller_address = reinterpret_cast<void *>(context.uc_mcontext.gregs[REG_RIP]);
         auto err_mask = context.uc_mcontext.gregs[REG_ERR];
-        #endif
+#endif
 #elif defined(__aarch64__)
-        #if defined(__arm64__) || defined(__arm64) /// Apple arm cpu
-            caller_address = reinterpret_cast<void *>(context.uc_mcontext->__ss.__pc);
-        #else /// arm server
-            caller_address = reinterpret_cast<void *>(context.uc_mcontext.pc);
-        #endif
+#if defined(__arm64__) || defined(__arm64) /// Apple arm cpu
+        caller_address = reinterpret_cast<void *>(context.uc_mcontext->__ss.__pc);
+#else /// arm server
+        caller_address = reinterpret_cast<void *>(context.uc_mcontext.pc);
+#endif
 #endif
 
         switch (sig)
         {
-            case SIGSEGV:
-            {
-                /// Print info about address and reason.
-                if (nullptr == info.si_addr)
-                    LOG_ERROR(log, "Address: NULL pointer.");
-                else
-                    LOG_ERROR(log, "Address: " << info.si_addr);
+        case SIGSEGV:
+        {
+            /// Print info about address and reason.
+            if (nullptr == info.si_addr)
+                LOG_ERROR(log, "Address: NULL pointer.");
+            else
+                LOG_ERROR(log, "Address: " << info.si_addr);
 
 #if defined(__x86_64__) && !defined(__FreeBSD__) && !defined(__APPLE__)
-                if ((err_mask & 0x02))
-                    LOG_ERROR(log, "Access: write.");
-                else
-                    LOG_ERROR(log, "Access: read.");
+            if ((err_mask & 0x02))
+                LOG_ERROR(log, "Access: write.");
+            else
+                LOG_ERROR(log, "Access: read.");
 #endif
 
-                switch (info.si_code)
-                {
-                    case SEGV_ACCERR:
-                        LOG_ERROR(log, "Attempted access has violated the permissions assigned to the memory area.");
-                        break;
-                    case SEGV_MAPERR:
-                        LOG_ERROR(log, "Address not mapped to object.");
-                        break;
-                    default:
-                        LOG_ERROR(log, "Unknown si_code.");
-                        break;
-                }
+            switch (info.si_code)
+            {
+            case SEGV_ACCERR:
+                LOG_ERROR(log, "Attempted access has violated the permissions assigned to the memory area.");
+                break;
+            case SEGV_MAPERR:
+                LOG_ERROR(log, "Address not mapped to object.");
+                break;
+            default:
+                LOG_ERROR(log, "Unknown si_code.");
                 break;
             }
+            break;
+        }
 
-            case SIGBUS:
+        case SIGBUS:
+        {
+            switch (info.si_code)
             {
-                switch (info.si_code)
-                {
-                    case BUS_ADRALN:
-                        LOG_ERROR(log, "Invalid address alignment.");
-                        break;
-                    case BUS_ADRERR:
-                        LOG_ERROR(log, "Non-existant physical address.");
-                        break;
-                    case BUS_OBJERR:
-                        LOG_ERROR(log, "Object specific hardware error.");
-                        break;
+            case BUS_ADRALN:
+                LOG_ERROR(log, "Invalid address alignment.");
+                break;
+            case BUS_ADRERR:
+                LOG_ERROR(log, "Non-existant physical address.");
+                break;
+            case BUS_OBJERR:
+                LOG_ERROR(log, "Object specific hardware error.");
+                break;
 
-                    // Linux specific
+                // Linux specific
 #if defined(BUS_MCEERR_AR)
-                    case BUS_MCEERR_AR:
-                        LOG_ERROR(log, "Hardware memory error: action required.");
-                        break;
+            case BUS_MCEERR_AR:
+                LOG_ERROR(log, "Hardware memory error: action required.");
+                break;
 #endif
 #if defined(BUS_MCEERR_AO)
-                    case BUS_MCEERR_AO:
-                        LOG_ERROR(log, "Hardware memory error: action optional.");
-                        break;
+            case BUS_MCEERR_AO:
+                LOG_ERROR(log, "Hardware memory error: action optional.");
+                break;
 #endif
 
-                    default:
-                        LOG_ERROR(log, "Unknown si_code.");
-                        break;
-                }
+            default:
+                LOG_ERROR(log, "Unknown si_code.");
                 break;
             }
+            break;
+        }
 
-            case SIGILL:
+        case SIGILL:
+        {
+            switch (info.si_code)
             {
-                switch (info.si_code)
-                {
-                    case ILL_ILLOPC:
-                        LOG_ERROR(log, "Illegal opcode.");
-                        break;
-                    case ILL_ILLOPN:
-                        LOG_ERROR(log, "Illegal operand.");
-                        break;
-                    case ILL_ILLADR:
-                        LOG_ERROR(log, "Illegal addressing mode.");
-                        break;
-                    case ILL_ILLTRP:
-                        LOG_ERROR(log, "Illegal trap.");
-                        break;
-                    case ILL_PRVOPC:
-                        LOG_ERROR(log, "Privileged opcode.");
-                        break;
-                    case ILL_PRVREG:
-                        LOG_ERROR(log, "Privileged register.");
-                        break;
-                    case ILL_COPROC:
-                        LOG_ERROR(log, "Coprocessor error.");
-                        break;
-                    case ILL_BADSTK:
-                        LOG_ERROR(log, "Internal stack error.");
-                        break;
-                    default:
-                        LOG_ERROR(log, "Unknown si_code.");
-                        break;
-                }
+            case ILL_ILLOPC:
+                LOG_ERROR(log, "Illegal opcode.");
+                break;
+            case ILL_ILLOPN:
+                LOG_ERROR(log, "Illegal operand.");
+                break;
+            case ILL_ILLADR:
+                LOG_ERROR(log, "Illegal addressing mode.");
+                break;
+            case ILL_ILLTRP:
+                LOG_ERROR(log, "Illegal trap.");
+                break;
+            case ILL_PRVOPC:
+                LOG_ERROR(log, "Privileged opcode.");
+                break;
+            case ILL_PRVREG:
+                LOG_ERROR(log, "Privileged register.");
+                break;
+            case ILL_COPROC:
+                LOG_ERROR(log, "Coprocessor error.");
+                break;
+            case ILL_BADSTK:
+                LOG_ERROR(log, "Internal stack error.");
+                break;
+            default:
+                LOG_ERROR(log, "Unknown si_code.");
                 break;
             }
+            break;
+        }
 
-            case SIGFPE:
+        case SIGFPE:
+        {
+            switch (info.si_code)
             {
-                switch (info.si_code)
-                {
-                    case FPE_INTDIV:
-                        LOG_ERROR(log, "Integer divide by zero.");
-                        break;
-                    case FPE_INTOVF:
-                        LOG_ERROR(log, "Integer overflow.");
-                        break;
-                    case FPE_FLTDIV:
-                        LOG_ERROR(log, "Floating point divide by zero.");
-                        break;
-                    case FPE_FLTOVF:
-                        LOG_ERROR(log, "Floating point overflow.");
-                        break;
-                    case FPE_FLTUND:
-                        LOG_ERROR(log, "Floating point underflow.");
-                        break;
-                    case FPE_FLTRES:
-                        LOG_ERROR(log, "Floating point inexact result.");
-                        break;
-                    case FPE_FLTINV:
-                        LOG_ERROR(log, "Floating point invalid operation.");
-                        break;
-                    case FPE_FLTSUB:
-                        LOG_ERROR(log, "Subscript out of range.");
-                        break;
-                    default:
-                        LOG_ERROR(log, "Unknown si_code.");
-                        break;
-                }
+            case FPE_INTDIV:
+                LOG_ERROR(log, "Integer divide by zero.");
+                break;
+            case FPE_INTOVF:
+                LOG_ERROR(log, "Integer overflow.");
+                break;
+            case FPE_FLTDIV:
+                LOG_ERROR(log, "Floating point divide by zero.");
+                break;
+            case FPE_FLTOVF:
+                LOG_ERROR(log, "Floating point overflow.");
+                break;
+            case FPE_FLTUND:
+                LOG_ERROR(log, "Floating point underflow.");
+                break;
+            case FPE_FLTRES:
+                LOG_ERROR(log, "Floating point inexact result.");
+                break;
+            case FPE_FLTINV:
+                LOG_ERROR(log, "Floating point invalid operation.");
+                break;
+            case FPE_FLTSUB:
+                LOG_ERROR(log, "Subscript out of range.");
+                break;
+            default:
+                LOG_ERROR(log, "Unknown si_code.");
                 break;
             }
+            break;
+        }
         }
 
         if (already_printed_stack_trace)
@@ -610,7 +607,8 @@ static void terminate_handler()
         {
         }
 
-        log << "Stack trace:\n\n" << StackTrace().toString() << std::endl;
+        log << "Stack trace:\n\n"
+            << StackTrace().toString() << std::endl;
     }
     else
     {
@@ -771,7 +769,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         std::cerr << "Logging errors to " << errorlog_path << std::endl;
         Poco::AutoPtr<Poco::LevelFilterChannel> level = new Poco::LevelFilterChannel;
         level->setLevel(Message::PRIO_NOTICE);
-        Poco::AutoPtr<OwnPatternFormatter> pf = new OwnPatternFormatter(this);
+        Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> errorlog = new FormattingChannel(pf);
         error_log_file = new FileChannel;
@@ -821,7 +819,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     logger().setLevel(log_level);
 
     // Set level to all already created loggers
-    std::vector <std::string> names;
+    std::vector<std::string> names;
     Logger::root().names(names);
     for (const auto & name : names)
         Logger::root().get(name).setLevel(log_level);
@@ -834,8 +832,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     AbstractConfiguration::Keys levels;
     config.keys("logger.levels", levels);
 
-    if(!levels.empty())
-        for(AbstractConfiguration::Keys::iterator it = levels.begin(); it != levels.end(); ++it)
+    if (!levels.empty())
+        for (AbstractConfiguration::Keys::iterator it = levels.begin(); it != levels.end(); ++it)
             Logger::get(*it).setLevel(config.getString("logger.levels." + *it, "trace"));
 }
 
@@ -865,7 +863,7 @@ void BaseDaemon::initialize(Application & self)
         /// Test: -- --1=1 --1=2 --3 5 7 8 -9 10 -11=12 14= 15== --16==17 --=18 --19= --20 21 22 --23 --24 25 --26 -27 28 ---29=30 -- ----31 32 --33 3-4
         Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
         std::string key;
-        for(auto & arg : argv())
+        for (auto & arg : argv())
         {
             auto key_start = arg.find_first_not_of('-');
             auto pos_minus = arg.find('-');
@@ -908,7 +906,7 @@ void BaseDaemon::initialize(Application & self)
                 continue;
             std::string value;
             if (arg.size() > pos_eq)
-                value = arg.substr(pos_eq+1);
+                value = arg.substr(pos_eq + 1);
 
             map_config->setString(key, value);
             key = "";
@@ -955,12 +953,12 @@ void BaseDaemon::initialize(Application & self)
         if (setrlimit(RLIMIT_CORE, &rlim))
         {
             std::string message = "Cannot set max size of core file to " + std::to_string(rlim.rlim_cur);
-        #if !defined(ADDRESS_SANITIZER) && !defined(THREAD_SANITIZER) && !defined(MEMORY_SANITIZER) && !defined(SANITIZER)
+#if !defined(ADDRESS_SANITIZER) && !defined(THREAD_SANITIZER) && !defined(MEMORY_SANITIZER) && !defined(SANITIZER)
             throw Poco::Exception(message);
-        #else
+#else
             /// It doesn't work under address/thread sanitizer. http://lists.llvm.org/pipermail/llvm-bugs/2013-April/027880.html
             std::cerr << message << std::endl;
-        #endif
+#endif
         }
     }
 
@@ -1051,8 +1049,7 @@ void BaseDaemon::initialize(Application & self)
 
     /// Setup signal handlers.
     auto add_signal_handler =
-        [](const std::vector<int> & signals, signal_function handler)
-        {
+        [](const std::vector<int> & signals, signal_function handler) {
             struct sigaction sa;
             memset(&sa, 0, sizeof(sa));
             sa.sa_sigaction = handler;
@@ -1100,18 +1097,18 @@ void BaseDaemon::logRevision() const
 }
 
 /// Used for exitOnTaskError()
-void BaseDaemon::handleNotification(Poco::TaskFailedNotification *_tfn)
+void BaseDaemon::handleNotification(Poco::TaskFailedNotification * _tfn)
 {
     task_failed = true;
     AutoPtr<Poco::TaskFailedNotification> fn(_tfn);
-    Logger *lg = &(logger());
+    Logger * lg = &(logger());
     LOG_ERROR(lg, "Task '" << fn->task()->name() << "' failed. Daemon is shutting down. Reason - " << fn->reason().displayText());
     ServerApplication::terminate();
 }
 
-void BaseDaemon::defineOptions(Poco::Util::OptionSet& _options)
+void BaseDaemon::defineOptions(Poco::Util::OptionSet & _options)
 {
-    Poco::Util::ServerApplication::defineOptions (_options);
+    Poco::Util::ServerApplication::defineOptions(_options);
 
     _options.addOption(
         Poco::Util::Option("config-file", "C", "load configuration from a given file")
@@ -1171,8 +1168,8 @@ void BaseDaemon::PID::seed(const std::string & file_)
     }
 
     int fd = open(file.c_str(),
-        O_CREAT | O_EXCL | O_WRONLY,
-        S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+                  O_CREAT | O_EXCL | O_WRONLY,
+                  S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
     if (-1 == fd)
     {
@@ -1209,9 +1206,7 @@ void BaseDaemon::PID::clear()
 
 void BaseDaemon::handleSignal(int signal_id)
 {
-    if (signal_id == SIGINT ||
-        signal_id == SIGQUIT ||
-        signal_id == SIGTERM)
+    if (signal_id == SIGINT || signal_id == SIGQUIT || signal_id == SIGTERM)
     {
         std::unique_lock<std::mutex> lock(signal_handler_mutex);
         {
@@ -1242,6 +1237,5 @@ void BaseDaemon::onInterruptSignals(int signal_id)
 void BaseDaemon::waitForTerminationRequest()
 {
     std::unique_lock<std::mutex> lock(signal_handler_mutex);
-    signal_event.wait(lock, [this](){ return terminate_signals_counter > 0; });
+    signal_event.wait(lock, [this]() { return terminate_signals_counter > 0; });
 }
-

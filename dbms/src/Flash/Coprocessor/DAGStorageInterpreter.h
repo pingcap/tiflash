@@ -38,7 +38,7 @@ public:
         const tipb::TableScan & ts,
         const std::vector<const tipb::Expr *> & conditions_,
         size_t max_streams_,
-        Poco::Logger * log_);
+        const LogWithPrefixPtr & log_);
 
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
     DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
@@ -59,6 +59,7 @@ public:
     std::optional<tipb::DAGRequest> dag_request;
     std::optional<DAGSchema> dag_schema;
     BlockInputStreamPtr null_stream_if_empty;
+
 private:
     LearnerReadSnapshot doCopLearnerRead();
 
@@ -80,7 +81,7 @@ private:
     const tipb::TableScan & table_scan;
     const std::vector<const tipb::Expr *> & conditions;
     size_t max_streams;
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
@@ -101,4 +102,3 @@ private:
 };
 
 } // namespace DB
-

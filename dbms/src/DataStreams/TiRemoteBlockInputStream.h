@@ -39,7 +39,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    Poco::Logger * log;
+    const LogWithPrefixPtr log;
+
+    uint64_t total_rows;
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
@@ -148,7 +150,13 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             default:
                 throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
-            LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()) + " for " + result.req_info);
+
+            total_rows += block.rows();
+
+            LOG_TRACE(
+                log,
+                fmt::format("recv {} rows from remote for {}, total recv row num: {}", block.rows(), result.req_info, total_rows));
+
             if (unlikely(block.rows() == 0))
                 continue;
             assertBlockSchema(expected_types, block, getName());
@@ -160,12 +168,13 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const LogWithPrefixPtr & log_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
         , execution_summaries_inited(source_num)
-        , log(&Poco::Logger::get(name))
+        , log(getMPPTaskLog(log_, getName()))
+        , total_rows(0)
     {
         // generate sample block
         ColumnsWithTypeAndName columns;

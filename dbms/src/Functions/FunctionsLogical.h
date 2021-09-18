@@ -1,24 +1,24 @@
 #pragma once
 
-#include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
-#include <DataTypes/DataTypeNullable.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
-#include <IO/WriteHelpers.h>
-#include <Functions/IFunction.h>
-#include <Functions/FunctionsArithmetic.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionUnaryArithmetic.h>
+#include <Functions/IFunction.h>
+#include <IO/WriteHelpers.h>
+
 #include <type_traits>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 /** Behaviour in presence of NULLs:
@@ -64,7 +64,6 @@ struct AndImpl
     {
         return a && b;
     }
-
 };
 
 struct OrImpl
@@ -99,7 +98,6 @@ struct OrImpl
     {
         return a || b;
     }
-
 };
 
 struct XorImpl
@@ -114,17 +112,17 @@ struct XorImpl
         return false;
     }
 
-    static inline bool resNotNull(const Field & )
+    static inline bool resNotNull(const Field &)
     {
         return true;
     }
 
-    static inline bool resNotNull(UInt8 , UInt8 )
+    static inline bool resNotNull(UInt8, UInt8)
     {
         return true;
     }
 
-    static inline void adjustForNullValue(UInt8 & , UInt8 & )
+    static inline void adjustForNullValue(UInt8 &, UInt8 &)
     {
     }
 
@@ -177,7 +175,9 @@ struct AssociativeOperationImpl
 
     /// Remembers the last N columns from `in`.
     AssociativeOperationImpl(UInt8ColumnPtrs & in)
-        : vec(in[in.size() - N]->getData()), continuation(in) {}
+        : vec(in[in.size() - N]->getData())
+        , continuation(in)
+    {}
 
     /// Returns a combination of values in the i-th row of all columns stored in the constructor.
     inline UInt8 apply(size_t i) const
@@ -205,7 +205,8 @@ struct AssociativeOperationImpl<Op, 1>
     const UInt8Container & vec;
 
     AssociativeOperationImpl(UInt8ColumnPtrs & in)
-        : vec(in[in.size() - 1]->getData()) {}
+        : vec(in[in.size() - 1]->getData())
+    {}
 
     inline UInt8 apply(size_t i) const
     {
@@ -226,7 +227,7 @@ public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionAnyArityLogical>(); };
 
 private:
-    bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, UInt8 & res_not_null, UInt8 & input_has_null)
+    bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, UInt8 & res_not_null, UInt8 & input_has_null) const
     {
         bool has_res = false;
         for (int i = static_cast<int>(in.size()) - 1; i >= 0; --i)
@@ -258,7 +259,7 @@ private:
     }
 
     template <typename T>
-    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null)
+    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column);
         if (!col)
@@ -276,8 +277,7 @@ private:
     }
 
     template <typename T>
-    bool convertNullableTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null,
-            UInt8Container & input_has_null)
+    bool convertNullableTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null) const
     {
         auto col_nullable = checkAndGetColumn<ColumnNullable>(column);
 
@@ -302,28 +302,27 @@ private:
         return true;
     }
 
-    void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null,
-            UInt8Container & input_has_null)
+    void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null) const
     {
-        if (!convertTypeToUInt8<Int8>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Int16>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Int32>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Int64>(column, res, res_not_null) &&
-            !convertTypeToUInt8<UInt16>(column, res, res_not_null) &&
-            !convertTypeToUInt8<UInt32>(column, res, res_not_null) &&
-            !convertTypeToUInt8<UInt64>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Float32>(column, res, res_not_null) &&
-            !convertTypeToUInt8<Float64>(column, res, res_not_null) &&
-            !convertNullableTypeToUInt8<Int8>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Int16>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Int32>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Int64>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<UInt8>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<UInt16>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<UInt32>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<UInt64>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Float32>(column, res, res_not_null, input_has_null) &&
-            !convertNullableTypeToUInt8<Float64>(column, res, res_not_null, input_has_null))
+        if (!convertTypeToUInt8<Int8>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int16>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int32>(column, res, res_not_null)
+            && !convertTypeToUInt8<Int64>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt16>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt32>(column, res, res_not_null)
+            && !convertTypeToUInt8<UInt64>(column, res, res_not_null)
+            && !convertTypeToUInt8<Float32>(column, res, res_not_null)
+            && !convertTypeToUInt8<Float64>(column, res, res_not_null)
+            && !convertNullableTypeToUInt8<Int8>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int16>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Int64>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt8>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt16>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<UInt64>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Float32>(column, res, res_not_null, input_has_null)
+            && !convertNullableTypeToUInt8<Float64>(column, res, res_not_null, input_has_null))
             throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -342,8 +341,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be at least 2.",
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed "
+                    + toString(arguments.size()) + ", should be at least 2.",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         bool has_nullable_input_column = false;
@@ -351,11 +351,13 @@ public:
         {
             has_nullable_input_column |= arguments[i]->isNullable();
             if (!(arguments[i]->isNumber()
-                || (special_impl_for_nulls && (arguments[i]->onlyNull() || removeNullable(arguments[i])->isNumber()))))
-                throw Exception("Illegal type ("
-                                + arguments[i]->getName()
-                                + ") of " + toString(i + 1) + " argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                  || (special_impl_for_nulls
+                      && (arguments[i]->onlyNull()
+                          || removeNullable(arguments[i])->isNumber()))))
+                throw Exception(
+                    "Illegal type (" + arguments[i]->getName() + ") of "
+                        + toString(i + 1) + " argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         if (has_nullable_input_column)
@@ -364,7 +366,7 @@ public:
             return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         bool has_nullable_input_column = false;
         size_t num_arguments = arguments.size();
@@ -396,12 +398,11 @@ public:
                 if (const_val_input_has_null && const_val_res_not_null)
                     Impl::adjustForNullValue(const_val, const_val_input_has_null);
                 if (const_val_input_has_null)
-                    block.getByPosition(result).column =
-                            block.getByPosition(result).type->createColumnConst(rows,Null());
+                    block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
                 else
-                    block.getByPosition(result).column = has_nullable_input_column ? makeNullable(
-                            DataTypeUInt8().createColumnConst(rows, toField(const_val))) :
-                                                         DataTypeUInt8().createColumnConst(rows, toField(const_val));
+                    block.getByPosition(result).column = has_nullable_input_column
+                        ? makeNullable(DataTypeUInt8().createColumnConst(rows, toField(const_val)))
+                        : DataTypeUInt8().createColumnConst(rows, toField(const_val));
             }
             return;
         }
@@ -434,8 +435,8 @@ public:
             vec_res.resize(rows);
             if constexpr (special_impl_for_nulls)
             {
-                vec_input_has_null.assign(rows, (UInt8) 0);
-                vec_res_not_null.assign(rows, (UInt8) 0);
+                vec_input_has_null.assign(rows, (UInt8)0);
+                vec_res_not_null.assign(rows, (UInt8)0);
             }
         }
 
@@ -494,8 +495,7 @@ public:
                     if (vec_input_has_null[i] && vec_res_not_null[i])
                         Impl::adjustForNullValue(vec_res[i], vec_input_has_null[i]);
                 }
-                block.getByPosition(result).column = ColumnNullable::create(std::move(col_res),
-                        std::move(col_input_has_null));
+                block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(col_input_has_null));
             }
             else
                 block.getByPosition(result).column = std::move(col_res);
@@ -513,7 +513,7 @@ public:
 
 private:
     template <typename T>
-    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if (auto col = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get()))
         {
@@ -541,9 +541,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isNumber())
-            throw Exception("Illegal type ("
-                + arguments[0]->getName()
-                + ") of argument of function " + getName(),
+            throw Exception(
+                "Illegal type (" + arguments[0]->getName()
+                    + ") of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt8>();
@@ -551,33 +551,35 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (!( executeType<UInt8>(block, arguments, result)
-            || executeType<UInt16>(block, arguments, result)
-            || executeType<UInt32>(block, arguments, result)
-            || executeType<UInt64>(block, arguments, result)
-            || executeType<Int8>(block, arguments, result)
-            || executeType<Int16>(block, arguments, result)
-            || executeType<Int32>(block, arguments, result)
-            || executeType<Int64>(block, arguments, result)
-            || executeType<Float32>(block, arguments, result)
-            || executeType<Float64>(block, arguments, result)))
-           throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+        if (!(executeType<UInt8>(block, arguments, result)
+              || executeType<UInt16>(block, arguments, result)
+              || executeType<UInt32>(block, arguments, result)
+              || executeType<UInt64>(block, arguments, result)
+              || executeType<Int8>(block, arguments, result)
+              || executeType<Int16>(block, arguments, result)
+              || executeType<Int32>(block, arguments, result)
+              || executeType<Int64>(block, arguments, result)
+              || executeType<Float32>(block, arguments, result)
+              || executeType<Float64>(block, arguments, result)))
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
                     + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
-
+// clang-format off
 struct NameAnd { static constexpr auto name = "and"; };
 struct NameOr { static constexpr auto name = "or"; };
 struct NameXor { static constexpr auto name = "xor"; };
 struct NameNot { static constexpr auto name = "not"; };
+// clang-format on
 
 using FunctionAnd = FunctionAnyArityLogical<AndImpl, NameAnd, true>;
 using FunctionOr = FunctionAnyArityLogical<OrImpl, NameOr, true>;
 using FunctionXor = FunctionAnyArityLogical<XorImpl, NameXor, false>;
 using FunctionNot = FunctionUnaryLogical<NotImpl, NameNot>;
 
-}
+} // namespace DB

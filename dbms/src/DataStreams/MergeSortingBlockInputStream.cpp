@@ -2,20 +2,18 @@
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/copyData.h>
-#include <IO/WriteBufferFromFile.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <IO/WriteBufferFromFile.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event ExternalSortWritePart;
-    extern const Event ExternalSortMerge;
-}
+extern const Event ExternalSortWritePart;
+extern const Event ExternalSortMerge;
+} // namespace ProfileEvents
 
 namespace DB
 {
-
-
 /** Remove constant columns from block.
   */
 static void removeConstantsFromBlock(Block & block)
@@ -36,14 +34,14 @@ static void removeConstantsFromBlock(Block & block)
 
 static void removeConstantsFromSortDescription(const Block & header, SortDescription & description)
 {
-    description.erase(std::remove_if(description.begin(), description.end(),
-        [&](const SortColumnDescription & elem)
-        {
+    description.erase(
+        std::remove_if(description.begin(), description.end(), [&](const SortColumnDescription & elem) {
             if (!elem.column_name.empty())
                 return header.getByName(elem.column_name).column->isColumnConst();
             else
                 return header.safeGetByPosition(elem.column_number).column->isColumnConst();
-        }), description.end());
+        }),
+        description.end());
 }
 
 /** Add into block, whose constant columns was removed by previous function,
@@ -64,11 +62,19 @@ static void enrichBlockWithConstants(Block & block, const Block & header)
 
 
 MergeSortingBlockInputStream::MergeSortingBlockInputStream(
-    const BlockInputStreamPtr & input, SortDescription & description_,
-    size_t max_merged_block_size_, size_t limit_,
-    size_t max_bytes_before_external_sort_, const std::string & tmp_path_)
-    : description(description_), max_merged_block_size(max_merged_block_size_), limit(limit_),
-    max_bytes_before_external_sort(max_bytes_before_external_sort_), tmp_path(tmp_path_)
+    const BlockInputStreamPtr & input,
+    SortDescription & description_,
+    size_t max_merged_block_size_,
+    size_t limit_,
+    size_t max_bytes_before_external_sort_,
+    const std::string & tmp_path_,
+    const LogWithPrefixPtr & log_)
+    : description(description_)
+    , max_merged_block_size(max_merged_block_size_)
+    , limit(limit_)
+    , max_bytes_before_external_sort(max_bytes_before_external_sort_)
+    , tmp_path(tmp_path_)
+    , log(getMPPTaskLog(log_, getName()))
 {
     children.push_back(input);
     header = children.at(0)->getHeader();
@@ -113,11 +119,11 @@ Block MergeSortingBlockInputStream::readImpl()
                 WriteBufferFromFile file_buf(path);
                 CompressedWriteBuffer compressed_buf(file_buf);
                 NativeBlockOutputStream block_out(compressed_buf, 0, header_without_constants);
-                MergeSortingBlocksBlockInputStream block_in(blocks, description, max_merged_block_size, limit);
+                MergeSortingBlocksBlockInputStream block_in(blocks, description, log, max_merged_block_size, limit);
 
                 LOG_INFO(log, "Sorting and writing part of data into temporary file " + path);
                 ProfileEvents::increment(ProfileEvents::ExternalSortWritePart);
-                copyData(block_in, block_out, &is_cancelled);    /// NOTE. Possibly limit disk usage.
+                copyData(block_in, block_out, &is_cancelled); /// NOTE. Possibly limit disk usage.
                 LOG_INFO(log, "Done writing part of data into temporary file " + path);
 
                 blocks.clear();
@@ -130,7 +136,7 @@ Block MergeSortingBlockInputStream::readImpl()
 
         if (temporary_files.empty())
         {
-            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, max_merged_block_size, limit);
+            impl = std::make_unique<MergeSortingBlocksBlockInputStream>(blocks, description, log, max_merged_block_size, limit);
         }
         else
         {
@@ -148,7 +154,12 @@ Block MergeSortingBlockInputStream::readImpl()
 
             /// Rest of blocks in memory.
             if (!blocks.empty())
-                inputs_to_merge.emplace_back(std::make_shared<MergeSortingBlocksBlockInputStream>(blocks, description, max_merged_block_size, limit));
+                inputs_to_merge.emplace_back(std::make_shared<MergeSortingBlocksBlockInputStream>(
+                    blocks,
+                    description,
+                    log,
+                    max_merged_block_size,
+                    limit));
 
             /// Will merge that sorted streams.
             impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, description, max_merged_block_size, limit);
@@ -163,8 +174,17 @@ Block MergeSortingBlockInputStream::readImpl()
 
 
 MergeSortingBlocksBlockInputStream::MergeSortingBlocksBlockInputStream(
-    Blocks & blocks_, SortDescription & description_, size_t max_merged_block_size_, size_t limit_)
-    : blocks(blocks_), header(blocks.at(0).cloneEmpty()), description(description_), max_merged_block_size(max_merged_block_size_), limit(limit_)
+    Blocks & blocks_,
+    SortDescription & description_,
+    const LogWithPrefixPtr & log_,
+    size_t max_merged_block_size_,
+    size_t limit_)
+    : blocks(blocks_)
+    , header(blocks.at(0).cloneEmpty())
+    , description(description_)
+    , max_merged_block_size(max_merged_block_size_)
+    , limit(limit_)
+    , log(getMPPTaskLog(log_, getName()))
 {
     Blocks nonempty_blocks;
     for (const auto & block : blocks)
@@ -254,4 +274,4 @@ Block MergeSortingBlocksBlockInputStream::mergeImpl(std::priority_queue<TSortCur
 }
 
 
-}
+} // namespace DB

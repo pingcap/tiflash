@@ -1,22 +1,22 @@
 #pragma once
 
-#include <IO/Progress.h>
-
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
-
+#include <IO/Progress.h>
 #include <Interpreters/SettingsCommon.h>
+#include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <atomic>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int QUERY_WAS_CANCELLED;
+extern const int QUERY_WAS_CANCELLED;
 }
 
 class QuotaForIntervals;
@@ -175,6 +175,17 @@ public:
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
 
+    const std::shared_ptr<LogWithPrefix> static getLogWithPrefix(const std::shared_ptr<LogWithPrefix> & log, const String & name = "name: N/A", Int64 mpp_task_id_ = -1)
+    {
+        if (log == nullptr)
+        {
+            String prefix = mpp_task_id_ == -1 ? "[task: N/A query: N/A] " : fmt::format("[task: {} query: N/A] ", mpp_task_id_);
+            return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), prefix);
+        }
+
+        return log;
+    }
+
 protected:
     BlockStreamProfileInfo info;
     std::atomic<bool> is_cancelled{false};
@@ -206,7 +217,7 @@ private:
 
     LocalLimits limits;
 
-    QuotaForIntervals * quota = nullptr;    /// If nullptr - the quota is not used.
+    QuotaForIntervals * quota = nullptr; /// If nullptr - the quota is not used.
     double prev_elapsed = 0;
 
     /// The approximate total number of rows to read. For progress bar.
@@ -245,4 +256,4 @@ private:
     }
 };
 
-}
+} // namespace DB

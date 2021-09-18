@@ -267,7 +267,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, false);
+                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, DMFile::ReadMetaMode::none());
                 if (dmfile->canGC())
                 {
                     delegate.removeDTFile(dmfile->fileId());
@@ -416,7 +416,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
                              EXTRA_HANDLE_COLUMN_INT_TYPE,
                              EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
             // Fill the new handle column with data in column[handle_pos] by applying cast.
-            FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
+            DefaultExecutable(FunctionToInt64::create(db_context)).execute(block, {handle_pos}, block.columns() - 1);
         }
         else
         {
@@ -611,7 +611,8 @@ void DeltaMergeStore::ingestFiles(
     {
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
+        // we always create a ref file to this DMFile with all meta info restored later, so here we just restore meta info to calculate its' memory and disk size
+        auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::memoryAndDiskSize());
         rows += file->getRows();
         bytes += file->getBytes();
         bytes_on_disk += file->getBytesOnDisk();
@@ -681,7 +682,7 @@ void DeltaMergeStore::ingestFiles(
                 auto & file_parent_path = file->parentPath();
                 auto ref_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-                auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path);
+                auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
                 auto pack = std::make_shared<DeltaPackFile>(*dm_context, ref_file, segment_range);
                 if (pack->getRows() != 0)
                 {
@@ -953,7 +954,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
             dm_context,
             read_task_pool,
             after_segment_read,
@@ -962,7 +963,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             MAX_UINT64,
             DEFAULT_BLOCK_SIZE,
             true,
-            db_settings.dt_raw_filter_range);
+            db_settings.dt_raw_filter_range,
+            nullptr);
         res.push_back(stream);
     }
     return res;
@@ -995,7 +997,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
             dm_context,
             read_task_pool,
             after_segment_read,
@@ -1004,7 +1006,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             max_version,
             expected_block_size,
             false,
-            db_settings.dt_raw_filter_range);
+            db_settings.dt_raw_filter_range,
+            nullptr);
         res.push_back(stream);
     }
 
@@ -2075,7 +2078,7 @@ void DeltaMergeStore::restoreStableFiles()
     {
         for (auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, true);
+            auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }

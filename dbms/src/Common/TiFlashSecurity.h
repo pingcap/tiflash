@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int INVALID_CONFIG_PARAMETER;
@@ -68,7 +67,8 @@ public:
             {
                 has_tls_config = true;
                 LOG_INFO(
-                    log, "security config is set: ca path is " << ca_path << " cert path is " << cert_path << " key path is " << key_path);
+                    log,
+                    "security config is set: ca path is " << ca_path << " cert path is " << cert_path << " key path is " << key_path);
             }
 
             if (config.has("security.cert_allowed_cn") && has_tls_config)
@@ -88,7 +88,6 @@ public:
 
     void parseAllowedCN(String verify_cns)
     {
-
         if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
         {
             verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
@@ -113,10 +112,9 @@ public:
             return true;
         }
         auto auth_context = grpc_context->auth_context();
-        for (const auto & [property_name, common_name] : *auth_context)
+        for (auto && [property_name, common_name] : *auth_context)
         {
-            if (property_name == GRPC_X509_CN_PROPERTY_NAME &&
-                    allowed_common_names.count(String(common_name.data(), common_name.size())))
+            if (property_name == GRPC_X509_CN_PROPERTY_NAME && allowed_common_names.count(String(common_name.data(), common_name.size())))
                 return true;
         }
         return false;

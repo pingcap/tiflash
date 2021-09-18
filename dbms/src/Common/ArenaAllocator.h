@@ -1,10 +1,9 @@
-#include <Common/Arena.h>
 #include <Common/Allocator.h>
+#include <Common/Arena.h>
 
 
 namespace DB
 {
-
 /// Allocator which proxies all allocations to Arena. Used in aggregate functions.
 class ArenaAllocator
 {
@@ -43,7 +42,6 @@ template <size_t REAL_ALLOCATION_TRESHOLD = 4096, typename TRealAllocator = Allo
 class MixedArenaAllocator : private TRealAllocator
 {
 public:
-
     void * alloc(size_t size, Arena * arena)
     {
         return (size < REAL_ALLOCATION_TRESHOLD) ? TArenaAllocator::alloc(size, arena) : TRealAllocator::alloc(size);
@@ -78,7 +76,6 @@ class ArenaAllocatorWithStackMemoty : public Base
     char stack_memory[N];
 
 public:
-
     void * alloc(size_t size, Arena * arena)
     {
         return (size > N) ? Base::alloc(size, arena) : stack_memory;
@@ -103,4 +100,4 @@ public:
     void free(void * /*buf*/, size_t /*size*/) {}
 };
 
-}
+} // namespace DB

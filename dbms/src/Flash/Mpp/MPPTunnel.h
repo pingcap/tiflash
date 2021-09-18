@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/ConcurrentBoundedQueue.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -11,10 +12,13 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <thread>
 
 namespace DB
 {
 class MPPTask;
+using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
+
 class MPPTunnel : private boost::noncopyable
 {
 public:
@@ -22,7 +26,8 @@ public:
         const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
         const std::chrono::seconds timeout_,
-        const std::shared_ptr<MPPTask> & current_task_);
+        const std::shared_ptr<MPPTask> & current_task_,
+        int input_steams_num_);
 
     ~MPPTunnel();
 
@@ -32,6 +37,9 @@ public:
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     void write(const mpp::MPPDataPacket & data, bool close_after_write = false);
+
+    /// to avoid being blocked when pop(), we should send nullptr into send_queue
+    void sendLoop();
 
     // finish the writing.
     void writeDone();
@@ -58,7 +66,7 @@ private:
 
     bool connected; // if the exchange in has connected this tunnel.
 
-    bool finished; // if the tunnel has finished its connection.
+    std::atomic<bool> finished; // if the tunnel has finished its connection.
 
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 
@@ -68,6 +76,12 @@ private:
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
+
+    int input_streams_num;
+
+    std::unique_ptr<std::thread> send_thread;
+
+    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
 
     Poco::Logger * log;
 };

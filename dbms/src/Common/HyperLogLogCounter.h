@@ -1,15 +1,14 @@
 #pragma once
 
-#include <common/types.h>
-#include <Common/HyperLogLogBiasEstimator.h>
 #include <Common/CompactArray.h>
 #include <Common/HashTable/Hash.h>
-
-#include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
+#include <Common/HyperLogLogBiasEstimator.h>
 #include <Core/Defines.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
+#include <common/types.h>
 
 #include <cmath>
 #include <cstring>
@@ -19,22 +18,21 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
-}
+} // namespace DB
 
 
 /// Sets denominator type.
 enum class DenominatorMode
 {
-    Compact,        /// Compact denominator.
-    StableIfBig,    /// Stable denominator falling back to Compact if rank storage is not big enough.
-    ExactType       /// Denominator of specified exact type.
+    Compact, /// Compact denominator.
+    StableIfBig, /// Stable denominator falling back to Compact if rank storage is not big enough.
+    ExactType /// Denominator of specified exact type.
 };
 
 namespace details
 {
-
 /// Look-up table of logarithms for integer numbers, used in HyperLogLogCounter.
 template <UInt8 K>
 struct LogLUT
@@ -60,38 +58,50 @@ private:
     double log_table[M + 1];
 };
 
-template <UInt8 K> struct MinCounterTypeHelper;
-template <> struct MinCounterTypeHelper<0>    { using Type = UInt8; };
-template <> struct MinCounterTypeHelper<1>    { using Type = UInt16; };
-template <> struct MinCounterTypeHelper<2>    { using Type = UInt32; };
-template <> struct MinCounterTypeHelper<3>    { using Type = UInt64; };
+template <UInt8 K>
+struct MinCounterTypeHelper;
+template <>
+struct MinCounterTypeHelper<0>
+{
+    using Type = UInt8;
+};
+template <>
+struct MinCounterTypeHelper<1>
+{
+    using Type = UInt16;
+};
+template <>
+struct MinCounterTypeHelper<2>
+{
+    using Type = UInt32;
+};
+template <>
+struct MinCounterTypeHelper<3>
+{
+    using Type = UInt64;
+};
 
 /// Auxiliary structure for automatic determining minimum size of counter's type depending on its maximum value.
 /// Used in HyperLogLogCounter in order to spend memory efficiently.
-template <UInt64 MaxValue> struct MinCounterType
+template <UInt64 MaxValue>
+struct MinCounterType
 {
     using Type = typename MinCounterTypeHelper<
-        (MaxValue >= 1 << 8) +
-        (MaxValue >= 1 << 16) +
-        (MaxValue >= 1ULL << 32)
-        >::Type;
+        (MaxValue >= 1 << 8) + (MaxValue >= 1 << 16) + (MaxValue >= 1ULL << 32)>::Type;
 };
 
 /// Denominator of expression for HyperLogLog algorithm.
-template <UInt8 precision, int max_rank, typename HashValueType, typename DenominatorType,
-    DenominatorMode denominator_mode, typename Enable = void>
-class __attribute__ ((packed)) Denominator;
+template <UInt8 precision, int max_rank, typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode, typename Enable = void>
+class __attribute__((packed)) Denominator;
 
-namespace
+namespace details
 {
-
 /// Returns true if rank storage is big.
 constexpr bool isBigRankStore(UInt8 precision)
 {
     return precision >= 12;
 }
-
-}
+} // namespace details
 
 /// Used to deduce denominator type depending on options provided.
 template <typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode, typename Enable = void>
@@ -118,17 +128,14 @@ struct IntermediateDenominator<HashValueType, DenominatorType, DenominatorMode::
 /// "Lightweight" implementation of expression's denominator for HyperLogLog algorithm.
 /// Uses minimum amount of memory, but estimates may be unstable.
 /// Satisfiable when rank storage is small enough.
-template <UInt8 precision, int max_rank, typename HashValueType, typename DenominatorType,
-    DenominatorMode denominator_mode>
-class __attribute__ ((packed)) Denominator<precision, max_rank, HashValueType, DenominatorType,
-    denominator_mode,
-    std::enable_if_t<!details::isBigRankStore(precision) || !(denominator_mode == DenominatorMode::StableIfBig)>>
+template <UInt8 precision, int max_rank, typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode>
+class __attribute__((packed)) Denominator<precision, max_rank, HashValueType, DenominatorType, denominator_mode, std::enable_if_t<!details::isBigRankStore(precision) || !(denominator_mode == DenominatorMode::StableIfBig)>>
 {
 private:
     using T = typename IntermediateDenominator<HashValueType, DenominatorType, denominator_mode>::Type;
 
 public:
-    Denominator(DenominatorType initial_value)
+    explicit Denominator(DenominatorType initial_value)
         : denominator(initial_value)
     {
     }
@@ -162,14 +169,11 @@ private:
 /// Fully-functional version of expression's denominator for HyperLogLog algorithm.
 /// Spends more space that lightweight version. Estimates will always be stable.
 /// Used when rank storage is big.
-template <UInt8 precision, int max_rank, typename HashValueType, typename DenominatorType,
-    DenominatorMode denominator_mode>
-class __attribute__ ((packed)) Denominator<precision, max_rank, HashValueType, DenominatorType,
-    denominator_mode,
-    std::enable_if_t<details::isBigRankStore(precision) && denominator_mode == DenominatorMode::StableIfBig>>
+template <UInt8 precision, int max_rank, typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode>
+class __attribute__((packed)) Denominator<precision, max_rank, HashValueType, DenominatorType, denominator_mode, std::enable_if_t<details::isBigRankStore(precision) && denominator_mode == DenominatorMode::StableIfBig>>
 {
 public:
-    Denominator(DenominatorType initial_value)
+    explicit Denominator(DenominatorType initial_value)
     {
         rank_count[0] = initial_value;
     }
@@ -203,7 +207,7 @@ public:
 
 private:
     static constexpr size_t size = max_rank + 1;
-    UInt32 rank_count[size] = { 0 };
+    UInt32 rank_count[size] = {0};
 };
 
 /// Number of trailing zeros.
@@ -250,15 +254,15 @@ struct RankWidth<UInt64>
     }
 };
 
-}
+} // namespace details
 
 /// Sets behavior of HyperLogLog class.
 enum class HyperLogLogMode
 {
-    Raw,            /// No error correction.
+    Raw, /// No error correction.
     LinearCounting, /// LinearCounting error correction.
-    BiasCorrected,  /// HyperLogLog++ error correction.
-    FullFeatured    /// LinearCounting or HyperLogLog++ error correction (depending).
+    BiasCorrected, /// HyperLogLog++ error correction.
+    FullFeatured /// LinearCounting or HyperLogLog++ error correction (depending).
 };
 
 /// Estimation of number of unique values using HyperLogLog algorithm.
@@ -278,7 +282,7 @@ template <
     typename BiasEstimator = TrivialBiasEstimator,
     HyperLogLogMode mode = HyperLogLogMode::FullFeatured,
     DenominatorMode denominator_mode = DenominatorMode::StableIfBig>
-class __attribute__ ((packed)) HyperLogLogCounter : private Hash
+class __attribute__((packed)) HyperLogLogCounter : private Hash
 {
 private:
     /// Number of buckets.
@@ -308,13 +312,12 @@ public:
     UInt64 size() const
     {
         /// Normalizing factor for harmonic mean.
-        static constexpr double alpha_m =
-            bucket_count == 2  ? 0.351 :
-            bucket_count == 4  ? 0.532 :
-            bucket_count == 8  ? 0.626 :
-            bucket_count == 16 ? 0.673 :
-            bucket_count == 32 ? 0.697 :
-            bucket_count == 64 ? 0.709 : 0.7213 / (1 + 1.079 / bucket_count);
+        static constexpr double alpha_m = bucket_count == 2 ? 0.351 : bucket_count == 4 ? 0.532
+            : bucket_count == 8                                                         ? 0.626
+            : bucket_count == 16                                                        ? 0.673
+            : bucket_count == 32                                                        ? 0.697
+            : bucket_count == 64                                                        ? 0.709
+                                                                                        : 0.7213 / (1 + 1.079 / bucket_count);
 
         /// Harmonic mean for all buckets of 2^rank values is: bucket_count / ∑ 2^-rank_i,
         /// where ∑ 2^-rank_i - is denominator.
@@ -323,7 +326,7 @@ public:
 
         double final_estimate = fixRawEstimate(raw_estimate);
 
-        return static_cast<UInt64>(final_estimate + 0.5);
+        return static_cast<UInt64>(std::llround(final_estimate));
     }
 
     void merge(const HyperLogLogCounter & rhs)
@@ -535,26 +538,22 @@ private:
 
 
 /// Declaration of static variables for linker.
-template
-<
+template <
     UInt8 precision,
     typename Hash,
     typename HashValueType,
     typename DenominatorType,
     typename BiasEstimator,
     HyperLogLogMode mode,
-    DenominatorMode denominator_mode
->
-details::LogLUT<precision> HyperLogLogCounter
-<
+    DenominatorMode denominator_mode>
+details::LogLUT<precision> HyperLogLogCounter<
     precision,
     Hash,
     HashValueType,
     DenominatorType,
     BiasEstimator,
     mode,
-    denominator_mode
->::log_lut;
+    denominator_mode>::log_lut;
 
 
 /// Lightweight implementation of expression's denominator is used in Metrage.
@@ -566,5 +565,4 @@ using HLL12 = HyperLogLogCounter<
     double,
     TrivialBiasEstimator,
     HyperLogLogMode::FullFeatured,
-    DenominatorMode::Compact
->;
+    DenominatorMode::Compact>;

@@ -57,7 +57,10 @@ static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
 static_assert(sizeof(RaftStoreProxyPtr) == sizeof(ConstRawVoidPtr));
 static_assert(alignof(RaftStoreProxyPtr) == alignof(ConstRawVoidPtr));
 
-EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, WriteCmdsView cmds, RaftCmdHeader header)
+EngineStoreApplyRes HandleWriteRaftCmd(
+    const EngineStoreServerWrap * server,
+    WriteCmdsView cmds,
+    RaftCmdHeader header)
 {
     try
     {
@@ -80,8 +83,8 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     {
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
-        request.ParseFromArray(req_buff.data, (int)req_buff.len);
-        response.ParseFromArray(resp_buff.data, (int)resp_buff.len);
+        request.ParseFromArray(req_buff.data, static_cast<int>(req_buff.len));
+        response.ParseFromArray(resp_buff.data, static_cast<int>(resp_buff.len));
 
         auto & kvstore = server->tmt->getKVStore();
         return kvstore->handleAdminRaftCmd(
@@ -166,9 +169,11 @@ RaftProxyStatus TiFlashRaftProxyHelper::getProxyStatus() const
     return fn_handle_get_proxy_status(proxy_ptr);
 }
 
-BaseBuffView strIntoView(const std::string & view)
+/// Use const pointer instead of const ref to avoid lifetime of `str` is shorter than view.
+BaseBuffView strIntoView(const std::string * str_ptr)
 {
-    return BaseBuffView{view.data(), view.size()};
+    assert(str_ptr);
+    return BaseBuffView{str_ptr->data(), str_ptr->size()};
 }
 
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const
@@ -181,26 +186,26 @@ EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::getFile(const std::string & view) const
 {
-    return fn_handle_get_file(proxy_ptr, strIntoView(view));
+    return fn_handle_get_file(proxy_ptr, strIntoView(&view));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::newFile(const std::string & view) const
 {
-    return fn_handle_new_file(proxy_ptr, strIntoView(view));
+    return fn_handle_new_file(proxy_ptr, strIntoView(&view));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(const std::string & view) const
 {
-    return fn_handle_delete_file(proxy_ptr, strIntoView(view));
+    return fn_handle_delete_file(proxy_ptr, strIntoView(&view));
 }
 FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, const std::string & dst) const
 {
-    return fn_handle_link_file(proxy_ptr, strIntoView(src), strIntoView(dst));
+    return fn_handle_link_file(proxy_ptr, strIntoView(&src), strIntoView(&dst));
 }
 
 struct CppStrVec
 {
     std::vector<std::string> data;
     std::vector<BaseBuffView> view;
-    CppStrVec(std::vector<std::string> && data_)
+    explicit CppStrVec(std::vector<std::string> && data_)
         : data(std::move(data_))
     {
         updateView();
@@ -216,28 +221,30 @@ void CppStrVec::updateView()
     view.reserve(data.size());
     for (const auto & e : data)
     {
-        view.emplace_back(strIntoView(e));
+        view.emplace_back(strIntoView(&e));
     }
 }
 
 kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
 {
     auto res = batchReadIndex({req}, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
-    return std::move(res->at(0).first);
+    return std::move(res.at(0).first);
 }
 
 BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
 {
     std::vector<std::string> req_strs;
     req_strs.reserve(req.size());
-    for (auto & r : req)
+    for (const auto & r : req)
     {
         req_strs.emplace_back(r.SerializeAsString());
     }
     CppStrVec data(std::move(req_strs));
     assert(req_strs.empty());
     auto outer_view = data.intoOuterView();
-    BatchReadIndexRes res(reinterpret_cast<BatchReadIndexRes::pointer>(fn_handle_batch_read_index(proxy_ptr, outer_view, timeout_ms)));
+    BatchReadIndexRes res;
+    res.reserve(req.size());
+    fn_handle_batch_read_index(proxy_ptr, outer_view, &res, timeout_ms);
     return res;
 }
 
@@ -278,7 +285,7 @@ RawCppPtr PreHandleSnapshot(
     try
     {
         metapb::Region region;
-        region.ParseFromArray(region_buff.data, (int)region_buff.len);
+        region.ParseFromArray(region_buff.data, static_cast<int>(region_buff.len));
         auto & tmt = *server->tmt;
         auto & kvstore = tmt.getKVStore();
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
@@ -288,7 +295,7 @@ RawCppPtr PreHandleSnapshot(
         {
             // Pre-decode as a block
             auto new_region_block_cache = kvstore->preHandleSnapshotToBlock(new_region, snaps, index, term, tmt);
-            auto res = new PreHandledSnapshotWithBlock{new_region, std::move(new_region_block_cache)};
+            auto * res = new PreHandledSnapshotWithBlock{new_region, std::move(new_region_block_cache)};
             return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithBlock);
         }
         case TiDB::SnapshotApplyMethod::DTFile_Directory:
@@ -296,7 +303,7 @@ RawCppPtr PreHandleSnapshot(
         {
             // Pre-decode and save as DTFiles
             auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
-            auto res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
+            auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
             return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
         }
         default:
@@ -358,7 +365,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
     }
 }
 
-void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
+void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)
     {
@@ -382,28 +389,21 @@ void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
 
 const char * IntoEncryptionMethodName(EncryptionMethod method)
 {
-    static const char * EncryptionMethodName[] = {
+    static const char * encryption_method_name[] = {
         "Unknown",
         "Plaintext",
         "Aes128Ctr",
         "Aes192Ctr",
         "Aes256Ctr",
     };
-    return EncryptionMethodName[static_cast<uint8_t>(method)];
-}
-
-RawVoidPtr GenBatchReadIndexRes(uint64_t cap)
-{
-    auto res = new BatchReadIndexRes::element_type();
-    res->reserve(cap);
-    return res;
+    return encryption_method_name[static_cast<uint8_t>(method)];
 }
 
 void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t region_id)
 {
     kvrpcpb::ReadIndexResponse res;
     res.ParseFromArray(view.data, view.len);
-    reinterpret_cast<BatchReadIndexRes::pointer>(resp)->emplace_back(std::move(res), region_id);
+    reinterpret_cast<BatchReadIndexRes *>(resp)->emplace_back(std::move(res), region_id);
 }
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)
@@ -411,7 +411,7 @@ RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)
     return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)};
 }
 
-void SetSetverInfoResp(BaseBuffView view, RawVoidPtr ptr)
+void SetServerInfoResp(BaseBuffView view, RawVoidPtr ptr)
 {
     using diagnosticspb::ServerInfoResponse;
     reinterpret_cast<ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);

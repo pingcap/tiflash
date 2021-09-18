@@ -3,7 +3,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
-#include <Common/Config/cpptoml.h>
+#include <cpptoml.h>
 #if !__clang__
 #pragma GCC diagnostic pop
 #endif
@@ -16,10 +16,13 @@
 
 namespace DB
 {
-
 using TOMLBasePtr = std::shared_ptr<cpptoml::base>;
 
-TOMLConfiguration::TOMLConfiguration(TOMLTablePtr toml_doc) : root(toml_doc) { poco_check_ptr(toml_doc); }
+TOMLConfiguration::TOMLConfiguration(TOMLTablePtr toml_doc)
+    : root(toml_doc)
+{
+    poco_check_ptr(toml_doc);
+}
 
 bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) const
 {

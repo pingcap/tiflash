@@ -1,10 +1,5 @@
 #pragma once
 
-#include <algorithm>
-#include <functional>
-#include <type_traits>
-#include <vector>
-
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
@@ -12,9 +7,13 @@
 #include <Core/Types.h>
 #include <common/strong_typedef.h>
 
+#include <algorithm>
+#include <functional>
+#include <type_traits>
+#include <vector>
+
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_TYPE_OF_FIELD;
@@ -42,6 +41,11 @@ bool decimalLess(T x, T y, UInt32 x_scale, UInt32 y_scale);
 template <typename T>
 bool decimalLessOrEqual(T x, T y, UInt32 x_scale, UInt32 y_scale);
 
+#pragma GCC diagnostic push
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#endif
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized" // this one should be a false positive
 template <typename T>
 class DecimalField
 {
@@ -51,12 +55,15 @@ public:
     using DecimalType = T;
     using NativeType = typename T::NativeType;
 
-    DecimalField(T value, UInt32 scale_) : dec(value), scale(scale_) {}
+    DecimalField(T value, UInt32 scale_)
+        : dec(value)
+        , scale(scale_)
+    {}
 
-    operator T() const { return dec; }
+    operator T() const { return dec; } // NOLINT(google-explicit-constructor)
 
     template <typename U, std::enable_if_t<std::is_floating_point_v<U>> * = nullptr>
-    operator U() const
+    operator U() const // NOLINT(google-explicit-constructor)
     {
         U v = static_cast<U>(dec.value);
         for (ScaleType i = 0; i < scale; i++)
@@ -66,8 +73,8 @@ public:
         return v;
     }
 
-    template <typename U, std::enable_if_t<std::is_integral_v<U> || std::is_same_v<U, Int128> || std::is_same_v<U, Int256>>* = nullptr>
-    operator U() const
+    template <typename U, std::enable_if_t<std::is_integral_v<U> || std::is_same_v<U, Int128> || std::is_same_v<U, Int256>> * = nullptr>
+    operator U() const // NOLINT(google-explicit-constructor)
     {
         Int256 v = dec.value;
         for (ScaleType i = 0; i < scale; i++)
@@ -154,10 +161,10 @@ public:
 
 
 private:
-    T dec;
-    UInt32 scale;
+    T dec{};
+    UInt32 scale{};
 };
-
+#pragma GCC diagnostic pop
 /** Discriminated union of several types.
   * Made for replacement of `boost::variant`
   *  is not generalized,
@@ -199,38 +206,38 @@ public:
         {
             switch (which)
             {
-                case Null:
-                    return "Null";
-                case UInt64:
-                    return "UInt64";
-                case Int64:
-                    return "Int64";
-                case Float64:
-                    return "Float64";
-                case UInt128:
-                    return "UInt128";
-                case Int128:
-                    return "Int128";
-                case Int256:
-                    return "Int256";
+            case Null:
+                return "Null";
+            case UInt64:
+                return "UInt64";
+            case Int64:
+                return "Int64";
+            case Float64:
+                return "Float64";
+            case UInt128:
+                return "UInt128";
+            case Int128:
+                return "Int128";
+            case Int256:
+                return "Int256";
 
-                case String:
-                    return "String";
-                case Array:
-                    return "Array";
-                case Tuple:
-                    return "Tuple";
-                case Decimal32:
-                    return "Decimal32";
-                case Decimal64:
-                    return "Decimal64";
-                case Decimal128:
-                    return "Decimal128";
-                case Decimal256:
-                    return "Decimal256";
+            case String:
+                return "String";
+            case Array:
+                return "Array";
+            case Tuple:
+                return "Tuple";
+            case Decimal32:
+                return "Decimal32";
+            case Decimal64:
+                return "Decimal64";
+            case Decimal128:
+                return "Decimal128";
+            case Decimal256:
+                return "Decimal256";
 
-                default:
-                    throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
+            default:
+                throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
             }
         }
     };
@@ -243,7 +250,9 @@ public:
     struct EnumToType;
 
 
-    Field() : which(Types::Null) {}
+    Field()
+        : which(Types::Null)
+    {}
 
     /** Despite the presence of a template constructor, this constructor is still needed,
       *  since, in its absence, the compiler will still generate the default constructor.
@@ -253,7 +262,7 @@ public:
     Field(Field && rhs) { create(std::move(rhs)); }
 
     template <typename T>
-    Field(T && rhs, std::integral_constant<int, Field::TypeToEnum<std::decay_t<T>>::value> * = nullptr)
+    Field(T && rhs, std::integral_constant<int, Field::TypeToEnum<std::decay_t<T>>::value> * = nullptr) // NOLINT(google-explicit-constructor)
     {
         createConcrete(std::forward<T>(rhs));
     }
@@ -291,31 +300,32 @@ public:
         return *this;
     }
 
-    Field & operator=(Field && rhs)
+    template <class T>
+    Field & operator=(T && rhs) // NOLINT(misc-unconventional-assign-operator) there is still a false-positive here
     {
-        if (this != &rhs)
+        if constexpr (std::is_same_v<std::decay_t<T>, Field>)
         {
-            if (which != rhs.which)
+            if (this != &rhs)
             {
-                destroy();
-                create(std::move(rhs));
+                if (which != rhs.which)
+                {
+                    destroy();
+                    create(std::forward<T>(rhs));
+                }
+                else
+                    assign(std::forward<T>(rhs));
             }
-            else
-                assign(std::move(rhs));
-        }
-        return *this;
-    }
-
-    template <typename T>
-    std::enable_if_t<!std::is_same_v<std::decay_t<T>, Field>, Field &> operator=(T && rhs)
-    {
-        if (which != TypeToEnum<std::decay_t<T>>::value)
-        {
-            destroy();
-            createConcrete(std::forward<T>(rhs));
         }
         else
-            assignConcrete(std::forward<T>(rhs));
+        {
+            if (which != TypeToEnum<std::decay_t<T>>::value)
+            {
+                destroy();
+                createConcrete(std::forward<T>(rhs));
+            }
+            else
+                assignConcrete(std::forward<T>(rhs));
+        }
 
         return *this;
     }
@@ -372,7 +382,7 @@ public:
         const Types::Which requested = TypeToEnum<std::decay_t<T>>::value;
         if (which != requested)
             throw Exception("Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
-                ErrorCodes::BAD_GET);
+                            ErrorCodes::BAD_GET);
         return get<T>();
     }
 
@@ -382,7 +392,7 @@ public:
         const Types::Which requested = TypeToEnum<std::decay_t<T>>::value;
         if (which != requested)
             throw Exception("Bad get: has " + std::string(getTypeName()) + ", requested " + std::string(Types::toString(requested)),
-                ErrorCodes::BAD_GET);
+                            ErrorCodes::BAD_GET);
         return get<T>();
     }
 
@@ -396,33 +406,33 @@ public:
 
         switch (which)
         {
-            case Types::Null:
-                return false;
-            case Types::UInt64:
-                return get<UInt64>() < rhs.get<UInt64>();
-            case Types::UInt128:
-                return get<UInt128>() < rhs.get<UInt128>();
-            case Types::Int64:
-                return get<Int64>() < rhs.get<Int64>();
-            case Types::Float64:
-                return get<Float64>() < rhs.get<Float64>();
-            case Types::String:
-                return get<String>() < rhs.get<String>();
-            case Types::Array:
-                return get<Array>() < rhs.get<Array>();
-            case Types::Tuple:
-                return get<Tuple>() < rhs.get<Tuple>();
-            case Types::Decimal32:
-                return get<DecimalField<Decimal32>>() < rhs.get<DecimalField<Decimal32>>();
-            case Types::Decimal64:
-                return get<DecimalField<Decimal64>>() < rhs.get<DecimalField<Decimal64>>();
-            case Types::Decimal128:
-                return get<DecimalField<Decimal128>>() < rhs.get<DecimalField<Decimal128>>();
-            case Types::Decimal256:
-                return get<DecimalField<Decimal256>>() < rhs.get<DecimalField<Decimal256>>();
+        case Types::Null:
+            return false;
+        case Types::UInt64:
+            return get<UInt64>() < rhs.get<UInt64>();
+        case Types::UInt128:
+            return get<UInt128>() < rhs.get<UInt128>();
+        case Types::Int64:
+            return get<Int64>() < rhs.get<Int64>();
+        case Types::Float64:
+            return get<Float64>() < rhs.get<Float64>();
+        case Types::String:
+            return get<String>() < rhs.get<String>();
+        case Types::Array:
+            return get<Array>() < rhs.get<Array>();
+        case Types::Tuple:
+            return get<Tuple>() < rhs.get<Tuple>();
+        case Types::Decimal32:
+            return get<DecimalField<Decimal32>>() < rhs.get<DecimalField<Decimal32>>();
+        case Types::Decimal64:
+            return get<DecimalField<Decimal64>>() < rhs.get<DecimalField<Decimal64>>();
+        case Types::Decimal128:
+            return get<DecimalField<Decimal128>>() < rhs.get<DecimalField<Decimal128>>();
+        case Types::Decimal256:
+            return get<DecimalField<Decimal256>>() < rhs.get<DecimalField<Decimal256>>();
 
-            default:
-                throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
+        default:
+            throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
     }
 
@@ -437,34 +447,34 @@ public:
 
         switch (which)
         {
-            case Types::Null:
-                return true;
-            case Types::UInt64:
-                return get<UInt64>() <= rhs.get<UInt64>();
-            case Types::UInt128:
-                return get<UInt128>() <= rhs.get<UInt128>();
-            case Types::Int64:
-                return get<Int64>() <= rhs.get<Int64>();
-            case Types::Float64:
-                return get<Float64>() <= rhs.get<Float64>();
-            case Types::String:
-                return get<String>() <= rhs.get<String>();
-            case Types::Array:
-                return get<Array>() <= rhs.get<Array>();
-            case Types::Tuple:
-                return get<Tuple>() <= rhs.get<Tuple>();
-            case Types::Decimal32:
-                return get<DecimalField<Decimal32>>() <= rhs.get<DecimalField<Decimal32>>();
-            case Types::Decimal64:
-                return get<DecimalField<Decimal64>>() <= rhs.get<DecimalField<Decimal64>>();
-            case Types::Decimal128:
-                return get<DecimalField<Decimal128>>() <= rhs.get<DecimalField<Decimal128>>();
-            case Types::Decimal256:
-                return get<DecimalField<Decimal256>>() <= rhs.get<DecimalField<Decimal256>>();
+        case Types::Null:
+            return true;
+        case Types::UInt64:
+            return get<UInt64>() <= rhs.get<UInt64>();
+        case Types::UInt128:
+            return get<UInt128>() <= rhs.get<UInt128>();
+        case Types::Int64:
+            return get<Int64>() <= rhs.get<Int64>();
+        case Types::Float64:
+            return get<Float64>() <= rhs.get<Float64>();
+        case Types::String:
+            return get<String>() <= rhs.get<String>();
+        case Types::Array:
+            return get<Array>() <= rhs.get<Array>();
+        case Types::Tuple:
+            return get<Tuple>() <= rhs.get<Tuple>();
+        case Types::Decimal32:
+            return get<DecimalField<Decimal32>>() <= rhs.get<DecimalField<Decimal32>>();
+        case Types::Decimal64:
+            return get<DecimalField<Decimal64>>() <= rhs.get<DecimalField<Decimal64>>();
+        case Types::Decimal128:
+            return get<DecimalField<Decimal128>>() <= rhs.get<DecimalField<Decimal128>>();
+        case Types::Decimal256:
+            return get<DecimalField<Decimal256>>() <= rhs.get<DecimalField<Decimal256>>();
 
 
-            default:
-                throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
+        default:
+            throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
     }
 
@@ -477,45 +487,49 @@ public:
 
         switch (which)
         {
-            case Types::Null:
-                return true;
-            case Types::UInt64:
-            case Types::Int64:
-            case Types::Float64:
-                return get<UInt64>() == rhs.get<UInt64>();
-            case Types::String:
-                return get<String>() == rhs.get<String>();
-            case Types::Array:
-                return get<Array>() == rhs.get<Array>();
-            case Types::Tuple:
-                return get<Tuple>() == rhs.get<Tuple>();
-            case Types::UInt128:
-                return get<UInt128>() == rhs.get<UInt128>();
-            case Types::Decimal32:
-                return get<DecimalField<Decimal32>>() == rhs.get<DecimalField<Decimal32>>();
-            case Types::Decimal64:
-                return get<DecimalField<Decimal64>>() == rhs.get<DecimalField<Decimal64>>();
-            case Types::Decimal128:
-                return get<DecimalField<Decimal128>>() == rhs.get<DecimalField<Decimal128>>();
-            case Types::Decimal256:
-                return get<DecimalField<Decimal256>>() == rhs.get<DecimalField<Decimal256>>();
+        case Types::Null:
+            return true;
+        case Types::UInt64:
+        case Types::Int64:
+        case Types::Float64:
+            return get<UInt64>() == rhs.get<UInt64>();
+        case Types::String:
+            return get<String>() == rhs.get<String>();
+        case Types::Array:
+            return get<Array>() == rhs.get<Array>();
+        case Types::Tuple:
+            return get<Tuple>() == rhs.get<Tuple>();
+        case Types::UInt128:
+            return get<UInt128>() == rhs.get<UInt128>();
+        case Types::Decimal32:
+            return get<DecimalField<Decimal32>>() == rhs.get<DecimalField<Decimal32>>();
+        case Types::Decimal64:
+            return get<DecimalField<Decimal64>>() == rhs.get<DecimalField<Decimal64>>();
+        case Types::Decimal128:
+            return get<DecimalField<Decimal128>>() == rhs.get<DecimalField<Decimal128>>();
+        case Types::Decimal256:
+            return get<DecimalField<Decimal256>>() == rhs.get<DecimalField<Decimal256>>();
 
-            default:
-                throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
+        default:
+            throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
     }
 
     bool operator!=(const Field & rhs) const { return !(*this == rhs); }
 
 private:
-    std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which), Null, UInt64, UInt128, Int64, Float64, String, Array, Tuple,
-        DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>>
+    std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which), Null, UInt64, UInt128, Int64, Float64, String, Array, Tuple, DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>>
         storage;
 
     Types::Which which;
 
 
     /// Assuming there was no allocated state or it was deallocated (see destroy).
+#pragma GCC diagnostic push
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#endif
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
     template <typename T>
     void createConcrete(T && x)
     {
@@ -524,6 +538,7 @@ private:
         new (ptr) JustT(std::forward<T>(x));
         which = TypeToEnum<JustT>::value;
     }
+#pragma GCC diagnostic pop
 
     /// Assuming same types.
     template <typename T>
@@ -540,45 +555,45 @@ private:
     {
         switch (field.which)
         {
-            case Types::Null:
-                f(field.template get<Null>());
-                return;
-            case Types::UInt64:
-                f(field.template get<UInt64>());
-                return;
-            case Types::UInt128:
-                f(field.template get<UInt128>());
-                return;
-            case Types::Int64:
-                f(field.template get<Int64>());
-                return;
-            case Types::Float64:
-                f(field.template get<Float64>());
-                return;
-            case Types::String:
-                f(field.template get<String>());
-                return;
-            case Types::Array:
-                f(field.template get<Array>());
-                return;
-            case Types::Tuple:
-                f(field.template get<Tuple>());
-                return;
-            case Types::Decimal32:
-                f(field.template get<DecimalField<Decimal32>>());
-                return;
-            case Types::Decimal64:
-                f(field.template get<DecimalField<Decimal64>>());
-                return;
-            case Types::Decimal128:
-                f(field.template get<DecimalField<Decimal128>>());
-                return;
-            case Types::Decimal256:
-                f(field.template get<DecimalField<Decimal256>>());
-                return;
+        case Types::Null:
+            f(field.template get<Null>());
+            return;
+        case Types::UInt64:
+            f(field.template get<UInt64>());
+            return;
+        case Types::UInt128:
+            f(field.template get<UInt128>());
+            return;
+        case Types::Int64:
+            f(field.template get<Int64>());
+            return;
+        case Types::Float64:
+            f(field.template get<Float64>());
+            return;
+        case Types::String:
+            f(field.template get<String>());
+            return;
+        case Types::Array:
+            f(field.template get<Array>());
+            return;
+        case Types::Tuple:
+            f(field.template get<Tuple>());
+            return;
+        case Types::Decimal32:
+            f(field.template get<DecimalField<Decimal32>>());
+            return;
+        case Types::Decimal64:
+            f(field.template get<DecimalField<Decimal64>>());
+            return;
+        case Types::Decimal128:
+            f(field.template get<DecimalField<Decimal128>>());
+            return;
+        case Types::Decimal256:
+            f(field.template get<DecimalField<Decimal256>>());
+            return;
 
-            default:
-                throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
+        default:
+            throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
     }
 
@@ -619,17 +634,17 @@ private:
 
         switch (which)
         {
-            case Types::String:
-                destroy<String>();
-                break;
-            case Types::Array:
-                destroy<Array>();
-                break;
-            case Types::Tuple:
-                destroy<Tuple>();
-                break;
-            default:
-                break;
+        case Types::String:
+            destroy<String>();
+            break;
+        case Types::Array:
+            destroy<Array>();
+            break;
+        case Types::Tuple:
+            destroy<Tuple>();
+            break;
+        default:
+            break;
         }
 
         which = Types::Null; /// for exception safety in subsequent calls to destroy and create, when create fails.
@@ -973,24 +988,42 @@ class WriteBuffer;
 /// It is assumed that all elements of the array have the same type.
 void readBinary(Array & x, ReadBuffer & buf);
 
-inline void readText(Array &, ReadBuffer &) { throw Exception("Cannot read Array.", ErrorCodes::NOT_IMPLEMENTED); }
-inline void readQuoted(Array &, ReadBuffer &) { throw Exception("Cannot read Array.", ErrorCodes::NOT_IMPLEMENTED); }
+inline void readText(Array &, ReadBuffer &)
+{
+    throw Exception("Cannot read Array.", ErrorCodes::NOT_IMPLEMENTED);
+}
+inline void readQuoted(Array &, ReadBuffer &)
+{
+    throw Exception("Cannot read Array.", ErrorCodes::NOT_IMPLEMENTED);
+}
 
 /// It is assumed that all elements of the array have the same type.
 void writeBinary(const Array & x, WriteBuffer & buf);
 
 void writeText(const Array & x, WriteBuffer & buf);
 
-inline void writeQuoted(const Array &, WriteBuffer &) { throw Exception("Cannot write Array quoted.", ErrorCodes::NOT_IMPLEMENTED); }
+inline void writeQuoted(const Array &, WriteBuffer &)
+{
+    throw Exception("Cannot write Array quoted.", ErrorCodes::NOT_IMPLEMENTED);
+}
 
 void readBinary(Tuple & x, ReadBuffer & buf);
 
-inline void readText(Tuple &, ReadBuffer &) { throw Exception("Cannot read Tuple.", ErrorCodes::NOT_IMPLEMENTED); }
-inline void readQuoted(Tuple &, ReadBuffer &) { throw Exception("Cannot read Tuple.", ErrorCodes::NOT_IMPLEMENTED); }
+inline void readText(Tuple &, ReadBuffer &)
+{
+    throw Exception("Cannot read Tuple.", ErrorCodes::NOT_IMPLEMENTED);
+}
+inline void readQuoted(Tuple &, ReadBuffer &)
+{
+    throw Exception("Cannot read Tuple.", ErrorCodes::NOT_IMPLEMENTED);
+}
 
 void writeBinary(const Tuple & x, WriteBuffer & buf);
 
 void writeText(const Tuple & x, WriteBuffer & buf);
 
-inline void writeQuoted(const Tuple &, WriteBuffer &) { throw Exception("Cannot write Tuple quoted.", ErrorCodes::NOT_IMPLEMENTED); }
+inline void writeQuoted(const Tuple &, WriteBuffer &)
+{
+    throw Exception("Cannot write Tuple quoted.", ErrorCodes::NOT_IMPLEMENTED);
+}
 } // namespace DB

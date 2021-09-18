@@ -4,11 +4,11 @@
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int NO_AVAILABLE_DATA;
-    }
+namespace ErrorCodes
+{
+extern const int NO_AVAILABLE_DATA;
 }
+} // namespace DB
 
 template <typename Key, typename TState = HashTableNoState>
 struct FixedHashTableCell
@@ -19,10 +19,12 @@ struct FixedHashTableCell
     using mapped_type = VoidMapped;
     bool full;
 
-    FixedHashTableCell() {} //-V730
-    FixedHashTableCell(const Key &, const State &) : full(true) {}
+    FixedHashTableCell() = default;
+    FixedHashTableCell(const Key &, const State &)
+        : full(true)
+    {}
 
-    const VoidKey getKey() const { return {}; }
+    VoidKey getKey() const { return {}; }
     VoidMapped getMapped() const { return {}; }
 
     bool isZero(const State &) const { return !full; }
@@ -39,7 +41,7 @@ struct FixedHashTableCell
     {
         Key key;
 
-        const VoidKey getKey() const { return {}; }
+        VoidKey getKey() const { return {}; }
         VoidMapped getMapped() const { return {}; }
         const value_type & getValue() const { return key; }
         void update(Key && key_, FixedHashTableCell *) { key = key_; }
@@ -105,7 +107,10 @@ struct FixedHashTableCalculatedSize
   *  TwoLevelHashSet(Map) to contain different type of sets(maps).
   */
 template <typename Key, typename Cell, typename Size, typename Allocator>
-class FixedHashTable : private boost::noncopyable, protected Allocator, protected Cell::State, protected Size
+class FixedHashTable : private boost::noncopyable
+    , protected Allocator
+    , protected Cell::State
+    , protected Size
 {
     static constexpr size_t NUM_CELLS = 1ULL << (sizeof(Key) * 8);
 
@@ -138,7 +143,7 @@ protected:
 
 
     template <typename Derived, bool is_const>
-    class iterator_base
+    class iterator_base // NOLINT(readability-identifier-naming)
     {
         using Container = std::conditional_t<is_const, const Self, Self>;
         using cell_type = std::conditional_t<is_const, const Cell, Cell>;
@@ -149,8 +154,10 @@ protected:
         friend class FixedHashTable;
 
     public:
-        iterator_base() {}
-        iterator_base(Container * container_, cell_type * ptr_) : container(container_), ptr(ptr_)
+        iterator_base() = default;
+        iterator_base(Container * container_, cell_type * ptr_)
+            : container(container_)
+            , ptr(ptr_)
         {
             cell.update(ptr - container->buf, ptr);
         }
@@ -176,7 +183,7 @@ protected:
                 cell.update(ptr - container->buf, ptr);
             return cell;
         }
-        auto * operator-> ()
+        auto * operator->()
         {
             if (cell.key != ptr - container->buf)
                 cell.update(ptr - container->buf, ptr);
@@ -204,7 +211,11 @@ public:
 
     FixedHashTable() { alloc(); }
 
-    FixedHashTable(FixedHashTable && rhs) : buf(nullptr) { *this = std::move(rhs); }
+    FixedHashTable(FixedHashTable && rhs)
+        : buf(nullptr)
+    {
+        *this = std::move(rhs);
+    }
 
     ~FixedHashTable()
     {
@@ -229,7 +240,9 @@ public:
     class Reader final : private Cell::State
     {
     public:
-        Reader(DB::ReadBuffer & in_) : in(in_) {}
+        explicit Reader(DB::ReadBuffer & in_)
+            : in(in_)
+        {}
 
         Reader(const Reader &) = delete;
         Reader & operator=(const Reader &) = delete;
@@ -273,13 +286,13 @@ public:
     };
 
 
-    class iterator : public iterator_base<iterator, false>
+    class iterator : public iterator_base<iterator, false> // NOLINT(readability-identifier-naming)
     {
     public:
         using iterator_base<iterator, false>::iterator_base;
     };
 
-    class const_iterator : public iterator_base<const_iterator, true>
+    class const_iterator : public iterator_base<const_iterator, true> // NOLINT(readability-identifier-naming)
     {
     public:
         using iterator_base<const_iterator, true>::iterator_base;
@@ -330,8 +343,6 @@ public:
         return iterator(this, buf ? buf + NUM_CELLS : buf);
     }
 
-
-public:
     /// The last parameter is unused but exists for compatibility with HashTable interface.
     void ALWAYS_INLINE emplace(const Key & x, LookupResult & it, bool & inserted, size_t /* hash */ = 0)
     {
@@ -491,6 +502,9 @@ public:
     Cell * data() { return buf; }
 
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-    size_t getCollisions() const { return 0; }
+    size_t getCollisions() const
+    {
+        return 0;
+    }
 #endif
 };

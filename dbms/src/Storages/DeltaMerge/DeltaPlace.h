@@ -198,15 +198,24 @@ template <bool use_row_id_ref, class DeltaTree>
 bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
                  const Block & delta_block,
                  const RowKeyRange & range,
+                 bool relevant_place,
                  DeltaTree & delta_tree,
                  size_t delta_value_space_offset,
                  const IColumn::Permutation & row_id_ref,
                  const SortDescription & sort)
 {
     auto rows = delta_block.rows();
-    auto [offset, limit] = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
-    if (!limit)
-        return rows == limit;
+
+    size_t offset = 0;
+    size_t limit = rows;
+
+    // Only filter out irrelevant rows if relevant_place is true. Otherwise, range should always be ALL.
+    if (relevant_place)
+    {
+        std::tie(offset, limit) = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+        if (!limit)
+            return rows == limit;
+    }
 
     RidGenerator rid_gen(stable, sort, delta_block, offset, limit);
 
@@ -237,13 +246,22 @@ template <class DeltaTree>
 bool placeDelete(const SkippableBlockInputStreamPtr & stable, //
                  const Block & delta_block,
                  const RowKeyRange & range,
+                 bool relevant_place,
                  DeltaTree & delta_tree,
                  const SortDescription & sort)
 {
     auto rows = delta_block.rows();
-    auto [offset, limit] = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
-    if (!limit)
-        return rows == limit;
+
+    size_t offset = 0;
+    size_t limit = rows;
+
+    // Only filter out irrelevant rows if relevant_place is true. Otherwise, range should always be ALL.
+    if (relevant_place)
+    {
+        std::tie(offset, limit) = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+        if (!limit)
+            return rows == limit;
+    }
 
     RidGenerator rid_gen(stable, sort, delta_block, offset, limit);
 

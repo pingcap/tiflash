@@ -1,10 +1,12 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
@@ -23,10 +25,7 @@ struct MPPTaskId
     uint64_t start_ts;
     int64_t task_id;
 
-    bool operator<(const MPPTaskId & rhs) const
-    {
-        return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id);
-    }
+    bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
 
     String toString() const;
 };
@@ -49,21 +48,13 @@ public:
 
     bool isRootMPPTask() const { return dag_context->isRootMPPTask(); }
 
-    TaskStatus getStatus() const { return static_cast<TaskStatus>(status.load()); }
-
-    void unregisterTask();
+    TaskStatus getStatus() const { return status.load(); }
 
     void cancel(const String & reason);
 
-    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnel(const String & reason);
-
-    void finishWrite();
-
-    void writeErrToAllTunnel(const String & e);
-
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
+
+    void preprocess();
 
     void run();
 
@@ -79,7 +70,22 @@ private:
 
     void runImpl();
 
+    void unregisterTask();
+
+    void writeErrToAllTunnels(const String & e);
+
+    /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
+    /// without waiting the tunnel to be connected
+    void closeAllTunnels(const String & reason);
+
+    void finishWrite();
+
+    bool switchStatus(TaskStatus from, TaskStatus to);
+
     Context context;
+
+    RegionInfoMap local_regions;
+    RegionInfoList remote_regions;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;
@@ -91,16 +97,17 @@ private:
 
     MPPTaskId id;
 
-    std::atomic<Int32> status{INITIALIZING};
+    std::atomic<TaskStatus> status{INITIALIZING};
 
     mpp::TaskMeta meta;
+    MPPTunnelSetPtr tunnel_set;
 
     // which targeted task we should send data by which tunnel.
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
     MPPTaskManager * manager = nullptr;
 
-    Poco::Logger * log;
+    const LogWithPrefixPtr log;
 
     Exception err;
 

@@ -2,6 +2,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -22,15 +23,17 @@ class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
 public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
-    DMSegmentThreadInputStream(const DMContextPtr & dm_context_,
-                               const SegmentReadTaskPoolPtr & task_pool_,
-                               AfterSegmentRead after_segment_read_,
-                               const ColumnDefines & columns_to_read_,
-                               const RSOperatorPtr & filter_,
-                               UInt64 max_version_,
-                               size_t expected_block_size_,
-                               bool is_raw_,
-                               bool do_range_filter_for_raw_)
+    DMSegmentThreadInputStream(
+        const DMContextPtr & dm_context_,
+        const SegmentReadTaskPoolPtr & task_pool_,
+        AfterSegmentRead after_segment_read_,
+        const ColumnDefines & columns_to_read_,
+        const RSOperatorPtr & filter_,
+        UInt64 max_version_,
+        size_t expected_block_size_,
+        bool is_raw_,
+        bool do_range_filter_for_raw_,
+        const LogWithPrefixPtr & log_)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
         , after_segment_read(after_segment_read_)
@@ -41,7 +44,7 @@ public:
         , expected_block_size(expected_block_size_)
         , is_raw(is_raw_)
         , do_range_filter_for_raw(do_range_filter_for_raw_)
-        , log(&Poco::Logger::get("DMSegmentThreadInputStream"))
+        , log(getMPPTaskLog(log_, getName()))
     {
     }
 
@@ -128,7 +131,7 @@ private:
 
     SegmentPtr cur_segment;
 
-    Poco::Logger * log;
+    LogWithPrefixPtr log;
 };
 
 } // namespace DM

@@ -1,11 +1,10 @@
 #pragma once
 
-#include <Poco/Timespan.h>
 #include <Interpreters/Settings.h>
+#include <Poco/Timespan.h>
 
 namespace DB
 {
-
 struct ConnectionTimeouts
 {
     Poco::Timespan connection_timeout;
@@ -17,9 +16,9 @@ struct ConnectionTimeouts
     ConnectionTimeouts(const Poco::Timespan & connection_timeout_,
                        const Poco::Timespan & send_timeout_,
                        const Poco::Timespan & receive_timeout_)
-    : connection_timeout(connection_timeout_),
-      send_timeout(send_timeout_),
-      receive_timeout(receive_timeout_)
+        : connection_timeout(connection_timeout_)
+        , send_timeout(send_timeout_)
+        , receive_timeout(receive_timeout_)
     {
     }
 
@@ -56,4 +55,4 @@ struct ConnectionTimeouts
     }
 };
 
-}
+} // namespace DB

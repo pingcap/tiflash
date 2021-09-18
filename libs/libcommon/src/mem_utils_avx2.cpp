@@ -6,12 +6,10 @@
 #include <cstdint>
 namespace mem_utils::_detail
 {
-
 using VectorType = __m256i;
 
 namespace
 {
-
 // Both `memoryEqualAVX2x4HalfAligned` and `memoryEqualAVX2x4FullAligned` compares the memory 128 bytes
 // starting immediately from p1 and p2.
 // AVX2 technology is utilized: this function loads 4 vectors from p1 and 4 vectors from p2 and use issue a
@@ -51,50 +49,50 @@ namespace
 // P1 must be aligned to 32-byte boundary
 __attribute__((always_inline, pure)) inline bool memoryEqualAVX2x4HalfAligned(const char * p1, const char * p2)
 {
-    auto p1_ = reinterpret_cast<const VectorType *>(p1);
-    auto p2_ = reinterpret_cast<const VectorType *>(p2);
+    const auto * v1 = reinterpret_cast<const VectorType *>(p1);
+    const auto * v2 = reinterpret_cast<const VectorType *>(p2);
     // clang-format off
     return 0xFFFFFFFF == static_cast<unsigned>(_mm256_movemask_epi8(
         _mm256_and_si256(
             _mm256_and_si256(
                 _mm256_cmpeq_epi8(
-                    _mm256_load_si256(p1_ + 0),
-                    _mm256_loadu_si256(p2_ + 0)),
+                    _mm256_load_si256(v1 + 0),
+                    _mm256_loadu_si256(v2 + 0)),
                 _mm256_cmpeq_epi8(
-                    _mm256_load_si256(p1_ + 1),
-                    _mm256_loadu_si256(p2_ + 1))),
+                    _mm256_load_si256(v1 + 1),
+                    _mm256_loadu_si256(v2 + 1))),
             _mm256_and_si256(
                 _mm256_cmpeq_epi8(
-                    _mm256_load_si256(p1_ + 2),
-                    _mm256_loadu_si256(p2_ + 2)),
+                    _mm256_load_si256(v1 + 2),
+                    _mm256_loadu_si256(v2 + 2)),
                 _mm256_cmpeq_epi8(
-                    _mm256_load_si256(p1_ + 3),
-                    _mm256_loadu_si256(p2_ + 3))))));
+                    _mm256_load_si256(v1 + 3),
+                    _mm256_loadu_si256(v2 + 3))))));
     // clang-format on
 }
 
 // Both P1 and P2 must be aligned to 32-byte boundary
 __attribute__((always_inline, pure)) inline bool memoryEqualAVX2x4FullAligned(const char * p1, const char * p2)
 {
-    auto p1_ = reinterpret_cast<const VectorType *>(p1);
-    auto p2_ = reinterpret_cast<const VectorType *>(p2);
+    const auto * const v1 = reinterpret_cast<const VectorType *>(p1);
+    const auto * const v2 = reinterpret_cast<const VectorType *>(p2);
     // clang-format off
     return 0xFFFFFFFF == static_cast<unsigned>(_mm256_movemask_epi8(
         _mm256_and_si256(
             _mm256_and_si256(
                 _mm256_cmpeq_epi8(
-                    _mm256_load_si256(p1_ + 0),
-                    _mm256_load_si256(p2_ + 0)),
+                    _mm256_load_si256(v1 + 0),
+                    _mm256_load_si256(v2 + 0)),
                 _mm256_cmpeq_epi8(
-                    _mm256_load_si256(p1_ + 1),
-                    _mm256_load_si256(p2_ + 1))),
+                    _mm256_load_si256(v1 + 1),
+                    _mm256_load_si256(v2 + 1))),
             _mm256_and_si256(
                 _mm256_cmpeq_epi8(
-                    _mm256_load_si256(p1_ + 2),
-                    _mm256_load_si256(p2_ + 2)),
+                    _mm256_load_si256(v1 + 2),
+                    _mm256_load_si256(v2 + 2)),
                 _mm256_cmpeq_epi8(
-                    _mm256_load_si256(p1_ + 3),
-                    _mm256_load_si256(p2_ + 3))))));
+                    _mm256_load_si256(v1 + 3),
+                    _mm256_load_si256(v2 + 3))))));
     // clang-format on
 }
 
@@ -103,7 +101,8 @@ __attribute__((always_inline, pure)) inline bool memoryEqualAVX2x1(const char * 
 {
     return 0xFFFFFFFF
         == static_cast<unsigned>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
-            _mm256_loadu_si256(reinterpret_cast<const VectorType *>(p1)), _mm256_loadu_si256(reinterpret_cast<const VectorType *>(p2)))));
+            _mm256_loadu_si256(reinterpret_cast<const VectorType *>(p1)),
+            _mm256_loadu_si256(reinterpret_cast<const VectorType *>(p2)))));
 }
 
 } // namespace
@@ -243,8 +242,8 @@ __attribute__((pure)) bool memoryIsByteAVX2(const void * data, size_t size, std:
     static constexpr size_t group_size = vector_length * 4;
     size_t remaining = size;
     auto filled_vector = _mm256_set1_epi8(static_cast<char>(target));
-    auto current_address = reinterpret_cast<const VectorType *>(data);
-    auto byte_address = reinterpret_cast<const uint8_t *>(data);
+    const auto * current_address = reinterpret_cast<const VectorType *>(data);
+    const auto * byte_address = reinterpret_cast<const uint8_t *>(data);
 
     if (!compareArrayAVX2<1>({_mm256_loadu_si256(current_address)}, filled_vector))
     {
@@ -281,21 +280,21 @@ __attribute__((pure)) bool memoryIsByteAVX2(const void * data, size_t size, std:
     bool result = true;
     switch (remaining / vector_length)
     {
-        case 3:
-            result = compareArrayAVX2<4>({_mm256_load_si256(current_address + 0), _mm256_load_si256(current_address + 1),
-                                             _mm256_load_si256(current_address + 2), tail},
-                filled_vector);
-            break;
-        case 2:
-            result = compareArrayAVX2<3>(
-                {_mm256_load_si256(current_address + 0), _mm256_load_si256(current_address + 1), tail}, filled_vector);
-            break;
-        case 1:
-            result = compareArrayAVX2<2>({_mm256_load_si256(current_address + 0), tail}, filled_vector);
-            break;
-        case 0:
-            result = compareArrayAVX2<1>({tail}, filled_vector);
-            break;
+    case 3:
+        result = compareArrayAVX2<4>({_mm256_load_si256(current_address + 0), _mm256_load_si256(current_address + 1), _mm256_load_si256(current_address + 2), tail},
+                                     filled_vector);
+        break;
+    case 2:
+        result = compareArrayAVX2<3>(
+            {_mm256_load_si256(current_address + 0), _mm256_load_si256(current_address + 1), tail},
+            filled_vector);
+        break;
+    case 1:
+        result = compareArrayAVX2<2>({_mm256_load_si256(current_address + 0), tail}, filled_vector);
+        break;
+    case 0:
+        result = compareArrayAVX2<1>({tail}, filled_vector);
+        break;
     }
     return result;
 }

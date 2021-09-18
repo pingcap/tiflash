@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Arena.h>
+#include <common/StringRef.h>
 
 /**
   * In some aggregation scenarios, when adding a key to the hash table, we
@@ -48,24 +49,28 @@
   * After the call to keyHolderPersistKey(), must return the persistent key.
   */
 template <typename Key>
-inline Key & ALWAYS_INLINE keyHolderGetKey(Key && key) { return key; }
+inline Key & ALWAYS_INLINE keyHolderGetKey(Key && key)
+{
+    return key;
+}
 
 /**
   * Make the key persistent. keyHolderGetKey() must return the persistent key
   * after this call.
   */
 template <typename Key>
-inline void ALWAYS_INLINE keyHolderPersistKey(Key &&) {}
+inline void ALWAYS_INLINE keyHolderPersistKey(Key &&)
+{}
 
 /**
   * Discard the key. Calling keyHolderGetKey() is ill-defined after this.
   */
 template <typename Key>
-inline void ALWAYS_INLINE keyHolderDiscardKey(Key &&) {}
+inline void ALWAYS_INLINE keyHolderDiscardKey(Key &&)
+{}
 
 namespace DB
 {
-
 /**
   * ArenaKeyHolder is a key holder for hash tables that serializes a StringRef
   * key to an Arena.
@@ -74,10 +79,9 @@ struct ArenaKeyHolder
 {
     StringRef key;
     Arena & pool;
-
 };
 
-}
+} // namespace DB
 
 inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::ArenaKeyHolder & holder)
 {
@@ -113,7 +117,6 @@ inline void ALWAYS_INLINE keyHolderDiscardKey(DB::ArenaKeyHolder &&)
 
 namespace DB
 {
-
 /** SerializedKeyHolder is a key holder for a StringRef key that is already
   * serialized to an Arena. The key must be the last allocation in this Arena,
   * and is discarded by rolling back the allocation.
@@ -124,7 +127,7 @@ struct SerializedKeyHolder
     Arena & pool;
 };
 
-}
+} // namespace DB
 
 inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::SerializedKeyHolder & holder)
 {
@@ -161,4 +164,3 @@ inline void ALWAYS_INLINE keyHolderDiscardKey(DB::SerializedKeyHolder && holder)
     holder.key.data = nullptr;
     holder.key.size = 0;
 }
-

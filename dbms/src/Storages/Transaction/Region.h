@@ -102,7 +102,7 @@ public:
     explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
-    void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
+    void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
     void remove(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.
@@ -144,8 +144,10 @@ public:
 
     ReadIndexResult learnerRead(UInt64 start_ts);
 
-    // Return time cost(seconds) about wait-index. If peer-state is NOT Normal or store-status is Terminated, wait-index process will be stopped as well.
-    double waitIndex(UInt64 index, const TMTContext & tmt);
+    bool checkIndex(UInt64 index) const;
+
+    // Return <WaitIndexResult, time cost(seconds)> for wait-index.
+    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TMTContext & tmt);
 
     UInt64 appliedIndex() const;
 

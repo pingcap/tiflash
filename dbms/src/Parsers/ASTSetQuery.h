@@ -1,14 +1,11 @@
 #pragma once
-
-#include <Core/Field.h>
 #include <Common/FieldVisitors.h>
+#include <Core/Field.h>
 #include <Parsers/IAST.h>
 
 
 namespace DB
 {
-
-
 /** SET query
   */
 class ASTSetQuery : public IAST
@@ -45,4 +42,4 @@ public:
     }
 };
 
-}
+} // namespace DB

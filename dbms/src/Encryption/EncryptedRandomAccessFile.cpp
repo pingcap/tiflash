@@ -4,8 +4,10 @@
 
 namespace DB
 {
-
-void EncryptedRandomAccessFile::close() { file->close(); }
+void EncryptedRandomAccessFile::close()
+{
+    file->close();
+}
 
 off_t EncryptedRandomAccessFile::seek(off_t offset, int whence)
 {
