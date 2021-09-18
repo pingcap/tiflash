@@ -74,7 +74,8 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
             std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
             dag_query_block.source->exchange_receiver(),
             dag.getDAGContext().getMPPTaskMeta(),
-            max_streams);
+            max_streams,
+            log);
     }
 }
 
