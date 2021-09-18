@@ -40,11 +40,29 @@ public:
 
 struct UnavailableRegions : public LockWrap
 {
-    using Result = RegionException::UnavailableRegions;
+    explicit UnavailableRegions(bool is_batch_cop_)
+        : is_batch_cop(is_batch_cop_)
+    {}
 
     void add(RegionID id, RegionException::RegionReadStatus status_)
     {
         status = status_;
+        auto lock = genLockGuard();
+        doAdd(id);
+    }
+
+    // Mark the Region occurrs "wait index timeout" event.
+    // For batch cop request, directly throw an error to make the query fail.
+    // For normal cop request, mark down the Region and throw region exception to let upper layer(client-c, tidb, tispark) handle it.
+    void addWaitTimeout(RegionID id)
+    {
+        if (is_batch_cop)
+        {
+            // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
+            throw TiFlashException(fmt::format("Region {} is unavailable", id), Errors::Coprocessor::RegionError);
+        }
+        // For normal cop request, mark the region as not found.
+        status = RegionException::RegionReadStatus::NOT_FOUND;
         auto lock = genLockGuard();
         doAdd(id);
     }
@@ -70,6 +88,7 @@ struct UnavailableRegions : public LockWrap
 
         // For batch-cop request, all unavailable regions, include the ones with lock exception, should be collected and retry next round.
         // For normal cop request, which only contains one region, LockException should be thrown directly and let upper layer(like client-c, tidb, tispark) handle it.
+        // FIXME: use `is_batch_cop` to replace `regions_info.size() == 1`
         if (regions_info.size() == 1 && region_lock)
             throw LockException(region_lock->first, std::move(region_lock->second));
 
@@ -86,6 +105,7 @@ struct UnavailableRegions : public LockWrap
 private:
     inline void doAdd(RegionID id) { ids.emplace(id); }
 
+    const bool is_batch_cop;
     RegionException::UnavailableRegions ids;
     std::optional<std::pair<RegionID, LockInfoPtr>> region_lock;
     std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND};
@@ -235,9 +255,9 @@ private:
         return 0;
     }
 };
-
 using BatchReadIndexRequests = BatchReadIndexDelegate::BatchReadIndexRequests;
 using BatchReadIndexResult = BatchReadIndexDelegate::BatchReadIndexResult;
+
 void BatchReadIndexDelegate::prepare(
     const size_t region_begin_idx,
     const size_t region_end_idx,
@@ -357,7 +377,7 @@ LearnerReadSnapshot doLearnerRead(
     const size_t batch_size = num_regions / concurrent_num;
     const auto & regions_info = mvcc_query_info.getRegionsInfo();
 
-    UnavailableRegions unavailable_regions;
+    UnavailableRegions unavailable_regions(!wait_index_timeout_as_region_not_found);
     const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
         Stopwatch batch_wait_data_watch;
         Stopwatch watch;
@@ -375,16 +395,6 @@ LearnerReadSnapshot doLearnerRead(
             watch.restart(); // restart to count the elapsed of wait index
         }
 
-        auto handle_wait_timeout_region = [&unavailable_regions, wait_index_timeout_as_region_not_found](const DB::RegionID region_id) {
-            if (wait_index_timeout_as_region_not_found)
-            {
-                // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
-                unavailable_regions.add(region_id, RegionException::RegionReadStatus::NOT_FOUND);
-                return;
-            }
-            // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
-            throw TiFlashException(fmt::format("Region {} is unavailable", region_id), Errors::Coprocessor::RegionError);
-        };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
         for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
         {
@@ -405,7 +415,7 @@ LearnerReadSnapshot doLearnerRead(
                 auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt);
                 if (wait_res != WaitIndexResult::Finished)
                 {
-                    handle_wait_timeout_region(region_to_query.region_id);
+                    unavailable_regions.addWaitTimeout(region_to_query.region_id);
                     continue;
                 }
                 if (time_cost > 0)
@@ -420,7 +430,7 @@ LearnerReadSnapshot doLearnerRead(
                 // for Regions one by one.
                 if (!region->checkIndex(index_to_wait))
                 {
-                    handle_wait_timeout_region(region_to_query.region_id);
+                    unavailable_regions.addWaitTimeout(region_to_query.region_id);
                     continue;
                 }
             }
