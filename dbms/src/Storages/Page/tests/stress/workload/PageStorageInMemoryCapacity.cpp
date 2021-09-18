@@ -1,5 +1,17 @@
 #include <PSWorkload.h>
+#include <fcntl.h>
+#include <stdlib.h>
 #include <sys/resource.h>
+#include <unistd.h>
+
+
+#ifdef __APPLE__
+
+#include <libproc.h>
+#include <mach/mach_host.h>
+#include <sys/proc_info.h>
+#include <sys/sysctl.h>
+#endif
 
 class PageStorageInMemoryCapacity : public StressWorkload
     , public StressWorkloadFunc<PageStorageInMemoryCapacity>
@@ -19,6 +31,69 @@ public:
         return 1 << 7;
     }
 
+    static std::tuple<UInt64, UInt64, UInt64> getCurrentMemory()
+    {
+        UInt64 virtual_size = 0;
+        UInt64 resident_size = 0;
+        UInt64 total_mem = 0;
+#ifdef __APPLE__
+        struct proc_taskinfo pti;
+        if (sizeof(pti) == proc_pidinfo(getpid(), PROC_PIDTASKINFO, 0, &pti, sizeof(pti)))
+        {
+            virtual_size = pti.pti_virtual_size;
+            resident_size = pti.pti_resident_size;
+        }
+        mach_msg_type_number_t info_size = HOST_BASIC_INFO_COUNT;
+        host_basic_info_data_t info_data;
+
+        kern_return_t kern_rc = host_info(mach_host_self(), HOST_BASIC_INFO, reinterpret_cast<host_info_t>(&info_data), &info_size);
+        if (kern_rc == KERN_SUCCESS)
+        {
+            total_mem = info_data.max_mem;
+        }
+
+        return std::make_tuple(total_mem, virtual_size, resident_size);
+#elif __linux__
+        int fd = open("/proc/self/statm", O_RDONLY);
+        if (fd != -1)
+        {
+            size_t max_proc_line = 4096 + 1;
+            char buf[max_proc_line];
+            ssize_t rres = read(fd, buf, max_proc_line);
+
+            close(fd);
+            if (rres > 0)
+            {
+                char * pos = buf;
+                virtual_size = strtol(pos, &pos, 10);
+                if (*pos == ' ')
+                    pos++;
+                resident_size = strtol(pos, &pos, 10);
+                if (*pos == ' ')
+                    pos++;
+            }
+        }
+
+        FILE * file = fopen("/proc/meminfo", "r");
+        if (file != NULL)
+        {
+            char buffer[128];
+#define MEMORY_TOTAL_LABEL "MemTotal:"
+            while (fgets(buffer, 128, file))
+            {
+                if ((strncmp((buffer), (MEMORY_TOTAL_LABEL), strlen(MEMORY_TOTAL_LABEL)) == 0)
+                    && sscanf(buffer + strlen(MEMORY_TOTAL_LABEL), " %32llu kB", &total_mem))
+                {
+                    break;
+                }
+            }
+#undef MEMORY_TOTAL_LABEL
+        }
+#endif
+        return std::make_tuple(total_mem, virtual_size, resident_size);
+    }
+
+
 private:
     String desc() override
     {
@@ -32,6 +107,14 @@ private:
 
     void run() override
     {
+        const size_t single_writer_page_nums = 250000;
+        UInt64 begin_virtual_size = 0;
+        UInt64 begin_resident_size = 0;
+        UInt64 end_virtual_size = 0;
+        UInt64 end_resident_size = 0;
+        UInt64 total_mem = 0;
+
+        std::tie(total_mem, begin_virtual_size, begin_resident_size) = getCurrentMemory();
         pool.addCapacity(1 + options.num_writers + options.num_readers);
         DB::PageStorage::Config config;
         initPageStorage(config, name());
@@ -39,27 +122,35 @@ private:
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);
         metrics_dumper->start();
 
-        stress_time = std::make_shared<StressTimeout>(60);
+        stress_time = std::make_shared<StressTimeout>(100);
         stress_time->start();
         {
             stop_watch.start();
             startWriter<PSIncreaseWriter>(options.num_writers, [](std::shared_ptr<PSIncreaseWriter> writer) -> void {
                 writer->setBatchBufferNums(1);
                 writer->setBatchBufferSize(10 * 1024);
-                writer->setPageRange(50000);
+                writer->setPageRange(single_writer_page_nums);
             });
 
             pool.joinAll();
             stop_watch.stop();
         }
 
-        // todo
+        std::tie(total_mem, end_virtual_size, end_resident_size) = getCurrentMemory();
+
+        LOG_INFO(StressEnv::logger, fmt::format("After gen : {} pages"
+                                                "virtual memory used : {} MB,"
+                                                "resident memory used : {} MB,"
+                                                "total memory is {} , It is estimated that {} pages can be stored in the virtual memory,"
+                                                "It is estimated that {} pages can be stored in the resident memory.",
+                                                single_writer_page_nums * options.num_writers,
+                                                (end_virtual_size - begin_virtual_size) / DB::MB,
+                                                (end_resident_size - begin_resident_size) / DB::MB,
+                                                total_mem,
+                                                total_mem / ((end_virtual_size - begin_virtual_size) / (single_writer_page_nums * options.num_writers)),
+                                                total_mem / ((end_resident_size - begin_resident_size) / (single_writer_page_nums * options.num_writers))));
     }
 
-    bool verify() override
-    {
-        return true;
-    }
 };
 
 REGISTER_WORKLOAD(PageStorageInMemoryCapacity)
