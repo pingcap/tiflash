@@ -4,9 +4,9 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsString.h>
-#include <Functions/castTypeToEither.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
+#include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
 #include <fmt/format.h>
 
@@ -3128,7 +3128,7 @@ public:
                     {
                         const size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<T1>());
                         col_res->reserve(val_num);
-                        for (const auto &number : col0_column->getData())
+                        for (const auto & number : col0_column->getData())
                         {
                             std::string number_str{number_to_str(number)};
                             roundFormatArgs(number_str, max_num_decimals);
@@ -3254,7 +3254,7 @@ private:
     static std::string formatENUS(std::string & number, size_t precision)
     {
         if (number[0] == '-' && number[1] == '.')
-             number.replace(0, 1, "-0");
+            number.replace(0, 1, "-0");
         else if (number[0] == '.')
             number.replace(0, 1, "0.");
 
@@ -3289,7 +3289,8 @@ private:
         }
 
         auto point_index = number.find('.');
-        if (point_index == std::string::npos) point_index = number.size();
+        if (point_index == std::string::npos)
+            point_index = number.size();
         auto integer_part_size = sign ? point_index - 1 : point_index;
         const auto remainder = integer_part_size % 3;
         auto integer_part_pos = number.cbegin() + (sign ? 1 : 0);

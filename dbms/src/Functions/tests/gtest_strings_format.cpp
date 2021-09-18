@@ -28,7 +28,7 @@ protected:
 };
 
 
-TEST_F(StringFormat, string_format_all_unit_Test)
+TEST_F(StringFormat, StringFormatAllUnitTest)
 try
 {
     std::string func_name = "format";
