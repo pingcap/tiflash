@@ -54,6 +54,7 @@ public:
 
         return std::make_tuple(total_mem, virtual_size, resident_size);
 #elif __linux__
+#define PAGE_SIZE (sysconf(_SC_PAGESIZE))
         int fd = open("/proc/self/statm", O_RDONLY);
         if (fd != -1)
         {
@@ -89,6 +90,9 @@ public:
             }
 #undef MEMORY_TOTAL_LABEL
         }
+        total_mem = total_mem * 1024;
+        virtual_size = virtual_size * PAGE_SIZE;
+        resident_size = resident_size * PAGE_SIZE;
 #endif
         return std::make_tuple(total_mem, virtual_size, resident_size);
     }
@@ -138,19 +142,23 @@ private:
 
         std::tie(total_mem, end_virtual_size, end_resident_size) = getCurrentMemory();
 
+        size_t virtual_used = (end_virtual_size - begin_virtual_size);
+        size_t resident_used = (end_resident_size - begin_resident_size);
+        size_t page_writen = (single_writer_page_nums * options.num_writers);
+        assert(page_writen != 0);
+
         LOG_INFO(StressEnv::logger, fmt::format("After gen : {} pages"
                                                 "virtual memory used : {} MB,"
                                                 "resident memory used : {} MB,"
                                                 "total memory is {} , It is estimated that {} pages can be stored in the virtual memory,"
                                                 "It is estimated that {} pages can be stored in the resident memory.",
-                                                single_writer_page_nums * options.num_writers,
-                                                (end_virtual_size - begin_virtual_size) / DB::MB,
-                                                (end_resident_size - begin_resident_size) / DB::MB,
+                                                page_writen,
+                                                virtual_used / DB::MB,
+                                                resident_used / DB::MB,
                                                 total_mem,
-                                                total_mem / ((end_virtual_size - begin_virtual_size) / (single_writer_page_nums * options.num_writers)),
-                                                total_mem / ((end_resident_size - begin_resident_size) / (single_writer_page_nums * options.num_writers))));
+                                                std::round(virtual_used) ? (total_mem / ((double)virtual_used / page_writen)) : 0,
+                                                std::round(resident_used) ? (total_mem / ((double)resident_used / page_writen)) : 0));
     }
-
 };
 
 REGISTER_WORKLOAD(PageStorageInMemoryCapacity)
