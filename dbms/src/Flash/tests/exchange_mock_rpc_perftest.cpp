@@ -130,20 +130,29 @@ struct MockWriter
         queue->push(std::make_shared<Packet>(std::move(packet)));
     }
 
+    void finish()
+    {
+        queue->finish();
+    }
+
     PacketQueuePtr queue;
 };
+
+using MockWriterPtr = std::shared_ptr<MockWriter>;
+using MockTunnel = MPPTunnelBase<MockWriter>;
+using MockTunnelPtr = std::shared_ptr<MockTunnel>;
+using MockTunnelSet = MPPTunnelSetBase<MockTunnel>;
+using MockTunnelSetPtr = std::shared_ptr<MockTunnelSet>;
 
 struct MockBlockInputStream : public IProfilingBlockInputStream
 {
     const std::vector<Block> & blocks;
-    StopFlag & stop_flag;
     Block header;
     std::mt19937 mt;
     std::uniform_int_distribution<int> dist;
 
-    MockBlockInputStream(const std::vector<Block> & blocks_, StopFlag & stop_flag_)
+    explicit MockBlockInputStream(const std::vector<Block> & blocks_)
         : blocks(blocks_)
-        , stop_flag(stop_flag_)
         , header(blocks[0].cloneEmpty())
         , mt(rd())
         , dist(0, blocks.size() - 1)
@@ -154,8 +163,7 @@ struct MockBlockInputStream : public IProfilingBlockInputStream
 
     Block readImpl() override
     {
-        if (!stop_flag.load(std::memory_order_acquire))
-            return blocks[dist(mt)];
+        return blocks[dist(mt)];
     }
 };
 
@@ -223,26 +231,22 @@ void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & q
     queue->finish();
 }
 
-using MockTunnel = MPPTunnelBase<MockWriter>;
-using BlockWriter = StreamingDAGResponseWriter<std::shared_ptr<MockWriter>>;
-using BlockWriterPtr = std::shared_ptr<BlockWriter>;
-
 void sendBlock(
-    const std::vector<Block> & blocks,
-    const BlockOutputStreamPtr & out,
-    const std::shared_ptr<MockWriter> & raw_writer [[maybe_unused]],
+    BlockInputStreamPtr stream,
+    std::vector<MockTunnelPtr> tunnels,
+    std::vector<MockWriterPtr> writers,
     const StopFlag & stop_flag)
 {
-    std::mt19937 mt(rd());
-    std::uniform_int_distribution<int> dist(0, blocks.size() - 1);
-
-    out->writePrefix();
     while (!stop_flag.load())
     {
-        int i = dist(mt);
-        out->write(blocks[i]);
+        stream->read();
     }
-    out->writeSuffix();
+    stream->readSuffix();
+    for (size_t i = 0; i < tunnels.size(); ++i)
+    {
+        tunnels[i]->waitForFinish();
+        writers[i]->finish();
+    }
 }
 
 void readBlock(BlockInputStreamPtr stream)
@@ -446,11 +450,11 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
         source_num * 5);
 
     using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
-    std::vector<BlockInputStreamPtr> streams;
+    std::vector<BlockInputStreamPtr> receive_streams;
     for (int i = 0; i < concurrency; ++i)
-        streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
+        receive_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
 
-    auto receiver_header = streams.front()->getHeader();
+    [[maybe_unused]] auto receiver_header = receive_streams.front()->getHeader();
 
     std::shared_ptr<Join> join_ptr;
     if constexpr (with_join)
@@ -474,30 +478,49 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
             65536);
 
         for (int i = 0; i < concurrency; ++i)
-            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i);
+            receive_streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(receive_streams[i], join_ptr, i);
     }
 
-    auto union_input_stream = std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency);
+    auto union_receive_stream = std::make_shared<UnionBlockInputStream<>>(receive_streams, nullptr, concurrency);
 
-    auto mock_writer = std::make_shared<MockWriter>(queues);
+    std::vector<MockWriterPtr> mock_writers;
+    std::vector<MockTunnelPtr> tunnels;
+    auto tunnel_set = std::make_shared<MockTunnelSet>();
+    for (int i = 0; i < source_num; ++i)
+    {
+        auto writer = std::make_shared<MockWriter>(queues[i]);
+        mock_writers.push_back(writer);
+
+        auto tunnel = std::make_shared<MockTunnel>(
+            task_meta, task_meta, std::chrono::seconds(60), [] { return false; }, concurrency);
+        tunnel->connect(writer.get());
+        tunnels.push_back(tunnel);
+        tunnel_set->addTunnel(tunnel);
+    }
 
     DAGContext dag_context(tipb::DAGRequest{});
     dag_context.final_concurrency = concurrency;
     dag_context.is_mpp_task = true;
     dag_context.is_root_mpp_task = false;
-    std::unique_ptr<DAGResponseWriter> response_writer(
-        new BlockWriter(
-            mock_writer,
-            {0, 1, 2},
-            TiDB::TiDBCollators(3),
-            tipb::Hash,
-            -1,
-            tipb::TypeCHBlock,
-            {f0, f1, f2},
-            dag_context));
 
-    BlockOutputStreamPtr output_stream = std::make_shared<DAGBlockOutputStream>(union_input_stream->getHeader(), std::move(response_writer));
-    output_stream = std::make_shared<SquashingBlockOutputStream>(output_stream, 20000, 0);
+    std::vector<BlockInputStreamPtr> send_streams;
+    for (int i = 0; i < concurrency; ++i)
+    {
+        BlockInputStreamPtr stream = std::make_shared<MockBlockInputStream>(blocks);
+        std::unique_ptr<DAGResponseWriter> response_writer(
+            new StreamingDAGResponseWriter<MockTunnelSetPtr>(
+                tunnel_set,
+                {0, 1, 2},
+                TiDB::TiDBCollators(3),
+                tipb::Hash,
+                -1,
+                tipb::TypeCHBlock,
+                {f0, f1, f2},
+                dag_context));
+        send_streams.push_back(std::make_shared<ExchangeSender>(stream, std::move(response_writer)));
+    }
+
+    auto union_send_stream = std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency);
 
     if constexpr (with_join)
     {
@@ -505,14 +528,13 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
             join_ptr->setSampleBlock(receiver_header);
     }
 
-    auto write_thread = std::thread(sendBlock, std::cref(blocks), output_stream, mock_writer, std::ref(stop_flag));
-    auto read_thread = std::thread(readBlock, union_input_stream);
+    auto write_thread = std::thread(sendBlock, union_send_stream, std::ref(tunnels), std::ref(mock_writers), std::ref(stop_flag));
+    auto read_thread = std::thread(readBlock, union_receive_stream);
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
     stop_flag.store(true);
 
     write_thread.join();
-    mock_writer->finish();
     read_thread.join();
 
     if constexpr (with_join)
