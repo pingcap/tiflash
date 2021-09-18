@@ -6,6 +6,7 @@
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -568,6 +569,21 @@ std::tuple<const IColumn *, const NullMap *> removeNullable(const IColumn * colu
     const auto * res = &nullable_column->getNestedColumn();
     const auto * nullmap = &nullable_column->getNullMapData();
     return {res, nullmap};
+}
+
+MutableColumns ColumnNullable::scatter(ColumnIndex num_columns, const Selector & selector) const
+{
+    auto scattered_nested_columns = nested_column->scatter(num_columns, selector);
+    auto scattered_nullmaps = null_map->scatter(num_columns, selector);
+
+    assert(scattered_nested_columns->size() == num_columns && scattered_nullmaps->size() == num_columns);
+
+    MutableColumns columns;
+    columns.reserve(num_columns);
+    for (ColumnIndex i = 0; i < num_columns; ++i)
+        columns.push_back(create(std::move(scattered_nested_columns[i]), std::move(scattered_nullmaps[i])));
+
+    return columns;
 }
 
 } // namespace DB

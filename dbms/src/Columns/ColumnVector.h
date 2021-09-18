@@ -272,10 +272,7 @@ public:
 
     void getExtremes(Field & min, Field & max) const override;
 
-    MutableColumns scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const override
-    {
-        return this->template scatterImpl<Self>(num_columns, selector);
-    }
+    MutableColumns scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const override;
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 

@@ -83,10 +83,7 @@ public:
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void getExtremes(Field & min, Field & max) const override;
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
-    {
-        return scatterImpl<ColumnNullable>(num_columns, selector);
-    }
+    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 

@@ -4,6 +4,7 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/NaNUtils.h>
 #include <Common/SipHash.h>
+#include <Common/assert_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
@@ -355,6 +356,42 @@ void ColumnVector<T>::getExtremes(Field & min, Field & max) const
 
     min = typename NearestFieldType<T>::Type(cur_min);
     max = typename NearestFieldType<T>::Type(cur_max);
+}
+
+template <typename T>
+MutableColumns ColumnVector<T>::scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const
+{
+    size_t num_rows = data.size();
+
+    if (num_rows != selector.size())
+        throw Exception(
+            "Size of selector: " + std::to_string(selector.size()) + " doesn't match size of column: " + std::to_string(num_rows),
+            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    MutableColumns columns(num_columns);
+    for (auto & column : columns)
+        column = this->create();
+
+    {
+        size_t reserve_size = num_rows * 1.1 / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
+
+        if (reserve_size > 1)
+        {
+            for (auto & column : columns)
+            {
+                Container & d = assert_cast<ColumnVector<T> &>(*column).getData();
+                d.reserve(reserve_size);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < num_rows; ++i)
+    {
+        Container & dst = assert_cast<ColumnVector<T> &>(*columns[selector[i]]).getData();
+        dst.push_back(data[i]);
+    }
+
+    return columns;
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
