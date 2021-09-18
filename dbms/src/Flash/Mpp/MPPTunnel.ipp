@@ -105,7 +105,6 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
     }
 }
 
-/// to avoid being blocked when pop(), we should send nullptr into send_queue
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {

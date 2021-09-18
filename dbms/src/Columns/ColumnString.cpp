@@ -366,9 +366,9 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
     UInt32 * hash_data = hash.getData().data();
     Offset prev_offset = 0;
 
-    if (collator != nullptr)
+    if (unlikely(collator))
     {
-        for (const auto & offset : offsets)
+        for (auto offset : offsets)
         {
             auto str_size = offset - prev_offset;
             /// Skip last zero byte.
@@ -382,7 +382,7 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
     }
     else
     {
-        for (const auto & offset : offsets)
+        for (auto offset : offsets)
         {
             auto str_size = offset - prev_offset;
             /// Skip last zero byte.
