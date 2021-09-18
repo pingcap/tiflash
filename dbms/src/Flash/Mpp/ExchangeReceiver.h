@@ -1,10 +1,11 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -53,6 +54,99 @@ enum State
     CLOSED,
 };
 
+struct ReceivedPacket
+{
+    ReceivedPacket()
+    {
+        packet = std::make_shared<mpp::MPPDataPacket>();
+    }
+    std::shared_ptr<mpp::MPPDataPacket> packet;
+    size_t source_index = 0;
+    String req_info;
+};
+
+/// RecyclableBuffer recycles unused objects to avoid too much allocation of objects.
+template <typename T>
+class RecyclableBuffer
+{
+public:
+    explicit RecyclableBuffer(size_t limit)
+        : capacity(limit)
+    {
+        /// init empty objects
+        for (size_t i = 0; i < limit; ++i)
+        {
+            empty_objects.push(std::make_shared<T>());
+        }
+    }
+    bool hasEmpty() const
+    {
+        assert(!isOverflow(empty_objects));
+        return !empty_objects.empty();
+    }
+    bool hasObjects() const
+    {
+        assert(!isOverflow(objects));
+        return !objects.empty();
+    }
+    bool canPushEmpty() const
+    {
+        assert(!isOverflow(empty_objects));
+        return !isFull(empty_objects);
+    }
+    bool canPush() const
+    {
+        assert(!isOverflow(objects));
+        return !isFull(objects);
+    }
+
+    void popEmpty(std::shared_ptr<T> & t)
+    {
+        assert(!empty_objects.empty() && !isOverflow(empty_objects));
+        t = empty_objects.front();
+        empty_objects.pop();
+    }
+    void popObject(std::shared_ptr<T> & t)
+    {
+        assert(!objects.empty() && !isOverflow(objects));
+        t = objects.front();
+        objects.pop();
+    }
+    void pushObject(const std::shared_ptr<T> & t)
+    {
+        assert(!isFullOrOverflow(objects));
+        objects.push(t);
+    }
+    void pushEmpty(const std::shared_ptr<T> & t)
+    {
+        assert(!isFullOrOverflow(empty_objects));
+        empty_objects.push(t);
+    }
+    void pushEmpty(std::shared_ptr<T> && t)
+    {
+        assert(!isFullOrOverflow(empty_objects));
+        empty_objects.push(std::move(t));
+    }
+
+private:
+    bool isFullOrOverflow(const std::queue<std::shared_ptr<T>> & q) const
+    {
+        return q.size() >= capacity;
+    }
+    bool isOverflow(const std::queue<std::shared_ptr<T>> & q) const
+    {
+        return q.size() > capacity;
+    }
+    bool isFull(const std::queue<std::shared_ptr<T>> & q) const
+    {
+        return q.size() == capacity;
+    }
+
+    std::queue<std::shared_ptr<T>> empty_objects;
+    std::queue<std::shared_ptr<T>> objects;
+    size_t capacity;
+};
+
 class ExchangeReceiver
 {
 public:
@@ -64,68 +158,43 @@ private:
     tipb::ExchangeReceiver pb_exchange_receiver;
     size_t source_num;
     ::mpp::TaskMeta task_meta;
+    size_t max_streams;
     size_t max_buffer_size;
     std::vector<std::thread> workers;
     DAGSchema schema;
-
-    // TODO: should be a concurrency bounded queue.
     std::mutex mu;
     std::condition_variable cv;
-    std::queue<ExchangeReceiverResult> result_buffer;
+    RecyclableBuffer<ReceivedPacket> res_buffer;
     Int32 live_connections;
     State state;
     String err_msg;
 
-    std::shared_ptr<LogWithPrefix> log;
+    LogWithPrefixPtr log;
 
     void setUpConnection();
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
-    bool decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
-    {
-        bool ret = true;
-        std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(p.data()))
-        {
-            resp_ptr = nullptr;
-            ret = false;
-        }
-        std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || state != NORMAL; });
-        if (state == NORMAL)
-        {
-            if (resp_ptr != nullptr)
-                result_buffer.emplace(resp_ptr, source_index, req_info);
-            else
-                result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
-        }
-        else
-        {
-            ret = false;
-        }
-        cv.notify_all();
-        return ret;
-    }
-
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_streams_)
         : cluster(context_.getTMTContext().getKVCluster())
         , pb_exchange_receiver(exc)
         , source_num(pb_exchange_receiver.encoded_task_meta_size())
         , task_meta(meta)
-        , max_buffer_size(max_buffer_size_)
+        , max_streams(max_streams_)
+        , max_buffer_size(max_streams_ * 2)
+        , res_buffer(max_buffer_size)
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
         , state(NORMAL)
+        , log(getMPPTaskLog(context_.getDAGContext() ? context_.getDAGContext()->mpp_task_log : nullptr, "ExchangeReceiver"))
     {
-        log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("ExchangeReceiver"), "");
-
         for (int i = 0; i < exc.field_types_size(); i++)
         {
             String name = "exchange_receiver_" + std::to_string(i);
             ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
+
 
         setUpConnection();
     }
@@ -137,6 +206,7 @@ public:
             state = CLOSED;
             cv.notify_all();
         }
+
         for (auto & worker : workers)
         {
             worker.join();
@@ -152,36 +222,7 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    ExchangeReceiverResult nextResult()
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || state != NORMAL; });
-        ExchangeReceiverResult result;
-        if (state != NORMAL)
-        {
-            String msg;
-            if (state == CANCELED)
-                msg = "Query canceled";
-            else if (state == CLOSED)
-                msg = "ExchangeReceiver closed";
-            else if (!err_msg.empty())
-                msg = err_msg;
-            else
-                msg = "Unknown error";
-            result = {nullptr, 0, "ExchangeReceiver", true, msg, false};
-        }
-        else if (result_buffer.empty())
-        {
-            result = {nullptr, 0, "ExchangeReceiver", false, "", true};
-        }
-        else
-        {
-            result = result_buffer.front();
-            result_buffer.pop();
-        }
-        cv.notify_all();
-        return result;
-    }
+    ExchangeReceiverResult nextResult();
 
     size_t getSourceNum() { return source_num; }
     String getName() { return "ExchangeReceiver"; }

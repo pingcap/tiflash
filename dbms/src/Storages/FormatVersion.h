@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 // Those versions use different data types. It is definitely a bad design pattern.
 // Unfortunately we cannot change it for compatibility issue.
 
@@ -25,6 +24,7 @@ using Version = UInt32;
 
 inline static constexpr Version V0 = 0;
 inline static constexpr Version V1 = 1; // Add column stats
+inline static constexpr Version V2 = 2; // Add checksum and configuration
 } // namespace DMFileFormat
 
 namespace StableFormat
@@ -77,23 +77,39 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V2 = StorageFormatVersio
     .page = PageFormat::V2,
 };
 
+inline static const StorageFormatVersion STORAGE_FORMAT_V3 = StorageFormatVersion{
+    .segment = SegmentFormat::V2,
+    .dm_file = DMFileFormat::V2, // diff
+    .stable = StableFormat::V1,
+    .delta = DeltaFormat::V3,
+    .page = PageFormat::V2,
+};
+
 inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V2;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {
     switch (setting)
     {
-        case 1:
-            return STORAGE_FORMAT_V1;
-        case 2:
-            return STORAGE_FORMAT_V2;
-        default:
-            throw Exception("Illegal setting value: " + DB::toString(setting));
+    case 1:
+        return STORAGE_FORMAT_V1;
+    case 2:
+        return STORAGE_FORMAT_V2;
+    case 3:
+        return STORAGE_FORMAT_V3;
+    default:
+        throw Exception("Illegal setting value: " + DB::toString(setting));
     }
 }
 
-inline void setStorageFormat(UInt64 setting) { STORAGE_FORMAT_CURRENT = toStorageFormat(setting); }
+inline void setStorageFormat(UInt64 setting)
+{
+    STORAGE_FORMAT_CURRENT = toStorageFormat(setting);
+}
 
-inline void setStorageFormat(const StorageFormatVersion & version) { STORAGE_FORMAT_CURRENT = version; }
+inline void setStorageFormat(const StorageFormatVersion & version)
+{
+    STORAGE_FORMAT_CURRENT = version;
+}
 
 } // namespace DB

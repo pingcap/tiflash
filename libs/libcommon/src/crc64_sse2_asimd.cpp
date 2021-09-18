@@ -57,7 +57,7 @@ uint64_t update_simd(uint64_t state, const void * src, size_t length)
         SIMD{K_511, K_575}, // fold by distance of 64 bytes
         SIMD{K_383, K_447}, // fold by distance of 48 bytes
         SIMD{K_255, K_319}, // fold by distance of 32 bytes
-        SIMD{K_127, K_191}  // fold by distance of 16 bytes
+        SIMD{K_127, K_191} // fold by distance of 16 bytes
     };
 
     auto acc = x[7];

@@ -2,20 +2,22 @@
 #include <Flash/DiagnosticsService.h>
 #include <Flash/LogSearch.h>
 #include <Poco/Path.h>
-#include <Storages/PathPool.h>
+//#include <Storages/PathPool.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <fmt/core.h>
-#include <re2/re2.h>
+//#include <fmt/core.h>
+//#include <re2/re2.h>
 
 #include <memory>
 
+/*
 #ifdef __linux__
 
 #include <sys/statvfs.h>
 
 #endif
+*/
 
 #define USE_PROXY_ENV_INFO
 
@@ -23,11 +25,12 @@ namespace DB
 {
 using diagnosticspb::LogLevel;
 using diagnosticspb::SearchLogResponse;
+
+/*
 using diagnosticspb::ServerInfoItem;
 using diagnosticspb::ServerInfoPair;
 using diagnosticspb::ServerInfoResponse;
 using diagnosticspb::ServerInfoType;
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_EXCEPTION;
@@ -959,6 +962,7 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
 {
     (void)server_info_items;
 }
+*/
 
 ::grpc::Status DiagnosticsService::server_info(
     ::grpc::ServerContext * context,
@@ -973,13 +977,14 @@ try
     if (helper)
     {
         std::string req = request->SerializeAsString();
-        helper->fn_server_info(helper->proxy_ptr, strIntoView(req), response);
+        helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), response);
     }
     else
     {
         LOG_ERROR(log, "TiFlashRaftProxyHelper is nullptr");
     }
 #else
+    /*
     auto tp = request->tp();
     std::vector<ServerInfoItem> items;
 
@@ -1044,6 +1049,7 @@ try
             added_pair->set_value(pair.value());
         }
     }
+    */
 #endif
     return ::grpc::Status::OK;
 }

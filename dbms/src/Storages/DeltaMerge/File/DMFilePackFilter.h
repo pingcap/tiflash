@@ -5,6 +5,7 @@
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Common/TiFlashMetrics.h>
 
 namespace ProfileEvents
 {
@@ -26,13 +27,13 @@ public:
     static DMFilePackFilter loadFrom(const DMFilePtr & dmfile,
                                      const MinMaxIndexCachePtr & index_cache,
                                      UInt64 hash_salt,
-                                     const RowKeyRange & rowkey_range,
+                                     const RowKeyRanges & rowkey_ranges,
                                      const RSOperatorPtr & filter,
                                      const IdSetPtr & read_packs,
                                      const FileProviderPtr & file_provider,
                                      const ReadLimiterPtr & read_limiter)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_range, filter, read_packs, file_provider, read_limiter);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, hash_salt, rowkey_ranges, filter, read_packs, file_provider, read_limiter);
         pack_filter.init();
         return pack_filter;
     }
@@ -85,7 +86,7 @@ private:
     DMFilePackFilter(const DMFilePtr & dmfile_,
                      const MinMaxIndexCachePtr & index_cache_,
                      UInt64 hash_salt_,
-                     const RowKeyRange & rowkey_range_, // filter by handle range
+                     const RowKeyRanges & rowkey_ranges_, // filter by handle range
                      const RSOperatorPtr & filter_, // filter by push down where clause
                      const IdSetPtr & read_packs_, // filter by pack index
                      const FileProviderPtr & file_provider_,
@@ -93,7 +94,7 @@ private:
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , hash_salt(hash_salt_)
-        , rowkey_range(rowkey_range_)
+        , rowkey_ranges(rowkey_ranges_)
         , filter(filter_)
         , read_packs(read_packs_)
         , file_provider(file_provider_)
@@ -107,13 +108,24 @@ private:
     void init()
     {
         size_t pack_count = dmfile->getPacks();
-        if (!rowkey_range.all())
+        if (!(rowkey_ranges.size() == 1 && rowkey_ranges[0].all()))
         {
             tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
-            auto handle_filter = toFilter(rowkey_range);
+            std::vector<RSOperatorPtr> handle_filters;
+            for (auto & rowkey_range : rowkey_ranges)
+                handle_filters.emplace_back(toFilter(rowkey_range));
             for (size_t i = 0; i < pack_count; ++i)
             {
-                handle_res[i] = handle_filter->roughCheck(i, param);
+                handle_res[i] = RSResult::None;
+            }
+            for (size_t i = 0; i < pack_count; ++i)
+            {
+                for (auto & handle_filter : handle_filters)
+                {
+                    handle_res[i] = handle_res[i] || handle_filter->roughCheck(i, param);
+                    if (handle_res[i] == RSResult::All)
+                        break;
+                }
             }
         }
 
@@ -167,10 +179,14 @@ private:
         ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
 
         Float64 filter_rate = (Float64)(after_read_packs - after_filter) * 100 / after_read_packs;
+        if (after_read_packs != 0)
+        {
+            GET_METRIC(tiflash_storage_rough_set_filter_rate, type_dtfile_pack).Observe(filter_rate);
+        }
         LOG_DEBUG(log,
                   "RSFilter exclude rate: " << ((after_read_packs == 0) ? "nan" : DB::toString(filter_rate, 2))
                                             << ", after_pk: " << after_pk << ", after_read_packs: " << after_read_packs
-                                            << ", after_filter: " << after_filter << ", handle_range: " << rowkey_range.toDebugString()
+                                            << ", after_filter: " << after_filter << ", handle_ranges: " << toDebugString(rowkey_ranges)
                                             << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
                                             << ", pack_count: " << pack_count);
     }
@@ -225,7 +241,7 @@ private:
     DMFilePtr dmfile;
     MinMaxIndexCachePtr index_cache;
     UInt64 hash_salt;
-    RowKeyRange rowkey_range;
+    RowKeyRanges rowkey_ranges;
     RSOperatorPtr filter;
     IdSetPtr read_packs;
     FileProviderPtr file_provider;

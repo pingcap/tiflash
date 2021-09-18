@@ -121,7 +121,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     const tipb::TableScan & ts,
     const std::vector<const tipb::Expr *> & conditions_,
     size_t max_streams_,
-    const std::shared_ptr<LogWithPrefix> & log_)
+    const LogWithPrefixPtr & log_)
     : context(context_)
     , dag(dag_)
     , query_block(query_block_)

@@ -1575,7 +1575,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column_src = block.getByPosition(arguments[0]).column;
         const ColumnPtr & column_needle = block.getByPosition(arguments[1]).column;
@@ -1608,7 +1608,7 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        ColumnWithTypeAndName & column_result)
+        ColumnWithTypeAndName & column_result) const
     {
         const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
         const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
@@ -1637,7 +1637,7 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        ColumnWithTypeAndName & column_result)
+        ColumnWithTypeAndName & column_result) const
     {
         if constexpr (Impl::support_non_const_needle)
         {
@@ -1672,7 +1672,7 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        ColumnWithTypeAndName & column_result)
+        ColumnWithTypeAndName & column_result) const
     {
         if constexpr (Impl::support_non_const_replacement)
         {
@@ -1707,7 +1707,7 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        ColumnWithTypeAndName & column_result)
+        ColumnWithTypeAndName & column_result) const
     {
         if constexpr (Impl::support_non_const_needle && Impl::support_non_const_replacement)
         {

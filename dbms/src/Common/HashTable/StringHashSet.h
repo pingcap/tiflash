@@ -34,9 +34,9 @@ struct StringHashSetCell<StringKey16> : public HashTableCell<StringKey16, String
     // zero keys, because such keys are unrepresentable (no way to encode length).
     static bool isZero(const StringKey16 & key_, const HashTableNoState &)
     {
-        return key_.items[1] == 0;
+        return key_ == 0;
     }
-    void setZero() { this->key.items[1] = 0; }
+    void setZero() { this->key = 0; }
 };
 
 template <>

@@ -42,13 +42,13 @@ struct UnavailableRegions : public LockWrap
     void add(RegionID id, RegionException::RegionReadStatus status_)
     {
         status = status_;
-        auto _lock = genLockGuard();
+        auto lock = genLockGuard();
         doAdd(id);
     }
 
     size_t size() const
     {
-        auto _lock = genLockGuard();
+        auto lock = genLockGuard();
         return ids.size();
     }
 
@@ -56,14 +56,14 @@ struct UnavailableRegions : public LockWrap
 
     void setRegionLock(RegionID region_id_, LockInfoPtr && region_lock_)
     {
-        auto _lock = genLockGuard();
+        auto lock = genLockGuard();
         region_lock = std::pair(region_id_, std::move(region_lock_));
         doAdd(region_id_);
     }
 
     void tryThrowRegionException(const MvccQueryInfo::RegionsQueryInfo & regions_info)
     {
-        auto _lock = genLockGuard();
+        auto lock = genLockGuard();
 
         // For batch-cop request, all unavailable regions, include the ones with lock exception, should be collected and retry next round.
         // For normal cop request, which only contains one region, LockException should be thrown directly and let upper layer(like client-c, tidb, tispark) handle it.
@@ -76,14 +76,13 @@ struct UnavailableRegions : public LockWrap
 
     bool contains(RegionID region_id) const
     {
-        auto _lock = genLockGuard();
+        auto lock = genLockGuard();
         return ids.count(region_id);
     }
 
 private:
     inline void doAdd(RegionID id) { ids.emplace(id); }
 
-private:
     RegionException::UnavailableRegions ids;
     std::optional<std::pair<RegionID, LockInfoPtr>> region_lock;
     std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND};
@@ -127,12 +126,12 @@ public:
     const Base::RegionsQueryInfo & getRegionsInfo() const { return *regions_info_ptr; }
     void addReadIndexRes(RegionID region_id, UInt64 read_index)
     {
-        auto _lock = genLockGuard();
+        auto lock = genLockGuard();
         inner.read_index_res[region_id] = read_index;
     }
     UInt64 getReadIndexRes(RegionID region_id) const
     {
-        auto _lock = genLockGuard();
+        auto lock = genLockGuard();
         if (auto it = inner.read_index_res.find(region_id); it != inner.read_index_res.end())
             return it->second;
         return 0;
@@ -150,7 +149,7 @@ LearnerReadSnapshot doLearnerRead(
     assert(log != nullptr);
 
     MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id);
-    auto & regions_info = mvcc_query_info.getRegionsInfo();
+    const auto & regions_info = mvcc_query_info.getRegionsInfo();
 
     // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
     size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info->concurrent), regions_info.size()));
@@ -193,7 +192,7 @@ LearnerReadSnapshot doLearnerRead(
         {
             for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
             {
-                auto & region_to_query = regions_info[region_idx];
+                const auto & region_to_query = regions_info[region_idx];
                 const RegionID region_id = region_to_query.region_id;
                 if (auto ori_read_index = mvcc_query_info.getReadIndexRes(region_id); ori_read_index)
                 {
@@ -233,10 +232,10 @@ LearnerReadSnapshot doLearnerRead(
 
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
-            if (auto proxy_helper = kvstore->getProxyHelper(); proxy_helper)
+            if (const auto * proxy_helper = kvstore->getProxyHelper(); proxy_helper)
             {
                 auto res = proxy_helper->batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
-                for (auto && [resp, region_id] : *res)
+                for (auto && [resp, region_id] : res)
                 {
                     batch_read_index_result.emplace(region_id, std::move(resp));
                 }
@@ -269,7 +268,7 @@ LearnerReadSnapshot doLearnerRead(
         {
             if (resp.has_region_error())
             {
-                auto & region_error = resp.region_error();
+                const auto & region_error = resp.region_error();
                 auto region_status = RegionException::RegionReadStatus::NOT_FOUND;
                 if (region_error.has_epoch_not_match())
                     region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
@@ -299,7 +298,7 @@ LearnerReadSnapshot doLearnerRead(
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < region_end_idx; ++region_idx, ++read_index_res_idx)
         {
-            auto & region_to_query = regions_info[region_idx];
+            const auto & region_to_query = regions_info[region_idx];
 
             // if region is unavailable, skip wait index.
             if (unavailable_regions.contains(region_to_query.region_id))

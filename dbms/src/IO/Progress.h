@@ -1,14 +1,13 @@
 #pragma once
 
-#include <atomic>
+#include <Core/Defines.h>
 #include <common/types.h>
 
-#include <Core/Defines.h>
+#include <atomic>
 
 
 namespace DB
 {
-
 class ReadBuffer;
 class WriteBuffer;
 
@@ -32,18 +31,21 @@ struct ProgressValues
   */
 struct Progress
 {
-    std::atomic<size_t> rows {0};        /// Rows (source) processed.
-    std::atomic<size_t> bytes {0};       /// Bytes (uncompressed, source) processed.
+    std::atomic<size_t> rows{0}; /// Rows (source) processed.
+    std::atomic<size_t> bytes{0}; /// Bytes (uncompressed, source) processed.
 
     /** How much rows must be processed, in total, approximately. Non-zero value is sent when there is information about some new part of job.
       * Received values must be summed to get estimate of total rows to process.
       * Used for rendering progress bar on client.
       */
-    std::atomic<size_t> total_rows {0};
+    std::atomic<size_t> total_rows{0};
 
     Progress() {}
     Progress(size_t rows_, size_t bytes_, size_t total_rows_ = 0)
-        : rows(rows_), bytes(bytes_), total_rows(total_rows_) {}
+        : rows(rows_)
+        , bytes(bytes_)
+        , total_rows(total_rows_)
+    {}
 
     void read(ReadBuffer & in, UInt64 server_revision);
     void write(WriteBuffer & out, UInt64 client_revision) const;
@@ -104,4 +106,4 @@ struct Progress
 };
 
 
-}
+} // namespace DB

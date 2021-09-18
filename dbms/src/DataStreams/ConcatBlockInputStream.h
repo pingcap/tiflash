@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB
@@ -13,8 +13,8 @@ namespace DB
 class ConcatBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_ = nullptr)
-        : log(getLogWithPrefix(log_))
+    ConcatBlockInputStream(BlockInputStreams inputs_, const LogWithPrefixPtr & log_)
+        : log(getMPPTaskLog(log_, getName()))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();

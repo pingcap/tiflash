@@ -33,7 +33,6 @@ class IPAddress;
 
 namespace DB
 {
-
 struct ContextShared;
 class IRuntimeComponentsFactory;
 class QuotaForIntervals;
@@ -131,17 +130,17 @@ private:
     String current_database;
     Settings settings; /// Setting for query execution.
     using ProgressCallback = std::function<void(const Progress & progress)>;
-    ProgressCallback progress_callback;               /// Callback for tracking progress of query execution.
+    ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
     ProcessListElement * process_list_elem = nullptr; /// For tracking total resource usage for query.
-
-    String default_format;              /// Format, used when server formats data by itself and if query does not have FORMAT specification.
-                                        /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
+    /// Format, used when server formats data by itself and if query does not have FORMAT specification.
+    /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
+    String default_format;
     TableAndCreateASTs external_tables; /// Temporary tables.
-    Tables table_function_results;      /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
+    Tables table_function_results; /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
     Context * query_context = nullptr;
     Context * session_context = nullptr; /// Session context or nullptr. Could be equal to this.
-    Context * global_context = nullptr;  /// Global context or nullptr. Could be equal to this.
-    SystemLogsPtr system_logs;           /// Used to log queries and operations on parts
+    Context * global_context = nullptr; /// Global context or nullptr. Could be equal to this.
+    SystemLogsPtr system_logs; /// Used to log queries and operations on parts
 
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
@@ -177,11 +176,11 @@ public:
     void setUserFilesPath(const String & path);
 
     void setPathPool(const Strings & main_data_paths,
-        const Strings & latest_data_paths,
-        const Strings & kvstore_paths,
-        bool enable_raft_compatible_mode,
-        PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider);
+                     const Strings & latest_data_paths,
+                     const Strings & kvstore_paths,
+                     bool enable_raft_compatible_mode,
+                     PathCapacityMetricsPtr global_capacity_,
+                     FileProviderPtr file_provider);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -301,7 +300,9 @@ public:
     Databases getDatabases();
 
     std::shared_ptr<Context> acquireSession(
-        const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
+        const String & session_id,
+        std::chrono::steady_clock::duration timeout,
+        bool session_check) const;
     void releaseSession(const String & session_id, std::chrono::steady_clock::duration timeout);
 
     /// Close sessions, that has been expired. Returns how long to wait for next session to be expired, if no new sessions will be added.
@@ -313,7 +314,6 @@ public:
     const Context & getQueryContext() const;
     Context & getQueryContext();
     bool hasQueryContext() const { return query_context != nullptr; }
-
     const Context & getSessionContext() const;
     Context & getSessionContext();
     bool hasSessionContext() const { return session_context != nullptr; }
@@ -325,7 +325,6 @@ public:
     void setQueryContext(Context & context_) { query_context = &context_; }
     void setSessionContext(Context & context_) { session_context = &context_; }
     void setGlobalContext(Context & context_) { global_context = &context_; }
-
     const Settings & getSettingsRef() const { return settings; };
     Settings & getSettingsRef() { return settings; };
 
@@ -397,10 +396,12 @@ public:
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePathCapacityMetric(                                                    //
-        size_t global_capacity_quota,                                                     //
-        const Strings & main_data_paths, const std::vector<size_t> & main_capacity_quota, //
-        const Strings & latest_data_paths, const std::vector<size_t> & latest_capacity_quota);
+    void initializePathCapacityMetric(
+        size_t global_capacity_quota,
+        const Strings & main_data_paths,
+        const std::vector<size_t> & main_capacity_quota,
+        const Strings & latest_data_paths,
+        const std::vector<size_t> & latest_capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
@@ -411,10 +412,10 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(Poco::Util::AbstractConfiguration& config);
+    void initializeRateLimiter(Poco::Util::AbstractConfiguration & config);
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
-    IORateLimiter& getIORateLimiter() const;
+    IORateLimiter & getIORateLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
@@ -458,7 +459,7 @@ public:
     {
         SERVER, /// The program is run as clickhouse-server daemon (default behavior)
         CLIENT, /// clickhouse-client
-        LOCAL   /// clickhouse-local
+        LOCAL /// clickhouse-local
     };
 
     ApplicationType getApplicationType() const;
@@ -480,6 +481,8 @@ public:
 
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;
+
+    void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
 
 private:
     /** Check if the current client has access to the specified database.
@@ -523,7 +526,9 @@ private:
 class SessionCleaner
 {
 public:
-    SessionCleaner(Context & context_) : context{context_} {}
+    SessionCleaner(Context & context_)
+        : context{context_}
+    {}
     ~SessionCleaner();
 
 private:

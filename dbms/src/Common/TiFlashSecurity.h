@@ -112,7 +112,7 @@ public:
             return true;
         }
         auto auth_context = grpc_context->auth_context();
-        for (const auto & [property_name, common_name] : *auth_context)
+        for (auto && [property_name, common_name] : *auth_context)
         {
             if (property_name == GRPC_X509_CN_PROPERTY_NAME && allowed_common_names.count(String(common_name.data(), common_name.size())))
                 return true;
