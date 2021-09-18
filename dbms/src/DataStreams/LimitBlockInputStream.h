@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB
@@ -16,7 +16,12 @@ public:
       * If always_read_till_end = true - reads all the data to the end, but ignores them. This is necessary in rare cases:
       *  when otherwise, due to the cancellation of the request, we would not have received the data for GROUP BY WITH TOTALS from the remote server.
       */
-    LimitBlockInputStream(const BlockInputStreamPtr & input, size_t limit_, size_t offset_, bool always_read_till_end_ = false, const LogWithPrefixPtr & log_ = nullptr);
+    LimitBlockInputStream(
+        const BlockInputStreamPtr & input,
+        size_t limit_,
+        size_t offset_,
+        const LogWithPrefixPtr & log_,
+        bool always_read_till_end_ = false);
 
     String getName() const override { return "Limit"; }
 

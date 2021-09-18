@@ -1,30 +1,23 @@
-#include <iostream>
-#include <iomanip>
-
-#include <IO/WriteBufferFromOStream.h>
-
-#include <Storages/StorageLog.h>
-#include <Storages/RegionQueryInfo.h>
-
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeDateTime.h>
-
-#include <DataStreams/LimitBlockInputStream.h>
-#include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/MergeSortingBlockInputStream.h>
-#include <DataStreams/TabSeparatedRowOutputStream.h>
 #include <DataStreams/BlockOutputStreamFromRowOutputStream.h>
+#include <DataStreams/LimitBlockInputStream.h>
+#include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/PartialSortingBlockInputStream.h>
+#include <DataStreams/TabSeparatedRowOutputStream.h>
 #include <DataStreams/copyData.h>
-
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-
-#include <Parsers/ParserSelectQuery.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/formatAST.h>
-
+#include <IO/WriteBufferFromOStream.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ParserSelectQuery.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/parseQuery.h>
+#include <Storages/RegionQueryInfo.h>
+#include <Storages/StorageLog.h>
+
+#include <iomanip>
+#include <iostream>
 
 
 using namespace DB;
@@ -33,8 +26,7 @@ using namespace DB;
 int main(int argc, char ** argv)
 try
 {
-    NamesAndTypesList names_and_types_list
-    {
+    NamesAndTypesList names_and_types_list{
         {"WatchID", std::make_shared<DataTypeUInt64>()},
         {"JavaEnable", std::make_shared<DataTypeUInt8>()},
         {"Title", std::make_shared<DataTypeString>()},
@@ -109,21 +101,22 @@ try
     /// create an object of an existing hit log table
 
     StoragePtr table = StorageLog::create(
-        "./", "HitLog", ColumnsDescription{names_and_types_list}, DEFAULT_MAX_COMPRESS_BLOCK_SIZE);
+        "./",
+        "HitLog",
+        ColumnsDescription{names_and_types_list},
+        DEFAULT_MAX_COMPRESS_BLOCK_SIZE);
     table->startup();
 
     /// read from it, sort it, and write it in tsv form to the console
 
-    Names column_names
-    {
+    Names column_names{
         "UniqID",
         "URL",
         "CounterID",
         "IsLink",
     };
 
-    DataTypes result_types = DataTypes
-    {
+    DataTypes result_types = DataTypes{
         names_and_types_map["UniqID"],
         names_and_types_map["URL"],
         names_and_types_map["CounterID"],
@@ -147,7 +140,7 @@ try
     QueryProcessingStage::Enum stage;
 
     BlockInputStreamPtr in = table->read(column_names, {}, Context::createGlobal(), stage, argc == 2 ? atoi(argv[1]) : 65536, 1)[0];
-    in = std::make_shared<PartialSortingBlockInputStream>(in, sort_columns);
+    in = std::make_shared<PartialSortingBlockInputStream>(in, sort_columns, nullptr);
     in = std::make_shared<MergeSortingBlockInputStream>(in, sort_columns, DEFAULT_BLOCK_SIZE, 0, 0, "");
     //in = std::make_shared<LimitBlockInputStream>(in, 10, 0);
 
