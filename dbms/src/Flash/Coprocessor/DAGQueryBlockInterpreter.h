@@ -6,10 +6,10 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -37,11 +37,10 @@ public:
         const std::vector<BlockInputStreams> & input_streams_vec_,
         const DAGQueryBlock & query_block_,
         bool keep_session_timezone_info_,
-        const tipb::DAGRequest & rqst,
         const DAGQuerySource & dag_,
         std::vector<SubqueriesForSets> & subqueriesForSets_,
         const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map,
-        const std::shared_ptr<LogWithPrefix> & log_);
+        const LogWithPrefixPtr & log_);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -112,6 +111,6 @@ private:
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
     BoolVec timestamp_column_flag_for_tablescan;
 
-    const std::shared_ptr<LogWithPrefix> log;
+    const LogWithPrefixPtr log;
 };
 } // namespace DB
