@@ -238,6 +238,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             }
             else
             {
+                // Only in mock test, `proxy_helper` will be `nullptr`. Set `read_index` to 0 and skip waiting.
                 make_default_batch_read_index_result(false);
             }
         }();
