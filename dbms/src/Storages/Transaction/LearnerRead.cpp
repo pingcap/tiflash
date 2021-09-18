@@ -181,11 +181,10 @@ public:
     friend struct BatchReadIndexDelegate;
 };
 
+using BatchReadIndexRequests = std::vector<kvrpcpb::ReadIndexRequest>;
+using BatchReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
 struct BatchReadIndexDelegate : public MvccQueryInfoWrap
 {
-    using BatchReadIndexRequests = std::vector<kvrpcpb::ReadIndexRequest>;
-    using BatchReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
-
     // Prepare read index requests for regions.
     // If a (valid) Refion Raft index has been cached in `MvccQueryInfo::read_index_res`,
     // it will reuse the result directly
@@ -224,8 +223,6 @@ private:
     }
 };
 static_assert(sizeof(MvccQueryInfoWrap) == sizeof(BatchReadIndexDelegate));
-using BatchReadIndexRequests = BatchReadIndexDelegate::BatchReadIndexRequests;
-using BatchReadIndexResult = BatchReadIndexDelegate::BatchReadIndexResult;
 
 void BatchReadIndexDelegate::prepare(
     const size_t region_begin_idx,
@@ -289,12 +286,11 @@ void BatchReadIndexDelegate::execute(
         return make_default_batch_read_index_result();
     }
 
-    /// Blocking learner read. Note that learner read must be performed ahead of data read,
-    /// otherwise the desired index will be blocked by the lock of data read.
+    /// Issue batch read index through the proxy
     auto resp = proxy_helper->batchReadIndex(reqs, tmt.batchReadIndexTimeout());
+    GET_METRIC(tiflash_raft_read_index_count).Increment(reqs.size());
     for (auto && [resp, region_id] : resp)
     {
-        GET_METRIC(tiflash_raft_read_index_count).Increment(reqs.size());
         result->emplace(region_id, std::move(resp));
     }
 }
