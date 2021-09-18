@@ -1,10 +1,10 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
 
 
@@ -28,7 +28,7 @@ public:
         bool final_,
         size_t max_threads_,
         size_t temporary_data_merge_threads_,
-        const LogWithPrefixPtr & log_ = nullptr);
+        const LogWithPrefixPtr & log_);
 
     String getName() const override { return "ParallelAggregating"; }
 

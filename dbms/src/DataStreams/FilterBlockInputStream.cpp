@@ -4,6 +4,7 @@
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB
@@ -15,9 +16,13 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 
-FilterBlockInputStream::FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name, const std::shared_ptr<LogWithPrefix> & log_)
+FilterBlockInputStream::FilterBlockInputStream(
+    const BlockInputStreamPtr & input,
+    const ExpressionActionsPtr & expression_,
+    const String & filter_column_name,
+    const LogWithPrefixPtr & log_)
     : expression(expression_)
-    , log(getLogWithPrefix(log_, getName()))
+    , log(getMPPTaskLog(log_, getName()))
 {
     children.push_back(input);
 
