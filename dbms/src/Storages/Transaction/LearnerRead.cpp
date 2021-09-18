@@ -227,7 +227,7 @@ private:
         return 0;
     }
 };
-static_assert(sizeof(MvccQueryInfoWrap) == sizeof(BatchReadIndexDelegate));
+static_assert(sizeof(MvccQueryInfoWrap) == sizeof(BatchReadIndexDelegate)); // They must be the same so that we can use static_cast
 
 void BatchReadIndexDelegate::prepare(
     const size_t region_begin_idx,
