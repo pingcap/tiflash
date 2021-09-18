@@ -45,7 +45,11 @@ void PSWriter::setApproxPageSize(size_t size_mb)
 DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder & holder)
 {
     // fill page with random bytes
-    const size_t buff_sz = approx_page_mb * DB::MB + arc4random() % 3000;
+    std::mt19937 size_gen;
+    size_gen.seed(time(nullptr));
+    std::uniform_int_distribution<> dist(0, 3000);
+
+    const size_t buff_sz = approx_page_mb * DB::MB + std::round(dist(size_gen));
     char * buff = static_cast<char *>(malloc(buff_sz));
     const char buff_ch = pageId % 0xFF;
     memset(buff, buff_ch, buff_sz);

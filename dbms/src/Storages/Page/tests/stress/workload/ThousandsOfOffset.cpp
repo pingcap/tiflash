@@ -41,8 +41,7 @@ private:
         size_t rest_nums = nums;
         for (size_t i = 0; i < nums - 1; i++)
         {
-            // I don't want to use uniform_int_distribution in here.Cause range is flexable.
-            size_t split = (arc4random() % (rest_amount / rest_nums * 2) - 1) + 1;
+            size_t split = (random() % (rest_amount / rest_nums * 2) - 1) + 1;
             rest_amount -= split;
             rest_nums--;
             field_sizes.emplace_back(split);
