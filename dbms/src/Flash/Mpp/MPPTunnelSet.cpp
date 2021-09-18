@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 namespace
 {
 inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & response)
@@ -31,12 +30,17 @@ void MPPTunnelSet::clearExecutionSummaries(tipb::SelectResponse & response)
 
 void MPPTunnelSet::write(tipb::SelectResponse & response)
 {
-    tunnels[0]->write(serializeToPacket(response));
+    auto packet = serializeToPacket(response);
+    tunnels[0]->write(packet);
 
     if (tunnels.size() > 1)
     {
-        clearExecutionSummaries(response);
-        auto packet = serializeToPacket(response);
+        /// only the last response has execution_summaries
+        if (response.execution_summaries_size() > 0)
+        {
+            clearExecutionSummaries(response);
+            packet = serializeToPacket(response);
+        }
         for (size_t i = 1; i < tunnels.size(); ++i)
             tunnels[i]->write(packet);
     }
@@ -44,7 +48,7 @@ void MPPTunnelSet::write(tipb::SelectResponse & response)
 
 void MPPTunnelSet::write(tipb::SelectResponse & response, int16_t partition_id)
 {
-    if (partition_id != 0)
+    if (partition_id != 0 && response.execution_summaries_size() > 0)
         clearExecutionSummaries(response);
 
     tunnels[partition_id]->write(serializeToPacket(response));

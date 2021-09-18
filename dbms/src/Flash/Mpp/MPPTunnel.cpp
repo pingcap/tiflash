@@ -17,12 +17,16 @@ MPPTunnel::MPPTunnel(
     const mpp::TaskMeta & receiver_meta_,
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
-    const std::shared_ptr<MPPTask> & current_task_)
+    const std::shared_ptr<MPPTask> & current_task_,
+    int input_steams_num_)
     : connected(false)
     , finished(false)
     , timeout(timeout_)
     , current_task(current_task_)
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
+    , input_streams_num(input_steams_num_)
+    , send_thread(nullptr)
+    , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
     , log(&Poco::Logger::get(tunnel_id))
 {
 }
@@ -33,6 +37,10 @@ MPPTunnel::~MPPTunnel()
     {
         if (!finished)
             writeDone();
+        if (nullptr != send_thread && send_thread->joinable())
+        {
+            send_thread->join();
+        }
     }
     catch (...)
     {
@@ -59,6 +67,7 @@ void MPPTunnel::close(const String & reason)
         }
     }
     finishWithLock();
+    send_queue.push(nullptr);
 }
 
 bool MPPTunnel::isTaskCancelled()
@@ -72,55 +81,87 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
 {
     LOG_TRACE(log, "ready to write");
     {
-        std::unique_lock<std::mutex> lk(mu);
+        {
+            std::unique_lock<std::mutex> lk(mu);
+            waitUntilConnectedOrCancelled(lk);
+            if (finished)
+                throw Exception("write to tunnel which is already closed.");
+        }
 
-        waitUntilConnectedOrCancelled(lk);
-        if (finished)
-            throw Exception("write to tunnel which is already closed.");
-        if (!writer->Write(data))
-            throw Exception("Failed to write data");
+        send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
         if (close_after_write)
-            finishWithLock();
+        {
+            std::unique_lock<std::mutex> lk(mu);
+            if (!finished)
+            {
+                /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
+                send_queue.push(nullptr);
+                LOG_TRACE(log, "sending a nullptr to finish write.");
+            }
+        }
     }
-    if (close_after_write)
-        LOG_TRACE(log, "finish write and close the tunnel");
-    else
-        LOG_TRACE(log, "finish write");
+}
+
+/// to avoid being blocked when pop(), we should send nullptr into send_queue
+void MPPTunnel::sendLoop()
+{
+    while (!finished)
+    {
+        /// TODO(fzh) reuse it later
+        MPPDataPacketPtr res;
+        send_queue.pop(res);
+        if (nullptr == res)
+        {
+            std::unique_lock<std::mutex> lk(mu);
+            finished = true;
+            cv_for_finished.notify_all();
+            return;
+        }
+        else
+        {
+            writer->Write(*res);
+        }
+    }
 }
 
 void MPPTunnel::writeDone()
 {
     LOG_TRACE(log, "ready to finish");
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        if (finished)
-            throw Exception("has finished");
-        /// make sure to finish the tunnel after it is connected
-        waitUntilConnectedOrCancelled(lk);
-        finishWithLock();
-    }
+    std::unique_lock<std::mutex> lk(mu);
+    if (finished)
+        throw Exception("has finished");
+    /// make sure to finish the tunnel after it is connected
+    waitUntilConnectedOrCancelled(lk);
+    lk.unlock();
+    /// in normal cases, send nullptr to notify finish
+    send_queue.push(nullptr);
+    waitForFinish();
     LOG_TRACE(log, "done to finish");
 }
 
 void MPPTunnel::connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
 {
-    std::lock_guard<std::mutex> lk(mu);
-    if (connected)
     {
-        throw Exception("has connected");
-    }
-    LOG_DEBUG(log, "ready to connect");
-    connected = true;
-    writer = writer_;
+        std::lock_guard<std::mutex> lk(mu);
+        if (connected)
+        {
+            throw Exception("has connected");
+        }
 
-    cv_for_connected.notify_all();
+        LOG_DEBUG(log, "ready to connect");
+        connected = true;
+        writer = writer_;
+        cv_for_connected.notify_all();
+    }
+    send_thread = std::make_unique<std::thread>([this] { sendLoop(); });
 }
+
 
 void MPPTunnel::waitForFinish()
 {
     std::unique_lock<std::mutex> lk(mu);
 
-    cv_for_finished.wait(lk, [&]() { return finished; });
+    cv_for_finished.wait(lk, [&]() { return finished.load(); });
 }
 
 void MPPTunnel::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
