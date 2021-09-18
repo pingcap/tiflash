@@ -186,45 +186,9 @@ struct BatchReadIndexDelegate : public MvccQueryInfoWrap
     using BatchReadIndexRequests = std::vector<kvrpcpb::ReadIndexRequest>;
     using BatchReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
 
-    BatchReadIndexResult execute(
-        TMTContext & tmt,
-        const size_t region_begin_idx,
-        const size_t region_end_idx,
-        const LearnerReadSnapshot & regions_snapshot,
-        Stopwatch & watch,
-        UnavailableRegions & unavailable_regions,
-        Poco::Logger * log)
-    {
-        BatchReadIndexResult result;
-        BatchReadIndexRequests reqs;
-        prepare(region_begin_idx, region_end_idx, regions_snapshot, &reqs, &result);
-        executeImpl(tmt, reqs, &result);
-
-        // Log down time elapsed
-        const size_t cached_size = result.size() - reqs.size();
-        auto read_index_elapsed_ms = watch.elapsedMilliseconds();
-        GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
-        LOG_DEBUG(
-            log,
-            fmt::format("Batch read index, original size {}, send & get {} message, cost {}ms",
-                        result.size(),
-                        reqs.size(),
-                        read_index_elapsed_ms);
-            do {
-                if (cached_size)
-                {
-                    oss_internal_rare << fmt::format(", {} in cache", cached_size);
-                }
-            } while (0));
-
-        // If there are region_error/unresolved transaction lock, mark those Region unavailable.
-        handleResultError(result, unavailable_regions);
-        return result;
-    }
-
-    BatchReadIndexDelegate() = delete;
-
-private:
+    // Prepare read index requests for regions.
+    // If a (valid) Refion Raft index has been cached in `MvccQueryInfo::read_index_res`,
+    // it will reuse the result directly
     void prepare(
         size_t region_begin_idx,
         size_t region_end_idx,
@@ -232,15 +196,19 @@ private:
         BatchReadIndexRequests * reqs,
         BatchReadIndexResult * result);
 
-    static void executeImpl(
+    // Send the batch read index requests through TiFlash-Proxy to get the result
+    static void execute(
         TMTContext & tmt,
         const BatchReadIndexRequests & reqs,
         BatchReadIndexResult * result);
 
-    void handleResultError(
-        BatchReadIndexResult & result,
-        UnavailableRegions & unavailable_regions);
+    // Cache the read index result to reduce overhead of handling retry for batch-cop
+    // If there are region_error/unresolved transaction lock, mark those Region unavailable.
+    void cacheResult(BatchReadIndexResult & result, UnavailableRegions & unavailable_regions);
 
+    BatchReadIndexDelegate() = delete;
+
+private:
     void addReadIndexRes(RegionID region_id, UInt64 read_index)
     {
         auto lock = genLockGuard();
@@ -255,6 +223,7 @@ private:
         return 0;
     }
 };
+static_assert(sizeof(MvccQueryInfoWrap) == sizeof(BatchReadIndexDelegate));
 using BatchReadIndexRequests = BatchReadIndexDelegate::BatchReadIndexRequests;
 using BatchReadIndexResult = BatchReadIndexDelegate::BatchReadIndexResult;
 
@@ -289,7 +258,7 @@ void BatchReadIndexDelegate::prepare(
     }
 }
 
-void BatchReadIndexDelegate::executeImpl(
+void BatchReadIndexDelegate::execute(
     TMTContext & tmt,
     const BatchReadIndexRequests & reqs,
     BatchReadIndexResult * result)
@@ -330,7 +299,7 @@ void BatchReadIndexDelegate::executeImpl(
     }
 }
 
-void BatchReadIndexDelegate::handleResultError(
+void BatchReadIndexDelegate::cacheResult(
     BatchReadIndexResult & result,
     UnavailableRegions & unavailable_regions)
 {
@@ -476,9 +445,30 @@ doLearnerRead(
         // It will make trouble for later checks. Mark all regions are unavailable would be a better way.
         BatchReadIndexResult batch_read_index_result;
         {
-            static_assert(sizeof(MvccQueryInfoWrap) == sizeof(BatchReadIndexDelegate));
             auto & delegate = static_cast<BatchReadIndexDelegate &>(mvcc_query_info);
-            batch_read_index_result = delegate.execute(tmt, region_begin_idx, region_end_idx, regions_snapshot, watch, unavailable_regions, log);
+            BatchReadIndexRequests reqs;
+            delegate.prepare(region_begin_idx, region_end_idx, regions_snapshot, &reqs, &batch_read_index_result);
+            delegate.execute(tmt, reqs, &batch_read_index_result);
+
+            // Log down time elapsed
+            const size_t cached_size = batch_read_index_result.size() - reqs.size();
+            auto read_index_elapsed_ms = watch.elapsedMilliseconds();
+            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
+            LOG_DEBUG(
+                log,
+                fmt::format("Batch read index, original size {}, send & get {} message, cost {}ms",
+                            batch_read_index_result.size(),
+                            reqs.size(),
+                            read_index_elapsed_ms);
+                do {
+                    if (cached_size)
+                    {
+                        oss_internal_rare << fmt::format(", {} in cache", cached_size);
+                    }
+                } while (0));
+
+            // If there are region_error/unresolved transaction lock, mark those Region unavailable.
+            delegate.cacheResult(batch_read_index_result, unavailable_regions);
         }
         watch.restart(); // restart to count the elapsed of wait index
         {
