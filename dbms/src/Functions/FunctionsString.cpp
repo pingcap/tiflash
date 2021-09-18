@@ -3169,7 +3169,7 @@ private:
         }
 
         ColumnString::Offset res_offset = 0;
-        Volnitsky searcher(reinterpret_cast<const char *>(delim.c_str()), delim.size(), 0);
+        Volnitsky searcher(delim.c_str(), delim.size(), 0);
         res_data.reserve(data.size());
         for (size_t i = 0; i < offsets.size(); ++i)
         {
@@ -3207,7 +3207,7 @@ private:
             {
                 res_data.resize(res_data.size() + 1);
                 res_data[res_offset] = '\0';
-                res_offset++;
+                ++res_offset;
                 res_offsets[i] = res_offset;
                 continue;
             }
@@ -3240,7 +3240,7 @@ private:
             while (pos < end)
             {
                 const UInt8 * match = delim_searcher->search(pos, end - pos);
-                count--;
+                --count;
                 if (match == end || count == 0)
                 {
                     copyDataToResult(res_data, res_offset, begin, match);
@@ -3274,7 +3274,7 @@ private:
             if (count <= static_cast<Int64>(delim_pos.size()))
             {
                 auto delim_count = delim_pos.size();
-                const UInt8 * match = reinterpret_cast<const UInt8 *>(delim_pos[delim_count - count]);
+                const UInt8 * match = delim_pos[delim_count - count];
                 begin = match + delim_size;
             }
             copyDataToResult(res_data, res_offset, begin, end);
