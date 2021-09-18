@@ -3229,6 +3229,7 @@ private:
         const UInt8 * begin = data_begin;
         const UInt8 * pos = begin;
         const UInt8 * end = pos + data_size;
+        assert(delim_size != 0);
         if (count > 0)
         {
             // Fast exit when count * delim_size > data_size
@@ -3252,14 +3253,13 @@ private:
         else
         {
             std::vector<const UInt8 *> delim_pos;
-            bool overflow = count == std::numeric_limits<Int64>::min();
-            count = -count;
             // Fast exit when count * delim_size > data_size, or count == INT64_MIN
-            if (static_cast<Int64>(data_size / delim_size) < count || overflow)
+            if (count == std::numeric_limits<Int64>::min() || static_cast<Int64>(data_size / delim_size) < -count)
             {
                 copyDataToResult(res_data, res_offset, begin, end);
                 return;
             }
+            count = -count;
             // When count is negative, we need split string by delim.
             while (pos < end)
             {
