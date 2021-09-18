@@ -2,7 +2,7 @@
 #include <Poco/FileChannel.h>
 namespace DB
 {
-class TiflashLogFileChannel : public Poco::FileChannel
+class TiFlashLogFileChannel : public Poco::FileChannel
 {
 protected:
     void setArchive(const std::string & archive) override;

@@ -1,14 +1,21 @@
 #pragma once
 
 
-#include <Poco/Logger.h>
 #include <Poco/SplitterChannel.h>
-#include <Poco/Util/AbstractConfiguration.h>
 
 #include <functional>
+
+namespace Poco
+{
+class Logger;
+namespace Util
+{
+class AbstractConfiguration;
+}
+}; // namespace Poco
 namespace DB
 {
-class MutableSplitterChannel : public Poco::SplitterChannel
+class ReloadableSplitterChannel : public Poco::SplitterChannel
 {
 public:
     using SplitterChannelValidator = std::function<void(Poco::Channel &, Poco::Util::AbstractConfiguration &)>;
@@ -17,6 +24,7 @@ public:
     void setPropertiesValidator(SplitterChannelValidator validator) { properties_validator = validator; }
     void validateProperties(Poco::Util::AbstractConfiguration & expect_config)
     {
+        Poco::FastMutex::ScopedLock lock(_mutex);
         for (auto it : _channels)
         {
             properties_validator(*it, expect_config);

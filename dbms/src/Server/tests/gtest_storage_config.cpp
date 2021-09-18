@@ -10,8 +10,8 @@
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/TOMLConfiguration.h>
-#include <Common/MutableSplitterChannel.h>
-#include <Common/TiflashLogFileChannel.h>
+#include <Common/ReloadableSplitterChannel.h>
+#include <Common/TiFlashLogFileChannel.h>
 #include <Interpreters/Quota.h>
 #include <Poco/Ext/LevelFilterChannel.h>
 #include <Poco/Logger.h>
@@ -306,6 +306,12 @@ public:
 protected:
     Poco::Logger * log;
     Settings origin_settings;
+    void clearFiles(String path)
+    {
+        Poco::File file(path);
+        if (file.exists())
+            file.remove(true);
+    }
 };
 
 
@@ -803,16 +809,16 @@ dt_page_gc_low_write_prob = 0.2
 }
 CATCH
 
-class TestMutableSplitterChannel : public MutableSplitterChannel
+class TestMutableSplitterChannel : public ReloadableSplitterChannel
 {
 public:
 };
 
 static void verifyChannelConfig(Poco::Channel & channel, Poco::Util::AbstractConfiguration & config)
 {
-    if (typeid(channel) == typeid(TiflashLogFileChannel))
+    if (typeid(channel) == typeid(TiFlashLogFileChannel))
     {
-        TiflashLogFileChannel * fileChannel = dynamic_cast<TiflashLogFileChannel *>(&channel);
+        TiFlashLogFileChannel * fileChannel = dynamic_cast<TiFlashLogFileChannel *>(&channel);
         ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_ROTATION), config.getRawString("logger.size", "100M"));
         ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "1"));
         return;
@@ -881,11 +887,11 @@ size = "1"
             Poco::Logger & cur_logger = Poco::Logger::get(fmt::format("ReloadLoggerConfig_test{}", j));
             ASSERT_NE(cur_logger.getChannel(), nullptr);
             Poco::Channel & cur_logger_channel = *cur_logger.getChannel();
-            ASSERT_EQ(typeid(cur_logger_channel), typeid(DB::MutableSplitterChannel));
-            DB::MutableSplitterChannel * splitter_channel = dynamic_cast<DB::MutableSplitterChannel *>(&cur_logger_channel);
+            ASSERT_EQ(typeid(cur_logger_channel), typeid(DB::ReloadableSplitterChannel));
+            DB::ReloadableSplitterChannel * splitter_channel = dynamic_cast<DB::ReloadableSplitterChannel *>(&cur_logger_channel);
             splitter_channel->setPropertiesValidator(verifyChannelConfig);
             splitter_channel->validateProperties(config);
-        }
+        };
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
@@ -897,6 +903,7 @@ size = "1"
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
         verifyLoggersConfig(i + 1, *config);
     }
+    clearFiles("./tmp/log");
 }
 CATCH
 } // namespace tests

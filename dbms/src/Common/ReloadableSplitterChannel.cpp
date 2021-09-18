@@ -1,22 +1,19 @@
-#include "MutableSplitterChannel.h"
-
+#include <Common/ReloadableSplitterChannel.h>
+#include <Common/TiFlashLogFileChannel.h>
 #include <Poco/Ext/LevelFilterChannel.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
+#include <Poco/Util/AbstractConfiguration.h>
 #include <fmt/format.h>
-
-#include <iostream>
-
-#include "TiflashLogFileChannel.h"
 namespace DB
 {
-void MutableSplitterChannel::setPropertiesRecursively(Poco::Logger & logger, Poco::Channel & channel, Poco::Util::AbstractConfiguration & config)
+void ReloadableSplitterChannel::setPropertiesRecursively(Poco::Logger & logger, Poco::Channel & channel, Poco::Util::AbstractConfiguration & config)
 {
-    if (typeid(channel) == typeid(TiflashLogFileChannel))
+    if (typeid(channel) == typeid(TiFlashLogFileChannel))
     {
-        TiflashLogFileChannel * fileChannel = dynamic_cast<TiflashLogFileChannel *>(&channel);
+        TiFlashLogFileChannel * fileChannel = dynamic_cast<TiFlashLogFileChannel *>(&channel);
         std::string rotation_size = config.getRawString("logger.size", "100M");
         std::string purge_count = config.getRawString("logger.count", "1");
-        logger.information(fmt::format("set channel rotation:{}, purgecount:{}", rotation_size, purge_count));
         fileChannel->setProperty(Poco::FileChannel::PROP_ROTATION, rotation_size);
         fileChannel->setProperty(Poco::FileChannel::PROP_PURGECOUNT, purge_count);
         return;
@@ -33,14 +30,14 @@ void MutableSplitterChannel::setPropertiesRecursively(Poco::Logger & logger, Poc
         setPropertiesRecursively(logger, *formattingChannel->getChannel(), config);
         return;
     }
-    logger.information(fmt::format("invalid channel type:{}", typeid(channel).name()));
 }
-// only support FormattingChannel --> LevelFilterChannel --> TiflashLogFileChannel or LevelFilterChannel --> TiflashLogFileChannel or TiflashLogFileChannel
-void MutableSplitterChannel::changeProperties(Poco::Logger & logger, Poco::Util::AbstractConfiguration & config)
+// only support FormattingChannel --> LevelFilterChannel --> TiFlashLogFileChannel or LevelFilterChannel --> TiFlashLogFileChannel or TiFlashLogFileChannel
+void ReloadableSplitterChannel::changeProperties(Poco::Logger & logger, Poco::Util::AbstractConfiguration & config)
 {
-    for (auto it : _channels)
+    Poco::FastMutex::ScopedLock lock(_mutex);
+    for (auto * chan : _channels)
     {
-        setPropertiesRecursively(logger, *it, config);
+        setPropertiesRecursively(logger, *chan, config);
     }
 }
 } // namespace DB

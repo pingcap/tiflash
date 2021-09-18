@@ -1,13 +1,13 @@
-#include "TiflashLogFileChannel.h"
+#include "TiFlashLogFileChannel.h"
 
 #include <Poco/LocalDateTime.h>
 
 #include "Poco/ArchiveStrategy.h"
 #include "Poco/String.h"
-#include "TiflashArchiveByTimestampsStrategy.h"
+#include "TiFlashArchiveByTimestampsStrategy.h"
 namespace DB
 {
-void TiflashLogFileChannel::setArchive(const std::string & archive)
+void TiFlashLogFileChannel::setArchive(const std::string & archive)
 {
     Poco::ArchiveStrategy * pStrategy = 0;
     if (archive == "number")
@@ -17,9 +17,9 @@ void TiflashLogFileChannel::setArchive(const std::string & archive)
     else if (archive == "timestamp")
     {
         if (_times == "utc")
-            pStrategy = new TiflashArchiveByTimestampsStrategy<Poco::DateTime>;
+            pStrategy = new TiFlashArchiveByTimestampsStrategy<Poco::DateTime>;
         else if (_times == "local")
-            pStrategy = new TiflashArchiveByTimestampsStrategy<Poco::LocalDateTime>;
+            pStrategy = new TiFlashArchiveByTimestampsStrategy<Poco::LocalDateTime>;
         else
             throw Poco::PropertyNotSupportedException("times", _times);
     }
