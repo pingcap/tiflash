@@ -427,9 +427,10 @@ doLearnerRead(
         .wait_index_timeout_ms = tmt.waitIndexTimeout(),
         .table_id = table_id,
     };
+    // Apply read index, wait index, resolve lock for Regions from [region_begin_idx, region_end_idx) in `regions_info`
     const auto batch_wait_index = [&](const size_t region_begin_idx, const size_t region_end_idx) -> void {
 #ifndef NDEBUG
-        if (region_end_idx >= regions_info.size())
+        if (region_end_idx > regions_info.size())
             throw Exception(fmt::format("Invalid region end index {}, num regions {}", region_end_idx, regions_info.size()), ErrorCodes::LOGICAL_ERROR);
 #endif
         const size_t batch_num_regions = region_end_idx - region_begin_idx;
