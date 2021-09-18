@@ -3252,9 +3252,10 @@ private:
         else
         {
             std::vector<const UInt8 *> delim_pos;
+            bool overflow = count == std::numeric_limits<Int64>::min();
             count = -count;
             // Fast exit when count * delim_size > data_size, or count == INT64_MIN
-            if (static_cast<Int64>(data_size / delim_size) < count || count == std::numeric_limits<Int64>::min())
+            if (static_cast<Int64>(data_size / delim_size) < count || overflow)
             {
                 copyDataToResult(res_data, res_offset, begin, end);
                 return;
