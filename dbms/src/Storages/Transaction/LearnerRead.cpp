@@ -203,23 +203,26 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
 
         GET_METRIC(metrics, tiflash_raft_read_index_count).Increment(batch_read_index_req.size());
 
-        const auto & make_default_batch_read_index_result = [&]() {
+        const auto & make_default_batch_read_index_result = [&](bool with_region_error) {
             for (const auto & req : batch_read_index_req)
             {
-                batch_read_index_result.emplace(req.context().region_id(), kvrpcpb::ReadIndexResponse());
+                auto resp = kvrpcpb::ReadIndexResponse();
+                if (with_region_error)
+                    resp.mutable_region_error();
+                batch_read_index_result.emplace(req.context().region_id(), std::move(resp));
             }
         };
         [&]() {
             if (!tmt.checkRunning(std::memory_order_relaxed))
             {
-                make_default_batch_read_index_result();
+                make_default_batch_read_index_result(true);
                 return;
             }
             kvstore->addReadIndexEvent(1);
             SCOPE_EXIT({ kvstore->addReadIndexEvent(-1); });
             if (!tmt.checkRunning())
             {
-                make_default_batch_read_index_result();
+                make_default_batch_read_index_result(true);
                 return;
             }
 
@@ -235,7 +238,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             }
             else
             {
-                make_default_batch_read_index_result();
+                make_default_batch_read_index_result(false);
             }
         }();
 
