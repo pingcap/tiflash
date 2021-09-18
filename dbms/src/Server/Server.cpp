@@ -908,20 +908,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_INFO(log, "encryption is disabled");
     }
 
-    SCOPE_EXIT({
-        if (!proxy_conf.is_proxy_runnable)
-        {
-            proxy_runner.join();
-            return;
-        }
-        LOG_INFO(log, "let tiflash proxy shutdown");
-        tiflash_instance_wrap.status = EngineStoreServerStatus::Stopped;
-        tiflash_instance_wrap.tmt = nullptr;
-        LOG_INFO(log, "wait for tiflash proxy thread to join");
-        proxy_runner.join();
-        LOG_INFO(log, "tiflash proxy thread is joined");
-    });
-
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
@@ -1024,6 +1010,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Poco::File(path + "metadata/" + default_database).createDirectories();
 
     StatusFile status{path + "status"};
+
+   SCOPE_EXIT({
+        if (!proxy_conf.is_proxy_runnable)
+        {
+            proxy_runner.join();
+            return;
+        }
+        LOG_INFO(log, "let tiflash proxy shutdown");
+        tiflash_instance_wrap.status = EngineStoreServerStatus::Stopped;
+        LOG_INFO(log, "wait for tiflash proxy thread to join");
+        proxy_runner.join();
+        LOG_INFO(log, "tiflash proxy thread is joined");
+    });
 
     SCOPE_EXIT({
         /** Explicitly destroy Context. It is more convenient than in destructor of Server, because logger is still available.
