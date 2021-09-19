@@ -13,12 +13,6 @@ set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
-
-# DO NOT enable format check until standards unified
-#curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format
-#chmod +x "/usr/local/bin/clang-format"
-#python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/master HEAD`
-
 CI_CCACHE_USED_SRCPATH="/build/tics"
 export INSTALL_DIR=${INSTALL_DIR:-"$SRCPATH/release-centos7/tiflash"}
 
