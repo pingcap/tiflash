@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/RecyclableBuffer.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
@@ -64,7 +65,30 @@ class ExchangeReceiverBase
 public:
     static constexpr bool is_streaming_reader = true;
 
+public:
+    ExchangeReceiverBase(
+        std::shared_ptr<RPCContext> rpc_context_,
+        const ::tipb::ExchangeReceiver & exc,
+        const ::mpp::TaskMeta & meta,
+        size_t max_streams_,
+        const LogWithPrefixPtr & log_);
+
+    ~ExchangeReceiverBase();
+
+    void cancel();
+
+    const DAGSchema & getOutputSchema() const { return schema; }
+
+    ExchangeReceiverResult nextResult();
+
+    size_t getSourceNum() { return source_num; }
+    String getName() { return "ExchangeReceiver"; }
+
 private:
+    void setUpConnection();
+
+    void readLoop(size_t source_index);
+
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
@@ -85,66 +109,6 @@ private:
     String err_msg;
 
     LogWithPrefixPtr log;
-
-    void setUpConnection();
-
-    void ReadLoop(size_t source_index);
-
-public:
-    ExchangeReceiverBase(
-        std::shared_ptr<RPCContext> rpc_context_,
-        const ::tipb::ExchangeReceiver & exc,
-        const ::mpp::TaskMeta & meta,
-        size_t max_streams_,
-        const std::shared_ptr<LogWithPrefix> & log_)
-        : rpc_context(std::move(rpc_context_))
-        , pb_exchange_receiver(exc)
-        , source_num(pb_exchange_receiver.encoded_task_meta_size())
-        , task_meta(meta)
-        , max_streams(max_streams_)
-        , max_buffer_size(max_streams_ * 2)
-        , res_buffer(max_buffer_size)
-        , live_connections(pb_exchange_receiver.encoded_task_meta_size())
-        , state(ExchangeReceiverState::NORMAL)
-        , log(getMPPTaskLog(log_, "ExchangeReceiver"))
-    {
-        for (int i = 0; i < exc.field_types_size(); i++)
-        {
-            String name = "exchange_receiver_" + std::to_string(i);
-            ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
-            schema.push_back(std::make_pair(name, info));
-        }
-
-        setUpConnection();
-    }
-
-    ~ExchangeReceiverBase()
-    {
-        {
-            std::unique_lock<std::mutex> lk(mu);
-            state = ExchangeReceiverState::CLOSED;
-            cv.notify_all();
-        }
-
-        for (auto & worker : workers)
-        {
-            worker.join();
-        }
-    }
-
-    void cancel()
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        state = ExchangeReceiverState::CANCELED;
-        cv.notify_all();
-    }
-
-    const DAGSchema & getOutputSchema() const { return schema; }
-
-    ExchangeReceiverResult nextResult();
-
-    size_t getSourceNum() { return source_num; }
-    String getName() { return "ExchangeReceiver"; }
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>
@@ -156,4 +120,3 @@ public:
 
 } // namespace DB
 
-#include <Flash/Mpp/ExchangeReceiver.ipp>

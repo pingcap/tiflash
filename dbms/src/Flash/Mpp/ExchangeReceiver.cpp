@@ -1,17 +1,68 @@
-#pragma once
-
+#include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
 
 namespace DB
 {
+
+template <typename RPCContext>
+ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
+    std::shared_ptr<RPCContext> rpc_context_,
+    const ::tipb::ExchangeReceiver & exc,
+    const ::mpp::TaskMeta & meta,
+    size_t max_streams_,
+    const std::shared_ptr<LogWithPrefix> & log_)
+    : rpc_context(std::move(rpc_context_))
+    , pb_exchange_receiver(exc)
+    , source_num(pb_exchange_receiver.encoded_task_meta_size())
+    , task_meta(meta)
+    , max_streams(max_streams_)
+    , max_buffer_size(max_streams_ * 2)
+    , res_buffer(max_buffer_size)
+    , live_connections(pb_exchange_receiver.encoded_task_meta_size())
+    , state(ExchangeReceiverState::NORMAL)
+    , log(getMPPTaskLog(log_, "ExchangeReceiver"))
+{
+    for (int i = 0; i < exc.field_types_size(); i++)
+    {
+        String name = "exchange_receiver_" + std::to_string(i);
+        ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
+        schema.push_back(std::make_pair(name, info));
+    }
+
+    setUpConnection();
+}
+
+template <typename RPCContext>
+ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
+{
+    {
+        std::unique_lock<std::mutex> lk(mu);
+        state = ExchangeReceiverState::CLOSED;
+        cv.notify_all();
+    }
+
+    for (auto & worker : workers)
+    {
+        worker.join();
+    }
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::cancel()
+{
+    std::unique_lock<std::mutex> lk(mu);
+    state = ExchangeReceiverState::CANCELED;
+    cv.notify_all();
+}
+
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
-        workers.emplace_back(&ExchangeReceiverBase::ReadLoop, this, index);
+        workers.emplace_back(&ExchangeReceiverBase::readLoop, this, index);
 }
 
-inline String getReceiverStateStr(const ExchangeReceiverState & s)
+static inline String getReceiverStateStr(const ExchangeReceiverState & s)
 {
     switch (s)
     {
@@ -29,7 +80,7 @@ inline String getReceiverStateStr(const ExchangeReceiverState & s)
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
+void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 {
     bool meet_error = false;
     String local_err_msg;
@@ -64,7 +115,7 @@ void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from ReadLoop";
+                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
@@ -91,7 +142,7 @@ void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from ReadLoop";
+                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
@@ -218,4 +269,8 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
     return result;
 }
 
+/// Explicit template instantiations - to avoid code bloat in headers.
+template class ExchangeReceiverBase<GRPCReceiverContext>;
+
 } // namespace DB
+
