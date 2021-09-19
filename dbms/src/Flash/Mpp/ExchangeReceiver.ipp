@@ -11,17 +11,17 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         workers.emplace_back(&ExchangeReceiverBase::ReadLoop, this, index);
 }
 
-inline String getReceiverStateStr(const State & s)
+inline String getReceiverStateStr(const ExchangeReceiverState & s)
 {
     switch (s)
     {
-    case NORMAL:
+    case ExchangeReceiverState::NORMAL:
         return "NORMAL";
-    case ERROR:
+    case ExchangeReceiverState::ERROR:
         return "ERROR";
-    case CANCELED:
+    case ExchangeReceiverState::CANCELED:
         return "CANCELED";
-    case CLOSED:
+    case ExchangeReceiverState::CLOSED:
         return "CLOSED";
     default:
         return "UNKNOWN";
@@ -55,8 +55,8 @@ void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
                 LOG_TRACE(log, "begin next ");
                 {
                     std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != NORMAL; });
-                    if (state == NORMAL)
+                    cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });
+                    if (state == ExchangeReceiverState::NORMAL)
                     {
                         res_buffer.popEmpty(packet);
                         cv.notify_all();
@@ -82,8 +82,8 @@ void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
                 }
                 {
                     std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.canPush() || state != NORMAL; });
-                    if (state == NORMAL)
+                    cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
+                    if (state == ExchangeReceiverState::NORMAL)
                     {
                         res_buffer.pushObject(packet);
                         cv.notify_all();
@@ -146,8 +146,8 @@ void ExchangeReceiverBase<RPCContext>::ReadLoop(size_t source_index)
     {
         std::unique_lock<std::mutex> lock(mu);
         live_connections--;
-        if (meet_error && state == NORMAL)
-            state = ERROR;
+        if (meet_error && state == ExchangeReceiverState::NORMAL)
+            state = ExchangeReceiverState::ERROR;
         if (meet_error && err_msg.empty())
             err_msg = local_err_msg;
         copy_live_conn = live_connections;
@@ -167,14 +167,14 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
     std::shared_ptr<ReceivedPacket> packet;
     {
         std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != NORMAL; });
+        cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != ExchangeReceiverState::NORMAL; });
 
-        if (state != NORMAL)
+        if (state != ExchangeReceiverState::NORMAL)
         {
             String msg;
-            if (state == CANCELED)
+            if (state == ExchangeReceiverState::CANCELED)
                 msg = "query canceled";
-            else if (state == CLOSED)
+            else if (state == ExchangeReceiverState::CLOSED)
                 msg = "ExchangeReceiver closed";
             else if (!err_msg.empty())
                 msg = err_msg;

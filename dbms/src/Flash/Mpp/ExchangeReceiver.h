@@ -22,7 +22,9 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "", bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
+
+    ExchangeReceiverResult(
+        std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "", bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
         : resp(resp_)
         , call_index(call_index_)
         , req_info(req_info_)
@@ -30,12 +32,13 @@ struct ExchangeReceiverResult
         , error_msg(error_msg_)
         , eof(eof_)
     {}
+
     ExchangeReceiverResult()
         : ExchangeReceiverResult(nullptr, 0)
     {}
 };
 
-enum State
+enum class ExchangeReceiverState
 {
     NORMAL,
     ERROR,
@@ -159,7 +162,7 @@ private:
     /// should lock `mu` when visit these members
     RecyclableBuffer<ReceivedPacket> res_buffer;
     Int32 live_connections;
-    State state;
+    ExchangeReceiverState state;
     String err_msg;
 
     LogWithPrefixPtr log;
@@ -183,7 +186,7 @@ public:
         , max_buffer_size(max_streams_ * 2)
         , res_buffer(max_buffer_size)
         , live_connections(pb_exchange_receiver.encoded_task_meta_size())
-        , state(NORMAL)
+        , state(ExchangeReceiverState::NORMAL)
         , log(getMPPTaskLog(log_, "ExchangeReceiver"))
     {
         for (int i = 0; i < exc.field_types_size(); i++)
@@ -200,7 +203,7 @@ public:
     {
         {
             std::unique_lock<std::mutex> lk(mu);
-            state = CLOSED;
+            state = ExchangeReceiverState::CLOSED;
             cv.notify_all();
         }
 
@@ -213,7 +216,7 @@ public:
     void cancel()
     {
         std::unique_lock<std::mutex> lk(mu);
-        state = CANCELED;
+        state = ExchangeReceiverState::CANCELED;
         cv.notify_all();
     }
 
