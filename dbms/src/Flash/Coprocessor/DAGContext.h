@@ -29,7 +29,8 @@ class DAGContext
 public:
     explicit DAGContext(const tipb::DAGRequest & dag_request)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
-        , return_executor_id(dag_request.has_root_executor() || dag_request.executors(0).has_executor_id())
+        , return_executor_id(
+              dag_request.has_root_executor() || (dag_request.executors_size() > 0 && dag_request.executors(0).has_executor_id()))
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , tunnel_set(nullptr)
