@@ -94,4 +94,3 @@ GRPCReceiverContext::StatusType GRPCReceiverContext::Reader::finish() const
 }
 
 } // namespace DB
-

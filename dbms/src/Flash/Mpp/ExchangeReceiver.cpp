@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
@@ -273,4 +272,3 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
 template class ExchangeReceiverBase<GRPCReceiverContext>;
 
 } // namespace DB
-

@@ -52,8 +52,8 @@ public:
     {
         return ::grpc::Status::OK;
     }
+
 private:
     pingcap::kv::Cluster * cluster;
 };
 } // namespace DB
-

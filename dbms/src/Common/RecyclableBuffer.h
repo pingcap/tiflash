@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 /// RecyclableBuffer recycles unused objects to avoid too much allocation of objects.
 template <typename T>
 class RecyclableBuffer
@@ -90,4 +89,3 @@ private:
 };
 
 } // namespace DB
-

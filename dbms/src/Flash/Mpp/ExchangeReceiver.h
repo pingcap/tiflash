@@ -6,13 +6,12 @@
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
-
-#include <mutex>
-#include <thread>
-
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
+
+#include <mutex>
+#include <thread>
 
 namespace DB
 {
@@ -26,7 +25,12 @@ struct ExchangeReceiverResult
     bool eof;
 
     ExchangeReceiverResult(
-        std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "", bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
+        std::shared_ptr<tipb::SelectResponse> resp_,
+        size_t call_index_,
+        const String & req_info_ = "",
+        bool meet_error_ = false,
+        const String & error_msg_ = "",
+        bool eof_ = false)
         : resp(resp_)
         , call_index(call_index_)
         , req_info(req_info_)
@@ -119,4 +123,3 @@ public:
 };
 
 } // namespace DB
-
