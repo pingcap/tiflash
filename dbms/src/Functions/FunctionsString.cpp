@@ -1,6 +1,7 @@
 #include <Columns/ColumnArray.h>
 #include <Common/UTF8Helpers.h>
 #include <DataTypes/DataTypeArray.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsString.h>
@@ -8,6 +9,7 @@
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <fmt/format.h>
 
 #include <ext/range.h>
@@ -3327,128 +3329,120 @@ private:
 
 class FunctionFormatWithLocale : public IFunction
 {
-    public:
-        static constexpr auto name = "formatWithLocale";
-        explicit FunctionFormatWithLocale(const Context & context_)
+public:
+    static constexpr auto name = "formatWithLocale";
+    explicit FunctionFormatWithLocale(const Context & context_)
         : context(context_)
-        {}
+    {}
 
-        static FunctionPtr create(const Context & context_)
+    static FunctionPtr create(const Context & context_)
+    {
+        return std::make_shared<FunctionFormatWithLocale>(context_);
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+
+    size_t getNumberOfArguments() const override { return 3; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto number_of_arguments = arguments.size();
+        if (number_of_arguments != 3)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 3", getName(), number_of_arguments),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isFloatingPoint() && !first_argument->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        auto second_argument = removeNullable(arguments[1]);
+        if (!second_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", second_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        auto third_argument = removeNullable(arguments[2]);
+        if (!third_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", third_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        std::cout << "formatWithLocale.execute" << std::endl;
+        const std::string forward_func_name{"format"};
+        if (auto forward_function_builder = FunctionFactory::instance().get(forward_func_name, context))
         {
-            return std::make_shared<FunctionFormatWithLocale>(context_);
+            const auto * locale_raw = block.getByPosition(arguments[2]).column.get();
+            handleLocale(locale_raw);
+
+            const ColumnsWithTypeAndName forward_build_args{block.getByPosition(arguments[0]), block.getByPosition(arguments[1])};
+            auto forward_function = forward_function_builder->build(forward_build_args);
+            const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
+            forward_function->execute(block, forward_arguments, result);
         }
-
-        String getName() const override
+        else
         {
-            return name;
+            throw Exception(
+                fmt::format("Forward Function {} for function {} has not yet been implemented", forward_func_name, getName()),
+                ErrorCodes::NOT_IMPLEMENTED);
         }
+    }
 
-        bool useDefaultImplementationForNulls() const override { return false; }
+private:
+    const Context & context;
 
-        size_t getNumberOfArguments() const override { return 3; }
-
-        DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    void handleLocale(const IColumn * locale_raw) const
+    {
+        const std::string supported_locale{"en_US"};
+        using ColVecLocale = ColumnString;
+        const auto column_size = locale_raw->size();
+        if (const auto * locale_const = checkAndGetColumnConst<ColVecLocale>(locale_raw, true))
         {
-            auto number_of_arguments = arguments.size();
-            if (number_of_arguments != 3)
-                throw Exception(
-                    fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 3", getName(), number_of_arguments),
-                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-            auto first_argument = removeNullable(arguments[0]);
-            if (!first_argument->isFloatingPoint() && !first_argument->isDecimal())
-                throw Exception(
-                    fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-            auto second_argument = removeNullable(arguments[1]);
-            if (!second_argument->isInteger())
-                throw Exception(
-                    fmt::format("Illegal type {} of second argument of function {}", second_argument->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-            auto third_argument = removeNullable(arguments[2]);
-            if (!third_argument->isStringOrFixedString())
-                throw Exception(
-                    fmt::format("Illegal type {} of third argument of function {}", third_argument->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-            return makeNullable(std::make_shared<DataTypeString>());
-        }
-
-        void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
-        {
-            const std::string forward_func_name{"format"};
-            if (auto forward_function_builder = FunctionFactory::instance().get(forward_func_name, context))
+            if (locale_const->isNullAt(0))
             {
-                const std::string supported_locale{"en_US"};
-                using ColVecLocale = ColumnVector<String>;
-                const auto * locale_raw = block.getByPosition(arguments[2]).column.get();
-                const auto column_size = locale_raw->size();
-                if (const auto * locale_const = checkAndGetColumnConst<ColVecLocale>(locale_raw, true))
-                {
-                    if (locale_const->isNullAt(0))
-                    {
-                        for (size_t i = 0; i < column_size; ++i)
-                        {
-                            // context.getDAGContext()->handleInvalidTime("Invalid time value: '" + string_value + "'", Errors::Types::WrongValue);
-                        }
-                    }
-                    else if (strcasecmp(locale_const->getValue<String>().c_str(), supported_locale.c_str()) != 0)
-                    {
-                        for (size_t i = 0; i < column_size; ++i)
-                        {
-                            // context.getDAGContext()->handleInvalidTime("Invalid time value: '" + string_value + "'", Errors::Types::WrongValue);
-                        }
-                    }
-                }
-                else
-                {
-                    if (const auto * locale_nullable_column = typeid_cast<const ColumnNullable *>(locale_raw))
-                    {
-                        const auto * locale_nullmap = &locale_nullable_column->getNullMapColumn();
-                        const auto *locale_data_column = &locale_nullable_column->getNestedColumn();
-                        for (size_t i = 0; i < column_size; ++i)
-                        {
-                            if (locale_nullable_column->isNullAt(i))
-                            {
-                                // context.getDAGContext()->handleInvalidTime("Invalid time value: '" + string_value + "'", Errors::Types::WrongValue);
-                            }
-                            else if (strcasecmp(locale_const->getValue<String>().c_str(), supported_locale.c_str()) != 0)
-                            {
-                                // context.getDAGContext()->handleInvalidTime("Invalid time value: '" + string_value + "'", Errors::Types::WrongValue);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        const auto * locale_column = checkAndGetColumn<ColVecLocale>(locale_raw);
-                        for (const auto &locale : locale_column->getData())
-                        {
-                            if (strcasecmp(locale_const->getValue<String>().c_str(), supported_locale.c_str()) != 0)
-                            {
-                                // context.getDAGContext()->handleInvalidTime("Invalid time value: '" + string_value + "'", Errors::Types::WrongValue);
-                            }
-                        }
-                    }
-                }
-
-                const ColumnsWithTypeAndName forward_build_args{block.getByPosition(arguments[0]), block.getByPosition(arguments[1])};
-                auto forward_function = forward_function_builder->build(forward_build_args);
-                const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
-                forward_function->execute(block, forward_arguments, result);
+                for (size_t i = 0; i < column_size; ++i)
+                    context.getDAGContext()->handleUnknownLocale("NULL");
             }
             else
             {
-                throw Exception(
-                    fmt::format("Forward Function {} for function {} has not yet been implemented", forward_func_name, getName()),
-                    ErrorCodes::NOT_IMPLEMENTED);
+                const String value = locale_const->getValue<String>();
+                if (strcasecmp(value.c_str(), supported_locale.c_str()) != 0)
+                {
+                    for (size_t i = 0; i < column_size; ++i)
+                        context.getDAGContext()->handleUnknownLocale(value);
+                }
             }
         }
-
-    private:
-        const Context & context;
-    };
+        else
+        {
+            Field locale_field;
+            for (size_t i = 0; i < column_size; ++i)
+            {
+                locale_raw->get(i, locale_field);
+                if (locale_field.isNull())
+                    context.getDAGContext()->handleUnknownLocale("NULL");
+                else
+                {
+                    String value = locale_field.get<String>();
+                    if (strcasecmp(value.c_str(), supported_locale.c_str()) != 0)
+                        context.getDAGContext()->handleUnknownLocale(value);
+                }
+            }
+        }
+    }
+};
 
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };

@@ -28,10 +28,24 @@ protected:
 };
 
 
+TEST_F(StringFormat, FormatWithLocaleAllUnitTest)
+try
+{
+    const std::string func_name = "formatWithLocale";
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", {}, {}, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Float64>>({12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, {}, {}}),
+            createColumn<Nullable<Int64>>({4, 4, 4, 4, 4, {}, 4, {}}),
+            createColumn<Nullable<String>>({"en_US", "en_us", "EN_US", "xxx", {}, "xx", "xx", "xx"})));
+}
+CATCH
+
 TEST_F(StringFormat, StringFormatAllUnitTest)
 try
 {
-    std::string func_name = "format";
+    const std::string func_name = "format";
 
     // float64, int64
     // vector, vector
@@ -194,7 +208,7 @@ try
     DECIMAL_TESTCASE(Decimal256, Int256, 65);
 
 #undef DECIMAL_TESTCASE
-} // namespace tests
+}
 CATCH
 
 } // namespace tests

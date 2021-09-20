@@ -96,6 +96,14 @@ void DAGContext::handleTruncateError(const String & msg)
     appendWarning(warning);
 }
 
+void DAGContext::handleUnknownLocale(const String & value)
+{
+    tipb::Error warning;
+    warning.set_code(0);
+    warning.set_msg(fmt::format("Unknown locale: \'{}\'", value));
+    appendWarning(warning);
+}
+
 void DAGContext::handleOverflowError(const String & msg, const TiFlashError & error)
 {
     if (!(flags & Flag::OVERFLOW_AS_WARNING))
