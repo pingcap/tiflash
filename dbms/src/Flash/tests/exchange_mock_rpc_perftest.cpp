@@ -240,17 +240,21 @@ std::vector<PacketPtr> makePackets(ChunkCodecStream & codec, int packet_num, int
     return packets;
 }
 
-void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & queue, StopFlag & stop_flag)
+std::vector<PacketQueuePtr> makePacketQueues(int source_num, int queue_size)
 {
-    std::mt19937 mt(rd());
-    std::uniform_int_distribution<int> dist(0, packets.size() - 1);
+    std::vector<PacketQueuePtr> queues;
+    for (int i = 0; i < source_num; ++i)
+        queues.push_back(std::make_shared<PacketQueue>(queue_size));
+    return queues;
+}
 
-    while (!stop_flag.load())
-    {
-        int i = dist(mt);
-        queue->tryPush(packets[i], std::chrono::milliseconds(10));
-    }
-    queue->finish();
+std::vector<tipb::FieldType> makeFields()
+{
+    std::vector<tipb::FieldType> fields(3);
+    fields[0].set_tp(TiDB::TypeLongLong);
+    fields[1].set_tp(TiDB::TypeString);
+    fields[2].set_tp(TiDB::TypeLongLong);
+    return fields;
 }
 
 void printException(const Exception & e)
@@ -265,75 +269,90 @@ void printException(const Exception & e)
                   << e.getStackTrace().toString() << std::endl;
 }
 
-void sendBlock(BlockInputStreamPtr stream)
+void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & queue, StopFlag & stop_flag)
 {
-    try
+    std::mt19937 mt(rd());
+    std::uniform_int_distribution<int> dist(0, packets.size() - 1);
+
+    while (!stop_flag.load())
     {
-        while (Block block = stream->read())
-        {
-            // do nothing
-        }
-        stream->readSuffix();
+        int i = dist(mt);
+        queue->tryPush(packets[i], std::chrono::milliseconds(10));
     }
-    catch (const Exception & e)
+    queue->finish();
+}
+
+void receivePacket(const PacketQueuePtr & queue)
+{
+    while (true)
     {
-        printException(e);
-        throw;
+        auto res = queue->pop();
+        if (res.has_value())
+            received_data_size.fetch_add(res.value()->ByteSizeLong());
+        else
+            break;
     }
 }
 
+template <bool print_progress>
 void readBlock(BlockInputStreamPtr stream)
 {
-    auto get_rate = [](auto count, auto duration) {
+    [[maybe_unused]] auto get_rate = [](auto count, auto duration) {
         return count * 1000 / duration.count();
     };
 
-    auto get_mib = [](auto v) {
+    [[maybe_unused]] auto get_mib = [](auto v) {
         return v / 1024 / 1024;
     };
 
-    auto start = std::chrono::high_resolution_clock::now();
-    auto second_ago = start;
-    Int64 block_count = 0;
-    Int64 last_block_count = 0;
-    Int64 last_data_size = received_data_size.load();
+    [[maybe_unused]] auto start = std::chrono::high_resolution_clock::now();
+    [[maybe_unused]] auto second_ago = start;
+    [[maybe_unused]] Int64 block_count = 0;
+    [[maybe_unused]] Int64 last_block_count = 0;
+    [[maybe_unused]] Int64 last_data_size = received_data_size.load();
     try
     {
         stream->readPrefix();
         while (auto block = stream->read())
         {
-            ++block_count;
-            auto cur = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - second_ago);
-            if (duration.count() >= 1000)
+            if constexpr (print_progress)
             {
-                Int64 data_size = received_data_size.load();
-                std::cout
-                    << fmt::format(
-                           "Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
-                           block_count,
-                           get_mib(data_size),
-                           get_rate(block_count - last_block_count, duration),
-                           get_mib(get_rate(data_size - last_data_size, duration)))
-                    << std::endl;
-                second_ago = cur;
-                last_block_count = block_count;
-                last_data_size = data_size;
+                ++block_count;
+                auto cur = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - second_ago);
+                if (duration.count() >= 1000)
+                {
+                    Int64 data_size = received_data_size.load();
+                    std::cout
+                        << fmt::format(
+                               "Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
+                               block_count,
+                               get_mib(data_size),
+                               get_rate(block_count - last_block_count, duration),
+                               get_mib(get_rate(data_size - last_data_size, duration)))
+                        << std::endl;
+                    second_ago = cur;
+                    last_block_count = block_count;
+                    last_data_size = data_size;
+                }
             }
         }
         stream->readSuffix();
 
-        auto cur = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - start);
-        Int64 data_size = received_data_size.load();
-        std::cout
-            << fmt::format(
-                   "End. Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
-                   block_count,
-                   get_mib(data_size),
-                   get_rate(block_count, duration),
-                   get_mib(get_rate(data_size, duration)))
-            << std::endl;
+        if constexpr (print_progress)
+        {
+            auto cur = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - start);
+            Int64 data_size = received_data_size.load();
+            std::cout
+                << fmt::format(
+                       "End. Blocks: {:<10} Data(MiB): {:<8} Block/s: {:<6} Data/s(MiB): {:<6}",
+                       block_count,
+                       get_mib(data_size),
+                       get_rate(block_count, duration),
+                       get_mib(get_rate(data_size, duration)))
+                << std::endl;
+        }
     }
     catch (const Exception & e)
     {
@@ -369,19 +388,14 @@ struct ReceiverHelper
             pb_exchange_receiver.add_encoded_task_meta(encoded_task);
         }
 
-        fields.resize(3);
-        fields[0].set_tp(TiDB::TypeLongLong);
-        fields[1].set_tp(TiDB::TypeString);
-        fields[2].set_tp(TiDB::TypeLongLong);
-
+        fields = makeFields();
         *pb_exchange_receiver.add_field_types() = fields[0];
         *pb_exchange_receiver.add_field_types() = fields[1];
         *pb_exchange_receiver.add_field_types() = fields[2];
 
         task_meta.set_task_id(100);
 
-        for (int i = 0; i < source_num; ++i)
-            queues.push_back(std::make_shared<PacketQueue>(10));
+        queues = makePacketQueues(source_num, 10);
     }
     
     MockExchangeReceiverPtr buildReceiver()
@@ -531,7 +545,7 @@ void testOnlyReceiver(int concurrency, int source_num, int block_rows, int secon
     std::vector<std::thread> threads;
     for (const auto & queue : receiver_helper.queues)
         threads.emplace_back(sendPacket, std::cref(packets), queue, std::ref(stop_flag));
-    threads.emplace_back(readBlock, union_input_stream);
+    threads.emplace_back(readBlock<true>, union_input_stream);
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
     stop_flag.store(true);
@@ -557,8 +571,8 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
     SenderHelper sender_helper(source_num, concurrency, receiver_helper.queues);
     auto union_send_stream = sender_helper.buildUnionStream(stop_flag, blocks, receiver_helper.fields);
 
-    auto write_thread = std::thread(sendBlock, union_send_stream);
-    auto read_thread = std::thread(readBlock, union_receive_stream);
+    auto write_thread = std::thread(readBlock<false>, union_send_stream);
+    auto read_thread = std::thread(readBlock<true>, union_receive_stream);
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
     stop_flag.store(true);
@@ -570,6 +584,32 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
     receiver_helper.finish();
 }
 
+void testOnlySender(int concurrency, int source_num, int block_rows, int seconds)
+{
+    auto queues = makePacketQueues(source_num, 10);
+    auto fields = makeFields();
+
+    StopFlag stop_flag(false);
+    auto blocks = makeBlocks(100, block_rows);
+
+    SenderHelper sender_helper(source_num, concurrency, queues);
+    auto union_send_stream = sender_helper.buildUnionStream(stop_flag, blocks, fields);
+
+    auto write_thread = std::thread(readBlock<true>, union_send_stream);
+    std::vector<std::thread> read_threads;
+    for (int i = 0; i < source_num; ++i)
+        read_threads.emplace_back(receivePacket, queues[i]);
+
+    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+    stop_flag.store(true);
+
+    write_thread.join();
+    sender_helper.finish();
+
+    for (auto & t : read_threads)
+        t.join();
+}
+
 } // namespace
 } // namespace DB::tests
 
@@ -577,7 +617,7 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
 {
     if (argc < 2 || argc > 6)
     {
-        std::cerr << fmt::format("Usage: {} [receiver|sender_receiver] <concurrency=5> <source_num=2> <block_rows=5000> <seconds=10>", argv[0]) << std::endl;
+        std::cerr << fmt::format("Usage: {} [receiver|sender|sender_receiver|sender_receiver_join] <concurrency=5> <source_num=2> <block_rows=5000> <seconds=10>", argv[0]) << std::endl;
         exit(1);
     }
 
@@ -590,6 +630,7 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
     using TestHandler = std::function<void(int concurrency, int source_num, int block_rows, int seconds)>;
     std::unordered_map<String, TestHandler> handlers = {
         {"receiver", DB::tests::testOnlyReceiver},
+        {"sender", DB::tests::testOnlySender},
         {"sender_receiver", DB::tests::testSenderReceiver<false>},
         {"sender_receiver_join", DB::tests::testSenderReceiver<true>},
     };
