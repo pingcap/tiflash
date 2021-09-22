@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int TRUNCATE_ERROR;
@@ -69,20 +68,35 @@ enum SqlMode
 };
 } // namespace
 
-bool strictSqlMode(UInt64 sql_mode) { return sql_mode & SqlMode::STRICT_ALL_TABLES || sql_mode & SqlMode::STRICT_TRANS_TABLES; }
+bool strictSqlMode(UInt64 sql_mode)
+{
+    return sql_mode & SqlMode::STRICT_ALL_TABLES || sql_mode & SqlMode::STRICT_TRANS_TABLES;
+}
 
-bool DAGContext::allowZeroInDate() const { return flags & Flag::IGNORE_ZERO_IN_DATE; }
+bool DAGContext::allowZeroInDate() const
+{
+    return flags & Flag::IGNORE_ZERO_IN_DATE;
+}
 
-bool DAGContext::allowInvalidDate() const { return sql_mode & SqlMode::ALLOW_INVALID_DATES; }
+bool DAGContext::allowInvalidDate() const
+{
+    return sql_mode & SqlMode::ALLOW_INVALID_DATES;
+}
 
-std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap() { return profile_streams_map; }
+std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap()
+{
+    return profile_streams_map;
+}
 
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMapForJoinBuildSide()
 {
     return profile_streams_map_for_join_build_side;
 }
 
-std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAliasMap() { return qb_id_to_join_alias_map; }
+std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAliasMap()
+{
+    return qb_id_to_join_alias_map;
+}
 
 void DAGContext::handleTruncateError(const String & msg)
 {
@@ -146,7 +160,10 @@ void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & erro
     }
 }
 
-bool DAGContext::shouldClipToZero() { return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT; }
+bool DAGContext::shouldClipToZero()
+{
+    return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT;
+}
 
 std::pair<bool, double> DAGContext::getTableScanThroughput()
 {

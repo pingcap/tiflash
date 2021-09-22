@@ -3068,7 +3068,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    // string format(decimal/float64, int64/uint64)
+    // string format(decimal/float, int/uint)
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto c0_type = block.getByPosition(arguments[0]).type;
@@ -3093,7 +3093,7 @@ public:
                 auto number_to_str = [&number_type](T0 value) -> std::string {
                     if constexpr (IsDecimal<T0>)
                         return value.toString(number_type.getScale());
-                    else // DataTypeFloat64
+                    else // Float
                         return fmt::format("{}", value);
                 };
 
@@ -3106,7 +3106,7 @@ public:
                     {
                         const auto & precision_array = col1_column->getData();
                         col_res->reserve(val_num);
-                        for (decltype(val_num) i = 0; i < val_num; i++)
+                        for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
                             std::string round_number_str{number_str};
@@ -3142,7 +3142,7 @@ public:
                         const auto & number_array = col0_column->getData();
                         const auto & precision_array = col1_column->getData();
                         col_res->reserve(val_num);
-                        for (decltype(val_num) i = 0; i < val_num; i++)
+                        for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
                             std::string number_str{number_to_str(number_array[i])};
                             const size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
@@ -3179,6 +3179,7 @@ private:
             DataTypeDecimal64,
             DataTypeDecimal128,
             DataTypeDecimal256,
+            DataTypeFloat32,
             DataTypeFloat64>(type.get(), std::forward<F>(f));
     }
 
@@ -3186,22 +3187,29 @@ private:
     bool getPrecisionType(DataTypePtr type, F && f) const
     {
         return castTypeToEither<
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
             DataTypeInt64,
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
             DataTypeUInt64>(type.get(), std::forward<F>(f));
     }
 
-    // int64/uint64
+    // int/uint
     template <typename T>
-    size_t getMaxNumDecimals(T c1_int) const
+    size_t getMaxNumDecimals(T precision) const
     {
         if constexpr (is_signed_v<T>)
         {
-            if (c1_int <= 0)
+            if (precision <= 0)
                 return 0;
         }
-        if (c1_int >= static_cast<T>(format_max_decimals))
+        size_t size_t_precision = static_cast<size_t>(precision); // NOLINT(bugprone-signed-char-misuse)
+        if (size_t_precision >= format_max_decimals)
             return format_max_decimals;
-        return c1_int;
+        return size_t_precision;
     }
 
     static void roundFormatArgs(std::string & x_str, size_t max_num_decimals)
@@ -3337,6 +3345,10 @@ public:
 
     static FunctionPtr create(const Context & context_)
     {
+        if (!context_.getDAGContext())
+        {
+            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+        }
         return std::make_shared<FunctionFormatWithLocale>(context_);
     }
 
@@ -3380,7 +3392,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        std::cout << "formatWithLocale.execute" << std::endl;
         const std::string forward_func_name{"format"};
         if (auto forward_function_builder = FunctionFactory::instance().get(forward_func_name, context))
         {
