@@ -1257,8 +1257,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         tmt_context.setStatusRunning();
         
-        // Bind CPU affinity after all threads started.
-        CPUAffinityManager::getInstance().bindThreadCPUAffinity();
+        try
+        {
+            // Bind CPU affinity after all threads started.
+            CPUAffinityManager::getInstance().bindThreadCPUAffinity();
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
+        }
 
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
