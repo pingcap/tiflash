@@ -131,7 +131,7 @@ public:
     {
         if (mask & registed_masks)
         {
-            fmt::print(stderr, "Current mask is {}, you can not register mask {}.\n", registed_masks, mask);
+            fmt::print(stderr, "Current mask is {}, you can not register mask {}. ", registed_masks, mask);
             assert(false);
         }
         registed_masks |= mask;
@@ -148,12 +148,12 @@ public:
 
     String toWorkloadSelctedString() const
     {
-        String debug_string = "Selected Workloads : \n";
+        String debug_string = "Selected Workloads : ";
         for (const auto & it : funcs)
         {
             if (options.situation_mask & it.first)
             {
-                debug_string += fmt::format("   Name : {} , mask : {}. \n", it.second.first, it.first);
+                debug_string += fmt::format("   Name : {} , mask : {}. ", it.second.first, it.first);
             }
         }
         return debug_string;
