@@ -11,6 +11,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <pingcap/coprocessor/Client.h>
 
 namespace DB
