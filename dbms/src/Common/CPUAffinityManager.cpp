@@ -183,7 +183,7 @@ void CPUAffinityManager::setAffinity(pid_t tid, const cpu_set_t & cpu_set) const
     int ret = sched_setaffinity(tid, sizeof(cpu_set), &cpu_set);
     if (ret != 0)
     {
-        throw DB::Exception(std::string("sched_setaffinity: ") + std::strerror(errno), DB::ErrorCodes::UNKNOWN_EXCEPTION);
+        LOG_ERROR(log, "sched_setaffinity fail but ignore error: " << std::strerror(errno));
     }
 #endif
 }
