@@ -11,6 +11,7 @@
 #include <random>
 
 void PSRunnable::run()
+try
 {
     MemoryTracker tracker;
     tracker.setDescription(nullptr);
@@ -23,6 +24,10 @@ void PSRunnable::run()
     auto peak = current_memory_tracker->getPeak();
     current_memory_tracker = nullptr;
     LOG_INFO(StressEnv::logger, description() << " exit with peak memory usage: " << formatReadableSizeWithBinarySuffix(peak));
+}
+catch (...)
+{
+    DB::tryLogCurrentException(StressEnv::logger);
 }
 
 size_t PSRunnable::getBytesUsed() const
@@ -87,7 +92,7 @@ void PSWriter::updatedRandomData()
 
 void PSWriter::fillAllPages(const PSPtr & ps)
 {
-    for (DB::PageId page_id = 0; page_id < MAX_PAGE_ID_DEFAULT; ++page_id)
+    for (DB::PageId page_id = 0; page_id <= MAX_PAGE_ID_DEFAULT; ++page_id)
     {
         DB::MemHolder holder;
         DB::ReadBufferPtr buff = genRandomData(page_id, holder);
@@ -145,8 +150,7 @@ void PSCommonWriter::updatedRandomData()
     size_t gen_size = genBufferSize();
     for (size_t i = 0; i < batch_buffer_nums; ++i)
     {
-        auto bufffff2 = std::make_shared<DB::ReadBuffer>(memory, gen_size, i * single_buff_size);
-        buff_ptrs.emplace_back(bufffff2);
+        buff_ptrs.emplace_back(std::make_shared<DB::ReadBufferFromMemory>(memory + i * single_buff_size, gen_size));
     }
 }
 
