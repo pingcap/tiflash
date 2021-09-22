@@ -32,6 +32,14 @@ public:
         gen.seed(time(nullptr));
     }
 
+    virtual ~PSWriter()
+    {
+        if (memory != nullptr)
+        {
+            free(memory);
+        }
+    }
+
     virtual String description() override
     {
         return fmt::format("(Stress Test Writer {})", index);
@@ -40,6 +48,8 @@ public:
     static void setApproxPageSize(size_t size_mb);
 
     static DB::ReadBufferPtr genRandomData(DB::PageId pageId, DB::MemHolder & holder);
+
+    virtual void updatedRandomData();
 
     static void fillAllPages(const PSPtr & ps);
 
@@ -53,6 +63,8 @@ protected:
     DB::UInt32 index = 0;
     std::mt19937 gen;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
+    char * memory = nullptr;
+    DB::ReadBufferPtr buff_ptr;
 };
 
 
@@ -65,7 +77,7 @@ public:
         : PSWriter(ps_, index_)
     {}
 
-    virtual void updatedRandomData();
+    virtual void updatedRandomData() override;
 
     virtual String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
 

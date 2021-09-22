@@ -22,7 +22,7 @@ private:
     String desc() override
     {
         return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {}"
+                           "`paths` will only used first one. which is {}. Data will store in {} ."
                            "Please cleanup folder after this test."
                            "The current workload will elapse near 60 seconds",
                            options.paths[0],
