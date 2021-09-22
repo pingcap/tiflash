@@ -12,7 +12,6 @@ namespace DB::tests
 {
 namespace
 {
-
 std::random_device rd;
 
 using StopFlag = std::atomic<bool>;
@@ -125,4 +124,3 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
         << std::endl;
     handler(rows, columns, seconds);
 }
-
