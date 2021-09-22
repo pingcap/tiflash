@@ -61,7 +61,7 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder
 
 void PSWriter::fillAllPages(const PSPtr & ps)
 {
-    for (DB::PageId page_id = 0; page_id < MAX_PAGE_ID_DEFAULT; ++page_id)
+    for (DB::PageId page_id = 0; page_id <= MAX_PAGE_ID_DEFAULT; ++page_id)
     {
         DB::MemHolder holder;
         DB::ReadBufferPtr buff = genRandomData(page_id, holder);
