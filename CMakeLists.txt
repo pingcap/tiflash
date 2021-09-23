@@ -3,6 +3,7 @@ cmake_minimum_required (VERSION 2.8)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ClickHouse_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
+set(CXX_WARNING_FLAGS "${CXX_WARNING_FLAGS} -Wno-nonnull")
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Require at least gcc 7

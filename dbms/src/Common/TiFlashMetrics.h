@@ -7,6 +7,7 @@
 #include <prometheus/gauge.h>
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
+#include <cassert>
 
 namespace DB
 {
