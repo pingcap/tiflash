@@ -141,19 +141,16 @@ void MPPTunnel::writeDone()
 
 void MPPTunnel::connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
 {
-    {
-        std::lock_guard<std::mutex> lk(mu);
-        if (connected)
-        {
-            throw Exception("has connected");
-        }
+    std::lock_guard<std::mutex> lk(mu);
+    if (connected)
+        throw Exception("has connected");
 
-        LOG_DEBUG(log, "ready to connect");
-        connected = true;
-        writer = writer_;
-        cv_for_connected.notify_all();
-    }
+    LOG_DEBUG(log, "ready to connect");
+    writer = writer_;
     send_thread = std::make_unique<std::thread>([this] { sendLoop(); });
+
+    connected = true;
+    cv_for_connected.notify_all();
 }
 
 
