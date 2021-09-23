@@ -5,7 +5,7 @@ mysql> insert into test.t values (12.1235, 12.1235, 12.1235, 5, 'en_US'),(12.123
 
 func> wait_table test t
 
-mysql> set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select float_val, double_val, decimal_val from (select format(a, d) as float_val, format(b, d) as double_val, format(c, d) as decimal_val from test.t) t group by float_val, double_val, decimal_val
+mysql> set tidb_allow_mpp=1; set tidb_isolation_read_engines='tiflash'; select float_val, double_val, decimal_val from (select format(a, d, e) as float_val, format(b, d, e) as double_val, format(c, d, e) as decimal_val from test.t) t group by float_val, double_val, decimal_val
 +-----------+------------+-------------+
 | float_val | double_val | decimal_val |
 +-----------+------------+-------------+
