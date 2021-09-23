@@ -3317,6 +3317,8 @@ public:
         return name;
     }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     size_t getNumberOfArguments() const override { return 2; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -3344,85 +3346,72 @@ public:
     // string format(decimal/float, int/uint)
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const auto c0_type = block.getByPosition(arguments[0]).type;
-        const auto c1_type = block.getByPosition(arguments[1]).type;
+        const auto number_base_type = block.getByPosition(arguments[0]).type;
+        const auto precision_base_type = block.getByPosition(arguments[1]).type;
 
         auto col_res = ColumnString::create();
         auto val_num = block.getByPosition(arguments[0]).column->size();
 
-        // number_nullable and precision_nullable must be false.
-        bool is_types_valid = getNumberType(c0_type, [&](const auto & number_type, bool number_nullable [[maybe_unused]]) {
+        // number_nullable and precision_nullable should be false.
+        bool is_types_valid = getNumberType(number_base_type, [&](const auto & number_type, bool number_nullable [[maybe_unused]]) {
             using NumberType = std::decay_t<decltype(number_type)>;
-            using T0 = typename NumberType::FieldType;
-            using ColVecT0 = std::conditional_t<IsDecimal<T0>, ColumnDecimal<T0>, ColumnVector<T0>>;
-            const auto * c0_raw = block.getByPosition(arguments[0]).column.get();
+            using NumberFieldType = typename NumberType::FieldType;
+            using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
+            const auto * number_raw = block.getByPosition(arguments[0]).column.get();
 
-            return getPrecisionType(c1_type, [&](const auto & precision_type, bool precision_nullable [[maybe_unused]]) {
+            return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool precision_nullable [[maybe_unused]]) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
-                using T1 = typename PrecisionType::FieldType;
-                using ColVecT1 = ColumnVector<T1>;
-                const auto * c1_raw = block.getByPosition(arguments[1]).column.get();
+                using PrecisionFieldType = typename PrecisionType::FieldType;
+                using PrecisionColVec = ColumnVector<PrecisionFieldType>;
+                const auto * precision_raw = block.getByPosition(arguments[1]).column.get();
 
-                auto number_to_str = [&number_type](T0 value) -> std::string {
-                    if constexpr (IsDecimal<T0>)
-                        return value.toString(number_type.getScale());
+                auto number_to_str = [&number_type](NumberFieldType number) -> std::string {
+                    if constexpr (IsDecimal<NumberFieldType>)
+                        return number.toString(number_type.getScale());
                     else // Float
-                        return fmt::format("{}", value);
+                        return fmt::format("{}", number);
                 };
 
-                if (const auto * col0_const = checkAndGetColumnConst<ColVecT0>(c0_raw))
+                if (const auto * col0_const = checkAndGetColumnConst<NumberColVec>(number_raw))
                 {
-                    const T0 & const_number = col0_const->template getValue<T0>();
-                    std::string number_str{number_to_str(const_number)};
+                    const NumberFieldType & const_number = col0_const->template getValue<NumberFieldType>();
+                    const std::string number_str = number_to_str(const_number);
 
-                    if (const auto * col1_column = checkAndGetColumn<ColVecT1>(c1_raw))
+                    if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
                     {
                         const auto & precision_array = col1_column->getData();
-                        col_res->reserve(val_num);
+                        std::string buffer;
                         for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
-                            std::string round_number_str{number_str};
-                            roundFormatArgs(round_number_str, max_num_decimals);
-                            col_res->insert(toField(formatENUS(round_number_str, max_num_decimals)));
+                            format(number_str, max_num_decimals, buffer, col_res->getChars(), col_res->getOffsets());
                         }
                     }
-                    else if (const auto * col1_const = checkAndGetColumnConst<ColVecT1>(c1_raw))
-                    {
-                        size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<T1>());
-                        roundFormatArgs(number_str, max_num_decimals);
-                        std::string const_result = formatENUS(number_str, max_num_decimals);
-                        col_res->insert(toField(const_result));
-                        block.getByPosition(result).column = ColumnConst::create(std::move(col_res), val_num);
-                        return true;
-                    }
+                    else
+                        return false;
                 }
-                else if (const auto * col0_column = checkAndGetColumn<ColVecT0>(c0_raw))
+                else if (const auto * col0_column = checkAndGetColumn<NumberColVec>(number_raw))
                 {
-                    if (const auto * col1_const = checkAndGetColumnConst<ColVecT1>(c1_raw))
+                    if (const auto * col1_const = checkAndGetColumnConst<PrecisionColVec>(precision_raw))
                     {
-                        const size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<T1>());
-                        col_res->reserve(val_num);
+                        const size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<PrecisionFieldType>());
+                        std::string buffer;
                         for (const auto & number : col0_column->getData())
-                        {
-                            std::string number_str{number_to_str(number)};
-                            roundFormatArgs(number_str, max_num_decimals);
-                            col_res->insert(toField(formatENUS(number_str, max_num_decimals)));
-                        }
+                            format(number_to_str(number), max_num_decimals, buffer, col_res->getChars(), col_res->getOffsets());
                     }
-                    else if (const auto * col1_column = checkAndGetColumn<ColVecT1>(c1_raw))
+                    else if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
                     {
                         const auto & number_array = col0_column->getData();
                         const auto & precision_array = col1_column->getData();
-                        col_res->reserve(val_num);
+                        std::string buffer;
                         for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
-                            std::string number_str{number_to_str(number_array[i])};
                             const size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
-                            roundFormatArgs(number_str, max_num_decimals);
-                            col_res->insert(toField(formatENUS(number_str, max_num_decimals)));
+                            format(number_to_str(number_array[i]), max_num_decimals, buffer, col_res->getChars(), col_res->getOffsets());
                         }
                     }
+                    else
+                        return false;
                 }
                 else
                     return false;
@@ -3434,18 +3423,18 @@ public:
 
         if (!is_types_valid)
             throw Exception(
-                fmt::format("Illegal types {}, {} arguments of function {}", c0_type->getName(), c1_type->getName(), getName()),
+                fmt::format("Illegal types {}, {} arguments of function {}", number_base_type->getName(), precision_base_type->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
 private:
     const Context & context;
-    // formatMaxDecimals limits the maximum number of decimal digits for result of
+    // format_max_decimals limits the maximum number of decimal digits for result of
     // function `format`, this value is same as `FORMAT_MAX_DECIMALS` in MySQL source code.
-    const size_t format_max_decimals = 30;
+    static constexpr size_t format_max_decimals = 30;
 
     template <typename F>
-    bool getNumberType(DataTypePtr type, F && f) const
+    static bool getNumberType(DataTypePtr type, F && f)
     {
         return castTypeToEither<
             DataTypeDecimal32,
@@ -3457,7 +3446,7 @@ private:
     }
 
     template <typename F>
-    bool getPrecisionType(DataTypePtr type, F && f) const
+    static bool getPrecisionType(DataTypePtr type, F && f)
     {
         return castTypeToEither<
             DataTypeInt8,
@@ -3472,40 +3461,60 @@ private:
 
     // int/uint
     template <typename T>
-    size_t getMaxNumDecimals(T precision) const
+    static size_t getMaxNumDecimals(T precision)
     {
-        if constexpr (is_signed_v<T>)
-        {
-            if (precision <= 0)
-                return 0;
-        }
-        size_t size_t_precision = static_cast<size_t>(precision); // NOLINT(bugprone-signed-char-misuse)
-        if (size_t_precision >= format_max_decimals)
-            return format_max_decimals;
-        return size_t_precision;
+        if (accurate::lessOrEqualsOp(precision, 0))
+            return 0;
+        return std::min(static_cast<size_t>(precision), format_max_decimals);
     }
 
-    static void roundFormatArgs(std::string & x_str, size_t max_num_decimals)
+    template <typename T>
+    static void format(
+        T && number_str,
+        const size_t max_num_decimals,
+        std::string & buffer,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
-        auto point_index = x_str.find('.');
+        // copy/move for modify.
+        std::string current_number_str = std::forward<T>(number_str);
+        roundFormatNumberString(current_number_str, max_num_decimals);
+        formatAsEnUs2Buffer(current_number_str, max_num_decimals, buffer);
+        copyFromBuffer(buffer, res_data, res_offsets);
+    }
+
+    static void copyFromBuffer(const std::string & buffer, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
+    {
+        const size_t old_size = res_data.size();
+        const size_t size_to_append = buffer.size() + 1;
+        const size_t new_size = old_size + size_to_append;
+
+        res_data.resize(new_size);
+        memcpy(&res_data[old_size], buffer.c_str(), size_to_append);
+        res_offsets.push_back(new_size);
+    }
+
+    static void roundFormatNumberString(std::string & number_str, size_t max_num_decimals)
+    {
+        auto point_index = number_str.find('.');
         if (point_index == std::string::npos)
             return;
 
-        const auto decimal_part_size = x_str.size() - point_index - 1;
+        const auto decimal_part_size = number_str.size() - point_index - 1;
         if (decimal_part_size > max_num_decimals)
         {
-            bool sign = x_str[0] == '-';
+            bool sign = number_str[0] == '-';
 
             auto decimal_part_start = point_index + 1;
-            bool carry = x_str[decimal_part_start + max_num_decimals] >= '5';
+            bool carry = number_str[decimal_part_start + max_num_decimals] >= '5';
             // decimal_part
             for (auto i = decimal_part_start + max_num_decimals - 1; i >= decimal_part_start && carry; --i)
             {
-                if (x_str[i] == '9')
-                    x_str[i] = '0';
+                if (number_str[i] == '9')
+                    number_str[i] = '0';
                 else
                 {
-                    x_str[i] = x_str[i] + 1;
+                    number_str[i] = number_str[i] + 1;
                     carry = false;
                 }
             }
@@ -3514,41 +3523,40 @@ private:
             // integer_part
             for (int i = point_index - 1; i >= integer_part_start && carry; --i)
             {
-                if (x_str[i] == '9')
-                    x_str[i] = '0';
+                if (number_str[i] == '9')
+                    number_str[i] = '0';
                 else
                 {
-                    x_str[i] = x_str[i] + 1;
+                    number_str[i] = number_str[i] + 1;
                     carry = false;
                 }
             }
 
             if (carry)
             {
-                std::string tmp{std::move(x_str)};
-                x_str = {};
-                x_str.reserve(tmp.size() + 1);
-                x_str += sign ? "-1" : "1";
-                x_str.append(tmp, integer_part_start);
+                std::string tmp{std::move(number_str)};
+                number_str = {};
+                number_str.reserve(tmp.size() + 1);
+                number_str += sign ? "-1" : "1";
+                number_str.append(tmp, integer_part_start);
             }
         }
     }
 
-    static std::string formatENUS(std::string & number, size_t precision)
+    static void formatAsEnUs2Buffer(std::string & number, size_t precision, std::string & buffer)
     {
+        buffer.clear();
         if (number[0] == '-' && number[1] == '.')
-            number.replace(0, 1, "-0");
+            number.insert(1, 1, '0');
         else if (number[0] == '.')
-            number.replace(0, 1, "0.");
-
-        std::string buffer;
+            number.insert(0, 1, '0');
 
         if ((number[0] == '-' && !std::isdigit(number[1])) || (!std::isdigit(number[0]) && number[0] != '-'))
         {
             buffer += '0';
             if (precision > 0)
                 (buffer += '.').append(precision, '0');
-            return buffer;
+            return;
         }
 
         decltype(number.size()) index = 0;
@@ -3603,8 +3611,6 @@ private:
                     buffer.append(decimal_part_start, number.cend()).append(precision - decimal_part_size, '0');
             }
         }
-
-        return buffer;
     }
 };
 
@@ -3663,23 +3669,12 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const std::string forward_func_name{"format"};
-        if (auto forward_function_builder = FunctionFactory::instance().get(forward_func_name, context))
-        {
-            const auto * locale_raw = block.getByPosition(arguments[2]).column.get();
-            handleLocale(locale_raw);
+        const auto * locale_raw = block.getByPosition(arguments[2]).column.get();
+        handleLocale(locale_raw);
 
-            const ColumnsWithTypeAndName forward_build_args{block.getByPosition(arguments[0]), block.getByPosition(arguments[1])};
-            auto forward_function = forward_function_builder->build(forward_build_args);
-            const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
-            forward_function->execute(block, forward_arguments, result);
-        }
-        else
-        {
-            throw Exception(
-                fmt::format("Forward Function {} for function {} has not yet been implemented", forward_func_name, getName()),
-                ErrorCodes::NOT_IMPLEMENTED);
-        }
+        static DefaultExecutable forward_function{std::make_shared<FunctionFormat>(context)};
+        const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
+        forward_function.execute(block, forward_arguments, result);
     }
 
 private:
@@ -3688,12 +3683,12 @@ private:
     // Append warning when locale is not 'en_US'.
     void handleLocale(const IColumn * locale_raw) const
     {
-        const std::string supported_locale{"en_US"};
-        using ColVecLocale = ColumnString;
+        static const std::string supported_locale{"en_US"};
+        using LocaleColVec = ColumnString;
         const auto column_size = locale_raw->size();
-        if (const auto * locale_const = checkAndGetColumnConst<ColVecLocale>(locale_raw, true))
+        if (const auto * locale_const = checkAndGetColumnConst<LocaleColVec>(locale_raw, true))
         {
-            if (locale_const->isNullAt(0))
+            if (locale_const->onlyNull())
             {
                 for (size_t i = 0; i < column_size; ++i)
                     context.getDAGContext()->handleUnknownLocale("NULL");
@@ -3701,7 +3696,7 @@ private:
             else
             {
                 const String value = locale_const->getValue<String>();
-                if (strcasecmp(value.c_str(), supported_locale.c_str()) != 0)
+                if (boost::iequals(value, supported_locale))
                 {
                     for (size_t i = 0; i < column_size; ++i)
                         context.getDAGContext()->handleUnknownLocale(value);
@@ -3719,7 +3714,7 @@ private:
                 else
                 {
                     String value = locale_field.get<String>();
-                    if (strcasecmp(value.c_str(), supported_locale.c_str()) != 0)
+                    if (boost::iequals(value, supported_locale))
                         context.getDAGContext()->handleUnknownLocale(value);
                 }
             }

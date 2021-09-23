@@ -7,9 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 class StringFormat : public ::testing::Test
 {
@@ -27,11 +25,10 @@ protected:
     }
 };
 
-
 TEST_F(StringFormat, FormatWithLocaleAllUnitTest)
 try
 {
-    // todo add dag_context in TiFlashTestEnv::getContext()
+    // TODO add dag_context in TiFlashTestEnv::getContext()
     if (!TiFlashTestEnv::getContext().getDAGContext())
     {
         return;
@@ -46,6 +43,102 @@ try
             createColumn<Nullable<String>>({"en_US", "en_us", "EN_US", "xxx", {}, "xx", "xx", "xx"})));
 }
 CATCH
+
+template <typename Decimal>
+static void formatDecimalTestCase(int precision)
+{
+    static const std::string func_name = "format";
+    using Native = typename Decimal::NativeType;
+    using FieldType = DecimalField<Decimal>;
+    using NullableDecimal = Nullable<Decimal>;
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"12,332.1000", "12,332", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),
+        executeFunction(
+            func_name,
+            createColumn<NullableDecimal>(
+                std::make_tuple(precision, 4),
+                {FieldType(static_cast<Native>(123321000), 4),
+                 FieldType(static_cast<Native>(123322000), 4),
+                 FieldType(static_cast<Native>(123323000), 4),
+                 FieldType(static_cast<Native>(123323000), 4),
+                 FieldType(static_cast<Native>(-123323000), 4),
+                 FieldType(static_cast<Native>(-9999999), 4),
+                 FieldType(static_cast<Native>(-3333330), 4),
+                 FieldType(static_cast<Native>(0), 0)}),
+            createColumn<Nullable<Int64>>({4, 0, -1, 31, 5, 1, 2, {}})));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"12,332.100", "-12,332.300", "-1,000.000", "-333.333"}),
+        executeFunction(
+            func_name,
+            createColumn<NullableDecimal>(
+                std::make_tuple(precision, 4),
+                {FieldType(static_cast<Native>(123321000), 4),
+                 FieldType(static_cast<Native>(-123323000), 4),
+                 FieldType(static_cast<Native>(-9999999), 4),
+                 FieldType(static_cast<Native>(-3333330), 4)}),
+            createConstColumn<Nullable<Int16>>(4, 3)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"-999.9999", "-1,000", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
+        executeFunction(
+            func_name,
+            createConstColumn<NullableDecimal>(
+                std::make_tuple(precision, 4),
+                7,
+                FieldType(static_cast<Native>(-9999999), 4)),
+            createColumn<Nullable<Int32>>({4, 0, -1, 31, 5, 1, 2})));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, "-1,000.000"),
+        executeFunction(
+            func_name,
+            createConstColumn<NullableDecimal>(
+                std::make_tuple(precision, 4),
+                1,
+                FieldType(static_cast<Native>(-9999999), 4)),
+            createConstColumn<Nullable<Int8>>(1, 3)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"12,332.1000", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),
+        executeFunction(
+            func_name,
+            createColumn<NullableDecimal>(
+                std::make_tuple(precision, 4),
+                {FieldType(static_cast<Native>(123321000), 4),
+                 FieldType(static_cast<Native>(123323000), 4),
+                 FieldType(static_cast<Native>(123323000), 4),
+                 FieldType(static_cast<Native>(-123323000), 4),
+                 FieldType(static_cast<Native>(-9999999), 4),
+                 FieldType(static_cast<Native>(-3333330), 4),
+                 FieldType(static_cast<Native>(0), 0)}),
+            createColumn<Nullable<UInt64>>({4, 0, 31, 5, 1, 2, {}})));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"12,332.100", "-12,332.300", "-1,000.000", "-333.333"}),
+        executeFunction(
+            func_name,
+            createColumn<NullableDecimal>(
+                std::make_tuple(precision, 4),
+                {FieldType(static_cast<Native>(123321000), 4),
+                 FieldType(static_cast<Native>(-123323000), 4),
+                 FieldType(static_cast<Native>(-9999999), 4),
+                 FieldType(static_cast<Native>(-3333330), 4)}),
+            createConstColumn<Nullable<UInt16>>(4, 3)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"-999.9999", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
+        executeFunction(
+            func_name,
+            createConstColumn<NullableDecimal>(
+                std::make_tuple(precision, 4),
+                6,
+                FieldType(static_cast<Native>(-9999999), 4)),
+            createColumn<Nullable<UInt32>>({4, 0, 31, 5, 1, 2})));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, "-1,000.000"),
+        executeFunction(
+            func_name,
+            createConstColumn<NullableDecimal>(
+                std::make_tuple(precision, 4),
+                1,
+                FieldType(static_cast<Native>(-9999999), 4)),
+            createConstColumn<Nullable<UInt8>>(1, 3)));
+}
 
 TEST_F(StringFormat, StringFormatAllUnitTest)
 try
@@ -112,109 +205,11 @@ try
             createConstColumn<Nullable<Float64>>(1, -999.9999),
             createConstColumn<Nullable<UInt8>>(1, 3)));
 
-#define DECIMAL_TESTCASE(Decimal, Origin, precision)                                                                                                                  \
-    do                                                                                                                                                                \
-    {                                                                                                                                                                 \
-        using FieldType = DecimalField<Decimal>;                                                                                                                      \
-        using NullableDecimal = Nullable<Decimal>;                                                                                                                    \
-        auto prec = (precision);                                                                                                                                      \
-        ASSERT_COLUMN_EQ(                                                                                                                                             \
-            createColumn<Nullable<String>>({"12,332.1000", "12,332", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}), \
-            executeFunction(                                                                                                                                          \
-                func_name,                                                                                                                                            \
-                createColumn<NullableDecimal>(                                                                                                                        \
-                    std::make_tuple(prec, 4),                                                                                                                         \
-                    {FieldType(static_cast<Origin>(123321000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(123322000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(123323000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(123323000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(-123323000), 4),                                                                                                   \
-                     FieldType(static_cast<Origin>(-9999999), 4),                                                                                                     \
-                     FieldType(static_cast<Origin>(-3333330), 4),                                                                                                     \
-                     FieldType(static_cast<Origin>(0), 0)}),                                                                                                          \
-                createColumn<Nullable<Int64>>({4, 0, -1, 31, 5, 1, 2, {}})));                                                                                         \
-        ASSERT_COLUMN_EQ(                                                                                                                                             \
-            createColumn<Nullable<String>>({"12,332.100", "-12,332.300", "-1,000.000", "-333.333"}),                                                                  \
-            executeFunction(                                                                                                                                          \
-                func_name,                                                                                                                                            \
-                createColumn<NullableDecimal>(                                                                                                                        \
-                    std::make_tuple(prec, 4),                                                                                                                         \
-                    {FieldType(static_cast<Origin>(123321000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(-123323000), 4),                                                                                                   \
-                     FieldType(static_cast<Origin>(-9999999), 4),                                                                                                     \
-                     FieldType(static_cast<Origin>(-3333330), 4)}),                                                                                                   \
-                createConstColumn<Nullable<Int16>>(4, 3)));                                                                                                           \
-        ASSERT_COLUMN_EQ(                                                                                                                                             \
-            createColumn<Nullable<String>>({"-999.9999", "-1,000", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),          \
-            executeFunction(                                                                                                                                          \
-                func_name,                                                                                                                                            \
-                createConstColumn<NullableDecimal>(                                                                                                                   \
-                    std::make_tuple(prec, 4),                                                                                                                         \
-                    7,                                                                                                                                                \
-                    FieldType(static_cast<Origin>(-9999999), 4)),                                                                                                     \
-                createColumn<Nullable<Int32>>({4, 0, -1, 31, 5, 1, 2})));                                                                                             \
-        ASSERT_COLUMN_EQ(                                                                                                                                             \
-            createConstColumn<Nullable<String>>(1, "-1,000.000"),                                                                                                     \
-            executeFunction(                                                                                                                                          \
-                func_name,                                                                                                                                            \
-                createConstColumn<NullableDecimal>(                                                                                                                   \
-                    std::make_tuple(prec, 4),                                                                                                                         \
-                    1,                                                                                                                                                \
-                    FieldType(static_cast<Origin>(-9999999), 4)),                                                                                                     \
-                createConstColumn<Nullable<Int8>>(1, 3)));                                                                                                            \
-        ASSERT_COLUMN_EQ(                                                                                                                                             \
-            createColumn<Nullable<String>>({"12,332.1000", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),           \
-            executeFunction(                                                                                                                                          \
-                func_name,                                                                                                                                            \
-                createColumn<NullableDecimal>(                                                                                                                        \
-                    std::make_tuple(prec, 4),                                                                                                                         \
-                    {FieldType(static_cast<Origin>(123321000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(123323000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(123323000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(-123323000), 4),                                                                                                   \
-                     FieldType(static_cast<Origin>(-9999999), 4),                                                                                                     \
-                     FieldType(static_cast<Origin>(-3333330), 4),                                                                                                     \
-                     FieldType(static_cast<Origin>(0), 0)}),                                                                                                          \
-                createColumn<Nullable<UInt64>>({4, 0, 31, 5, 1, 2, {}})));                                                                                            \
-        ASSERT_COLUMN_EQ(                                                                                                                                             \
-            createColumn<Nullable<String>>({"12,332.100", "-12,332.300", "-1,000.000", "-333.333"}),                                                                  \
-            executeFunction(                                                                                                                                          \
-                func_name,                                                                                                                                            \
-                createColumn<NullableDecimal>(                                                                                                                        \
-                    std::make_tuple(prec, 4),                                                                                                                         \
-                    {FieldType(static_cast<Origin>(123321000), 4),                                                                                                    \
-                     FieldType(static_cast<Origin>(-123323000), 4),                                                                                                   \
-                     FieldType(static_cast<Origin>(-9999999), 4),                                                                                                     \
-                     FieldType(static_cast<Origin>(-3333330), 4)}),                                                                                                   \
-                createConstColumn<Nullable<UInt16>>(4, 3)));                                                                                                          \
-        ASSERT_COLUMN_EQ(                                                                                                                                             \
-            createColumn<Nullable<String>>({"-999.9999", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),                    \
-            executeFunction(                                                                                                                                          \
-                func_name,                                                                                                                                            \
-                createConstColumn<NullableDecimal>(                                                                                                                   \
-                    std::make_tuple(prec, 4),                                                                                                                         \
-                    6,                                                                                                                                                \
-                    FieldType(static_cast<Origin>(-9999999), 4)),                                                                                                     \
-                createColumn<Nullable<UInt32>>({4, 0, 31, 5, 1, 2})));                                                                                                \
-        ASSERT_COLUMN_EQ(                                                                                                                                             \
-            createConstColumn<Nullable<String>>(1, "-1,000.000"),                                                                                                     \
-            executeFunction(                                                                                                                                          \
-                func_name,                                                                                                                                            \
-                createConstColumn<NullableDecimal>(                                                                                                                   \
-                    std::make_tuple(prec, 4),                                                                                                                         \
-                    1,                                                                                                                                                \
-                    FieldType(static_cast<Origin>(-9999999), 4)),                                                                                                     \
-                createConstColumn<Nullable<UInt8>>(1, 3)));                                                                                                           \
-    } while (false)
-
-    DECIMAL_TESTCASE(Decimal32, Int32, 9);
-    DECIMAL_TESTCASE(Decimal64, Int64, 18);
-    DECIMAL_TESTCASE(Decimal128, Int128, 38);
-    DECIMAL_TESTCASE(Decimal256, Int256, 65);
-
-#undef DECIMAL_TESTCASE
+    formatDecimalTestCase<Decimal32>(9);
+    formatDecimalTestCase<Decimal64>(18);
+    formatDecimalTestCase<Decimal128>(38);
+    formatDecimalTestCase<Decimal256>(65);
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

@@ -113,7 +113,7 @@ void DAGContext::handleTruncateError(const String & msg)
 void DAGContext::handleUnknownLocale(const String & value)
 {
     tipb::Error warning;
-    warning.set_code(1649);
+    warning.set_code(0);
     warning.set_msg(fmt::format("Unknown locale: \'{}\'", value));
     appendWarning(warning);
 }
