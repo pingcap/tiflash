@@ -25,6 +25,7 @@ struct LongString
     String str;
 };
 
+/*
 String generateString(int min_len, int max_len)
 {
     std::uniform_int_distribution<int> len_dist(min_len, max_len);
@@ -35,6 +36,7 @@ String generateString(int min_len, int max_len)
         str.push_back(char_dist(mt));
     return str;
 }
+*/
 
 void fillData(std::vector<int> & data, int n)
 {
@@ -44,6 +46,7 @@ void fillData(std::vector<int> & data, int n)
         data.push_back(dist(mt));
 }
 
+/*
 void fillData(std::vector<ShortString> & data, int n)
 {
     data.clear();
@@ -57,6 +60,7 @@ void fillData(std::vector<LongString> & data, int n)
     for (int i = 0; i < n; ++i)
         data.push_back({generateString(50, 60)});
 }
+*/
 
 template <typename T>
 struct Helper;
@@ -72,7 +76,8 @@ struct Helper<MPMCQueue<T>>
     template <typename U>
     static void pushOneTo(MPMCQueue<T> & queue, U && data)
     {
-        queue.tryPush(std::forward<U>(data), std::chrono::milliseconds(1));
+        //queue.tryPush(std::forward<U>(data), std::chrono::milliseconds(1));
+        queue.push(std::forward<U>(data));
     }
 };
 
@@ -88,7 +93,8 @@ struct Helper<ConcurrentBoundedQueue<T>>
     template <typename U>
     static void pushOneTo(ConcurrentBoundedQueue<T> & queue, U && data)
     {
-        queue.tryPush(std::forward<U>(data), 1);
+        // queue.tryPush(std::forward<U>(data), 1);
+        queue.push(std::forward<U>(data));
     }
 };
 
@@ -110,14 +116,14 @@ void test(int capacity [[maybe_unused]], int reader_cnt [[maybe_unused]], int wr
         {
             for (int i = 0; i < 10; ++i)
                 Helper<QueueType<ValueType>>::popOneFrom(queue);
-            counter.fetch_add(10, std::memory_order_acq_rel);
+            counter.fetch_add(10, std::memory_order_relaxed);
         }
     };
 
     auto write_func = [&] {
         while (!write_stop.load(std::memory_order_relaxed))
             for (int i = 0; i < 10; ++i)
-                Helper<QueueType<ValueType>>::pushOneTo(queue, data[dist(mt) % data.size()]);
+                Helper<QueueType<ValueType>>::pushOneTo(queue, i);
     };
 
     std::vector<std::thread> readers;
@@ -199,12 +205,14 @@ int main(int argc, char ** argv)
         handlers = {
             {"MPMCQueue",
              {{"Int", DB::tests::test<DB::MPMCQueue, int>},
-              {"ShortString", DB::tests::test<DB::MPMCQueue, DB::tests::ShortString>},
-              {"LongString", DB::tests::test<DB::MPMCQueue, DB::tests::LongString>}}},
+              //{"ShortString", DB::tests::test<DB::MPMCQueue, DB::tests::ShortString>},
+              //{"LongString", DB::tests::test<DB::MPMCQueue, DB::tests::LongString>}}},
+        }},
             {"ConcurrentBoundedQueue",
              {{"Int", DB::tests::test<ConcurrentBoundedQueue, int>},
-              {"ShortString", DB::tests::test<ConcurrentBoundedQueue, DB::tests::ShortString>},
-              {"LongString", DB::tests::test<ConcurrentBoundedQueue, DB::tests::LongString>}}}};
+              //{"ShortString", DB::tests::test<ConcurrentBoundedQueue, DB::tests::ShortString>},
+              //{"LongString", DB::tests::test<ConcurrentBoundedQueue, DB::tests::LongString>}}}};
+             }}};
 
     const auto & find_handler = [](const String & title, const String & name, const auto & handler_map) {
         auto it = handler_map.find(name);
