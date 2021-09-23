@@ -477,8 +477,9 @@ try
 }
 catch (const Poco::Exception & e)
 {
-    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TiFlashReplicaInfo): " + e.displayText(),
-                        DB::Exception(e));
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TiFlashReplicaInfo): " + e.displayText(),
+        DB::Exception(e));
 }
 
 void TiFlashReplicaInfo::deserialize(Poco::JSON::Object::Ptr & json)
@@ -836,8 +837,9 @@ try
     }
     if (is_common_handle && index_infos.size() != 1)
     {
-        throw DB::Exception(std::string(__PRETTY_FUNCTION__)
-                            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: " + json_str);
+        throw DB::Exception(
+            std::string(__PRETTY_FUNCTION__)
+            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: " + json_str);
     }
 }
 catch (const Poco::Exception & e)
@@ -899,7 +901,9 @@ ColumnID TableInfo::getColumnID(const String & name) const
     else if (name == DB::MutableSupport::delmark_column_name)
         return DB::DelMarkColumnID;
 
-    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name,
+        DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 String TableInfo::getColumnName(const ColumnID id) const
@@ -912,8 +916,9 @@ String TableInfo::getColumnName(const ColumnID id) const
         }
     }
 
-    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + name,
-                        DB::ErrorCodes::LOGICAL_ERROR);
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + name,
+        DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 const ColumnInfo & TableInfo::getColumnInfo(const ColumnID id) const
@@ -926,8 +931,9 @@ const ColumnInfo & TableInfo::getColumnInfo(const ColumnID id) const
         }
     }
 
-    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + name,
-                        DB::ErrorCodes::LOGICAL_ERROR);
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + name,
+        DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleColumn() const
@@ -941,23 +947,27 @@ std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleCo
             return std::optional<std::reference_wrapper<const ColumnInfo>>(col);
     }
 
-    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Cannot get handle column for table " + name, DB::ErrorCodes::LOGICAL_ERROR);
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Cannot get handle column for table " + name,
+        DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id, const SchemaNameMapper & name_mapper) const
 {
     // Some sanity checks for partition table.
     if (unlikely(!(is_partition_table && partition.enable)))
-        throw Exception("Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id)
-                            + " but it's not a partition table",
-                        DB::ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id)
+                + " but it's not a partition table",
+            DB::ErrorCodes::LOGICAL_ERROR);
 
     if (unlikely(std::find_if(partition.definitions.begin(), partition.definitions.end(), [table_or_partition_id](const auto & d) {
                      return d.id == table_or_partition_id;
                  })
                  == partition.definitions.end()))
-        throw Exception("Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id),
-                        DB::ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id),
+            DB::ErrorCodes::LOGICAL_ERROR);
 
     // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
     auto new_table = std::make_shared<TableInfo>();

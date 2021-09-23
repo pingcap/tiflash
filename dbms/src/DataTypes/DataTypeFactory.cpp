@@ -72,29 +72,31 @@ DataTypePtr DataTypeFactory::get(const String & family_name, const ASTPtr & para
 void DataTypeFactory::registerDataType(const String & family_name, Creator creator, CaseSensitiveness case_sensitiveness)
 {
     if (creator == nullptr)
-        throw Exception("DataTypeFactory: the data type family " + family_name + " has been provided "
-                                                                                 " a null constructor",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "DataTypeFactory: the data type family " + family_name + " has been provided a null constructor",
+            ErrorCodes::LOGICAL_ERROR);
 
     if (!data_types.emplace(family_name, creator).second)
-        throw Exception("DataTypeFactory: the data type family name '" + family_name + "' is not unique",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "DataTypeFactory: the data type family name '" + family_name + "' is not unique",
+            ErrorCodes::LOGICAL_ERROR);
 
     String family_name_lowercase = Poco::toLower(family_name);
 
     if (case_sensitiveness == CaseInsensitive
         && !case_insensitive_data_types.emplace(family_name_lowercase, creator).second)
-        throw Exception("DataTypeFactory: the case insensitive data type family name '" + family_name + "' is not unique",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "DataTypeFactory: the case insensitive data type family name '" + family_name + "' is not unique",
+            ErrorCodes::LOGICAL_ERROR);
 }
 
 
 void DataTypeFactory::registerSimpleDataType(const String & name, SimpleCreator creator, CaseSensitiveness case_sensitiveness)
 {
     if (creator == nullptr)
-        throw Exception("DataTypeFactory: the data type " + name + " has been provided "
-                                                                   " a null constructor",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "DataTypeFactory: the data type " + name + " has been provided a null constructor",
+            ErrorCodes::LOGICAL_ERROR);
 
     registerDataType(
         name,
