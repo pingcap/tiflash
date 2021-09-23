@@ -106,10 +106,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 auto pop_res = empty_received_packets.pop();
                 if (!pop_res.has_value() || !pop_res.value())
                 {
-			meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(getState()) + ", exit from ReadLoop";
-                        LOG_WARNING(log, local_err_msg);
-                        break;
+                    meet_error = true;
+                    local_err_msg = "receiver's state is " + getReceiverStateStr(getState()) + ", exit from ReadLoop";
+                    LOG_WARNING(log, local_err_msg);
+                    break;
                 }
                 std::unique_ptr<ReceivedPacket> packet = std::move(pop_res.value());
                 packet->req_info = req_info;
@@ -127,9 +127,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 if (!push_res)
                 {
                     meet_error = true;
-		    local_err_msg = "receiver's state is " + getReceiverStateStr(getState()) + ", exit from ReadLoop";
-		    LOG_WARNING(log, local_err_msg);
-		    break;
+                    local_err_msg = "receiver's state is " + getReceiverStateStr(getState()) + ", exit from ReadLoop";
+                    LOG_WARNING(log, local_err_msg);
+                    break;
                 }
             }
             // if meet error, such as decode packect fails, it will not retry.
