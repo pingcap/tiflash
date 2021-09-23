@@ -245,6 +245,7 @@ struct Settings
     \
     M(SettingUInt64, dt_segment_limit_rows, 1000000, "Base rows of segments in DeltaTree Engine.")\
     M(SettingUInt64, dt_segment_limit_size, 1073741824, "Base size of segments in DeltaTree Engine. 1 GB by default.")\
+    M(SettingUInt64, dt_segment_delta_limit_delete_ranges, 2, "Suggesting delete range numbers")\
     M(SettingUInt64, dt_segment_delta_limit_rows, 80000, "Max rows of segment delta in DeltaTree Engine")\
     M(SettingUInt64, dt_segment_delta_limit_size, 85983232, "Max size of segment delta in DeltaTree Engine. 82 MB by default.")\
     M(SettingUInt64, dt_segment_force_merge_delta_deletes, 10, "Delta delete ranges before force merge into stable.")\

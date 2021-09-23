@@ -45,6 +45,8 @@ struct DMContext : private boost::noncopyable
     const size_t segment_limit_rows;
     // The base bytes of segment.
     const size_t segment_limit_bytes;
+    // The delete_ranges threshold of delta.
+    const size_t delta_limit_delete_ranges;
     // The rows threshold of delta.
     const size_t delta_limit_rows;
     // The rows threshold of delta.
@@ -93,6 +95,7 @@ public:
         , rowkey_column_size(rowkey_column_size_)
         , segment_limit_rows(settings.dt_segment_limit_rows)
         , segment_limit_bytes(settings.dt_segment_limit_size)
+        , delta_limit_delete_ranges(settings.dt_segment_delta_limit_delete_ranges)
         , delta_limit_rows(settings.dt_segment_delta_limit_rows)
         , delta_limit_bytes(settings.dt_segment_delta_limit_size)
         , delta_cache_limit_rows(settings.dt_segment_delta_cache_limit_rows)

@@ -1108,6 +1108,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     auto segment_limit_rows = dm_context->segment_limit_rows;
     auto segment_limit_bytes = dm_context->segment_limit_bytes;
+    auto delete_limit_delete_ranges = dm_context->delta_limit_delete_ranges;
     auto delta_limit_rows = dm_context->delta_limit_rows;
     auto delta_limit_bytes = dm_context->delta_limit_bytes;
     auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
@@ -1121,7 +1122,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_background_merge_delta = ((delta_check_rows >= delta_limit_rows || delta_check_bytes >= delta_limit_bytes) //
                                           && (delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows
                                               || delta_bytes - delta_last_try_merge_delta_bytes >= delta_cache_limit_bytes))
-        || delta_deletes >= 2;
+        || delta_deletes >= delete_limit_delete_ranges;
     bool should_foreground_merge_delta_by_rows_or_bytes
         = delta_check_rows >= forceMergeDeltaRows(dm_context) || delta_check_bytes >= forceMergeDeltaBytes(dm_context);
     bool should_foreground_merge_delta_by_deletes = delta_deletes >= forceMergeDeltaDeletes(dm_context);
