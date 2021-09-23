@@ -4,8 +4,8 @@
 #include <Storages/Transaction/TiDB.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <tipb/expression.pb.h>
 #include <Core/NamesAndTypes.h>
+#include <tipb/expression.pb.h>
 
 #pragma GCC diagnostic pop
 
@@ -29,4 +29,3 @@ TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value, bool for_test);
 
 } // namespace DB
-
