@@ -3346,9 +3346,7 @@ public:
     static FunctionPtr create(const Context & context_)
     {
         if (!context_.getDAGContext())
-        {
             throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
-        }
         return std::make_shared<FunctionFormatWithLocale>(context_);
     }
 
@@ -3414,6 +3412,7 @@ public:
 private:
     const Context & context;
 
+    // Append warning when locale is not 'en_US'.
     void handleLocale(const IColumn * locale_raw) const
     {
         const std::string supported_locale{"en_US"};
