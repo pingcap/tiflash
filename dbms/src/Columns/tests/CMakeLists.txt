@@ -1,0 +1,2 @@
+add_executable (column_vector_perftest column_vector_perftest.cpp)
+target_link_libraries (column_vector_perftest dbms)
