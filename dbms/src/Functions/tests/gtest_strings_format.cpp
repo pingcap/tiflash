@@ -32,7 +32,8 @@ TEST_F(StringFormat, FormatWithLocaleAllUnitTest)
 try
 {
     // todo add dag_context in TiFlashTestEnv::getContext()
-    if (!TiFlashTestEnv::getContext().getDAGContext()) {
+    if (!TiFlashTestEnv::getContext().getDAGContext())
+    {
         return;
     }
     const std::string func_name = "formatWithLocale";
@@ -160,7 +161,7 @@ try
                     std::make_tuple(prec, 4),                                                                                                                         \
                     1,                                                                                                                                                \
                     FieldType(static_cast<Origin>(-9999999), 4)),                                                                                                     \
-                createConstColumn<Nullable<Int8>>(1, 3)));                                                                                                           \
+                createConstColumn<Nullable<Int8>>(1, 3)));                                                                                                            \
         ASSERT_COLUMN_EQ(                                                                                                                                             \
             createColumn<Nullable<String>>({"12,332.1000", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),           \
             executeFunction(                                                                                                                                          \
@@ -203,7 +204,7 @@ try
                     std::make_tuple(prec, 4),                                                                                                                         \
                     1,                                                                                                                                                \
                     FieldType(static_cast<Origin>(-9999999), 4)),                                                                                                     \
-                createConstColumn<Nullable<UInt8>>(1, 3)));                                                                                                          \
+                createConstColumn<Nullable<UInt8>>(1, 3)));                                                                                                           \
     } while (false)
 
     DECIMAL_TESTCASE(Decimal32, Int32, 9);
