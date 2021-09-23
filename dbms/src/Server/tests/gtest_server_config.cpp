@@ -800,8 +800,24 @@ dt_page_gc_low_write_prob = 0.2
 }
 CATCH
 
+static void validate_bool_config(SettingBool & setting, String input, bool expect_value, bool expect_exception)
+{
+    try
+    {
+        setting.set(input);
+    }
+    catch (const DB::Exception & e)
+    {
+        if (e.code() != ErrorCodes::CANNOT_PARSE_BOOL)
+        {
+            throw;
+        }
+        ASSERT_EQ(expect_exception, true);
+        ASSERT_EQ(setting, expect_value);
+    }
+}
 
-TEST_F(UsersConfigParser_test, ReloadStorageBoolConfig)
+TEST_F(UsersConfigParser_test, ReloadBoolSetting)
 try
 {
     Strings tests = {
@@ -828,6 +844,18 @@ dt_read_stable_only = true
         ASSERT_EQ(global_ctx.getSettingsRef().dt_read_delta_only, true);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_read_stable_only, true);
     }
+    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "1", true, false);
+    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "0", false, false);
+    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "2", false, true);
+    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "10", false, true);
+
+    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "false", false, false);
+    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "ture", false, true);
+    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "true", true, false);
+    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "flase", true, true);
+    validate_bool_config(global_ctx.getSettingsRef().join_concurrent_build, "false", false, false);
+    validate_bool_config(global_ctx.getSettingsRef().join_concurrent_build, "true", true, false);
+
     global_ctx.setSettings(origin_settings);
 }
 CATCH
