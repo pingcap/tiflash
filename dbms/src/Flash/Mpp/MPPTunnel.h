@@ -54,11 +54,13 @@ public:
 private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
-    // must under mu's protection
+    /// must under mu's protection
     void finishWithLock();
 
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
+
+    void finishSendThread(bool cancel);
 
     std::mutex mu;
     std::condition_variable cv_for_connected;
@@ -66,7 +68,7 @@ private:
 
     bool connected; // if the exchange in has connected this tunnel.
 
-    std::atomic<bool> finished; // if the tunnel has finished its connection.
+    bool finished; // if the tunnel has finished its connection.
 
     Writer * writer;
 
@@ -79,6 +81,7 @@ private:
 
     int input_streams_num;
 
+    /// only valid between connected and finished
     std::unique_ptr<std::thread> send_thread;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
