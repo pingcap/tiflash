@@ -1,10 +1,10 @@
 #include "Server.h"
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/CPUAffinityManager.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -1360,7 +1360,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         tmt_context.setStatusRunning();
-        
+
         try
         {
             // Bind CPU affinity after all threads started.
