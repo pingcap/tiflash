@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
@@ -84,7 +84,7 @@ public:
         size_t max_threads,
         const LogWithPrefixPtr & log_,
         ExceptionCallback exception_callback_ = ExceptionCallback())
-        : output_queue(std::min(inputs.size(), max_threads))
+        : output_queue(std::min(inputs.size(), max_threads) * 5) // to reduce contention
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
@@ -157,20 +157,20 @@ protected:
             /** Let's read everything up to the end, so that ParallelInputsProcessor is not blocked when trying to insert into the queue.
               * Maybe there is an exception in the queue.
               */
-            _UnionBlockInputStreamImpl::OutputData<mode> res;
             while (true)
             {
                 //std::cerr << "popping\n";
-                output_queue.pop(res);
+                auto res = output_queue.pop();
+                assert(res.has_value());
 
-                if (res.exception)
+                if (res.value().exception)
                 {
                     if (!exception)
-                        exception = res.exception;
+                        exception = res.value().exception;
                     else if (Exception * e = exception_cast<Exception *>(exception))
-                        e->addMessage("\n" + getExceptionMessage(res.exception, false));
+                        e->addMessage("\n" + getExceptionMessage(res.value().exception, false));
                 }
-                else if (!res.block)
+                else if (!res.value().block)
                     break;
             }
 
@@ -212,7 +212,8 @@ protected:
 
         /// We will wait until the next block is ready or an exception is thrown.
         //std::cerr << "popping\n";
-        output_queue.pop(received_payload);
+        auto res = output_queue.pop();
+        received_payload = std::move(res.value());
 
         if (received_payload.exception)
         {
@@ -252,7 +253,7 @@ private:
 
 private:
     using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
-    using OutputQueue = ConcurrentBoundedQueue<Payload>;
+    using OutputQueue = MPMCQueue<Payload>;
 
 private:
     /** The queue of the finished blocks. Also, you can put an exception instead of a block.
@@ -296,7 +297,7 @@ private:
             ///  when before exception, an empty block (end of data) will be put into the queue,
             ///  and the exception is lost.
 
-            parent.output_queue.push(exception);
+            parent.output_queue.emplace(exception);
             parent.cancel(false); /// Does not throw exceptions.
         }
 

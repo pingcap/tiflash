@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/RecyclableBuffer.h>
+#include <Common/MPMCQueue.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -54,11 +54,7 @@ enum class ExchangeReceiverState
 
 struct ReceivedPacket
 {
-    ReceivedPacket()
-    {
-        packet = std::make_shared<mpp::MPPDataPacket>();
-    }
-    std::shared_ptr<mpp::MPPDataPacket> packet;
+    mpp::MPPDataPacket packet;
     size_t source_index = 0;
     String req_info;
 };
@@ -95,6 +91,8 @@ private:
 
     std::shared_ptr<RPCContext> rpc_context;
 
+    ExchangeReceiverState getState() const;
+
     const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
     const ::mpp::TaskMeta task_meta;
@@ -104,14 +102,15 @@ private:
     std::vector<std::thread> workers;
     DAGSchema schema;
 
-    std::mutex mu;
+    mutable std::mutex mu;
     std::condition_variable cv;
     /// should lock `mu` when visit these members
-    RecyclableBuffer<ReceivedPacket> res_buffer;
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
 
+    MPMCQueue<std::unique_ptr<ReceivedPacket>> received_packets;
+    MPMCQueue<std::unique_ptr<ReceivedPacket>> empty_received_packets;
     LogWithPrefixPtr log;
 };
 

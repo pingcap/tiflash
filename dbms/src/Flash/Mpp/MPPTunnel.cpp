@@ -68,7 +68,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
         }
     }
     finishWithLock();
-    send_queue.push(nullptr);
+    send_queue.finish();
 }
 
 template <typename Writer>
@@ -96,8 +96,8 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
             std::unique_lock<std::mutex> lk(mu);
             if (!finished)
             {
-                /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
-                send_queue.push(nullptr);
+                /// in abnormal cases, finished can be set in advance
+                send_queue.finish();
                 LOG_TRACE(log, "sending a nullptr to finish write.");
             }
         }
@@ -111,9 +111,8 @@ void MPPTunnelBase<Writer>::sendLoop()
     while (!finished)
     {
         /// TODO(fzh) reuse it later
-        MPPDataPacketPtr res;
-        send_queue.pop(res);
-        if (nullptr == res)
+        auto res = send_queue.pop();
+        if (!res.has_value() || !res.value())
         {
             std::unique_lock<std::mutex> lk(mu);
             finishWithLock();
@@ -121,7 +120,7 @@ void MPPTunnelBase<Writer>::sendLoop()
         }
         else
         {
-            writer->Write(*res);
+            writer->Write(*res.value());
         }
     }
 }
@@ -136,8 +135,8 @@ void MPPTunnelBase<Writer>::writeDone()
     /// make sure to finish the tunnel after it is connected
     waitUntilConnectedOrCancelled(lk);
     lk.unlock();
-    /// in normal cases, send nullptr to notify finish
-    send_queue.push(nullptr);
+    /// in normal cases, notify send_loop finish
+    send_queue.finish();
     waitForFinish();
     LOG_TRACE(log, "done to finish");
 }
