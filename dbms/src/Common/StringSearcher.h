@@ -75,7 +75,7 @@ private:
 #endif
 
 public:
-    StringSearcher(const char * const needle_, const size_t needle_size)
+    [[maybe_unused]] StringSearcher(const char * const needle_, const size_t needle_size)
         : needle{reinterpret_cast<const UInt8 *>(needle_)}
         , needle_size{needle_size}
     {
@@ -110,7 +110,7 @@ public:
         patu = _mm_set1_epi8(u);
         /// lower and uppercase vectors of first 16 octets of `needle`
 
-        auto needle_pos = needle;
+        const auto * needle_pos = needle;
 
         for (size_t i = 0; i < n;)
         {
@@ -178,7 +178,7 @@ public:
                 if (mask == cachemask)
                 {
                     pos += cache_valid_len;
-                    auto needle_pos = needle + cache_valid_len;
+                    const auto * needle_pos = needle + cache_valid_len;
 
                     while (needle_pos < needle_end && Poco::Unicode::toLower(utf8.convert(pos)) == Poco::Unicode::toLower(utf8.convert(needle_pos)))
                     {
@@ -201,7 +201,7 @@ public:
         if (*pos == l || *pos == u)
         {
             pos += first_needle_symbol_is_ascii;
-            auto needle_pos = needle + first_needle_symbol_is_ascii;
+            const auto * needle_pos = needle + first_needle_symbol_is_ascii;
 
             while (needle_pos < needle_end && Poco::Unicode::toLower(utf8.convert(pos)) == Poco::Unicode::toLower(utf8.convert(needle_pos)))
             {
@@ -257,8 +257,8 @@ public:
                     {
                         if (mask == cachemask)
                         {
-                            auto haystack_pos = haystack + cache_valid_len;
-                            auto needle_pos = needle + cache_valid_len;
+                            const auto * haystack_pos = haystack + cache_valid_len;
+                            const auto * needle_pos = needle + cache_valid_len;
 
                             while (haystack_pos < haystack_end && needle_pos < needle_end && Poco::Unicode::toLower(utf8.convert(haystack_pos)) == Poco::Unicode::toLower(utf8.convert(needle_pos)))
                             {
@@ -286,8 +286,8 @@ public:
 
             if (*haystack == l || *haystack == u)
             {
-                auto haystack_pos = haystack + first_needle_symbol_is_ascii;
-                auto needle_pos = needle + first_needle_symbol_is_ascii;
+                const auto * haystack_pos = haystack + first_needle_symbol_is_ascii;
+                const auto * needle_pos = needle + first_needle_symbol_is_ascii;
 
                 while (haystack_pos < haystack_end && needle_pos < needle_end && Poco::Unicode::toLower(utf8.convert(haystack_pos)) == Poco::Unicode::toLower(utf8.convert(needle_pos)))
                 {
@@ -335,7 +335,7 @@ private:
 #endif
 
 public:
-    StringSearcher(const char * const needle_, const size_t needle_size)
+    [[maybe_unused]] StringSearcher(const char * const needle_, const size_t needle_size)
         : needle{reinterpret_cast<const UInt8 *>(needle_)}
         , needle_size{needle_size}
     {
@@ -349,7 +349,7 @@ public:
         patl = _mm_set1_epi8(l);
         patu = _mm_set1_epi8(u);
 
-        auto needle_pos = needle;
+        const auto * needle_pos = needle;
 
         for (const auto i : ext::range(0, n))
         {
@@ -383,7 +383,7 @@ public:
                 if (mask == cachemask)
                 {
                     pos += n;
-                    auto needle_pos = needle + n;
+                    const auto * needle_pos = needle + n;
 
                     while (needle_pos < needle_end && std::tolower(*pos) == std::tolower(*needle_pos))
                         ++pos, ++needle_pos;
@@ -402,7 +402,7 @@ public:
         if (*pos == l || *pos == u)
         {
             ++pos;
-            auto needle_pos = needle + 1;
+            const auto * needle_pos = needle + 1;
 
             while (needle_pos < needle_end && std::tolower(*pos) == std::tolower(*needle_pos))
                 ++pos, ++needle_pos;
@@ -452,8 +452,8 @@ public:
                     {
                         if (mask == cachemask)
                         {
-                            auto haystack_pos = haystack + n;
-                            auto needle_pos = needle + n;
+                            const auto * haystack_pos = haystack + n;
+                            const auto * needle_pos = needle + n;
 
                             while (haystack_pos < haystack_end && needle_pos < needle_end && std::tolower(*haystack_pos) == std::tolower(*needle_pos))
                                 ++haystack_pos, ++needle_pos;
@@ -476,8 +476,8 @@ public:
 
             if (*haystack == l || *haystack == u)
             {
-                auto haystack_pos = haystack + 1;
-                auto needle_pos = needle + 1;
+                const auto * haystack_pos = haystack + 1;
+                const auto * needle_pos = needle + 1;
 
                 while (haystack_pos < haystack_end && needle_pos < needle_end && std::tolower(*haystack_pos) == std::tolower(*needle_pos))
                     ++haystack_pos, ++needle_pos;
@@ -520,7 +520,7 @@ private:
 #endif
 
 public:
-    StringSearcher(const char * const needle_, const size_t needle_size)
+    [[maybe_unused]] StringSearcher(const char * const needle_, const size_t needle_size)
         : needle{reinterpret_cast<const UInt8 *>(needle_)}
         , needle_size{needle_size}
     {
@@ -532,7 +532,7 @@ public:
 #if __SSE4_1__
         pattern = _mm_set1_epi8(first);
 
-        auto needle_pos = needle;
+        const auto * needle_pos = needle;
 
         for (const auto i : ext::range(0, n))
         {
@@ -562,7 +562,7 @@ public:
                 if (mask == cachemask)
                 {
                     pos += n;
-                    auto needle_pos = needle + n;
+                    const auto * needle_pos = needle + n;
 
                     while (needle_pos < needle_end && *pos == *needle_pos)
                         ++pos, ++needle_pos;
@@ -581,7 +581,7 @@ public:
         if (*pos == first)
         {
             ++pos;
-            auto needle_pos = needle + 1;
+            const auto * needle_pos = needle + 1;
 
             while (needle_pos < needle_end && *pos == *needle_pos)
                 ++pos, ++needle_pos;
@@ -630,8 +630,8 @@ public:
                     {
                         if (mask == cachemask)
                         {
-                            auto haystack_pos = haystack + n;
-                            auto needle_pos = needle + n;
+                            const auto * haystack_pos = haystack + n;
+                            const auto * needle_pos = needle + n;
 
                             while (haystack_pos < haystack_end && needle_pos < needle_end && *haystack_pos == *needle_pos)
                                 ++haystack_pos, ++needle_pos;
@@ -654,8 +654,8 @@ public:
 
             if (*haystack == first)
             {
-                auto haystack_pos = haystack + 1;
-                auto needle_pos = needle + 1;
+                const auto * haystack_pos = haystack + 1;
+                const auto * needle_pos = needle + 1;
 
                 while (haystack_pos < haystack_end && needle_pos < needle_end && *haystack_pos == *needle_pos)
                     ++haystack_pos, ++needle_pos;
@@ -679,7 +679,7 @@ public:
 
 using ASCIICaseSensitiveStringSearcher = StringSearcher<true, true>;
 using ASCIICaseInsensitiveStringSearcher = StringSearcher<false, true>;
-using UTF8CaseSensitiveStringSearcher = StringSearcher<true, false>;
+using UTF8CaseSensitiveStringSearcher [[maybe_unused]] = StringSearcher<true, false>;
 using UTF8CaseInsensitiveStringSearcher = StringSearcher<false, false>;
 
 
@@ -694,14 +694,14 @@ struct LibCASCIICaseSensitiveStringSearcher
     const char * const needle;
     const size_t needle_size;
 
-    LibCASCIICaseSensitiveStringSearcher(const char * const needle, const size_t needle_size)
+    [[maybe_unused]] LibCASCIICaseSensitiveStringSearcher(const char * const needle, const size_t needle_size)
         : needle(needle)
         , needle_size(needle_size)
     {}
 
     const UInt8 * search(const UInt8 * haystack, const UInt8 * const haystack_end) const
     {
-        auto res = strstr(reinterpret_cast<const char *>(haystack), reinterpret_cast<const char *>(needle));
+        const auto * res = strstr(reinterpret_cast<const char *>(haystack), reinterpret_cast<const char *>(needle));
         if (!res)
             return haystack_end;
         return reinterpret_cast<const UInt8 *>(res);
@@ -718,14 +718,14 @@ struct LibCASCIICaseInsensitiveStringSearcher
     const char * const needle;
     const size_t needle_size;
 
-    LibCASCIICaseInsensitiveStringSearcher(const char * const needle, const size_t needle_size)
+    [[maybe_unused]] LibCASCIICaseInsensitiveStringSearcher(const char * const needle, const size_t needle_size)
         : needle(needle)
         , needle_size(needle_size)
     {}
 
     const UInt8 * search(const UInt8 * haystack, const UInt8 * const haystack_end) const
     {
-        auto res = strcasestr(reinterpret_cast<const char *>(haystack), reinterpret_cast<const char *>(needle));
+        const auto * res = strcasestr(reinterpret_cast<const char *>(haystack), reinterpret_cast<const char *>(needle));
         if (!res)
             return haystack_end;
         return reinterpret_cast<const UInt8 *>(res);
