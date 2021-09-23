@@ -472,13 +472,12 @@ struct SenderHelper
     std::vector<MockWriterPtr> mock_writers;
     std::vector<MockTunnelPtr> tunnels;
     MockTunnelSetPtr tunnel_set;
-    DAGContext dag_context;
+    std::unique_ptr<DAGContext> dag_context;
 
     SenderHelper(int source_num_, int concurrency_, const std::vector<PacketQueuePtr> & queues_)
         : source_num(source_num_)
         , concurrency(concurrency_)
         , queues(queues_)
-        , dag_context(tipb::DAGRequest{})
     {
         mpp::TaskMeta task_meta;
         tunnel_set = std::make_shared<MockTunnelSet>();
@@ -498,9 +497,13 @@ struct SenderHelper
             tunnel_set->addTunnel(tunnel);
         }
 
-        dag_context.final_concurrency = concurrency; // just for execution_summary
-        dag_context.is_mpp_task = true;
-        dag_context.is_root_mpp_task = false;
+        tipb::DAGRequest dag_request;
+        *dag_request.mutable_root_executor() = tipb::Executor{};
+
+        dag_context = std::make_unique<DAGContext>(dag_request);
+        dag_context->final_concurrency = concurrency; // just for execution_summary
+        dag_context->is_mpp_task = true;
+        dag_context->is_root_mpp_task = false;
     }
 
     BlockInputStreamPtr buildUnionStream(
@@ -521,7 +524,7 @@ struct SenderHelper
                     -1,
                     tipb::TypeCHBlock,
                     fields,
-                    dag_context,
+                    *dag_context,
                     nullptr));
             send_streams.push_back(std::make_shared<ExchangeSender>(stream, std::move(response_writer)));
         }
