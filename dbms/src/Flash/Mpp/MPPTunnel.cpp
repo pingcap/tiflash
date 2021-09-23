@@ -145,19 +145,16 @@ void MPPTunnelBase<Writer>::writeDone()
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
-    {
-        std::lock_guard<std::mutex> lk(mu);
-        if (connected)
-        {
-            throw Exception("has connected");
-        }
+    std::lock_guard<std::mutex> lk(mu);
+    if (connected)
+        throw Exception("has connected");
 
-        LOG_DEBUG(log, "ready to connect");
-        connected = true;
-        writer = writer_;
-        cv_for_connected.notify_all();
-    }
+    LOG_DEBUG(log, "ready to connect");
+    writer = writer_;
     send_thread = std::make_unique<std::thread>([this] { sendLoop(); });
+
+    connected = true;
+    cv_for_connected.notify_all();
 }
 
 template <typename Writer>
