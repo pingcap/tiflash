@@ -16,6 +16,7 @@
 #include <fmt/format.h>
 #include <fmt/printf.h>
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
 #include <thread>
 
