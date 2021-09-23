@@ -1,4 +1,5 @@
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <DataStreams/ExchangeSender.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -51,7 +52,7 @@ struct MockReceiverContext
 
     struct Request
     {
-        String DebugString() const
+        String debugString() const
         {
             return "{Request}";
         }
@@ -405,7 +406,8 @@ struct ReceiverHelper
             std::make_shared<MockReceiverContext>(queues),
             pb_exchange_receiver,
             task_meta,
-            source_num * 5);
+            source_num * 5,
+            nullptr);
     }
 
     BlockInputStreamPtr buildUnionStream(int concurrency)
@@ -413,8 +415,8 @@ struct ReceiverHelper
         auto receiver = buildReceiver();
         std::vector<BlockInputStreamPtr> streams;
         for (int i = 0; i < concurrency; ++i)
-            streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency);
+            streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, nullptr));
+        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, nullptr);
     }
 
     BlockInputStreamPtr buildUnionStreamWithHashJoinBuildStream(int concurrency)
@@ -422,7 +424,7 @@ struct ReceiverHelper
         auto receiver = buildReceiver();
         std::vector<BlockInputStreamPtr> streams;
         for (int i = 0; i < concurrency; ++i)
-            streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver));
+            streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, nullptr));
 
         auto receiver_header = streams.front()->getHeader();
         auto key_name = receiver_header.getByPosition(0).name;
@@ -446,9 +448,9 @@ struct ReceiverHelper
         join_ptr->setSampleBlock(receiver_header);
 
         for (int i = 0; i < concurrency; ++i)
-            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i);
+            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, nullptr);
 
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency);
+        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, nullptr);
     }
 
     void finish()
@@ -470,13 +472,12 @@ struct SenderHelper
     std::vector<MockWriterPtr> mock_writers;
     std::vector<MockTunnelPtr> tunnels;
     MockTunnelSetPtr tunnel_set;
-    DAGContext dag_context;
+    std::unique_ptr<DAGContext> dag_context;
 
     SenderHelper(int source_num_, int concurrency_, const std::vector<PacketQueuePtr> & queues_)
         : source_num(source_num_)
         , concurrency(concurrency_)
         , queues(queues_)
-        , dag_context(tipb::DAGRequest{})
     {
         mpp::TaskMeta task_meta;
         tunnel_set = std::make_shared<MockTunnelSet>();
@@ -496,9 +497,13 @@ struct SenderHelper
             tunnel_set->addTunnel(tunnel);
         }
 
-        dag_context.final_concurrency = concurrency; // just for execution_summary
-        dag_context.is_mpp_task = true;
-        dag_context.is_root_mpp_task = false;
+        tipb::DAGRequest dag_request;
+        *dag_request.mutable_root_executor() = tipb::Executor{};
+
+        dag_context = std::make_unique<DAGContext>(dag_request);
+        dag_context->final_concurrency = concurrency; // just for execution_summary
+        dag_context->is_mpp_task = true;
+        dag_context->is_root_mpp_task = false;
     }
 
     BlockInputStreamPtr buildUnionStream(
@@ -519,11 +524,12 @@ struct SenderHelper
                     -1,
                     tipb::TypeCHBlock,
                     fields,
-                    dag_context));
+                    *dag_context,
+                    nullptr));
             send_streams.push_back(std::make_shared<ExchangeSender>(stream, std::move(response_writer)));
         }
 
-        return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency);
+        return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, nullptr);
     }
 
     void finish()
