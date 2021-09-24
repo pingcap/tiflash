@@ -1,24 +1,23 @@
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Common/typeid_cast.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/parseQuery.h>
 #include <Poco/String.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int UNKNOWN_TYPE;
-    extern const int ILLEGAL_SYNTAX_FOR_DATA_TYPE;
-    extern const int UNEXPECTED_AST_STRUCTURE;
-    extern const int DATA_TYPE_CANNOT_HAVE_ARGUMENTS;
-}
+extern const int LOGICAL_ERROR;
+extern const int UNKNOWN_TYPE;
+extern const int ILLEGAL_SYNTAX_FOR_DATA_TYPE;
+extern const int UNEXPECTED_AST_STRUCTURE;
+extern const int DATA_TYPE_CANNOT_HAVE_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 DataTypePtr DataTypeFactory::get(const String & full_name) const
@@ -73,18 +72,21 @@ DataTypePtr DataTypeFactory::get(const String & family_name, const ASTPtr & para
 void DataTypeFactory::registerDataType(const String & family_name, Creator creator, CaseSensitiveness case_sensitiveness)
 {
     if (creator == nullptr)
-        throw Exception("DataTypeFactory: the data type family " + family_name + " has been provided "
-            " a null constructor", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "DataTypeFactory: the data type family " + family_name + " has been provided a null constructor",
+            ErrorCodes::LOGICAL_ERROR);
 
     if (!data_types.emplace(family_name, creator).second)
-        throw Exception("DataTypeFactory: the data type family name '" + family_name + "' is not unique",
+        throw Exception(
+            "DataTypeFactory: the data type family name '" + family_name + "' is not unique",
             ErrorCodes::LOGICAL_ERROR);
 
     String family_name_lowercase = Poco::toLower(family_name);
 
     if (case_sensitiveness == CaseInsensitive
         && !case_insensitive_data_types.emplace(family_name_lowercase, creator).second)
-        throw Exception("DataTypeFactory: the case insensitive data type family name '" + family_name + "' is not unique",
+        throw Exception(
+            "DataTypeFactory: the case insensitive data type family name '" + family_name + "' is not unique",
             ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -92,15 +94,18 @@ void DataTypeFactory::registerDataType(const String & family_name, Creator creat
 void DataTypeFactory::registerSimpleDataType(const String & name, SimpleCreator creator, CaseSensitiveness case_sensitiveness)
 {
     if (creator == nullptr)
-        throw Exception("DataTypeFactory: the data type " + name + " has been provided "
-            " a null constructor", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "DataTypeFactory: the data type " + name + " has been provided a null constructor",
+            ErrorCodes::LOGICAL_ERROR);
 
-    registerDataType(name, [name, creator](const ASTPtr & ast)
-    {
-        if (ast)
-            throw Exception("Data type " + name + " cannot have arguments", ErrorCodes::DATA_TYPE_CANNOT_HAVE_ARGUMENTS);
-        return creator();
-    }, case_sensitiveness);
+    registerDataType(
+        name,
+        [name, creator](const ASTPtr & ast) {
+            if (ast)
+                throw Exception("Data type " + name + " cannot have arguments", ErrorCodes::DATA_TYPE_CANNOT_HAVE_ARGUMENTS);
+            return creator();
+        },
+        case_sensitiveness);
 }
 
 
@@ -144,4 +149,4 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeMyDate(*this);
 }
 
-}
+} // namespace DB
