@@ -92,7 +92,7 @@ public:
     const IColumn & getData() const { return *data; }
 
     IColumn & getOffsetsColumn() { return offsets->assumeMutableRef(); }
-    const IColumn & getOffsetsColumn() const { return *offsets; }
+    [[maybe_unused]] const IColumn & getOffsetsColumn() const { return *offsets; }
 
     Offsets & ALWAYS_INLINE getOffsets()
     {
@@ -105,7 +105,7 @@ public:
     }
 
     const ColumnPtr & getDataPtr() const { return data; }
-    ColumnPtr & getDataPtr() { return data; }
+    [[maybe_unused]] ColumnPtr & getDataPtr() { return data; }
 
     const ColumnPtr & getOffsetsPtr() const { return offsets; }
     ColumnPtr & getOffsetsPtr() { return offsets; }

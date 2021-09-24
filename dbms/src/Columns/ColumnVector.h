@@ -94,13 +94,13 @@ struct CompareHelper<Float64> : public FloatCompareHelper<Float64>
 /** To implement `get64` function.
   */
 template <typename T>
-inline UInt64 unionCastToUInt64(T x)
+[[maybe_unused]] inline UInt64 unionCastToUInt64(T x)
 {
     return x;
 }
 
 template <>
-inline UInt64 unionCastToUInt64(Float64 x)
+[[maybe_unused]] inline UInt64 unionCastToUInt64(Float64 x)
 {
     union
     {
@@ -113,7 +113,7 @@ inline UInt64 unionCastToUInt64(Float64 x)
 }
 
 template <>
-inline UInt64 unionCastToUInt64(Float32 x)
+[[maybe_unused]] inline UInt64 unionCastToUInt64(Float32 x)
 {
     union
     {
@@ -147,7 +147,7 @@ public:
     using Container = PaddedPODArray<value_type>;
 
 private:
-    ColumnVector() {}
+    ColumnVector() = default;
     explicit ColumnVector(const size_t n)
         : data(n)
     {}
@@ -278,7 +278,6 @@ public:
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
-
 
     bool canBeInsideNullable() const override { return true; }
 

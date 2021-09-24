@@ -9,6 +9,7 @@
 #include <Core/Field.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -152,7 +153,8 @@ public:
       *  For example, to obtain unambiguous representation of Array of strings, strings data should be interleaved with their sizes.
       * Parameter begin should be used with Arena::allocContinue.
       */
-    virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+    virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const { serializeValueIntoArena(n, arena, begin, nullptr, TiDB::dummy_sort_key_contaner); }
 
     /** Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
       * Returns pointer to the position after the read data.
@@ -167,20 +169,24 @@ public:
       *     but it is only used by TiDB , which does not support complex columns, so just ignore
       *     the complex column will be ok.
       */
-    virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator = nullptr) = 0;
+    virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
+    const char * deserializeAndInsertFromArena(const char * pos) { deserializeAndInsertFromArena(pos, nullptr); }
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
     ///  passed bytes to hash must identify sequence of values unambiguously.
-    virtual void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+    virtual void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
+    void updateHashWithValue(size_t n, SipHash & hash) const { updateHashWithValue(n, hash, nullptr, TiDB::dummy_sort_key_contaner); }
 
     using HashValues = PaddedPODArray<SipHash>;
-    virtual void updateHashWithValues(HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+    virtual void updateHashWithValues(HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
+    void updateHashWithValues(HashValues & hash_values) const { updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner); }
 
     /// Update hash function value. Hash is calculated for each element.
     /// It's a fast weak hash function. Mainly need to scatter data between threads.
     /// WeakHash32 must have the same size as column.
-    virtual void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
+    virtual void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
+    void updateWeakHash32(WeakHash32 & hash) const { updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner); }
 
     /** Removes elements that don't match the filter.
       * Is used in WHERE and HAVING operations.
@@ -351,7 +357,7 @@ public:
     virtual bool canBeInsideNullable() const { return false; }
 
 
-    virtual ~IColumn() {}
+    virtual ~IColumn() = default;
 
     /** Print column name, size, and recursively print all subcolumns.
       */
@@ -367,7 +373,7 @@ protected:
 
         if (num_rows != selector.size())
             throw Exception(
-                "Size of selector: " + std::to_string(selector.size()) + " doesn't match size of column: " + std::to_string(num_rows),
+                fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
                 ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
         std::vector<MutablePtr> columns(num_columns);

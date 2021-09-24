@@ -149,21 +149,21 @@ void ColumnArray::insertData(const char * pos, size_t length)
 {
     /** Similarly - only for arrays of fixed length values.
       */
-    IColumn * data_ = &getData();
-    if (!data_->isFixedAndContiguous())
+    IColumn * array_data = &getData();
+    if (!array_data->isFixedAndContiguous())
         throw Exception("Method insertData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 
-    size_t field_size = data_->sizeOfValueIfFixed();
+    size_t field_size = array_data->sizeOfValueIfFixed();
 
     const char * end = pos + length;
     size_t elems = 0;
     for (; pos + field_size <= end; pos += field_size, ++elems)
-        data_->insertData(pos, field_size);
+        array_data->insertData(pos, field_size);
 
     if (pos != end)
         throw Exception("Incorrect length argument for method ColumnArray::insertData", ErrorCodes::BAD_ARGUMENTS);
 
-    getOffsets().push_back((getOffsets().size() == 0 ? 0 : getOffsets().back()) + elems);
+    getOffsets().push_back((getOffsets().empty() ? 0 : getOffsets().back()) + elems);
 }
 
 
@@ -191,7 +191,7 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
     for (size_t i = 0; i < array_size; ++i)
         pos = getData().deserializeAndInsertFromArena(pos, collator);
 
-    getOffsets().push_back((getOffsets().size() == 0 ? 0 : getOffsets().back()) + array_size);
+    getOffsets().push_back((getOffsets().empty() ? 0 : getOffsets().back()) + array_size);
     return pos;
 }
 
@@ -258,7 +258,7 @@ void ColumnArray::insert(const Field & x)
     size_t size = array.size();
     for (size_t i = 0; i < size; ++i)
         getData().insert(array[i]);
-    getOffsets().push_back((getOffsets().size() == 0 ? 0 : getOffsets().back()) + size);
+    getOffsets().push_back((getOffsets().empty() ? 0 : getOffsets().back()) + size);
 }
 
 
@@ -269,13 +269,13 @@ void ColumnArray::insertFrom(const IColumn & src_, size_t n)
     size_t offset = src.offsetAt(n);
 
     getData().insertRangeFrom(src.getData(), offset, size);
-    getOffsets().push_back((getOffsets().size() == 0 ? 0 : getOffsets().back()) + size);
+    getOffsets().push_back((getOffsets().empty() ? 0 : getOffsets().back()) + size);
 }
 
 
 void ColumnArray::insertDefault()
 {
-    getOffsets().push_back(getOffsets().size() == 0 ? 0 : getOffsets().back());
+    getOffsets().push_back(getOffsets().empty() ? 0 : getOffsets().back());
 }
 
 
@@ -475,7 +475,7 @@ ColumnPtr ColumnArray::filter(const Filter & filt, ssize_t result_size_hint) con
 template <typename T>
 ColumnPtr ColumnArray::filterNumber(const Filter & filt, ssize_t result_size_hint) const
 {
-    if (getOffsets().size() == 0)
+    if (getOffsets().empty())
         return ColumnArray::create(data);
 
     auto res = ColumnArray::create(data->cloneEmpty());
@@ -602,15 +602,15 @@ ColumnPtr ColumnArray::filterGeneric(const Filter & filt, ssize_t result_size_hi
 
 ColumnPtr ColumnArray::filterNullable(const Filter & filt, ssize_t result_size_hint) const
 {
-    if (getOffsets().size() == 0)
+    if (getOffsets().empty())
         return ColumnArray::create(data);
 
     const ColumnNullable & nullable_elems = static_cast<const ColumnNullable &>(*data);
 
     auto array_of_nested = ColumnArray::create(nullable_elems.getNestedColumnPtr(), offsets);
     auto filtered_array_of_nested_owner = array_of_nested->filter(filt, result_size_hint);
-    auto & filtered_array_of_nested = static_cast<const ColumnArray &>(*filtered_array_of_nested_owner);
-    auto & filtered_offsets = filtered_array_of_nested.getOffsetsPtr();
+    const auto & filtered_array_of_nested = static_cast<const ColumnArray &>(*filtered_array_of_nested_owner);
+    const auto & filtered_offsets = filtered_array_of_nested.getOffsetsPtr();
 
     auto res_null_map = ColumnUInt8::create();
 
@@ -625,7 +625,7 @@ ColumnPtr ColumnArray::filterNullable(const Filter & filt, ssize_t result_size_h
 
 ColumnPtr ColumnArray::filterTuple(const Filter & filt, ssize_t result_size_hint) const
 {
-    if (getOffsets().size() == 0)
+    if (getOffsets().empty())
         return ColumnArray::create(data);
 
     const ColumnTuple & tuple = static_cast<const ColumnTuple &>(*data);
@@ -762,13 +762,13 @@ ColumnPtr ColumnArray::replicateNumber(const Offsets & replicate_offsets) const
     if (0 == col_size)
         return res;
 
-    ColumnArray & res_ = typeid_cast<ColumnArray &>(*res);
+    ColumnArray & array_res = typeid_cast<ColumnArray &>(*res);
 
     const typename ColumnVector<T>::Container & src_data = typeid_cast<const ColumnVector<T> &>(*data).getData();
     const Offsets & src_offsets = getOffsets();
 
-    typename ColumnVector<T>::Container & res_data = typeid_cast<ColumnVector<T> &>(res_.getData()).getData();
-    Offsets & res_offsets = res_.getOffsets();
+    typename ColumnVector<T>::Container & res_data = typeid_cast<ColumnVector<T> &>(array_res.getData()).getData();
+    Offsets & res_offsets = array_res.getOffsets();
 
     res_data.reserve(data->size() / col_size * replicate_offsets.back());
     res_offsets.reserve(replicate_offsets.back());
@@ -810,16 +810,16 @@ ColumnPtr ColumnArray::replicateString(const Offsets & replicate_offsets) const
     if (0 == col_size)
         return res;
 
-    ColumnArray & res_ = static_cast<ColumnArray &>(*res);
+    ColumnArray & array_res = static_cast<ColumnArray &>(*res);
 
     const ColumnString & src_string = typeid_cast<const ColumnString &>(*data);
     const ColumnString::Chars_t & src_chars = src_string.getChars();
     const Offsets & src_string_offsets = src_string.getOffsets();
     const Offsets & src_offsets = getOffsets();
 
-    ColumnString::Chars_t & res_chars = typeid_cast<ColumnString &>(res_.getData()).getChars();
-    Offsets & res_string_offsets = typeid_cast<ColumnString &>(res_.getData()).getOffsets();
-    Offsets & res_offsets = res_.getOffsets();
+    ColumnString::Chars_t & res_chars = typeid_cast<ColumnString &>(array_res.getData()).getChars();
+    Offsets & res_string_offsets = typeid_cast<ColumnString &>(array_res.getData()).getOffsets();
+    Offsets & res_offsets = array_res.getOffsets();
 
     res_chars.reserve(src_chars.size() / col_size * replicate_offsets.back());
     res_string_offsets.reserve(src_string_offsets.size() / col_size * replicate_offsets.back());
