@@ -1,8 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/TaskStatus.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
@@ -13,16 +11,17 @@ namespace FailPoints
 extern const char exception_during_mpp_close_tunnel[];
 } // namespace FailPoints
 
-MPPTunnel::MPPTunnel(
+template <typename Writer>
+MPPTunnelBase<Writer>::MPPTunnelBase(
     const mpp::TaskMeta & receiver_meta_,
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
-    const std::shared_ptr<MPPTask> & current_task_,
+    TaskCancelledCallback callback,
     int input_steams_num_)
     : connected(false)
     , finished(false)
     , timeout(timeout_)
-    , current_task(current_task_)
+    , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
@@ -31,7 +30,8 @@ MPPTunnel::MPPTunnel(
 {
 }
 
-MPPTunnel::~MPPTunnel()
+template <typename Writer>
+MPPTunnelBase<Writer>::~MPPTunnelBase()
 {
     try
     {
@@ -48,7 +48,8 @@ MPPTunnel::~MPPTunnel()
     }
 }
 
-void MPPTunnel::close(const String & reason)
+template <typename Writer>
+void MPPTunnelBase<Writer>::close(const String & reason)
 {
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
@@ -70,14 +71,15 @@ void MPPTunnel::close(const String & reason)
     send_queue.push(nullptr);
 }
 
-bool MPPTunnel::isTaskCancelled()
+template <typename Writer>
+bool MPPTunnelBase<Writer>::isTaskCancelled()
 {
-    auto sp = current_task.lock();
-    return sp != nullptr && sp->getStatus() == CANCELLED;
+    return task_cancelled_callback();
 }
 
 // TODO: consider to hold a buffer
-void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
+template <typename Writer>
+void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_after_write)
 {
     LOG_TRACE(log, "ready to write");
     {
@@ -103,7 +105,8 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
 }
 
 /// to avoid being blocked when pop(), we should send nullptr into send_queue
-void MPPTunnel::sendLoop()
+template <typename Writer>
+void MPPTunnelBase<Writer>::sendLoop()
 {
     while (!finished)
     {
@@ -113,8 +116,7 @@ void MPPTunnel::sendLoop()
         if (nullptr == res)
         {
             std::unique_lock<std::mutex> lk(mu);
-            finished = true;
-            cv_for_finished.notify_all();
+            finishWithLock();
             return;
         }
         else
@@ -124,7 +126,8 @@ void MPPTunnel::sendLoop()
     }
 }
 
-void MPPTunnel::writeDone()
+template <typename Writer>
+void MPPTunnelBase<Writer>::writeDone()
 {
     LOG_TRACE(log, "ready to finish");
     std::unique_lock<std::mutex> lk(mu);
@@ -139,34 +142,33 @@ void MPPTunnel::writeDone()
     LOG_TRACE(log, "done to finish");
 }
 
-void MPPTunnel::connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
+template <typename Writer>
+void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
-    {
-        std::lock_guard<std::mutex> lk(mu);
-        if (connected)
-        {
-            throw Exception("has connected");
-        }
+    std::lock_guard<std::mutex> lk(mu);
+    if (connected)
+        throw Exception("has connected");
 
-        LOG_DEBUG(log, "ready to connect");
-        connected = true;
-        writer = writer_;
-        cv_for_connected.notify_all();
-    }
+    LOG_DEBUG(log, "ready to connect");
+    writer = writer_;
     send_thread = std::make_unique<std::thread>([this] { sendLoop(); });
+
+    connected = true;
+    cv_for_connected.notify_all();
 }
 
-
-void MPPTunnel::waitForFinish()
+template <typename Writer>
+void MPPTunnelBase<Writer>::waitForFinish()
 {
     std::unique_lock<std::mutex> lk(mu);
 
     cv_for_finished.wait(lk, [&]() { return finished.load(); });
 }
 
-void MPPTunnel::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
+template <typename Writer>
+void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
 {
-    auto connected_or_cancelled = [&]() {
+    auto connected_or_cancelled = [&] {
         return connected || isTaskCancelled();
     };
     if (timeout.count() > 0)
@@ -182,10 +184,14 @@ void MPPTunnel::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
         throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
 }
 
-void MPPTunnel::finishWithLock()
+template <typename Writer>
+void MPPTunnelBase<Writer>::finishWithLock()
 {
     finished = true;
     cv_for_finished.notify_all();
 }
+
+/// Explicit template instantiations - to avoid code bloat in headers.
+template class MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>;
 
 } // namespace DB
