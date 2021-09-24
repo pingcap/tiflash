@@ -66,6 +66,16 @@ public:
         }
     }
 
+    DAGContext()
+        : collect_execution_summaries(false)
+        , is_mpp_task(false)
+        , is_root_mpp_task(false)
+        , tunnel_set(nullptr)
+        , flags(0)
+        , sql_mode(0)
+        , warnings(std::numeric_limits<int>::max())
+    {}
+
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
@@ -95,6 +105,7 @@ public:
             warnings_.push_back(error);
         }
     }
+    void clearWarnings() { warnings.clear(); }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB

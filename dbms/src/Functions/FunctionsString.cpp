@@ -3697,7 +3697,7 @@ private:
             else
             {
                 const String value = locale_const->getValue<String>();
-                if (boost::iequals(value, supported_locale))
+                if (!boost::iequals(value, supported_locale))
                 {
                     for (size_t i = 0; i < column_size; ++i)
                         context.getDAGContext()->handleUnknownLocale(value);
@@ -3715,7 +3715,7 @@ private:
                 else
                 {
                     String value = locale_field.get<String>();
-                    if (boost::iequals(value, supported_locale))
+                    if (!boost::iequals(value, supported_locale))
                         context.getDAGContext()->handleUnknownLocale(value);
                 }
             }

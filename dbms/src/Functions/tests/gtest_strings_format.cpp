@@ -1,4 +1,5 @@
 #include <DataTypes/DataTypeNullable.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -28,11 +29,9 @@ protected:
 TEST_F(StringFormat, FormatWithLocaleAllUnitTest)
 try
 {
-    // TODO add dag_context in TiFlashTestEnv::getContext()
-    if (!TiFlashTestEnv::getContext().getDAGContext())
-    {
-        return;
-    }
+    auto & dag_context = TiFlashTestEnv::getDAGContext();
+    dag_context.clearWarnings();
+
     const std::string func_name = "formatWithLocale";
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", {}, {}, {}}),
@@ -40,7 +39,20 @@ try
             func_name,
             createColumn<Nullable<Float64>>({12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, {}, {}}),
             createColumn<Nullable<Int64>>({4, 4, 4, 4, 4, {}, 4, {}}),
-            createColumn<Nullable<String>>({"en_US", "en_us", "EN_US", "xxx", {}, "xx", "xx", "xx"})));
+            createColumn<Nullable<String>>({"en_US", "en_us", "EN_US", "xxx", {}, "xx1", "xx2", "xx3"})));
+
+    auto gen_warning_str = [](const std::string & value) -> std::string {
+        return fmt::format("Unknown locale: \'{}\'", value);
+    };
+    std::vector<std::string> expected_warnings{gen_warning_str("xxx"), gen_warning_str("NULL"), gen_warning_str("xx1")};
+    std::vector<tipb::Error> actual_warnings;
+    dag_context.consumeWarnings(actual_warnings);
+    ASSERT_TRUE(expected_warnings.size() == actual_warnings.size());
+    for (size_t i = 0; i < expected_warnings.size(); ++i)
+    {
+        auto actual_warning = actual_warnings[i];
+        ASSERT_TRUE(actual_warning.has_msg() && actual_warning.msg() == expected_warnings[i]);
+    }
 }
 CATCH
 
