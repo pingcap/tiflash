@@ -135,9 +135,9 @@ public:
 
             /// @note Unicode standard states it is a rare but possible occasion
             if (!(dst_l_len == dst_u_len && dst_u_len == src_len))
-                throw DB::Exception{
+                throw DB::Exception(
                     "UTF8 sequences with different lowercase and uppercase lengths are not supported",
-                    DB::ErrorCodes::UNSUPPORTED_PARAMETER};
+                    DB::ErrorCodes::UNSUPPORTED_PARAMETER);
 
             cache_actual_len += src_len;
             if (cache_actual_len < n)
