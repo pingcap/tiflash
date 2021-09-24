@@ -189,7 +189,7 @@ DMFileReader::DMFileReader(
     bool enable_clean_read_,
     UInt64 max_read_version_,
     // filters
-    const RowKeyRange & rowkey_range_,
+    const RowKeyRanges & rowkey_ranges_,
     const RSOperatorPtr & filter_,
     const IdSetPtr & read_packs_,
     // caches
