@@ -23,7 +23,6 @@
 
 namespace DB
 {
-
 class TypeMapping : public ext::singleton<TypeMapping>
 {
 public:
@@ -179,7 +178,10 @@ TypeMapping::TypeMapping()
 #undef M
 }
 
-DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info) { return type_map[column_info.tp](column_info); }
+DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info)
+{
+    return type_map[column_info.tp](column_info);
+}
 
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
 {
@@ -252,40 +254,40 @@ void fillTiDBColumnInfo(const String & family_name, const ASTPtr & parameters, C
 
     switch (column_info.tp)
     {
-        case TiDB::TypeTimestamp:
-        case TiDB::TypeTime:
-            if (!parameters)
-                column_info.decimal = 0;
-            else
-            {
-                if (parameters->children.size() != 1)
-                    throw Exception("TimeStamp/Time type can optionally have only one argument - fractional");
-                column_info.decimal = typeid_cast<const ASTLiteral *>(parameters->children[0].get())->value.get<int>();
-            }
-            break;
-        case TiDB::TypeSet:
-            if (!parameters)
-                throw Exception("Set type must have arguments");
-            for (auto & ele : parameters->children)
-            {
-                column_info.elems.emplace_back(typeid_cast<const ASTLiteral *>(ele.get())->value.get<String>(), val);
-                val++;
-            }
-            column_info.setUnsignedFlag();
-            break;
-        case TiDB::TypeBit:
-            if (!parameters)
-                column_info.flen = 1;
-            else
-            {
-                if (parameters->children.size() != 1)
-                    throw Exception("Bit type can optionally have only one argument");
-                column_info.flen = typeid_cast<const ASTLiteral *>(parameters->children[0].get())->value.get<int>();
-            }
-            column_info.setUnsignedFlag();
-            break;
-        default:
-            break;
+    case TiDB::TypeTimestamp:
+    case TiDB::TypeTime:
+        if (!parameters)
+            column_info.decimal = 0;
+        else
+        {
+            if (parameters->children.size() != 1)
+                throw Exception("TimeStamp/Time type can optionally have only one argument - fractional");
+            column_info.decimal = typeid_cast<const ASTLiteral *>(parameters->children[0].get())->value.get<int>();
+        }
+        break;
+    case TiDB::TypeSet:
+        if (!parameters)
+            throw Exception("Set type must have arguments");
+        for (auto & ele : parameters->children)
+        {
+            column_info.elems.emplace_back(typeid_cast<const ASTLiteral *>(ele.get())->value.get<String>(), val);
+            val++;
+        }
+        column_info.setUnsignedFlag();
+        break;
+    case TiDB::TypeBit:
+        if (!parameters)
+            column_info.flen = 1;
+        else
+        {
+            if (parameters->children.size() != 1)
+                throw Exception("Bit type can optionally have only one argument");
+            column_info.flen = typeid_cast<const ASTLiteral *>(parameters->children[0].get())->value.get<int>();
+        }
+        column_info.setUnsignedFlag();
+        break;
+    default:
+        break;
     }
 }
 
@@ -344,61 +346,61 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     // Fill tp.
     switch (nested_type->getTypeId())
     {
-        case TypeIndex::Nothing:
-            column_info.tp = TiDB::TypeNull;
-            break;
-        case TypeIndex::UInt8:
-        case TypeIndex::Int8:
-            column_info.tp = TiDB::TypeTiny;
-            break;
-        case TypeIndex::UInt16:
-        case TypeIndex::Int16:
-            column_info.tp = TiDB::TypeShort;
-            break;
-        case TypeIndex::UInt32:
-        case TypeIndex::Int32:
-            column_info.tp = TiDB::TypeLong;
-            break;
-        case TypeIndex::UInt64:
-        case TypeIndex::Int64:
-            column_info.tp = TiDB::TypeLongLong;
-            break;
-        case TypeIndex::Float32:
-            column_info.tp = TiDB::TypeFloat;
-            break;
-        case TypeIndex::Float64:
-            column_info.tp = TiDB::TypeDouble;
-            break;
-        case TypeIndex::Date:
-        case TypeIndex::MyDate:
-            column_info.tp = TiDB::TypeDate;
-            break;
-        case TypeIndex::DateTime:
-        case TypeIndex::MyDateTime:
-            column_info.tp = TiDB::TypeDatetime;
-            break;
-        case TypeIndex::MyTimeStamp:
-            column_info.tp = TiDB::TypeTimestamp;
-            break;
-        case TypeIndex::MyTime:
-            column_info.tp = TiDB::TypeTime;
-            break;
-        case TypeIndex::String:
-        case TypeIndex::FixedString:
-            column_info.tp = TiDB::TypeString;
-            break;
-        case TypeIndex::Decimal32:
-        case TypeIndex::Decimal64:
-        case TypeIndex::Decimal128:
-        case TypeIndex::Decimal256:
-            column_info.tp = TiDB::TypeNewDecimal;
-            break;
-        case TypeIndex::Enum8:
-        case TypeIndex::Enum16:
-            column_info.tp = TiDB::TypeEnum;
-            break;
-        default:
-            throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type", ErrorCodes::LOGICAL_ERROR);
+    case TypeIndex::Nothing:
+        column_info.tp = TiDB::TypeNull;
+        break;
+    case TypeIndex::UInt8:
+    case TypeIndex::Int8:
+        column_info.tp = TiDB::TypeTiny;
+        break;
+    case TypeIndex::UInt16:
+    case TypeIndex::Int16:
+        column_info.tp = TiDB::TypeShort;
+        break;
+    case TypeIndex::UInt32:
+    case TypeIndex::Int32:
+        column_info.tp = TiDB::TypeLong;
+        break;
+    case TypeIndex::UInt64:
+    case TypeIndex::Int64:
+        column_info.tp = TiDB::TypeLongLong;
+        break;
+    case TypeIndex::Float32:
+        column_info.tp = TiDB::TypeFloat;
+        break;
+    case TypeIndex::Float64:
+        column_info.tp = TiDB::TypeDouble;
+        break;
+    case TypeIndex::Date:
+    case TypeIndex::MyDate:
+        column_info.tp = TiDB::TypeDate;
+        break;
+    case TypeIndex::DateTime:
+    case TypeIndex::MyDateTime:
+        column_info.tp = TiDB::TypeDatetime;
+        break;
+    case TypeIndex::MyTimeStamp:
+        column_info.tp = TiDB::TypeTimestamp;
+        break;
+    case TypeIndex::MyTime:
+        column_info.tp = TiDB::TypeTime;
+        break;
+    case TypeIndex::String:
+    case TypeIndex::FixedString:
+        column_info.tp = TiDB::TypeString;
+        break;
+    case TypeIndex::Decimal32:
+    case TypeIndex::Decimal64:
+    case TypeIndex::Decimal128:
+    case TypeIndex::Decimal256:
+        column_info.tp = TiDB::TypeNewDecimal;
+        break;
+    case TypeIndex::Enum8:
+    case TypeIndex::Enum16:
+        column_info.tp = TiDB::TypeEnum;
+        break;
+    default:
+        throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type", ErrorCodes::LOGICAL_ERROR);
     }
 
     // Fill unsigned flag.

@@ -30,7 +30,6 @@ struct SchemaNameMapper;
 
 namespace TiDB
 {
-
 using DB::ColumnID;
 using DB::DatabaseID;
 using DB::Exception;
