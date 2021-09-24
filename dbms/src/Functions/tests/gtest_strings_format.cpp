@@ -44,7 +44,7 @@ try
     auto gen_warning_str = [](const std::string & value) -> std::string {
         return fmt::format("Unknown locale: \'{}\'", value);
     };
-    std::vector<std::string> expected_warnings{gen_warning_str("xxx"), gen_warning_str("NULL"), gen_warning_str("xx1")};
+    std::vector<std::string> expected_warnings{gen_warning_str("xxx"), gen_warning_str("NULL"), gen_warning_str("xx1"), gen_warning_str("xx2"), gen_warning_str("xx3")};
     std::vector<tipb::Error> actual_warnings;
     dag_context.consumeWarnings(actual_warnings);
     ASSERT_TRUE(expected_warnings.size() == actual_warnings.size());
