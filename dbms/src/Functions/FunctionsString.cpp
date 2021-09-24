@@ -169,11 +169,13 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
      const ConstPtr<UInt8> src_end,
      Ptr<UInt8> dst),
     {
+        static constexpr UInt8 mask_shift = __builtin_ctz(flip_case_mask);
         for (; src < src_end; ++src, ++dst)
-            if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
-                *dst = *src ^ flip_case_mask;
-            else
-                *dst = *src;
+        {
+            auto data = static_cast<UInt8>(*src <= not_case_upper_bound)
+                & static_cast<UInt8>(*src >= not_case_lower_bound);
+            *dst = *src ^ (data << mask_shift);
+        }
     })
 } // namespace
 
