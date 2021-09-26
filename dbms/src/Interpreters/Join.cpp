@@ -3,6 +3,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Common/ColumnsHashing.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -1613,6 +1614,19 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
     }
 }
 
+namespace {
+
+struct ThreadTracker {
+    ThreadTracker() {
+        GET_METRIC(tiflash_hash_join_probe_threads).Increment();
+    }
+
+    ~ThreadTracker() {
+        GET_METRIC(tiflash_hash_join_probe_threads).Decrement();
+    }
+};
+
+}
 
 void Join::joinBlock(Block & block) const
 {
@@ -1624,6 +1638,12 @@ void Join::joinBlock(Block & block) const
 
         build_table_cv.wait(lk, [&]() { return have_finish_build; });
     }
+
+    thread_local std::unique_ptr<ThreadTracker> tracker;
+    if (!tracker)
+        tracker = std::make_unique<ThreadTracker>();
+    GET_METRIC(tiflash_hash_join_probe_in_bytes).Increment(block.bytes());
+    auto begin_ts = std::chrono::steady_clock::now();
 
     std::shared_lock lock(rwlock);
 
@@ -1663,6 +1683,11 @@ void Join::joinBlock(Block & block) const
         joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>(block);
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
+
+    auto end_ts = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_ts - begin_ts).count();
+    GET_METRIC(tiflash_hash_join_probe_duration).Increment(duration);
+    GET_METRIC(tiflash_hash_join_probe_out_bytes).Increment(block.bytes());
 }
 
 
