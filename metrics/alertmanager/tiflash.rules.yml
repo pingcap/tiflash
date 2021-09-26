@@ -1,29 +1,17 @@
 groups:
 - name: alert.rules
   rules:
-  - alert: TiFlash_tmt_merge_duration
-    expr: histogram_quantile(0.99, sum(rate(tiflash_tmt_merge_duration_seconds_bucket[1m])) BY (le, instance)) > 600
+  - alert: TiFlash_server_is_down
+    expr: probe_success{group="tiflash"} == 0
     for: 1m
     labels:
       env: ENV_LABELS_ENV
       level: emergency
-      expr:  histogram_quantile(0.99, sum(rate(tiflash_tmt_merge_duration_seconds_bucket[1m])) BY (le, instance)) > 600
+      expr: probe_success{group="tiflash"} == 0
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
       value: '{{ $value }}'
-      summary: TiFlash tmt merge duration 99th percentile is above 600s
-
-  - alert: TiFlash_tmt_write_parts_duration
-    expr: histogram_quantile(0.99, sum(rate(tiflash_tmt_write_parts_duration_seconds_bucket[1m])) BY (le, instance)) > 8
-    for: 1m
-    labels:
-      env: ENV_LABELS_ENV
-      level: emergency
-      expr:  histogram_quantile(0.99, sum(rate(tiflash_tmt_write_parts_duration_seconds_bucket[1m])) BY (le, instance)) > 8
-    annotations:
-      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
-      value: '{{ $value }}'
-      summary: TiFlash tmt write parts duration 99th percentile is above 8s
+      summary: TiFlash server is down
 
   - alert: TiFlash_schema_error
     expr: increase(tiflash_schema_apply_count{type="failed"}[15m]) > 0
