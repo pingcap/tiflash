@@ -46,7 +46,7 @@ static bool isInnerJoin(ASTTableJoin::Kind kind)
 }
 static bool isAntiJoin(ASTTableJoin::Kind kind)
 {
-    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
+    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti || kind == ASTTableJoin::Kind::Cross_AntiLeftOuterSemi;
 }
 static bool isCrossJoin(ASTTableJoin::Kind kind)
 {
@@ -1467,6 +1467,30 @@ struct CrossJoinAdder<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::
         return true;
     }
 };
+template<ASTTableJoin::Strictness STRICTNESS> struct CrossJoinAdder<ASTTableJoin::Kind::Cross_AntiLeftOuterSemi, STRICTNESS>
+{
+    static void addFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add,
+                         size_t start_offset, size_t i, const BlocksList & blocks, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+                         {
+        CrossJoinAdder<ASTTableJoin::Kind::Cross, STRICTNESS>::addFound(dst_columns, num_existing_columns, src_left_columns,
+                                                                        num_columns_to_add, start_offset, i, blocks, is_row_matched, current_offset, expanded_row_size_after_join);
+                         }
+                         static void addNotFound(MutableColumns & dst_columns, size_t num_existing_columns, ColumnRawPtrs & src_left_columns, size_t num_columns_to_add,
+                                                 size_t start_offset, size_t i, IColumn::Filter * is_row_matched, IColumn::Offset & current_offset, IColumn::Offsets * expanded_row_size_after_join)
+                                                 {
+        /// for left all/any join, mark this row as matched
+        (*is_row_matched)[i - start_offset] = 1;
+        (*expanded_row_size_after_join)[i - start_offset] = 1 + current_offset;
+        current_offset += 1;
+        for (size_t col_num = 0; col_num < num_existing_columns; ++col_num)
+            dst_columns[col_num]->insertFrom(*src_left_columns[col_num], i);
+        for (size_t col_num = 0; col_num < num_columns_to_add; ++col_num)
+            dst_columns[num_existing_columns + col_num]->insertDefault();
+                                                 }
+                                                 static bool allRightRowsMaybeAdded() {
+        return STRICTNESS == ASTTableJoin::Strictness::All;
+    }
+};
 } // namespace
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
@@ -1661,6 +1685,10 @@ void Join::joinBlock(Block & block) const
         joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::All>(block);
     else if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::Any)
         joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>(block);
+    else if (kind == ASTTableJoin::Kind::Cross_AntiLeftOuterSemi && strictness == ASTTableJoin::Strictness::All)
+        joinBlockImplCross<ASTTableJoin::Kind::Cross_AntiLeftOuterSemi, ASTTableJoin::Strictness::All>(block);
+    else if (kind == ASTTableJoin::Kind::Cross_AntiLeftOuterSemi && strictness == ASTTableJoin::Strictness::Any)
+        joinBlockImplCross<ASTTableJoin::Kind::Cross_AntiLeftOuterSemi, ASTTableJoin::Strictness::Any>(block);
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 }

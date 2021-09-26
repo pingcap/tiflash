@@ -426,7 +426,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
-        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti}};
+        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_AntiLeftOuterSemi}};
+
     if (input_streams_vec.size() != 2)
     {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
@@ -438,8 +440,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
 
     ASTTableJoin::Kind kind = join_type_it->second;
+    bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin ||
+            join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
-    bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin;
     if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
 
@@ -520,6 +523,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     {
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
+
+    if (kind == ASTTableJoin::Kind::Cross_AntiLeftOuterSemi)
+        columns_added_by_join.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
 
     DataTypes join_key_types;
     getJoinKeyTypes(join, join_key_types);

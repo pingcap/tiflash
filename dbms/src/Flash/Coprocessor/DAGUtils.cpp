@@ -282,7 +282,7 @@ Field decodeLiteral(const tipb::Expr & expr)
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
     auto column_index = decodeDAGInt64(expr.val());
-    if (column_index < 0 || column_index >= (Int64)input_col.size())
+    if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
     {
         throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
