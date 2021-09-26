@@ -441,7 +441,7 @@ int benchEntry(const std::vector<std::string> & opts)
                     dm_context->hash_salt,
                     dmfile,
                     *defines,
-                    DB::DM::RowKeyRange::newAll(false, 1),
+                    {DB::DM::RowKeyRange::newAll(false, 1)},
                     DB::DM::RSOperatorPtr{},
                     std::make_shared<DB::DM::ColumnCache>(),
                     DB::DM::IdSetPtr{});
