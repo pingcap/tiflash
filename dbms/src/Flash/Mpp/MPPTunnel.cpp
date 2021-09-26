@@ -42,6 +42,12 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         {
             send_thread->join();
         }
+        /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
+        while (send_queue.size() > 0)
+        {
+            MPPDataPacketPtr res;
+            send_queue.pop(res);
+        }
     }
     catch (...)
     {
@@ -68,8 +74,9 @@ void MPPTunnelBase<Writer>::close(const String & reason)
             tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
         }
     }
-    finishWithLock();
     send_queue.push(nullptr);
+    /// should wait the errors being sent in abnormal cases.
+    waitForFinish();
 }
 
 template <typename Writer>
@@ -122,7 +129,12 @@ void MPPTunnelBase<Writer>::sendLoop()
         }
         else
         {
-            writer->Write(*res);
+            if (!writer->Write(*res))
+            {
+                std::unique_lock<std::mutex> lk(mu);
+                finishWithLock();
+                LOG_ERROR(log, "grpc writes failed");
+            }
         }
     }
 }
