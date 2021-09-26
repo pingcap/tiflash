@@ -1,5 +1,5 @@
 #pragma once
-
+#include <Common/Config/TOMLConfiguration.h>
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
@@ -13,7 +13,9 @@
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
+#include <Poco/Util/LayeredConfiguration.h>
 #include <TestUtils/TiFlashTestException.h>
+#include <cpptoml.h>
 #include <fmt/core.h>
 
 #if !__clang__
@@ -88,6 +90,16 @@ inline DataTypes typesFromString(const String & str)
         data_types.push_back(typeFromString(data_type));
 
     return data_types;
+}
+
+inline auto loadConfigFromString(const String & s)
+{
+    std::istringstream ss(s);
+    cpptoml::parser p(ss);
+    auto table = p.parse();
+    Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
+    config->add(new DB::TOMLConfiguration(table), false); // Take ownership of TOMLConfig
+    return config;
 }
 
 class TiFlashTestEnv
