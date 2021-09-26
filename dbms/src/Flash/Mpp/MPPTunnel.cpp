@@ -24,6 +24,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , timeout(timeout_)
     , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
+    , sendLoop_msg("")
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
     , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
@@ -95,7 +96,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
             std::unique_lock<std::mutex> lk(mu);
             waitUntilConnectedOrCancelled(lk);
             if (finished)
-                throw Exception("write to tunnel which is already closed.");
+                throw Exception("write to tunnel which is already closed," + sendLoop_msg);
         }
 
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
@@ -108,6 +109,12 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 send_queue.push(nullptr);
                 LOG_TRACE(log, "sending a nullptr to finish write.");
             }
+        }
+        else
+        {
+            std::unique_lock<std::mutex> lk(mu);
+            if (finished)
+                throw Exception("write to tunnel which is already closed," + sendLoop_msg);
         }
     }
 }
@@ -124,6 +131,7 @@ void MPPTunnelBase<Writer>::sendLoop()
         if (nullptr == res)
         {
             std::unique_lock<std::mutex> lk(mu);
+            sendLoop_msg = " finished after getting nullptr.";
             finishWithLock();
             return;
         }
@@ -132,8 +140,9 @@ void MPPTunnelBase<Writer>::sendLoop()
             if (!writer->Write(*res))
             {
                 std::unique_lock<std::mutex> lk(mu);
+                sendLoop_msg = " grpc writes failed.";
                 finishWithLock();
-                LOG_ERROR(log, "grpc writes failed");
+                LOG_ERROR(log, sendLoop_msg);
             }
         }
     }

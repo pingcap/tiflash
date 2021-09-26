@@ -77,6 +77,8 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
+    String sendLoop_msg;
+
     int input_streams_num;
 
     std::unique_ptr<std::thread> send_thread;
