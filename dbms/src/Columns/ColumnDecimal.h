@@ -22,12 +22,12 @@ public:
     using Base = PaddedPODArray<T>;
     using Base::operator[];
 
-    [[maybe_unused]] DecimalPaddedPODArray(size_t size, UInt32 scale_)
+    DecimalPaddedPODArray(size_t size, UInt32 scale_)
         : Base(size)
         , scale(scale_)
     {}
 
-    [[maybe_unused]] DecimalPaddedPODArray(size_t size, const T & x, UInt32 scale_)
+    DecimalPaddedPODArray(size_t size, const T & x, UInt32 scale_)
         : Base(size, x)
         , scale(scale_)
     {}

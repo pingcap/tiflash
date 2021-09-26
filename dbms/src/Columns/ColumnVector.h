@@ -94,13 +94,13 @@ struct CompareHelper<Float64> : public FloatCompareHelper<Float64>
 /** To implement `get64` function.
   */
 template <typename T>
-[[maybe_unused]] inline UInt64 unionCastToUInt64(T x)
+inline UInt64 unionCastToUInt64(T x)
 {
     return x;
 }
 
 template <>
-[[maybe_unused]] inline UInt64 unionCastToUInt64(Float64 x)
+inline UInt64 unionCastToUInt64(Float64 x)
 {
     union
     {
@@ -113,7 +113,7 @@ template <>
 }
 
 template <>
-[[maybe_unused]] inline UInt64 unionCastToUInt64(Float32 x)
+inline UInt64 unionCastToUInt64(Float32 x)
 {
     union
     {
