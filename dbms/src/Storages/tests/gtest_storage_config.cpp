@@ -13,6 +13,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <TestUtils/ConfigTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 namespace DB
 {
