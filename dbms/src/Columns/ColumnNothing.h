@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class ColumnNothing final : public COWPtrHelper<IColumnDummy, ColumnNothing>
 {
 private:
@@ -25,4 +24,4 @@ public:
     bool canBeInsideNullable() const override { return true; }
 };
 
-}
+} // namespace DB
