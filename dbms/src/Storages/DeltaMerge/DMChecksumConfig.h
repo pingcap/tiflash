@@ -2,6 +2,7 @@
 #include <Common/TiFlashException.h>
 #include <Common/config_version.h>
 #include <IO/ChecksumBuffer.h>
+#include <Interpreters/Context.h>
 
 #include <map>
 #include <string>
@@ -25,6 +26,11 @@ public:
         , checksum_algorithm(checksum_algorithm_)
         , embedded_checksum(std::move(embedded_checksum_))
         , debug_info(std::move(debug_info_))
+    {
+    }
+
+    explicit DMChecksumConfig(const DB::Context & context)
+        : DMChecksumConfig({}, context.getSettingsRef().dt_checksum_frame_size.get(), context.getSettingsRef().dm_checksum_algorithm.get())
     {
     }
 

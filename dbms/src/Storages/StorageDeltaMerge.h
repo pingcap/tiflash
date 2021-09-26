@@ -2,6 +2,7 @@
 
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
@@ -121,6 +122,13 @@ public:
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
 
     bool initStoreIfDataDirExist() override;
+
+    DM::DMConfigurationOpt createChecksumConfig(bool is_single_file)
+    {
+        return !is_single_file && STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2
+            ? std::make_optional<DM::DMChecksumConfig>(global_context)
+            : std::nullopt;
+    }
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Checksum.h>
 #include <Common/FieldVisitors.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Core/Field.h>
@@ -24,6 +25,7 @@ extern const int UNKNOWN_COMPRESSION_METHOD;
 extern const int UNKNOWN_DISTRIBUTED_PRODUCT_MODE;
 extern const int UNKNOWN_GLOBAL_SUBQUERIES_METHOD;
 extern const int CANNOT_PARSE_BOOL;
+extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
 
@@ -728,6 +730,90 @@ public:
 
 private:
     OverflowMode value;
+};
+
+struct SettingChecksumAlgorithm
+{
+public:
+    bool changed = false;
+
+    SettingChecksumAlgorithm(ChecksumAlgo x = ChecksumAlgo::XXH3) // NOLINT(google-explicit-constructor)
+        : value(x)
+    {}
+
+    operator ChecksumAlgo() const { return value; } // NOLINT(google-explicit-constructor)
+    SettingChecksumAlgorithm & operator=(ChecksumAlgo x)
+    {
+        set(x);
+        return *this;
+    }
+
+    void set(ChecksumAlgo x)
+    {
+        value = x;
+        changed = true;
+    }
+
+    void set(const Field & x)
+    {
+        set(safeGet<const String &>(x));
+    }
+
+    void set(const String & x)
+    {
+        set(getChecksumAlgorithm(x));
+    }
+
+    void set(ReadBuffer & buf)
+    {
+        String x;
+        readBinary(x, buf);
+        set(x);
+    }
+
+    void write(WriteBuffer & buf) const
+    {
+        writeBinary(toString(), buf);
+    }
+
+    ChecksumAlgo get() const
+    {
+        return value;
+    }
+
+    String toString() const
+    {
+        if (value == ChecksumAlgo::XXH3)
+            return "xxh3";
+        if (value == ChecksumAlgo::City128)
+            return "city128";
+        if (value == ChecksumAlgo::CRC32)
+            return "cec32";
+        if (value == ChecksumAlgo::CRC64)
+            return "crc64";
+        if (value == ChecksumAlgo::None)
+            return "none";
+
+        throw Exception("invalid checksum algorithm value: " + ::DB::toString(static_cast<size_t>(value)), ErrorCodes::INVALID_CONFIG_PARAMETER);
+    }
+
+private:
+    static ChecksumAlgo getChecksumAlgorithm(const String & s)
+    {
+        if (s == "xxh3")
+            return ChecksumAlgo::XXH3;
+        if (s == "city128")
+            return ChecksumAlgo::City128;
+        if (s == "crc32")
+            return ChecksumAlgo::CRC32;
+        if (s == "crc64")
+            return ChecksumAlgo::CRC64;
+        if (s == "none")
+            return ChecksumAlgo::CRC64;
+
+        throw Exception("Unknown checksum algorithm: '" + s + "', must be one of 'xxh3', 'city128', 'crc32', 'crc64', 'none'", ErrorCodes::INVALID_CONFIG_PARAMETER);
+    }
+    ChecksumAlgo value;
 };
 
 struct SettingCompressionMethod

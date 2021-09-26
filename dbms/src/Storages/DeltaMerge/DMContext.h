@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 namespace DB
@@ -106,6 +107,12 @@ public:
 
     WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
     ReadLimiterPtr getReadLimiter() const { return db_context.getReadLimiter(); }
+    DM::DMConfigurationOpt createChecksumConfig(bool is_single_file) const
+    {
+        return !is_single_file && STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2
+            ? std::make_optional<DM::DMChecksumConfig>(db_context)
+            : std::nullopt;
+    }
 };
 
 } // namespace DM
