@@ -103,7 +103,6 @@ private:
     DAGSchema schema;
 
     mutable std::mutex mu;
-    std::condition_variable cv;
     /// should lock `mu` when visit these members
     Int32 live_connections;
     ExchangeReceiverState state;
