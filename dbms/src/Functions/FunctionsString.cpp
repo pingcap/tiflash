@@ -1,16 +1,19 @@
 #include <Columns/ColumnArray.h>
 #include <Common/UTF8Helpers.h>
+#include <Common/Volnitsky.h>
+#include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsString.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
+#include <Functions/StringUtil.h>
 #include <IO/WriteHelpers.h>
+#include <fmt/printf.h>
 
 #include <ext/range.h>
 #include <thread>
-
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -3022,6 +3025,275 @@ private:
     const Context & context;
 };
 
+class FunctionSubStringIndex : public IFunction
+{
+public:
+    static constexpr auto name = "substringIndex";
+    explicit FunctionSubStringIndex(const Context & context_)
+        : context(context_)
+    {}
+
+    static FunctionPtr create(const Context & context)
+    {
+        return std::make_shared<FunctionSubStringIndex>(context);
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 3; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 3)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be {}.", getName(), toString(arguments.size()), 3),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!arguments[1]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!arguments[2]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeSubStringIndex<UInt8>(block, arguments, result)
+            || executeSubStringIndex<UInt16>(block, arguments, result)
+            || executeSubStringIndex<UInt32>(block, arguments, result)
+            || executeSubStringIndex<UInt64>(block, arguments, result)
+            || executeSubStringIndex<Int8>(block, arguments, result)
+            || executeSubStringIndex<Int16>(block, arguments, result)
+            || executeSubStringIndex<Int32>(block, arguments, result)
+            || executeSubStringIndex<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function  {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    const Context & context;
+
+    template <typename IntType>
+    bool executeSubStringIndex(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        ColumnPtr & column_str = block.getByPosition(arguments[0]).column;
+        ColumnPtr & column_delim = block.getByPosition(arguments[1]).column;
+        ColumnPtr & column_count = block.getByPosition(arguments[2]).column;
+        ColumnWithTypeAndName & column_result = block.getByPosition(result);
+
+        bool delim_const = column_delim->isColumnConst();
+        bool count_const = column_count->isColumnConst();
+
+        // TODO: differentiate vector and const
+        column_str = column_str->isColumnConst() ? column_str->convertToFullColumnIfConst() : column_str;
+        if (delim_const && count_const)
+        {
+            const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
+            const ColumnConst * delim_col = checkAndGetColumnConst<ColumnString>(column_delim.get());
+            const ColumnConst * count_col = checkAndGetColumnConst<ColumnVector<IntType>>(column_count.get());
+            if (str_col == nullptr || delim_col == nullptr || count_col == nullptr)
+            {
+                return false;
+            }
+            auto col_res = ColumnString::create();
+            IntType count = count_col->getValue<IntType>();
+            vectorConstConst(
+                str_col->getChars(),
+                str_col->getOffsets(),
+                delim_col->getValue<String>(),
+                accurate::lessOp(INT64_MAX, count) ? INT64_MAX : count,
+                col_res->getChars(),
+                col_res->getOffsets());
+            column_result.column = std::move(col_res);
+        }
+        else
+        {
+            column_delim = column_delim->isColumnConst() ? column_delim->convertToFullColumnIfConst() : column_delim;
+            column_count = column_count->isColumnConst() ? column_count->convertToFullColumnIfConst() : column_count;
+            const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
+            const ColumnString * delim_col = checkAndGetColumn<ColumnString>(column_delim.get());
+            const ColumnVector<IntType> * count_col = checkAndGetColumn<ColumnVector<IntType>>(column_count.get());
+            if (str_col == nullptr || delim_col == nullptr || count_col == nullptr)
+            {
+                return false;
+            }
+            auto col_res = ColumnString::create();
+            vectorVectorVector(
+                str_col->getChars(),
+                str_col->getOffsets(),
+                delim_col->getChars(),
+                delim_col->getOffsets(),
+                count_col->getData(),
+                col_res->getChars(),
+                col_res->getOffsets());
+            column_result.column = std::move(col_res);
+        }
+
+        return true;
+    }
+
+    static void vectorConstConst(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const std::string & delim,
+        const Int64 needCount,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_offsets.resize(offsets.size());
+        if (delim.empty() || needCount == 0)
+        {
+            // All result is ""
+            res_data.resize(offsets.size());
+            for (size_t i = 0; i < offsets.size(); ++i)
+            {
+                res_data[i] = '\0';
+                res_offsets[i] = i + 1;
+            }
+            return;
+        }
+
+        ColumnString::Offset res_offset = 0;
+        Volnitsky searcher(delim.c_str(), delim.size(), 0);
+        res_data.reserve(data.size());
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i) - 1;
+
+            subStringIndex(&data[data_offset], data_size, &searcher, delim.size(), needCount, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    template <typename IntType>
+    static void vectorVectorVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const ColumnString::Chars_t & delim_data,
+        const ColumnString::Offsets & delim_offsets,
+        const PaddedPODArray<IntType> & needCount,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        res_offsets.resize(offsets.size());
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i) - 1;
+            auto delim_offset = StringUtil::offsetAt(delim_offsets, i);
+            auto delim_size = StringUtil::sizeAt(delim_offsets, i) - 1; // ignore the trailing zero.
+            Int64 count = accurate::lessOp(INT64_MAX, needCount[i]) ? INT64_MAX : needCount[i];
+
+            if (delim_size == 0 || count == 0)
+            {
+                res_data.resize(res_data.size() + 1);
+                res_data[res_offset] = '\0';
+                ++res_offset;
+                res_offsets[i] = res_offset;
+                continue;
+            }
+            Volnitsky searcher(reinterpret_cast<const char *>(&delim_data[delim_offset]), delim_size, data_size);
+            subStringIndex(&data[data_offset], data_size, &searcher, delim_size, count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    static void subStringIndex(
+        const UInt8 * data_begin,
+        size_t data_size,
+        Volnitsky * delim_searcher,
+        size_t delim_size,
+        Int64 count,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset)
+    {
+        const UInt8 * begin = data_begin;
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data_size;
+        assert(delim_size != 0);
+        if (count > 0)
+        {
+            // Fast exit when count * delim_size > data_size
+            if (static_cast<Int64>(data_size / delim_size) < count)
+            {
+                copyDataToResult(res_data, res_offset, begin, end);
+                return;
+            }
+            while (pos < end)
+            {
+                const UInt8 * match = delim_searcher->search(pos, end - pos);
+                --count;
+                if (match == end || count == 0)
+                {
+                    copyDataToResult(res_data, res_offset, begin, match);
+                    break;
+                }
+                pos = match + delim_size;
+            }
+        }
+        else
+        {
+            std::vector<const UInt8 *> delim_pos;
+            // Fast exit when count * delim_size > data_size, or count == INT64_MIN
+            if (count == std::numeric_limits<Int64>::min() || static_cast<Int64>(data_size / delim_size) < -count)
+            {
+                copyDataToResult(res_data, res_offset, begin, end);
+                return;
+            }
+            count = -count;
+            // When count is negative, we need split string by delim.
+            while (pos < end)
+            {
+                const UInt8 * match = delim_searcher->search(pos, end - pos);
+                if (match == end)
+                {
+                    break;
+                }
+                delim_pos.push_back(match);
+                pos = match + delim_size;
+            }
+
+            if (count <= static_cast<Int64>(delim_pos.size()))
+            {
+                auto delim_count = delim_pos.size();
+                const UInt8 * match = delim_pos[delim_count - count];
+                begin = match + delim_size;
+            }
+            copyDataToResult(res_data, res_offset, begin, end);
+        }
+    }
+
+    static void copyDataToResult(
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset,
+        const UInt8 * begin,
+        const UInt8 * end)
+    {
+        res_data.resize(res_data.size() + (end - begin + 1));
+        memcpy(&res_data[res_offset], begin, end - begin);
+        res_data[res_offset + (end - begin)] = '\0';
+        res_offset += end - begin + 1;
+    }
+};
 
 struct NameEmpty
 {
@@ -3144,5 +3416,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionRightUTF8>();
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
+    factory.registerFunction<FunctionSubStringIndex>();
 }
 } // namespace DB
