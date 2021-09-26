@@ -104,18 +104,7 @@ void DAGContext::handleTruncateError(const String & msg)
     {
         throw TiFlashException("Truncate error " + msg, Errors::Types::Truncated);
     }
-    tipb::Error warning;
-    warning.set_code(0);
-    warning.set_msg(msg);
-    appendWarning(warning);
-}
-
-void DAGContext::handleUnknownLocale(const String & value)
-{
-    tipb::Error warning;
-    warning.set_code(0);
-    warning.set_msg(fmt::format("Unknown locale: \'{}\'", value));
-    appendWarning(warning);
+    appendWarning(msg);
 }
 
 void DAGContext::handleOverflowError(const String & msg, const TiFlashError & error)
@@ -124,10 +113,7 @@ void DAGContext::handleOverflowError(const String & msg, const TiFlashError & er
     {
         throw TiFlashException("Overflow error: " + msg, error);
     }
-    tipb::Error warning;
-    warning.set_code(0);
-    warning.set_msg("Overflow error: " + msg);
-    appendWarning(warning);
+    appendWarning("Overflow error: " + msg);
 }
 
 void DAGContext::handleDivisionByZero()
@@ -141,10 +127,7 @@ void DAGContext::handleDivisionByZero()
             throw TiFlashException("Division by 0", Errors::Expression::DivisionByZero);
         }
     }
-    tipb::Error warning;
-    warning.set_code(0);
-    warning.set_msg("Division by 0");
-    appendWarning(warning);
+    appendWarning("Division by 0");
 }
 
 void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & error)
@@ -158,6 +141,14 @@ void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & erro
     {
         throw TiFlashException(msg, error);
     }
+}
+
+void DAGContext::appendWarning(const String & msg, int32_t code)
+{
+    tipb::Error warning;
+    warning.set_code(code);
+    warning.set_msg(msg);
+    appendWarning(warning);
 }
 
 bool DAGContext::shouldClipToZero()

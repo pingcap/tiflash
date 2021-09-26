@@ -80,10 +80,10 @@ public:
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     void handleTruncateError(const String & msg);
-    void handleUnknownLocale(const String & value);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
     void handleInvalidTime(const String & msg, const TiFlashError & error);
+    void appendWarning(const String & msg, int32_t code = 0);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
     bool shouldClipToZero();

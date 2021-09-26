@@ -3300,6 +3300,7 @@ private:
     }
 };
 
+template <typename Format>
 class FunctionFormat : public IFunction
 {
 public:
@@ -3324,12 +3325,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        auto number_of_arguments = arguments.size();
-        if (number_of_arguments != 2)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2", getName(), number_of_arguments),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
         auto first_argument = arguments[0];
         if (!first_argument->isFloatingPoint() && !first_argument->isDecimal())
             throw Exception(
@@ -3430,6 +3425,7 @@ public:
 
 private:
     const Context & context;
+
     // format_max_decimals limits the maximum number of decimal digits for result of
     // function `format`, this value is same as `FORMAT_MAX_DECIMALS` in MySQL source code.
     static constexpr size_t format_max_decimals = 30;
@@ -3480,7 +3476,7 @@ private:
         // copy/move for modify.
         std::string current_number_str = std::forward<T>(number_str);
         roundFormatNumberString(current_number_str, max_num_decimals);
-        formatAsEnUs2Buffer(current_number_str, max_num_decimals, buffer);
+        Format::apply(current_number_str, max_num_decimals, buffer);
         copyFromBuffer(buffer, res_data, res_offsets);
     }
 
@@ -3543,8 +3539,11 @@ private:
             }
         }
     }
+};
 
-    static void formatAsEnUs2Buffer(std::string & number, size_t precision, std::string & buffer)
+struct FormatWithEnUS
+{
+    static void apply(std::string & number, size_t precision, std::string & buffer)
     {
         buffer.clear();
         if (number[0] == '-' && number[1] == '.')
@@ -3630,10 +3629,7 @@ public:
         return std::make_shared<FunctionFormatWithLocale>(context_);
     }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     bool useDefaultImplementationForNulls() const override { return false; }
 
@@ -3641,12 +3637,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        auto number_of_arguments = arguments.size();
-        if (number_of_arguments != 3)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 3", getName(), number_of_arguments),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
         auto first_argument = removeNullable(arguments[0]);
         if (!first_argument->isFloatingPoint() && !first_argument->isDecimal())
             throw Exception(
@@ -3673,7 +3663,8 @@ public:
         const auto * locale_raw = block.getByPosition(arguments[2]).column.get();
         handleLocale(locale_raw);
 
-        static DefaultExecutable forward_function{std::make_shared<FunctionFormat>(context)};
+        // todo support switch different locale in a block.
+        static DefaultExecutable forward_function{std::make_shared<FunctionFormat<FormatWithEnUS>>(context)};
         const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
         forward_function.execute(block, forward_arguments, result);
     }
@@ -3691,16 +3682,18 @@ private:
         {
             if (locale_const->onlyNull())
             {
+                const auto & msg = genWarningMsg("NULL");
                 for (size_t i = 0; i < column_size; ++i)
-                    context.getDAGContext()->handleUnknownLocale("NULL");
+                    context.getDAGContext()->appendWarning(msg);
             }
             else
             {
                 const String value = locale_const->getValue<String>();
                 if (!boost::iequals(value, supported_locale))
                 {
+                    const auto & msg = genWarningMsg(value);
                     for (size_t i = 0; i < column_size; ++i)
-                        context.getDAGContext()->handleUnknownLocale(value);
+                        context.getDAGContext()->appendWarning(msg);
                 }
             }
         }
@@ -3711,15 +3704,20 @@ private:
             {
                 locale_raw->get(i, locale_field);
                 if (locale_field.isNull())
-                    context.getDAGContext()->handleUnknownLocale("NULL");
+                    context.getDAGContext()->appendWarning(genWarningMsg("NULL"));
                 else
                 {
                     String value = locale_field.get<String>();
                     if (!boost::iequals(value, supported_locale))
-                        context.getDAGContext()->handleUnknownLocale(value);
+                        context.getDAGContext()->appendWarning(genWarningMsg(value));
                 }
             }
         }
+    }
+
+    static std::string genWarningMsg(const std::string & value)
+    {
+        return fmt::format("Unknown locale: \'{}\'", value);
     }
 };
 
@@ -3790,7 +3788,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
     factory.registerFunction<FunctionSubStringIndex>();
-    factory.registerFunction<FunctionFormat>();
+    factory.registerFunction<FunctionFormat<FormatWithEnUS>>();
     factory.registerFunction<FunctionFormatWithLocale>();
 }
 } // namespace DB
