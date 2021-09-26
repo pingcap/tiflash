@@ -1,6 +1,6 @@
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/ChecksumBuffer.h>
-#include <Server/DMTool.h>
+#include <Server/DMTool/DMTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 
 #include <boost/program_options.hpp>

@@ -60,7 +60,7 @@ target_link_libraries (clickhouse-compressor-lib clickhouse_common_io ${Boost_PR
 add_library (clickhouse-format-lib ${SPLIT_SHARED} Format.cpp)
 target_link_libraries (clickhouse-format-lib dbms clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 
-add_library(tiflash-dmtool-lib ${SPLIT_SHARED} DMTool.cpp DMToolBench.cpp DMToolMigrate.cpp DMToolInspect.cpp)
+add_library(tiflash-dmtool-lib ${SPLIT_SHARED} DMTool/DMTool.cpp DMTool/DMToolBench.cpp DMTool/DMToolMigrate.cpp DMTool/DMToolInspect.cpp)
 target_link_libraries(tiflash-dmtool-lib dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_include_directories(tiflash-dmtool-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
 
@@ -87,7 +87,7 @@ if (CLICKHOUSE_SPLIT_BINARY)
     target_link_libraries (clickhouse-compressor clickhouse-compressor-lib)
     add_executable (clickhouse-format clickhouse-format.cpp)
     target_link_libraries (clickhouse-format clickhouse-format-lib)
-    add_executable (tiflash-dmtool tiflash-dmtool.cpp)
+    add_executable (tiflash-dmtool DMTool/tiflash-dmtool.cpp)
     target_link_libraries (tiflash-dmtool tiflash-dmtool-lib)
 
     set (CLICKHOUSE_ALL_TARGETS clickhouse-server clickhouse-client clickhouse-local clickhouse-benchmark clickhouse-performance-test

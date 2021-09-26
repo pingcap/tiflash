@@ -2,7 +2,7 @@
 #include <Encryption/MockKeyManager.h>
 #include <IO/ChecksumBuffer.h>
 #include <Poco/Path.h>
-#include <Server/DMTool.h>
+#include <Server/DMTool/DMTool.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DMContext.h>

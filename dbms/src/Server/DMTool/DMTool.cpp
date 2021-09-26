@@ -1,4 +1,4 @@
-#include <Server/DMTool.h>
+#include <Server/DMTool/DMTool.h>
 
 #include <boost/program_options.hpp>
 #include <iostream>

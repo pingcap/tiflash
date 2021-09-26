@@ -22,7 +22,7 @@
 #include "LocalServer.h"
 #endif
 #if ENABLE_TIFLASH_DMTOOL
-#include <Server/DMTool.h>
+#include <Server/DMTool/DMTool.h>
 #endif
 #include <Common/StringUtils/StringUtils.h>
 
