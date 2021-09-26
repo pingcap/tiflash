@@ -21,9 +21,7 @@
 #endif
 #include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
-#include <Common/ReloadableSplitterChannel.h>
 #include <Common/TiFlashBuildInfo.h>
-#include <Common/TiFlashLogFileChannel.h>
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
@@ -37,7 +35,9 @@
 #include <Poco/ErrorHandler.h>
 #include <Poco/Exception.h>
 #include <Poco/Ext/LevelFilterChannel.h>
+#include <Poco/Ext/ReloadableSplitterChannel.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <Poco/Ext/TiFlashLogFileChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -741,7 +741,6 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     Poco::AutoPtr<DB::ReloadableSplitterChannel> split = new DB::ReloadableSplitterChannel;
 
     auto log_level = normalize(config.getString("logger.level", "debug"));
-    auto rotation = config.getRawString("logger.size", "100M");
     const auto log_path = config.getString("logger.log", "");
     if (!log_path.empty())
     {
@@ -830,17 +829,16 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     {
         Logger & cur_logger = Logger::root().get(name);
         cur_logger.setLevel(log_level);
-        if (!cur_logger.getChannel())
+        Poco::Channel * cur_logger_channel = cur_logger.getChannel();
+        if (!cur_logger_channel)
         {
             continue;
         }
-        Poco::Channel & cur_logger_channel = *cur_logger.getChannel();
         // only loggers created after buildLoggers() need to change properties, types of channel in them must be ReloadableSplitterChannel
-        // typeid should be applied to a polymorphic class type but not a pointer, see https://stackoverflow.com/questions/17010884/typeid-for-polymorphic-pointers
-        if (typeid(cur_logger_channel) == typeid(DB::ReloadableSplitterChannel))
+        if (typeid(*cur_logger_channel) == typeid(DB::ReloadableSplitterChannel))
         {
-            DB::ReloadableSplitterChannel * splitter_channel = dynamic_cast<DB::ReloadableSplitterChannel *>(&cur_logger_channel);
-            splitter_channel->changeProperties(logger(), config);
+            DB::ReloadableSplitterChannel * splitter_channel = dynamic_cast<DB::ReloadableSplitterChannel *>(cur_logger_channel);
+            splitter_channel->changeProperties(config);
         }
     }
 

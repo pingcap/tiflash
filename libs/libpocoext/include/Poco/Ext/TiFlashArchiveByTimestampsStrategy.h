@@ -7,10 +7,10 @@ class TiFlashArchiveByTimestampsStrategy : public Poco::ArchiveByTimestampStrate
 {
 public:
     inline static const std::string suffix_fmt = "%Y-%m-%d-%H:%M:%S.%i";
-    Poco::LogFile * archive(Poco::LogFile * pFile) override
+    Poco::LogFile * archive(Poco::LogFile * p_file) override
     {
-        std::string path = pFile->path();
-        delete pFile;
+        std::string path = p_file->path();
+        delete p_file;
         std::string archPath = path;
         archPath.append(".");
         Poco::DateTimeFormatter::append(archPath, DT().timestamp(), suffix_fmt);

@@ -10,10 +10,7 @@
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/TOMLConfiguration.h>
-#include <Common/ReloadableSplitterChannel.h>
-#include <Common/TiFlashLogFileChannel.h>
 #include <Interpreters/Quota.h>
-#include <Poco/Ext/LevelFilterChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/StorageConfigParser.h>
@@ -25,7 +22,7 @@
 #include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <daemon/BaseDaemon.h>
+
 namespace DB
 {
 namespace tests
@@ -306,12 +303,6 @@ public:
 protected:
     Poco::Logger * log;
     Settings origin_settings;
-    void clearFiles(String path)
-    {
-        Poco::File file(path);
-        if (file.exists())
-            file.remove(true);
-    }
 };
 
 
@@ -806,104 +797,6 @@ dt_page_gc_low_write_prob = 0.2
         verifyStoragePoolReloadConfig(storage_pool);
     }
     global_ctx.setSettings(origin_settings);
-}
-CATCH
-
-class TestMutableSplitterChannel : public ReloadableSplitterChannel
-{
-public:
-};
-
-static void verifyChannelConfig(Poco::Channel & channel, Poco::Util::AbstractConfiguration & config)
-{
-    if (typeid(channel) == typeid(TiFlashLogFileChannel))
-    {
-        TiFlashLogFileChannel * fileChannel = dynamic_cast<TiFlashLogFileChannel *>(&channel);
-        ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_ROTATION), config.getRawString("logger.size", "100M"));
-        ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "1"));
-        return;
-    }
-    if (typeid(channel) == typeid(Poco::LevelFilterChannel))
-    {
-        Poco::LevelFilterChannel * levelFilterChannel = dynamic_cast<Poco::LevelFilterChannel *>(&channel);
-        verifyChannelConfig(*levelFilterChannel->getChannel(), config);
-        return;
-    }
-    if (typeid(channel) == typeid(Poco::FormattingChannel))
-    {
-        Poco::FormattingChannel * formattingChannel = dynamic_cast<Poco::FormattingChannel *>(&channel);
-        verifyChannelConfig(*formattingChannel->getChannel(), config);
-    }
-}
-
-TEST_F(UsersConfigParser_test, ReloadLoggerConfig)
-try
-{
-    Strings tests = {
-        R"(
-[profiles]
-[profiles.default]
-max_rows_in_set = 455
-dt_page_gc_low_write_prob = 0.2
-[logger]
-count = 20
-errorlog = "./tmp/log/tiflash_error.log"
-level = "debug"
-log = "./tmp/log/tiflash.log"
-size = "1M"
-        )",
-        R"(
-[application]
-runAsDaemon = false
-[profiles]
-[profiles.default]
-max_rows_in_set = 455
-dt_page_gc_low_write_prob = 0.2
-[logger]
-count = 10
-errorlog = "./tmp/log/tiflash_error.log"
-level = "debug"
-log = "./tmp/log/tiflash.log"
-size = "1K"
-        )",
-        R"(
-[profiles]
-[profiles.default]
-max_rows_in_set = 455
-dt_page_gc_low_write_prob = 0.2
-[logger]
-count = 1
-errorlog = "./tmp/log/tiflash_error.log"
-level = "debug"
-log = "./tmp/log/tiflash.log"
-size = "1"
-        )",
-    };
-    BaseDaemon app;
-
-    auto verifyLoggersConfig = [](size_t logger_num, Poco::Util::AbstractConfiguration & config) {
-        for (size_t j = 0; j < logger_num; j++)
-        {
-            Poco::Logger & cur_logger = Poco::Logger::get(fmt::format("ReloadLoggerConfig_test{}", j));
-            ASSERT_NE(cur_logger.getChannel(), nullptr);
-            Poco::Channel & cur_logger_channel = *cur_logger.getChannel();
-            ASSERT_EQ(typeid(cur_logger_channel), typeid(DB::ReloadableSplitterChannel));
-            DB::ReloadableSplitterChannel * splitter_channel = dynamic_cast<DB::ReloadableSplitterChannel *>(&cur_logger_channel);
-            splitter_channel->setPropertiesValidator(verifyChannelConfig);
-            splitter_channel->validateProperties(config);
-        };
-    };
-
-    for (size_t i = 0; i < tests.size(); ++i)
-    {
-        const auto & test_case = tests[i];
-        auto config = loadConfigFromString(test_case);
-        app.buildLoggers(*config);
-        Poco::Logger::get(fmt::format("ReloadLoggerConfig_test{}", i));
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
-        verifyLoggersConfig(i + 1, *config);
-    }
-    clearFiles("./tmp/log");
 }
 CATCH
 } // namespace tests

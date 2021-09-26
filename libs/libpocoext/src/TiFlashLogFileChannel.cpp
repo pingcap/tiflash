@@ -1,15 +1,13 @@
-#include "TiFlashLogFileChannel.h"
-
+#include <Poco/ArchiveStrategy.h>
+#include <Poco/Ext/TiFlashArchiveByTimestampsStrategy.h>
+#include <Poco/Ext/TiFlashLogFileChannel.h>
 #include <Poco/LocalDateTime.h>
-
-#include "Poco/ArchiveStrategy.h"
-#include "Poco/String.h"
-#include "TiFlashArchiveByTimestampsStrategy.h"
+#include <Poco/String.h>
 namespace DB
 {
 void TiFlashLogFileChannel::setArchive(const std::string & archive)
 {
-    Poco::ArchiveStrategy * pStrategy = 0;
+    Poco::ArchiveStrategy * pStrategy = nullptr;
     if (archive == "number")
     {
         pStrategy = new Poco::ArchiveByNumberStrategy;
