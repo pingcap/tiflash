@@ -3,29 +3,29 @@
 #include <Poco/Ext/TiFlashLogFileChannel.h>
 #include <Poco/LocalDateTime.h>
 #include <Poco/String.h>
-namespace DB
+namespace Poco
 {
 void TiFlashLogFileChannel::setArchive(const std::string & archive)
 {
-    Poco::ArchiveStrategy * pStrategy = nullptr;
+    ArchiveStrategy * pStrategy = nullptr;
     if (archive == "number")
     {
-        pStrategy = new Poco::ArchiveByNumberStrategy;
+        pStrategy = new ArchiveByNumberStrategy;
     }
     else if (archive == "timestamp")
     {
         if (_times == "utc")
-            pStrategy = new TiFlashArchiveByTimestampsStrategy<Poco::DateTime>;
+            pStrategy = new TiFlashArchiveByTimestampsStrategy<DateTime>;
         else if (_times == "local")
-            pStrategy = new TiFlashArchiveByTimestampsStrategy<Poco::LocalDateTime>;
+            pStrategy = new TiFlashArchiveByTimestampsStrategy<LocalDateTime>;
         else
-            throw Poco::PropertyNotSupportedException("times", _times);
+            throw PropertyNotSupportedException("times", _times);
     }
     else
-        throw Poco::InvalidArgumentException("archive", archive);
+        throw InvalidArgumentException("archive", archive);
     delete _pArchiveStrategy;
     pStrategy->compress(_compress);
     _pArchiveStrategy = pStrategy;
     _archive = archive;
 }
-} // namespace DB
+} // namespace Poco

@@ -738,7 +738,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     bool is_daemon = config.getBool("application.runAsDaemon", false);
 
     // Split log and error log.
-    Poco::AutoPtr<DB::ReloadableSplitterChannel> split = new DB::ReloadableSplitterChannel;
+    Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
 
     auto log_level = normalize(config.getString("logger.level", "debug"));
     const auto log_path = config.getString("logger.log", "");
@@ -751,7 +751,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> log = new FormattingChannel(pf);
-        log_file = new DB::TiFlashLogFileChannel;
+        log_file = new Poco::TiFlashLogFileChannel;
         log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(log_path).absolute().toString());
         log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
         log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
@@ -775,7 +775,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> errorlog = new FormattingChannel(pf);
-        error_log_file = new DB::TiFlashLogFileChannel;
+        error_log_file = new Poco::TiFlashLogFileChannel;
         error_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(errorlog_path).absolute().toString());
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
         error_log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
@@ -835,9 +835,9 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
             continue;
         }
         // only loggers created after buildLoggers() need to change properties, types of channel in them must be ReloadableSplitterChannel
-        if (typeid(*cur_logger_channel) == typeid(DB::ReloadableSplitterChannel))
+        if (typeid(*cur_logger_channel) == typeid(Poco::ReloadableSplitterChannel))
         {
-            DB::ReloadableSplitterChannel * splitter_channel = dynamic_cast<DB::ReloadableSplitterChannel *>(cur_logger_channel);
+            Poco::ReloadableSplitterChannel * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
             splitter_channel->changeProperties(config);
         }
     }

@@ -43,9 +43,9 @@ static auto loadConfigFromString(const String & s)
 
 static void verifyChannelConfig(Poco::Channel & channel, Poco::Util::AbstractConfiguration & config)
 {
-    if (typeid(channel) == typeid(DB::TiFlashLogFileChannel))
+    if (typeid(channel) == typeid(Poco::TiFlashLogFileChannel))
     {
-        DB::TiFlashLogFileChannel * fileChannel = dynamic_cast<DB::TiFlashLogFileChannel *>(&channel);
+        Poco::TiFlashLogFileChannel * fileChannel = dynamic_cast<Poco::TiFlashLogFileChannel *>(&channel);
         ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_ROTATION), config.getRawString("logger.size", "100M"));
         ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "1"));
         return;
@@ -114,8 +114,8 @@ size = "1"
             Poco::Logger & cur_logger = Poco::Logger::get(fmt::format("ReloadLoggerConfig_test{}", j));
             ASSERT_NE(cur_logger.getChannel(), nullptr);
             Poco::Channel * cur_logger_channel = cur_logger.getChannel();
-            ASSERT_EQ(typeid(*cur_logger_channel), typeid(DB::ReloadableSplitterChannel));
-            DB::ReloadableSplitterChannel * splitter_channel = dynamic_cast<DB::ReloadableSplitterChannel *>(cur_logger_channel);
+            ASSERT_EQ(typeid(*cur_logger_channel), typeid(Poco::ReloadableSplitterChannel));
+            Poco::ReloadableSplitterChannel * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
             splitter_channel->setPropertiesValidator(verifyChannelConfig);
             splitter_channel->validateProperties(config);
         };
