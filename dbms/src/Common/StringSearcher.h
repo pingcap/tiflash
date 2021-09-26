@@ -76,7 +76,7 @@ private:
 #endif
 
 public:
-    [[maybe_unused]] StringSearcher(const char * const needle_, const size_t needle_size)
+    StringSearcher(const char * const needle_, const size_t needle_size)
         : needle{reinterpret_cast<const UInt8 *>(needle_)}
         , needle_size{needle_size}
     {
@@ -336,7 +336,7 @@ private:
 #endif
 
 public:
-    [[maybe_unused]] StringSearcher(const char * const needle_, const size_t needle_size)
+    StringSearcher(const char * const needle_, const size_t needle_size)
         : needle{reinterpret_cast<const UInt8 *>(needle_)}
         , needle_size{needle_size}
     {
@@ -521,7 +521,7 @@ private:
 #endif
 
 public:
-    [[maybe_unused]] StringSearcher(const char * const needle_, const size_t needle_size)
+    StringSearcher(const char * const needle_, const size_t needle_size)
         : needle{reinterpret_cast<const UInt8 *>(needle_)}
         , needle_size{needle_size}
     {
@@ -680,7 +680,7 @@ public:
 
 using ASCIICaseSensitiveStringSearcher = StringSearcher<true, true>;
 using ASCIICaseInsensitiveStringSearcher = StringSearcher<false, true>;
-using UTF8CaseSensitiveStringSearcher [[maybe_unused]] = StringSearcher<true, false>;
+using UTF8CaseSensitiveStringSearcher = StringSearcher<true, false>;
 using UTF8CaseInsensitiveStringSearcher = StringSearcher<false, false>;
 
 
@@ -695,7 +695,7 @@ struct LibCASCIICaseSensitiveStringSearcher
     const char * const needle;
     const size_t needle_size;
 
-    [[maybe_unused]] LibCASCIICaseSensitiveStringSearcher(const char * const needle, const size_t needle_size)
+    LibCASCIICaseSensitiveStringSearcher(const char * const needle, const size_t needle_size)
         : needle(needle)
         , needle_size(needle_size)
     {}
@@ -719,7 +719,7 @@ struct LibCASCIICaseInsensitiveStringSearcher
     const char * const needle;
     const size_t needle_size;
 
-    [[maybe_unused]] LibCASCIICaseInsensitiveStringSearcher(const char * const needle, const size_t needle_size)
+    LibCASCIICaseInsensitiveStringSearcher(const char * const needle, const size_t needle_size)
         : needle(needle)
         , needle_size(needle_size)
     {}

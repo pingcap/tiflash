@@ -20,7 +20,7 @@ inline bool endsWith(const StringRef & view, const char * prefix)
 }
 
 // case insensitive version of endsWith
-[[maybe_unused]] inline bool endsWithCI(const StringRef & view, const char * prefix)
+inline bool endsWithCI(const StringRef & view, const char * prefix)
 {
     return detail::endsWithCI(view.data, view.size, prefix, strlen(prefix));
 }
