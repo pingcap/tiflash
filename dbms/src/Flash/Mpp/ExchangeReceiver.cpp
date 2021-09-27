@@ -139,19 +139,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 }
 
                 {
-                    struct Tracker
-                    {
-                        Tracker()
-                        {
-                            GET_METRIC(tiflash_receiver_gauge, type_read_concurrency).Increment();
-                        }
-
-                        ~Tracker()
-                        {
-                            GET_METRIC(tiflash_receiver_gauge, type_read_concurrency).Decrement();
-                        }
-                    } tracker [[maybe_unused]];
-
                     packet->req_info = req_info;
                     packet->source_index = source_index;
                     bool success = reader->read(packet->packet.get());
@@ -173,6 +160,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     if (state == ExchangeReceiverState::NORMAL)
                     {
                         res_buffer.pushObject(packet);
+                        GET_METRIC(tiflash_receiver_gauge, type_read_buffer).Increment(packet->packet->ByteSizeLong());
                         cv.notify_all();
                     }
                     else
@@ -272,6 +260,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         else if (res_buffer.hasObjects())
         {
             res_buffer.popObject(packet);
+            GET_METRIC(tiflash_receiver_gauge, type_read_buffer).Decrement(packet->packet->ByteSizeLong());
             cv.notify_all();
         }
         else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
@@ -283,19 +272,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
     ExchangeReceiverResult result;
 
     {
-        struct Tracker
-        {
-            Tracker()
-            {
-                GET_METRIC(tiflash_receiver_gauge, type_decode_concurrency).Increment();
-            }
-
-            ~Tracker()
-            {
-                GET_METRIC(tiflash_receiver_gauge, type_decode_concurrency).Decrement();
-            }
-        } tracker [[maybe_unused]];
-
         assert(packet != nullptr && packet->packet != nullptr);
         if (packet->packet->has_error())
         {

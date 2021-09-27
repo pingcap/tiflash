@@ -206,12 +206,21 @@ namespace DB
       F(type_probe_threads, {"type", "probe_threads"}))                                                                                                                                               \
     M(tiflash_receiver_counter, "", Counter, /**/                                                                                                                                                     \
       F(type_in_bytes, {"type", "in_bytes"}),                                                                                                                                                         \
-      F(type_in_chunks, {"type", "in_chunks"}), \
+      F(type_in_chunks, {"type", "in_chunks"}),                                                                                                                                                       \
       F(type_in_blocks, {"type", "in_blocks"}))                                                                                                                                                       \
     M(tiflash_receiver_gauge, "", Gauge, /**/                                                                                                                                                         \
-      F(type_read_concurrency, {"type", "read_concurrency"}),                                                                                                                                         \
       F(type_read_threads, {"type", "read_threads"}),                                                                                                                                                 \
-      F(type_decode_concurrency, {"type", "decode_concurrency"}))
+      F(type_read_buffer, {"type", "read_buffer"}))                                                                                                                                                   \
+    M(tiflash_sender_counter, "", Counter, /**/                                                                                                                                                       \
+      F(type_broadcast_out_bytes, {"type", "broadcast_out_bytes"}),                                                                                                                                   \
+      F(type_broadcast_out_chunks, {"type", "broadcast_out_chunks"}),                                                                                                                                 \
+      F(type_broadcast_out_blocks, {"type", "broadcast_out_blocks"}),                                                                                                                                 \
+      F(type_partition_out_bytes, {"type", "partition_out_bytes"}),                                                                                                                                   \
+      F(type_partition_out_chunks, {"type", "partition_out_chunks"}),                                                                                                                                 \
+      F(type_partition_out_blocks, {"type", "partition_out_blocks"}))                                                                                                                                 \
+    M(tiflash_sender_gauge, "", Gauge, /**/                                                                                                                                                           \
+      F(type_write_threads, {"type", "write_threads"}),                                                                                                                                               \
+      F(type_write_buffer, {"type", "write_buffer"}))
 
 struct ExpBuckets
 {

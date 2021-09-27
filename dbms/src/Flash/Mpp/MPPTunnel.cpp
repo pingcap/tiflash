@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
@@ -92,6 +93,8 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         }
 
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
+        GET_METRIC(tiflash_sender_gauge, type_write_buffer).Increment(data.ByteSizeLong());
+
         if (close_after_write)
         {
             std::unique_lock<std::mutex> lk(mu);
@@ -109,11 +112,26 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
+    struct Tracker
+    {
+        Tracker()
+        {
+            GET_METRIC(tiflash_sender_gauge, type_write_threads).Increment();
+        }
+
+        ~Tracker()
+        {
+            GET_METRIC(tiflash_sender_gauge, type_write_threads).Decrement();
+        }
+    } tracker [[maybe_unused]];
+
     while (!finished)
     {
         /// TODO(fzh) reuse it later
         MPPDataPacketPtr res;
         send_queue.pop(res);
+        GET_METRIC(tiflash_sender_gauge, type_write_buffer).Decrement(res->ByteSizeLong());
+
         if (nullptr == res)
         {
             std::unique_lock<std::mutex> lk(mu);
