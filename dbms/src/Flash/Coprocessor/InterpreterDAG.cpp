@@ -77,6 +77,8 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
             dag.getDAGContext().getMPPTaskMeta(),
             max_streams,
             log);
+        /// although ExchangeReceiver support lazy init, current implementation require calling `init()` immediately
+        /// otherwise, its down stream task may hit write timeout error
         exchange_receiver->init();
         mpp_exchange_receiver_maps[dag_query_block.source_name] = exchange_receiver;
     }
