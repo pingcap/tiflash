@@ -193,7 +193,7 @@ try
 {
     size_t buff_size = 123;
     char buff_write[buff_size];
-    ;
+
     for (size_t i = 0; i < buff_size; i++)
     {
         buff_write[i] = i % 0xFF;
@@ -272,7 +272,6 @@ try
     enc_file_for_read.read(buff_read, buff_size);
     enc_file_for_read.close();
 
-    // std::cout << "buff_read : " << buff_read << std::endl;
     ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
 }
 CATCH
