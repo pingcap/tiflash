@@ -79,6 +79,8 @@ public:
 
     ~ExchangeReceiverBase();
 
+    void init();
+
     void cancel();
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -89,8 +91,6 @@ public:
     String getName() { return "ExchangeReceiver"; }
 
 private:
-    void setUpConnection();
-
     void readLoop(size_t source_index);
 
     std::shared_ptr<RPCContext> rpc_context;
@@ -111,6 +111,7 @@ private:
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
+    bool inited = false;
 
     LogWithPrefixPtr log;
 };

@@ -71,12 +71,14 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     }
     if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
+        auto exchange_receiver = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
             dag_query_block.source->exchange_receiver(),
             dag.getDAGContext().getMPPTaskMeta(),
             max_streams,
             log);
+        exchange_receiver->init();
+        mpp_exchange_receiver_maps[dag_query_block.source_name] = exchange_receiver;
     }
 }
 

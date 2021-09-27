@@ -47,7 +47,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(segment_merge_after_ingest_packs)                           \
     M(force_formal_page_file_not_exists)                          \
     M(force_legacy_or_checkpoint_page_file_exists)                \
-    M(exception_in_creating_set_input_stream)
+    M(exception_in_creating_set_input_stream)                     \
+    M(exception_in_alloc_thread_in_exchange_receiver)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(force_set_page_file_write_errno)                       \

@@ -1,9 +1,15 @@
 #include <Common/ThreadFactory.h>
+#include <Common/FailPoint.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_in_alloc_thread_in_exchange_receiver[];
+}
+
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
@@ -28,8 +34,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
         schema.push_back(std::make_pair(name, info));
     }
-
-    setUpConnection();
 }
 
 template <typename RPCContext>
@@ -56,12 +60,18 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::setUpConnection()
+void ExchangeReceiverBase<RPCContext>::init()
 {
-    for (size_t index = 0; index < source_num; ++index)
+    std::unique_lock<std::mutex> lk(mu);
+    if (!inited)
     {
-        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
-        workers.push_back(std::move(t));
+        for (size_t index = 0; index < source_num; ++index)
+        {
+            auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
+            workers.push_back(std::move(t));
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_alloc_thread_in_exchange_receiver);
+        }
+        inited = true;
     }
 }
 
@@ -218,6 +228,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
 {
+    if (!inited)
+        init();
     std::shared_ptr<ReceivedPacket> packet;
     {
         std::unique_lock<std::mutex> lock(mu);
