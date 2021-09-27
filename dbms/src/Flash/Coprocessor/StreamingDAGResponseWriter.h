@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -15,24 +16,30 @@
 
 namespace DB
 {
-
 /// Serializes the stream of blocks in TiDB DAG response format.
 template <class StreamWriterPtr>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
 public:
-    StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_, TiDB::TiDBCollators collators_,
-        tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
+    StreamingDAGResponseWriter(
+        StreamWriterPtr writer_,
+        std::vector<Int64> partition_col_ids_,
+        TiDB::TiDBCollators collators_,
+        tipb::ExchangeType exchange_type_,
+        Int64 records_per_chunk_,
+        tipb::EncodeType encodeType_,
+        std::vector<tipb::FieldType> result_field_types,
+        DAGContext & dag_context_,
+        const LogWithPrefixPtr & log_);
     void write(const Block & block) override;
     void finishWrite() override;
 
 private:
     template <bool for_last_response>
-    void ScheduleEncodeTask();
-    ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void batchWrite();
+    void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     template <bool for_last_response>
-    ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     tipb::ExchangeType exchange_type;
     StreamWriterPtr writer;
@@ -41,8 +48,7 @@ private:
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
     uint16_t partition_num;
-    ThreadPool thread_pool;
-    std::shared_ptr<LogWithPrefix> log;
+    LogWithPrefixPtr log;
 };
 
 } // namespace DB

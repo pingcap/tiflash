@@ -3,6 +3,7 @@
 #include <Core/Defines.h>
 #include <Core/Types.h>
 
+#include <chrono>
 #include <unordered_set>
 #include <vector>
 

@@ -94,15 +94,14 @@ struct MinCounterType
 template <UInt8 precision, int max_rank, typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode, typename Enable = void>
 class __attribute__((packed)) Denominator;
 
-namespace
+namespace details
 {
 /// Returns true if rank storage is big.
 constexpr bool isBigRankStore(UInt8 precision)
 {
     return precision >= 12;
 }
-
-} // namespace
+} // namespace details
 
 /// Used to deduce denominator type depending on options provided.
 template <typename HashValueType, typename DenominatorType, DenominatorMode denominator_mode, typename Enable = void>
@@ -136,7 +135,7 @@ private:
     using T = typename IntermediateDenominator<HashValueType, DenominatorType, denominator_mode>::Type;
 
 public:
-    Denominator(DenominatorType initial_value)
+    explicit Denominator(DenominatorType initial_value)
         : denominator(initial_value)
     {
     }
@@ -174,7 +173,7 @@ template <UInt8 precision, int max_rank, typename HashValueType, typename Denomi
 class __attribute__((packed)) Denominator<precision, max_rank, HashValueType, DenominatorType, denominator_mode, std::enable_if_t<details::isBigRankStore(precision) && denominator_mode == DenominatorMode::StableIfBig>>
 {
 public:
-    Denominator(DenominatorType initial_value)
+    explicit Denominator(DenominatorType initial_value)
     {
         rank_count[0] = initial_value;
     }
@@ -327,7 +326,7 @@ public:
 
         double final_estimate = fixRawEstimate(raw_estimate);
 
-        return static_cast<UInt64>(final_estimate + 0.5);
+        return static_cast<UInt64>(std::llround(final_estimate));
     }
 
     void merge(const HyperLogLogCounter & rhs)

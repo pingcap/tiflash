@@ -1381,7 +1381,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
         auto compression_settings = this->context.chooseCompressionSettings(
             part->bytes_on_disk,
             static_cast<double>(part->bytes_on_disk) / this->getTotalActiveSizeInBytes());
-        ExpressionBlockInputStream in(part_in, expression);
+        ExpressionBlockInputStream in(part_in, expression, nullptr);
 
         /** Don't write offsets for arrays, because ALTER never change them
          *  (MODIFY COLUMN could only change types of elements but never modify array sizes).

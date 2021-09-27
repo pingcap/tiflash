@@ -1,12 +1,12 @@
 #pragma once
 
+#include <Common/SipHash.h>
+
 #include <string>
 #include <tuple>
-#include <Common/SipHash.h>
 
 namespace DB
 {
-
 struct QualifiedTableName
 {
     std::string database;
@@ -31,12 +31,12 @@ struct QualifiedTableName
     }
 };
 
-}
+} // namespace DB
 
 namespace std
 {
-
-template <> struct hash<DB::QualifiedTableName>
+template <>
+struct hash<DB::QualifiedTableName>
 {
     using argument_type = DB::QualifiedTableName;
     using result_type = size_t;
@@ -47,4 +47,4 @@ template <> struct hash<DB::QualifiedTableName>
     }
 };
 
-}
+} // namespace std

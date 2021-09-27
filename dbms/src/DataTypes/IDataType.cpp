@@ -1,25 +1,20 @@
-#include <Columns/IColumn.h>
 #include <Columns/ColumnConst.h>
-
+#include <Columns/IColumn.h>
 #include <Common/Exception.h>
 #include <Common/escapeForFileName.h>
-
 #include <Core/Defines.h>
-
-#include <IO/WriteHelpers.h>
-
 #include <DataTypes/IDataType.h>
 #include <DataTypes/NestedUtils.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int MULTIPLE_STREAMS_REQUIRED;
-    extern const int LOGICAL_ERROR;
-}
+extern const int MULTIPLE_STREAMS_REQUIRED;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 void IDataType::updateAvgValueSizeHint(const IColumn & column, double & avg_value_size_hint)
@@ -68,7 +63,8 @@ size_t IDataType::getSizeOfValueInMemory() const
 }
 
 
-bool IDataType::isNullMap(const IDataType::SubstreamPath & path) {
+bool IDataType::isNullMap(const IDataType::SubstreamPath & path)
+{
     for (const Substream & elem : path)
     {
         if (elem.type == Substream::NullMap)
@@ -111,4 +107,4 @@ void IDataType::insertDefaultInto(IColumn & column) const
     column.insertDefault();
 }
 
-}
+} // namespace DB

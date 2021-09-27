@@ -30,12 +30,13 @@ private:
     struct less;
 
     /** Create an empty column of strings of fixed-length `n` */
-    ColumnFixedString(size_t n_)
+    explicit ColumnFixedString(size_t n_)
         : n(n_)
     {}
 
     ColumnFixedString(const ColumnFixedString & src)
-        : chars(src.chars.begin(), src.chars.end())
+        : COWPtrHelper<IColumn, ColumnFixedString>(src)
+        , chars(src.chars.begin(), src.chars.end())
         , n(src.n){};
 
 public:

@@ -3,17 +3,10 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ExpressionAnalyzer.h> /// SubqueriesForSets
-#include <Poco/Logger.h>
 
-
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB
 {
-
 /** Returns the data from the stream of blocks without changes, but
   * in the `readPrefix` function or before reading the first block
   * initializes all the passed sets.
@@ -22,12 +15,17 @@ class CreatingSetsBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     CreatingSetsBlockInputStream(
-        const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets_, const SizeLimits & network_transfer_limits, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
+        const BlockInputStreamPtr & input,
+        const SubqueriesForSets & subqueries_for_sets_,
+        const SizeLimits & network_transfer_limits,
+        const LogWithPrefixPtr & log_);
 
-    CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
+    CreatingSetsBlockInputStream(
+        const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-        const SizeLimits & network_transfer_limits, Int64 mpp_task_id_,
-        const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
+        const SizeLimits & network_transfer_limits,
+        Int64 mpp_task_id_,
+        const LogWithPrefixPtr & log_);
     ~CreatingSetsBlockInputStream()
     {
         for (auto & worker : workers)
@@ -64,7 +62,7 @@ private:
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
-    const std::shared_ptr<LogWithPrefix> log;
+    const LogWithPrefixPtr log;
 
     void createAll();
     void createOne(SubqueryForSet & subquery);
