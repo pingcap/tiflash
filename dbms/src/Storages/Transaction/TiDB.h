@@ -55,7 +55,7 @@ using DB::Timestamp;
     M(LongLong, 8, Int, Int64, false)                \
     M(Int24, 9, VarInt, Int32, true)                 \
     M(Date, 10, UInt, MyDate, false)                 \
-    M(Time, 11, Duration, Int64, false)              \
+    M(Time, 11, Duration, MyDuration, false)         \
     M(Datetime, 12, UInt, MyDateTime, false)         \
     M(Year, 13, Int, Int16, false)                   \
     M(NewDate, 14, Int, MyDate, false)               \

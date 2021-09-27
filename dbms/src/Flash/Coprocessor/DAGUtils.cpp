@@ -116,6 +116,14 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             ret = ret + "_ts";
         return ret;
     }
+    case tipb::ExprType::MysqlDuration:
+    {
+        if (!expr.has_field_type())
+            throw TiFlashException("MySQL Duration literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+        auto t = decodeDAGInt64(expr.val());
+        auto ret = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
+        return ret;
+    }
     case tipb::ExprType::ColumnRef:
         return getColumnNameForColumnExpr(expr, input_col);
     case tipb::ExprType::Count:
@@ -266,8 +274,14 @@ Field decodeLiteral(const tipb::Expr & expr)
         auto t = decodeDAGUInt64(expr.val());
         return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
     }
-    case tipb::ExprType::MysqlBit:
     case tipb::ExprType::MysqlDuration:
+    {
+        if (!expr.has_field_type())
+            throw TiFlashException("MySQL Duration literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+        auto t = decodeDAGInt64(expr.val());
+        return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
+    }
+    case tipb::ExprType::MysqlBit:
     case tipb::ExprType::MysqlEnum:
     case tipb::ExprType::MysqlHex:
     case tipb::ExprType::MysqlSet:
@@ -959,10 +973,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::AddDateDurationDecimal, "cast"},
 
     {tipb::ScalarFuncSig::Date, "toMyDate"},
-    //{tipb::ScalarFuncSig::Hour, "cast"},
-    //{tipb::ScalarFuncSig::Minute, "cast"},
-    //{tipb::ScalarFuncSig::Second, "cast"},
-    //{tipb::ScalarFuncSig::MicroSecond, "cast"},
+    {tipb::ScalarFuncSig::Hour, "hour"},
+    {tipb::ScalarFuncSig::Minute, "minute"},
+    {tipb::ScalarFuncSig::Second, "second"},
+    {tipb::ScalarFuncSig::MicroSecond, "microsecond"},
     {tipb::ScalarFuncSig::Month, "toMonth"},
     //{tipb::ScalarFuncSig::MonthName, "cast"},
 
