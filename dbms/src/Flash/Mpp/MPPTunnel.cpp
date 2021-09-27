@@ -44,9 +44,9 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             send_thread->join();
         }
         /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
+        MPPDataPacketPtr res;
         while (send_queue.size() > 0)
         {
-            MPPDataPacketPtr res;
             send_queue.pop(res);
         }
     }
@@ -56,6 +56,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     }
 }
 
+/// exit abnormally, such as being cancelled.
 template <typename Writer>
 void MPPTunnelBase<Writer>::close(const String & reason)
 {
@@ -67,17 +68,19 @@ void MPPTunnelBase<Writer>::close(const String & reason)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            if (!writer->Write(getPacketWithError(reason)))
-                throw Exception("Failed to write err");
+            send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
         }
         catch (...)
         {
             tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
         }
     }
-    send_queue.push(nullptr);
-    /// should wait the errors being sent in abnormal cases.
-    waitForFinish();
+    if (connected)
+    {
+        send_queue.push(nullptr);
+        /// should wait the errors being sent in abnormal cases.
+        cv_for_finished.wait(lk, [&]() { return finished.load(); });
+    }
 }
 
 template <typename Writer>
@@ -100,9 +103,9 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         }
 
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
+        std::unique_lock<std::mutex> lk(mu);
         if (close_after_write)
         {
-            std::unique_lock<std::mutex> lk(mu);
             if (!finished)
             {
                 /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
@@ -110,9 +113,8 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 LOG_TRACE(log, "sending a nullptr to finish write.");
             }
         }
-        else
+        else /// double check abnormal cases
         {
-            std::unique_lock<std::mutex> lk(mu);
             if (finished)
                 throw Exception("write to tunnel which is already closed," + sendLoop_msg);
         }
@@ -131,7 +133,6 @@ void MPPTunnelBase<Writer>::sendLoop()
         if (nullptr == res)
         {
             std::unique_lock<std::mutex> lk(mu);
-            sendLoop_msg = " finished after getting nullptr.";
             finishWithLock();
             return;
         }
@@ -148,19 +149,23 @@ void MPPTunnelBase<Writer>::sendLoop()
     }
 }
 
+/// done normally and being called exactly once after writing all packets
 template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
     LOG_TRACE(log, "ready to finish");
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
-        throw Exception("has finished");
+        throw Exception("has finished, " + sendLoop_msg);
     /// make sure to finish the tunnel after it is connected
     waitUntilConnectedOrCancelled(lk);
     lk.unlock();
     /// in normal cases, send nullptr to notify finish
     send_queue.push(nullptr);
     waitForFinish();
+    /// check whether sendLoop() normally or abnormally exited
+    if (!sendLoop_msg.empty())
+        throw Exception("sendLoop() exits unexpected, " + sendLoop_msg);
     LOG_TRACE(log, "done to finish");
 }
 
