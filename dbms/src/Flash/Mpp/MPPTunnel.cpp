@@ -127,10 +127,10 @@ void MPPTunnelBase<Writer>::sendLoop()
 {
     try
     {
+        /// TODO(fzh) reuse it later
+        MPPDataPacketPtr res;
         while (!finished)
         {
-            /// TODO(fzh) reuse it later
-            MPPDataPacketPtr res;
             send_queue.pop(res);
             if (nullptr == res)
             {
@@ -151,14 +151,17 @@ void MPPTunnelBase<Writer>::sendLoop()
     }
     catch (Exception & e)
     {
+        std::unique_lock<std::mutex> lk(mu);
         send_loop_msg = e.message();
     }
     catch (std::exception & e)
     {
+        std::unique_lock<std::mutex> lk(mu);
         send_loop_msg = e.what();
     }
     catch (...)
     {
+        std::unique_lock<std::mutex> lk(mu);
         send_loop_msg = "fatal error in sendLoop()";
     }
     if (!finished)
@@ -181,9 +184,6 @@ void MPPTunnelBase<Writer>::writeDone()
     /// in normal cases, send nullptr to notify finish
     send_queue.push(nullptr);
     waitForFinish();
-    /// check whether sendLoop() normally or abnormally exited
-    if (!send_loop_msg.empty())
-        throw Exception("sendLoop() exits unexpected, " + send_loop_msg);
     LOG_TRACE(log, "done to finish");
 }
 
@@ -208,6 +208,10 @@ void MPPTunnelBase<Writer>::waitForFinish()
     std::unique_lock<std::mutex> lk(mu);
 
     cv_for_finished.wait(lk, [&]() { return finished.load(); });
+
+    /// check whether sendLoop() normally or abnormally exited
+    if (!send_loop_msg.empty())
+        throw Exception("sendLoop() exits unexpected, " + send_loop_msg);
 }
 
 template <typename Writer>
