@@ -108,6 +108,10 @@ private:
         void onFinishThread(size_t thread_num);
         void onFinish();
         void onException(std::exception_ptr & exception, size_t thread_num);
+        String getName() const
+        {
+            return "ParallelAgg";
+        }
 
         ParallelAggregatingBlockInputStream & parent;
     };

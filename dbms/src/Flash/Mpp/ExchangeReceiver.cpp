@@ -1,3 +1,4 @@
+#include <Common/ThreadFactory.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
 
@@ -58,7 +59,10 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
-        workers.emplace_back(&ExchangeReceiverBase::readLoop, this, index);
+    {
+        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
+        workers.push_back(std::move(t));
+    }
 }
 
 static inline String getReceiverStateStr(const ExchangeReceiverState & s)
