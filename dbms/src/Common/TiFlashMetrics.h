@@ -193,12 +193,12 @@ namespace DB
       F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                                                                                    \
     M(tiflash_hash_join_build_in_bytes, "", Counter)                                                                                                                                                  \
     M(tiflash_hash_join_build_duration, "", Counter)                                                                                                                                                 \
-    M(tiflash_hash_join_build_executions, "", Gauge)                                                                                                                                                  \
+    M(tiflash_hash_join_build_concurrency, "", Gauge)                                                                                                                                                  \
     M(tiflash_hash_join_build_threads, "", Gauge)                                                                                                                                                     \
     M(tiflash_hash_join_probe_in_bytes, "", Counter)                                                                                                                                                  \
     M(tiflash_hash_join_probe_out_bytes, "", Counter)                                                                                                                                                 \
     M(tiflash_hash_join_probe_duration, "", Counter)                                                                                                                                                  \
-    M(tiflash_hash_join_probe_executions, "", Gauge)                                                                                                                                                  \
+    M(tiflash_hash_join_probe_concurrency, "", Gauge)                                                                                                                                                  \
     M(tiflash_hash_join_probe_threads, "", Gauge)
 
 struct ExpBuckets

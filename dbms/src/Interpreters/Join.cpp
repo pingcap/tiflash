@@ -1643,7 +1643,7 @@ void Join::joinBlock(Block & block) const
     if (!tracker)
         tracker = std::make_unique<ThreadTracker>();
     GET_METRIC(tiflash_hash_join_probe_in_bytes).Increment(block.bytes());
-    GET_METRIC(tiflash_hash_join_probe_executions).Increment();
+    GET_METRIC(tiflash_hash_join_probe_concurrency).Increment();
     auto begin_ts = std::chrono::steady_clock::now();
 
     std::shared_lock lock(rwlock);
@@ -1689,7 +1689,7 @@ void Join::joinBlock(Block & block) const
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_ts - begin_ts).count();
     GET_METRIC(tiflash_hash_join_probe_duration).Increment(duration);
     GET_METRIC(tiflash_hash_join_probe_out_bytes).Increment(block.bytes());
-    GET_METRIC(tiflash_hash_join_probe_executions).Decrement();
+    GET_METRIC(tiflash_hash_join_probe_concurrency).Decrement();
 }
 
 

@@ -30,7 +30,7 @@ Block HashJoinBuildBlockInputStream::readImpl()
         return block;
 
     GET_METRIC(tiflash_hash_join_build_in_bytes).Increment(block.bytes());
-    GET_METRIC(tiflash_hash_join_build_executions).Increment();
+    GET_METRIC(tiflash_hash_join_build_concurrency).Increment();
 
     auto begin_ts = std::chrono::steady_clock::now();
     join->insertFromBlock(block, stream_index);
@@ -38,7 +38,7 @@ Block HashJoinBuildBlockInputStream::readImpl()
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_ts - begin_ts).count();
 
     GET_METRIC(tiflash_hash_join_build_duration).Increment(duration);
-    GET_METRIC(tiflash_hash_join_build_executions).Decrement();
+    GET_METRIC(tiflash_hash_join_build_concurrency).Decrement();
 
     return block;
 }
