@@ -1,5 +1,8 @@
 set(JEMALLOC_SOURCE_DIR ${ClickHouse_SOURCE_DIR}/contrib/jemalloc)
 
+# TODO: Ensure whether we can enable it by default
+option (ENABLE_JEMALLOC_PROF "Enables jemalloc profiling under release mode" OFF)
+
 set(SRCS
 ${JEMALLOC_SOURCE_DIR}/src/arena.c
 ${JEMALLOC_SOURCE_DIR}/src/background_thread.c
@@ -68,6 +71,21 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     if (USE_UNWIND)
         target_compile_definitions (jemalloc PRIVATE -DJEMALLOC_PROF_LIBUNWIND=1)
         target_include_directories (jemalloc BEFORE PRIVATE ${UNWIND_INCLUDE_DIR})
+        target_include_directories (jemalloc BEFORE PRIVATE ${UNWIND_INCREMENTAL_DIR})
         target_link_libraries (jemalloc PRIVATE ${UNWIND_LIBRARY})
     endif ()
+else ()
+    if (ENABLE_JEMALLOC_PROF)
+        message(STATUS "Building with jemalloc prof is enabled")
+        target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_PROF=1)
+
+        if (USE_UNWIND)
+            target_compile_definitions (jemalloc PRIVATE -DJEMALLOC_PROF_LIBUNWIND=1)
+            target_include_directories (jemalloc BEFORE PRIVATE ${UNWIND_INCLUDE_DIR})
+            target_include_directories (jemalloc BEFORE PRIVATE ${UNWIND_INCREMENTAL_DIR})
+            target_link_libraries (jemalloc PRIVATE ${UNWIND_LIBRARY})
+        endif ()
+    else ()
+        message(STATUS "Building with jemalloc prof is disabled")
+    endif()
 endif ()
