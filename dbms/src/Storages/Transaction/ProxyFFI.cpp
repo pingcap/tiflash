@@ -176,11 +176,6 @@ BaseBuffView strIntoView(const std::string * str_ptr)
     return BaseBuffView{str_ptr->data(), str_ptr->size()};
 }
 
-BaseBuffView strIntoView(const std::string & view)
-{
-    return BaseBuffView{view.data(), view.size()};
-}
-
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const
 {
     return fn_is_encryption_enabled(proxy_ptr);
@@ -233,7 +228,7 @@ void CppStrVec::updateView()
 kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
 {
     auto res = batchReadIndex({req}, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
-    return std::move(res->at(0).first);
+    return std::move(res.at(0).first);
 }
 
 BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
@@ -247,7 +242,9 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpc
     CppStrVec data(std::move(req_strs));
     assert(req_strs.empty());
     auto outer_view = data.intoOuterView();
-    BatchReadIndexRes res(reinterpret_cast<BatchReadIndexRes::pointer>(fn_handle_batch_read_index(proxy_ptr, outer_view, timeout_ms)));
+    BatchReadIndexRes res;
+    res.reserve(req.size());
+    fn_handle_batch_read_index(proxy_ptr, outer_view, &res, timeout_ms);
     return res;
 }
 
@@ -368,7 +365,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
     }
 }
 
-void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
+void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)
     {
@@ -402,18 +399,11 @@ const char * IntoEncryptionMethodName(EncryptionMethod method)
     return encryption_method_name[static_cast<uint8_t>(method)];
 }
 
-RawVoidPtr GenBatchReadIndexRes(uint64_t cap)
-{
-    auto * res = new BatchReadIndexRes::element_type();
-    res->reserve(cap);
-    return res;
-}
-
 void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t region_id)
 {
     kvrpcpb::ReadIndexResponse res;
     res.ParseFromArray(view.data, view.len);
-    reinterpret_cast<BatchReadIndexRes::pointer>(resp)->emplace_back(std::move(res), region_id);
+    reinterpret_cast<BatchReadIndexRes *>(resp)->emplace_back(std::move(res), region_id);
 }
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)

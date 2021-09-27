@@ -9,13 +9,12 @@ class PSRunnable : public Poco::Runnable
 public:
     void run() override;
 
-    size_t getBytesUsed();
-    size_t getPagesUsed();
+    size_t getBytesUsed() const;
+    size_t getPagesUsed() const;
 
     virtual String description() = 0;
     virtual bool runImpl() = 0;
 
-public:
     size_t bytes_used = 0;
     size_t pages_used = 0;
 };
@@ -26,10 +25,11 @@ class PSWriter : public PSRunnable
 
 public:
     PSWriter(const PSPtr & ps_, DB::UInt32 index_)
-        : PSRunnable()
-        , ps(ps_)
+        : ps(ps_)
         , index(index_)
-    {}
+    {
+        gen.seed(time(0));
+    }
 
     virtual String description() override
     {
@@ -38,7 +38,7 @@ public:
 
     static void setApproxPageSize(size_t size_mb);
 
-    static DB::ReadBufferPtr genRandomData(const DB::PageId pageId, DB::MemHolder & holder);
+    static DB::ReadBufferPtr genRandomData(DB::PageId pageId, DB::MemHolder & holder);
 
     static void fillAllPages(const PSPtr & ps);
 
@@ -81,7 +81,7 @@ public:
     void setBatchBufferRange(size_t min, size_t max);
 
 protected:
-    std::vector<DB::ReadBufferPtr> buffPtrs;
+    std::vector<DB::ReadBufferPtr> buff_ptrs;
     size_t batch_buffer_nums = 100;
     size_t batch_buffer_size = 1 * DB::MB;
     size_t batch_buffer_limit = 0;
@@ -97,8 +97,7 @@ class PSReader : public PSRunnable
 {
 public:
     PSReader(const PSPtr & ps_, DB::UInt32 index_)
-        : PSRunnable()
-        , ps(ps_)
+        : ps(ps_)
         , index(index_)
     {}
 
