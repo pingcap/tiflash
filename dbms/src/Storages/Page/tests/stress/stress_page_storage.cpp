@@ -1,10 +1,10 @@
-#include <PSBackground.h>
-#include <PSRunnable.h>
 #include <PSStressEnv.h>
 #include <PSWorkload.h>
 
 namespace DB
 {
+// Define is_background_thread for this binary
+// It is required for `RateLimiter` but we do not link with `BackgroundProcessingPool`.
 #if __APPLE__ && __clang__
 __thread bool is_background_thread = false;
 #else

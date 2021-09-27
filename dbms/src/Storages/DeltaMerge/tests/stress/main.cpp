@@ -1,6 +1,6 @@
-#include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/tests/stress/DMStressProxy.h>
 #include <fmt/format.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -87,12 +87,12 @@ void init()
 #endif
 }
 
-void runProxy(const StressOptions & opts, Poco::Logger * log)
+void runProxy(const StressOptions & opts, const Poco::Logger * log)
 {
     try
     {
         UInt64 run_count = 0;
-        for (;;)
+        while (true)
         {
             auto start = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             run_count++;

@@ -1,16 +1,12 @@
 #pragma once
 
-#include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
-#include <Encryption/MockKeyManager.h>
 #include <PSBackground.h>
 #include <PSRunnable.h>
 #include <PSStressEnv.h>
-#include <Poco/Logger.h>
 #include <Poco/ThreadPool.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
-#include <TestUtils/MockDiskDelegator.h>
 #include <fmt/format.h>
 
 #define NORMAL_WORKLOAD 0
@@ -19,35 +15,36 @@ template <typename Child>
 class StressWorkloadFunc
 {
 public:
-    static String name_func()
+    static String nameFunc()
     {
         return Child::name();
     }
-    static UInt64 mask_func()
+    static UInt64 maskFunc()
     {
         return Child::mask();
     }
 };
 
+// Define a workload.
+// The derived class must define `static String name()` and `static UInt64 mask()`
+// and register itself by macro `REGISTER_WORKLOAD`
 class StressWorkload
 {
 public:
-    virtual ~StressWorkload(){};
+    explicit StressWorkload(StressEnv options_)
+        : options(options_)
+    {}
 
-public:
-    virtual void init(StressEnv & options_)
-    {
-        options = options_;
-    }
+    virtual ~StressWorkload() = default;
 
-    virtual String desc() { return ""; };
-    virtual void run(){};
+    virtual String desc() { return ""; }
+    virtual void run() {}
     virtual bool verify()
     {
         return true;
-    };
-    virtual void failed(){};
-    virtual void result();
+    }
+    virtual void onFailed() {}
+    virtual void onDumpResult();
 
 protected:
     void initPageStorage(DB::PageStorage::Config & config, String path_prefix = "");
@@ -86,7 +83,7 @@ protected:
         }
     }
 
-protected:
+
     StressEnv options;
     Poco::ThreadPool pool;
 
@@ -108,49 +105,51 @@ protected:
 class StressWorkloadManger
 {
 private:
-    using workload_func = std::function<StressWorkload *()>;
-    std::map<UInt64, std::pair<String, workload_func>> funcs;
-    UInt64 mask = 0;
+    using WorkloadCreator = std::function<std::shared_ptr<StressWorkload>(const StressEnv &)>;
+    // mask -> (name, creator)
+    std::map<UInt64, std::pair<String, WorkloadCreator>> funcs;
+    UInt64 registed_masks = 0;
 
-private:
-    StressWorkloadManger(){};
-    ~StressWorkloadManger(){};
+    StressWorkloadManger() = default;
 
 public:
+    StressWorkloadManger(const StressWorkloadManger &) = delete;
+    StressWorkloadManger(StressWorkloadManger &&) = delete;
+
     static StressWorkloadManger & getInstance()
     {
         static StressWorkloadManger instance;
         return instance;
     }
 
-    void setEnv(StressEnv & env_)
+    void setEnv(const StressEnv & env_)
     {
         options = env_;
     }
 
-    void reg(const String & name_, const UInt64 & mask_, const workload_func func)
+    void reg(const String & name, const UInt64 & mask, const WorkloadCreator workload_creator)
     {
-        if (mask_ & mask)
+        if (mask & registed_masks)
         {
-            fmt::print(stderr, "Current mask is {}, you can not regster mask {}.\n", mask, mask_);
+            fmt::print(stderr, "Current mask is {}, you can not register mask {}.\n", registed_masks, mask);
             assert(false);
         }
-        mask |= mask_;
-        funcs[mask_] = std::make_pair(name_, func);
+        registed_masks |= mask;
+        funcs[mask] = std::make_pair(name, workload_creator);
     }
 
-    std::pair<String, workload_func> get(const UInt64 mask_)
+    std::pair<String, WorkloadCreator> get(const UInt64 mask)
     {
-        auto it = funcs.find(mask_);
+        auto it = funcs.find(mask);
         if (it == funcs.end())
-            throw DB::Exception(fmt::format("No registed workload. mask {} . ", mask_));
+            throw DB::Exception(fmt::format("Not registed workload. mask {} . ", mask));
         return it->second;
     }
 
     String toWorkloadSelctedString() const
     {
         String debug_string = "Selected Workloads : \n";
-        for (auto & it : funcs)
+        for (const auto & it : funcs)
         {
             if (options.situation_mask & it.first)
             {
@@ -162,12 +161,12 @@ public:
 
     String toDebugStirng() const
     {
-        String debug_string = "Support Workloads : \n";
-        for (auto & it : funcs)
+        String debug_string = "Support Workloads: \n";
+        for (const auto & it : funcs)
         {
-            debug_string += fmt::format("   Name : {} , mask : {}. \n", it.second.first, it.first);
+            debug_string += fmt::format("   Name: {}, mask :{}. \n", it.second.first, it.first);
         }
-        debug_string += fmt::format("   Need to run all over? try use `-M {}`", mask);
+        debug_string += fmt::format("   Need to run all over? try use `-M {}`", registed_masks);
         return debug_string;
     }
 
@@ -180,9 +179,10 @@ private:
 #define REGISTER_WORKLOAD(WORKLOAD)                                                     \
     static void __attribute__((constructor)) _work_load_register_named_##WORKLOAD(void) \
     {                                                                                   \
-        StressWorkloadManger::getInstance().reg(WORKLOAD::name_func(),                  \
-                                                WORKLOAD::mask_func(),                  \
-                                                []() -> WORKLOAD * {                    \
-                                                    return new WORKLOAD();              \
-                                                });                                     \
+        StressWorkloadManger::getInstance().reg(                                        \
+            WORKLOAD::nameFunc(),                                                       \
+            WORKLOAD::maskFunc(),                                                       \
+            [](const StressEnv & opts) -> std::shared_ptr<StressWorkload> {             \
+                return std::make_shared<WORKLOAD>(opts);                                \
+            });                                                                         \
     }

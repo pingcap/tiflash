@@ -11,6 +11,7 @@
 ///   including <common/defines.h>
 /// - it should not have fallback to 0,
 ///   since this may create false-positive detection (common problem)
+// clang-format off
 #if defined(__clang__) && defined(__has_feature)
 #    define ch_has_feature __has_feature
 #endif
@@ -117,8 +118,64 @@
 #    define ALWAYS_INLINE_NO_SANITIZE_UNDEFINED ALWAYS_INLINE
 #endif
 
+#define TIFLASH_TEMPLATE(...) template <__VA_ARGS__>
+#define TIFLASH_MACRO_ARGS(...) __VA_ARGS__
+
+#define TIFLASH_MACRO_CONCAT_IMPL(X, Y) X ## Y
+/// \name TIFLASH_MACRO_CONCAT
+/// \details Concat two language terms (macro expanded).
+/// If you concern about why do we need two levels of macros,
+/// please check: https://gcc.gnu.org/onlinedocs/cpp/Argument-Prescan.html
+/// TL;DR, concatenation operation in macro will forbid pre-scanning
+/// and hence stop the macro in the operands being expanded.
+#define TIFLASH_MACRO_CONCAT(X, Y) TIFLASH_MACRO_CONCAT_IMPL(X, Y)
+// clang-format on
+
 /// A template function for suppressing warnings about unused variables or function results.
 template <typename... Args>
 constexpr void UNUSED(Args &&... args [[maybe_unused]])
 {
 }
+
+/// \name TIFLASH_NO_OPTIMIZE
+/// \tparam T arbitrary type
+/// \param var universal variable reference
+/// \details stop the compiler from optimizing out a variable; this
+/// can be useful in debug or benchmark
+/// \example
+/// \code{.cpp}
+/// for (size_t i = 0; i < loop_times; ++i) {
+///     TIFLASH_NO_OPTIMIZE(i);
+/// } // the loop will not be optimized out
+/// \endcode
+/// the code will yield
+/// \code{.asm}
+///        cmp     w0, 0
+///        ble     .L1
+///        mov     w1, 0
+///.L3:
+///        add     w1, w1, 1
+///        cmp     w0, w1
+///        bne     .L3
+///.L1:
+///        ret
+/// \endcode
+template <typename T>
+static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
+{
+    asm volatile(""
+                 :
+                 : "r,m"(var)
+                 : "memory");
+}
+
+/*!
+ * \def TIFLASH_DUMMY_FUNCTION_DEFINITION
+ * Clang shows warning when there aren't any objects to apply pragma.
+ * To prevent this warning we define this function inside every macros with pragmas.
+ */
+#ifdef __clang__
+#define TIFLASH_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void TIFLASH_MACRO_CONCAT(__dummy_function_definition_, __LINE__)();
+#else
+#define TIFLASH_DUMMY_FUNCTION_DEFINITION
+#endif

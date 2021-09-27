@@ -78,6 +78,7 @@ void PSScanner::start()
     scanner_timer.start(Poco::TimerCallback<PSScanner>(*this, &PSScanner::onTime));
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void StressTimeout::onTime(Poco::Timer & /* t */)
 {
     LOG_INFO(StressEnv::logger, "timeout.");

@@ -1,33 +1,18 @@
 
-#include "PSStressEnv.h"
-
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <PSStressEnv.h>
 #include <PSWorkload.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <signal.h>
 
 #include <boost/program_options.hpp>
-
-int StressEnvStatus::isSuccess()
-{
-    return status > 0 ? 0 : (int)status;
-}
-
-bool StressEnvStatus::stat()
-{
-    return status == STATUS_LOOP;
-}
-
-void StressEnvStatus::setStat(enum StressEnvStat status_)
-{
-    status = status_;
-}
 
 Poco::Logger * StressEnv::logger;
 void StressEnv::initGlobalLogger()
@@ -54,11 +39,10 @@ StressEnv StressEnv::parse(int argc, char ** argv)
         ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots") //
         ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay") //
         ("avg_page_size", value<UInt32>()->default_value(1), "avg size for each page(MiB)") //
-        ("rand_seed", value<UInt32>()->default_value(0x123987), "random seed") //
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
         ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable") //
         ("status_interval,S", value<UInt32>()->default_value(1), "Status statistics interval. 0 means no statistics") //
-        ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially,example -M 0x2"); //
+        ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially, example -M 2"); //
 
     po::variables_map options;
     po::store(po::parse_command_line(argc, argv, desc), options);
@@ -80,7 +64,6 @@ StressEnv StressEnv::parse(int argc, char ** argv)
     opt.read_delay_ms = options["read_delay_ms"].as<UInt32>();
     opt.num_writer_slots = options["writer_slots"].as<UInt32>();
     opt.avg_page_size_mb = options["avg_page_size"].as<UInt32>();
-    opt.rand_seed = options["rand_seed"].as<UInt32>();
     opt.status_interval = options["status_interval"].as<UInt32>();
     opt.situation_mask = options["situation_mask"].as<UInt64>();
 
@@ -112,9 +95,6 @@ void StressEnv::setup()
     {
         DB::FailPointHelper::enableFailPoint(fp);
     }
-
-    // set random seed
-    srand(rand_seed);
 
     // drop dir if exists
     bool all_directories_not_exist = true;

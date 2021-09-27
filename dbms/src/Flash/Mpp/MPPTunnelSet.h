@@ -1,15 +1,18 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
+#include <Flash/Mpp/MPPTunnel.h>
 #include <tipb/select.pb.h>
 
-#include <Flash/Mpp/MPPTunnel.h>
+#include <boost/noncopyable.hpp>
 
 namespace DB
 {
-class MPPTunnelSet : private boost::noncopyable
+template <typename Tunnel>
+class MPPTunnelSetBase : private boost::noncopyable
 {
 public:
+    using TunnelPtr = std::shared_ptr<Tunnel>;
+
     void clearExecutionSummaries(tipb::SelectResponse & response);
 
     /// for both broadcast writing and partition writing, only
@@ -28,12 +31,19 @@ public:
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
 
-    void addTunnel(const MPPTunnelPtr & tunnel) { tunnels.push_back(tunnel); }
+    void addTunnel(const TunnelPtr & tunnel) { tunnels.push_back(tunnel); }
+
 private:
-    std::vector<MPPTunnelPtr> tunnels;
+    std::vector<TunnelPtr> tunnels;
+};
+
+class MPPTunnelSet : public MPPTunnelSetBase<MPPTunnel>
+{
+public:
+    using Base = MPPTunnelSetBase<MPPTunnel>;
+    using Base::Base;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 } // namespace DB
-
