@@ -130,7 +130,8 @@ void MPPTunnelBase<Writer>::sendLoop()
         /// TODO(fzh) reuse it later
         MPPDataPacketPtr res;
         send_queue.pop(res);
-        GET_METRIC(tiflash_sender_gauge, type_write_buffer).Decrement(res->ByteSizeLong());
+        if (!res)
+            GET_METRIC(tiflash_sender_gauge, type_write_buffer).Decrement(res->ByteSizeLong());
 
         if (nullptr == res)
         {
