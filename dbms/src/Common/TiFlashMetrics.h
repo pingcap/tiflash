@@ -191,15 +191,27 @@ namespace DB
       F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                                                                                  \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge, /**/                                                                                 \
       F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                                                                                    \
-    M(tiflash_hash_join_build_in_bytes, "", Counter)                                                                                                                                                  \
-    M(tiflash_hash_join_build_duration, "", Counter)                                                                                                                                                 \
-    M(tiflash_hash_join_build_concurrency, "", Gauge)                                                                                                                                                  \
-    M(tiflash_hash_join_build_threads, "", Gauge)                                                                                                                                                     \
-    M(tiflash_hash_join_probe_in_bytes, "", Counter)                                                                                                                                                  \
-    M(tiflash_hash_join_probe_out_bytes, "", Counter)                                                                                                                                                 \
-    M(tiflash_hash_join_probe_duration, "", Counter)                                                                                                                                                  \
-    M(tiflash_hash_join_probe_concurrency, "", Gauge)                                                                                                                                                  \
-    M(tiflash_hash_join_probe_threads, "", Gauge)
+    M(tiflash_hash_join_counter, "", Counter, /**/                                                                                                                                                    \
+      F(type_build_in_bytes, {"type", "build_in_bytes"}),                                                                                                                                             \
+      F(type_build_in_blocks, {"type", "build_in_blocks"}),                                                                                                                                           \
+      F(type_build_duration, {"type", "build_duration"}),                                                                                                                                             \
+      F(type_probe_in_bytes, {"type", "probe_in_bytes"}),                                                                                                                                             \
+      F(type_probe_in_blocks, {"type", "probe_in_blocks"}),                                                                                                                                           \
+      F(type_probe_duration, {"type", "probe_duration"}),                                                                                                                                             \
+      F(type_probe_out_bytes, {"type", "probe_out_bytes"}))                                                                                                                                           \
+    M(tiflash_hash_join_gauge, "", Gauge, /**/                                                                                                                                                        \
+      F(type_build_concurrency, {"type", "build_concurrency"}),                                                                                                                                       \
+      F(type_build_threads, {"type", "build_threads"}),                                                                                                                                               \
+      F(type_probe_concurrency, {"type", "probe_concurrency"}),                                                                                                                                       \
+      F(type_probe_threads, {"type", "probe_threads"}))                                                                                                                                               \
+    M(tiflash_receiver_counter, "", Counter, /**/                                                                                                                                                     \
+      F(type_in_bytes, {"type", "in_bytes"}),                                                                                                                                                         \
+      F(type_in_chunks, {"type", "in_chunks"}), \
+      F(type_in_blocks, {"type", "in_blocks"}))                                                                                                                                                       \
+    M(tiflash_receiver_gauge, "", Gauge, /**/                                                                                                                                                         \
+      F(type_read_concurrency, {"type", "read_concurrency"}),                                                                                                                                         \
+      F(type_read_threads, {"type", "read_threads"}),                                                                                                                                                 \
+      F(type_decode_concurrency, {"type", "decode_concurrency"}))
 
 struct ExpBuckets
 {

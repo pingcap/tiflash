@@ -1,4 +1,5 @@
 #include <Common/ThreadFactory.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
 
@@ -85,6 +86,19 @@ static inline String getReceiverStateStr(const ExchangeReceiverState & s)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 {
+    struct ThreadTracker
+    {
+        ThreadTracker()
+        {
+            GET_METRIC(tiflash_receiver_gauge, type_read_threads).Increment();
+        }
+
+        ~ThreadTracker()
+        {
+            GET_METRIC(tiflash_receiver_gauge, type_read_threads).Decrement();
+        }
+    } tracker [[maybe_unused]];
+
     bool meet_error = false;
     String local_err_msg;
 
@@ -123,17 +137,36 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         break;
                     }
                 }
-                packet->req_info = req_info;
-                packet->source_index = source_index;
-                bool success = reader->read(packet->packet.get());
-                if (!success)
-                    break;
-                else
-                    has_data = true;
-                if (packet->packet->has_error())
+
                 {
-                    throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                    struct Tracker
+                    {
+                        Tracker()
+                        {
+                            GET_METRIC(tiflash_receiver_gauge, type_read_concurrency).Increment();
+                        }
+
+                        ~Tracker()
+                        {
+                            GET_METRIC(tiflash_receiver_gauge, type_read_concurrency).Decrement();
+                        }
+                    } tracker [[maybe_unused]];
+
+                    packet->req_info = req_info;
+                    packet->source_index = source_index;
+                    bool success = reader->read(packet->packet.get());
+                    if (!success)
+                        break;
+                    else
+                        has_data = true;
+                    if (packet->packet->has_error())
+                    {
+                        throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                    }
+
+                    GET_METRIC(tiflash_receiver_counter, type_in_bytes).Increment(packet->packet->ByteSizeLong());
                 }
+
                 {
                     std::unique_lock<std::mutex> lock(mu);
                     cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
@@ -246,25 +279,44 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
-    assert(packet != nullptr && packet->packet != nullptr);
-    ExchangeReceiverResult result;
-    if (packet->packet->has_error())
+
     {
-        result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
-    }
-    else
-    {
-        auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(packet->packet->data()))
+        struct Tracker
         {
-            result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
+            Tracker()
+            {
+                GET_METRIC(tiflash_receiver_gauge, type_decode_concurrency).Increment();
+            }
+
+            ~Tracker()
+            {
+                GET_METRIC(tiflash_receiver_gauge, type_decode_concurrency).Decrement();
+            }
+        } tracker [[maybe_unused]];
+
+        assert(packet != nullptr && packet->packet != nullptr);
+        ExchangeReceiverResult result;
+        if (packet->packet->has_error())
+        {
+            result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
         }
         else
         {
-            result = {resp_ptr, packet->source_index, packet->req_info};
+            auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+            if (!resp_ptr->ParseFromString(packet->packet->data()))
+            {
+                result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
+            }
+            else
+            {
+                result = {resp_ptr, packet->source_index, packet->req_info};
+
+                GET_METRIC(tiflash_receiver_counter, type_in_chunks).Increment(resp_ptr->chunks_size());
+            }
         }
+        packet->packet->Clear();
     }
-    packet->packet->Clear();
+
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
     res_buffer.pushEmpty(std::move(packet));
