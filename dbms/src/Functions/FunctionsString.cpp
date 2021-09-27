@@ -3325,7 +3325,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         auto first_argument = arguments[0];
-        if (!first_argument->isFloatingPoint() && !first_argument->isDecimal())
+        if (!first_argument->isNumber() && !first_argument->isDecimal())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -3338,7 +3338,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    /// string format(decimal/float, int/uint)
+    /// string format(number/decimal, int/uint)
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto number_base_type = block.getByPosition(arguments[0]).type;
@@ -3431,7 +3431,15 @@ private:
             DataTypeDecimal128,
             DataTypeDecimal256,
             DataTypeFloat32,
-            DataTypeFloat64>(type.get(), std::forward<F>(f));
+            DataTypeFloat64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
     }
 
     template <typename F>
@@ -3462,8 +3470,10 @@ private:
     {
         if constexpr (IsDecimal<T>)
             return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
-        else
+        else if constexpr (std::is_floating_point_v<T>)
             return TiDBFloatingRound<T, T>::eval(number, max_num_decimals);
+        else
+            return number;
     }
 
     template <typename T>
@@ -3471,7 +3481,7 @@ private:
     {
         if constexpr (IsDecimal<T>)
             return number.toString(info.output_scale);
-        else /// Float
+        else
             return fmt::format("{}", number);
     }
 
@@ -3599,7 +3609,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         auto first_argument = removeNullable(arguments[0]);
-        if (!first_argument->isFloatingPoint() && !first_argument->isDecimal())
+        if (!first_argument->isNumber() && !first_argument->isDecimal())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);

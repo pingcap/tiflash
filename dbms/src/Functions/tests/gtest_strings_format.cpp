@@ -152,6 +152,50 @@ static void formatDecimalTestCase(int precision)
             createConstColumn<Nullable<UInt8>>(1, 3)));
 }
 
+template <typename Integer>
+static void formatIntegerTestCase()
+{
+    static const std::string func_name = "format";
+    using NullableInteger = Nullable<Integer>;
+    if constexpr (std::is_same_v<Integer, Int8> || std::is_same_v<Integer, UInt8>)
+    {
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"10.0000", {}}),
+            executeFunction(
+                func_name,
+                createColumn<NullableInteger>({10, 10}),
+                createColumn<Nullable<Int64>>({4, {}})));
+        if constexpr (std::is_signed_v<Integer>)
+        {
+            ASSERT_COLUMN_EQ(
+                createColumn<Nullable<String>>({"-10.0000", {}}),
+                executeFunction(
+                    func_name,
+                    createColumn<NullableInteger>({-10, -10}),
+                    createColumn<Nullable<Int64>>({4, {}})));
+        }
+    }
+    else
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"31,234.0000", {}}),
+            executeFunction(
+                func_name,
+                createColumn<NullableInteger>({31234, 10}),
+                createColumn<Nullable<Int64>>({4, {}})));
+        if constexpr (std::is_signed_v<Integer>)
+        {
+            ASSERT_COLUMN_EQ(
+                createColumn<Nullable<String>>({"-31,234.0000", {}}),
+                executeFunction(
+                    func_name,
+                    createColumn<NullableInteger>({-31234, -31234}),
+                    createColumn<Nullable<Int64>>({4, {}})));
+        }
+    }
+}
+
 TEST_F(StringFormat, StringFormatAllUnitTest)
 try
 {
@@ -221,6 +265,15 @@ try
     formatDecimalTestCase<Decimal64>(18);
     formatDecimalTestCase<Decimal128>(38);
     formatDecimalTestCase<Decimal256>(65);
+
+    formatIntegerTestCase<Int8>();
+    formatIntegerTestCase<Int16>();
+    formatIntegerTestCase<Int32>();
+    formatIntegerTestCase<Int64>();
+    formatIntegerTestCase<UInt8>();
+    formatIntegerTestCase<UInt16>();
+    formatIntegerTestCase<UInt32>();
+    formatIntegerTestCase<UInt64>();
 }
 CATCH
 
