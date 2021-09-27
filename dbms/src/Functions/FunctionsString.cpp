@@ -11,6 +11,7 @@
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/StringUtil.h>
 #include <Functions/castTypeToEither.h>
+#include <FunctionsRound.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <fmt/format.h>
@@ -3351,6 +3352,7 @@ public:
             using NumberFieldType = typename NumberType::FieldType;
             using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
             const auto * number_raw = block.getByPosition(arguments[0]).column.get();
+            TiDBDecimalRoundInfo info{number_type, number_type};
 
             return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool precision_nullable [[maybe_unused]]) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
@@ -3358,17 +3360,9 @@ public:
                 using PrecisionColVec = ColumnVector<PrecisionFieldType>;
                 const auto * precision_raw = block.getByPosition(arguments[1]).column.get();
 
-                auto number_to_str = [&number_type](NumberFieldType number) -> std::string {
-                    if constexpr (IsDecimal<NumberFieldType>)
-                        return number.toString(number_type.getScale());
-                    else /// Float
-                        return fmt::format("{}", number);
-                };
-
                 if (const auto * col0_const = checkAndGetColumnConst<NumberColVec>(number_raw))
                 {
                     const NumberFieldType & const_number = col0_const->template getValue<NumberFieldType>();
-                    const std::string number_str = number_to_str(const_number);
 
                     if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
                     {
@@ -3377,7 +3371,7 @@ public:
                         for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
-                            format(number_str, max_num_decimals, buffer, col_res->getChars(), col_res->getOffsets());
+                            format(const_number, max_num_decimals, info, buffer, col_res->getChars(), col_res->getOffsets());
                         }
                     }
                     else
@@ -3390,7 +3384,7 @@ public:
                         const size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<PrecisionFieldType>());
                         std::string buffer;
                         for (const auto & number : col0_column->getData())
-                            format(number_to_str(number), max_num_decimals, buffer, col_res->getChars(), col_res->getOffsets());
+                            format(number, max_num_decimals, info, buffer, col_res->getChars(), col_res->getOffsets());
                     }
                     else if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
                     {
@@ -3400,7 +3394,7 @@ public:
                         for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
                             const size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
-                            format(number_to_str(number_array[i]), max_num_decimals, buffer, col_res->getChars(), col_res->getOffsets());
+                            format(number_array[i], max_num_decimals, info, buffer, col_res->getChars(), col_res->getOffsets());
                         }
                     }
                     else
@@ -3453,7 +3447,7 @@ private:
             DataTypeUInt64>(type.get(), std::forward<F>(f));
     }
 
-    // int/uint
+    /// int/uint
     template <typename T>
     static size_t getMaxNumDecimals(T precision)
     {
@@ -3463,19 +3457,21 @@ private:
     }
 
     template <typename T>
-    static void format(
-        T && number_str,
-        const size_t max_num_decimals,
-        std::string & buffer,
-        ColumnString::Chars_t & res_data,
-        ColumnString::Offsets & res_offsets)
+    static T round(T number, const size_t max_num_decimals, const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
-        buffer.clear();
-        // copy/move for modify.
-        std::string current_number_str = std::forward<T>(number_str);
-        roundFormatNumberString(current_number_str, max_num_decimals);
-        Format::apply(current_number_str, max_num_decimals, buffer);
-        copyFromBuffer(buffer, res_data, res_offsets);
+        if constexpr (IsDecimal<T>)
+            return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
+        else
+            return TiDBFloatingRound<T, T>::eval(number, max_num_decimals);
+    }
+
+    template <typename T>
+    static std::string number2Str(T number, const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    {
+        if constexpr (IsDecimal<T>)
+            return number.toString(info.output_scale);
+        else /// Float
+            return fmt::format("{}", number);
     }
 
     static void copyFromBuffer(const std::string & buffer, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
@@ -3489,53 +3485,20 @@ private:
         res_offsets.push_back(new_size);
     }
 
-    static void roundFormatNumberString(std::string & number_str, size_t max_num_decimals)
+    template <typename T>
+    static void format(
+        T number,
+        const size_t max_num_decimals,
+        const TiDBDecimalRoundInfo & info,
+        std::string & buffer,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
-        auto point_index = number_str.find('.');
-        if (point_index == std::string::npos)
-            return;
-
-        const auto decimal_part_size = number_str.size() - point_index - 1;
-        if (decimal_part_size > max_num_decimals)
-        {
-            bool sign = number_str[0] == '-';
-
-            auto decimal_part_start = point_index + 1;
-            bool carry = number_str[decimal_part_start + max_num_decimals] >= '5';
-            /// decimal_part
-            for (auto i = decimal_part_start + max_num_decimals - 1; i >= decimal_part_start && carry; --i)
-            {
-                if (number_str[i] == '9')
-                    number_str[i] = '0';
-                else
-                {
-                    number_str[i] = number_str[i] + 1;
-                    carry = false;
-                }
-            }
-
-            int integer_part_start = sign ? 1 : 0;
-            /// integer_part
-            for (int i = point_index - 1; i >= integer_part_start && carry; --i)
-            {
-                if (number_str[i] == '9')
-                    number_str[i] = '0';
-                else
-                {
-                    number_str[i] = number_str[i] + 1;
-                    carry = false;
-                }
-            }
-
-            if (carry)
-            {
-                std::string tmp{std::move(number_str)};
-                number_str = {};
-                number_str.reserve(tmp.size() + 1);
-                number_str += sign ? "-1" : "1";
-                number_str.append(tmp, integer_part_start);
-            }
-        }
+        buffer.clear();
+        T round_number = round(number, max_num_decimals, info);
+        std::string round_number_str = number2Str(round_number, info);
+        Format::apply(round_number_str, max_num_decimals, buffer);
+        copyFromBuffer(buffer, res_data, res_offsets);
     }
 };
 
