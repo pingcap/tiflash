@@ -142,7 +142,7 @@ public:
     {
         auto it = funcs.find(mask);
         if (it == funcs.end())
-            throw DB::Exception(fmt::format("Not registed workload. mask {} . ", mask));
+            throw DB::Exception(fmt::format("Not registed workload. Mask: {}. ", mask));
         return it->second;
     }
 
@@ -153,7 +153,7 @@ public:
         {
             if (options.situation_mask & it.first)
             {
-                debug_string += fmt::format("   Name : {} , mask : {}. ", it.second.first, it.first);
+                debug_string += fmt::format("   Name: {} , Mask: {}. ", it.second.first, it.first);
             }
         }
         return debug_string;
@@ -164,7 +164,7 @@ public:
         String debug_string = "Support Workloads: \n";
         for (const auto & it : funcs)
         {
-            debug_string += fmt::format("   Name: {}, mask :{}. \n", it.second.first, it.first);
+            debug_string += fmt::format("   Name: {}, mask: {}. \n", it.second.first, it.first);
         }
         debug_string += fmt::format("   Need to run all over? try use `-M {}`", registed_masks);
         return debug_string;

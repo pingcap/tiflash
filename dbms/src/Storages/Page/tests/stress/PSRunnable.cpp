@@ -54,7 +54,7 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder
     size_gen.seed(time(nullptr));
     std::uniform_int_distribution<> dist(0, 3000);
 
-    const size_t buff_sz = approx_page_mb * DB::MB + std::round(dist(size_gen));
+    const size_t buff_sz = approx_page_mb * DB::MB + dist(size_gen);
     char * buff = static_cast<char *>(malloc(buff_sz));
     if (buff == nullptr)
     {
@@ -86,7 +86,7 @@ void PSWriter::updatedRandomData()
     }
 
     std::uniform_int_distribution<> dist(0, memory_size / 2 - 1);
-    size_t gen_size = std::round(dist(gen));
+    size_t gen_size = dist(gen);
     buff_ptr = std::make_shared<DB::ReadBufferFromMemory>(memory + gen_size, memory_size - gen_size);
 }
 

@@ -43,7 +43,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
         ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable") //
         ("status_interval,S", value<UInt32>()->default_value(1), "Status statistics interval. 0 means no statistics") //
         ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially, example -M 2") //
-        ("no_verify", value<bool>()->default_value(false), "Run special tests sequentially without verify."); //
+        ("verify", value<bool>()->default_value(true), "Run special tests sequentially with verify."); //
 
     po::variables_map options;
     po::store(po::parse_command_line(argc, argv, desc), options);
@@ -67,7 +67,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
     opt.avg_page_size_mb = options["avg_page_size"].as<UInt32>();
     opt.status_interval = options["status_interval"].as<UInt32>();
     opt.situation_mask = options["situation_mask"].as<UInt64>();
-    opt.no_verify = options["no_verify"].as<bool>();
+    opt.verify = options["verify"].as<bool>();
 
     if (options.count("paths"))
         opt.paths = options["paths"].as<std::vector<std::string>>();

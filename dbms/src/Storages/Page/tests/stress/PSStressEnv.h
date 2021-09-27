@@ -68,7 +68,7 @@ struct StressEnv
     size_t avg_page_size_mb = 1;
     size_t status_interval = 1;
     size_t situation_mask = 0;
-    bool no_verify = false;
+    bool verify = true;
 
     std::vector<std::string> paths;
     std::vector<std::string> failpoints;
@@ -77,10 +77,10 @@ struct StressEnv
     {
         return fmt::format(
             "{{ "
-            "num_writers: {}, num_readers: {}, init_pages : {} ,clean_before_run: {}"
+            "num_writers: {}, num_readers: {}, init_pages: {} ,clean_before_run: {}"
             ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
             ", avg_page_size_mb: {}, paths: [{}], failpoints: [{}]"
-            ", status_interval: {}, situation_mask : {} , no_verify : {}"
+            ", status_interval: {}, situation_mask: {} , verify: {}"
             " }}",
             num_writers,
             num_readers,
@@ -94,7 +94,7 @@ struct StressEnv
             fmt::join(failpoints.begin(), failpoints.end(), ","),
             status_interval,
             situation_mask,
-            no_verify
+            verify
             //
         );
     }
