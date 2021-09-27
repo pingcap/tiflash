@@ -63,10 +63,22 @@ http_port = 8123
 ## but for disk that read bandwidth and write bandwith are calculated separatly, such as GCP's persistent disks.
 # max_read_bytes_per_sec = 0
 # max_write_bytes_per_sec = 0
-
+# foreground_write_weight = 25
+# background_write_weight = 25
+# foreground_read_weight = 25
+# background_read_weight = 25
+# auto_tune_sec = 5
 [flash]
 tidb_status_addr = "tidb0:10080"
 service_addr = "0.0.0.0:3930"
+# overlap_threshold = "0.6"
+# compact_log_min_period = "120"
+# compact_log_min_rows = "40960"
+# compact_log_min_bytes = "33554432"
+# replica_read_max_thread = "1"
+# batch_read_index_timeout_ms = "10000"
+# wait_index_timeout_ms = "300000"
+# wait_region_ready_timeout_sec = "1200"
 [flash.flash_cluster]
 update_rule_interval = 5
 [flash.proxy]
