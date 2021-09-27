@@ -24,7 +24,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , timeout(timeout_)
     , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
-    , sendLoop_msg("")
+    , send_loop_msg("")
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
     , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
@@ -99,7 +99,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
             std::unique_lock<std::mutex> lk(mu);
             waitUntilConnectedOrCancelled(lk);
             if (finished)
-                throw Exception("write to tunnel which is already closed," + sendLoop_msg);
+                throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
 
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
@@ -116,36 +116,52 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         else /// double check abnormal cases
         {
             if (finished)
-                throw Exception("write to tunnel which is already closed," + sendLoop_msg);
+                throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
     }
 }
 
-/// to avoid being blocked when pop(), we should send nullptr into send_queue
+/// to avoid being blocked when pop(), we should send nullptr into send_queue in all cases
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
-    while (!finished)
+    try
     {
-        /// TODO(fzh) reuse it later
-        MPPDataPacketPtr res;
-        send_queue.pop(res);
-        if (nullptr == res)
+        while (!finished)
         {
-            std::unique_lock<std::mutex> lk(mu);
-            finishWithLock();
-            return;
-        }
-        else
-        {
-            if (!writer->Write(*res))
+            /// TODO(fzh) reuse it later
+            MPPDataPacketPtr res;
+            send_queue.pop(res);
+            if (nullptr == res)
             {
                 std::unique_lock<std::mutex> lk(mu);
-                sendLoop_msg = " grpc writes failed.";
                 finishWithLock();
-                LOG_ERROR(log, sendLoop_msg);
+                return;
+            }
+            else
+            {
+                if (!writer->Write(*res))
+                {
+                    std::unique_lock<std::mutex> lk(mu);
+                    finishWithLock();
+                    auto msg = " grpc writes failed.";
+                    LOG_ERROR(log, msg);
+                    throw Exception(msg);
+                }
             }
         }
+    }
+    catch (Exception & e)
+    {
+        send_loop_msg = e.message();
+    }
+    catch (std::exception & e)
+    {
+        send_loop_msg = e.what();
+    }
+    catch (...)
+    {
+        send_loop_msg = "fatal error in sendLoop()";
     }
 }
 
@@ -156,7 +172,7 @@ void MPPTunnelBase<Writer>::writeDone()
     LOG_TRACE(log, "ready to finish");
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
-        throw Exception("has finished, " + sendLoop_msg);
+        throw Exception("has finished, " + send_loop_msg);
     /// make sure to finish the tunnel after it is connected
     waitUntilConnectedOrCancelled(lk);
     lk.unlock();
@@ -164,8 +180,8 @@ void MPPTunnelBase<Writer>::writeDone()
     send_queue.push(nullptr);
     waitForFinish();
     /// check whether sendLoop() normally or abnormally exited
-    if (!sendLoop_msg.empty())
-        throw Exception("sendLoop() exits unexpected, " + sendLoop_msg);
+    if (!send_loop_msg.empty())
+        throw Exception("sendLoop() exits unexpected, " + send_loop_msg);
     LOG_TRACE(log, "done to finish");
 }
 

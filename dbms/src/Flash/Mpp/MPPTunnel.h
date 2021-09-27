@@ -77,7 +77,7 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    String sendLoop_msg;
+    String send_loop_msg;
 
     int input_streams_num;
 
