@@ -24,19 +24,28 @@ catchError {
                             alwaysPullImage: true, ttyEnabled: true, command: 'cat',
                             resourceRequestCpu: '4000m', resourceRequestMemory: '8Gi',
                             resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
-            ]) {
+            ],
+            volumes: [
+                    nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
+                            serverPath: '/mnt/ci.pingcap.net-nfs/git', readOnly: false),
+            ]
+) {
 
         node(label) {
 
             dir("tics") {
                 stage("Checkout") {
                     container("docker") {
-                        sh """
-                        archive_url=${FILE_SERVER_URL}/download/builds/pingcap/tics/cache/tics-repo_latest.tar.gz
-                        if [ ! -d contrib ]; then curl -sL \$archive_url | tar -zx --strip-components=1 || true; fi
-                        """
-                        sh "chown -R 1000:1000 ./"
-                        // sh "if ! grep -q hub.pingcap.net /etc/hosts ; then echo '172.16.10.5 hub.pingcap.net' >> /etc/hosts; fi"
+                        def repoDailyCache = "/home/jenkins/agent/ci-cached-code-daily/src-tics.tar.gz"
+                        if (fileExists(repoDailyCache)) {
+                            println "get code from nfs to reduce clone time"
+                            sh """
+                            cp -R ${repoDailyCache}  ./
+                            tar -xzf ${repoDailyCache} --strip-components=1
+                            rm -f src-tics.tar.gz
+                            """
+                            sh "chown -R 1000:1000 ./"
+                        }    
                     }
                     util.checkoutTiCSFull("${ghprbActualCommit}", "${ghprbPullId}")
                 }
