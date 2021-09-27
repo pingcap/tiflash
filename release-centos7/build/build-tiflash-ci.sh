@@ -28,7 +28,7 @@ BUILD_BRANCH=${BUILD_BRANCH:-master}
 ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
 
 if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
-  python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/${BUILD_BRANCH} HEAD`
+  python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/${BUILD_BRANCH} HEAD` --dump_diff_files_to "/tmp/tiflash-diff-files.json"
   export ENABLE_FORMAT_CHECK=false
 fi
 
@@ -115,9 +115,9 @@ fi
 
 chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
 
-build_dir="$SRCPATH/release-centos7/build-release"
-rm -rf ${build_dir}
-mkdir -p $build_dir && cd $build_dir
+BUILD_DIR="$SRCPATH/release-centos7/build-release"
+rm -rf ${BUILD_DIR}
+mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 cmake "$SRCPATH" \
     -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
     -DENABLE_TESTS=$ENABLE_TEST \
@@ -131,8 +131,8 @@ make -j ${NPROC} tiflash
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
     make -j ${NPROC} page_ctl
     make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing
-    cp -f "$build_dir/dbms/gtests_dbms" "${INSTALL_DIR}/"
-    cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
+    cp -f "${BUILD_DIR}/dbms/gtests_dbms" "${INSTALL_DIR}/"
+    cp -f "${BUILD_DIR}/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
 fi
 
 ccache -s
@@ -145,9 +145,9 @@ if [[ ${UPDATE_CCACHE} == "true" ]]; then
 fi
 
 # Reduce binary size by compressing.
-objcopy --compress-debug-sections=zlib-gnu "$build_dir/dbms/src/Server/tiflash"
+objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash"
 cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}"/flash_cluster_manager
-cp -f "$build_dir/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
+cp -f "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 ldd "${INSTALL_DIR}/tiflash"
 cd "${INSTALL_DIR}"

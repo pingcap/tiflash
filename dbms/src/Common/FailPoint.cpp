@@ -51,6 +51,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(force_set_page_file_write_errno)                       \
+    M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
     M(random_exception_after_dt_write_done)                  \
     M(random_slow_page_storage_write)                        \
@@ -59,7 +60,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(random_slow_page_storage_list_all_live_files)          \
     M(force_set_safepoint_when_decode_block)                 \
     M(force_set_page_data_compact_batch)                     \
-    M(force_set_dtfile_exist_when_acquire_id)
+    M(force_set_dtfile_exist_when_acquire_id)                \
+    M(force_no_local_region_for_mpp_task)                    \
+    M(force_remote_read_for_batch_cop)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \

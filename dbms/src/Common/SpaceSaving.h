@@ -1,19 +1,17 @@
 #pragma once
 
-#include <iostream>
-#include <vector>
-
-#include <boost/range/adaptor/reversed.hpp>
-
 #include <Common/ArenaWithFreeLists.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/HashMap.h>
-
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
+
+#include <boost/range/adaptor/reversed.hpp>
+#include <iostream>
+#include <vector>
 
 /*
  * Implementation of the Filtered Space-Saving for TopK streaming analysis.
@@ -24,7 +22,6 @@
 
 namespace DB
 {
-
 /*
  * Arena interface to allow specialized storage of keys.
  * POD keys do not require additional storage, so this interface is empty.
@@ -63,11 +60,9 @@ private:
 };
 
 
-template
-<
+template <
     typename TKey,
-    typename Hash = DefaultHash<TKey>
->
+    typename Hash = DefaultHash<TKey>>
 class SpaceSaving
 {
 private:
@@ -87,7 +82,12 @@ public:
         Counter() = default; //-V730
 
         Counter(const TKey & k, UInt64 c = 0, UInt64 e = 0, size_t h = 0)
-          : key(k), slot(0), hash(h), count(c), error(e) {}
+            : key(k)
+            , slot(0)
+            , hash(h)
+            , count(c)
+            , error(e)
+        {}
 
         void write(WriteBuffer & wb) const
         {
@@ -104,7 +104,7 @@ public:
         }
 
         // greater() taking slot error into account
-        bool operator> (const Counter & b) const
+        bool operator>(const Counter & b) const
         {
             return (count > b.count) || (count == b.count && error < b.error);
         }
@@ -116,7 +116,10 @@ public:
         UInt64 error;
     };
 
-    SpaceSaving(size_t c = 10) : alpha_map(nextAlphaSize(c)), m_capacity(c) {}
+    SpaceSaving(size_t c = 10)
+        : alpha_map(nextAlphaSize(c))
+        , m_capacity(c)
+    {}
 
     ~SpaceSaving() { destroyElements(); }
 
@@ -389,4 +392,4 @@ private:
     size_t removed_keys = 0;
 };
 
-}
+} // namespace DB

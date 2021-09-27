@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 std::string escapeForFileName(const StringRef & s)
 {
     std::string res;
@@ -54,4 +53,4 @@ std::string unescapeForFileName(const StringRef & s)
     return res;
 }
 
-}
+} // namespace DB

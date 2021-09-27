@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 void TiFlashErrorRegistry::initialize()
 {
     // Used to check uniqueness of classes
@@ -30,8 +29,7 @@ void TiFlashErrorRegistry::initialize()
 #undef E
 }
 
-void TiFlashErrorRegistry::registerError(const std::string & error_class, const std::string & error_code, const std::string & description,
-    const std::string & workaround, const std::string & message_template)
+void TiFlashErrorRegistry::registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template)
 {
     TiFlashError error{error_class, error_code, description, workaround, message_template};
     if (all_errors.find({error_class, error_code}) == all_errors.end())
@@ -44,8 +42,7 @@ void TiFlashErrorRegistry::registerError(const std::string & error_class, const 
     }
 }
 
-void TiFlashErrorRegistry::registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description,
-    const std::string & workaround, const std::string & message_template)
+void TiFlashErrorRegistry::registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description, const std::string & workaround, const std::string & message_template)
 {
     std::string error_code_str = std::to_string(error_code);
     registerError(error_class, error_code_str, description, workaround, message_template);

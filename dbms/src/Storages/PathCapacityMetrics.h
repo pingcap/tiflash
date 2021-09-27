@@ -42,11 +42,12 @@ private:
 class PathCapacityMetrics : private boost::noncopyable
 {
 public:
-    PathCapacityMetrics(const size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
-                        const Strings & main_paths_,
-                        const std::vector<size_t> main_capacity_quota_, //
-                        const Strings & latest_paths_,
-                        const std::vector<size_t> latest_capacity_quota_);
+    PathCapacityMetrics(
+        const size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
+        const Strings & main_paths_,
+        const std::vector<size_t> main_capacity_quota_,
+        const Strings & latest_paths_,
+        const std::vector<size_t> latest_capacity_quota_);
 
     virtual ~PathCapacityMetrics(){};
 

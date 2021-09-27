@@ -10,6 +10,7 @@
 #include <Core/Block.h>
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
+#include <Core/SortDescription.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -33,6 +34,7 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value);
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value);
 void constructNULLLiteralTiExpr(tipb::Expr & expr);
 DataTypePtr inferDataType4Literal(const tipb::Expr & expr);
+SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns, const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items);
 
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;
 extern std::unordered_map<tipb::ExprType, String> distinct_agg_func_map;

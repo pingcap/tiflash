@@ -39,10 +39,13 @@ inline String getNormalizedPath(const String & s)
 }
 
 // Constructor to be used during initialization
-PathPool::PathPool(const Strings & main_data_paths_, const Strings & latest_data_paths_, const Strings & kvstore_paths_, //
-                   PathCapacityMetricsPtr global_capacity_,
-                   FileProviderPtr file_provider_,
-                   bool enable_raft_compatible_mode_)
+PathPool::PathPool(
+    const Strings & main_data_paths_,
+    const Strings & latest_data_paths_,
+    const Strings & kvstore_paths_,
+    PathCapacityMetricsPtr global_capacity_,
+    FileProviderPtr file_provider_,
+    bool enable_raft_compatible_mode_)
     : main_data_paths(main_data_paths_)
     , latest_data_paths(latest_data_paths_)
     , kvstore_paths(kvstore_paths_)
@@ -65,7 +68,14 @@ PathPool::PathPool(const Strings & main_data_paths_, const Strings & latest_data
 
 StoragePathPool PathPool::withTable(const String & database_, const String & table_, bool path_need_database_name_) const
 {
-    return StoragePathPool(main_data_paths, latest_data_paths, database_, table_, path_need_database_name_, global_capacity, file_provider);
+    return StoragePathPool(
+        main_data_paths,
+        latest_data_paths,
+        database_,
+        table_,
+        path_need_database_name_,
+        global_capacity,
+        file_provider);
 }
 
 Strings PathPool::listPaths() const
@@ -90,12 +100,12 @@ PSDiskDelegatorPtr PathPool::getPSDiskDelegatorRaft()
 // StoragePathPool
 //==========================================================================================
 
-StoragePathPool::StoragePathPool( //
+StoragePathPool::StoragePathPool(
     const Strings & main_data_paths,
-    const Strings & latest_data_paths, //
+    const Strings & latest_data_paths,
     String database_,
     String table_,
-    bool path_need_database_name_, //
+    bool path_need_database_name_,
     PathCapacityMetricsPtr global_capacity_,
     FileProviderPtr file_provider_)
     : database(std::move(database_))
@@ -162,7 +172,7 @@ void StoragePathPool::rename(const String & new_database, const String & new_tab
         if (unlikely(path_need_database_name))
             throw Exception("Can not do clean rename with path_need_database_name is true!");
 
-        std::lock_guard<std::mutex> lock{mutex};
+        std::lock_guard<std::mutex> guard{mutex};
         database = new_database;
         table = new_table;
     }
@@ -172,7 +182,7 @@ void StoragePathPool::rename(const String & new_database, const String & new_tab
             throw Exception("Encryption is only supported when using clean_rename");
 
         // Note: changing these path is not atomic, we may lost data if process is crash here.
-        std::lock_guard<std::mutex> lock{mutex};
+        std::lock_guard<std::mutex> guard{mutex};
         // Get root path without database and table
         for (auto & info : main_path_infos)
         {
@@ -202,7 +212,7 @@ void StoragePathPool::rename(const String & new_database, const String & new_tab
 
 void StoragePathPool::drop(bool recursive, bool must_success)
 {
-    std::lock_guard<std::mutex> lock{mutex};
+    std::lock_guard<std::mutex> guard{mutex};
     for (auto & path_info : main_path_infos)
     {
         try
@@ -303,7 +313,7 @@ String StableDiskDelegator::choosePath() const
 
 String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exist) const
 {
-    std::lock_guard<std::mutex> lock{pool.mutex};
+    std::lock_guard<std::mutex> guard{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
     if (likely(iter != pool.dt_file_path_map.end()))
         return pool.main_path_infos[iter->second].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
@@ -315,7 +325,7 @@ String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exis
 void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::string_view path)
 {
     path.remove_suffix(1 + strlen(StoragePathPool::STABLE_FOLDER_NAME)); // remove '/stable' added in listPathsForStable/getDTFilePath
-    std::lock_guard<std::mutex> lock{pool.mutex};
+    std::lock_guard<std::mutex> guard{pool.mutex};
     if (auto iter = pool.dt_file_path_map.find(file_id); unlikely(iter != pool.dt_file_path_map.end()))
     {
         const auto & path_info = pool.main_path_infos[iter->second];
@@ -345,7 +355,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
 
 void StableDiskDelegator::removeDTFile(UInt64 file_id)
 {
-    std::lock_guard<std::mutex> lock{pool.mutex};
+    std::lock_guard<std::mutex> guard{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
     if (unlikely(iter == pool.dt_file_path_map.end()))
         throw Exception("Cannot find DMFile for id " + toString(file_id));
@@ -389,7 +399,7 @@ String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
     };
 
     {
-        std::lock_guard<std::mutex> lock{pool.mutex};
+        std::lock_guard<std::mutex> guard{pool.mutex};
         /// If id exists in page_path_map, just return the same path
         if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
             return path_generator(pool.latest_path_infos[iter->second].path);
@@ -420,7 +430,7 @@ size_t PSDiskDelegatorMulti::addPageFileUsedSize(
         throw Exception("Unrecognized path " + upper_path);
 
     {
-        std::lock_guard<std::mutex> lock{pool.mutex};
+        std::lock_guard<std::mutex> guard{pool.mutex};
         if (need_insert_location)
             page_path_map[id_lvl] = index;
     }
@@ -432,7 +442,7 @@ size_t PSDiskDelegatorMulti::addPageFileUsedSize(
 
 String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
-    std::lock_guard<std::mutex> lock{pool.mutex};
+    std::lock_guard<std::mutex> guard{pool.mutex};
     auto iter = page_path_map.find(id_lvl);
     if (likely(iter != page_path_map.end()))
         return pool.latest_path_infos[iter->second].path + "/" + path_prefix;
@@ -441,7 +451,7 @@ String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) 
 
 void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left)
 {
-    std::lock_guard<std::mutex> lock{pool.mutex};
+    std::lock_guard<std::mutex> guard{pool.mutex};
     auto iter = page_path_map.find(id_lvl);
     if (unlikely(iter == page_path_map.end()))
         return;
@@ -538,7 +548,7 @@ String PSDiskDelegatorRaft::choosePath(const PageFileIdAndLevel & id_lvl)
     };
 
     {
-        std::lock_guard lock{mutex};
+        std::lock_guard guard{mutex};
         /// If id exists in page_path_map, just return the same path
         if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
             return path_generator(raft_path_infos[iter->second].path);
@@ -570,7 +580,7 @@ size_t PSDiskDelegatorRaft::addPageFileUsedSize(
         throw Exception("Unrecognized path " + upper_path);
 
     {
-        std::lock_guard<std::mutex> lock{mutex};
+        std::lock_guard<std::mutex> guard{mutex};
         if (need_insert_location)
             page_path_map[id_lvl] = index;
     }
@@ -582,7 +592,7 @@ size_t PSDiskDelegatorRaft::addPageFileUsedSize(
 
 String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
-    std::lock_guard<std::mutex> lock{mutex};
+    std::lock_guard<std::mutex> guard{mutex};
     auto iter = page_path_map.find(id_lvl);
     if (likely(iter != page_path_map.end()))
         return raft_path_infos[iter->second].path;
@@ -591,7 +601,7 @@ String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) c
 
 void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left)
 {
-    std::lock_guard<std::mutex> lock{mutex};
+    std::lock_guard<std::mutex> guard{mutex};
     auto iter = page_path_map.find(id_lvl);
     if (unlikely(iter == page_path_map.end()))
         return;

@@ -6,6 +6,7 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -18,7 +19,6 @@
 
 namespace DB
 {
-
 class Context;
 
 class DAGQuerySource;
@@ -32,40 +32,61 @@ class DAGExpressionAnalyzer;
 class DAGQueryBlockInterpreter
 {
 public:
-    DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst,
-        const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
-        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
+    DAGQueryBlockInterpreter(
+        Context & context_,
+        const std::vector<BlockInputStreams> & input_streams_vec_,
+        const DAGQueryBlock & query_block_,
+        bool keep_session_timezone_info_,
+        const tipb::DAGRequest & rqst,
+        const DAGQuerySource & dag_,
+        std::vector<SubqueriesForSets> & subqueriesForSets_,
+        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map,
+        const std::shared_ptr<LogWithPrefix> & log_);
 
     ~DAGQueryBlockInterpreter() = default;
 
     BlockInputStreams execute();
 
-    static void executeUnion(DAGPipeline & pipeline, size_t max_streams);
+    static void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log);
 
 private:
     void executeRemoteQuery(DAGPipeline & pipeline);
     void executeImpl(DAGPipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
     void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
-    void prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, DAGPipeline & pipeline,
-        Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+    void prepareJoin(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types,
+        DAGPipeline & pipeline,
+        Names & key_names,
+        bool left,
+        bool is_right_out_join,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
-    ExpressionActionsPtr genJoinOtherConditionAction(const tipb::Join & join, std::vector<NameAndTypePair> & source_columns,
-        String & filter_column_for_other_condition, String & filter_column_for_other_eq_condition);
+    ExpressionActionsPtr genJoinOtherConditionAction(
+        const tipb::Join & join,
+        std::vector<NameAndTypePair> & source_columns,
+        String & filter_column_for_other_condition,
+        String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
-    void executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
-        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
+    void executeAggregation(
+        DAGPipeline & pipeline,
+        const ExpressionActionsPtr & expressionActionsPtr,
+        Names & aggregation_keys,
+        TiDB::TiDBCollators & collators,
+        AggregateDescriptions & aggregate_descriptions);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
-    SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    void executeRemoteQueryImpl(DAGPipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
-        ::tipb::DAGRequest & dag_req, const DAGSchema & schema);
+    void executeRemoteQueryImpl(
+        DAGPipeline & pipeline,
+        const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
+        ::tipb::DAGRequest & dag_req,
+        const DAGSchema & schema);
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
@@ -91,6 +112,6 @@ private:
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
     BoolVec timestamp_column_flag_for_tablescan;
 
-    Poco::Logger * log;
+    const std::shared_ptr<LogWithPrefix> log;
 };
 } // namespace DB

@@ -8,15 +8,18 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_,
-    const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
-    : context(context_), regions(regions_), retry_regions(retry_regions_), dag_request(dag_request_), is_batch_cop(is_batch_cop_)
+DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & regions_for_remote_read_, const tipb::DAGRequest & dag_request_, const std::shared_ptr<LogWithPrefix> & log_, const bool is_batch_cop_)
+    : context(context_)
+    , regions(regions_)
+    , regions_for_remote_read(regions_for_remote_read_)
+    , dag_request(dag_request_)
+    , is_batch_cop(is_batch_cop_)
+    , log(log_)
 {
     if (dag_request.has_root_executor())
     {
@@ -33,8 +36,8 @@ DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions
     {
         if (unlikely(i >= root_query_block->output_field_types.size()))
             throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "
-                    + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
-                Errors::Coprocessor::BadRequest);
+                                       + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
+                                   Errors::Coprocessor::BadRequest);
         result_field_types.push_back(root_query_block->output_field_types[i]);
     }
     analyzeDAGEncodeType();
@@ -46,6 +49,12 @@ void DAGQuerySource::analyzeDAGEncodeType()
     {
         /// always use CHBlock encode type for data exchange between TiFlash nodes
         encode_type = tipb::EncodeType::TypeCHBlock;
+        return;
+    }
+    if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
+    {
+        encode_type = dag_request.encode_type();
+        assert(encode_type == tipb::EncodeType::TypeCHBlock);
         return;
     }
     encode_type = dag_request.encode_type();
@@ -65,11 +74,14 @@ std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
     return {dag_request.DebugString(), makeDummyQuery()};
 }
 
-String DAGQuerySource::str(size_t) { return dag_request.DebugString(); }
+String DAGQuerySource::str(size_t)
+{
+    return dag_request.DebugString();
+}
 
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
-    return std::make_unique<InterpreterDAG>(context, *this);
+    return std::make_unique<InterpreterDAG>(context, *this, log);
 }
 
 } // namespace DB
