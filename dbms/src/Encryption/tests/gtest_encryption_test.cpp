@@ -1,7 +1,9 @@
 #include <Encryption/AESCTRCipherStream.h>
+#include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
+#include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -189,56 +191,89 @@ CATCH
 TEST(PosixWritableFileTest, hardlink)
 try
 {
+    size_t buff_size = 123;
+    char buff_write[buff_size];
+    ;
+    for (size_t i = 0; i < buff_size; i++)
     {
-        String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_file");
-        PosixWritableFile file(file_path, true, -1, 0600, nullptr);
-        file.close();
-
-        String linked_file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_linked_file");
-        PosixWritableFile linked_file(linked_file_path, true, -1, 0600, nullptr);
-        linked_file.hardLink(file_path.c_str());
-        linked_file.close();
-
-        struct stat file_stat;
-        ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
-        ASSERT_EQ(2, file_stat.st_nlink);
+        buff_write[i] = i % 0xFF;
     }
 
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_file");
+    PosixWritableFile file(file_path, true, -1, 0600, nullptr);
+    file.write(buff_write, buff_size);
+    file.close();
+
+    String linked_file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_linked_file");
+    PosixWritableFile linked_file(linked_file_path, true, -1, 0600, nullptr);
+    linked_file.hardLink(file_path);
+    linked_file.close();
+
+    // Check the stat
+    struct stat file_stat;
+    ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
+    ASSERT_EQ(2, file_stat.st_nlink);
+
+    // Read and check
+    char buff_read[buff_size];
+    RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(linked_file_path, -1, nullptr);
+    file_for_read->read(buff_read, buff_size);
+    file_for_read->close();
+    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+}
+CATCH
+
+TEST(PosixWritableFileTest, hardlinkEnc)
+try
+{
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_file");
+    WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path, true, -1, 0600, nullptr);
+
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
+    auto encryption_info = key_manager->newFile("encryption");
+    BlockAccessCipherStreamPtr cipher_stream
+        = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+
+    EncryptedWritableFile enc_file(file, cipher_stream);
+
+    size_t buff_size = 123;
+    char buff_write[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
     {
-        String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_file");
-        WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path, true, -1, 0600, nullptr);
-
-        std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
-        std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
-        auto encryption_info = key_manager->newFile("encryption");
-        BlockAccessCipherStreamPtr cipher_stream
-            = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
-
-        EncryptedWritableFile enc_file(file, cipher_stream);
-
-        size_t buff_size = 123;
-        char buff_write[buff_size];
-
-        for (size_t i = 0; i < buff_size; i++)
-        {
-            buff_write[i] = i % 0xFF;
-        }
-        enc_file.write(buff_write, buff_size);
-        enc_file.fsync();
-        enc_file.close();
-
-        String linked_file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_linked_posix_file");
-        WritableFilePtr linked_file = std::make_shared<PosixWritableFile>(linked_file_path, true, -1, 0600, nullptr);
-        EncryptedWritableFile linked_enc_file(linked_file, cipher_stream);
-
-        linked_enc_file.hardLink(file_path.c_str());
-        linked_enc_file.close();
-
-        struct stat file_stat;
-        ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
-        ASSERT_EQ(2, file_stat.st_nlink);
+        buff_write[i] = i % 0xFF;
     }
+
+    char buff_write_cpy[buff_size];
+    memcpy(buff_write_cpy, buff_write, buff_size);
+
+    enc_file.write(buff_write_cpy, buff_size);
+    enc_file.fsync();
+    enc_file.close();
+
+    String linked_file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_linked_posix_file");
+    WritableFilePtr linked_file = std::make_shared<PosixWritableFile>(linked_file_path, true, -1, 0600, nullptr);
+    EncryptedWritableFile linked_enc_file(linked_file, cipher_stream);
+
+    linked_enc_file.hardLink(file_path);
+    linked_enc_file.close();
+
+    // Check the stat
+    struct stat file_stat;
+    ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
+    ASSERT_EQ(2, file_stat.st_nlink);
+
+    // Read and check
+    char buff_read[buff_size];
+    RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(linked_file_path, -1, nullptr);
+    EncryptedRandomAccessFile enc_file_for_read(file_for_read, cipher_stream);
+    enc_file_for_read.read(buff_read, buff_size);
+    enc_file_for_read.close();
+
+    // std::cout << "buff_read : " << buff_read << std::endl;
+    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
 }
 CATCH
 

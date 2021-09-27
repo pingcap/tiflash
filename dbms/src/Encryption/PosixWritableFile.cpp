@@ -18,6 +18,7 @@ namespace ErrorCodes
 extern const int FILE_DOESNT_EXIST;
 extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_CLOSE_FILE;
+extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 PosixWritableFile::PosixWritableFile(
@@ -121,31 +122,33 @@ int PosixWritableFile::fsync()
     return ::fsync(fd);
 }
 
-void PosixWritableFile::hardLink(const char * link_file)
+void PosixWritableFile::hardLink(const std::string existing_file)
 {
-    int rc;
-
-    if (link_file == nullptr || strlen(link_file) == 0)
+    if (existing_file.empty())
     {
-        throwFromErrno("Link file does not exist.", ErrorCodes::FILE_DOESNT_EXIST);
+        throw Exception("Failed to create hard link for empty file name", ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (getFileName().empty())
+    if (file_name.empty())
     {
-        throwFromErrno("File does not exist.", ErrorCodes::FILE_DOESNT_EXIST);
+        throw Exception("Failed to create hard link for:" + existing_file + " to an empty path", ErrorCodes::LOGICAL_ERROR);
     }
 
     close();
-    rc = ::remove(getFileName().c_str());
+    int rc = ::remove(file_name.c_str());
     if (rc != 0)
     {
-        throwFromErrno("Can't remove file : " + getFileName());
+        throwFromErrno("Can't remove file : " + file_name);
     }
 
-    rc = ::link(link_file, getFileName().c_str());
+    // The link() function shall create a new link (directory entry) for the existing file, `existing_file`. The second path argument
+    // points to a pathname naming the new directory entry to be created. The link() function shall atomically create a new link
+    // for the existing file and the link count of the file shall be incremented by one.
+    // Reference: https://linux.die.net/man/3/link
+    rc = ::link(existing_file.c_str(), file_name.c_str());
     if (rc != 0)
     {
-        throwFromErrno("Can't link file : " + getFileName() + " to file : " + link_file);
+        throw Exception("Failed to create hard link for:" + existing_file + " to an empty path", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
