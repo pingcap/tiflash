@@ -11,7 +11,6 @@
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/StringUtil.h>
 #include <Functions/castTypeToEither.h>
-#include "FunctionsRound.h"
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <fmt/format.h>
@@ -20,6 +19,8 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
 #include <thread>
+
+#include "FunctionsRound.h"
 
 #if __SSE2__
 #include <emmintrin.h>
