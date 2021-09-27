@@ -34,13 +34,11 @@ public:
     std::thread newThread(F && f, Args &&... args)
     {
         auto memory_tracker = current_memory_tracker;
-        /// Use std::tuple to workaround the limit on the lambda's init-capture of C++17.
-        /// See https://stackoverflow.com/questions/47496358/c-lambdas-how-to-capture-variadic-parameter-pack-from-the-upper-scope
-        auto wrapped_func = [memory_tracker, thread_name = thread_name, f = std::move(f), args = std::make_tuple(std::move(args)...)] {
+        auto wrapped_func = [memory_tracker, thread_name = thread_name, f = std::move(f)](auto &&... args) {
             setAttributes(memory_tracker, thread_name, true);
-            return std::apply(f, std::move(args));
+            return std::invoke(f, std::forward<Args>(args)...);
         };
-        return std::thread(wrapped_func);
+        return std::thread(wrapped_func, std::forward<Args>(args)...);
     }
 
     template <typename F, typename... Args>
