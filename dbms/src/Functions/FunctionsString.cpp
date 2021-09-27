@@ -3314,10 +3314,7 @@ public:
         return std::make_shared<FunctionFormat>(context_);
     }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -3339,7 +3336,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    // string format(decimal/float, int/uint)
+    /// string format(decimal/float, int/uint)
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto number_base_type = block.getByPosition(arguments[0]).type;
@@ -3348,7 +3345,7 @@ public:
         auto col_res = ColumnString::create();
         auto val_num = block.getByPosition(arguments[0]).column->size();
 
-        // number_nullable and precision_nullable should be false.
+        /// number_nullable and precision_nullable should be false.
         bool is_types_valid = getNumberType(number_base_type, [&](const auto & number_type, bool number_nullable [[maybe_unused]]) {
             using NumberType = std::decay_t<decltype(number_type)>;
             using NumberFieldType = typename NumberType::FieldType;
@@ -3364,7 +3361,7 @@ public:
                 auto number_to_str = [&number_type](NumberFieldType number) -> std::string {
                     if constexpr (IsDecimal<NumberFieldType>)
                         return number.toString(number_type.getScale());
-                    else // Float
+                    else /// Float
                         return fmt::format("{}", number);
                 };
 
@@ -3426,8 +3423,8 @@ public:
 private:
     const Context & context;
 
-    // format_max_decimals limits the maximum number of decimal digits for result of
-    // function `format`, this value is same as `FORMAT_MAX_DECIMALS` in MySQL source code.
+    /// format_max_decimals limits the maximum number of decimal digits for result of
+    /// function `format`, this value is same as `FORMAT_MAX_DECIMALS` in MySQL source code.
     static constexpr size_t format_max_decimals = 30;
 
     template <typename F>
@@ -3473,6 +3470,7 @@ private:
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
+        buffer.clear();
         // copy/move for modify.
         std::string current_number_str = std::forward<T>(number_str);
         roundFormatNumberString(current_number_str, max_num_decimals);
@@ -3504,7 +3502,7 @@ private:
 
             auto decimal_part_start = point_index + 1;
             bool carry = number_str[decimal_part_start + max_num_decimals] >= '5';
-            // decimal_part
+            /// decimal_part
             for (auto i = decimal_part_start + max_num_decimals - 1; i >= decimal_part_start && carry; --i)
             {
                 if (number_str[i] == '9')
@@ -3517,7 +3515,7 @@ private:
             }
 
             int integer_part_start = sign ? 1 : 0;
-            // integer_part
+            /// integer_part
             for (int i = point_index - 1; i >= integer_part_start && carry; --i)
             {
                 if (number_str[i] == '9')
@@ -3545,7 +3543,6 @@ struct FormatWithEnUS
 {
     static void apply(std::string & number, size_t precision, std::string & buffer)
     {
-        buffer.clear();
         if (number[0] == '-' && number[1] == '.')
             number.insert(1, 1, '0');
         else if (number[0] == '.')
@@ -3599,7 +3596,7 @@ struct FormatWithEnUS
         if (precision > 0)
         {
             buffer += '.';
-            if (point_index == number.size()) // no decimal part
+            if (point_index == number.size()) /// no decimal part
                 buffer.append(precision, '0');
             else
             {
@@ -3663,7 +3660,7 @@ public:
         const auto * locale_raw = block.getByPosition(arguments[2]).column.get();
         handleLocale(locale_raw);
 
-        // todo support switch different locale in a block.
+        /// TODO support switching different locale in a block.
         static DefaultExecutable forward_function{std::make_shared<FunctionFormat<FormatWithEnUS>>(context)};
         const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
         forward_function.execute(block, forward_arguments, result);
@@ -3672,7 +3669,8 @@ public:
 private:
     const Context & context;
 
-    // Append warning when locale is not 'en_US'.
+    /// Append warning when locale is not 'en_US'.
+    /// TODO support other locales after tidb has supported them.
     void handleLocale(const IColumn * locale_raw) const
     {
         static const std::string supported_locale{"en_US"};
