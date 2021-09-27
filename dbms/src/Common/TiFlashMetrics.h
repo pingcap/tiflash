@@ -195,14 +195,14 @@ namespace DB
       F(type_build_in_bytes, {"type", "build_in_bytes"}),                                                                                                                                             \
       F(type_build_in_blocks, {"type", "build_in_blocks"}),                                                                                                                                           \
       F(type_build_duration, {"type", "build_duration"}),                                                                                                                                             \
+      F(type_build_ops, {"type", "build_ops"}),                                                                                                                                                       \
       F(type_probe_in_bytes, {"type", "probe_in_bytes"}),                                                                                                                                             \
       F(type_probe_in_blocks, {"type", "probe_in_blocks"}),                                                                                                                                           \
       F(type_probe_duration, {"type", "probe_duration"}),                                                                                                                                             \
-      F(type_probe_out_bytes, {"type", "probe_out_bytes"}))                                                                                                                                           \
+      F(type_probe_out_bytes, {"type", "probe_out_bytes"}),                                                                                                                                           \
+      F(type_probe_ops, {"type", "probe_ops"}))                                                                                                                                                       \
     M(tiflash_hash_join_gauge, "", Gauge, /**/                                                                                                                                                        \
-      F(type_build_concurrency, {"type", "build_concurrency"}),                                                                                                                                       \
       F(type_build_threads, {"type", "build_threads"}),                                                                                                                                               \
-      F(type_probe_concurrency, {"type", "probe_concurrency"}),                                                                                                                                       \
       F(type_probe_threads, {"type", "probe_threads"}))                                                                                                                                               \
     M(tiflash_receiver_counter, "", Counter, /**/                                                                                                                                                     \
       F(type_in_bytes, {"type", "in_bytes"}),                                                                                                                                                         \
