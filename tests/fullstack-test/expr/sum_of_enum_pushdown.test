@@ -1,138 +1,68 @@
 #tidb version : https://github.com/pingcap/tidb/compare/master...bestwoody:support_enum_pushdown?expand=1
-mysql> DROP TABLE shirts;
-Query OK, 0 rows affected (0.28 sec)
+mysql> DROP TABLE if EXISTS test.shirts
 
-mysql> CREATE TABLE shirts (
-    ->     name VARCHAR(40),
-    ->     size ENUM('x-small', 'small', 'medium', 'large', 'x-large')
-    -> );
-Query OK, 0 rows affected (0.08 sec)
+mysql> CREATE TABLE test.shirts (name VARCHAR(40),     size ENUM('x-small', 'small', 'medium', 'large', 'x-large') )
 
-mysql> INSERT INTO shirts (name, size) VALUES ('dress shirt','large'), ('t-shirt','medium'),
-    ->   ('polo shirt','small');
-Query OK, 3 rows affected (0.01 sec)
-Records: 3  Duplicates: 0  Warnings: 0
+mysql> INSERT INTO test.shirts (name, size) VALUES ('dress shirt','large'), ('t-shirt','medium'),   ('polo shirt','small')
 
-mysql> ALTER TABLE `tpch_0_01`.`shirts` SET TIFLASH REPLICA 1;
-Query OK, 0 rows affected (0.08 sec)
+mysql> analyze table test.shirts
 
-mysql> select * from information_schema.tiflash_replica;
-+--------------+------------+----------+---------------+-----------------+-----------+----------+
-| TABLE_SCHEMA | TABLE_NAME | TABLE_ID | REPLICA_COUNT | LOCATION_LABELS | AVAILABLE | PROGRESS |
-+--------------+------------+----------+---------------+-----------------+-----------+----------+
-| tpch_0_01    | customer   |       55 |             1 |                 |         1 |        1 |
-| tpch_0_01    | nation     |       58 |             1 |                 |         1 |        1 |
-| tpch_0_01    | orders     |       62 |             1 |                 |         1 |        1 |
-| tpch_0_01    | part       |       66 |             1 |                 |         1 |        1 |
-| tpch_0_01    | region     |       70 |             1 |                 |         1 |        1 |
-| tpch_0_01    | supplier   |       74 |             1 |                 |         1 |        1 |
-| tpch_0_01    | partsupp   |       78 |             1 |                 |         1 |        1 |
-| tpch_0_01    | lineitem   |       83 |             1 |                 |         1 |        1 |
-| tpch_0_01    | shirts     |       99 |             1 |                 |         1 |        1 |
-+--------------+------------+----------+---------------+-----------------+-----------+----------+
-9 rows in set (0.00 sec)
+mysql> ALTER TABLE test.shirts SET TIFLASH REPLICA 1
 
-mysql> desc select sum(cast(size as decimal)) from shirts;
-+--------------------------------+----------+-------------------+---------------+-------------------------------------------------------------+
-| id                             | estRows  | task              | access object | operator info                                               |
-+--------------------------------+----------+-------------------+---------------+-------------------------------------------------------------+
-| HashAgg_20                     | 1.00     | root              |               | funcs:sum(Column#6)->Column#4                               |
-| └─TableReader_22               | 1.00     | root              |               | data:ExchangeSender_21                                      |
-|   └─ExchangeSender_21          | 1.00     | batchCop[tiflash] |               | ExchangeType: PassThrough                                   |
-|     └─HashAgg_8                | 1.00     | batchCop[tiflash] |               | funcs:sum(Column#8)->Column#6                               |
-|       └─Projection_31          | 10000.00 | batchCop[tiflash] |               | cast(tpch_0_01.shirts.size, decimal(32,0) BINARY)->Column#8 |
-|         └─TableFullScan_19     | 10000.00 | batchCop[tiflash] | table:shirts  | keep order:false, stats:pseudo                              |
-+--------------------------------+----------+-------------------+---------------+-------------------------------------------------------------+
-6 rows in set (0.01 sec)
+func> wait_table test shirts
 
-mysql> desc select sum(cast(size as signed)) from shirts;
-+--------------------------------+----------+-------------------+---------------+--------------------------------------------------------------------------------------+
-| id                             | estRows  | task              | access object | operator info                                                                        |
-+--------------------------------+----------+-------------------+---------------+--------------------------------------------------------------------------------------+
-| HashAgg_20                     | 1.00     | root              |               | funcs:sum(Column#6)->Column#4                                                        |
-| └─TableReader_22               | 1.00     | root              |               | data:ExchangeSender_21                                                               |
-|   └─ExchangeSender_21          | 1.00     | batchCop[tiflash] |               | ExchangeType: PassThrough                                                            |
-|     └─HashAgg_8                | 1.00     | batchCop[tiflash] |               | funcs:sum(Column#8)->Column#6                                                        |
-|       └─Projection_31          | 10000.00 | batchCop[tiflash] |               | cast(cast(tpch_0_01.shirts.size, bigint(22) BINARY), decimal(43,0) BINARY)->Column#8 |
-|         └─TableFullScan_19     | 10000.00 | batchCop[tiflash] | table:shirts  | keep order:false, stats:pseudo                                                       |
-+--------------------------------+----------+-------------------+---------------+--------------------------------------------------------------------------------------+
-6 rows in set (0.00 sec)
-
-mysql> desc select sum(cast(size as unsigned)) from shirts;
-+--------------------------------+----------+-------------------+---------------+-----------------------------------------------------------------------------------------------+
-| id                             | estRows  | task              | access object | operator info                                                                                 |
-+--------------------------------+----------+-------------------+---------------+-----------------------------------------------------------------------------------------------+
-| HashAgg_20                     | 1.00     | root              |               | funcs:sum(Column#6)->Column#4                                                                 |
-| └─TableReader_22               | 1.00     | root              |               | data:ExchangeSender_21                                                                        |
-|   └─ExchangeSender_21          | 1.00     | batchCop[tiflash] |               | ExchangeType: PassThrough                                                                     |
-|     └─HashAgg_8                | 1.00     | batchCop[tiflash] |               | funcs:sum(Column#8)->Column#6                                                                 |
-|       └─Projection_31          | 10000.00 | batchCop[tiflash] |               | cast(cast(tpch_0_01.shirts.size, bigint(22) UNSIGNED BINARY), decimal(43,0) BINARY)->Column#8 |
-|         └─TableFullScan_19     | 10000.00 | batchCop[tiflash] | table:shirts  | keep order:false, stats:pseudo                                                                |
-+--------------------------------+----------+-------------------+---------------+-----------------------------------------------------------------------------------------------+
-6 rows in set (0.00 sec)
-
-mysql> desc select sum(size) from shirts;
-+--------------------------------+----------+-------------------+---------------+------------------------------------------------------+
-| id                             | estRows  | task              | access object | operator info                                        |
-+--------------------------------+----------+-------------------+---------------+------------------------------------------------------+
-| HashAgg_20                     | 1.00     | root              |               | funcs:sum(Column#6)->Column#4                        |
-| └─TableReader_22               | 1.00     | root              |               | data:ExchangeSender_21                               |
-|   └─ExchangeSender_21          | 1.00     | batchCop[tiflash] |               | ExchangeType: PassThrough                            |
-|     └─HashAgg_8                | 1.00     | batchCop[tiflash] |               | funcs:sum(Column#8)->Column#6                        |
-|       └─Projection_31          | 10000.00 | batchCop[tiflash] |               | cast(tpch_0_01.shirts.size, double BINARY)->Column#8 |
-|         └─TableFullScan_19     | 10000.00 | batchCop[tiflash] | table:shirts  | keep order:false, stats:pseudo                       |
-+--------------------------------+----------+-------------------+---------------+------------------------------------------------------+
-6 rows in set (0.00 sec)
-
-mysql> desc select sum(size + 0) from shirts;
-+--------------------------------+----------+-------------------+---------------+---------------------------------------------------------------+
-| id                             | estRows  | task              | access object | operator info                                                 |
-+--------------------------------+----------+-------------------+---------------+---------------------------------------------------------------+
-| HashAgg_20                     | 1.00     | root              |               | funcs:sum(Column#6)->Column#4                                 |
-| └─TableReader_22               | 1.00     | root              |               | data:ExchangeSender_21                                        |
-|   └─ExchangeSender_21          | 1.00     | batchCop[tiflash] |               | ExchangeType: PassThrough                                     |
-|     └─HashAgg_8                | 1.00     | batchCop[tiflash] |               | funcs:sum(Column#8)->Column#6                                 |
-|       └─Projection_31          | 10000.00 | batchCop[tiflash] |               | plus(cast(tpch_0_01.shirts.size, double BINARY), 0)->Column#8 |
-|         └─TableFullScan_19     | 10000.00 | batchCop[tiflash] | table:shirts  | keep order:false, stats:pseudo                                |
-+--------------------------------+----------+-------------------+---------------+---------------------------------------------------------------+
-6 rows in set (0.00 sec)
-
-mysql> select sum(cast(size as decimal)) from shirts;
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as decimal)) from test.shirts
 +----------------------------+
 | sum(cast(size as decimal)) |
 +----------------------------+
 |                          9 |
 +----------------------------+
-1 row in set (0.12 sec)
 
-mysql> select sum(cast(size as signed)) from shirts;
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as signed)) from test.shirts
 +---------------------------+
 | sum(cast(size as signed)) |
 +---------------------------+
 |                         9 |
 +---------------------------+
-1 row in set (0.02 sec)
 
-mysql> select sum(cast(size as unsigned)) from shirts;
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as unsigned)) from test.shirts
 +-----------------------------+
 | sum(cast(size as unsigned)) |
 +-----------------------------+
 |                           9 |
 +-----------------------------+
-1 row in set (0.02 sec)
 
-mysql> select sum(size) from shirts;
+mysql> set tidb_enforce_mpp=1; select sum(size) from test.shirts
 +-----------+
 | sum(size) |
 +-----------+
 |         9 |
 +-----------+
-1 row in set (0.01 sec)
 
-mysql> select sum(size + 0) from shirts;
+mysql> set tidb_enforce_mpp=1; select sum(size + 0) from test.shirts
 +---------------+
 | sum(size + 0) |
 +---------------+
 |             9 |
 +---------------+
-1 row in set (0.02 sec)
+
+mysql> set tidb_enforce_mpp=1; select sum(size + 0.0) from test.shirts;
++-----------------+
+| sum(size + 0.0) |
++-----------------+
+|               9 |
++-----------------+
+
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as double)) from test.shirts;
++---------------------------+
+| sum(cast(size as double)) |
++---------------------------+
+|                         9 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as real)) from test.shirts;
++-------------------------+
+| sum(cast(size as real)) |
++-------------------------+
+|                       9 |
++-------------------------+
