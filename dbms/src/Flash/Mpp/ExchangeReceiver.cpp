@@ -280,6 +280,8 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         }
     }
 
+    ExchangeReceiverResult result;
+
     {
         struct Tracker
         {
@@ -295,7 +297,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         } tracker [[maybe_unused]];
 
         assert(packet != nullptr && packet->packet != nullptr);
-        ExchangeReceiverResult result;
         if (packet->packet->has_error())
         {
             result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
