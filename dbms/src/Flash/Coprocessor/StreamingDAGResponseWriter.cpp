@@ -1,5 +1,6 @@
 #include <Common/LogWithPrefix.h>
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -67,6 +68,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     const std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
+    GET_METRIC(tiflash_sender_counter, type_broadcast_out_blocks).Increment(input_blocks.size());
+
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
     if (encode_type == tipb::EncodeType::TypeDefault)
     {
@@ -127,6 +130,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         chunk_codec_stream->clear();
     }
 
+    GET_METRIC(tiflash_sender_counter, type_broadcast_out_chunks).Increment(response.chunks_size());
+    GET_METRIC(tiflash_sender_counter, type_broadcast_out_bytes).Increment(response.ByteSizeLong());
+
     writer->write(response);
 }
 
@@ -136,6 +142,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
+    GET_METRIC(tiflash_sender_counter, type_partition_out_blocks).Increment(input_blocks.size());
+
     std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
     std::vector<tipb::SelectResponse> responses(partition_num);
     std::vector<size_t> responses_row_count(partition_num);
@@ -238,12 +246,20 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     {
         if constexpr (for_last_response)
         {
+            GET_METRIC(tiflash_sender_counter, type_partition_out_chunks).Increment(responses[part_id].chunks_size());
+            GET_METRIC(tiflash_sender_counter, type_partition_out_bytes).Increment(responses[part_id].ByteSizeLong());
+
             writer->write(responses[part_id], part_id);
         }
         else
         {
             if (responses_row_count[part_id] > 0)
+            {
+                GET_METRIC(tiflash_sender_counter, type_partition_out_chunks).Increment(responses[part_id].chunks_size());
+                GET_METRIC(tiflash_sender_counter, type_partition_out_bytes).Increment(responses[part_id].ByteSizeLong());
+
                 writer->write(responses[part_id], part_id);
+            }
         }
     }
 }

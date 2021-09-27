@@ -1,3 +1,5 @@
+#include <Common/ThreadFactory.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
 
@@ -58,7 +60,10 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
-        workers.emplace_back(&ExchangeReceiverBase::readLoop, this, index);
+    {
+        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
+        workers.push_back(std::move(t));
+    }
 }
 
 static inline String getReceiverStateStr(const ExchangeReceiverState & s)
@@ -81,6 +86,19 @@ static inline String getReceiverStateStr(const ExchangeReceiverState & s)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 {
+    struct ThreadTracker
+    {
+        ThreadTracker()
+        {
+            GET_METRIC(tiflash_receiver_gauge, type_read_threads).Increment();
+        }
+
+        ~ThreadTracker()
+        {
+            GET_METRIC(tiflash_receiver_gauge, type_read_threads).Decrement();
+        }
+    } tracker [[maybe_unused]];
+
     bool meet_error = false;
     String local_err_msg;
 
@@ -119,23 +137,30 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         break;
                     }
                 }
-                packet->req_info = req_info;
-                packet->source_index = source_index;
-                bool success = reader->read(packet->packet.get());
-                if (!success)
-                    break;
-                else
-                    has_data = true;
-                if (packet->packet->has_error())
+
                 {
-                    throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                    packet->req_info = req_info;
+                    packet->source_index = source_index;
+                    bool success = reader->read(packet->packet.get());
+                    if (!success)
+                        break;
+                    else
+                        has_data = true;
+                    if (packet->packet->has_error())
+                    {
+                        throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                    }
+
+                    GET_METRIC(tiflash_receiver_counter, type_in_bytes).Increment(packet->packet->ByteSizeLong());
                 }
+
                 {
                     std::unique_lock<std::mutex> lock(mu);
                     cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
                     if (state == ExchangeReceiverState::NORMAL)
                     {
                         res_buffer.pushObject(packet);
+                        GET_METRIC(tiflash_receiver_gauge, type_read_buffer).Increment(packet->packet->ByteSizeLong());
                         cv.notify_all();
                     }
                     else
@@ -235,6 +260,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         else if (res_buffer.hasObjects())
         {
             res_buffer.popObject(packet);
+            GET_METRIC(tiflash_receiver_gauge, type_read_buffer).Decrement(packet->packet->ByteSizeLong());
             cv.notify_all();
         }
         else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
@@ -242,25 +268,32 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
-    assert(packet != nullptr && packet->packet != nullptr);
+
     ExchangeReceiverResult result;
-    if (packet->packet->has_error())
+
     {
-        result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
-    }
-    else
-    {
-        auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(packet->packet->data()))
+        assert(packet != nullptr && packet->packet != nullptr);
+        if (packet->packet->has_error())
         {
-            result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
+            result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
         }
         else
         {
-            result = {resp_ptr, packet->source_index, packet->req_info};
+            auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+            if (!resp_ptr->ParseFromString(packet->packet->data()))
+            {
+                result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
+            }
+            else
+            {
+                result = {resp_ptr, packet->source_index, packet->req_info};
+
+                GET_METRIC(tiflash_receiver_counter, type_in_chunks).Increment(resp_ptr->chunks_size());
+            }
         }
+        packet->packet->Clear();
     }
-    packet->packet->Clear();
+
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
     res_buffer.pushEmpty(std::move(packet));

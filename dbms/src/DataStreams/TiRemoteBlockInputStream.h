@@ -8,6 +8,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
+#include <Common/TiFlashMetrics.h>
 
 #include <chrono>
 #include <mutex>
@@ -161,6 +162,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 continue;
             assertBlockSchema(expected_types, block, getName());
             block_queue.push(std::move(block));
+
+            GET_METRIC(tiflash_receiver_counter, type_in_blocks).Increment();
         }
         if (block_queue.empty())
             return fetchRemoteResult();

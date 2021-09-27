@@ -300,6 +300,11 @@ private:
             parent.cancel(false); /// Does not throw exceptions.
         }
 
+        String getName() const
+        {
+            return "ParallelUnion";
+        }
+
         Self & parent;
     };
 

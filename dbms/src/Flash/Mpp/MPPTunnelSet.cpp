@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <fmt/core.h>
+#include <Common/TiFlashMetrics.h>
 
 namespace DB
 {
