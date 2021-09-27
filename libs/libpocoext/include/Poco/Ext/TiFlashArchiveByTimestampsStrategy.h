@@ -11,7 +11,7 @@ public:
     {
         std::string path = p_file->path();
         delete p_file;
-        std::string archPath = path;
+        std::string arch_path = path;
         archPath.append(".");
         DateTimeFormatter::append(archPath, DT().timestamp(), suffix_fmt);
 
