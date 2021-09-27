@@ -7,7 +7,7 @@ option (USE_INTERNAL_SSL_LIBRARY "Set to FALSE to use system *ssl library instea
 if (NOT USE_INTERNAL_SSL_LIBRARY)
     if (APPLE)
         execute_process(
-            COMMAND brew --prefix openssl
+            COMMAND brew --prefix openssl@1.1
             RESULT_VARIABLE BREW_OPENSSL
             OUTPUT_VARIABLE BREW_OPENSSL_PREFIX
             OUTPUT_STRIP_TRAILING_WHITESPACE
