@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -80,7 +81,7 @@ void MPPTask::finishWrite()
 void MPPTask::run()
 {
     memory_tracker = current_memory_tracker;
-    std::thread worker(&MPPTask::runImpl, this->shared_from_this());
+    auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
     worker.detach();
 }
 
