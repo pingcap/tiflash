@@ -103,20 +103,15 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         }
 
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
-        std::unique_lock<std::mutex> lk(mu);
         if (close_after_write)
         {
+            std::unique_lock<std::mutex> lk(mu);
             if (!finished)
             {
                 /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
                 send_queue.push(nullptr);
                 LOG_TRACE(log, "sending a nullptr to finish write.");
             }
-        }
-        else /// double check abnormal cases
-        {
-            if (finished)
-                throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
     }
 }
