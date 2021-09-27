@@ -31,12 +31,9 @@ public:
 
     void insert(const struct statvfs & vfs, const FsStats & fs_stat, const String & path);
 
-    // Note that caller should never call `insert` after `getBiggestAvailableDisk`, or the
-    // iterator of biggest available disk will be invalid.
-    using Iterator = std::unordered_map<FSID, DiskInfo>::const_iterator;
-    std::tuple<size_t, size_t, Iterator> getBiggestAvailableDisk() const;
-
-    Iterator end() const { return disks_stats.end(); }
+    // Note that caller should never call `insert` after `getAvailablePaths`,
+    // or nothing will be invalid.
+    std::tuple<size_t, size_t, std::vector<std::pair<FsStats, String>>> getAvailablePaths() const;
 
 private:
     std::unordered_map<FSID, DiskInfo> disks_stats;

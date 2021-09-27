@@ -36,33 +36,46 @@ void DisksCapacity::insert(const struct statvfs & vfs, const FsStats & fs_stat, 
     }
 }
 
-std::tuple<size_t, size_t, DisksCapacity::Iterator> DisksCapacity::getBiggestAvailableDisk() const
+std::tuple<size_t, size_t, std::vector<std::pair<FsStats, String>>> DisksCapacity::getAvailablePaths() const
 {
+    std::vector<std::pair<FsStats, String>> path_stats;
+    size_t total_stat_avail_size = 0;
     size_t total_avail_size = 0;
-    size_t biggest_avail_size = 0;
-    DisksCapacity::Iterator biggest_disk_iter = disks_stats.end();
-    for (auto iter = disks_stats.begin(); iter != disks_stats.end(); ++iter)
+
+    for (const auto & disks_stat : disks_stats)
     {
         size_t disk_stat_avail_size = 0;
-        const auto & single_disk = iter->second;
+        const auto & single_disk = disks_stat.second;
         const auto & vfs_info = single_disk.disk.vfs_info;
 
-        for (const auto & path_stats : single_disk.disk.path_stats)
+        for (const auto & path_stat : single_disk.disk.path_stats)
         {
-            disk_stat_avail_size += path_stats.avail_size;
+            disk_stat_avail_size += path_stat.avail_size;
         }
 
-        // Calutate single disk info
+        total_stat_avail_size += disk_stat_avail_size;
         disk_stat_avail_size = std::min(vfs_info.f_bavail * vfs_info.f_frsize, disk_stat_avail_size);
-        if (disk_stat_avail_size > biggest_avail_size)
+        if (disk_stat_avail_size == 0)
         {
-            biggest_avail_size = disk_stat_avail_size;
-            biggest_disk_iter = iter;
+            continue;
         }
-
         total_avail_size += disk_stat_avail_size;
+
+        size_t position = 0;
+        for (const auto & path_stat : single_disk.disk.path_stats)
+        {
+            if (path_stat.avail_size != 0)
+            {
+                path_stats.emplace_back(std::make_pair(path_stat, single_disk.paths[position++]));
+            }
+            else
+            {
+                position++;
+            }
+        }
     }
-    return {total_avail_size, biggest_avail_size, biggest_disk_iter};
+
+    return {total_stat_avail_size, total_avail_size, path_stats};
 }
 
 inline size_t safeGetQuota(const std::vector<size_t> & quotas, size_t idx)

@@ -565,7 +565,7 @@ TEST_F(PathCapcatity, ChoosePath)
         ASSERT_EQ(path, main_data_path1);
     }
 
-    // Add disk3, and disk3 have some available size but smaller than disk2
+    // Add disk3, and disk3 have some available size
     {
         struct statvfs fake_vfs = {};
         fake_vfs.f_fsid = 102;
@@ -575,7 +575,7 @@ TEST_F(PathCapcatity, ChoosePath)
         disks_capacity.insert(fake_vfs, {.used_size = 200, .avail_size = 300, .capacity_size = 500, .ok = 1}, main_data_path2);
 
         auto path = callChoosePath({main_data_path, main_data_path1, main_data_path2}, disks_capacity);
-        ASSERT_EQ(path, main_data_path1);
+        ASSERT_TRUE(path == main_data_path1 || path == main_data_path2);
     }
 
     // Add a new path in disk2
@@ -588,20 +588,22 @@ TEST_F(PathCapcatity, ChoosePath)
         disks_capacity.insert(fake_vfs, {.used_size = 250, .avail_size = 500, .capacity_size = 2000, .ok = 1}, main_data_path3);
 
         auto path = callChoosePath({main_data_path, main_data_path1, main_data_path2, main_data_path3}, disks_capacity);
-        // Should return main_data_path1 or main_data_path3
-        ASSERT_TRUE(path == main_data_path1 || path == main_data_path3);
+        // Should return main_data_path1/main_data_path2/main_data_path3
+        ASSERT_TRUE(path == main_data_path1 || path == main_data_path2 || path == main_data_path3);
     }
 
-    { // Add a new path in disk4
+    // Add a new path without available size in disk2
+    {
         struct statvfs fake_vfs = {};
-        fake_vfs.f_fsid = 103;
+        fake_vfs.f_fsid = 101;
         fake_vfs.f_blocks = 1000;
-        fake_vfs.f_bavail = 900;
+        fake_vfs.f_bavail = 500;
         fake_vfs.f_frsize = 1;
-        disks_capacity.insert(fake_vfs, {.used_size = 888, .avail_size = 9000, .capacity_size = 2000, .ok = 1}, main_data_path4);
+        disks_capacity.insert(fake_vfs, {.used_size = 250, .avail_size = 0, .capacity_size = 200, .ok = 1}, main_data_path4);
 
         auto path = callChoosePath({main_data_path, main_data_path1, main_data_path2, main_data_path3, main_data_path4}, disks_capacity);
-        ASSERT_EQ(path, main_data_path4);
+        // Should return main_data_path1/main_data_path2/main_data_path3
+        ASSERT_TRUE(path == main_data_path1 || path == main_data_path2 || path == main_data_path3);
     }
 
     dropDataOnDisk(main_data_path1);

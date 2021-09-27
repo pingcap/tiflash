@@ -32,9 +32,9 @@ String choose(const std::vector<T> & paths, const P & global_capacity, std::func
 
     /// Calutate total_available_size and get a biggest fs
     size_t total_available_size = 0;
-    size_t biggest_avail_size = 0;
-    DisksCapacity::Iterator biggest_disk_iter = all_disks.end();
-    std::tie(total_available_size, biggest_avail_size, biggest_disk_iter) = all_disks.getBiggestAvailableDisk();
+    size_t total_stat_available_size = 0;
+    std::vector<std::pair<FsStats, String>> path_stats;
+    std::tie(total_stat_available_size, total_available_size, path_stats) = all_disks.getAvailablePaths();
 
     // We should choose path even if there is no available space.
     // If the actual disk space is running out, let the later `write` to throw exception.
@@ -48,17 +48,30 @@ String choose(const std::vector<T> & paths, const P & global_capacity, std::func
         return path_generator(paths[0].path);
     }
 
-    if (unlikely(biggest_disk_iter == all_disks.end()))
+    if (total_stat_available_size > total_available_size)
     {
-        LOG_WARNING(log, "Some of DISK have been removed.");
-        return path_generator(paths[0].path);
+        LOG_WARNING(log, "Total stat available size bigger than total disk available size.");
     }
 
-    const auto & select_paths = biggest_disk_iter->second.paths;
+    std::vector<double> ratio;
+    for (const auto & stats : path_stats)
+    {
+        ratio.push_back(1.0 * stats.first.avail_size / total_stat_available_size);
+    }
 
-    double rand_number = rand() % select_paths.size();
-    LOG_INFO(log, "Choose path [path=" << select_paths[rand_number] << "] " << log_msg);
-    return path_generator(select_paths[rand_number]);
+    double rand_number = (double)rand() / RAND_MAX;
+    double ratio_sum = 0.0;
+    for (size_t i = 0; i < ratio.size(); i++)
+    {
+        ratio_sum += ratio[i];
+        if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
+        {
+            LOG_INFO(log, "Choose path [index=" << i << "] " << log_msg);
+            return path_generator(path_stats[i].second);
+        }
+    }
+
+    throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
 }
 
 } // namespace PathSelector
