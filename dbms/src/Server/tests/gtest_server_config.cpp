@@ -332,7 +332,10 @@ static void validate_bool_config(SettingBool & setting, String input, bool expec
         }
         ASSERT_EQ(expect_exception, true);
         ASSERT_EQ(setting, expect_value);
+        return;
     }
+    ASSERT_EQ(expect_exception, false);
+    ASSERT_EQ(setting, expect_value);
 }
 
 TEST_F(UsersConfigParser_test, ReloadBoolSetting)
@@ -362,17 +365,18 @@ dt_read_stable_only = true
         ASSERT_EQ(global_ctx.getSettingsRef().dt_read_delta_only, true);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_read_stable_only, true);
     }
-    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "1", true, false);
-    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "0", false, false);
-    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "2", false, true);
-    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "10", false, true);
+    SettingBool test_config = false;
+    validate_bool_config(test_config, "1", true, false);
+    validate_bool_config(test_config, "0", false, false);
+    validate_bool_config(test_config, "2", false, true);
+    validate_bool_config(test_config, "10", false, true);
 
-    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "false", false, false);
-    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "ture", false, true);
-    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "true", true, false);
-    validate_bool_config(global_ctx.getSettingsRef().dt_enable_rough_set_filter, "flase", true, true);
-    validate_bool_config(global_ctx.getSettingsRef().join_concurrent_build, "false", false, false);
-    validate_bool_config(global_ctx.getSettingsRef().join_concurrent_build, "true", true, false);
+    validate_bool_config(test_config, "false", false, false);
+    validate_bool_config(test_config, "ture", false, true);
+    validate_bool_config(test_config, "true", true, false);
+    validate_bool_config(test_config, "flase", true, true);
+    validate_bool_config(test_config, "false", false, false);
+    validate_bool_config(test_config, "true", true, false);
 
     global_ctx.setSettings(origin_settings);
 }
