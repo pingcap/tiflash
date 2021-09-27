@@ -64,6 +64,7 @@ CPUAffinityManager::CPUAffinityManager()
     , log(&Poco::Logger::get("CPUAffinityManager"))
 {}
 
+#ifdef __linux__
 void CPUAffinityManager::init(const CPUAffinityConfig & config)
 {
     query_cpu_percent = config.query_cpu_percent;
@@ -127,12 +128,7 @@ void CPUAffinityManager::bindSelfOtherThread() const
 
 void CPUAffinityManager::bindSelfGrpcThread() const
 {
-#if __APPLE__ && __clang__
-    static __thread bool is_binding = false;
-#else
     static thread_local bool is_binding = false;
-#endif
-
     if (!is_binding)
     {
         bindSelfQueryThread();
@@ -142,14 +138,10 @@ void CPUAffinityManager::bindSelfGrpcThread() const
 
 std::string CPUAffinityManager::toString() const
 {
-// clang-format off
-#ifdef __linux__
+    // clang-format off
     return "enable " + std::to_string(enable()) + " query_cpu_percent " + std::to_string(query_cpu_percent) +
         " cpu_cores " + std::to_string(cpu_cores) + " query_cpu_set " + cpuSetToString(query_cpu_set) +
         " other_cpu_set " + cpuSetToString(other_cpu_set);
-#elif
-    return "not support";
-#endif
     // clang-format on
 }
 
@@ -188,13 +180,11 @@ void CPUAffinityManager::initCPUSet(cpu_set_t & cpu_set, int start, int count)
 
 void CPUAffinityManager::setAffinity(pid_t tid, const cpu_set_t & cpu_set) const
 {
-#ifdef __linux__
     int ret = sched_setaffinity(tid, sizeof(cpu_set), &cpu_set);
     if (ret != 0)
     {
         LOG_ERROR(log, "sched_setaffinity fail but ignore error: " << std::strerror(errno));
     }
-#endif
 }
 
 bool CPUAffinityManager::enable() const
@@ -312,7 +302,6 @@ void CPUAffinityManager::bindThreadCPUAffinity() const
 
 void CPUAffinityManager::checkThreadCPUAffinity() const
 {
-#ifdef __linux__
     auto threads = getThreads(getpid());
     for (const auto & t : threads)
     {
@@ -333,7 +322,6 @@ void CPUAffinityManager::checkThreadCPUAffinity() const
             LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is other thread and bind CPU info is error.");
         }
     }
-#endif
 }
-
+#endif
 } // namespace DB

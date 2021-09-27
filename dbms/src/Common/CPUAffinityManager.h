@@ -45,6 +45,7 @@ public:
     static CPUAffinityConfig readConfig(Poco::Util::LayeredConfiguration & config);
     static CPUAffinityManager & getInstance();
 
+#ifdef __linux__
     void init(const CPUAffinityConfig & config);
 
     void bindQueryThread(pid_t tid) const;
@@ -57,10 +58,24 @@ public:
     std::string toString() const;
 
     void bindThreadCPUAffinity() const;
+#else
+    void init(const CPUAffinityConfig &)
+    {}
+
+    void bindQueryThread(pid_t) const {}
+    void bindOtherThread(pid_t) const {}
+
+    void bindSelfQueryThread() const {}
+    void bindSelfOtherThread() const {}
+    void bindSelfGrpcThread() const {}
+
+    std::string toString() const { return "Not Support"; }
+
+    void bindThreadCPUAffinity() const {}
+#endif
 
 private:
-    CPUAffinityManager();
-
+#ifdef __linux__
     void initCPUSet();
     int getCPUCores() const;
     int getQueryCPUCores() const;
@@ -80,13 +95,16 @@ private:
     std::string getShortFilename(const std::string & path) const;
     bool isQueryThread(const std::string & name) const;
 
+    cpu_set_t query_cpu_set;
+    cpu_set_t other_cpu_set;
+#endif
+
     int query_cpu_percent;
     int cpu_cores;
     std::vector<std::string> query_threads;
-    cpu_set_t query_cpu_set;
-    cpu_set_t other_cpu_set;
     Poco::Logger * log;
 
+    CPUAffinityManager();
     // Disable copy and move
     CPUAffinityManager(const CPUAffinityManager &) = delete;
     CPUAffinityManager & operator=(const CPUAffinityManager &) = delete;
