@@ -12,13 +12,13 @@ public:
         std::string path = p_file->path();
         delete p_file;
         std::string arch_path = path;
-        archPath.append(".");
-        DateTimeFormatter::append(archPath, DT().timestamp(), suffix_fmt);
+        arch_path.append(".");
+        DateTimeFormatter::append(arch_path, DT().timestamp(), suffix_fmt);
 
-        if (this->exists(archPath))
-            this->archiveByNumber(archPath);
+        if (this->exists(arch_path))
+            this->archiveByNumber(arch_path);
         else
-            this->moveFile(path, archPath);
+            this->moveFile(path, arch_path);
 
         return new LogFile(path);
     }
