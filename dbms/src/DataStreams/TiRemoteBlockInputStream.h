@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
@@ -8,7 +9,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
-#include <Common/TiFlashMetrics.h>
 
 #include <chrono>
 #include <mutex>
@@ -161,6 +161,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             if (unlikely(block.rows() == 0))
                 continue;
             assertBlockSchema(expected_types, block, getName());
+
+            GET_METRIC(tiflash_receiver_gauge, type_decode_buffer).Increment(block.bytes());
             block_queue.push(std::move(block));
 
             GET_METRIC(tiflash_receiver_counter, type_in_blocks).Increment();
@@ -214,6 +216,7 @@ public:
         }
         // todo should merge some blocks to make sure the output block is big enough
         Block block = block_queue.front();
+        GET_METRIC(tiflash_receiver_gauge, type_decode_buffer).Decrement(block.bytes());
         block_queue.pop();
         return block;
     }

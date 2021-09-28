@@ -210,7 +210,8 @@ namespace DB
       F(type_in_blocks, {"type", "in_blocks"}))                                                                                                                                                       \
     M(tiflash_receiver_gauge, "", Gauge, /**/                                                                                                                                                         \
       F(type_read_threads, {"type", "read_threads"}),                                                                                                                                                 \
-      F(type_read_buffer, {"type", "read_buffer"}))                                                                                                                                                   \
+      F(type_read_buffer, {"type", "read_buffer"}),                                                                                                                                                   \
+      F(type_decode_buffer, {"type", "decode_buffer"}))                                                                                                                                               \
     M(tiflash_sender_counter, "", Counter, /**/                                                                                                                                                       \
       F(type_broadcast_out_bytes, {"type", "broadcast_out_bytes"}),                                                                                                                                   \
       F(type_broadcast_out_chunks, {"type", "broadcast_out_chunks"}),                                                                                                                                 \
@@ -230,7 +231,13 @@ namespace DB
       F(type_materialize_out_blocks, {"type", "materialize_out_blocks"}))                                                                                                                             \
     M(tiflash_aggregation_gauge, "", Gauge, /**/                                                                                                                                                      \
       F(type_build_threads, {"type", "build_threads"}),                                                                                                                                               \
-      F(type_materialize_threads, {"type", "materialize_threads"}))
+      F(type_materialize_threads, {"type", "materialize_threads"}))                                                                                                                                   \
+    M(tiflash_squash_counter, "", Counter, /**/                                                                                                                                                       \
+      F(type_ops, {"type", "ops"}),                                                                                                                                                                   \
+      F(type_in_bytes, {"type", "in_bytes"}),                                                                                                                                                         \
+      F(type_in_blocks, {"type", "in_blocks"}),                                                                                                                                                       \
+      F(type_out_bytes, {"type", "out_bytes"}),                                                                                                                                                       \
+      F(type_out_blocks, {"type", "out_blocks"}))
 
 struct ExpBuckets
 {

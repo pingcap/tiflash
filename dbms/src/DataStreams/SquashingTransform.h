@@ -47,6 +47,8 @@ private:
 
     Block accumulated_block;
 
+    Result addImpl(Block && block);
+
     void append(Block && block);
 
     bool isEnoughSize(size_t rows, size_t bytes) const;

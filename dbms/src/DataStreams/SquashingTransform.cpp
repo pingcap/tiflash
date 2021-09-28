@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <DataStreams/SquashingTransform.h>
 #include <common/logger_useful.h>
 
@@ -12,8 +13,24 @@ SquashingTransform::SquashingTransform(size_t min_block_size_rows, size_t min_bl
     LOG_DEBUG(log, "Squashing config - min_block_size_rows: " << min_block_size_rows << " min_block_size_bytes: " << min_block_size_bytes);
 }
 
-
 SquashingTransform::Result SquashingTransform::add(Block && block)
+{
+    GET_METRIC(tiflash_squash_counter, type_ops).Increment();
+    GET_METRIC(tiflash_squash_counter, type_in_blocks).Increment();
+    GET_METRIC(tiflash_squash_counter, type_in_bytes).Increment(block.bytes());
+
+    auto result = addImpl(std::move(block));
+
+    if (result.ready)
+    {
+        GET_METRIC(tiflash_squash_counter, type_out_blocks).Increment();
+        GET_METRIC(tiflash_squash_counter, type_out_bytes).Increment(result.block.bytes());
+    }
+
+    return result;
+}
+
+SquashingTransform::Result SquashingTransform::addImpl(Block && block)
 {
     if (!block)
         return Result(std::move(accumulated_block));
