@@ -6,6 +6,7 @@
 #pragma GCC diagnostic pop
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
@@ -78,8 +79,10 @@ public:
         const TiDB::TiDBCollatorPtr & collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_ts_column);
+    bool appendDurationCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_ts_column, const DAGQueryBlock & query_block);
     bool appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
+    String appendDurationCast(const String & dr_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
     String convertToUInt8(ExpressionActionsPtr & actions, const String & column_name);
     const Context & getContext() const { return context; }

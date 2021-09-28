@@ -18,8 +18,10 @@ public:
 
     TypeIndex getTypeId() const override { return TypeIndex::MyTime; }
 
+    bool isComparable() const override { return true; };
     bool canBeUsedAsVersion() const override { return true; }
     bool canBeInsideNullable() const override { return true; };
+    bool isCategorial() const override { return true; }
     bool isMyTime() const override { return true; };
 
     bool equals(const IDataType & rhs) const override;

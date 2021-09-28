@@ -49,6 +49,7 @@ public:
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     BoolVec is_timestamp_column;
+    BoolVec is_duration_column;
     /// it should be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry;
     /// Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
@@ -69,7 +70,7 @@ private:
 
     std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorage(Int64 query_schema_version);
 
-    std::tuple<Names, NamesAndTypes, BoolVec, String> getColumnsForTableScan(Int64 max_columns_to_read);
+    std::tuple<Names, NamesAndTypes, BoolVec, BoolVec, String> getColumnsForTableScan(Int64 max_columns_to_read);
 
     std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> buildRemoteTS();
 

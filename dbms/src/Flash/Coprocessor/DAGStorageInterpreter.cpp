@@ -146,7 +146,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
     std::tie(storage, table_structure_lock) = getAndLockStorage(settings.schema_version);
 
-    std::tie(required_columns, source_columns, is_timestamp_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
+    std::tie(required_columns, source_columns, is_timestamp_column, is_duration_column,handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
@@ -460,7 +460,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     }
 }
 
-std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColumnsForTableScan(Int64 max_columns_to_read)
+std::tuple<Names, NamesAndTypes, BoolVec, BoolVec, String> DAGStorageInterpreter::getColumnsForTableScan(Int64 max_columns_to_read)
 {
     // todo handle alias column
     if (max_columns_to_read && table_scan.columns().size() > max_columns_to_read)
@@ -474,6 +474,7 @@ std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColu
     Names required_columns_;
     NamesAndTypes source_columns_;
     BoolVec timestamp_column_flag;
+    BoolVec duration_column_flag;
     String handle_column_name_ = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         handle_column_name_ = pk_handle_col->get().name;
@@ -489,9 +490,10 @@ std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColu
         required_columns_.emplace_back(std::move(name));
         source_columns_.emplace_back(std::move(pair));
         timestamp_column_flag.push_back(cid != -1 && ci.tp() == TiDB::TypeTimestamp);
+        duration_column_flag.push_back(cid != -1 && ci.tp() == TiDB::TypeTime);
     }
 
-    return {required_columns_, source_columns_, timestamp_column_flag, handle_column_name_};
+    return {required_columns_, source_columns_, timestamp_column_flag, duration_column_flag, handle_column_name_};
 }
 
 std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorageInterpreter::buildRemoteTS()

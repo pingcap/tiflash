@@ -110,6 +110,7 @@ private:
     std::vector<SubqueriesForSets> & subqueriesForSets;
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
     BoolVec timestamp_column_flag_for_tablescan;
+    BoolVec duration_column_flag_for_tablescan;
 
     const LogWithPrefixPtr log;
 };

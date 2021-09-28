@@ -87,12 +87,14 @@ namespace
 struct AnalysisResult
 {
     bool need_timezone_cast_after_tablescan = false;
+    bool need_duration_cast_after_tablescan = false;
     bool has_where = false;
     bool need_aggregate = false;
     bool has_having = false;
     bool has_order_by = false;
 
     ExpressionActionsPtr timezone_cast;
+    ExpressionActionsPtr duration_cast;
     NamesWithAliases project_after_ts_and_filter_for_remote_read;
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr project_after_where;
@@ -127,12 +129,28 @@ bool addTimeZoneCastAfterTS(
     return analyzer.appendTimeZoneCastsAfterTS(chain, is_ts_column);
 }
 
+bool addDurationCastAfterTS(
+        DAGExpressionAnalyzer & analyzer,
+        const BoolVec & is_dur_column,
+        ExpressionActionsChain & chain,
+        const DAGQueryBlock & query_block)
+{
+    bool hasDurColumn = false;
+    for (auto b : is_dur_column)
+        hasDurColumn |= b;
+    if (!hasDurColumn)
+        return false;
+
+    return analyzer.appendDurationCastsAfterTS(chain, is_dur_column, query_block);
+}
+
 AnalysisResult analyzeExpressions(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
     const BoolVec & is_ts_column,
+    const BoolVec & is_dur_column,
     bool keep_session_timezone_info,
     NamesWithAliases & final_project)
 {
@@ -147,6 +165,18 @@ AnalysisResult analyzeExpressions(
             res.timezone_cast = chain.getLastActions();
             chain.addStep();
             size_t index = 0;
+            for (const auto & col : analyzer.getCurrentInputColumns())
+            {
+                res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
+                index++;
+            }
+        }
+        if (addDurationCastAfterTS(analyzer, is_dur_column, chain, query_block)) {
+            res.need_duration_cast_after_tablescan = true;
+            res.duration_cast = chain.getLastActions();
+            chain.addStep();
+            size_t index = 0;
+            res.project_after_ts_and_filter_for_remote_read.clear();
             for (const auto & col : analyzer.getCurrentInputColumns())
             {
                 res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
@@ -300,6 +330,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
 
     analyzer = std::move(storage_interpreter.analyzer);
     timestamp_column_flag_for_tablescan = std::move(storage_interpreter.is_timestamp_column);
+    duration_column_flag_for_tablescan = std::move(storage_interpreter.is_duration_column);
 
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
@@ -1051,10 +1082,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block,
         conditions,
         timestamp_column_flag_for_tablescan,
+        duration_column_flag_for_tablescan,
         keep_session_timezone_info,
         final_project);
 
-    if (res.need_timezone_cast_after_tablescan || res.has_where)
+    if (res.need_timezone_cast_after_tablescan|| res.need_duration_cast_after_tablescan || res.has_where)
     {
         /// execute timezone cast and the selection
         ExpressionActionsPtr project_for_cop_read;
@@ -1077,6 +1109,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                 /// execute timezone cast if needed
                 if (res.need_timezone_cast_after_tablescan)
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast, log);
+                if (res.need_duration_cast_after_tablescan)
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.duration_cast, log);
                 /// execute selection if needed
                 if (res.has_where)
                 {

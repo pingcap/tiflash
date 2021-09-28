@@ -9,6 +9,45 @@
 
 namespace DB
 {
+class FunctionConvertDurationFromInt64 : public IFunction
+{
+public:
+    static constexpr auto name = "ConvertDurationFromInt64";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionConvertDurationFromInt64>(); };
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (arguments.size() != 2)
+        {
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2",
+                            getName(),
+                            toString(arguments.size())),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
+        if (!arguments[0].type->isInteger())
+        {
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0].type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        if (!arguments[1].type->isInteger() || !arguments[1].column->isColumnConst())
+        {
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1].type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        auto fsp = arguments[1].column.get()->getInt(0);
+        return std::make_shared<DataTypeMyDuration>(fsp);
+    }
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        block.getByPosition(result).column = std::move(block.getByPosition(arguments[0]).column);
+    }
+};
+
 template <typename Impl>
 class FunctionDurationSplit : public IFunction
 {
@@ -48,7 +87,7 @@ public:
                                 + " of first argument of function " + name,
                             ErrorCodes::ILLEGAL_COLUMN);
         }
-        auto test = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
+        const auto * test = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
         if (test != nullptr)
         {
             test->getFsp();
@@ -117,6 +156,8 @@ using FunctionDurationMicroSecond = FunctionDurationSplit<DurationSplitMicroSeco
 
 void registerFunctionsDuration(FunctionFactory & factory)
 {
+    factory.registerFunction<FunctionConvertDurationFromInt64>();
+
     factory.registerFunction<FunctionDurationHour>();
     factory.registerFunction<FunctionDurationMinute>();
     factory.registerFunction<FunctionDurationSecond>();

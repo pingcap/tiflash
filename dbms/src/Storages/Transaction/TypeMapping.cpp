@@ -7,7 +7,6 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
-#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -91,7 +90,7 @@ template <typename T>
 inline constexpr bool IsEnumType = EnumType<T>::value;
 
 template <typename T, bool should_widen>
-std::enable_if_t<!IsSignedType<T> && !IsDecimalType<T> && !IsEnumType<T> && !std::is_same_v<T, DataTypeMyDateTime> && !std::is_same_v<T, DataTypeMyDuration>, DataTypePtr>
+std::enable_if_t<!IsSignedType<T> && !IsDecimalType<T> && !IsEnumType<T> && !std::is_same_v<T, DataTypeMyDateTime>, DataTypePtr>
 getDataTypeByColumnInfoBase(const ColumnInfo &, const T *)
 {
     DataTypePtr t = std::make_shared<T>();
@@ -153,22 +152,6 @@ std::enable_if_t<std::is_same_v<T, DataTypeMyDateTime>, DataTypePtr> getDataType
 
     return t;
 }
-
-template <typename T, bool should_widen>
-std::enable_if_t<std::is_same_v<T, DataTypeMyDuration>, DataTypePtr> getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
-{
-    // In some cases, TiDB will set the decimal to -1, change -1 to 6 to avoid error
-    DataTypePtr t = std::make_shared<T>(column_info.decimal == -1 ? 6 : column_info.decimal);
-
-    if (should_widen)
-    {
-        auto widen = t->widen();
-        t.swap(widen);
-    }
-
-    return t;
-}
-
 
 template <typename T, bool should_widen>
 std::enable_if_t<IsEnumType<T>, DataTypePtr> getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
@@ -437,10 +420,6 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     // Fill decimal for date time.
     if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
         column_info.decimal = type->getFraction();
-
-    // Fill decimal for time.
-    if (auto type = checkAndGetDataType<DataTypeMyDuration>(nested_type))
-        column_info.decimal = type->getFsp();
 
     // Fill elems for enum.
     if (checkDataType<DataTypeEnum16>(nested_type))

@@ -990,6 +990,44 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & 
     return ret;
 }
 
+String DAGExpressionAnalyzer::appendDurationCast(
+    const String & fsp_expr,
+    const String & dur_expr,
+    const String & func_name,
+    ExpressionActionsPtr & actions)
+{
+    String cast_expr_name = applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
+    return cast_expr_name;
+}
+
+bool DAGExpressionAnalyzer::appendDurationCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_dur_column, const DAGQueryBlock & query_block)
+{
+    bool ret = false;
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsPtr actions = chain.getLastActions();
+    String fsp_col;
+    String func_name = "ConvertDurationFromInt64";
+    auto columns = query_block.source->tbl_scan().columns();
+    for (size_t i = 0; i < is_dur_column.size(); i++)
+    {
+        if (is_dur_column[i])
+        {
+            tipb::Expr fsp_expr;
+            auto fsp = columns[i].decimal() < 0 ? 6 : columns[i].decimal();
+            constructInt64LiteralTiExpr(fsp_expr, fsp);
+            fsp_col = getActions(fsp_expr, actions);
+            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, func_name, actions);
+            source_columns[i].name = casted_name;
+            ret = true;
+        }
+    }
+    NamesWithAliases project_cols;
+    for (auto & col : source_columns)
+        project_cols.emplace_back(col.name, col.name);
+    actions->add(ExpressionAction::project(project_cols));
+    return ret;
+}
+
 void DAGExpressionAnalyzer::appendJoin(
     ExpressionActionsChain & chain,
     SubqueryForSet & join_query,
@@ -1383,6 +1421,17 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
             String tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions);
+            ret = casted_name;
+        }
+        if (expr.field_type().tp() == TiDB::TypeTime)
+        {
+            /// append duration cast for duration literal
+            tipb::Expr fsp_expr;
+            auto fsp = expr.field_type().decimal() < 0 ? 6 : expr.field_type().decimal();
+            constructInt64LiteralTiExpr(fsp_expr, fsp);
+            String func_name = "ConvertDurationFromInt64";
+            String fsp_col = getActions(fsp_expr, actions);
+            String casted_name = appendDurationCast(fsp_col, ret, func_name, actions);
             ret = casted_name;
         }
     }
