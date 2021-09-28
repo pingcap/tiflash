@@ -3466,7 +3466,7 @@ private:
     }
 
     template <typename T>
-    static T round(T number, const size_t max_num_decimals, const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    static T round(T number, const size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
         if constexpr (IsDecimal<T>)
             return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);

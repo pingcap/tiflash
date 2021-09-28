@@ -159,7 +159,6 @@ static void formatIntegerTestCase()
     using NullableInteger = Nullable<Integer>;
     if constexpr (std::is_same_v<Integer, Int8> || std::is_same_v<Integer, UInt8>)
     {
-
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"10.0000", {}}),
             executeFunction(
