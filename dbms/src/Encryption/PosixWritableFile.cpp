@@ -122,7 +122,7 @@ int PosixWritableFile::fsync()
     return ::fsync(fd);
 }
 
-void PosixWritableFile::hardLink(const std::string existing_file)
+void PosixWritableFile::hardLink(const std::string & existing_file)
 {
     if (existing_file.empty())
     {

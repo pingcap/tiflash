@@ -28,7 +28,7 @@ public:
     virtual int fsync() = 0;
 
     // Create a new hard link file for `existing_file` to this file
-    virtual void hardLink(const std::string existing_file) = 0;
+    virtual void hardLink(const std::string & existing_file) = 0;
 };
 
 using WritableFilePtr = std::shared_ptr<WritableFile>;
