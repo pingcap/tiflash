@@ -81,6 +81,10 @@ void MPPTunnelBase<Writer>::close(const String & reason)
         /// should wait the errors being sent in abnormal cases.
         cv_for_finished.wait(lk, [&]() { return finished.load(); });
     }
+    else
+    {
+        finished = true;
+    }
 }
 
 template <typename Writer>
