@@ -8,6 +8,7 @@
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadFactory.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -513,6 +514,26 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
 {
     if (isCancelled())
         return true;
+
+    struct Tracker
+    {
+        Tracker()
+        {
+            GET_METRIC(tiflash_aggregation_gauge, type_build_threads).Increment();
+        }
+
+        ~Tracker()
+        {
+            GET_METRIC(tiflash_aggregation_gauge, type_build_threads).Decrement();
+        }
+    };
+    thread_local std::unique_ptr<Tracker> tracker;
+    if (!tracker)
+        tracker = std::make_unique<Tracker>();
+
+    GET_METRIC(tiflash_aggregation_counter, type_build_ops).Increment();
+    GET_METRIC(tiflash_aggregation_counter, type_build_in_blocks).Increment();
+    GET_METRIC(tiflash_aggregation_counter, type_build_in_bytes).Increment(block.bytes());
 
     /// `result` will destroy the states of aggregate functions in the destructor
     result.aggregator = this;
@@ -1460,11 +1481,43 @@ public:
 protected:
     Block readImpl() override
     {
+        struct Tracker
+        {
+            Tracker()
+            {
+                GET_METRIC(tiflash_aggregation_gauge, type_materialize_threads).Increment();
+            }
+
+            ~Tracker()
+            {
+                GET_METRIC(tiflash_aggregation_gauge, type_materialize_threads).Decrement();
+            }
+        };
+
+        thread_local std::unique_ptr<Tracker> tracker;
+        if (!tracker)
+            tracker = std::make_unique<Tracker>();
+
+        auto block = readImplImpl();
+
+        if (block)
+        {
+            GET_METRIC(tiflash_aggregation_counter, type_materialize_out_blocks).Increment();
+            GET_METRIC(tiflash_aggregation_counter, type_materialize_out_bytes).Increment(block.bytes());
+        }
+
+        return block;
+    }
+
+    Block readImplImpl()
+    {
         if (data.empty())
             return {};
 
         if (current_bucket_num >= NUM_BUCKETS)
             return {};
+
+        GET_METRIC(tiflash_aggregation_counter, type_materialize_ops).Increment();
 
         AggregatedDataVariantsPtr & first = data[0];
 

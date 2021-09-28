@@ -220,7 +220,17 @@ namespace DB
       F(type_partition_out_blocks, {"type", "partition_out_blocks"}))                                                                                                                                 \
     M(tiflash_sender_gauge, "", Gauge, /**/                                                                                                                                                           \
       F(type_write_threads, {"type", "write_threads"}),                                                                                                                                               \
-      F(type_write_buffer, {"type", "write_buffer"}))
+      F(type_write_buffer, {"type", "write_buffer"}))                                                                                                                                                 \
+    M(tiflash_aggregation_counter, "", Counter, /**/                                                                                                                                                  \
+      F(type_build_ops, {"type", "build_ops"}),                                                                                                                                                       \
+      F(type_build_in_bytes, {"type", "build_in_bytes"}),                                                                                                                                             \
+      F(type_build_in_blocks, {"type", "build_in_blocks"}),                                                                                                                                           \
+      F(type_materialize_ops, {"type", "materialize_ops"}),                                                                                                                                           \
+      F(type_materialize_out_bytes, {"type", "materialize_out_bytes"}),                                                                                                                               \
+      F(type_materialize_out_blocks, {"type", "materialize_out_blocks"}))                                                                                                                             \
+    M(tiflash_aggregation_gauge, "", Gauge, /**/                                                                                                                                                      \
+      F(type_build_threads, {"type", "build_threads"}),                                                                                                                                               \
+      F(type_materialize_threads, {"type", "materialize_threads"}))
 
 struct ExpBuckets
 {
