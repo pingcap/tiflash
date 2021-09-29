@@ -7,7 +7,6 @@ ThreadPool::ThreadPool(size_t m_size_, Job pre_worker_)
     : m_size(m_size_)
     , pre_worker(std::move(pre_worker_))
 {
-    threads.reserve(m_size);
 }
 
 void ThreadPool::init()
@@ -15,6 +14,7 @@ void ThreadPool::init()
     std::unique_lock<std::mutex> lock(mutex);
     if (!inited)
     {
+        threads.reserve(m_size);
         for (size_t i = 0; i < m_size; ++i)
             threads.emplace_back([this] {
                 pre_worker();
@@ -62,8 +62,6 @@ ThreadPool::~ThreadPool()
     {
         std::unique_lock<std::mutex> lock(mutex);
         shutdown = true;
-        if (!inited)
-            return;
     }
 
     has_new_job_or_shutdown.notify_all();
