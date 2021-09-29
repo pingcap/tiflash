@@ -370,7 +370,6 @@ void PageStorage::restore()
                 page_file.getDiskSize(),
                 page_file.parentPath(),
                 /*need_insert_location*/ true);
-            LOG_DEBUG(log, "Metric size test " << page_file.parentPath() << " PageFile " << page_file.fileIdLevel().first << "." << page_file.fileIdLevel().second << " restore " << page_file.getDiskSize() << "bytes");
             // Try best to reuse writable page files
             if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
@@ -573,7 +572,6 @@ void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
                                        bytes_written,
                                        file_to_write->parentPath(),
                                        /*need_insert_location*/ false);
-        LOG_DEBUG(log, "Metric size test " << file_to_write->parentPath() << " PageFile " << file_to_write->fileIdLevel().first << "." << file_to_write->fileIdLevel().second << " write " << bytes_written << "bytes");
     }
     catch (...)
     {
@@ -1205,7 +1203,6 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
                 file.remove(true);
                 page_file.deleteEncryptionInfo();
                 delegator->removePageFile(page_file.fileIdLevel(), file_size, false);
-                LOG_DEBUG(log, "Metric size test " << page_file.folderPath() << " PageFile "  << page_file.fileIdLevel().first << "." << page_file.fileIdLevel().second << " archive size " << file_size << "bytes");
             }
         }
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
@@ -1275,7 +1272,6 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
             // work around by using a const_cast
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
             delegator->removePageFile(page_id_and_lvl, bytes_removed, true);
-            LOG_DEBUG(log, "Metric size test " << page_file.folderPath() << " PageFile " << page_id_and_lvl.first << "." << page_id_and_lvl.second << " archive size " << bytes_removed << "bytes");
             num_data_removed += 1;
         }
     }
