@@ -16,8 +16,10 @@ class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info);
+DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_info);
 
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type);
+DataTypePtr getDataTypeByFieldTypeForComputingLayer(const tipb::FieldType & field_type);
 
 TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 

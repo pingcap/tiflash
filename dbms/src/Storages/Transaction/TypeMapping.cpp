@@ -7,6 +7,7 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -186,7 +187,21 @@ DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info)
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
 {
     DataTypePtr base = TypeMapping::instance().getDataType(column_info);
+    if (!column_info.hasNotNullFlag())
+    {
+        return std::make_shared<DataTypeNullable>(base);
+    }
+    return base;
+}
 
+DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_info)
+{
+    DataTypePtr base = TypeMapping::instance().getDataType(column_info);
+
+    if (column_info.tp == TiDB::TypeTime)
+    {
+        return std::make_shared<DataTypeMyDuration>(column_info.decimal);
+    }
     if (!column_info.hasNotNullFlag())
     {
         return std::make_shared<DataTypeNullable>(base);
@@ -198,6 +213,16 @@ DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type)
 {
     ColumnInfo ci = TiDB::fieldTypeToColumnInfo(field_type);
+    return getDataTypeByColumnInfo(ci);
+}
+
+DataTypePtr getDataTypeByFieldTypeForComputingLayer(const tipb::FieldType & field_type)
+{
+    ColumnInfo ci = TiDB::fieldTypeToColumnInfo(field_type);
+    if (field_type.tp() == TiDB::TypeTime)
+    {
+        return std::make_shared<DataTypeMyDuration>(field_type.decimal());
+    }
     return getDataTypeByColumnInfo(ci);
 }
 

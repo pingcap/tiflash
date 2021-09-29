@@ -3,6 +3,7 @@
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Columns/ColumnSet.h>
 #include <Common/TiFlashException.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -1018,6 +1019,7 @@ bool DAGExpressionAnalyzer::appendDurationCastsAfterTS(ExpressionActionsChain & 
             fsp_col = getActions(fsp_expr, actions);
             String casted_name = appendDurationCast(fsp_col, source_columns[i].name, func_name, actions);
             source_columns[i].name = casted_name;
+            source_columns[i].type = std::make_shared<DataTypeMyDuration>(fsp);
             ret = true;
         }
     }
@@ -1222,7 +1224,7 @@ void DAGExpressionAnalyzer::generateFinalProject(
         for (UInt32 i : output_offsets)
         {
             auto & actual_type = current_columns[i].type;
-            auto expected_type = getDataTypeByFieldType(schema[i]);
+            auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
             if (actual_type->getName() != expected_type->getName())
             {
                 need_append_type_cast = true;
