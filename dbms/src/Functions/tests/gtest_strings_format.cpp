@@ -34,12 +34,12 @@ try
 
     const std::string func_name = "formatWithLocale";
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", {}, {}, {}}),
+        createColumn<Nullable<String>>({"0.0000", "-0.0120", "0.0120", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", "12,332.1235", {}, {}, {}}),
         executeFunction(
             func_name,
-            createColumn<Nullable<Float64>>({12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, {}, {}}),
-            createColumn<Nullable<Int64>>({4, 4, 4, 4, 4, {}, 4, {}}),
-            createColumn<Nullable<String>>({"en_US", "en_us", "EN_US", "xxx", {}, "xx1", "xx2", "xx3"})));
+            createColumn<Nullable<Float64>>({0, -.012, .012, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, 12332.123456, {}, {}}),
+            createColumn<Nullable<Int64>>({4, 4, 4, 4, 4, 4, 4, 4, {}, 4, {}}),
+            createColumn<Nullable<String>>({"en_US", "en_US", "en_US", "en_US", "en_us", "EN_US", "xxx", {}, "xx1", "xx2", "xx3"})));
 
     auto gen_warning_str = [](const std::string & value) -> std::string {
         return fmt::format("Unknown locale: \'{}\'", value);
@@ -64,12 +64,15 @@ static void formatDecimalTestCase(int precision)
     using FieldType = DecimalField<Decimal>;
     using NullableDecimal = Nullable<Decimal>;
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"12,332.1000", "12,332", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),
+        createColumn<Nullable<String>>({"0.0000", "-0.0120", "0.0120", "12,332.1000", "12,332", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),
         executeFunction(
             func_name,
             createColumn<NullableDecimal>(
                 std::make_tuple(precision, 4),
-                {FieldType(static_cast<Native>(123321000), 4),
+                {FieldType(static_cast<Native>(0), 4),
+                 FieldType(static_cast<Native>(-120), 4),
+                 FieldType(static_cast<Native>(120), 4),
+                 FieldType(static_cast<Native>(123321000), 4),
                  FieldType(static_cast<Native>(123322000), 4),
                  FieldType(static_cast<Native>(123323000), 4),
                  FieldType(static_cast<Native>(123323000), 4),
@@ -77,7 +80,7 @@ static void formatDecimalTestCase(int precision)
                  FieldType(static_cast<Native>(-9999999), 4),
                  FieldType(static_cast<Native>(-3333330), 4),
                  FieldType(static_cast<Native>(0), 0)}),
-            createColumn<Nullable<Int64>>({4, 0, -1, 31, 5, 1, 2, {}})));
+            createColumn<Nullable<Int64>>({4, 4, 4, 4, 0, -1, 31, 5, 1, 2, {}})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"12,332.100", "-12,332.300", "-1,000.000", "-333.333"}),
         executeFunction(
@@ -160,37 +163,37 @@ static void formatIntegerTestCase()
     if constexpr (std::is_same_v<Integer, Int8> || std::is_same_v<Integer, UInt8>)
     {
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({"10.0000", {}}),
+            createColumn<Nullable<String>>({"0.0000", "10.0000", {}}),
             executeFunction(
                 func_name,
-                createColumn<NullableInteger>({10, 10}),
-                createColumn<Nullable<Int64>>({4, {}})));
+                createColumn<NullableInteger>({0, 10, 10}),
+                createColumn<Nullable<Int64>>({4, 4, {}})));
         if constexpr (std::is_signed_v<Integer>)
         {
             ASSERT_COLUMN_EQ(
-                createColumn<Nullable<String>>({"-10.0000", {}}),
+                createColumn<Nullable<String>>({"0.0000", "-10.0000", {}}),
                 executeFunction(
                     func_name,
-                    createColumn<NullableInteger>({-10, -10}),
-                    createColumn<Nullable<Int64>>({4, {}})));
+                    createColumn<NullableInteger>({-0, -10, -10}),
+                    createColumn<Nullable<Int64>>({4, 4, {}})));
         }
     }
     else
     {
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({"31,234.0000", {}}),
+            createColumn<Nullable<String>>({"0.0000", "31,234.0000", {}}),
             executeFunction(
                 func_name,
-                createColumn<NullableInteger>({31234, 10}),
-                createColumn<Nullable<Int64>>({4, {}})));
+                createColumn<NullableInteger>({0, 31234, 10}),
+                createColumn<Nullable<Int64>>({4, 4, {}})));
         if constexpr (std::is_signed_v<Integer>)
         {
             ASSERT_COLUMN_EQ(
-                createColumn<Nullable<String>>({"-31,234.0000", {}}),
+                createColumn<Nullable<String>>({"0.0000", "-31,234.0000", {}}),
                 executeFunction(
                     func_name,
-                    createColumn<NullableInteger>({-31234, -31234}),
-                    createColumn<Nullable<Int64>>({4, {}})));
+                    createColumn<NullableInteger>({-0, -31234, -31234}),
+                    createColumn<Nullable<Int64>>({4, 4, {}})));
         }
     }
 }

@@ -6,6 +6,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
+#include <Functions/FunctionsRound.h>
 #include <Functions/FunctionsString.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
@@ -19,8 +20,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
 #include <thread>
-
-#include "FunctionsRound.h"
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -3302,18 +3301,18 @@ private:
     }
 };
 
-template <typename Format>
-class FunctionFormat : public IFunction
+template <typename Name, typename Format>
+class FormatImpl : public IFunction
 {
 public:
-    static constexpr auto name = "format";
-    explicit FunctionFormat(const Context & context_)
+    static constexpr auto name = Name::name;
+    explicit FormatImpl(const Context & context_)
         : context(context_)
     {}
 
     static FunctionPtr create(const Context & context_)
     {
-        return std::make_shared<FunctionFormat>(context_);
+        return std::make_shared<FormatImpl>(context_);
     }
 
     String getName() const override { return name; }
@@ -3341,21 +3340,20 @@ public:
     /// string format(number/decimal, int/uint)
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const auto number_base_type = block.getByPosition(arguments[0]).type;
-        const auto precision_base_type = block.getByPosition(arguments[1]).type;
+        const auto & number_base_type = block.getByPosition(arguments[0]).type;
+        const auto & precision_base_type = block.getByPosition(arguments[1]).type;
 
         auto col_res = ColumnString::create();
         auto val_num = block.getByPosition(arguments[0]).column->size();
 
-        /// number_nullable and precision_nullable should be false.
-        bool is_types_valid = getNumberType(number_base_type, [&](const auto & number_type, bool number_nullable [[maybe_unused]]) {
+        bool is_types_valid = getNumberType(number_base_type, [&](const auto & number_type, bool) {
             using NumberType = std::decay_t<decltype(number_type)>;
             using NumberFieldType = typename NumberType::FieldType;
             using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
             const auto * number_raw = block.getByPosition(arguments[0]).column.get();
             TiDBDecimalRoundInfo info{number_type, number_type};
 
-            return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool precision_nullable [[maybe_unused]]) {
+            return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
                 using PrecisionFieldType = typename PrecisionType::FieldType;
                 using PrecisionColVec = ColumnVector<PrecisionFieldType>;
@@ -3382,7 +3380,7 @@ public:
                 {
                     if (const auto * col1_const = checkAndGetColumnConst<PrecisionColVec>(precision_raw))
                     {
-                        const size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<PrecisionFieldType>());
+                        size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<PrecisionFieldType>());
                         std::string buffer;
                         for (const auto & number : col0_column->getData())
                             format(number, max_num_decimals, info, buffer, col_res->getChars(), col_res->getOffsets());
@@ -3394,7 +3392,7 @@ public:
                         std::string buffer;
                         for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
-                            const size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
+                            size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
                             format(number_array[i], max_num_decimals, info, buffer, col_res->getChars(), col_res->getOffsets());
                         }
                     }
@@ -3456,24 +3454,27 @@ private:
             DataTypeUInt64>(type.get(), std::forward<F>(f));
     }
 
-    /// int/uint
     template <typename T>
     static size_t getMaxNumDecimals(T precision)
     {
+        static_assert(std::is_integral_v<T>);
         if (accurate::lessOrEqualsOp(precision, 0))
             return 0;
         return std::min(static_cast<size_t>(precision), format_max_decimals);
     }
 
     template <typename T>
-    static T round(T number, const size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    static T round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
         if constexpr (IsDecimal<T>)
             return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
         else if constexpr (std::is_floating_point_v<T>)
             return TiDBFloatingRound<T, T>::eval(number, max_num_decimals);
         else
+        {
+            static_assert(std::is_integral_v<T>);
             return number;
+        }
     }
 
     template <typename T>
@@ -3482,7 +3483,10 @@ private:
         if constexpr (IsDecimal<T>)
             return number.toString(info.output_scale);
         else
+        {
+            static_assert(std::is_floating_point_v<T> || std::is_integral_v<T>);
             return fmt::format("{}", number);
+        }
     }
 
     static void copyFromBuffer(const std::string & buffer, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
@@ -3499,7 +3503,7 @@ private:
     template <typename T>
     static void format(
         T number,
-        const size_t max_num_decimals,
+        size_t max_num_decimals,
         const TiDBDecimalRoundInfo & info,
         std::string & buffer,
         ColumnString::Chars_t & res_data,
@@ -3515,47 +3519,22 @@ private:
 
 struct FormatWithEnUS
 {
-    static void apply(std::string & number, size_t precision, std::string & buffer)
+    static void apply(const std::string & number, size_t precision, std::string & buffer)
     {
-        if (number[0] == '-' && number[1] == '.')
-            number.insert(1, 1, '0');
-        else if (number[0] == '.')
-            number.insert(0, 1, '0');
-
-        if ((number[0] == '-' && !std::isdigit(number[1])) || (!std::isdigit(number[0]) && number[0] != '-'))
-        {
-            buffer += '0';
-            if (precision > 0)
-                (buffer += '.').append(precision, '0');
-            return;
-        }
-
-        decltype(number.size()) index = 0;
-        bool sign = number[0] == '-';
-        if (sign)
+        decltype(number.size()) number_part_start = 0;
+        if (number[0] == '-')
         {
             buffer += '-';
-            ++index;
-        }
-
-        const auto legal_point_index = index + 1;
-        for (; index != number.size(); ++index)
-        {
-            if (!std::isdigit(number[index])
-                && !(index == legal_point_index && number[legal_point_index] == '.')
-                && !(number[index] == '.' && number[legal_point_index] != '.'))
-            {
-                number = number.substr(0, index);
-                break;
-            }
+            number_part_start = 1;
         }
 
         auto point_index = number.find('.');
         if (point_index == std::string::npos)
             point_index = number.size();
-        auto integer_part_size = sign ? point_index - 1 : point_index;
+
+        auto integer_part_size = point_index - number_part_start;
         const auto remainder = integer_part_size % 3;
-        auto integer_part_pos = number.cbegin() + (sign ? 1 : 0);
+        auto integer_part_pos = number.cbegin() + number_part_start;
         if (remainder != 0)
         {
             buffer.append(integer_part_pos, integer_part_pos + remainder);
@@ -3564,7 +3543,10 @@ struct FormatWithEnUS
         }
         const auto integer_part_end = number.cbegin() + point_index;
         for (; integer_part_pos != integer_part_end; integer_part_pos += 3)
-            buffer.append(integer_part_pos, integer_part_pos + 3) += ',';
+        {
+            buffer.append(integer_part_pos, integer_part_pos + 3);
+            buffer += ',';
+        }
         buffer.resize(buffer.size() - 1);
 
         if (precision > 0)
@@ -3588,7 +3570,14 @@ struct FormatWithEnUS
 class FunctionFormatWithLocale : public IFunction
 {
 public:
-    static constexpr auto name = "formatWithLocale";
+    struct NameFormatWithLocale
+    {
+        static constexpr auto name = "formatWithLocale";
+    };
+    template <typename Format>
+    using FormatImpl_t = FormatImpl<NameFormatWithLocale, Format>;
+
+    static constexpr auto name = NameFormatWithLocale::name;
     explicit FunctionFormatWithLocale(const Context & context_)
         : context(context_)
     {}
@@ -3635,7 +3624,7 @@ public:
         handleLocale(locale_raw);
 
         /// TODO support switching different locale in a block.
-        static DefaultExecutable forward_function{std::make_shared<FunctionFormat<FormatWithEnUS>>(context)};
+        static DefaultExecutable forward_function{std::make_shared<FormatImpl_t<FormatWithEnUS>>(context)};
         const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
         forward_function.execute(block, forward_arguments, result);
     }
@@ -3655,7 +3644,7 @@ private:
             if (locale_const->onlyNull())
             {
                 const auto & msg = genWarningMsg("NULL");
-                for (size_t i = 0; i < column_size; ++i)
+                for (size_t i = 0; i != column_size; ++i)
                     context.getDAGContext()->appendWarning(msg);
             }
             else
@@ -3664,7 +3653,7 @@ private:
                 if (!boost::iequals(value, supported_locale))
                 {
                     const auto & msg = genWarningMsg(value);
-                    for (size_t i = 0; i < column_size; ++i)
+                    for (size_t i = 0; i != column_size; ++i)
                         context.getDAGContext()->appendWarning(msg);
                 }
             }
@@ -3672,7 +3661,7 @@ private:
         else
         {
             Field locale_field;
-            for (size_t i = 0; i < column_size; ++i)
+            for (size_t i = 0; i != column_size; ++i)
             {
                 locale_raw->get(i, locale_field);
                 if (locale_field.isNull())
@@ -3713,6 +3702,7 @@ struct NameRPad                  { static constexpr auto name = "rpad"; };
 struct NameRPadUTF8              { static constexpr auto name = "rpadUTF8"; };
 struct NameConcat                { static constexpr auto name = "concat"; };
 struct NameConcatAssumeInjective { static constexpr auto name = "concatAssumeInjective"; };
+struct NameFormat                { static constexpr auto name = "format"; };
 // clang-format on
 
 using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, UInt8>;
@@ -3729,6 +3719,7 @@ using FunctionLPadUTF8 = PadUTF8Impl<NameLPad, true>;
 using FunctionRPadUTF8 = PadUTF8Impl<NameRPad, false>;
 using FunctionConcat = ConcatImpl<NameConcat, false>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
+using FunctionFormat = FormatImpl<NameFormat, FormatWithEnUS>;
 
 
 void registerFunctionsString(FunctionFactory & factory)
@@ -3760,7 +3751,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
     factory.registerFunction<FunctionSubStringIndex>();
-    factory.registerFunction<FunctionFormat<FormatWithEnUS>>();
+    factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();
 }
 } // namespace DB
