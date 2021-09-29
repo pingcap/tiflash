@@ -219,7 +219,7 @@ MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
 }
 
 template <typename T>
-void ColumnDecimal<T>::insertData(const char * src, size_t /*length*/)
+void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*length*/)
 {
     if constexpr (is_Decimal256)
     {
