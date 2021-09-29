@@ -93,8 +93,7 @@ LegacyCompactor::tryCompact( //
     if (!info.empty())
     {
         bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log, write_limiter);
-        // Don't need to insert location since Checkpoint PageFile won't be read except using listAllPageFiles in `PageStorage::restore`
-        delegator->addPageFileUsedSize(checkpoint_id, bytes_written, storage_path, /*need_insert_location=*/false);
+        delegator->addPageFileUsedSize(checkpoint_id, bytes_written, storage_path, /*need_insert_location=*/true);
     }
 
     // Clean up compacted PageFiles from `page_files`
