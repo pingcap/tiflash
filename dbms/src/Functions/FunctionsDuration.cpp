@@ -87,26 +87,21 @@ public:
                                 + " of first argument of function " + name,
                             ErrorCodes::ILLEGAL_COLUMN);
         }
-        const auto * test = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
-        if (test != nullptr)
-        {
-            test->getFsp();
-        }
         const auto * duration_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(block.getByPosition(arguments[0]).column.get());
         if (duration_col != nullptr)
         {
             const typename ColumnVector<DataTypeMyDuration::FieldType>::Container & vec_duration = duration_col->getData();
-            auto col_hour = ColumnVector<Int64>::create();
-            typename ColumnVector<Int64>::Container & vec_hour = col_hour->getData();
+            auto col_result = ColumnVector<Int64>::create();
+            typename ColumnVector<Int64>::Container & vec_result = col_result->getData();
             size_t size = duration_col->size();
-            vec_hour.resize(size);
+            vec_result.resize(size);
 
             for (size_t i = 0; i < size; ++i)
             {
                 MyDuration dur(vec_duration[i]);
-                vec_hour[i] = Impl::getResult(dur);
+                vec_result[i] = Impl::getResult(dur);
             }
-            block.getByPosition(result).column = std::move(col_hour);
+            block.getByPosition(result).column = std::move(col_result);
         }
         else
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()

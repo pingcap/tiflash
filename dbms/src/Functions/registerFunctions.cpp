@@ -42,6 +42,7 @@ void registerFunctionsFindCluster(FunctionFactory &);
 void registerFunctionsStringMath(FunctionFactory &);
 void registerFunctionsDuration(FunctionFactory &);
 
+
 void registerFunctions()
 {
     auto & factory = FunctionFactory::instance();
