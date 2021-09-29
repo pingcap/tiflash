@@ -348,7 +348,7 @@ void PageStorage::restore()
             LOG_TRACE(log, storage_name << pf.toString());
 #else
         // when restore `PageStorage`, the `PageFile` in `page_files_to_remove` is not counted in the total size,
-        // so need to remove it here again.
+        // so no need to remove it here again.
         archivePageFiles(page_files_to_remove, false);
 #endif
         removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool { return page_files_to_remove.count(pf) > 0; });
