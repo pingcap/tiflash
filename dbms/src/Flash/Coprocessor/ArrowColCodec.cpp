@@ -98,8 +98,9 @@ void flashDecimalColToArrowCol(
           || flashDecimalColToArrowColInternal<Decimal64, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)
           || flashDecimalColToArrowColInternal<Decimal128, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)
           || flashDecimalColToArrowColInternal<Decimal256, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)))
-        throw TiFlashException("Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
-                               Errors::Coprocessor::Internal);
+        throw TiFlashException(
+            "Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
+            Errors::Coprocessor::Internal);
 }
 
 template <typename T, bool is_nullable>
@@ -165,8 +166,9 @@ void flashIntegerColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_co
           || flashIntegerColToArrowColInternal<Int16, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
           || flashIntegerColToArrowColInternal<Int32, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
           || flashIntegerColToArrowColInternal<Int64, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)))
-        throw TiFlashException("Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
-                               Errors::Coprocessor::Internal);
+        throw TiFlashException(
+            "Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
+            Errors::Coprocessor::Internal);
 }
 
 
