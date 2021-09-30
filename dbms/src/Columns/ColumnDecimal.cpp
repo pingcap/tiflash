@@ -198,7 +198,7 @@ MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
 
             if (size > count)
             {
-                T zero;
+                T zero{};
                 for (size_t i = count; i != size; ++i)
                     new_col.data[i] = zero;
             }
