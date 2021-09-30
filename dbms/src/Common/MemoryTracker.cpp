@@ -168,7 +168,10 @@ __attribute__((always_inline)) inline void checkSubmitAndUpdateLocalDelta(Int64 
             current_memory_tracker->free(-updated_local_delta);
         local_delta = 0;
     }
-    local_delta = updated_local_delta;
+    else
+    {
+        local_delta = updated_local_delta;
+    }
 }
 
 void alloc(Int64 size)
