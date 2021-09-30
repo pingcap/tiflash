@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DataTypes/DataTypeMyTimeBase.h>
+#include <DataTypes/DataTypeNumberBase.h>
 #include <fmt/format.h>
 
 namespace DB
