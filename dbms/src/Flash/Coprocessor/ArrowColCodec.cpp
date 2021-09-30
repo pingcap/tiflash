@@ -97,14 +97,10 @@ void flashDecimalColToArrowCol(
     if (!(flashDecimalColToArrowColInternal<Decimal32, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)
           || flashDecimalColToArrowColInternal<Decimal64, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)
           || flashDecimalColToArrowColInternal<Decimal128, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)
-          || flashDecimalColToArrowColInternal<Decimal256, is_nullable>(
-              dag_column,
-              flash_col_untyped,
-              start_index,
-              end_index,
-              data_type)))
-        throw TiFlashException("Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
-                               Errors::Coprocessor::Internal);
+          || flashDecimalColToArrowColInternal<Decimal256, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)))
+        throw TiFlashException(
+            "Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
+            Errors::Coprocessor::Internal);
 }
 
 template <typename T, bool is_nullable>
@@ -170,8 +166,9 @@ void flashIntegerColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_co
           || flashIntegerColToArrowColInternal<Int16, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
           || flashIntegerColToArrowColInternal<Int32, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
           || flashIntegerColToArrowColInternal<Int64, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)))
-        throw TiFlashException("Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
-                               Errors::Coprocessor::Internal);
+        throw TiFlashException(
+            "Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
+            Errors::Coprocessor::Internal);
 }
 
 
@@ -391,8 +388,9 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
             flashEnumColToArrowCol<true>(dag_column, col, start_index, end_index, type);
         break;
     default:
-        throw TiFlashException("Unsupported field type " + field_type.DebugString() + " when try to convert flash col to DAG col",
-                               Errors::Coprocessor::Internal);
+        throw TiFlashException(
+            "Unsupported field type " + field_type.DebugString() + " when try to convert flash col to DAG col",
+            Errors::Coprocessor::Internal);
     }
 }
 
@@ -411,7 +409,15 @@ bool checkNull(UInt32 i, UInt32 null_count, const std::vector<UInt8> & null_bitm
     return false;
 }
 
-const char * arrowStringColToFlashCol(const char * pos, UInt8, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const std::vector<UInt64> & offsets, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+const char * arrowStringColToFlashCol(
+    const char * pos,
+    UInt8,
+    UInt32 null_count,
+    const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> & offsets,
+    const ColumnWithTypeAndName & col,
+    const ColumnInfo &,
+    UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++)
     {
@@ -423,7 +429,15 @@ const char * arrowStringColToFlashCol(const char * pos, UInt8, UInt32 null_count
     return pos + offsets[length];
 }
 
-const char * arrowEnumColToFlashCol(const char * pos, UInt8, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const std::vector<UInt64> & offsets, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+const char * arrowEnumColToFlashCol(
+    const char * pos,
+    UInt8,
+    UInt32 null_count,
+    const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> & offsets,
+    const ColumnWithTypeAndName & col,
+    const ColumnInfo &,
+    UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++)
     {
@@ -435,7 +449,15 @@ const char * arrowEnumColToFlashCol(const char * pos, UInt8, UInt32 null_count, 
     return pos + offsets[length];
 }
 
-const char * arrowBitColToFlashCol(const char * pos, UInt8, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const std::vector<UInt64> & offsets, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+const char * arrowBitColToFlashCol(
+    const char * pos,
+    UInt8,
+    UInt32 null_count,
+    const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> & offsets,
+    const ColumnWithTypeAndName & col,
+    const ColumnInfo &,
+    UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++)
     {
@@ -489,7 +511,15 @@ T toCHDecimal(UInt8 digits_int, UInt8 digits_frac, bool negative, const Int32 * 
     return negative ? -value : value;
 }
 
-const char * arrowDecimalColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+const char * arrowDecimalColToFlashCol(
+    const char * pos,
+    UInt8 field_length,
+    UInt32 null_count,
+    const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> &,
+    const ColumnWithTypeAndName & col,
+    const ColumnInfo &,
+    UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++)
     {
@@ -538,7 +568,15 @@ const char * arrowDecimalColToFlashCol(const char * pos, UInt8 field_length, UIn
     return pos;
 }
 
-const char * arrowDateColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+const char * arrowDateColToFlashCol(
+    const char * pos,
+    UInt8 field_length,
+    UInt32 null_count,
+    const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> &,
+    const ColumnWithTypeAndName & col,
+    const ColumnInfo &,
+    UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++)
     {
@@ -562,7 +600,15 @@ const char * arrowDateColToFlashCol(const char * pos, UInt8 field_length, UInt32
     return pos;
 }
 
-const char * arrowNumColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo & col_info, UInt32 length)
+const char * arrowNumColToFlashCol(
+    const char * pos,
+    UInt8 field_length,
+    UInt32 null_count,
+    const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> &,
+    const ColumnWithTypeAndName & col,
+    const ColumnInfo & col_info,
+    UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++, pos += field_length)
     {
@@ -613,7 +659,15 @@ const char * arrowNumColToFlashCol(const char * pos, UInt8 field_length, UInt32 
     return pos;
 }
 
-const char * arrowColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const std::vector<UInt64> & offsets, const ColumnWithTypeAndName & flash_col, const ColumnInfo & col_info, UInt32 length)
+const char * arrowColToFlashCol(
+    const char * pos,
+    UInt8 field_length,
+    UInt32 null_count,
+    const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> & offsets,
+    const ColumnWithTypeAndName & flash_col,
+    const ColumnInfo & col_info,
+    UInt32 length)
 {
     switch (col_info.tp)
     {
