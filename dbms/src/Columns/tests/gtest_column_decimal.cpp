@@ -17,23 +17,31 @@ void testCloneResized(int precision)
 
     auto column_ptr = createColumn<Decimal>(
         std::make_tuple(precision, 4),
-        {FieldType(static_cast<Native>(0), 4),
-         FieldType(static_cast<Native>(1), 4),
+        {FieldType(static_cast<Native>(1), 4),
          FieldType(static_cast<Native>(2), 4),
-         FieldType(static_cast<Native>(3), 0)}).column;
+         FieldType(static_cast<Native>(3), 4),
+         FieldType(static_cast<Native>(4), 4)}).column;
     auto clone_column_ptr = column_ptr->cloneResized(column_ptr->size() + 1);
 
-    Field f;
     for (size_t i = 0; i != column_ptr->size(); ++i)
     {
-        column_ptr->get(i, f);
-        auto origin_value [[maybe_unused]] = f.template get<Decimal>();
-        clone_column_ptr->get(i, f);
-        auto clone_value [[maybe_unused]] = f.template get<Decimal>();
+        Field origin_field;
+        column_ptr->get(i, origin_field);
+        auto & origin_value = origin_field.template get<Decimal>();
+
+        Field clone_field;
+        clone_column_ptr->get(i, clone_field);
+        auto & clone_value = clone_field.template get<Decimal>();
+
         ASSERT_TRUE(origin_value == clone_value);
+
+        Decimal zero{};
+        origin_value = zero;
+        ASSERT_TRUE(origin_value != clone_value);
     }
-    clone_column_ptr->get(column_ptr->size(), f);
-    auto last_value = f.template get<Decimal>();
+    Field last_field;
+    clone_column_ptr->get(column_ptr->size(), last_field);
+    auto last_value = last_field.template get<Decimal>();
     ASSERT_TRUE(last_value.value == 0);
 }
 
