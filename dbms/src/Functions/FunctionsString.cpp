@@ -3366,11 +3366,10 @@ public:
                     if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
                     {
                         const auto & precision_array = col1_column->getData();
-                        std::string buffer;
                         for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
-                            format(const_number, max_num_decimals, info, buffer, col_res->getChars(), col_res->getOffsets());
+                            format(const_number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
                         }
                     }
                     else
@@ -3381,19 +3380,17 @@ public:
                     if (const auto * col1_const = checkAndGetColumnConst<PrecisionColVec>(precision_raw))
                     {
                         size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<PrecisionFieldType>());
-                        std::string buffer;
                         for (const auto & number : col0_column->getData())
-                            format(number, max_num_decimals, info, buffer, col_res->getChars(), col_res->getOffsets());
+                            format(number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
                     }
                     else if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
                     {
                         const auto & number_array = col0_column->getData();
                         const auto & precision_array = col1_column->getData();
-                        std::string buffer;
                         for (decltype(val_num) i = 0; i < val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
-                            format(number_array[i], max_num_decimals, info, buffer, col_res->getChars(), col_res->getOffsets());
+                            format(number_array[i], max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
                         }
                     }
                     else
@@ -3505,22 +3502,21 @@ private:
         T number,
         size_t max_num_decimals,
         const TiDBDecimalRoundInfo & info,
-        std::string & buffer,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        buffer.clear();
         T round_number = round(number, max_num_decimals, info);
         std::string round_number_str = number2Str(round_number, info);
-        Format::apply(round_number_str, max_num_decimals, buffer);
+        std::string buffer = Format::apply(round_number_str, max_num_decimals);
         copyFromBuffer(buffer, res_data, res_offsets);
     }
 };
 
 struct FormatWithEnUS
 {
-    static void apply(const std::string & number, size_t precision, std::string & buffer)
+    static std::string apply(const std::string & number, size_t precision)
     {
+        std::string buffer;
         size_t number_part_start = 0;
         if (number[0] == '-')
         {
@@ -3532,20 +3528,23 @@ struct FormatWithEnUS
         if (point_index == std::string::npos)
             point_index = number.size();
 
+        /// a comma can be used to group 3 digits in en_US locale, such as 12,345,678.00
+        constexpr int digit_grouping_size = 3;
+        constexpr char comma = ',';
         auto integer_part_size = point_index - number_part_start;
-        const auto remainder = integer_part_size % 3;
+        const auto remainder = integer_part_size % digit_grouping_size;
         auto integer_part_pos = number.cbegin() + number_part_start;
         if (remainder != 0)
         {
             buffer.append(integer_part_pos, integer_part_pos + remainder);
-            buffer += ',';
+            buffer += comma;
             integer_part_pos += remainder;
         }
         const auto integer_part_end = number.cbegin() + point_index;
-        for (; integer_part_pos != integer_part_end; integer_part_pos += 3)
+        for (; integer_part_pos != integer_part_end; integer_part_pos += digit_grouping_size)
         {
-            buffer.append(integer_part_pos, integer_part_pos + 3);
-            buffer += ',';
+            buffer.append(integer_part_pos, integer_part_pos + digit_grouping_size);
+            buffer += comma;
         }
         buffer.resize(buffer.size() - 1);
 
@@ -3564,6 +3563,7 @@ struct FormatWithEnUS
                     buffer.append(decimal_part_start, number.cend()).append(precision - decimal_part_size, '0');
             }
         }
+        return buffer;
     }
 };
 
@@ -3579,13 +3579,11 @@ public:
 
     static constexpr auto name = NameFormatWithLocale::name;
     explicit FunctionFormatWithLocale(const Context & context_)
-        : context(context_)
+        : context(checkDagContextIsValid(context_))
     {}
 
     static FunctionPtr create(const Context & context_)
     {
-        if (!context_.getDAGContext())
-            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
         return std::make_shared<FunctionFormatWithLocale>(context_);
     }
 
@@ -3636,7 +3634,7 @@ private:
     /// TODO support other locales after tidb has supported them.
     void handleLocale(const IColumn * locale_raw) const
     {
-        static const std::string supported_locale{"en_US"};
+        static const std::string supported_locale = "en_US";
         using LocaleColVec = ColumnString;
         const auto column_size = locale_raw->size();
         if (const auto * locale_const = checkAndGetColumnConst<LocaleColVec>(locale_raw, true))
@@ -3679,6 +3677,13 @@ private:
     static std::string genWarningMsg(const std::string & value)
     {
         return fmt::format("Unknown locale: \'{}\'", value);
+    }
+
+    static const Context & checkDagContextIsValid(const Context & context_)
+    {
+        if (!context_.getDAGContext())
+            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+        return context_;
     }
 };
 
