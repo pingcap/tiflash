@@ -1,5 +1,5 @@
-#include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
@@ -16,11 +16,12 @@ void testCloneResized(int precision)
     using FieldType = DecimalField<Decimal>;
 
     auto column_ptr = createColumn<Decimal>(
-        std::make_tuple(precision, 4),
-        {FieldType(static_cast<Native>(1), 4),
-         FieldType(static_cast<Native>(2), 4),
-         FieldType(static_cast<Native>(3), 4),
-         FieldType(static_cast<Native>(4), 4)}).column;
+                          std::make_tuple(precision, 4),
+                          {FieldType(static_cast<Native>(1), 4),
+                           FieldType(static_cast<Native>(2), 4),
+                           FieldType(static_cast<Native>(3), 4),
+                           FieldType(static_cast<Native>(4), 4)})
+                          .column;
     auto clone_column_ptr = column_ptr->cloneResized(column_ptr->size() + 1);
 
     for (size_t i = 0; i != column_ptr->size(); ++i)
@@ -55,5 +56,5 @@ try
 }
 CATCH
 
-}
-}
+} // namespace tests
+} // namespace DB
