@@ -3521,7 +3521,7 @@ struct FormatWithEnUS
 {
     static void apply(const std::string & number, size_t precision, std::string & buffer)
     {
-        decltype(number.size()) number_part_start = 0;
+        size_t number_part_start = 0;
         if (number[0] == '-')
         {
             buffer += '-';
