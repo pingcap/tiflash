@@ -3,29 +3,46 @@
 
 namespace DB
 {
-MyDuration::MyDuration(Int64 packed)
+std::tuple<Int32, Int32, Int32, Int32, Int32> MyDuration::splitDuration() const
 {
-    sign = 1;
-    if (packed < 0)
+    int sign = 1, hours, minutes, seconds, fraction;
+    Int64 t = nanos;
+    if (t < 0)
     {
+        t = -t;
         sign = -1;
-        packed = -packed;
     }
-    hour = packed / HOUR;
-    packed -= hour * HOUR;
-    minute = packed / MINUTE;
-    packed -= minute * MINUTE;
-    second = packed / SECOND;
-    packed -= second * SECOND;
-    micro_second = packed / MICRO_SECOND;
+    hours = t / HOUR;
+    t -= hours * HOUR;
+    minutes = t / MINUTE;
+    t -= minutes * MINUTE;
+    seconds = t / SECOND;
+    t -= seconds * SECOND;
+    fraction = t / MICRO_SECOND;
+    return std::tuple<int, int, int, int, int>(sign, hours, minutes, seconds, fraction);
 }
 
-MyDuration::MyDuration(UInt8 sign_, Int16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
-    : sign(sign_)
-    , hour(hour_)
-    , minute(minute_)
-    , second(second_)
-    , micro_second(micro_second_)
+UInt32 MyDuration::hours() const
 {
+    auto [sign, hours, minutes, seconds, fraction] = splitDuration();
+    return hours;
+}
+
+UInt32 MyDuration::minutes() const
+{
+    auto [sign, hours, minutes, seconds, fraction] = splitDuration();
+    return minutes;
+}
+
+UInt32 MyDuration::seconds() const
+{
+    auto [sign, hours, minutes, seconds, fraction] = splitDuration();
+    return seconds;
+}
+
+UInt32 MyDuration::microsecond() const
+{
+    auto [sign, hours, minutes, seconds, fraction] = splitDuration();
+    return fraction;
 }
 } // namespace DB

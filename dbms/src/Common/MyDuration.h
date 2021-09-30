@@ -16,14 +16,23 @@ static const Int64 HOUR = 60 * MINUTE;
 class MyDuration
 {
 public:
-    UInt8 sign;
-    Int16 hour;
-    UInt8 minute;
-    UInt8 second;
-    UInt32 micro_second; // ms second <= 999999
+    Int64 nanos;
+    UInt8 fsp;
 
     MyDuration() = default;
-    explicit MyDuration(Int64 packed);
-    MyDuration(UInt8 sign_, Int16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_);
+    MyDuration(Int64 nanos_, UInt8 fsp_)
+        : nanos(nanos_)
+        , fsp(fsp_)
+    {}
+    MyDuration(Int32 hour, Int32 minute, Int32 second, Int32 microsecond, UInt8 fsp)
+        : MyDuration(hour * HOUR + minute * MINUTE + second * SECOND + microsecond * MICRO_SECOND, fsp)
+    {}
+
+    std::tuple<Int32, Int32, Int32, Int32, Int32> splitDuration() const;
+    bool isNeg() const { return nanos < 0; }
+    UInt32 hours() const;
+    UInt32 minutes() const;
+    UInt32 seconds() const;
+    UInt32 microsecond() const;
 };
 } // namespace DB

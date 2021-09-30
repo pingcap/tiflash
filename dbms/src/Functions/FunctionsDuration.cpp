@@ -81,7 +81,8 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (!checkDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get()))
+        const auto * dur_type = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
+        if (dur_type == nullptr)
         {
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
                                 + " of first argument of function " + name,
@@ -98,7 +99,7 @@ public:
 
             for (size_t i = 0; i < size; ++i)
             {
-                MyDuration dur(vec_duration[i]);
+                MyDuration dur(vec_duration[i], dur_type->getFsp());
                 vec_result[i] = Impl::getResult(dur);
             }
             block.getByPosition(result).column = std::move(col_result);
@@ -115,7 +116,7 @@ struct DurationSplitHourImpl
     static constexpr auto name = "hour";
     static Int64 getResult(MyDuration & dur)
     {
-        return dur.hour;
+        return dur.hours();
     }
 };
 
@@ -124,7 +125,7 @@ struct DurationSplitMinuteImpl
     static constexpr auto name = "minute";
     static Int64 getResult(MyDuration & dur)
     {
-        return dur.minute;
+        return dur.minutes();
     }
 };
 struct DurationSplitSecondImpl
@@ -132,7 +133,7 @@ struct DurationSplitSecondImpl
     static constexpr auto name = "second";
     static Int64 getResult(MyDuration & dur)
     {
-        return dur.second;
+        return dur.seconds();
     }
 };
 struct DurationSplitMicroSecondImpl
@@ -140,7 +141,7 @@ struct DurationSplitMicroSecondImpl
     static constexpr auto name = "microSecond";
     static Int64 getResult(MyDuration & dur)
     {
-        return dur.micro_second;
+        return dur.microsecond();
     }
 };
 
