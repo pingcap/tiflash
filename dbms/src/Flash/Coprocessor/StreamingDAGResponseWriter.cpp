@@ -56,7 +56,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     {
         blocks.push_back(block);
     }
-    if ((Int64)rows_in_blocks > (records_per_chunk == -1 ? 65535 : records_per_chunk))
+    if ((Int64)rows_in_blocks > (records_per_chunk == -1 ? 20000 : records_per_chunk))
     {
         batchWrite<false>();
     }
