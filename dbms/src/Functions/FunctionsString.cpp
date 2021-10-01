@@ -3546,7 +3546,7 @@ struct FormatWithEnUS
             buffer.append(integer_part_pos, integer_part_pos + digit_grouping_size);
             buffer += comma;
         }
-        buffer.resize(buffer.size() - 1);
+        buffer.pop_back();
 
         if (precision > 0)
         {
