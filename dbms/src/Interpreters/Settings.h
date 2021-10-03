@@ -4,6 +4,7 @@
 #include <Core/Field.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <common/simd.h>
 
 
 namespace DB
@@ -12,6 +13,39 @@ namespace Constant
 {
 inline static constexpr UInt64 MB = 1024UL * 1024UL;
 }
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+namespace detail
+{
+using AVXSettingType = SettingVariable<SettingBool, simd_option::ENABLE_AVX>;
+}
+#define TIFLASH_SETTING_ENTRY_AVX(M) \
+    M(detail::AVXSettingType, enable_avx, true, "Enable AVX/AVX2 support.")
+#else
+#define TIFLASH_SETTING_ENTRY_AVX(M)
+#endif
+
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+namespace detail
+{
+using AVX512SettingType = SettingVariable<SettingBool, simd_option::ENABLE_AVX512>;
+}
+#define TIFLASH_SETTING_ENTRY_AVX512(M) \
+    M(detail::AVX512SettingType, enable_avx512, true, "Enable AVX512 support.")
+#else
+#define TIFLASH_SETTING_ENTRY_AVX512(M)
+#endif
+
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+namespace detail
+{
+using ASIMDSettingType = SettingVariable<SettingBool, simd_option::ENABLE_ASIMD>;
+}
+#define TIFLASH_SETTING_ENTRY_ASIMD(M) \
+    M(detail::ASIMDSettingType, enable_asimd, true, "Enable ASIMD support.")
+#else
+#define TIFLASH_SETTING_ENTRY_ASIMD(M)
+#endif
 
 /** Settings of query execution.
   */
@@ -28,6 +62,9 @@ struct Settings
       */
 
 #define APPLY_FOR_SETTINGS(M)                                                                                                                                                                                                           \
+    TIFLASH_SETTING_ENTRY_AVX(M)                                                                                                                                                                                                        \
+    TIFLASH_SETTING_ENTRY_AVX512(M)                                                                                                                                                                                                     \
+    TIFLASH_SETTING_ENTRY_ASIMD(M)                                                                                                                                                                                                      \
     M(SettingString, regions, "", "the region need to be read.")                                                                                                                                                                        \
     M(SettingBool, resolve_locks, false, "tmt resolve locks.")                                                                                                                                                                          \
     M(SettingBool, group_by_collation_sensitive, false, "do group by with collation info.")                                                                                                                                             \

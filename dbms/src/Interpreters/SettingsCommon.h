@@ -944,4 +944,50 @@ private:
     String value;
 };
 
+namespace detail
+{
+template <class Adapter>
+using SettingAdapterGetType = std::decay_t<decltype(std::declval<Adapter>().get())>;
+}
+template <typename Adapter, detail::SettingAdapterGetType<Adapter> & reference>
+struct SettingVariable : private Adapter
+{
+    using GetType = detail::SettingAdapterGetType<Adapter>;
+    bool changed = false;
+
+    template <typename... Args>
+    explicit SettingVariable(Args &&... args)
+        : Adapter(std::forward<Args>(args)...)
+    {}
+
+    operator GetType() const { return reference; } // NOLINT(google-explicit-constructor)
+    GetType get() const { return reference; }
+
+    template <typename... Args>
+    void set(Args &&... args)
+    {
+        Adapter::set(std::forward<Args>(args)...);
+        reference = Adapter::get();
+        changed = true;
+    }
+
+    template <typename... Args>
+    void write(Args &&... args) const
+    {
+        Adapter::write(std::forward<Args>(args)...);
+    }
+
+    String toString() const
+    {
+        return Adapter::toString();
+    }
+
+    template <typename U>
+    SettingVariable & operator=(U && x)
+    {
+        set(std::forward<U>(x));
+        return *this;
+    }
+};
+
 } // namespace DB
