@@ -950,15 +950,17 @@ template <class Adapter>
 using SettingAdapterGetType = std::decay_t<decltype(std::declval<Adapter>().get())>;
 }
 template <typename Adapter, detail::SettingAdapterGetType<Adapter> & reference>
-struct SettingVariable : private Adapter
+struct SettingVariable
 {
     using GetType = detail::SettingAdapterGetType<Adapter>;
     bool changed = false;
 
     template <typename... Args>
     explicit SettingVariable(Args &&... args)
-        : Adapter(std::forward<Args>(args)...)
-    {}
+    {
+        Adapter adapter(std::forward<Args>(args)...);
+        reference = adapter.get();
+    }
 
     operator GetType() const { return reference; } // NOLINT(google-explicit-constructor)
     GetType get() const { return reference; }
@@ -966,20 +968,23 @@ struct SettingVariable : private Adapter
     template <typename... Args>
     void set(Args &&... args)
     {
-        Adapter::set(std::forward<Args>(args)...);
-        reference = Adapter::get();
+        Adapter adapter(reference);
+        adapter.set(std::forward<Args>(args)...);
+        reference = adapter.get();
         changed = true;
     }
 
     template <typename... Args>
     void write(Args &&... args) const
     {
-        Adapter::write(std::forward<Args>(args)...);
+        Adapter adapter(reference);
+        adapter.write(std::forward<Args>(args)...);
     }
 
     String toString() const
     {
-        return Adapter::toString();
+        Adapter adapter(reference);
+        return adapter.toString();
     }
 
     template <typename U>
