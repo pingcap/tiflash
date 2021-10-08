@@ -27,6 +27,7 @@ public:
         TiDB::TiDBCollators collators_,
         tipb::ExchangeType exchange_type_,
         Int64 records_per_chunk_,
+        Int64 batch_send_min_limit_,
         tipb::EncodeType encodeType_,
         std::vector<tipb::FieldType> result_field_types,
         DAGContext & dag_context_,
@@ -41,6 +42,7 @@ private:
     template <bool for_last_response>
     void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
+    Int64 batch_send_min_limit;
     tipb::ExchangeType exchange_type;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
