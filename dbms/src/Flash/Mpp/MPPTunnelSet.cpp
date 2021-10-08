@@ -49,12 +49,29 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 }
 
 template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
+{
+    auto tunnels_size = tunnels.size();
+    if (tunnels_size > 1)
+    {
+        for (size_t i = 0; i < tunnels_size; ++i)
+            tunnels[i]->write(packet);
+    }
+}
+
+template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t partition_id)
 {
     if (partition_id != 0 && response.execution_summaries_size() > 0)
         clearExecutionSummaries(response);
 
     tunnels[partition_id]->write(serializeToPacket(response));
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partition_id)
+{
+    tunnels[partition_id]->write(packet);
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

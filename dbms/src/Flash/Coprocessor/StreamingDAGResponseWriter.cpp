@@ -16,6 +16,12 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+inline void serializeToPacket(mpp::MPPDataPacket & packet, const tipb::SelectResponse & response)
+{
+    if (!response.SerializeToString(packet.mutable_data()))
+        throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
+}
+
 template <class StreamWriterPtr>
 StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     StreamWriterPtr writer_,
@@ -65,6 +71,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 }
 
 template <class StreamWriterPtr>
+template <bool for_last_response>
 void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     const std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
@@ -83,26 +90,36 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
     }
 
-    response.set_encode_type(encode_type);
-    Int64 current_records_num = 0;
-    if (input_blocks.empty())
-    {
-        writer->write(response);
-        return;
-    }
     if (encode_type == tipb::EncodeType::TypeCHBlock)
     {
+        mpp::MPPDataPacket packet;
+        if constexpr (for_last_response)
+        {
+            serializeToPacket(packet, response);
+        }
+        if (input_blocks.empty())
+        {
+            writer->write(packet);
+            return;
+        }
         for (auto & block : input_blocks)
         {
             chunk_codec_stream->encode(block, 0, block.rows());
-            auto dag_chunk = response.add_chunks();
-            dag_chunk->set_rows_data(chunk_codec_stream->getString());
+            packet.add_chunks(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        current_records_num = 0;
+        writer->write(packet);
     }
     else
     {
+        response.set_encode_type(encode_type);
+        Int64 current_records_num = 0;
+        if (input_blocks.empty())
+        {
+            writer->write(response);
+            return;
+        }
+
         for (auto & block : input_blocks)
         {
             size_t rows = block.rows();
@@ -121,15 +138,15 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 row_index = upper;
             }
         }
-    }
-    if (current_records_num > 0)
-    {
-        auto dag_chunk = response.add_chunks();
-        dag_chunk->set_rows_data(chunk_codec_stream->getString());
-        chunk_codec_stream->clear();
-    }
 
-    writer->write(response);
+        if (current_records_num > 0)
+        {
+            auto dag_chunk = response.add_chunks();
+            dag_chunk->set_rows_data(chunk_codec_stream->getString());
+            chunk_codec_stream->clear();
+        }
+        writer->write(response);
+    }
 }
 
 template <class StreamWriterPtr>
@@ -139,7 +156,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     tipb::SelectResponse & response) const
 {
     std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
-    std::vector<tipb::SelectResponse> responses(partition_num);
+    std::vector<mpp::MPPDataPacket> packet(partition_num);
+
     std::vector<size_t> responses_row_count(partition_num);
     for (auto i = 0; i < partition_num; ++i)
     {
@@ -155,8 +173,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         {
             chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(result_field_types);
         }
-        responses[i] = response;
-        responses[i].set_encode_type(encode_type);
+        if constexpr (for_last_response)
+        {
+            serializeToPacket(packet[i], response);
+        }
     }
     if (input_blocks.empty())
     {
@@ -164,7 +184,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         {
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
-                writer->write(responses[part_id], part_id);
+                writer->write(packet[part_id], part_id);
             }
         }
         return;
@@ -230,8 +250,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
             dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
             responses_row_count[part_id] += dest_blocks[part_id].rows();
             chunk_codec_stream[part_id]->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
-            auto dag_chunk = responses[part_id].add_chunks();
-            dag_chunk->set_rows_data(chunk_codec_stream[part_id]->getString());
+            packet[part_id].add_chunks(chunk_codec_stream[part_id]->getString());
             chunk_codec_stream[part_id]->clear();
         }
     }
@@ -240,12 +259,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     {
         if constexpr (for_last_response)
         {
-            writer->write(responses[part_id], part_id);
+            writer->write(packet[part_id], part_id);
         }
         else
         {
             if (responses_row_count[part_id] > 0)
-                writer->write(responses[part_id], part_id);
+                writer->write(packet[part_id], part_id);
         }
     }
 }
@@ -263,7 +282,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
     }
     else
     {
-        encodeThenWriteBlocks(blocks, response);
+        encodeThenWriteBlocks<for_last_response>(blocks, response);
     }
     blocks.clear();
     rows_in_blocks = 0;

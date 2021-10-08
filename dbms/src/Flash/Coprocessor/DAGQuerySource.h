@@ -28,7 +28,14 @@ struct StreamWriter
     StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
         : writer(writer_)
     {}
-
+    void write(mpp::MPPDataPacket &)
+    {
+        assert(false);
+    }
+    void write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t)
+    {
+        assert(false);
+    }
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
         ::coprocessor::BatchResponse resp;
