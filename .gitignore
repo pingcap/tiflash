@@ -19,7 +19,7 @@ compile_commands.json
 # auto generated files
 *.logrt
 
-build
+/build
 /docs/en_single_page/
 /docs/ru_single_page/
 /docs/venv/
@@ -255,7 +255,6 @@ website/presentations
 build_docker
 docker/builder/tics
 release-centos7/tiflash
-release-centos7/tiflash-*
 release-centos7/build-release
 release-darwin/tiflash
 release-darwin/build-release
