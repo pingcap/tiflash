@@ -23,11 +23,13 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     TiDB::TiDBCollators collators_,
     tipb::ExchangeType exchange_type_,
     Int64 records_per_chunk_,
+    Int64 batch_send_min_limit_,
     tipb::EncodeType encode_type_,
     std::vector<tipb::FieldType> result_field_types_,
     DAGContext & dag_context_,
     const LogWithPrefixPtr & log_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
+    , batch_send_min_limit(batch_send_min_limit_)
     , exchange_type(exchange_type_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
@@ -56,7 +58,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     {
         blocks.push_back(block);
     }
-    if ((Int64)rows_in_blocks > records_per_chunk)
+    if ((Int64)rows_in_blocks > encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk)
     {
         batchWrite<false>();
     }
@@ -88,7 +90,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         writer->write(response);
         return;
     }
-    if (records_per_chunk == -1)
+    if (encode_type == tipb::EncodeType::TypeCHBlock)
     {
         for (auto & block : input_blocks)
         {
