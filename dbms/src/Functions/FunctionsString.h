@@ -186,18 +186,4 @@ public:
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
-
-struct NameLowerUTF8
-{
-    static constexpr auto name = "lowerUTF8";
-};
-struct NameUpperUTF8
-{
-    static constexpr auto name = "upperUTF8";
-};
-
-
-using FunctionLowerUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;
-using FunctionUpperUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;
-
 } // namespace DB

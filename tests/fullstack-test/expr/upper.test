@@ -1,16 +1,17 @@
 mysql> drop table if exists test.t
 mysql> create table test.t(col_string char(64))
 mysql> alter table test.t set tiflash replica 1
-mysql> insert into test.t values ('one week’s time TEST'), ('one week\'s time TEST'), ('abc测试DeF'), ('AbCテストAbC')
+mysql> insert into test.t values ('one week’s time TEST'), ('one week\'s time TEST'), ('abc测试DeF'), ('AbCテストAbC'), ('ѐёђѓєѕіїјЉЊЋЌЍЎЏ')
 
 func> wait_table test t
 
 mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select UPPER(col_string) from test.t;
-+------------------------+
-| UPPER(col_string)      |
-+------------------------+
-| ONE WEEK’S TIME TEST   |
-| ONE WEEK'S TIME TEST   |
-| ABC测试DEF             |
-| ABCテストABC           |
-+------------------------+
++----------------------------------+
+| UPPER(col_string)                |
++----------------------------------+
+| ONE WEEK’S TIME TEST             |
+| ONE WEEK'S TIME TEST             |
+| ABC测试DEF                       |
+| ABCテストABC                     |
+| ЀЁЂЃЄЅІЇЈЉЊЋЌЍЎЏ                 |
++----------------------------------+

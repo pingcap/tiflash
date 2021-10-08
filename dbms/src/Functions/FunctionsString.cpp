@@ -159,8 +159,8 @@ struct LowerUpperImpl
                        ColumnString::Offsets & res_offsets)
     {
         res_data.resize(data.size());
+        res_data.assign(data.begin(), data.end());
         res_offsets.assign(offsets);
-        array(data.data(), data.data() + data.size(), res_data.data());
     }
 
     static void vector_fixed(const ColumnString::Chars_t & data, size_t /*n*/, ColumnString::Chars_t & res_data)
@@ -3315,9 +3315,17 @@ struct NameLower
 {
     static constexpr auto name = "lower";
 };
+struct NameLowerUTF8
+{
+    static constexpr auto name = "lowerUTF8";
+};
 struct NameUpper
 {
     static constexpr auto name = "upper";
+};
+struct NameUpperUTF8
+{
+    static constexpr auto name = "upperUTF8";
 };
 struct NameReverseUTF8
 {
@@ -3377,7 +3385,9 @@ using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty,
 // using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
 using FunctionLengthUTF8 = FunctionStringOrArrayToT<LengthUTF8Impl, NameLengthUTF8, UInt64>;
 using FunctionLower = FunctionStringToString<LowerUpperImpl<'A', 'Z'>, NameLower>;
+using FunctionLowerUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;
 using FunctionUpper = FunctionStringToString<LowerUpperImpl<'a', 'z'>, NameUpper>;
+using FunctionUpperUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;
 using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseUTF8, true>;
 using FunctionTrimUTF8 = TrimUTF8Impl<NameTrim, true, true>;
 using FunctionLTrimUTF8 = TrimUTF8Impl<NameLTrim, true, false>;
