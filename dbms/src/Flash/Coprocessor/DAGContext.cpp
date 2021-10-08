@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int TRUNCATE_ERROR;
@@ -69,20 +68,35 @@ enum SqlMode
 };
 } // namespace
 
-bool strictSqlMode(UInt64 sql_mode) { return sql_mode & SqlMode::STRICT_ALL_TABLES || sql_mode & SqlMode::STRICT_TRANS_TABLES; }
+bool strictSqlMode(UInt64 sql_mode)
+{
+    return sql_mode & SqlMode::STRICT_ALL_TABLES || sql_mode & SqlMode::STRICT_TRANS_TABLES;
+}
 
-bool DAGContext::allowZeroInDate() const { return flags & Flag::IGNORE_ZERO_IN_DATE; }
+bool DAGContext::allowZeroInDate() const
+{
+    return flags & Flag::IGNORE_ZERO_IN_DATE;
+}
 
-bool DAGContext::allowInvalidDate() const { return sql_mode & SqlMode::ALLOW_INVALID_DATES; }
+bool DAGContext::allowInvalidDate() const
+{
+    return sql_mode & SqlMode::ALLOW_INVALID_DATES;
+}
 
-std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap() { return profile_streams_map; }
+std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap()
+{
+    return profile_streams_map;
+}
 
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMapForJoinBuildSide()
 {
     return profile_streams_map_for_join_build_side;
 }
 
-std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAliasMap() { return qb_id_to_join_alias_map; }
+std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAliasMap()
+{
+    return qb_id_to_join_alias_map;
+}
 
 void DAGContext::handleTruncateError(const String & msg)
 {
@@ -90,10 +104,7 @@ void DAGContext::handleTruncateError(const String & msg)
     {
         throw TiFlashException("Truncate error " + msg, Errors::Types::Truncated);
     }
-    tipb::Error warning;
-    warning.set_code(0);
-    warning.set_msg(msg);
-    appendWarning(warning);
+    appendWarning(msg);
 }
 
 void DAGContext::handleOverflowError(const String & msg, const TiFlashError & error)
@@ -102,10 +113,7 @@ void DAGContext::handleOverflowError(const String & msg, const TiFlashError & er
     {
         throw TiFlashException("Overflow error: " + msg, error);
     }
-    tipb::Error warning;
-    warning.set_code(0);
-    warning.set_msg("Overflow error: " + msg);
-    appendWarning(warning);
+    appendWarning("Overflow error: " + msg);
 }
 
 void DAGContext::handleDivisionByZero()
@@ -119,10 +127,7 @@ void DAGContext::handleDivisionByZero()
             throw TiFlashException("Division by 0", Errors::Expression::DivisionByZero);
         }
     }
-    tipb::Error warning;
-    warning.set_code(0);
-    warning.set_msg("Division by 0");
-    appendWarning(warning);
+    appendWarning("Division by 0");
 }
 
 void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & error)
@@ -138,7 +143,18 @@ void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & erro
     }
 }
 
-bool DAGContext::shouldClipToZero() { return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT; }
+void DAGContext::appendWarning(const String & msg, int32_t code)
+{
+    tipb::Error warning;
+    warning.set_code(code);
+    warning.set_msg(msg);
+    appendWarning(warning);
+}
+
+bool DAGContext::shouldClipToZero()
+{
+    return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT;
+}
 
 std::pair<bool, double> DAGContext::getTableScanThroughput()
 {
