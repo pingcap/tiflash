@@ -401,7 +401,10 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
 
 size_t PSDiskDelegatorMulti::numPaths() const { return pool.latest_path_infos.size(); }
 
-String PSDiskDelegatorMulti::defaultPath() const { return pool.latest_path_infos[0].path + "/" + path_prefix; }
+String PSDiskDelegatorMulti::defaultPath() const
+{
+    return pool.latest_path_infos[default_path_index].path + "/" + path_prefix;
+}
 
 Strings PSDiskDelegatorMulti::listPaths() const
 {
@@ -467,17 +470,24 @@ String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) 
     throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
 }
 
-void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left)
+void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path)
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
-    auto iter = page_path_map.find(id_lvl);
-    if (unlikely(iter == page_path_map.end()))
-        return;
-    auto index = iter->second;
-    if (!meta_left)
-        page_path_map.erase(iter);
+    if (remove_from_default_path)
+    {
+        pool.global_capacity->freeUsedSize(pool.latest_path_infos[default_path_index].path, file_size);
+    }
+    else
+    {
+        auto iter = page_path_map.find(id_lvl);
+        if (unlikely(iter == page_path_map.end()))
+            return;
+        auto index = iter->second;
+        if (!meta_left)
+            page_path_map.erase(iter);
 
-    pool.global_capacity->freeUsedSize(pool.latest_path_infos[index].path, file_size);
+        pool.global_capacity->freeUsedSize(pool.latest_path_infos[index].path, file_size);
+    }
 }
 
 //==========================================================================================
@@ -515,7 +525,7 @@ String PSDiskDelegatorSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lv
     return pool.latest_path_infos[0].path + "/" + path_prefix;
 }
 
-void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/)
+void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/, bool /*remove_from_default_path*/)
 {
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[0].path, file_size);
 }
@@ -536,7 +546,10 @@ PSDiskDelegatorRaft::PSDiskDelegatorRaft(PathPool & pool_) : pool(pool_)
 
 size_t PSDiskDelegatorRaft::numPaths() const { return raft_path_infos.size(); }
 
-String PSDiskDelegatorRaft::defaultPath() const { return raft_path_infos[0].path; }
+String PSDiskDelegatorRaft::defaultPath() const
+{
+    return raft_path_infos[default_path_index].path;
+}
 
 Strings PSDiskDelegatorRaft::listPaths() const { return pool.kvstore_paths; }
 
@@ -594,17 +607,23 @@ String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) c
     throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
 }
 
-void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left)
+void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path)
 {
     std::lock_guard<std::mutex> lock{mutex};
-    auto iter = page_path_map.find(id_lvl);
-    if (unlikely(iter == page_path_map.end()))
-        return;
-    auto index = iter->second;
-    if (!meta_left)
-        page_path_map.erase(iter);
-
-    pool.global_capacity->freeUsedSize(raft_path_infos[index].path, file_size);
+    if (remove_from_default_path)
+    {
+        pool.global_capacity->freeUsedSize(raft_path_infos[default_path_index].path, file_size);
+    }
+    else
+    {
+        auto iter = page_path_map.find(id_lvl);
+        if (unlikely(iter == page_path_map.end()))
+            return;
+        auto index = iter->second;
+        if (!meta_left)
+            page_path_map.erase(iter);
+        pool.global_capacity->freeUsedSize(raft_path_infos[index].path, file_size);
+    }
 }
 
 } // namespace DB
