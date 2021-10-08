@@ -3366,7 +3366,7 @@ public:
                     if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
                     {
                         const auto & precision_array = col1_column->getData();
-                        for (decltype(val_num) i = 0; i < val_num; ++i)
+                        for (size_t i = 0; i != val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
                             format(const_number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
@@ -3387,7 +3387,7 @@ public:
                     {
                         const auto & number_array = col0_column->getData();
                         const auto & precision_array = col1_column->getData();
-                        for (decltype(val_num) i = 0; i < val_num; ++i)
+                        for (size_t i = 0; i != val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
                             format(number_array[i], max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
@@ -3556,7 +3556,7 @@ struct FormatWithEnUS
             else
             {
                 const auto decimal_part_size = number.size() - point_index - 1;
-                const auto decimal_part_start = number.cbegin() + point_index + 1;
+                const auto decimal_part_start = integer_part_end + 1;
                 if (decimal_part_size >= precision)
                     buffer.append(decimal_part_start, decimal_part_start + precision);
                 else
@@ -3613,7 +3613,8 @@ public:
                 fmt::format("Illegal type {} of third argument of function {}", third_argument->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return makeNullable(std::make_shared<DataTypeString>());
+        auto return_type = std::make_shared<DataTypeString>();
+        return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
