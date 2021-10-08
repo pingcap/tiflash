@@ -247,7 +247,7 @@ void ColumnDecimal<T>::insertRangeFrom(const IColumn & src, size_t start, size_t
     if constexpr (is_Decimal256)
     {
         for (size_t i = 0; i != length; ++i)
-            data[i + old_size] = src_vec.data[i];
+            data[i + old_size] = src_vec.data[i + start];
     }
     else
     {
