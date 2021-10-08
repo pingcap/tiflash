@@ -16,7 +16,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
 extern const int LOGICAL_ERROR;
 extern const int NOT_IMPLEMENTED;
@@ -282,7 +281,7 @@ Field decodeLiteral(const tipb::Expr & expr)
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
     auto column_index = decodeDAGInt64(expr.val());
-    if (column_index < 0 || column_index >= (Int64)input_col.size())
+    if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
     {
         throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
@@ -1130,6 +1129,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Substring2Args, "cast"},
     //{tipb::ScalarFuncSig::Substring3Args, "cast"},
     {tipb::ScalarFuncSig::SubstringIndex, "substringIndex"},
+    {tipb::ScalarFuncSig::Format, "format"},
+    {tipb::ScalarFuncSig::FormatWithLocale, "formatWithLocale"},
 
     //{tipb::ScalarFuncSig::ToBase64, "cast"},
     {tipb::ScalarFuncSig::Trim1Arg, "trim"},
