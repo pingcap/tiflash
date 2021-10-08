@@ -1,6 +1,7 @@
 #include "Server.h"
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
@@ -1259,7 +1260,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setCurrentDatabase(default_database);
 
     global_context->initializeSchemaSyncService();
-
+    CPUAffinityManager::initCPUAffinityManager(config());
+    LOG_INFO(log, "CPUAffinity: " << CPUAffinityManager::getInstance().toString());
     SCOPE_EXIT({
         /** Ask to cancel background jobs all table engines,
           *  and also query_log.
@@ -1386,6 +1388,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         tmt_context.setStatusRunning();
+
+        try
+        {
+            // Bind CPU affinity after all threads started.
+            CPUAffinityManager::getInstance().bindThreadCPUAffinity();
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
+        }
+
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
