@@ -104,7 +104,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         {
             auto reader = rpc_context->makeReader(req);
             reader->initialize();
-            std::shared_ptr<ReceivedPacket> packet;
+            std::shared_ptr<ReceivedMessage> recv_msg;
             bool has_data = false;
             for (;;)
             {
@@ -114,7 +114,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });
                     if (state == ExchangeReceiverState::NORMAL)
                     {
-                        res_buffer.popEmpty(packet);
+                        res_buffer.popEmpty(recv_msg);
                         cv.notify_all();
                     }
                     else
@@ -125,23 +125,23 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         break;
                     }
                 }
-                packet->req_info = req_info;
-                packet->source_index = source_index;
-                bool success = reader->read(packet->packet.get());
+                recv_msg->req_info = req_info;
+                recv_msg->source_index = source_index;
+                bool success = reader->read(recv_msg->packet.get());
                 if (!success)
                     break;
                 else
                     has_data = true;
-                if (packet->packet->has_error())
+                if (recv_msg->packet->has_error())
                 {
-                    throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                    throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
                 }
                 {
                     std::unique_lock<std::mutex> lock(mu);
                     cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
                     if (state == ExchangeReceiverState::NORMAL)
                     {
-                        res_buffer.pushObject(packet);
+                        res_buffer.pushObject(recv_msg);
                         cv.notify_all();
                     }
                     else
@@ -218,9 +218,19 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 }
 
 template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(ExchangeReceiverResult const * res)
+{
+    res->recv_msg->packet->Clear();
+    std::unique_lock<std::mutex> lock(mu);
+    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
+    res_buffer.pushEmpty(std::move(res->recv_msg));
+    cv.notify_all();
+}
+
+template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
 {
-    std::shared_ptr<ReceivedPacket> packet;
+    std::shared_ptr<ReceivedMessage> recv_msg;
     {
         std::unique_lock<std::mutex> lock(mu);
         cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != ExchangeReceiverState::NORMAL; });
@@ -240,7 +250,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         }
         else if (res_buffer.hasObjects())
         {
-            res_buffer.popObject(packet);
+            res_buffer.popObject(recv_msg);
             cv.notify_all();
         }
         else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
@@ -248,29 +258,31 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
-    assert(packet != nullptr && packet->packet != nullptr);
+    assert(recv_msg != nullptr && recv_msg->packet != nullptr);
     ExchangeReceiverResult result;
-    if (packet->packet->has_error())
+    if (recv_msg->packet->has_error())
     {
-        result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
+        result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, recv_msg->packet->error().msg(), false};
     }
     else
     {
-        auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(packet->packet->data()))
+        if (!recv_msg->packet->data().empty()) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
         {
-            result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
+            auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+            if (!resp_ptr->ParseFromString(recv_msg->packet->data()))
+            {
+                result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, "decode error", false};
+            }
+            else
+            {
+                result = {resp_ptr, recv_msg->source_index, recv_msg->req_info, false, "", false, recv_msg};
+            }
         }
-        else
+        else /// the non-last packets
         {
-            result = {resp_ptr, packet->source_index, packet->req_info};
+            result = {nullptr, recv_msg->source_index, recv_msg->req_info, false, "", false, recv_msg};
         }
     }
-    packet->packet->Clear();
-    std::unique_lock<std::mutex> lock(mu);
-    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
-    res_buffer.pushEmpty(std::move(packet));
-    cv.notify_all();
     return result;
 }
 

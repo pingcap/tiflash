@@ -32,6 +32,7 @@ struct CoprocessorReaderResult
     String error_msg;
     bool eof;
     String req_info = "cop request";
+
     CoprocessorReaderResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
         bool meet_error_ = false,
@@ -42,6 +43,41 @@ struct CoprocessorReaderResult
         , error_msg(error_msg_)
         , eof(eof_)
     {}
+    Int64 decodeChunks(std::queue<Block> & block_queue, const DAGSchema & schema, const DataTypes & expected_types)
+    {
+        Int64 rows = 0;
+        int chunk_size = resp->chunks_size();
+        if (chunk_size == 0)
+            return rows;
+
+        for (int i = 0; i < chunk_size; i++)
+        {
+            Block block;
+            const tipb::Chunk & chunk = resp->chunks(i);
+            switch (resp->encode_type())
+            {
+            case tipb::EncodeType::TypeCHBlock:
+                block = CHBlockChunkCodec().decode(chunk, schema);
+                break;
+            case tipb::EncodeType::TypeChunk:
+                block = ArrowChunkCodec().decode(chunk, schema);
+                break;
+            case tipb::EncodeType::TypeDefault:
+                block = DefaultChunkCodec().decode(chunk, schema);
+                break;
+            default:
+                throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
+            }
+
+            rows += block.rows();
+
+            if (unlikely(block.rows() == 0))
+                continue;
+            assertBlockSchema(expected_types, block, req_info);
+            block_queue.push(std::move(block));
+        }
+        return rows;
+    }
 };
 
 /// this is an adapter for pingcap::coprocessor::ResponseIter, so it can be used in TiRemoteBlockInputStream
@@ -69,6 +105,7 @@ public:
         resp_iter.open();
     }
 
+    void returnEmptyMsg(CoprocessorReaderResult const *) const {}
     const DAGSchema & getOutputSchema() const { return schema; }
 
     void cancel() { resp_iter.cancel(); }

@@ -113,56 +113,32 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         }
         if (result.eof)
             return false;
-        if (result.resp->has_error())
+        if (result.resp != nullptr && result.resp->has_error())
         {
             LOG_WARNING(log, "remote reader meets error: " << result.resp->error().DebugString());
             throw Exception(result.resp->error().DebugString());
         }
-
-        if constexpr (is_streaming_reader)
+        /// only the last response contains execution summaries
+        if (result.resp != nullptr)
         {
-            addRemoteExecutionSummaries(*result.resp, result.call_index, true);
-        }
-        else
-        {
-            addRemoteExecutionSummaries(*result.resp, 0, false);
-        }
-
-        int chunk_size = result.resp->chunks_size();
-        if (chunk_size == 0)
-            return fetchRemoteResult();
-
-        for (int i = 0; i < chunk_size; i++)
-        {
-            Block block;
-            const tipb::Chunk & chunk = result.resp->chunks(i);
-            switch (result.resp->encode_type())
+            if constexpr (is_streaming_reader)
             {
-            case tipb::EncodeType::TypeCHBlock:
-                block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            case tipb::EncodeType::TypeChunk:
-                block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            case tipb::EncodeType::TypeDefault:
-                block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            default:
-                throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
+                addRemoteExecutionSummaries(*result.resp, result.call_index, true);
             }
-
-            total_rows += block.rows();
-
-            LOG_TRACE(
-                log,
-                fmt::format("recv {} rows from remote for {}, total recv row num: {}", block.rows(), result.req_info, total_rows));
-
-            if (unlikely(block.rows() == 0))
-                continue;
-            assertBlockSchema(expected_types, block, getName());
-            block_queue.push(std::move(block));
+            else
+            {
+                addRemoteExecutionSummaries(*result.resp, 0, false);
+            }
         }
-        if (block_queue.empty())
+
+        auto rows = result.decodeChunks(block_queue, remote_reader->getOutputSchema(), expected_types);
+        /// return empty msg after all its chunks are decoded.
+        remote_reader->returnEmptyMsg(&result);
+        total_rows += rows;
+        LOG_TRACE(
+            log,
+            fmt::format("recv {} rows from remote for {}, total recv row num: {}", rows, result.req_info, total_rows));
+        if (rows == 0)
             return fetchRemoteResult();
         return true;
     }
