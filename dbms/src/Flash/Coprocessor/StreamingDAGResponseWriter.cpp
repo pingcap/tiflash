@@ -58,7 +58,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     {
         blocks.push_back(block);
     }
-    if ((Int64)rows_in_blocks > encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk)
+    if ((Int64)rows_in_blocks > (encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk - 1))
     {
         batchWrite<false>();
     }
