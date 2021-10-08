@@ -237,7 +237,10 @@ namespace DB
       F(type_in_bytes, {"type", "in_bytes"}),                                                                                                                                                         \
       F(type_in_blocks, {"type", "in_blocks"}),                                                                                                                                                       \
       F(type_out_bytes, {"type", "out_bytes"}),                                                                                                                                                       \
-      F(type_out_blocks, {"type", "out_blocks"}))
+      F(type_out_blocks, {"type", "out_blocks"}))                                                                                                                                                     \
+    M(tiflash_sender_hist, "", Histogram, /**/                                                                                                                                                        \
+      F(type_packet, {{"type", "packet"}}, ExpBuckets{1, 2, 25}),                                                                                                                                     \
+      F(type_block, {{"type", "block"}}, ExpBuckets{1, 2, 25}))
 
 struct ExpBuckets
 {

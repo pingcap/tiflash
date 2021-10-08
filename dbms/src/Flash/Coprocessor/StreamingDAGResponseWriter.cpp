@@ -69,6 +69,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     tipb::SelectResponse & response) const
 {
     GET_METRIC(tiflash_sender_counter, type_broadcast_out_blocks).Increment(input_blocks.size());
+    for (const auto & block : input_blocks)
+    {
+        GET_METRIC(tiflash_sender_hist, type_block).Observe(block.bytes());
+    }
 
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
     if (encode_type == tipb::EncodeType::TypeDefault)
@@ -235,6 +239,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         {
             dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
             responses_row_count[part_id] += dest_blocks[part_id].rows();
+            GET_METRIC(tiflash_sender_hist, type_block).Observe(dest_blocks[part_id].bytes());
             chunk_codec_stream[part_id]->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
             auto dag_chunk = responses[part_id].add_chunks();
             dag_chunk->set_rows_data(chunk_codec_stream[part_id]->getString());

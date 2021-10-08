@@ -141,6 +141,7 @@ void MPPTunnelBase<Writer>::sendLoop()
         }
         else
         {
+            GET_METRIC(tiflash_sender_hist, type_packet).Observe(res->ByteSizeLong());
             writer->Write(*res);
         }
     }
