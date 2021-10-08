@@ -5,11 +5,12 @@
 
 namespace DB::tests
 {
-
 class MockDiskDelegatorSingle final : public PSDiskDelegator
 {
 public:
-    MockDiskDelegatorSingle(String path_) : path(std::move(path_)) {}
+    MockDiskDelegatorSingle(String path_)
+        : path(std::move(path_))
+    {}
 
     size_t numPaths() const { return 1; }
     String defaultPath() const { return path; }
@@ -23,7 +24,10 @@ public:
     }
     String choosePath(const PageFileIdAndLevel & /*id_lvl*/) { return path; }
     size_t addPageFileUsedSize(
-        const PageFileIdAndLevel & /*id_lvl*/, size_t /*size_to_add*/, const String & /*pf_parent_path*/, bool /*need_insert_location*/)
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*size_to_add*/,
+        const String & /*pf_parent_path*/,
+        bool /*need_insert_location*/)
     {
         return 0;
     }
@@ -35,7 +39,8 @@ private:
 class MockDiskDelegatorMulti final : public PSDiskDelegator
 {
 public:
-    MockDiskDelegatorMulti(Strings paths_) : paths(std::move(paths_))
+    MockDiskDelegatorMulti(Strings paths_)
+        : paths(std::move(paths_))
     {
         if (paths.empty())
             throw Exception("Should not generate MockDiskDelegatorMulti with empty paths");
@@ -53,7 +58,10 @@ public:
         return chosen;
     }
     size_t addPageFileUsedSize(
-        const PageFileIdAndLevel & /*id_lvl*/, size_t /*size_to_add*/, const String & /*pf_parent_path*/, bool /*need_insert_location*/)
+        const PageFileIdAndLevel & /*id_lvl*/,
+        size_t /*size_to_add*/,
+        const String & /*pf_parent_path*/,
+        bool /*need_insert_location*/)
     {
         return 0;
     }

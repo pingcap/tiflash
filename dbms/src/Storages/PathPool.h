@@ -12,7 +12,6 @@ class Logger;
 
 namespace DB
 {
-
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class FileProvider;
@@ -40,10 +39,12 @@ public:
     PathPool() = default;
 
     // Constructor to be used during initialization
-    PathPool(                                                                    //
-        const Strings & main_data_paths, const Strings & latest_data_paths,      //
-        const Strings & kvstore_paths,                                           //
-        PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, //
+    PathPool( //
+        const Strings & main_data_paths,
+        const Strings & latest_data_paths, //
+        const Strings & kvstore_paths, //
+        PathCapacityMetricsPtr global_capacity_,
+        FileProviderPtr file_provider_, //
         bool enable_raft_compatible_mode_ = false);
 
     // Constructor to create PathPool for one Storage
@@ -89,7 +90,9 @@ private:
 class StableDiskDelegator : private boost::noncopyable
 {
 public:
-    StableDiskDelegator(StoragePathPool & pool_) : pool(pool_) {}
+    StableDiskDelegator(StoragePathPool & pool_)
+        : pool(pool_)
+    {}
 
     Strings listPaths() const;
 
@@ -121,7 +124,10 @@ public:
     virtual String choosePath(const PageFileIdAndLevel & id_lvl) = 0;
 
     virtual size_t addPageFileUsedSize(
-        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location)
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_add,
+        const String & pf_parent_path,
+        bool need_insert_location)
         = 0;
 
     virtual String getPageFilePath(const PageFileIdAndLevel & id_lvl) const = 0;
@@ -132,7 +138,10 @@ public:
 class PSDiskDelegatorMulti : public PSDiskDelegator
 {
 public:
-    PSDiskDelegatorMulti(StoragePathPool & pool_, String prefix) : pool(pool_), path_prefix(std::move(prefix)) {}
+    PSDiskDelegatorMulti(StoragePathPool & pool_, String prefix)
+        : pool(pool_)
+        , path_prefix(std::move(prefix))
+    {}
 
     size_t numPaths() const override;
 
@@ -143,7 +152,10 @@ public:
     String choosePath(const PageFileIdAndLevel & id_lvl) override;
 
     size_t addPageFileUsedSize(
-        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location) override;
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_add,
+        const String & pf_parent_path,
+        bool need_insert_location) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
@@ -160,7 +172,10 @@ private:
 class PSDiskDelegatorSingle : public PSDiskDelegator
 {
 public:
-    PSDiskDelegatorSingle(StoragePathPool & pool_, String prefix) : pool(pool_), path_prefix(std::move(prefix)) {}
+    PSDiskDelegatorSingle(StoragePathPool & pool_, String prefix)
+        : pool(pool_)
+        , path_prefix(std::move(prefix))
+    {}
 
     size_t numPaths() const override;
 
@@ -171,7 +186,10 @@ public:
     String choosePath(const PageFileIdAndLevel & id_lvl) override;
 
     size_t addPageFileUsedSize(
-        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location) override;
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_add,
+        const String & pf_parent_path,
+        bool need_insert_location) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
@@ -196,7 +214,10 @@ public:
     String choosePath(const PageFileIdAndLevel & id_lvl) override;
 
     size_t addPageFileUsedSize(
-        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location) override;
+        const PageFileIdAndLevel & id_lvl,
+        size_t size_to_add,
+        const String & pf_parent_path,
+        bool need_insert_location) override;
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
@@ -224,8 +245,11 @@ public:
     static constexpr const char * STABLE_FOLDER_NAME = "stable";
 
     StoragePathPool(const Strings & main_data_paths, const Strings & latest_data_paths, //
-        String database_, String table_, bool path_need_database_name_,                 //
-        PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_);
+                    String database_,
+                    String table_,
+                    bool path_need_database_name_, //
+                    PathCapacityMetricsPtr global_capacity_,
+                    FileProviderPtr file_provider_);
 
     StoragePathPool(const StoragePathPool & rhs);
     StoragePathPool & operator=(const StoragePathPool & rhs);
