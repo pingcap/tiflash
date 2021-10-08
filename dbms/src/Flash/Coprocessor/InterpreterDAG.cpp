@@ -135,6 +135,7 @@ BlockIO InterpreterDAG::execute()
                 collators,
                 exchange_sender.tp(),
                 context.getSettings().dag_records_per_chunk,
+                context.getSettings().batch_send_min_limit,
                 dag.getEncodeType(),
                 dag.getResultFieldTypes(),
                 dag.getDAGContext(),
