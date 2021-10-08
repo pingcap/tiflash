@@ -132,10 +132,6 @@ DAGResponseWriter::DAGResponseWriter(
     {
         local_executors.insert(p.first);
     }
-    if (encode_type == tipb::EncodeType::TypeCHBlock)
-    {
-        records_per_chunk = -1;
-    }
     if (encode_type != tipb::EncodeType::TypeCHBlock && encode_type != tipb::EncodeType::TypeChunk
         && encode_type != tipb::EncodeType::TypeDefault)
     {
