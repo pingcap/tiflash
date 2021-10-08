@@ -365,11 +365,12 @@ void PageStorage::restore()
         // Only insert location of PageFile when it storing delta data
         for (auto & page_file : page_files)
         {
+            // Checkpoint file is always stored on `delegator`'s default path, so no need to insert it's location here
             size_t idx_in_delta_paths = delegator->addPageFileUsedSize(
                 page_file.fileIdLevel(),
                 page_file.getDiskSize(),
                 page_file.parentPath(),
-                /*need_insert_location*/ true);
+                /*need_insert_location*/ page_file.getType() != PageFile::Type::Checkpoint);
             // Try best to reuse writable page files
             if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
