@@ -18,9 +18,11 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
     TaskCancelledCallback callback,
-    int input_steams_num_)
+    int input_steams_num_,
+    bool is_local_)
     : connected(false)
     , finished(false)
+    , is_local(is_local_)
     , timeout(timeout_)
     , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
@@ -124,6 +126,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
+    if (is_local) return; // sendLoop is useless in local environment
     try
     {
         /// TODO(fzh) reuse it later
@@ -185,6 +188,27 @@ void MPPTunnelBase<Writer>::writeDone()
     waitForFinish();
     LOG_TRACE(log, "done to finish");
 }
+
+template <typename Writer>
+std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
+{
+    if (is_local)
+    {
+        MPPDataPacketPtr res;
+        if (!finished)
+        {
+            send_queue.pop(res);
+            if (nullptr == res)
+            {
+                finishWithLock();
+            }
+
+            return res;
+        }
+    }
+    return nullptr;
+}
+
 
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)

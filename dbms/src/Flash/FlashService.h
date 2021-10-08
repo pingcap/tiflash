@@ -1,11 +1,13 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
+#include <Flash/Mpp/MPPTunnel.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
+#include <tuple>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/tikvpb.grpc.pb.h>
@@ -48,6 +50,8 @@ public:
                                           const ::mpp::EstablishMPPConnectionRequest * request,
                                           ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
 
+    std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request);
+
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
 private:
@@ -64,5 +68,7 @@ private:
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };
+
+extern FlashService * glbFlashService;
 
 } // namespace DB

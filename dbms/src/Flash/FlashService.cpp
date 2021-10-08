@@ -19,6 +19,9 @@
 
 namespace DB
 {
+
+FlashService* glbFlashService = nullptr;
+
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
@@ -224,6 +227,73 @@ grpc::Status FlashService::Coprocessor(
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;
+}
+
+std::tuple<MPPTunnelPtr, grpc::Status> FlashService::EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request)
+{
+    // Establish a pipe for data transferring. The pipes has registered by the task in advance.
+    // We need to find it out and bind the grpc stream with it.
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling establish mpp connection request: " << request->DebugString());
+
+    //    if (!security_config.checkGrpcContext(grpc_context))
+    //    {
+    //        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    //    }
+    GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+    });
+    auto context = server.context();
+    //    auto [context, status] = createDBContext(grpc_context);
+    //    if (!status.ok())
+    //    {
+    //        return status;
+    //    }
+
+    auto & tmt_context = context.getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    std::chrono::seconds timeout(10);
+    std::string err_msg;
+    MPPTunnelPtr tunnel = nullptr;
+    {
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
+        if (sender_task != nullptr)
+        {
+            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
+        }
+        if (tunnel == nullptr)
+        {
+            LOG_ERROR(log, err_msg);
+            //            if (writer->Write(getPacketWithError(err_msg)))
+            //            {
+            return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+            //            }
+            //            else
+            //            {
+            //                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write error message failed for unknown reason.");
+            //                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+            //            }
+        }
+    }
+    Stopwatch stopwatch;
+    if (!tunnel->isLocal())
+    {
+        std::string err_msg("EstablishMPPConnectionLocal into a remote channel !");
+        LOG_ERROR(log, err_msg);
+        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+    }
+    tunnel->connect(nullptr);
+    //    grpc_context->peer()
+    LOG_DEBUG(log, "connect local-tunnel successfully and begin to wait");
+    //    tunnel->waitForFinish();
+    LOG_INFO(log, "connection for local-tunnel " << tunnel->id() << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    // TODO: Check if there are errors in task.
+    return std::make_tuple(tunnel, grpc::Status::OK);
+    //    return grpc::Status::OK;
 }
 
 ::grpc::Status FlashService::CancelMPPTask(

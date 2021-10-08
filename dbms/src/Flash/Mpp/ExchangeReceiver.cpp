@@ -1,5 +1,8 @@
 #include <Common/ThreadFactory.h>
+#include <Flash/FlashService.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/var.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -90,7 +93,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
     Int64 send_task_id = -1;
     Int64 recv_task_id = task_meta.task_id();
-
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
@@ -98,10 +100,28 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
+        bool is_local = Tiflash::kGrpcLocalAddr && req.req->sender_meta().address() == (*Tiflash::kGrpcLocalAddr);
         for (int i = 0; i < 10; i++)
         {
-            auto reader = rpc_context->makeReader(req);
-            reader->initialize();
+            std::shared_ptr<GRPCReceiverContext::Reader> reader;
+
+            MPPTunnelPtr tunnel;
+
+            if (is_local)
+            {
+                std::tuple<MPPTunnelPtr, grpc::Status> localConnRetPair = DB::glbFlashService->EstablishMPPConnectionLocal(req.req.get());
+                tunnel = std::get<0>(localConnRetPair);
+                status = std::get<1>(localConnRetPair);
+                if (!status.ok())
+                {
+                    throw Exception("Exchange receiver meet error : " + status.error_message());
+                }
+            }
+            else
+            {
+                reader = rpc_context->makeReader(req);
+                reader->initialize();
+            }
             std::shared_ptr<ReceivedPacket> packet;
             bool has_data = false;
             for (;;)
@@ -125,7 +145,18 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 }
                 packet->req_info = req_info;
                 packet->source_index = source_index;
-                bool success = reader->read(packet->packet.get());
+                bool success;
+                if (is_local)
+                {
+                    std::shared_ptr<mpp::MPPDataPacket> tmp_packet = tunnel->readForLocal();
+                    success = tmp_packet != nullptr;
+                    if (success)
+                        packet->packet = tmp_packet;
+                }
+                else
+                {
+                    success = reader->read(packet->packet.get());
+                }
                 if (!success)
                     break;
                 else
@@ -156,8 +187,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             {
                 break;
             }
-            status = reader->finish();
-            if (status.ok())
+            if (!is_local)
+                status = reader->finish();
+            if (is_local || status.ok())
             {
                 LOG_DEBUG(log, "finish read : " << req.debugString());
                 break;
