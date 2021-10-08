@@ -171,6 +171,7 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::core
     prometheus-cpp::push
     prometheus-cpp::pull
+    cpptoml
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 
