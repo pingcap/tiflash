@@ -24,25 +24,21 @@ std::tuple<Int32, Int32, Int32, Int32, Int32> MyDuration::splitDuration() const
 
 UInt32 MyDuration::hours() const
 {
-    auto [sign, hours, minutes, seconds, fraction] = splitDuration();
-    return hours;
+    return std::get<1>(splitDuration());
 }
 
 UInt32 MyDuration::minutes() const
 {
-    auto [sign, hours, minutes, seconds, fraction] = splitDuration();
-    return minutes;
+    return std::get<2>(splitDuration());
 }
 
 UInt32 MyDuration::seconds() const
 {
-    auto [sign, hours, minutes, seconds, fraction] = splitDuration();
-    return seconds;
+    return std::get<3>(splitDuration());
 }
 
 UInt32 MyDuration::microsecond() const
 {
-    auto [sign, hours, minutes, seconds, fraction] = splitDuration();
-    return fraction;
+    return std::get<4>(splitDuration());
 }
 } // namespace DB
