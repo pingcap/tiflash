@@ -134,7 +134,7 @@ BlockIO InterpreterDAG::execute()
                 partition_col_id,
                 collators,
                 exchange_sender.tp(),
-                dag.getEncodeType() == tipb::TypeCHBlock ? context.getSettings().batch_send_min_limit: context.getSettings().dag_records_per_chunk,
+                dag.getEncodeType() == tipb::TypeCHBlock ? context.getSettings().batch_send_min_limit : context.getSettings().dag_records_per_chunk,
                 dag.getEncodeType(),
                 dag.getResultFieldTypes(),
                 dag.getDAGContext(),
