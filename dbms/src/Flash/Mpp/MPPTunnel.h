@@ -53,6 +53,8 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
+    LogWithPrefixPtr getLogger() const { return log; }
+
 private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 

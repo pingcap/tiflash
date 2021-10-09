@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Common/LogWithPrefix.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>

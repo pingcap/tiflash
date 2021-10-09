@@ -598,7 +598,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         other_eq_filter_from_in_column_name,
         other_condition_expr,
         max_block_size_for_cross_join,
-        join);
+        log);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <Common/StackTrace.h>
 #include <Poco/Exception.h>
 
@@ -16,6 +15,9 @@ class Logger;
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 class Exception : public Poco::Exception
 {
 public:
