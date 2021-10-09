@@ -116,6 +116,7 @@ try
             collators,
             tipb::ExchangeType::PassThrough,
             context.getSettings().dag_records_per_chunk,
+            context.getSettings().batch_send_min_limit,
             dag.getEncodeType(),
             dag.getResultFieldTypes(),
             dag_context,

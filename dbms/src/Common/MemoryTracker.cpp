@@ -159,19 +159,23 @@ static __thread Int64 local_delta{};
 static thread_local Int64 local_delta{};
 #endif
 
-__attribute__((always_inline)) inline void checkSubmit()
+__attribute__((always_inline)) inline void checkSubmitAndUpdateLocalDelta(Int64 updated_local_delta)
 {
-    if (unlikely(local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
+    if (unlikely(updated_local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)
-            current_memory_tracker->alloc(local_delta);
+            current_memory_tracker->alloc(updated_local_delta);
         local_delta = 0;
     }
-    else if (unlikely(local_delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
+    else if (unlikely(updated_local_delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)
-            current_memory_tracker->free(-local_delta);
+            current_memory_tracker->free(-updated_local_delta);
         local_delta = 0;
+    }
+    else
+    {
+        local_delta = updated_local_delta;
     }
 }
 
@@ -182,20 +186,17 @@ void disableThreshold()
 
 void alloc(Int64 size)
 {
-    local_delta += size;
-    checkSubmit();
+    checkSubmitAndUpdateLocalDelta(local_delta + size);
 }
 
 void realloc(Int64 old_size, Int64 new_size)
 {
-    local_delta += new_size - old_size;
-    checkSubmit();
+    checkSubmitAndUpdateLocalDelta(local_delta + (new_size - old_size));
 }
 
 void free(Int64 size)
 {
-    local_delta -= size;
-    checkSubmit();
+    checkSubmitAndUpdateLocalDelta(local_delta - size);
 }
 
 } // namespace CurrentMemoryTracker
