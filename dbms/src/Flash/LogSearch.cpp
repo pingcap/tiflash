@@ -1,4 +1,6 @@
+#include <Common/StringUtils/StringUtils.h>
 #include <Flash/LogSearch.h>
+#include <Poco/InflatingStream.h>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -10,7 +12,7 @@ using ::diagnosticspb::LogMessage;
 
 static time_t fast_mktime(struct tm * tm)
 {
-    thread_local struct tm cache = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    thread_local struct tm cache = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr};
     thread_local time_t time_cache = 0;
     time_t result;
     time_t hmsarg;
@@ -173,7 +175,7 @@ bool LogIterator::read_level(size_t limit, const char * s, size_t & level_start,
     if (s[level_start] != '[')
         return false;
     level_start++;
-    while (1)
+    while (true)
     {
         if (level_size > 7)
         {
@@ -230,27 +232,27 @@ bool LogIterator::read_date(
 
 std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
 {
-    if (!*log_file)
+    if (!log_input_stream)
     {
-        if (log_file->eof())
+        if (log_input_stream.eof())
             return std::optional<Error>(Error{Error::Type::EOI});
         else
             return std::optional<Error>(Error{Error::Type::UNKNOWN});
     }
 
-    std::getline(*log_file, line);
+    std::getline(log_input_stream, line);
     cur_lineno++;
 
     thread_local char prev_time_buff[35] = {0};
     thread_local time_t prev_time_t;
 
-    constexpr size_t kTimestampFinishOffset = 32;
-    constexpr size_t kLogLevelStartFinishOffset = 33;
+    constexpr size_t timestamp_finish_offset = 32;
+    constexpr size_t log_level_start_finish_offset = 33;
     const char * loglevel_start;
     size_t loglevel_size;
     size_t loglevel_s;
 
-    if (strncmp(prev_time_buff, line.data(), kTimestampFinishOffset) == 0)
+    if (strncmp(prev_time_buff, line.data(), timestamp_finish_offset) == 0)
     {
         // If we can reuse prev_time
         entry.time = prev_time_t;
@@ -290,7 +292,7 @@ std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
         entry.time = ctime;
 
         memset(prev_time_buff, 0, sizeof prev_time_buff);
-        strncpy(prev_time_buff, line.data(), kTimestampFinishOffset);
+        strncpy(prev_time_buff, line.data(), timestamp_finish_offset);
         prev_time_t = ctime;
     }
 
@@ -320,7 +322,7 @@ std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
     if (loglevel_size == 0)
         return std::optional<Error>(Error{Error::Type::INVALID_LOG_LEVEL});
 
-    size_t message_begin = kLogLevelStartFinishOffset + loglevel_size + 3; // [] and a space
+    size_t message_begin = log_level_start_finish_offset + loglevel_size + 3; // [] and a space
     if (line.size() <= message_begin)
     {
         return std::optional<Error>(Error{Error::Type::UNEXPECTED_LOG_HEAD});
@@ -333,7 +335,7 @@ std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
 void LogIterator::init()
 {
     // Check empty, if empty then fill with ".*"
-    if (patterns.size() == 0 || (patterns.size() == 1 && patterns[0] == ""))
+    if (patterns.empty() || (patterns.size() == 1 && patterns[0].empty()))
     {
         patterns = {".*"};
     }
@@ -348,8 +350,112 @@ LogIterator::~LogIterator()
 {
     if (err_info.has_value())
     {
-        LOG_ERROR(log, "LogIterator search end with error " << std::to_string(err_info->first) << " at line " << std::to_string(err_info->second));
+        LOG_DEBUG(log, "LogIterator search end with error " << std::to_string(err_info->second) << " at line " << std::to_string(err_info->first));
     }
 }
+
+// read approximate timestamp, round up to second, return -1 if failed.
+int64_t readApproxiTimestamp(const char * start, const char * date_format)
+{
+    int year;
+    int month;
+    int day;
+    int hour;
+    int minute;
+    int second;
+    int milli_second;
+
+    if (std::sscanf(start, date_format, &year, &month, &day, &hour, &minute, &second, &milli_second) != 7)
+    {
+        return -1;
+    }
+
+    std::tm time;
+    time.tm_year = year - 1900;
+    time.tm_mon = month - 1;
+    time.tm_mday = day;
+    time.tm_hour = hour;
+    time.tm_min = minute;
+    time.tm_sec = second + (milli_second ? 1 : 0); // ignore millisecond
+    time_t ctime = mktime(&time) * 1000;
+
+    return ctime;
+}
+
+// if name ends with date format and timestamp < start-time, return true.
+// otherwise(can NOT tell ts) return false.
+bool filterLogEndDatetime(const std::string & path, const std::string & example, const char * date_format, const int64_t start_time)
+{
+    if (path.size() > example.size())
+    {
+        auto tso = readApproxiTimestamp(path.data() + path.size() - example.size(), date_format);
+        if (tso == -1)
+            return false;
+        if (tso < start_time)
+            return true;
+    }
+    return false;
+}
+
+static const std::string gz_suffix = ".gz";
+
+// if timestamp of log file could be told, return whether it can be filtered.
+bool FilterFileByDatetime(
+    const std::string & path,
+    const std::string & error_log_file_prefix,
+    const int64_t start_time)
+{
+    static const std::string date_format_example = "0000-00-00-00:00:00.000";
+    static const std::string raftstore_proxy_date_format_example = "0000-00-00-00:00:00.000000000";
+    static const char * date_format = "%d-%d-%d-%d:%d:%d.%d";
+
+    // ignore tiflash error log
+    if (!error_log_file_prefix.empty() && startsWith(path, error_log_file_prefix))
+        return true;
+    if (endsWith(path, gz_suffix))
+    {
+        if (path.size() <= gz_suffix.size() + date_format_example.size())
+            return false;
+
+        auto date_str = std::string(path.end() - gz_suffix.size() - date_format_example.size(), path.end() - gz_suffix.size());
+
+        if (auto ts = readApproxiTimestamp(date_str.data(), date_format); ts == -1)
+        {
+            return false;
+        }
+        else if (ts < start_time)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        // filter proxy log end datetime
+        return filterLogEndDatetime(path, raftstore_proxy_date_format_example, date_format, start_time);
+    }
+}
+
+// if path ends with `.gz`, try to read by `Poco::InflatingInputStream`
+void ReadLogFile(const std::string & path, std::function<void(std::istream &)> && cb)
+{
+    if (endsWith(path, gz_suffix))
+    {
+        std::ifstream istr(path, std::ios::binary);
+        Poco::InflatingInputStream inflater(istr, Poco::InflatingStreamBuf::STREAM_GZIP);
+        cb(inflater);
+        istr.close();
+    }
+    else
+    {
+        std::ifstream istr(path);
+        cb(istr);
+        istr.close();
+    }
+}
+
 
 } // namespace DB
