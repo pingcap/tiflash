@@ -2,7 +2,6 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/var.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -100,7 +99,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
-        bool is_local = Tiflash::kGrpcLocalAddr && req.req->sender_meta().address() == (*Tiflash::kGrpcLocalAddr);
+        bool is_local = req.req->sender_meta().address() == task_meta.address();
         for (int i = 0; i < 10; i++)
         {
             std::shared_ptr<GRPCReceiverContext::Reader> reader;

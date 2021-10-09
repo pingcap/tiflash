@@ -23,7 +23,6 @@
 #include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
-#include <Flash/var.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
@@ -507,13 +506,13 @@ public:
         {
             builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
         }
-        Tiflash::kGrpcLocalAddr = std::make_shared<std::string>(raft_config.flash_server_addr);
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(server);
         diagnostics_service = std::make_unique<DiagnosticsService>(server);
         builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_ping_interval_without_data_ms", 10 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_time_between_pings_ms", 10 * 1000));
+        DB::glbFlashService = flash_service.get();
         builder.RegisterService(flash_service.get());
         LOG_INFO(log, "Flash service registered");
         builder.RegisterService(diagnostics_service.get());
