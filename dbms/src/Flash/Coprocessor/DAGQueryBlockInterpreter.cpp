@@ -988,6 +988,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         executeJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
+
+        SubqueriesForSets subquries;
+        subquries[query_block.qb_join_subquery_alias] = right_query;
+        subqueriesForSets.emplace_back(subquries);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
@@ -1139,13 +1143,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
-    }
-
-    if (query_block.source->tp() == tipb::ExecType::TypeJoin)
-    {
-        SubqueriesForSets subquries;
-        subquries[query_block.qb_join_subquery_alias] = right_query;
-        subqueriesForSets.emplace_back(subquries);
     }
 }
 
