@@ -103,7 +103,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
     // PS-single delegate
@@ -137,7 +137,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
     // PS-Raft delegate
@@ -171,7 +171,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
 }
@@ -247,7 +247,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
     // PS-single delegate
@@ -281,7 +281,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
     // PS-Raft delegate
@@ -315,7 +315,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
 }
