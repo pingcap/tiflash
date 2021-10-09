@@ -1,5 +1,4 @@
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <IO/ChecksumBuffer.h>
 #include <Server/DMTool/DMTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 
@@ -7,6 +6,8 @@
 #include <iostream>
 namespace bpo = boost::program_options;
 
+namespace DTTool::Inspect
+{
 // clang-format off
 static constexpr char INSPECT_HELP[] =
     "Usage: inspect [args]\n"
@@ -18,14 +19,6 @@ static constexpr char INSPECT_HELP[] =
     "  --workdir     Target directory.";
 
 // clang-format on
-
-struct InspectArgs
-{
-    bool check;
-    size_t file_id;
-    std::string workdir;
-};
-
 
 int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 {
@@ -159,3 +152,4 @@ int inspectEntry(const std::vector<std::string> & opts)
 
     return 0;
 }
+} // namespace DTTool::Inspect

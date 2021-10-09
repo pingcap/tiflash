@@ -15,15 +15,48 @@
 #define _TO_STRING(X) #X
 #define TO_STRING(X) _TO_STRING(X)
 
+namespace DTTool
+{
 int mainEntryTiFlashDMTool(int argc, char ** argv);
+}
+
+namespace DTTool::Bench
+{
 int benchEntry(const std::vector<std::string> & opts);
+}
+
+namespace DTTool::Inspect
+{
+struct InspectArgs
+{
+    bool check;
+    size_t file_id;
+    std::string workdir;
+};
 int inspectEntry(const std::vector<std::string> & opts);
+} // namespace DTTool::Inspect
+
+namespace DTTool::Migrate
+{
+struct MigrateArgs
+{
+    bool no_keep;
+    bool dry_mode;
+    size_t file_id;
+    size_t version;
+    size_t frame;
+    DB::ChecksumAlgo algorithm;
+    std::string workdir;
+};
 int migrateEntry(const std::vector<std::string> & opts);
+} // namespace DTTool::Migrate
 
 extern "C" {
 void run_raftstore_proxy_ffi(int argc, const char * const * argv, const DB::EngineStoreServerHelper *);
 }
 
+namespace DTTool
+{
 template <typename Func, typename Args>
 struct CLIService : public BaseDaemon
 {
@@ -162,28 +195,10 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
     using namespace DB;
     TiFlashProxyConfig proxy_conf(config());
     EngineStoreServerWrap tiflash_instance_wrap{};
-    EngineStoreServerHelper helper{
-        // a special number, also defined in proxy
-        .magic_number = RAFT_STORE_PROXY_MAGIC_NUMBER,
-        .version = RAFT_STORE_PROXY_VERSION,
-        .inner = &tiflash_instance_wrap,
-        .fn_gen_cpp_string = GenCppRawString,
-        .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
-        .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
-        .fn_atomic_update_proxy = AtomicUpdateProxy,
-        .fn_handle_destroy = HandleDestroy,
-        .fn_handle_ingest_sst = HandleIngestSST,
-        .fn_handle_check_terminated = HandleCheckTerminated,
-        .fn_handle_compute_store_stats = HandleComputeStoreStats,
-        .fn_handle_get_engine_store_server_status = HandleGetTiFlashStatus,
-        .fn_pre_handle_snapshot = PreHandleSnapshot,
-        .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
-        .fn_handle_http_request = HandleHttpRequest,
-        .fn_check_http_uri_available = CheckHttpUriAvailable,
-        .fn_gc_raw_cpp_ptr = GcRawCppPtr,
-        .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
-        .fn_set_server_info_resp = SetServerInfoResp,
-    };
+    auto helper = getEngineStoreServerHelper(
+        RAFT_STORE_PROXY_MAGIC_NUMBER,
+        RAFT_STORE_PROXY_VERSION,
+        &tiflash_instance_wrap);
 
     typename RaftStoreProxyRunner::RunRaftStoreProxyParms parms{&helper, proxy_conf};
     RaftStoreProxyRunner proxy_runner(std::move(parms));
@@ -202,7 +217,7 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
             proxy_runner.join();
             return;
         }
-        tiflash_instance_wrap.status = EngineStoreServerStatus::Stopped;
+        tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
         tiflash_instance_wrap.tmt = nullptr;
         proxy_runner.join();
     });
@@ -235,3 +250,5 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
 
 template <class Func, class Args>
 inline const std::string CLIService<Func, Args>::TiFlashProxyConfig::config_prefix = "flash.proxy";
+
+} // namespace DTTool

@@ -15,12 +15,22 @@
 #include <Storages/FormatVersion.h>
 #include <common/logger_useful.h>
 
-int migrateServiceMain(DB::Context & context, const struct MigrateArgs & args);
+namespace DB::DM
+{
+class DMFile;
+}
+namespace DTTool::Migrate
+{
+struct MigrateArgs;
+bool isRecognizable(const DB::DM::DMFile & file, std::string & target);
+bool needFrameMigration(const DB::DM::DMFile & file, std::string & target);
+int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
+} // namespace DTTool::Migrate
+
 namespace DB
 {
 namespace DM
 {
-class DMFile;
 using DMFilePtr = std::shared_ptr<DMFile>;
 using DMFiles = std::vector<DMFilePtr>;
 
@@ -377,7 +387,9 @@ private:
     friend class DMFileWriter;
     friend class DMFileReader;
     friend class DMFilePackFilter;
-    friend int ::migrateServiceMain(DB::Context & context, const struct MigrateArgs & args);
+    friend int ::DTTool::Migrate::migrateServiceMain(DB::Context & context, const ::DTTool::Migrate::MigrateArgs & args);
+    friend bool ::DTTool::Migrate::isRecognizable(const DB::DM::DMFile & file, std::string & target);
+    friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, std::string & target);
 };
 
 inline ReadBufferFromFileProvider openForRead(

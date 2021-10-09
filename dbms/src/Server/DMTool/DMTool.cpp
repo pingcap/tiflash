@@ -3,11 +3,10 @@
 #include <boost/program_options.hpp>
 #include <iostream>
 
-
-#define _TO_STRING(X) #X
-#define TO_STRING(X) _TO_STRING(X)
 namespace bpo = boost::program_options;
 
+namespace DTTool
+{
 // clang-format off
 static constexpr char MAIN_HELP[] =
     "Usage: dmtool <subcommand> [args]\n"
@@ -52,19 +51,19 @@ int mainEntryTiFlashDMTool(int argc, char ** argv)
         {
             std::vector<std::string> opts = bpo::collect_unrecognized(parsed.options, bpo::include_positional);
             opts.erase(opts.begin());
-            return benchEntry(opts);
+            return Bench::benchEntry(opts);
         }
         else if (command == "migrate")
         {
             std::vector<std::string> opts = bpo::collect_unrecognized(parsed.options, bpo::include_positional);
             opts.erase(opts.begin());
-            return migrateEntry(opts);
+            return Migrate::migrateEntry(opts);
         }
         else if (command == "inspect")
         {
             std::vector<std::string> opts = bpo::collect_unrecognized(parsed.options, bpo::include_positional);
             opts.erase(opts.begin());
-            return inspectEntry(opts);
+            return Inspect::inspectEntry(opts);
         }
         else
         {
@@ -80,3 +79,4 @@ int mainEntryTiFlashDMTool(int argc, char ** argv)
 
     return 0;
 }
+} // namespace DTTool

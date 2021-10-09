@@ -9,6 +9,27 @@
 
 #include <boost/program_options.hpp>
 #include <iostream>
+
+namespace DTTool::Migrate
+{
+bool isIgnoredInMigration(const DB::DM::DMFile & file, std::string & target)
+{
+    UNUSED(file);
+    return target == "NGC"; // this is not exported
+}
+bool needFrameMigration(const DB::DM::DMFile & file, std::string & target)
+{
+    return endsWith(target, ".mrk") || endsWith(target, ".dat") || endsWith(target, ".idx") || file.packStatFileName() == target;
+}
+bool isRecognizable(const DB::DM::DMFile & file, std::string & target)
+{
+    return file.metaFileName() == target
+        || file.configurationFileName() == target
+        || file.packPropertyFileName() == target
+        || needFrameMigration(file, target)
+        || isIgnoredInMigration(file, target);
+}
+
 namespace bpo = boost::program_options;
 
 // clang-format off
@@ -25,17 +46,6 @@ static constexpr char MIGRATE_HELP[] =
     "  --dry         Dry run: only print change list.";
 
 // clang-format on
-
-struct MigrateArgs
-{
-    bool no_keep;
-    bool dry_mode;
-    size_t file_id;
-    size_t version;
-    size_t frame;
-    DB::ChecksumAlgo algorithm;
-    std::string workdir;
-};
 
 struct DirLock
 {
@@ -167,6 +177,10 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
     }
     for (auto & i : sub)
     {
+        if (!isRecognizable(*src_file, i))
+        {
+            std::cerr << "target file: " << i << " is not recognizable by this tool" << std::endl;
+        }
         if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
         {
             auto source_path = src_file->path() + "/" + i;
@@ -289,7 +303,6 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
     return 0;
 }
 
-
 int migrateEntry(const std::vector<std::string> & opts)
 {
     bpo::options_description options{"Delta Merge Migration"};
@@ -376,3 +389,4 @@ int migrateEntry(const std::vector<std::string> & opts)
         return 1;
     }
 }
+} // namespace DTTool::Migrate

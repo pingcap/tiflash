@@ -128,7 +128,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
     {"lld", mainEntryClickHouseLLD},
 #endif
 #if ENABLE_TIFLASH_DMTOOL
-    {"dmtool", mainEntryTiFlashDMTool},
+    {"dmtool", DTTool::mainEntryTiFlashDMTool},
 #endif
     {"version", mainEntryVersion},
     {"errgen", mainExportError}};

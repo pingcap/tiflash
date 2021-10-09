@@ -23,6 +23,8 @@
 #include <utility>
 namespace bpo = boost::program_options;
 
+namespace DTTool::Bench
+{
 // clang-format off
 static constexpr char BENCH_HELP[] =
     "Usage: bench [args]\n"
@@ -40,8 +42,6 @@ static constexpr char BENCH_HELP[] =
     "  --workdir     Directory to create temporary data storage. [default: /tmp/test]";
 // clang-format on
 
-namespace benchmark
-{
 using namespace DB::DM;
 using namespace DB;
 std::unique_ptr<Context> global_context = nullptr;
@@ -95,7 +95,7 @@ void initializeGlobalContext(String tmp_path, bool encryption)
     global_context->getTMTContext().restore();
 }
 
-typedef const String string;
+using string = const String;
 Context getContext(const DB::Settings & settings, const String & tmp_path)
 {
     Context context = *global_context;
@@ -234,7 +234,6 @@ DB::Block createBlock(size_t column_number, size_t start, size_t row_number, std
     return block;
 }
 
-} // namespace benchmark
 
 int benchEntry(const std::vector<std::string> & opts)
 {
@@ -327,7 +326,7 @@ int benchEntry(const std::vector<std::string> & opts)
                 file.remove(true);
             }
 
-            benchmark::shutdown();
+            DTTool::Bench::shutdown();
         });
         static constexpr char SUMMARY_TEMPLATE_V1[] = "version:    {}\n"
                                                       "column:     {}\n"
@@ -361,17 +360,17 @@ int benchEntry(const std::vector<std::string> & opts)
         }
 
         // start initialization
-        benchmark::initializeGlobalContext(workdir, encryption);
+        DTTool::Bench::initializeGlobalContext(workdir, encryption);
         size_t effective_size = 0;
         auto engine = std::mt19937_64{random};
-        auto defines = benchmark::createColumnDefines(column);
+        auto defines = DTTool::Bench::createColumnDefines(column);
         std::vector<DB::Block> blocks;
         std::vector<DB::DM::DMFileBlockOutputStream::BlockProperty> properties;
         for (size_t i = 0, count = 1; i < size; count++)
         {
             auto block_size = engine() % (size - i) + 1;
             std::cout << "generating block with size: " << block_size << std::endl;
-            blocks.push_back(benchmark::createBlock(column, i, block_size, field, engine, effective_size));
+            blocks.push_back(DTTool::Bench::createBlock(column, i, block_size, field, engine, effective_size));
             i += block_size;
             DB::DM::DMFileBlockOutputStream::BlockProperty property{};
             property.gc_hint_version = count;
@@ -382,7 +381,7 @@ int benchEntry(const std::vector<std::string> & opts)
         std::cout << "start writing" << std::endl;
         size_t write_records = 0;
         auto settings = DB::Settings();
-        auto db_context = std::make_unique<DB::Context>(benchmark::getContext(settings, workdir));
+        auto db_context = std::make_unique<DB::Context>(DTTool::Bench::getContext(settings, workdir));
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
@@ -474,3 +473,5 @@ int benchEntry(const std::vector<std::string> & opts)
 
     return 0;
 }
+
+} // namespace DTTool::Bench
