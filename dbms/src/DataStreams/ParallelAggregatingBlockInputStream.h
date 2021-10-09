@@ -45,6 +45,8 @@ protected:
     Block readImpl() override;
 
 private:
+    const LogWithPrefixPtr log;
+
     Aggregator::Params params;
     Aggregator aggregator;
     FileProviderPtr file_provider;
@@ -126,8 +128,6 @@ private:
     /** From here we get the finished blocks after the aggregation.
       */
     std::unique_ptr<IBlockInputStream> impl;
-
-    LogWithPrefixPtr log;
 };
 
 } // namespace DB

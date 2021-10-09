@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <Common/StackTrace.h>
 #include <Poco/Exception.h>
 
@@ -83,6 +84,7 @@ using Exceptions = std::vector<std::exception_ptr>;
   */
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
+void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
 
 
 /** Prints current exception in canonical format.
@@ -121,6 +123,7 @@ struct ExecutionStatus
 
 void tryLogException(std::exception_ptr e, const char * log_name, const std::string & start_of_message = "");
 void tryLogException(std::exception_ptr e, Poco::Logger * logger, const std::string & start_of_message = "");
+void tryLogException(std::exception_ptr e, const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
 
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace = false);
 std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace);

@@ -1,13 +1,14 @@
 #include <DataStreams/SquashingTransform.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <common/logger_useful.h>
 
 
 namespace DB
 {
-SquashingTransform::SquashingTransform(size_t min_block_size_rows, size_t min_block_size_bytes)
+SquashingTransform::SquashingTransform(size_t min_block_size_rows, size_t min_block_size_bytes, const LogWithPrefixPtr & log_)
     : min_block_size_rows(min_block_size_rows)
     , min_block_size_bytes(min_block_size_bytes)
-    , log(&Poco::Logger::get("SquashingTransform"))
+    , log(getMPPTaskLog(log_, "SquashingTransform"))
 {
     LOG_DEBUG(log, "Squashing config - min_block_size_rows: " << min_block_size_rows << " min_block_size_bytes: " << min_block_size_bytes);
 }
@@ -60,7 +61,7 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
     }
 
     /// Squashed block is not ready.
-    return false;
+    return Result(false);
 }
 
 

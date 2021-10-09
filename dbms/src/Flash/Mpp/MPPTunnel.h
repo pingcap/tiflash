@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/LogWithPrefix.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -27,7 +28,8 @@ public:
         const mpp::TaskMeta & sender_meta_,
         const std::chrono::seconds timeout_,
         TaskCancelledCallback callback,
-        int input_steams_num_);
+        int input_steams_num_,
+        const LogWithPrefixPtr & log_ = nullptr);
 
     ~MPPTunnelBase();
 
@@ -86,7 +88,7 @@ private:
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
 
-    Poco::Logger * log;
+    const LogWithPrefixPtr log;
 };
 
 class MPPTunnel : public MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>

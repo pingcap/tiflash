@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Interpreters/Aggregator.h>
 #include <common/demangle.h>
@@ -145,8 +146,9 @@ Block Aggregator::Params::getHeader(
 }
 
 
-Aggregator::Aggregator(const Params & params_)
+Aggregator::Aggregator(const Params & params_, const LogWithPrefixPtr & log_)
     : params(params_)
+    , log(getMPPTaskLog(log_, "Aggregator"))
     , isCancelled([]() { return false; })
 {
     if (current_memory_tracker)
