@@ -38,12 +38,11 @@ StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, cha
     {
         /// serialize Decimal256 in `Non-trivial, Binary` way, the serialization logical is
         /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L149
-        size_t mem_size;
         const typename T::NativeType::backend_type & val = data[n].value.backend();
         bool s = val.sign();
         size_t limb_count = val.size();
 
-        mem_size = sizeof(bool) + sizeof(size_t) + limb_count * sizeof(boost::multiprecision::limb_type);
+        size_t mem_size = sizeof(bool) + sizeof(size_t) + limb_count * sizeof(boost::multiprecision::limb_type);
 
         auto * pos = arena.allocContinue(mem_size, begin);
         auto * current_pos = pos;

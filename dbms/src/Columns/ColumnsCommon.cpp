@@ -39,9 +39,10 @@ size_t countBytesInFilter(const UInt8 * filt, size_t sz)
     const Int8 * end64 = pos + sz / 64 * 64;
 
     for (; pos < end64; pos += 64)
+    {
         count += __builtin_popcountll(toBits64(pos));
-
-        /// TODO Add duff device for tail?
+    }
+    /// TODO Add duff device for tail?
 #endif
 
     for (; pos < end; ++pos)

@@ -312,12 +312,12 @@ int ColumnArray::compareAt(size_t n, size_t m, const IColumn & rhs_, int nan_dir
 namespace
 {
 template <bool positive>
-struct less
+struct Less
 {
     const ColumnArray & parent;
     int nan_direction_hint;
 
-    less(const ColumnArray & parent_, int nan_direction_hint_)
+    Less(const ColumnArray & parent_, int nan_direction_hint_)
         : parent(parent_)
         , nan_direction_hint(nan_direction_hint_)
     {}
@@ -702,16 +702,16 @@ void ColumnArray::getPermutation(bool reverse, size_t limit, int nan_direction_h
     if (limit)
     {
         if (reverse)
-            std::partial_sort(res.begin(), res.begin() + limit, res.end(), less<false>(*this, nan_direction_hint));
+            std::partial_sort(res.begin(), res.begin() + limit, res.end(), Less<false>(*this, nan_direction_hint));
         else
-            std::partial_sort(res.begin(), res.begin() + limit, res.end(), less<true>(*this, nan_direction_hint));
+            std::partial_sort(res.begin(), res.begin() + limit, res.end(), Less<true>(*this, nan_direction_hint));
     }
     else
     {
         if (reverse)
-            std::sort(res.begin(), res.end(), less<false>(*this, nan_direction_hint));
+            std::sort(res.begin(), res.end(), Less<false>(*this, nan_direction_hint));
         else
-            std::sort(res.begin(), res.end(), less<true>(*this, nan_direction_hint));
+            std::sort(res.begin(), res.end(), Less<true>(*this, nan_direction_hint));
     }
 }
 

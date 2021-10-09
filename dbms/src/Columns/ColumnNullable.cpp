@@ -470,6 +470,11 @@ void getExtremesFromNullableContent(const ColumnVector<T> & col, const NullMap &
 
 } // namespace
 
+template <typename... Ts, typename F>
+static void castNestedColumn(const IColumn * nested_column, F && f)
+{
+    ((typeid_cast<const Ts *>(nested_column) ? (f(*typeid_cast<const Ts *>(nested_column))) : false) || ...);
+}
 
 void ColumnNullable::getExtremes(Field & min, Field & max) const
 {
@@ -478,28 +483,23 @@ void ColumnNullable::getExtremes(Field & min, Field & max) const
 
     const auto & null_map = getNullMapData();
 
-    if (const auto * const col = typeid_cast<const ColumnInt8 *>(nested_column.get()))
-        getExtremesFromNullableContent<Int8>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnInt16 *>(nested_column.get()))
-        getExtremesFromNullableContent<Int16>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnInt32 *>(nested_column.get()))
-        getExtremesFromNullableContent<Int32>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnInt64 *>(nested_column.get()))
-        getExtremesFromNullableContent<Int64>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnUInt8 *>(nested_column.get()))
-        getExtremesFromNullableContent<UInt8>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnUInt16 *>(nested_column.get()))
-        getExtremesFromNullableContent<UInt16>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnUInt32 *>(nested_column.get()))
-        getExtremesFromNullableContent<UInt32>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnUInt64 *>(nested_column.get()))
-        getExtremesFromNullableContent<UInt64>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnFloat32 *>(nested_column.get()))
-        getExtremesFromNullableContent<Float32>(*col, null_map, min, max);
-    else if (const auto * const col = typeid_cast<const ColumnFloat64 *>(nested_column.get()))
-        getExtremesFromNullableContent<Float64>(*col, null_map, min, max);
+    castNestedColumn<
+        ColumnInt8,
+        ColumnInt16,
+        ColumnInt32,
+        ColumnInt64,
+        ColumnUInt8,
+        ColumnUInt16,
+        ColumnUInt32,
+        ColumnUInt64,
+        ColumnFloat32,
+        ColumnFloat64>(nested_column.get(), [&](const auto & column) {
+        using ColumnType = std::decay_t<decltype(column)>;
+        using ValueType = typename ColumnType::value_type;
+        getExtremesFromNullableContent<ValueType>(column, null_map, min, max);
+        return true;
+    });
 }
-
 
 ColumnPtr ColumnNullable::replicate(const Offsets & offsets) const
 {
