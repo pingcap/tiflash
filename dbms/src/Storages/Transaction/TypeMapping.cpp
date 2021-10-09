@@ -187,6 +187,7 @@ DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info)
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
 {
     DataTypePtr base = TypeMapping::instance().getDataType(column_info);
+
     if (!column_info.hasNotNullFlag())
     {
         return std::make_shared<DataTypeNullable>(base);
@@ -200,13 +201,12 @@ DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_i
 
     if (column_info.tp == TiDB::TypeTime)
     {
-        return std::make_shared<DataTypeMyDuration>(column_info.decimal);
+        base = std::make_shared<DataTypeMyDuration>(column_info.decimal);
     }
     if (!column_info.hasNotNullFlag())
     {
         return std::make_shared<DataTypeNullable>(base);
     }
-
     return base;
 }
 
@@ -219,11 +219,7 @@ DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type)
 DataTypePtr getDataTypeByFieldTypeForComputingLayer(const tipb::FieldType & field_type)
 {
     ColumnInfo ci = TiDB::fieldTypeToColumnInfo(field_type);
-    if (field_type.tp() == TiDB::TypeTime)
-    {
-        return std::make_shared<DataTypeMyDuration>(field_type.decimal());
-    }
-    return getDataTypeByColumnInfo(ci);
+    return getDataTypeByColumnInfoForComputingLayer(ci);
 }
 
 TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type)

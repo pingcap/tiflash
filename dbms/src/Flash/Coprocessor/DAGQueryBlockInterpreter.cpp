@@ -130,10 +130,10 @@ bool addTimeZoneCastAfterTS(
 }
 
 bool addDurationCastAfterTS(
-        DAGExpressionAnalyzer & analyzer,
-        const BoolVec & is_dur_column,
-        ExpressionActionsChain & chain,
-        const DAGQueryBlock & query_block)
+    DAGExpressionAnalyzer & analyzer,
+    const BoolVec & is_dur_column,
+    ExpressionActionsChain & chain,
+    const DAGQueryBlock & query_block)
 {
     bool hasDurColumn = false;
     for (auto b : is_dur_column)
@@ -171,7 +171,8 @@ AnalysisResult analyzeExpressions(
                 index++;
             }
         }
-        if (addDurationCastAfterTS(analyzer, is_dur_column, chain, query_block)) {
+        if (addDurationCastAfterTS(analyzer, is_dur_column, chain, query_block))
+        {
             res.need_duration_cast_after_tablescan = true;
             res.duration_cast = chain.getLastActions();
             chain.addStep();
@@ -1086,7 +1087,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         keep_session_timezone_info,
         final_project);
 
-    if (res.need_timezone_cast_after_tablescan|| res.need_duration_cast_after_tablescan || res.has_where)
+    if (res.need_timezone_cast_after_tablescan || res.need_duration_cast_after_tablescan || res.has_where)
     {
         /// execute timezone cast and the selection
         ExpressionActionsPtr project_for_cop_read;

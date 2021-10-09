@@ -180,7 +180,7 @@ public:
         ColumnsWithTypeAndName columns;
         for (auto & dag_col : remote_reader->getOutputSchema())
         {
-            auto tp = getDataTypeByColumnInfo(dag_col.second);
+            auto tp = getDataTypeByColumnInfoForComputingLayer(dag_col.second);
             ColumnWithTypeAndName col(tp, dag_col.first);
             expected_types.push_back(col.type);
             columns.emplace_back(col);

@@ -1020,6 +1020,10 @@ bool DAGExpressionAnalyzer::appendDurationCastsAfterTS(ExpressionActionsChain & 
             String casted_name = appendDurationCast(fsp_col, source_columns[i].name, func_name, actions);
             source_columns[i].name = casted_name;
             source_columns[i].type = std::make_shared<DataTypeMyDuration>(fsp);
+            if (!(columns[i].flag() & (1 << 0)))
+            {
+                source_columns[i].type = makeNullable(source_columns[i].type);
+            }
             ret = true;
         }
     }

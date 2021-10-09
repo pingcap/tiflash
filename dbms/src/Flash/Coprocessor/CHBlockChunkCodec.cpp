@@ -7,16 +7,16 @@
 
 namespace DB
 {
-
 class CHBlockChunkCodecStream : public ChunkCodecStream
 {
 public:
-    explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types)
+    explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
+        : ChunkCodecStream(field_types)
     {
         output = std::make_unique<WriteBufferFromOwnString>();
         for (size_t i = 0; i < field_types.size(); i++)
         {
-            expected_types.emplace_back(getDataTypeByFieldType(field_types[i]));
+            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_types[i]));
         }
     }
 
@@ -43,7 +43,9 @@ void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & o
     else
         full_column = column;
 
-    IDataType::OutputStreamGetter output_stream_getter = [&](const IDataType::SubstreamPath &) { return &ostr; };
+    IDataType::OutputStreamGetter output_stream_getter = [&](const IDataType::SubstreamPath &) {
+        return &ostr;
+    };
     type.serializeBinaryBulkWithMultipleStreams(*full_column, output_stream_getter, offset, limit, false, {});
 }
 
