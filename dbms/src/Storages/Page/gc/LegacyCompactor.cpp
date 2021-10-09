@@ -93,7 +93,10 @@ LegacyCompactor::tryCompact(                 //
     if (!info.empty())
     {
         bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log, write_limiter);
-        // Don't need to insert location since Checkpoint PageFile won't be read except using listAllPageFiles in `PageStorage::restore`
+        // 1. Don't need to insert location since Checkpoint PageFile won't be read except using listAllPageFiles in `PageStorage::restore`
+        // 2. Also, `checkpoint_id` is the same as the largest page file compacted,
+        //    so insert the checkpoint file's location here will overwrite the old page file's location and may incur error when deploy on multi disk environment
+        // 3. And we always store checkpoint file on `delegator`'s default path, so we can just remove it from the default path when removing it
         delegator->addPageFileUsedSize(checkpoint_id, bytes_written, storage_path, /*need_insert_location=*/false);
     }
 
