@@ -386,11 +386,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     }
     if (unlikely(index == UINT32_MAX))
         throw DB::TiFlashException(
-<<<<<<< HEAD
             "Try to add a DTFile to an unrecognized path. [id=" + DB::toString(file_id) + "] [path=" + String(path) + "]",
-=======
-            fmt::format("Try to add a DTFile to an unrecognized path. [id={}] [path={}]", file_id, path),
->>>>>>> 7204b8612 (decrease the size of checkpoint file when removing it (#3175))
             Errors::DeltaTree::Internal);
     pool.dt_file_path_map.emplace(file_id, index);
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
