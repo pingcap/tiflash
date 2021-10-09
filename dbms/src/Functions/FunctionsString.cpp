@@ -155,6 +155,66 @@ struct LengthUTF8Impl
     }
 };
 
+template <char not_case_lower_bound, char not_case_upper_bound>
+struct LowerUpperBinaryImpl
+{
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
+    {
+        res_data.resize(data.size());
+        res_data.assign(data.begin(), data.end());
+        res_offsets.assign(offsets);
+    }
+
+    static void vector_fixed(const ColumnString::Chars_t & data, size_t /*n*/, ColumnString::Chars_t & res_data)
+    {
+        res_data.resize(data.size());
+        res_data.assign(data.begin(), data.end());
+    }
+
+private:
+    static void array(const UInt8 * src, const UInt8 * src_end, UInt8 * dst)
+    {
+        const auto flip_case_mask = 'A' ^ 'a';
+
+#if __SSE2__
+        const auto bytes_sse = sizeof(__m128i);
+        const auto src_end_sse = src_end - (src_end - src) % bytes_sse;
+
+        const auto v_not_case_lower_bound = _mm_set1_epi8(not_case_lower_bound - 1);
+        const auto v_not_case_upper_bound = _mm_set1_epi8(not_case_upper_bound + 1);
+        const auto v_flip_case_mask = _mm_set1_epi8(flip_case_mask);
+
+        for (; src < src_end_sse; src += bytes_sse, dst += bytes_sse)
+        {
+            /// load 16 sequential 8-bit characters
+            const auto chars = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src));
+
+            /// find which 8-bit sequences belong to range [case_lower_bound, case_upper_bound]
+            const auto is_not_case
+                = _mm_and_si128(_mm_cmpgt_epi8(chars, v_not_case_lower_bound), _mm_cmplt_epi8(chars, v_not_case_upper_bound));
+
+            /// keep `flip_case_mask` only where necessary, zero out elsewhere
+            const auto xor_mask = _mm_and_si128(v_flip_case_mask, is_not_case);
+
+            /// flip case by applying calculated mask
+            const auto cased_chars = _mm_xor_si128(chars, xor_mask);
+
+            /// store result back to destination
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), cased_chars);
+        }
+#endif
+
+        for (; src < src_end; ++src, ++dst)
+            if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
+                *dst = *src ^ flip_case_mask;
+            else
+                *dst = *src;
+    }
+};
+
 
 template <char not_case_lower_bound, char not_case_upper_bound>
 struct LowerUpperImpl
@@ -165,8 +225,8 @@ struct LowerUpperImpl
                        ColumnString::Offsets & res_offsets)
     {
         res_data.resize(data.size());
-        res_data.assign(data.begin(), data.end());
         res_offsets.assign(offsets);
+        array(data.data(), data.data() + data.size(), res_data.data());
     }
 
     static void vector_fixed(const ColumnString::Chars_t & data, size_t /*n*/, ColumnString::Chars_t & res_data)
@@ -3693,9 +3753,9 @@ struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
 struct NameLength                { static constexpr auto name = "length"; };
 struct NameLengthUTF8            { static constexpr auto name = "lengthUTF8"; };
-struct NameLower                 { static constexpr auto name = "lower"; };
+struct NameLowerBinary           { static constexpr auto name = "lowerBinary"; };
 struct NameLowerUTF8             { static constexpr auto name = "lowerUTF8"; };
-struct NameUpper                 { static constexpr auto name = "upper"; };
+struct NameUpperBinary           { static constexpr auto name = "upperBinary"; };
 struct NameUpperUTF8             { static constexpr auto name = "upperUTF8"; };
 struct NameReverseUTF8           { static constexpr auto name = "reverseUTF8"; };
 struct NameTrim                  { static constexpr auto name = "trim"; };
@@ -3717,9 +3777,9 @@ using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, UInt
 using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty, UInt8>;
 // using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
 using FunctionLengthUTF8 = FunctionStringOrArrayToT<LengthUTF8Impl, NameLengthUTF8, UInt64>;
-using FunctionLower = FunctionStringToString<LowerUpperImpl<'A', 'Z'>, NameLower>;
+using FunctionLowerBinary = FunctionStringToString<LowerUpperBinaryImpl<'A', 'Z'>, NameLowerBinary>;
 using FunctionLowerUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;
-using FunctionUpper = FunctionStringToString<LowerUpperImpl<'a', 'z'>, NameUpper>;
+using FunctionUpperBinary = FunctionStringToString<LowerUpperBinaryImpl<'a', 'z'>, NameUpperBinary>;
 using FunctionUpperUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;
 using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseUTF8, true>;
 using FunctionTrimUTF8 = TrimUTF8Impl<NameTrim, true, true>;
@@ -3738,8 +3798,8 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionNotEmpty>();
     factory.registerFunction<FunctionLength>();
     factory.registerFunction<FunctionLengthUTF8>();
-    factory.registerFunction<FunctionLower>();
-    factory.registerFunction<FunctionUpper>();
+    factory.registerFunction<FunctionLowerBinary>();
+    factory.registerFunction<FunctionUpperBinary>();
     factory.registerFunction<FunctionLowerUTF8>();
     factory.registerFunction<FunctionUpperUTF8>();
     factory.registerFunction<FunctionReverse>();
