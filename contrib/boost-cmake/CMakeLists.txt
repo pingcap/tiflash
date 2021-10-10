@@ -17,7 +17,7 @@ if (NOT MSVC)
 endif ()
 
 
-file(GLOB BOOST_INTERNAL_SRC ${LIBRARY_DIR}/libs/*/src/*.cpp)
+file(GLOB_RECURSE BOOST_INTERNAL_SRC ${LIBRARY_DIR}/libs/*/src/*.cpp)
 
 add_library(boost_internal STATIC ${BOOST_INTERNAL_SRC})
 
