@@ -11,6 +11,7 @@
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/StringUtil.h>
+#include <Functions/CharUtil.h>
 #include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
@@ -384,24 +385,6 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
         else
             *dst++ = *src++;
     }
-    else if (src + 1 < src_end
-             && ((src[0] == 0xD0u && (src[1] >= 0x80u && src[1] <= 0xBFu)) || (src[0] == 0xD1u && (src[1] >= 0x80u && src[1] <= 0x9Fu))))
-    {
-        cyrillic_to_case(src, dst);
-    }
-    else if (src + 1 < src_end && src[0] == 0xC2u)
-    {
-        /// Punctuation U+0080 - U+00BF, UTF-8: C2 80 - C2 BF
-        *dst++ = *src++;
-        *dst++ = *src++;
-    }
-    else if (src + 2 < src_end && src[0] == 0xE2u)
-    {
-        /// Characters U+2000 - U+2FFF, UTF-8: E2 80 80 - E2 BF BF
-        *dst++ = *src++;
-        *dst++ = *src++;
-        *dst++ = *src++;
-    }
     else
     {
         static const Poco::UTF8Encoding utf8;
@@ -411,6 +394,33 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
         else
             ++src, ++dst;
     }
+//    else if (src + 1 < src_end
+//             && ((src[0] == 0xD0u && (src[1] >= 0x80u && src[1] <= 0xBFu)) || (src[0] == 0xD1u && (src[1] >= 0x80u && src[1] <= 0x9Fu))))
+//    {
+//        cyrillic_to_case(src, dst);
+//    }
+//    else if (src + 1 < src_end && src[0] == 0xC2u)
+//    {
+//        /// Punctuation U+0080 - U+00BF, UTF-8: C2 80 - C2 BF
+//        *dst++ = *src++;
+//        *dst++ = *src++;
+//    }
+//    else if (src + 2 < src_end && src[0] == 0xE2u)
+//    {
+//        /// Characters U+2000 - U+2FFF, UTF-8: E2 80 80 - E2 BF BF
+//        *dst++ = *src++;
+//        *dst++ = *src++;
+//        *dst++ = *src++;
+//    }
+//    else
+//    {
+//        static const Poco::UTF8Encoding utf8;
+//
+//        if (const auto chars = utf8.convert(to_case(utf8.convert(src)), dst, src_end - src))
+//            src += chars, dst += chars;
+//        else
+//            ++src, ++dst;
+//    }
 }
 
 template <char not_case_lower_bound,
@@ -3738,9 +3748,9 @@ using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty,
 // using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
 using FunctionLengthUTF8 = FunctionStringOrArrayToT<LengthUTF8Impl, NameLengthUTF8, UInt64>;
 using FunctionLowerBinary = FunctionStringToString<LowerUpperBinaryImpl<'A', 'Z'>, NameLowerBinary>;
-using FunctionLowerUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;
+using FunctionLowerUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'A', 'Z', CharUtil::unicodeToLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;
 using FunctionUpperBinary = FunctionStringToString<LowerUpperBinaryImpl<'a', 'z'>, NameUpperBinary>;
-using FunctionUpperUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;
+using FunctionUpperUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'a', 'z', CharUtil::unicodeToUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;
 using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseUTF8, true>;
 using FunctionTrimUTF8 = TrimUTF8Impl<NameTrim, true, true>;
 using FunctionLTrimUTF8 = TrimUTF8Impl<NameLTrim, true, false>;
