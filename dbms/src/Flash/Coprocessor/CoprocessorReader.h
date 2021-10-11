@@ -57,13 +57,13 @@ struct CoprocessorReaderResult
             switch (resp->encode_type())
             {
             case tipb::EncodeType::TypeCHBlock:
-                block = CHBlockChunkCodec().decode(chunk, schema);
+                block = CHBlockChunkCodec().decode(chunk.rows_data(), schema);
                 break;
             case tipb::EncodeType::TypeChunk:
-                block = ArrowChunkCodec().decode(chunk, schema);
+                block = ArrowChunkCodec().decode(chunk.rows_data(), schema);
                 break;
             case tipb::EncodeType::TypeDefault:
-                block = DefaultChunkCodec().decode(chunk, schema);
+                block = DefaultChunkCodec().decode(chunk.rows_data(), schema);
                 break;
             default:
                 throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);

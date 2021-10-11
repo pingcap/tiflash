@@ -30,11 +30,11 @@ struct StreamWriter
     {}
     void write(mpp::MPPDataPacket &)
     {
-        assert(false);
+        throw Exception("StreamWriter::write(mpp::MPPDataPacket &) do not support writing MPPDataPacket!");
     }
     void write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t)
     {
-        assert(false);
+        throw Exception("StreamWriter::write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
     }
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {

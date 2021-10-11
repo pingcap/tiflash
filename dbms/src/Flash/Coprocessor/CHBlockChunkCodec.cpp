@@ -82,18 +82,7 @@ std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::v
     return std::make_unique<CHBlockChunkCodecStream>(field_types);
 }
 
-Block CHBlockChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schema)
-{
-    const String & row_data = chunk.rows_data();
-    ReadBufferFromString read_buffer(row_data);
-    std::vector<String> output_names;
-    for (const auto & c : schema)
-        output_names.push_back(c.first);
-    NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names));
-    return block_in.read();
-}
-
-Block CHBlockChunkCodec::decode(const std::string & str, const DAGSchema & schema)
+Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
 {
     ReadBufferFromString read_buffer(str);
     std::vector<String> output_names;
