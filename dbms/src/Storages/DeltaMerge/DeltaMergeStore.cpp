@@ -100,6 +100,7 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
         if (heavy_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
             return std::make_pair(false, is_heavy);
         heavy_tasks.push(task);
+        break;
     case TaskType::Compact:
     case TaskType::Flush:
     case TaskType::PlaceIndex:
@@ -108,6 +109,7 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
         if (light_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
             return std::make_pair(false, is_heavy);
         light_tasks.push(task);
+        break;
     default:
         throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
     }
