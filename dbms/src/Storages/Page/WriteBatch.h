@@ -2,6 +2,7 @@
 
 #include <IO/ReadBuffer.h>
 #include <Storages/Page/PageDefines.h>
+#include <IO/WriteHelpers.h>
 
 #include <vector>
 
