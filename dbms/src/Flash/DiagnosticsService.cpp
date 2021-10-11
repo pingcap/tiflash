@@ -1114,11 +1114,15 @@ grpc::Status searchLog(Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb:
         auto resp = SearchLogResponse::default_instance();
         for (; i < LOG_BATCH_SIZE;)
         {
-            ::diagnosticspb::LogMessage tmp_msg;
-            if (!log_itr.next(tmp_msg))
+            if (auto tmp_msg = log_itr.next(); !tmp_msg)
+            {
                 break;
-            i++;
-            resp.mutable_messages()->Add(std::move(tmp_msg));
+            }
+            else
+            {
+                i++;
+                resp.mutable_messages()->Add(std::move(*tmp_msg));
+            }
         }
 
         if (i == 0)

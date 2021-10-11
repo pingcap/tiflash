@@ -37,7 +37,7 @@ static time_t fast_mktime(struct tm * tm)
     return result;
 }
 
-bool LogIterator::next(::diagnosticspb::LogMessage & msg)
+std::optional<LogMessage> LogIterator::next()
 {
     for (;;)
     {
@@ -63,11 +63,10 @@ bool LogIterator::next(::diagnosticspb::LogMessage & msg)
             }
             else
             {
-                return false;
+                return {};
             }
         }
 
-        msg.set_time(entry.time);
         LogLevel level;
         switch (entry.level)
         {
@@ -90,35 +89,26 @@ bool LogIterator::next(::diagnosticspb::LogMessage & msg)
             level = LogLevel::UNKNOWN;
             break;
         }
-        msg.set_level(level);
 
-        if (match(msg, entry.message.data(), entry.message.size()))
+        if (match(entry.time, level, entry.message.data(), entry.message.size()))
         {
-            std::string tmp_message{entry.message};
-            msg.set_message(std::move(tmp_message));
-            return true;
+            LogMessage msg;
+            msg.set_time(entry.time);
+            msg.set_level(level);
+            msg.set_message(std::string(entry.message));
+            return msg;
         }
     }
 }
 
-std::optional<LogMessage> LogIterator::next()
-{
-    LogMessage msg;
-    if (!next(msg))
-    {
-        return {};
-    }
-    return msg;
-}
-
-bool LogIterator::match(const LogMessage & log_msg, const char * c, size_t sz) const
+bool LogIterator::match(const int64_t time, const LogLevel level, const char * c, size_t sz) const
 {
     // Check time range
-    if (log_msg.time() >= end_time || log_msg.time() < start_time)
+    if (time >= end_time || time < start_time)
         return false;
 
     // Check level
-    if (std::find(levels.begin(), levels.end(), log_msg.level()) == levels.end() && !levels.empty())
+    if (std::find(levels.begin(), levels.end(), level) == levels.end() && !levels.empty())
         return false;
 
     // Grep

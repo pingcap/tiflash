@@ -45,7 +45,6 @@ public:
 
 public:
     std::optional<::diagnosticspb::LogMessage> next();
-    bool next(::diagnosticspb::LogMessage & msg);
     static bool read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size);
     static bool read_date(
         size_t limit,
@@ -96,7 +95,7 @@ public:
 
 private:
     static Result<::diagnosticspb::LogMessage> parseLog(const std::string & log_content);
-    bool match(const ::diagnosticspb::LogMessage & log_msg, const char * c, size_t sz) const;
+    bool match(const int64_t time, const diagnosticspb::LogLevel level, const char * c, size_t sz) const;
     void init();
 
     std::optional<Error> readLog(LogEntry &);
