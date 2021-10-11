@@ -8,7 +8,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
@@ -72,7 +71,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
     , have_finish_build(true)
-    , log(getMPPTaskLog(log_, "Join"))
+    , log(getLogWithPrefix(log_, "Join"))
     , limits(limits)
 {
     build_set_exceeded.store(false);

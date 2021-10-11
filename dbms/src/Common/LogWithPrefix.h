@@ -88,4 +88,14 @@ private:
     }
 };
 
+[[maybe_unused]] std::shared_ptr<LogWithPrefix> static getLogWithPrefix(const std::shared_ptr<LogWithPrefix> & log = nullptr, const String & name = "name: N/A")
+{
+    if (log == nullptr)
+    {
+        return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), "");
+    }
+
+    return log->append(name);
+}
+
 } // namespace DB
