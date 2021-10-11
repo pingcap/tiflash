@@ -17,10 +17,16 @@ if (NOT MSVC)
 endif ()
 
 
-file(GLOB_RECURSE BOOST_INTERNAL_SRC ${LIBRARY_DIR}/libs/*/src/*.cpp)
+file(GLOB BOOST_INTERNAL_SRC
+    ${LIBRARY_DIR}/libs/filesystem/src/*.cpp
+    ${LIBRARY_DIR}/libs/program_options/src/*.cpp
+    ${LIBRARY_DIR}/libs/serialization/src/*.cpp)
 
 add_library(boost_internal STATIC ${BOOST_INTERNAL_SRC})
 
 target_include_directories (boost_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
 target_compile_definitions (boost_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
+
+include(context.cmake)
+include(fiber.cmake)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/FiberPool.hpp>
 #include <Common/RecyclableBuffer.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -9,9 +10,6 @@
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
-
-#include <mutex>
-#include <thread>
 
 namespace DB
 {
@@ -101,11 +99,11 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::vector<std::thread> workers;
+    std::vector<std::optional<boost::fibers::future<>>> workers;
     DAGSchema schema;
 
-    std::mutex mu;
-    std::condition_variable cv;
+    boost::fibers::mutex mu;
+    boost::fibers::condition_variable cv;
     /// should lock `mu` when visit these members
     RecyclableBuffer<ReceivedPacket> res_buffer;
     Int32 live_connections;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/FiberPool.hpp>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
 #include <Common/setThreadName.h>
@@ -9,9 +10,7 @@
 
 #include <atomic>
 #include <list>
-#include <mutex>
 #include <queue>
-#include <thread>
 
 
 /** Allows to process multiple block input streams (sources) in parallel, using specified number of threads.
@@ -108,7 +107,7 @@ public:
         active_threads = max_threads;
         threads.reserve(max_threads);
         for (size_t i = 0; i < max_threads; ++i)
-            threads.emplace_back(ThreadFactory(true, handler.getName()).newThread([this, i] { thread(i); }));
+            threads.emplace_back(DefaultFiberPool::submit_job([this, i] { thread(i); }));
     }
 
     /// Ask all sources to stop earlier than they run out.
@@ -143,7 +142,8 @@ public:
             return;
 
         for (auto & thread : threads)
-            thread.join();
+            if (thread.has_value())
+                thread.value().get()
 
         threads.clear();
         joined_threads = true;
@@ -192,7 +192,7 @@ private:
             {
                 InputData unprepared_input;
                 {
-                    std::lock_guard<std::mutex> lock(unprepared_inputs_mutex);
+                    std::lock_guard lock(unprepared_inputs_mutex);
 
                     if (unprepared_inputs.empty())
                         break;
@@ -204,7 +204,7 @@ private:
                 unprepared_input.in->readPrefix();
 
                 {
-                    std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                    std::lock_guard lock(available_inputs_mutex);
                     available_inputs.push(unprepared_input);
                 }
             }
@@ -258,7 +258,7 @@ private:
 
             /// Select the next source.
             {
-                std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                std::lock_guard lock(available_inputs_mutex);
 
                 /// If there are no free sources, then this thread is no longer needed. (But other threads can work with their sources.)
                 if (available_inputs.empty())
@@ -279,7 +279,7 @@ private:
 
                 /// If this source is not run out yet, then put the resulting block in the ready queue.
                 {
-                    std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                    std::lock_guard lock(available_inputs_mutex);
 
                     if (block)
                     {
@@ -308,7 +308,7 @@ private:
     Handler & handler;
 
     /// Streams.
-    using ThreadsData = std::vector<std::thread>;
+    using ThreadsData = std::vector<std::optional<boost::fibers::future<>>>;
     ThreadsData threads;
 
     /** A set of available sources that are not currently processed by any thread.
@@ -339,10 +339,10 @@ private:
     UnpreparedInputs unprepared_inputs;
 
     /// For operations with available_inputs.
-    std::mutex available_inputs_mutex;
+    boost::fibers::mutex available_inputs_mutex;
 
     /// For operations with unprepared_inputs.
-    std::mutex unprepared_inputs_mutex;
+    boost::fibers::mutex unprepared_inputs_mutex;
 
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};

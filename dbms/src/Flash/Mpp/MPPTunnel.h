@@ -7,6 +7,7 @@
 #include <kvproto/mpp.pb.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 
+#include <boost/fiber/all.hpp> 
 #include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
@@ -52,7 +53,7 @@ public:
     void waitForFinish();
 
 private:
-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
+    void waitUntilConnectedOrCancelled(std::unique_lock<boost::fibers::mutex> & lk);
 
     // must under mu's protection
     void finishWithLock();
@@ -60,7 +61,7 @@ private:
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
 
-    std::mutex mu;
+    boost::fibers mu;
     std::condition_variable cv_for_connected;
     std::condition_variable cv_for_finished;
 

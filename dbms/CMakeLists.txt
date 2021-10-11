@@ -167,6 +167,8 @@ target_link_libraries (clickhouse_common_io
     ${EXECINFO_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${CMAKE_DL_LIBS}
+    boost_context
+    boost_fiber
     fiu
     prometheus-cpp::core
     prometheus-cpp::push

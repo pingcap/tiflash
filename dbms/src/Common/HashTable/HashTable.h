@@ -14,6 +14,7 @@
 #include <math.h>
 #include <string.h>
 
+#include <boost/fiber/all.hpp> 
 #include <boost/noncopyable.hpp>
 #include <new>
 #include <utility>
@@ -1354,59 +1355,59 @@ public:
     /// when I refine the code using shared_mutex to return read lock for ConstIterator and write lock for Iterator, the tests
     /// in gtest_concurrent_hashmap(with test_loop = 1000) is about 5 times slower. Since the typical usage of concurrent hash map
     /// in TiFlash is concurrent insert(when building join hash table), I think just keep using mutex is ok.
-    using IteratorWithLock = std::pair<typename HashTableType::LookupResult, std::unique_ptr<std::lock_guard<std::mutex>>>;
-    using ConstIteratorWithLock = std::pair<typename HashTableType::ConstLookupResult, std::unique_ptr<std::lock_guard<std::mutex>>>;
+    using IteratorWithLock = std::pair<typename HashTableType::LookupResult, std::unique_ptr<std::lock_guard<boost::fibers::mutex>>>;
+    using ConstIteratorWithLock = std::pair<typename HashTableType::ConstLookupResult, std::unique_ptr<std::lock_guard<boost::fibers::mutex>>>;
     HashTableWithLock() = default;
     explicit HashTableWithLock(size_t reserve_for_num_elements)
         : hash_table(reserve_for_num_elements)
     {}
-    std::mutex & getMutex() { return mutex; }
+    boost::fibers::mutex & getMutex() { return mutex; }
     HashTableType & getHashTable() { return hash_table; }
     IteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x)
     {
-        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        std::unique_ptr<std::lock_guard<boost::fibers::mutex>> lock_ptr = std::make_unique<std::lock_guard<boost::fibers::mutex>>(mutex);
         return std::make_pair(hash_table.find(x), std::move(lock_ptr));
     }
     ConstIteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x) const
     {
-        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        std::unique_ptr<std::lock_guard<boost::fibers::mutex>> lock_ptr = std::make_unique<std::lock_guard<boost::fibers::mutex>>(mutex);
         return std::make_pair(hash_table.find(x), std::move(lock_ptr));
     }
     IteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value)
     {
-        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        std::unique_ptr<std::lock_guard<boost::fibers::mutex>> lock_ptr = std::make_unique<std::lock_guard<boost::fibers::mutex>>(mutex);
         return std::make_pair(hash_table.find(x, hash_value), std::move(lock_ptr));
     }
     ConstIteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value) const
     {
-        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        std::unique_ptr<std::lock_guard<boost::fibers::mutex>> lock_ptr = std::make_unique<std::lock_guard<boost::fibers::mutex>>(mutex);
         return std::make_pair(hash_table.find(x, hash_value), std::move(lock_ptr));
     }
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
     std::pair<IteratorWithLock, bool> ALWAYS_INLINE insert(const typename HashTableType::value_type & x)
     {
-        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        std::unique_ptr<std::lock_guard<boost::fibers::mutex>> lock_ptr = std::make_unique<std::lock_guard<boost::fibers::mutex>>(mutex);
         auto res = hash_table.insert(x);
         return std::make_pair(std::make_pair(res.first, std::move(lock_ptr)), res.second);
     }
     void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, IteratorWithLock & it, bool & inserted)
     {
-        it.second = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        it.second = std::make_unique<std::lock_guard<boost::fibers::mutex>>(mutex);
         return hash_table.emplace(x, it.first, inserted);
     }
     void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, IteratorWithLock & it, bool & inserted, size_t hash_value)
     {
-        it.second = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        it.second = std::make_unique<std::lock_guard<boost::fibers::mutex>>(mutex);
         return hash_table.emplace(x, it.first, inserted, hash_value);
     }
     bool ALWAYS_INLINE has(const typename HashTableType::Key & x) const
     {
-        std::lock_guard<std::mutex> lk(mutex);
+        std::lock_guard<boost::fibers::mutex> lk(mutex);
         return hash_table.has(x);
     }
     bool ALWAYS_INLINE has(const typename HashTableType::Key & x, size_t hash_value) const
     {
-        std::lock_guard<std::mutex> lk(mutex);
+        std::lock_guard<boost::fibers::mutex> lk(mutex);
         return hash_table.has(x, hash_value);
     }
     size_t getBufferSizeInBytes() const
@@ -1420,7 +1421,7 @@ public:
 
 private:
     HashTableType hash_table;
-    mutable std::mutex mutex;
+    mutable boost::fibers::mutex mutex;
 };
 
 template <typename HashTableType>
@@ -1463,7 +1464,7 @@ public:
         return segments[segment_index]->getHashTable();
     }
 
-    std::mutex & getSegmentMutex(size_t segment_index)
+    boost::fibers::mutex & getSegmentMutex(size_t segment_index)
     {
         return segments[segment_index]->getMutex();
     }

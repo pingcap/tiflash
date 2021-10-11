@@ -4,6 +4,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
+#include <Common/FiberPool.hpp>
 #include <Common/HashTable/HashMap.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
@@ -267,7 +268,7 @@ private:
       */
     BlocksList blocks;
     /// mutex to protect concurrent insert to blocks
-    std::mutex blocks_lock;
+    boost::fibers::mutex blocks_lock;
     /// keep original block for concurrent build
     Blocks original_blocks;
 
@@ -296,8 +297,8 @@ private:
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
 
-    mutable std::mutex build_table_mutex;
-    mutable std::condition_variable build_table_cv;
+    mutable boost::fibers::mutex build_table_mutex;
+    mutable boost::fibers::condition_variable build_table_cv;
     bool have_finish_build;
 
     Poco::Logger * log;
@@ -311,7 +312,7 @@ private:
       *  and StorageJoin only calls these two methods.
       * That's why another methods are not guarded.
       */
-    mutable std::shared_mutex rwlock;
+    mutable boost::fibers::mutex rwlock;
 
     void init(Type type_);
 

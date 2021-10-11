@@ -255,7 +255,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     }
     catch (std::exception & e)
     {
-        std::unique_lock<std::mutex> lock(exception_mutex);
+        std::unique_lock lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
     }
 }

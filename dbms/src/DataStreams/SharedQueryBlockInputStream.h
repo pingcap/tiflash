@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/ThreadFactory.h>
+#include <Common/FiberPool.hpp>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
@@ -43,7 +43,7 @@ public:
 
     void readPrefix() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         if (read_prefixed)
             return;
@@ -55,14 +55,14 @@ public:
 
     void readSuffix() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         if (read_suffixed)
             return;
         read_suffixed = true;
 
-        if (thread.joinable())
-            thread.join();
+        if (thread.has_value())
+            thread.value().get();
         if (!exception_msg.empty())
             throw Exception(exception_msg);
     }
@@ -70,7 +70,7 @@ public:
 protected:
     Block readImpl() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         if (!read_prefixed)
             throw Exception("read operation called before readPrefix");
@@ -134,8 +134,8 @@ private:
     bool read_prefixed = false;
     bool read_suffixed = false;
 
-    std::thread thread;
-    std::mutex mutex;
+    std::optional<boost::fibers::future<>> thread;
+    boost::fibers::mutex mutex;
 
     std::string exception_msg;
 

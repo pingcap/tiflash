@@ -98,7 +98,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
 
 void Join::setFinishBuildTable(bool finish_)
 {
-    std::lock_guard<std::mutex> lk(build_table_mutex);
+    std::lock_guard lk(build_table_mutex);
     have_finish_build = finish_;
     build_table_cv.notify_all();
 }
@@ -576,7 +576,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
         }
         else
         {
-            std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
+            std::lock_guard lk(map.getSegmentMutex(segment_index));
             for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
             {
                 Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(segment_index), key_getter, stored_block, segment_index_info[segment_index][i], pool, sort_key_containers);
@@ -732,7 +732,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
     std::shared_lock lock(rwlock);
     Block * stored_block = nullptr;
     {
-        std::lock_guard<std::mutex> lk(blocks_lock);
+        std::lock_guard lk(blocks_lock);
         blocks.push_back(block);
         stored_block = &blocks.back();
         original_blocks.push_back(block);
@@ -1624,8 +1624,6 @@ void Join::joinBlock(Block & block) const
 
         build_table_cv.wait(lk, [&]() { return have_finish_build; });
     }
-
-    std::shared_lock lock(rwlock);
 
     checkTypesOfKeys(block, sample_block_with_keys);
 

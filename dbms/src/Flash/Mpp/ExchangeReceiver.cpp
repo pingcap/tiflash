@@ -37,21 +37,20 @@ template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
     {
-        std::unique_lock<std::mutex> lk(mu);
+        std::unique_lock lk(mu);
         state = ExchangeReceiverState::CLOSED;
         cv.notify_all();
     }
 
     for (auto & worker : workers)
-    {
-        worker.join();
-    }
+        if (worker.has_value())
+            worker.value().get();
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-    std::unique_lock<std::mutex> lk(mu);
+    std::unique_lock lk(mu);
     state = ExchangeReceiverState::CANCELED;
     cv.notify_all();
 }
@@ -61,8 +60,8 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
     {
-        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
-        workers.push_back(std::move(t));
+        auto f = DefaultFiberPool::submit_job(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
+        workers.push_back(std::move(f));
     }
 }
 
@@ -86,7 +85,6 @@ static inline String getReceiverStateStr(const ExchangeReceiverState & s)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 {
-    CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
 
@@ -110,7 +108,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             {
                 LOG_TRACE(log, "begin next ");
                 {
-                    std::unique_lock<std::mutex> lock(mu);
+                    std::unique_lock lock(mu);
                     cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });
                     if (state == ExchangeReceiverState::NORMAL)
                     {
@@ -137,7 +135,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
                 }
                 {
-                    std::unique_lock<std::mutex> lock(mu);
+                    std::unique_lock lock(mu);
                     cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
                     if (state == ExchangeReceiverState::NORMAL)
                     {
@@ -174,7 +172,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     break;
 
                 using namespace std::chrono_literals;
-                std::this_thread::sleep_for(1s);
+                boost::this_fiber::sleep_for(1s);
             }
         }
         if (!status.ok())
@@ -200,7 +198,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
     }
     Int32 copy_live_conn = -1;
     {
-        std::unique_lock<std::mutex> lock(mu);
+        std::unique_lock lock(mu);
         live_connections--;
         if (meet_error && state == ExchangeReceiverState::NORMAL)
             state = ExchangeReceiverState::ERROR;
@@ -222,7 +220,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
 {
     std::shared_ptr<ReceivedPacket> packet;
     {
-        std::unique_lock<std::mutex> lock(mu);
+        std::unique_lock lock(mu);
         cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != ExchangeReceiverState::NORMAL; });
 
         if (state != ExchangeReceiverState::NORMAL)
@@ -267,7 +265,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         }
     }
     packet->packet->Clear();
-    std::unique_lock<std::mutex> lock(mu);
+    std::unique_lock lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
     res_buffer.pushEmpty(std::move(packet));
     cv.notify_all();

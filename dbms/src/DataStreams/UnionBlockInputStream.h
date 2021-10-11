@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/FiberPool.hpp>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
@@ -252,7 +252,7 @@ private:
 
 private:
     using Payload = _UnionBlockInputStreamImpl::OutputData<mode>;
-    using OutputQueue = ConcurrentBoundedQueue<Payload>;
+    using OutputQueue = boost::fibers::buffered_channel<Payload>;
 
 private:
     /** The queue of the finished blocks. Also, you can put an exception instead of a block.

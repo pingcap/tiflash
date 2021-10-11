@@ -89,3 +89,6 @@ target_link_libraries (uint128_perf clickhouse_common_io)
 
 add_executable (mpmc_queue_perftest mpmc_queue_perftest.cpp)
 target_link_libraries (mpmc_queue_perftest clickhouse_common_io)
+
+add_executable (fiber_test fiber_test.cpp)
+target_link_libraries (fiber_test clickhouse_common_io)

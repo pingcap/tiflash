@@ -76,10 +76,9 @@ class adaptive_buffered_channel
 {
 public:
     using value_type = typename boost::fibers::buffered_channel<T>::value_type;
-    using boost::fibers::channel_op_status;
 
     explicit adaptive_buffered_channel(size_t capacity)
-        : channel(std::max(roundUpToPowerOfTwoOrZero(capacity), 2))
+        : channel(std::max<size_t>(roundUpToPowerOfTwoOrZero(capacity), 2))
     {
     }
 
@@ -93,17 +92,17 @@ public:
         channel.close();
     }
 
-    channel_op_status try_push(const value_type & value)
+    boost::fibers::channel_op_status try_push(const value_type & value)
     {
         return channel.try_push(value);
     }
 
-    channel_op_status try_push(value_type && value)
+    boost::fibers::channel_op_status try_push(value_type && value)
     {
         return channel.try_push(std::move(value));
     }
 
-    channel_op_status push(const value_type & value)
+    boost::fibers::channel_op_status push(const value_type & value)
     {
         if (inside_of_fiber_pool)
             return channel.push(value);
@@ -113,14 +112,14 @@ public:
             for (int i = 0; i < 10; ++i)
             {
                 auto res = channel.try_push(value);
-                if (res != channel_op_status::full)
+                if (res != boost::fibers::channel_op_status::full)
                     return res;
             }
             sched_yield();
         }
     }
 
-    channel_op_status push(value_type && value)
+    boost::fibers::channel_op_status push(value_type && value)
     {
         if (inside_of_fiber_pool)
             return channel.push(std::move(value));
@@ -130,19 +129,19 @@ public:
             for (int i = 0; i < 10; ++i)
             {
                 auto res = channel.try_push(std::move(value));
-                if (res != channel_op_status::full)
+                if (res != boost::fibers::channel_op_status::full)
                     return res;
             }
             sched_yield();
         }
     }
 
-    channel_op_status try_pop(value_type & value)
+    boost::fibers::channel_op_status try_pop(value_type & value)
     {
         return channel.try_pop(value);
     }
 
-    channel_op_status pop(value_type & value)
+    boost::fibers::channel_op_status pop(value_type & value)
     {
         if (inside_of_fiber_pool)
             return channel.pop(value);
@@ -152,7 +151,7 @@ public:
             for (int i = 0; i < 10; ++i)
             {
                 auto res = channel.try_pop(value);
-                if (res != channel_op_status::empty)
+                if (res != boost::fibers::channel_op_status::empty)
                     return res;
             }
             sched_yield();

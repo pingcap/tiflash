@@ -1,12 +1,11 @@
 #pragma once
 
 #include <Flash/Mpp/MPPTask.h>
+#include <boost/fiber/all.hpp> 
 #include <common/logger_useful.h>
 #include <kvproto/mpp.pb.h>
 
 #include <chrono>
-#include <condition_variable>
-#include <mutex>
 
 namespace DB
 {
@@ -29,13 +28,13 @@ using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSet>;
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
-    std::mutex mu;
+    boost::fibers::mutex mu;
 
     MPPQueryMap mpp_query_map;
 
     Poco::Logger * log;
 
-    std::condition_variable cv;
+    boost::fibers::condition_variable cv;
 
 public:
     MPPTaskManager();

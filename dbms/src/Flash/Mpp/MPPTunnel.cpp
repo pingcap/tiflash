@@ -60,7 +60,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
 template <typename Writer>
 void MPPTunnelBase<Writer>::close(const String & reason)
 {
-    std::unique_lock<std::mutex> lk(mu);
+    std::unique_lock lk(mu);
     if (finished)
         return;
     if (connected && !reason.empty())
@@ -100,7 +100,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
     LOG_TRACE(log, "ready to write");
     {
         {
-            std::unique_lock<std::mutex> lk(mu);
+            std::unique_lock lk(mu);
             waitUntilConnectedOrCancelled(lk);
             if (finished)
                 throw Exception("write to tunnel which is already closed," + send_loop_msg);
@@ -109,7 +109,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
         if (close_after_write)
         {
-            std::unique_lock<std::mutex> lk(mu);
+            std::unique_lock lk(mu);
             if (!finished)
             {
                 /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
@@ -150,17 +150,17 @@ void MPPTunnelBase<Writer>::sendLoop()
     }
     catch (Exception & e)
     {
-        std::unique_lock<std::mutex> lk(mu);
+        std::unique_lock lk(mu);
         send_loop_msg = e.message();
     }
     catch (std::exception & e)
     {
-        std::unique_lock<std::mutex> lk(mu);
+        std::unique_lock lk(mu);
         send_loop_msg = e.what();
     }
     catch (...)
     {
-        std::unique_lock<std::mutex> lk(mu);
+        std::unique_lock lk(mu);
         send_loop_msg = "fatal error in sendLoop()";
     }
     if (!finished)
@@ -174,7 +174,7 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
     LOG_TRACE(log, "ready to finish");
-    std::unique_lock<std::mutex> lk(mu);
+    std::unique_lock lk(mu);
     if (finished)
         throw Exception("has finished, " + send_loop_msg);
     /// make sure to finish the tunnel after it is connected
@@ -189,7 +189,7 @@ void MPPTunnelBase<Writer>::writeDone()
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
-    std::lock_guard<std::mutex> lk(mu);
+    std::lock_guard lk(mu);
     if (connected)
         throw Exception("has connected");
 
@@ -204,7 +204,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 template <typename Writer>
 void MPPTunnelBase<Writer>::waitForFinish()
 {
-    std::unique_lock<std::mutex> lk(mu);
+    std::unique_lock lk(mu);
 
     cv_for_finished.wait(lk, [&]() { return finished.load(); });
 
@@ -214,7 +214,7 @@ void MPPTunnelBase<Writer>::waitForFinish()
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk)
+void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock & lk)
 {
     auto connected_or_cancelled = [&] {
         return connected || isTaskCancelled();
@@ -235,7 +235,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::
 template <typename Writer>
 void MPPTunnelBase<Writer>::finishWithLock()
 {
-    std::unique_lock<std::mutex> lk(mu);
+    std::unique_lock lk(mu);
     finished = true;
     cv_for_finished.notify_all();
 }

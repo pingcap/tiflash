@@ -59,7 +59,7 @@ private:
     Int64 mpp_task_id = 0;
 
     std::vector<std::thread> workers;
-    std::mutex exception_mutex;
+    boost::fibers::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
     const LogWithPrefixPtr log;
