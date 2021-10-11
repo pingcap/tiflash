@@ -524,7 +524,7 @@ struct TiDBConvertToInteger
         }
         else if constexpr (std::is_integral_v<FromFieldType>)
         {
-            /// cast int as int
+            /// cast enum/int as int
             const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
@@ -781,7 +781,7 @@ struct TiDBConvertToFloat
         }
         else if constexpr (std::is_integral_v<FromFieldType> || std::is_floating_point_v<FromFieldType>)
         {
-            /// cast int/real as real
+            /// cast enum/int/real as real
             const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
@@ -1182,7 +1182,7 @@ struct TiDBConvertToDecimal
         else if (const ColumnVector<FromFieldType> * col_from
                  = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
-            /// cast int/real as decimal
+            /// cast enum/int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
             for (size_t i = 0; i < size; ++i)
@@ -1827,6 +1827,10 @@ private:
             return createWrapper<DataTypeMyDateTime, return_nullable>(to_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeString>(from_type.get()))
             return createWrapper<DataTypeString, return_nullable>(to_type);
+        if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum8>(from_type.get()))
+            return createWrapper<DataTypeEnum8, return_nullable>(to_type);
+        if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum16>(from_type.get()))
+            return createWrapper<DataTypeEnum16, return_nullable>(to_type);
 
         // todo support convert to duration/json type
         throw Exception{
