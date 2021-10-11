@@ -64,17 +64,17 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     std::stringstream ss;
     ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
     // TODO: cancel tasks in order rather than issuing so many threads to cancel tasks
-    std::vector<std::thread> cancel_workers;
+    std::vector<std::optional<boost::fibers::future<void>>> cancel_workers;
     for (auto task_it = task_set.task_map.rbegin(); task_it != task_set.task_map.rend(); task_it++)
     {
         ss << task_it->first.toString() << " ";
-        std::thread t(&MPPTask::cancel, task_it->second, std::ref(reason));
+        auto t = DefaultFiberPool::submit_job(&MPPTask::cancel, task_it->second, std::ref(reason));
         cancel_workers.push_back(std::move(t));
     }
     LOG_WARNING(log, ss.str());
     for (auto & worker : cancel_workers)
     {
-        worker.join();
+        worker.value().get();
     }
     MPPQueryTaskSet canceled_task_set;
     {

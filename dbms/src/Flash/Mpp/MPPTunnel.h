@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/FiberPool.hpp>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -61,9 +61,9 @@ private:
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
 
-    boost::fibers mu;
-    std::condition_variable cv_for_connected;
-    std::condition_variable cv_for_finished;
+    boost::fibers::mutex mu;
+    boost::fibers::condition_variable cv_for_connected;
+    boost::fibers::condition_variable cv_for_finished;
 
     bool connected; // if the exchange in has connected this tunnel.
 
@@ -82,10 +82,10 @@ private:
 
     int input_streams_num;
 
-    std::unique_ptr<std::thread> send_thread;
+    std::optional<boost::fibers::future<void>> send_thread;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
+    boost::fibers::buffered_channel<MPPDataPacketPtr> send_queue;
 
     Poco::Logger * log;
 };

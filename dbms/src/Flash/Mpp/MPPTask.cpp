@@ -1,6 +1,5 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/FailPoint.h>
-#include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -82,8 +81,7 @@ void MPPTask::finishWrite()
 void MPPTask::run()
 {
     memory_tracker = current_memory_tracker;
-    auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
-    worker.detach();
+    DefaultFiberPool::submit_job(&MPPTask::runImpl, this->shared_from_this());
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)

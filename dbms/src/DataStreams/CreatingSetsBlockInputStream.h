@@ -29,10 +29,7 @@ public:
     ~CreatingSetsBlockInputStream()
     {
         for (auto & worker : workers)
-        {
-            if (worker.joinable())
-                worker.join();
-        }
+            worker.get();
     }
 
     String getName() const override { return "CreatingSets"; }
@@ -58,7 +55,7 @@ private:
     size_t bytes_to_transfer = 0;
     Int64 mpp_task_id = 0;
 
-    std::vector<std::thread> workers;
+    std::vector<boost::fibers::future<void>> workers;
     boost::fibers::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 

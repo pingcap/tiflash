@@ -1,5 +1,4 @@
 #include <Common/CPUAffinityManager.h>
-#include <Common/ThreadFactory.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
 

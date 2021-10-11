@@ -5,6 +5,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <functional>
+#include <boost/fiber/all.hpp>
 #include <boost/noncopyable.hpp>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
@@ -112,7 +113,7 @@ public:
     void forEachChild(F && f)
     {
         /// NOTE: Acquire a read lock, therefore f() should be thread safe
-        std::shared_lock lock(children_mutex);
+        std::unique_lock lock(children_mutex);
 
         for (auto & child : children)
             if (f(*child))
@@ -121,7 +122,7 @@ public:
 
 protected:
     BlockInputStreams children;
-    mutable std::shared_mutex children_mutex;
+    mutable boost::fibers::mutex children_mutex;
 
 private:
     TableLockHolders table_locks;

@@ -5,9 +5,9 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/FiberPool.hpp>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
-#include <Common/ThreadFactory.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -1090,10 +1090,10 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
 }
 
 
-BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const
+BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const
 {
 #define M(NAME) \
-    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool);
+    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, max_threads);
 
     if (false)
     {
@@ -1109,9 +1109,8 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
     AggregatedDataVariants & data_variants,
     Method & method,
     bool final,
-    ThreadPool * thread_pool) const
+    size_t max_threads) const
 {
-    size_t max_threads = thread_pool ? thread_pool->size() : 1;
     if (max_threads > data_variants.aggregates_pools.size())
         for (size_t i = data_variants.aggregates_pools.size(); i < max_threads; ++i)
             data_variants.aggregates_pools.push_back(std::make_shared<Arena>());
@@ -1140,6 +1139,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
     /// packaged_task is used to ensure that exceptions are automatically thrown into the main stream.
 
     std::vector<std::packaged_task<BlocksList()>> tasks(max_threads);
+    std::vector<boost::fibers::future<void>> futures;
 
     try
     {
@@ -1148,23 +1148,20 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
             tasks[thread_id] = std::packaged_task<BlocksList()>(
                 [thread_id, &converter] { return converter(thread_id); });
 
-            if (thread_pool)
-                thread_pool->schedule(ThreadFactory().newJob([thread_id, &tasks] { tasks[thread_id](); }));
-            else
-                tasks[thread_id]();
+            futures.push_back(DefaultFiberPool::submit_job([thread_id, &tasks] { tasks[thread_id](); }).value());
         }
     }
     catch (...)
     {
         /// If this is not done, then in case of an exception, tasks will be destroyed before the threads are completed, and it will be bad.
-        if (thread_pool)
-            thread_pool->wait();
+        for (auto & f : futures)
+            f.get();
 
         throw;
     }
 
-    if (thread_pool)
-        thread_pool->wait();
+    for (auto & f : futures)
+        f.get();
 
     BlocksList blocks;
 
@@ -1195,11 +1192,6 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     if (data_variants.empty())
         return blocks;
 
-    std::unique_ptr<ThreadPool> thread_pool;
-    if (max_threads > 1 && data_variants.sizeWithoutOverflowRow() > 100000 /// TODO Make a custom threshold.
-        && data_variants.isTwoLevel()) /// TODO Use the shared thread pool with the `merge` function.
-        thread_pool = std::make_unique<ThreadPool>(max_threads);
-
     if (isCancelled())
         return BlocksList();
 
@@ -1217,7 +1209,7 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
         if (!data_variants.isTwoLevel())
             blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final));
         else
-            blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, thread_pool.get()));
+            blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, max_threads));
     }
 
     if (!final)
@@ -1454,7 +1446,8 @@ public:
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
         if (parallel_merge_data)
-            parallel_merge_data->pool.wait();
+            for (auto & f : parallel_merge_data->futures)
+                f.get();
     }
 
 protected:
@@ -1517,7 +1510,7 @@ protected:
 
             while (true)
             {
-                std::unique_lock<std::mutex> lock(parallel_merge_data->mutex);
+                std::unique_lock lock(parallel_merge_data->mutex);
 
                 if (parallel_merge_data->exception)
                     std::rethrow_exception(parallel_merge_data->exception);
@@ -1558,12 +1551,11 @@ private:
     {
         std::map<Int32, Block> ready_blocks;
         std::exception_ptr exception;
-        std::mutex mutex;
-        std::condition_variable condvar;
-        ThreadPool pool;
+        boost::fibers::mutex mutex;
+        boost::fibers::condition_variable condvar;
+        std::vector<boost::fibers::future<void>> futures;
 
-        explicit ParallelMergeData(size_t threads)
-            : pool(threads)
+        explicit ParallelMergeData(size_t)
         {}
     };
 
@@ -1575,8 +1567,7 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool.schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this, num] { thread(num); }));
+        parallel_merge_data->futures.push_back(DefaultFiberPool::submit_job([this, num] { thread(num); }).value());
     }
 
     void thread(Int32 bucket_num)
@@ -1606,12 +1597,12 @@ private:
             APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
 
-            std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
+            std::lock_guard lock(parallel_merge_data->mutex);
             parallel_merge_data->ready_blocks[bucket_num] = std::move(block);
         }
         catch (...)
         {
-            std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
+            std::lock_guard lock(parallel_merge_data->mutex);
             if (!parallel_merge_data->exception)
                 parallel_merge_data->exception = std::current_exception();
         }
@@ -1873,7 +1864,7 @@ void NO_INLINE Aggregator::mergeWithoutKeyStreamsImpl(
 }
 
 
-void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t max_threads)
+void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t)
 {
     if (isCancelled())
         return;
@@ -1964,11 +1955,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             }
         };
 
-        std::unique_ptr<ThreadPool> thread_pool;
-        if (max_threads > 1 && total_input_rows > 100000 /// TODO Make a custom threshold.
-            && has_two_level)
-            thread_pool = std::make_unique<ThreadPool>(max_threads);
-
+        std::vector<boost::fibers::future<void>> futures;
         for (const auto & bucket_blocks : bucket_to_blocks)
         {
             const auto bucket = bucket_blocks.first;
@@ -1981,14 +1968,11 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
 
             auto task = std::bind(merge_bucket, bucket, aggregates_pool);
 
-            if (thread_pool)
-                thread_pool->schedule(ThreadFactory().newJob(task));
-            else
-                task();
+            futures.push_back(DefaultFiberPool::submit_job(task).value());
         }
 
-        if (thread_pool)
-            thread_pool->wait();
+        for (auto & f : futures)
+            f.get();
 
         LOG_TRACE(log, "Merged partially aggregated two-level data.");
     }

@@ -892,7 +892,7 @@ protected:
     /// How many RAM were used to process the query before processing the first block.
     Int64 memory_usage_before_aggregation = 0;
 
-    std::mutex mutex;
+    boost::fibers::mutex mutex;
 
     Poco::Logger * log = &Poco::Logger::get("Aggregator");
 
@@ -1034,14 +1034,14 @@ protected:
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const;
+    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
         AggregatedDataVariants & data_variants,
         Method & method,
         bool final,
-        ThreadPool * thread_pool) const;
+        size_t max_threads) const;
 
     template <bool no_more_keys, typename Method, typename Table>
     void mergeStreamsImplCase(

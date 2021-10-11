@@ -5,6 +5,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/FiberPool.hpp>
+#include <Common/FiberRWLock.h>
 #include <Common/HashTable/HashMap.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
@@ -312,7 +313,7 @@ private:
       *  and StorageJoin only calls these two methods.
       * That's why another methods are not guarded.
       */
-    mutable boost::fibers::mutex rwlock;
+    mutable FiberRWLock rwlock;
 
     void init(Type type_);
 

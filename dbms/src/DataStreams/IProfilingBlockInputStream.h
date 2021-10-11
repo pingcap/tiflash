@@ -247,7 +247,7 @@ private:
     void forEachProfilingChild(F && f)
     {
         /// NOTE: Acquire a read lock, therefore f() should be thread safe
-        std::shared_lock lock(children_mutex);
+        std::unique_lock lock(children_mutex);
 
         for (auto & child : children)
             if (IProfilingBlockInputStream * p_child = dynamic_cast<IProfilingBlockInputStream *>(child.get()))

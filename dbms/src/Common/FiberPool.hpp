@@ -17,8 +17,6 @@ no_of_defualt_threads()
     return std::max(std::thread::hardware_concurrency(), 2u) - 1u;
 }
 
-inline thread_local bool inside_of_fiber_pool = false;
-
 /**
  * A wrapper primarly for boost::fibers::buffered_channel
  * The buffered_channel has non-virtual member functions
@@ -69,96 +67,6 @@ public:
 
 private:
     BaseChannel m_base_channel; 
-};
-
-template <typename T>
-class adaptive_buffered_channel
-{
-public:
-    using value_type = typename boost::fibers::buffered_channel<T>::value_type;
-
-    explicit adaptive_buffered_channel(size_t capacity)
-        : channel(std::max<size_t>(roundUpToPowerOfTwoOrZero(capacity), 2))
-    {
-    }
-
-    bool is_closed() const noexcept
-    {
-        return channel.is_closed();
-    }
-
-    void close() noexcept
-    {
-        channel.close();
-    }
-
-    boost::fibers::channel_op_status try_push(const value_type & value)
-    {
-        return channel.try_push(value);
-    }
-
-    boost::fibers::channel_op_status try_push(value_type && value)
-    {
-        return channel.try_push(std::move(value));
-    }
-
-    boost::fibers::channel_op_status push(const value_type & value)
-    {
-        if (inside_of_fiber_pool)
-            return channel.push(value);
-
-        while (true)
-        {
-            for (int i = 0; i < 10; ++i)
-            {
-                auto res = channel.try_push(value);
-                if (res != boost::fibers::channel_op_status::full)
-                    return res;
-            }
-            sched_yield();
-        }
-    }
-
-    boost::fibers::channel_op_status push(value_type && value)
-    {
-        if (inside_of_fiber_pool)
-            return channel.push(std::move(value));
-
-        while (true)
-        {
-            for (int i = 0; i < 10; ++i)
-            {
-                auto res = channel.try_push(std::move(value));
-                if (res != boost::fibers::channel_op_status::full)
-                    return res;
-            }
-            sched_yield();
-        }
-    }
-
-    boost::fibers::channel_op_status try_pop(value_type & value)
-    {
-        return channel.try_pop(value);
-    }
-
-    boost::fibers::channel_op_status pop(value_type & value)
-    {
-        if (inside_of_fiber_pool)
-            return channel.pop(value);
-
-        while (true)
-        {
-            for (int i = 0; i < 10; ++i)
-            {
-                auto res = channel.try_pop(value);
-                if (res != boost::fibers::channel_op_status::empty)
-                    return res;
-            }
-            sched_yield();
-        }
-    }
-private:
-    boost::fibers::buffered_channel<T> channel;
 };
 
 /**

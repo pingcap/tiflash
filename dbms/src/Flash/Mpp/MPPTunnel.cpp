@@ -1,6 +1,5 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/ThreadFactory.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
@@ -26,7 +25,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
-    , send_thread(nullptr)
     , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
     , log(&Poco::Logger::get(tunnel_id))
 {
@@ -39,16 +37,12 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         if (!finished)
             writeDone();
-        if (nullptr != send_thread && send_thread->joinable())
+        if (send_thread.has_value())
         {
-            send_thread->join();
+            send_thread.value().get();
+            send_thread.reset();
         }
-        /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
-        MPPDataPacketPtr res;
-        while (send_queue.size() > 0)
-        {
-            send_queue.pop(res);
-        }
+        send_queue.close();
     }
     catch (...)
     {
@@ -68,7 +62,9 @@ void MPPTunnelBase<Writer>::close(const String & reason)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+            auto res = send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+            if (res != boost::fibers::channel_op_status::success)
+                throw Exception("write to tunnel which is already closed");
         }
         catch (...)
         {
@@ -77,7 +73,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
     }
     if (connected)
     {
-        send_queue.push(nullptr);
+        send_queue.close();
         /// should wait the errors being sent in abnormal cases.
         cv_for_finished.wait(lk, [&]() { return finished.load(); });
     }
@@ -106,16 +102,14 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
 
-        send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
+        auto res = send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
+        if (res != boost::fibers::channel_op_status::success)
+            throw Exception("write to tunnel which is already closed");
         if (close_after_write)
         {
             std::unique_lock lk(mu);
             if (!finished)
-            {
-                /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
-                send_queue.push(nullptr);
-                LOG_TRACE(log, "sending a nullptr to finish write.");
-            }
+                send_queue.close();
         }
     }
 }
@@ -130,8 +124,8 @@ void MPPTunnelBase<Writer>::sendLoop()
         MPPDataPacketPtr res;
         while (!finished)
         {
-            send_queue.pop(res);
-            if (nullptr == res)
+            auto status = send_queue.pop(res);
+            if (status == boost::fibers::channel_op_status::closed)
             {
                 finishWithLock();
                 return;
@@ -181,7 +175,7 @@ void MPPTunnelBase<Writer>::writeDone()
     waitUntilConnectedOrCancelled(lk);
     lk.unlock();
     /// in normal cases, send nullptr to notify finish
-    send_queue.push(nullptr);
+    send_queue.close();
     waitForFinish();
     LOG_TRACE(log, "done to finish");
 }
@@ -195,7 +189,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
-    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+    send_thread = DefaultFiberPool::submit_job([this] { sendLoop(); });
 
     connected = true;
     cv_for_connected.notify_all();
@@ -214,7 +208,7 @@ void MPPTunnelBase<Writer>::waitForFinish()
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock & lk)
+void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<boost::fibers::mutex> & lk)
 {
     auto connected_or_cancelled = [&] {
         return connected || isTaskCancelled();

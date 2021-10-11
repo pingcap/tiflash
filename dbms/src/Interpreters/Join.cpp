@@ -1625,6 +1625,8 @@ void Join::joinBlock(Block & block) const
         build_table_cv.wait(lk, [&]() { return have_finish_build; });
     }
 
+    std::shared_lock lock(rwlock);
+
     checkTypesOfKeys(block, sample_block_with_keys);
 
     if (kind == ASTTableJoin::Kind::Left && strictness == ASTTableJoin::Strictness::Any)

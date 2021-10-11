@@ -3,7 +3,6 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FiberPool.hpp>
 #include <Common/MemoryTracker.h>
-#include <Common/ThreadFactory.h>
 #include <Common/setThreadName.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <common/logger_useful.h>
@@ -143,7 +142,7 @@ public:
 
         for (auto & thread : threads)
             if (thread.has_value())
-                thread.value().get()
+                thread.value().get();
 
         threads.clear();
         joined_threads = true;
@@ -308,7 +307,7 @@ private:
     Handler & handler;
 
     /// Streams.
-    using ThreadsData = std::vector<std::optional<boost::fibers::future<>>>;
+    using ThreadsData = std::vector<std::optional<boost::fibers::future<void>>>;
     ThreadsData threads;
 
     /** A set of available sources that are not currently processed by any thread.

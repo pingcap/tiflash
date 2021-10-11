@@ -6,7 +6,7 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <boost/fiber/all.hpp>
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
@@ -34,7 +34,6 @@ public:
         , tunnel_set(nullptr)
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
-        , warnings(std::numeric_limits<int>::max())
     {
         assert(dag_request.has_root_executor() || dag_request.executors_size() > 0);
         return_executor_id = dag_request.has_root_executor() || dag_request.executors(0).has_executor_id();
@@ -48,7 +47,6 @@ public:
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
         , mpp_task_meta(meta_)
-        , warnings(std::numeric_limits<int>::max())
     {
         assert(dag_request.has_root_executor());
 
@@ -73,7 +71,6 @@ public:
         , tunnel_set(nullptr)
         , flags(0)
         , sql_mode(0)
-        , warnings(std::numeric_limits<int>::max())
     {}
 
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
@@ -90,23 +87,22 @@ public:
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
     {
-        if (!warnings.tryPush(warning))
-            throw TiFlashException("Too many warnings, exceeds limit of 2147483647", Errors::Coprocessor::Internal);
+        warnings.push(warning);
     }
     /// Consume all warnings. Once this method called, every warning will be cleared.
     /// This method is not thread-safe.
     void consumeWarnings(std::vector<tipb::Error> & warnings_)
     {
-        const size_t warnings_size = warnings.size();
-        warnings_.reserve(warnings_size);
-        for (size_t i = 0; i < warnings_size; ++i)
-        {
-            tipb::Error error;
-            warnings.pop(error);
+        tipb::Error error;
+        while (warnings.pop(error) == boost::fibers::channel_op_status::success)
             warnings_.push_back(error);
-        }
     }
-    void clearWarnings() { warnings.clear(); }
+    void clearWarnings()
+    {
+        std::vector<tipb::Error> dummy;
+        consumeWarnings(dummy);
+    }
+
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
@@ -151,7 +147,7 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
-    ConcurrentBoundedQueue<tipb::Error> warnings;
+    boost::fibers::unbuffered_channel<tipb::Error> warnings;
 };
 
 } // namespace DB

@@ -1,12 +1,9 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
 #include <Common/FiberPool.hpp>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
-
-#include <thread>
 
 namespace DB
 {
@@ -50,7 +47,7 @@ public:
         read_prefixed = true;
 
         /// Start reading thread.
-        thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
+        thread = DefaultFiberPool::submit_job([this] { fetchBlocks(); });
     }
 
     void readSuffix() override
@@ -76,7 +73,7 @@ protected:
             throw Exception("read operation called before readPrefix");
 
         Block block;
-        do
+        while (true)
         {
             if (!exception_msg.empty())
             {
@@ -84,9 +81,10 @@ protected:
             }
             if (isCancelled() || read_suffixed)
                 return {};
-        } while (!queue.tryPop(block, try_action_millisecionds));
-
-        return block;
+            auto res = queue.pop_wait_for(block, try_action_timeout);
+            if (res == boost::fibers::channel_op_status::success)
+                return block;
+        }
     }
 
     void fetchBlocks()
@@ -97,15 +95,18 @@ protected:
             while (!isCancelled())
             {
                 Block block = in->read();
-                do
+                while (true)
                 {
                     if (isCancelled() || read_suffixed)
                     {
                         // Notify waiting client.
-                        queue.tryEmplace(0);
+                        queue.close();
                         break;
                     }
-                } while (!queue.tryPush(block, try_action_millisecionds));
+                    auto res = queue.push_wait_for(block, try_action_timeout);
+                    if (res == boost::fibers::channel_op_status::success)
+                        break;
+                }
 
                 if (!block)
                     break;
@@ -127,14 +128,14 @@ protected:
     }
 
 private:
-    static constexpr UInt64 try_action_millisecionds = 200;
+    static constexpr auto try_action_timeout = std::chrono::milliseconds(200);
 
-    ConcurrentBoundedQueue<Block> queue;
+    boost::fibers::buffered_channel<Block> queue;
 
     bool read_prefixed = false;
     bool read_suffixed = false;
 
-    std::optional<boost::fibers::future<>> thread;
+    std::optional<boost::fibers::future<void>> thread;
     boost::fibers::mutex mutex;
 
     std::string exception_msg;
