@@ -13,8 +13,8 @@ namespace DB
 class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
-        : queue(clients)
+    SharedQueryBlockInputStream(size_t clients [[maybe_unused]], const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
+        : queue(1024)
         , log(getMPPTaskLog(log_, getName()))
         , in(in_)
     {

@@ -182,7 +182,6 @@ private:
     {
         std::exception_ptr exception;
 
-        setThreadName("ParalInputsProc");
         CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
 
         try

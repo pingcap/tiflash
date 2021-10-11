@@ -25,7 +25,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
-    , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
+    , send_queue(1024) /// TODO(fzh) set a reasonable parameter
     , log(&Poco::Logger::get(tunnel_id))
 {
 }

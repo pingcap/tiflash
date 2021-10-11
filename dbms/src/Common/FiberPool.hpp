@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <Common/setThreadName>
 #include <Common/BitHelpers.h>
 #include <boost/fiber/all.hpp> 
 
@@ -277,6 +278,7 @@ private:
      */
     void worker()
     {
+        setThreadName("FiberPool");
         // make this thread participate in shared_work 
         // fiber sharing
         //
