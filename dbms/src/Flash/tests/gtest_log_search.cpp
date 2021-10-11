@@ -43,7 +43,6 @@ TEST_F(LogSearch_Test, LogSearch)
     EXPECT_EQ(timezone_hour, 8);
     EXPECT_EQ(timezone_min, 0);
     EXPECT_EQ((int)loglevel_size, 5);
-    for (int i = 0; i < 3; i++)
     {
         auto in = std::istringstream(s);
         LogIterator itr(0l, 1587830400000l, {::diagnosticspb::LogLevel::Debug}, {}, in);
@@ -53,6 +52,22 @@ TEST_F(LogSearch_Test, LogSearch)
             EXPECT_EQ(log->level(), ::diagnosticspb::LogLevel::Debug);
             EXPECT_EQ(log->time(), 1587618662329);
             EXPECT_EQ(log->message(), "[\"Application : Load metadata done.\"]");
+        }
+    }
+    {
+        auto in = std::istringstream(s);
+        LogIterator itr(0l, 1587618662329ll - 10, {::diagnosticspb::LogLevel::Debug}, {}, in);
+        {
+            auto log = itr.next();
+            ASSERT_FALSE(log.has_value());
+        }
+    }
+    {
+        auto in = std::istringstream(s);
+        LogIterator itr(0l, 1587830400000l, {::diagnosticspb::LogLevel::Info}, {}, in);
+        {
+            auto log = itr.next();
+            ASSERT_FALSE(log.has_value());
         }
     }
 }
