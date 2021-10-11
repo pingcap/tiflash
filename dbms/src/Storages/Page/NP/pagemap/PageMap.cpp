@@ -135,7 +135,6 @@ void NPageMap::getDataRange(UInt64 * sizes, size_t nums, UInt64 *offsets, bool a
         markDataRange(offsets, sizes, nums);
 }
 
-
 void NPageMap::splitDataInRange(UInt64 * sizes, size_t nums, UInt64 *offsets, UInt64 start_range, UInt64 range_len)
 {
     UInt64 cur_range = start_range;

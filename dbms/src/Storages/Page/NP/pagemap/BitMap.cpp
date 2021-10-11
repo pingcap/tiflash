@@ -214,7 +214,7 @@ static int rb_insert_extent(UInt64 start, UInt64 count, struct rb_private *bp)
 		} else if (start > (ext->start + ext->count)) {
 			n = &(*n)->rb_right;
 		} else {
-      got_extent:
+got_extent:
 			if ((start + count) <= (ext->start + ext->count))
 				return 1;
 
@@ -250,7 +250,7 @@ static int rb_insert_extent(UInt64 start, UInt64 count, struct rb_private *bp)
 		}
 	}
 
-      skip_insert:
+skip_insert:
 	/* See if we can merge extent to the right */
 	for (node = rb_next(new_node); node != NULL; node = next) {
 		next = rb_next(node);
@@ -548,6 +548,8 @@ static int rb_test_clear_bmap_extent(struct bitmaps *bitmap,
 	return retval;
 }
 
+//  FIXME : format && fix warming
+/*
 static void rb_print_stats(struct bitmaps *bitmap)
 {
 	struct rb_private *bp;
@@ -586,6 +588,83 @@ static void rb_print_stats(struct bitmaps *bitmap)
 	printf("%16llu bits set in bitmap (out of %llu)\n", size,
 	       bitmap->real_end - bitmap->start);
 	printf("%16.4lf memory / bitmap bit memory ratio (bitarray = 1)\n", eff);
+}
+*/
+
+static void rb_print_stats(struct bitmaps *bitmap)
+{
+
+}
+
+static UInt64 __rb_search_range(struct rb_node *node, UInt64 start, UInt64 end, size_t num)
+{
+	UInt64 result = UINT64_MAX; 
+	struct bmap_rb_extent *ext,*l_ext,*r_ext;
+	ext = node_to_extent(node);
+
+	if (node->rb_left) 
+	{
+		l_ext = node_to_extent(node->rb_left);
+		if ((l_ext->start + l_ext->count) > start) 
+		{
+			if ((ext->start - (l_ext->start + l_ext->count)) > num)
+			{
+				return l_ext->start + l_ext->count;
+			} else {
+				result = __rb_search_range(node->rb_left, start, end, num);
+				if (result != UINT64_MAX)
+				{
+					return UINT64_MAX;
+				}
+			}
+		}
+	}
+
+	if (node->rb_right) 
+	{
+		r_ext = node_to_extent(node->rb_right);
+		if (r_ext->start< end) 
+		{
+			if (r_ext->start - (ext->start + ext->count) > num)
+			{
+				return ext->start + ext->count;
+			} else {
+				result = __rb_search_range(node->rb_right, start, end, num);
+				if (result != UINT64_MAX)
+				{
+					return UINT64_MAX;
+				}
+			}
+		}
+	}
+
+	return result;
+}
+
+static void rb_search_range(struct bitmaps *bitmap, UInt64 start, UInt64 end, size_t num, UInt64 * ret)
+{
+	struct rb_private *bp;
+	struct rb_node *root_node,*last_node;
+	struct bmap_rb_extent *last_node_ext;
+
+	bp = (struct rb_private *)bitmap->_private;
+	root_node = bp->root.rb_node;
+	// If root node have not been create, just return the start position
+	*ret = !root_node ? start : __rb_search_range(root_node, start, end, num);
+
+	// If we can't find any space in [start,last node]
+	// Then try to find space in [last node, end]
+	if (*ret == UINT64_MAX)
+	{
+		last_node = rb_last(&bp->root);
+		if (last_node)
+		{
+			last_node_ext = node_to_extent(last_node);
+			if (last_node_ext->start + last_node_ext->count + num < end){
+				*ret = last_node_ext->start + last_node_ext->count;
+			}
+		}
+	}
 }
 
 static int rb_set_bmap_range(struct bitmaps *bitmap, UInt64 start, size_t num, void *in)
@@ -695,18 +774,24 @@ static int rb_get_bmap_range(struct bitmaps *bitmap, UInt64 start, size_t num, v
 
 struct bitmap_ops bmap_rbtree = {
 	.type = BMAP64_RBTREE,
+
 	.new_bmap = rb_new_bmap,
 	.free_bmap = rb_free_bmap,
+	.copy_bmap = NULL,
+	.resize_bmap = NULL,
 	.mark_bmap = rb_mark_bmap,
 	.unmark_bmap = rb_unmark_bmap,
+	.test_bmap = rb_test_bmap,
 	.mark_bmap_extent = rb_mark_bmap_extent,
 	.unmark_bmap_extent = rb_unmark_bmap_extent,
-	.test_bmap = rb_test_bmap,
 	.test_clear_bmap_extent = rb_test_clear_bmap_extent,
 	.set_bmap_range = rb_set_bmap_range,
 	.get_bmap_range = rb_get_bmap_range,
+	.clear_bmap = rb_clear_bmap,
 	.print_stats = rb_print_stats,
-	.clear_bmap = rb_clear_bmap
+	.search_range = rb_search_range,
+	.find_first_zero = NULL,
+	.find_first_set = NULL
 };
 
 int unmark_bmap(struct bitmaps *bitmap, UInt64 arg)
@@ -820,29 +905,15 @@ int test_bmap_range(struct bitmaps *bitmap, UInt64 block, unsigned int num)
 int get_free_blocks(struct bitmaps *bitmap, UInt64 start, UInt64 finish,
 			 int num, UInt64 * ret)
 {
-	int c_ratio;
-	int _start;
-	assert(bitmap != NULL);
-	assert(finish > start);
+	if ((start < bitmap->start) || (start > bitmap->end) ||
+	    (start + num - 1 > bitmap->end)) {
+		return -1;
+	}
 
-	_start = start;
+	bitmap->bitmap_ops->search_range(bitmap, start, finish, num, ret);
+	std::cout << "ret : " << *ret << std::endl;
 
-	c_ratio = 1 << bitmap->cluster_bits;
-	// todo cluster not support for now
-	assert(c_ratio == 1);
-
-	do {
-		if (start + num - 1 >= bitmap->end) {
-			return -1;
-		}
-		if (test_bmap_range(bitmap, start, num)) {
-			*ret = start;
-			return 0;
-		}
-		start += c_ratio;
-	} while (start != finish);
-	
-	return -1;
+	return (*ret == UINT64_MAX ? -1 : 0);
 }
 
 int set_bmap_range(struct bitmaps *bitmap, UInt64 start, unsigned int num, void *in)

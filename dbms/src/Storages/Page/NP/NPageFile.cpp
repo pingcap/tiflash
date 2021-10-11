@@ -165,7 +165,8 @@ void NPageFile::write(WriteBatch && write_batch)
         index++;
     }
 
-    for (size_t j = 0 ; j < write_batch_size ; j++){
+    for (size_t j = 0 ; j < write_batch_size ; j++)
+    {
         // std::cout << "buffer_need_write.size() : " << buffer_need_write.size() << std::endl;
         std::cout << "offsets_in_file[j] : " << offsets_in_file[j] << std::endl;
     }

@@ -58,6 +58,9 @@ struct bitmap_ops {
 	void (*clear_bmap)(struct bitmaps* bitmap);
 	void (*print_stats)(struct bitmaps* bitmap);
 
+	/* search range */
+	void (*search_range)(struct bitmaps *bitmap, UInt64 start, UInt64 end, size_t num, UInt64 * ret);
+
 	/* Find the first zero bit between start and end, inclusive.
 	 * May be NULL, in which case a generic function is used. */
 	int (*find_first_zero)(struct bitmaps* bitmap, UInt64 start, UInt64 end, UInt64 *out);
