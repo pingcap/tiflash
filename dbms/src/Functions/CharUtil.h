@@ -225,8 +225,8 @@ inline int toCase(int _case, int ch)
         return ReplacementChar;
     }
     // binary search over ranges
-    auto lo = 0;
-    auto hi = sizeof(caseRange) / sizeof(CaseRange);
+    int lo = 0;
+    int hi = sizeof(caseRange) / sizeof(CaseRange);
     while (lo < hi)
     {
         auto m = lo + (hi - lo) / 2;
