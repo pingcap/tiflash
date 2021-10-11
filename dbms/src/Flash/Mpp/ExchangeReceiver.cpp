@@ -218,17 +218,38 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(ExchangeReceiverResult const * res)
+void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg)
 {
-    res->recv_msg->packet->Clear();
+    recv_msg->packet->Clear();
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
-    res_buffer.pushEmpty(std::move(res->recv_msg));
+    res_buffer.pushEmpty(std::move(recv_msg));
     cv.notify_all();
+}
+template <typename RPCContext>
+Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
+{
+    assert(recv_msg != nullptr);
+    Int64 rows = 0;
+    int chunk_size = recv_msg->packet->chunks_size();
+    if (chunk_size == 0)
+        return rows;
+
+    /// ExchangeReceiverBase should receive chunks of TypeCHBlock
+    for (int i = 0; i < chunk_size; i++)
+    {
+        Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
+        rows += block.rows();
+        if (unlikely(block.rows() == 0))
+            continue;
+        assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
+        block_queue.push(std::move(block));
+    }
+    return rows;
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
 {
     std::shared_ptr<ReceivedMessage> recv_msg;
     {
@@ -275,14 +296,19 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
             }
             else
             {
-                result = {resp_ptr, recv_msg->source_index, recv_msg->req_info, false, "", false, recv_msg};
+                result = {resp_ptr, recv_msg->source_index, recv_msg->req_info, false, "", false};
             }
         }
         else /// the non-last packets
         {
-            result = {nullptr, recv_msg->source_index, recv_msg->req_info, false, "", false, recv_msg};
+            result = {nullptr, recv_msg->source_index, recv_msg->req_info, false, "", false};
+        }
+        if (!result.meet_error)
+        {
+            result.rows = decodeChunks(recv_msg, block_queue, expected_types);
         }
     }
+    returnEmptyMsg(recv_msg);
     return result;
 }
 

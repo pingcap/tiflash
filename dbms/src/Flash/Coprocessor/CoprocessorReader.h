@@ -32,18 +32,52 @@ struct CoprocessorReaderResult
     String error_msg;
     bool eof;
     String req_info = "cop request";
+    Int64 rows;
 
     CoprocessorReaderResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
         bool meet_error_ = false,
         const String & error_msg_ = "",
-        bool eof_ = false)
+        bool eof_ = false,
+        Int64 rows_ = 0)
         : resp(resp_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
+        , rows(rows_)
     {}
-    Int64 decodeChunks(std::queue<Block> & block_queue, const DAGSchema & schema, const DataTypes & expected_types)
+};
+
+/// this is an adapter for pingcap::coprocessor::ResponseIter, so it can be used in TiRemoteBlockInputStream
+class CoprocessorReader
+{
+public:
+    static constexpr bool is_streaming_reader = false;
+
+private:
+    DAGSchema schema;
+    bool has_enforce_encode_type;
+    pingcap::coprocessor::ResponseIter resp_iter;
+
+public:
+    CoprocessorReader(
+        const DAGSchema & schema_,
+        pingcap::kv::Cluster * cluster,
+        std::vector<pingcap::coprocessor::copTask> tasks,
+        bool has_enforce_encode_type_,
+        int concurrency)
+        : schema(schema_)
+        , has_enforce_encode_type(has_enforce_encode_type_)
+        , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
+    {
+        resp_iter.open();
+    }
+
+    const DAGSchema & getOutputSchema() const { return schema; }
+
+    void cancel() { resp_iter.cancel(); }
+
+    Int64 decodeChunks(std::shared_ptr<tipb::SelectResponse> & resp, std::queue<Block> & block_queue, const DataTypes & expected_types)
     {
         Int64 rows = 0;
         int chunk_size = resp->chunks_size();
@@ -73,44 +107,12 @@ struct CoprocessorReaderResult
 
             if (unlikely(block.rows() == 0))
                 continue;
-            assertBlockSchema(expected_types, block, req_info);
+            assertBlockSchema(expected_types, block, "CoprocessorReader decode chunks");
             block_queue.push(std::move(block));
         }
         return rows;
     }
-};
-
-/// this is an adapter for pingcap::coprocessor::ResponseIter, so it can be used in TiRemoteBlockInputStream
-class CoprocessorReader
-{
-public:
-    static constexpr bool is_streaming_reader = false;
-
-private:
-    DAGSchema schema;
-    bool has_enforce_encode_type;
-    pingcap::coprocessor::ResponseIter resp_iter;
-
-public:
-    CoprocessorReader(
-        const DAGSchema & schema_,
-        pingcap::kv::Cluster * cluster,
-        std::vector<pingcap::coprocessor::copTask> tasks,
-        bool has_enforce_encode_type_,
-        int concurrency)
-        : schema(schema_)
-        , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
-    {
-        resp_iter.open();
-    }
-
-    void returnEmptyMsg(CoprocessorReaderResult const *) const {}
-    const DAGSchema & getOutputSchema() const { return schema; }
-
-    void cancel() { resp_iter.cancel(); }
-
-    CoprocessorReaderResult nextResult()
+    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
     {
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
@@ -129,7 +131,8 @@ public:
                 return {nullptr, true, "Encode type of coprocessor response is not CHBlock, "
                                        "maybe the version of some TiFlash node in the cluster is not match with this one",
                         false};
-            return {resp, false, "", false};
+            auto rows = decodeChunks(resp, block_queue, expected_types);
+            return {resp, false, "", false, rows};
         }
         else
         {

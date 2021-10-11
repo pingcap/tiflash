@@ -105,7 +105,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     bool fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult();
+        auto result = remote_reader->nextResult(block_queue, expected_types);
         if (result.meet_error)
         {
             LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
@@ -130,15 +130,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 addRemoteExecutionSummaries(*result.resp, 0, false);
             }
         }
-
-        auto rows = result.decodeChunks(block_queue, remote_reader->getOutputSchema(), expected_types);
-        /// return empty msg after all its chunks are decoded.
-        remote_reader->returnEmptyMsg(&result);
-        total_rows += rows;
+        total_rows += result.rows;
         LOG_TRACE(
             log,
-            fmt::format("recv {} rows from remote for {}, total recv row num: {}", rows, result.req_info, total_rows));
-        if (rows == 0)
+            fmt::format("recv {} rows from remote for {}, total recv row num: {}", result.rows, result.req_info, total_rows));
+        if (result.rows == 0)
             return fetchRemoteResult();
         return true;
     }

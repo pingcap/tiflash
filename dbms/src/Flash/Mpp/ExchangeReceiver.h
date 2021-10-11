@@ -36,7 +36,7 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    std::shared_ptr<ReceivedMessage> recv_msg;
+    Int64 rows;
 
     ExchangeReceiverResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
@@ -44,40 +44,19 @@ struct ExchangeReceiverResult
         const String & req_info_ = "",
         bool meet_error_ = false,
         const String & error_msg_ = "",
-        bool eof_ = false,
-        std::shared_ptr<ReceivedMessage> msg = nullptr)
+        bool eof_ = false)
         : resp(resp_)
         , call_index(call_index_)
         , req_info(req_info_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
-        , recv_msg(msg)
+        , rows(0)
     {}
 
     ExchangeReceiverResult()
         : ExchangeReceiverResult(nullptr, 0)
     {}
-
-    Int64 decodeChunks(std::queue<Block> & block_queue, const DAGSchema & schema, const DataTypes & expected_types)
-    {
-        assert(recv_msg != nullptr);
-        Int64 rows = 0;
-        int chunk_size = recv_msg->packet->chunks_size();
-        if (chunk_size == 0)
-            return rows;
-
-        for (int i = 0; i < chunk_size; i++)
-        {
-            Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
-            rows += block.rows();
-            if (unlikely(block.rows() == 0))
-                continue;
-            assertBlockSchema(expected_types, block, "decode chunks in exchange receiver");
-            block_queue.push(std::move(block));
-        }
-        return rows;
-    }
 };
 
 enum class ExchangeReceiverState
@@ -109,9 +88,10 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    ExchangeReceiverResult nextResult();
+    ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types);
 
-    void returnEmptyMsg(ExchangeReceiverResult const * res);
+    void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
+    Int64 decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types);
 
     size_t getSourceNum() { return source_num; }
     String getName() { return "ExchangeReceiver"; }
