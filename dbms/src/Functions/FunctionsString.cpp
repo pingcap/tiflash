@@ -4,6 +4,7 @@
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Functions/CharUtil.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsRound.h>
@@ -11,7 +12,6 @@
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/StringUtil.h>
-#include <Functions/CharUtil.h>
 #include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
