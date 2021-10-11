@@ -26,12 +26,17 @@ namespace DB
 class LogIterator : private boost::noncopyable
 {
 public:
-    explicit LogIterator(int64_t _start_time, int64_t _end_time, const std::vector<::diagnosticspb::LogLevel> & _levels, const std::vector<std::string> & _patterns, std::unique_ptr<std::istream> && _log_file)
+    explicit LogIterator(
+        int64_t _start_time,
+        int64_t _end_time,
+        const std::vector<::diagnosticspb::LogLevel> & _levels,
+        const std::vector<std::string> & _patterns,
+        std::istream & _log_input_stream)
         : start_time(_start_time)
         , end_time(_end_time)
         , levels(_levels)
         , patterns(_patterns)
-        , log_file(std::move(_log_file))
+        , log_input_stream(_log_input_stream)
         , log(&Poco::Logger::get("LogIterator"))
         , cur_lineno(0)
     {
@@ -45,7 +50,6 @@ public:
 
 public:
     std::optional<::diagnosticspb::LogMessage> next();
-    bool next(::diagnosticspb::LogMessage & msg);
     static bool read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size);
     static bool read_date(
         size_t limit,
@@ -96,7 +100,7 @@ public:
 
 private:
     static Result<::diagnosticspb::LogMessage> parseLog(const std::string & log_content);
-    bool match(const ::diagnosticspb::LogMessage & log_msg, const char * c, size_t sz) const;
+    bool match(const int64_t time, const diagnosticspb::LogLevel level, const char * c, size_t sz) const;
     void init();
 
     std::optional<Error> readLog(LogEntry &);
@@ -107,7 +111,7 @@ private:
     std::vector<::diagnosticspb::LogLevel> levels;
     std::vector<std::string> patterns;
     std::vector<std::unique_ptr<RE2>> compiled_patterns;
-    std::unique_ptr<std::istream> log_file;
+    std::istream & log_input_stream;
     std::string line;
 
     Poco::Logger * log;
@@ -115,5 +119,13 @@ private:
     uint32_t cur_lineno;
     std::optional<std::pair<uint32_t, Error::Type>> err_info; // <lineno, Error::Type>
 };
+
+void ReadLogFile(const std::string & path, std::function<void(std::istream &)> && cb);
+
+bool FilterFileByDatetime(
+    const std::string & path,
+    const std::string & error_log_file_prefix,
+    const int64_t start_time);
+
 
 }; // namespace DB

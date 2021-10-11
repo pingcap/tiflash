@@ -4,7 +4,8 @@
 #include <Poco/Path.h>
 #include <Storages/PathPool.h>
 #include <re2/re2.h>
-
+#include <Poco/DirectoryIterator.h>
+#include <ext/scope_guard.h>
 #include <memory>
 
 #ifdef __linux__
@@ -991,19 +992,77 @@ catch (const Exception & e)
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 
-::grpc::Status DiagnosticsService::search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request,
-    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream)
+// get & filter(ts of last record < start-time) all files in same log directory.
+std::list<std::string> getFilesToSearch(IServer & server, Poco::Logger * , const int64_t start_time)
 {
-    (void)grpc_context;
+    std::list<std::string> files_to_search;
 
-    /// TODO: add error log
-    Poco::File log_file(Poco::Path(server.config().getString("logger.log")));
-    if (!log_file.exists())
+    std::string log_dir; // log directory
+    auto error_log_file_prefix = server.config().getString("logger.errorlog", "*");
+
     {
-        LOG_ERROR(log, "Invalid log path: " << log_file.path());
-        return ::grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
+        auto log_file_prefix = server.config().getString("logger.log");
+        if (auto it = log_file_prefix.rfind('/'); it != std::string::npos)
+        {
+            log_dir = std::string(log_file_prefix.begin(), log_file_prefix.begin() + it);
+        }
     }
 
+    if (log_dir.empty())
+        return files_to_search;
+
+    Poco::DirectoryIterator dir_end;
+    for (Poco::DirectoryIterator it(log_dir); it != dir_end; ++it)
+    {
+        const auto & path = it->path();
+        if (it->isFile() && it->exists())
+        {
+            if (!FilterFileByDatetime(path, error_log_file_prefix, start_time))
+                files_to_search.emplace_back(path);
+        }
+    }
+
+    return files_to_search;
+}
+
+grpc::Status searchLog(Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream, LogIterator & log_itr)
+{
+    static constexpr size_t LOG_BATCH_SIZE = 256;
+
+    for (;;)
+    {
+        size_t i = 0;
+        auto resp = SearchLogResponse::default_instance();
+        for (; i < LOG_BATCH_SIZE;)
+        {
+            if (auto tmp_msg = log_itr.next(); !tmp_msg)
+            {
+                break;
+            }
+            else
+            {
+                i++;
+                resp.mutable_messages()->Add(std::move(*tmp_msg));
+            }
+        }
+
+        if (i == 0)
+            break;
+
+        if (!stream->Write(resp))
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write response failed for unknown reason.");
+            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
+        }
+    }
+    return ::grpc::Status::OK;
+}
+
+::grpc::Status DiagnosticsService::search_log(
+    ::grpc::ServerContext *,
+    const ::diagnosticspb::SearchLogRequest * request,
+    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream)
+{
     int64_t start_time = request->start_time();
     int64_t end_time = request->end_time();
     if (end_time == 0)
@@ -1022,36 +1081,24 @@ catch (const Exception & e)
         patterns.push_back(pattern);
     }
 
-    auto in_ptr = std::make_unique<std::ifstream>(log_file.path());
-
-    LogIterator log_itr(start_time, end_time, levels, patterns, std::move(in_ptr));
-
-    static constexpr size_t LOG_BATCH_SIZE = 256;
-
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog: " << request->DebugString());
-    for (;;)
+    SCOPE_EXIT({
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog done: " << request->DebugString());
+    });
+
+    auto files_to_search = getFilesToSearch(server, log, start_time);
+
+    for (const auto & path : files_to_search)
     {
-        size_t i = 0;
-        auto resp = SearchLogResponse::default_instance();
-        for (; i < LOG_BATCH_SIZE;)
-        {
-            ::diagnosticspb::LogMessage tmp_msg;
-            if (!log_itr.next(tmp_msg))
-                break;
-            i++;
-            resp.mutable_messages()->Add(std::move(tmp_msg));
-        }
-
-        if (i == 0)
-            break;
-
-        if (!stream->Write(resp))
-        {
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write response failed for unknown reason.");
-            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
-        }
+        LOG_DEBUG(log, "start to search file " << path);
+        auto status = grpc::Status::OK;
+        ReadLogFile(path, [&](std::istream & istr) {
+            LogIterator log_itr(start_time, end_time, levels, patterns, istr);
+            status = searchLog(log, stream, log_itr);
+        });
+        if (!status.ok())
+            return status;
     }
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog done: " << request->DebugString());
 
     return ::grpc::Status::OK;
 }
