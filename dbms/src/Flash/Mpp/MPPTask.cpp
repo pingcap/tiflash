@@ -1,3 +1,4 @@
+#include <Common/CPUAffinityManager.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
@@ -283,6 +284,7 @@ void MPPTask::preprocess()
 
 void MPPTask::runImpl()
 {
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
@@ -390,6 +392,7 @@ void MPPTask::writeErrToAllTunnels(const String & e)
 
 void MPPTask::cancel(const String & reason)
 {
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
     LOG_WARNING(log, "Begin cancel task: " + id.toString());
     while (true)
     {

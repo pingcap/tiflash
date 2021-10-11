@@ -1,6 +1,7 @@
 #include "Server.h"
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
@@ -878,7 +879,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
-        .fn_handle_check_terminated = HandleCheckTerminated,
         .fn_handle_compute_store_stats = HandleComputeStoreStats,
         .fn_handle_get_engine_store_server_status = HandleGetTiFlashStatus,
         .fn_pre_handle_snapshot = PreHandleSnapshot,
@@ -915,10 +915,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             proxy_runner.join();
             return;
         }
-        LOG_INFO(log, "let tiflash proxy shutdown");
-        tiflash_instance_wrap.status = EngineStoreServerStatus::Stopped;
+        LOG_INFO(log, "Let tiflash proxy shutdown");
+        tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
         tiflash_instance_wrap.tmt = nullptr;
-        LOG_INFO(log, "wait for tiflash proxy thread to join");
+        LOG_INFO(log, "Wait for tiflash proxy thread to join");
         proxy_runner.join();
         LOG_INFO(log, "tiflash proxy thread is joined");
     });
@@ -1261,7 +1261,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setCurrentDatabase(default_database);
 
     global_context->initializeSchemaSyncService();
-
+    CPUAffinityManager::initCPUAffinityManager(config());
+    LOG_INFO(log, "CPUAffinity: " << CPUAffinityManager::getInstance().toString());
     SCOPE_EXIT({
         /** Ask to cancel background jobs all table engines,
           *  and also query_log.
@@ -1344,13 +1345,42 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (proxy_conf.is_proxy_runnable)
         {
             tiflash_instance_wrap.tmt = &tmt_context;
-            LOG_INFO(log, "let tiflash proxy start all services");
+            LOG_INFO(log, "Let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
             LOG_INFO(log, "tiflash proxy is ready to serve, try to wake up all regions' leader");
             WaitCheckRegionReady(tmt_context, terminate_signals_counter);
         }
+        SCOPE_EXIT({
+            if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
+            {
+                LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
+                exit(-1);
+            }
+            LOG_INFO(log, "Set store context status Stopping");
+            tmt_context.setStatusStopping();
+            {
+                // Wait until there is no read-index task.
+                while (tmt_context.getKVStore()->getReadIndexEvent())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+            tmt_context.setStatusTerminated();
+            LOG_INFO(log, "Set store context status Terminated");
+            {
+                // update status and let proxy stop all services except encryption.
+                tiflash_instance_wrap.status = EngineStoreServerStatus::Stopping;
+                LOG_INFO(log, "Set engine store server status Stopping");
+            }
+            // wait proxy to stop services
+            if (proxy_conf.is_proxy_runnable)
+            {
+                LOG_INFO(log, "Let tiflash proxy to stop all services");
+                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                LOG_INFO(log, "All services in tiflash proxy are stopped");
+            }
+        });
 
         {
             // Report the unix timestamp, git hash, release version
@@ -1359,29 +1389,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         tmt_context.setStatusRunning();
+
+        try
+        {
+            // Bind CPU affinity after all threads started.
+            CPUAffinityManager::getInstance().bindThreadCPUAffinity();
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
+        }
+
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
         {
-            LOG_INFO(log, "Set store status Stopping");
-            tmt_context.setStatusStopping();
             // Set limiters stopping and wakeup threads in waitting queue.
             global_context->getIORateLimiter().setStop();
-            {
-                // Wait until there is no read-index task.
-                while (tmt_context.getKVStore()->getReadIndexEvent())
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            }
-            tmt_context.setStatusTerminated();
-            LOG_INFO(log, "Set store status Terminated");
-            // wait proxy to stop services
-            if (proxy_conf.is_proxy_runnable)
-            {
-                LOG_INFO(log, "wait tiflash proxy to stop all services");
-                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                LOG_INFO(log, "all services in tiflash proxy are stopped");
-            }
         }
     }
 
