@@ -83,28 +83,39 @@ namespace DM
 //   MergeDeltaTaskPool
 // ================================================
 
-bool DeltaMergeStore::MergeDeltaTaskPool::addTask(const BackgroundTask & task, const ThreadType & whom, Poco::Logger * log_)
+std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, Poco::Logger * log_)
 {
-    LOG_DEBUG(log_,
-              "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
-                          << toString(whom) << "]");
-
     std::scoped_lock lock(mutex);
+    if (light_tasks.size() + heavy_tasks.size() >= max_task_num)
+        return std::make_pair(false, false);
+
+    bool is_heavy = false;
     switch (task.type)
     {
     case TaskType::Split:
     case TaskType::Merge:
     case TaskType::MergeDelta:
+        is_heavy = true;
+        // reserve some task space for light tasks
+        if (heavy_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
+            return std::make_pair(false, is_heavy);
         heavy_tasks.push(task);
-        return true;
     case TaskType::Compact:
     case TaskType::Flush:
     case TaskType::PlaceIndex:
+        is_heavy = false;
+        // reserve some task space for heavy tasks
+        if (light_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
+            return std::make_pair(false, is_heavy);
         light_tasks.push(task);
-        return false;
     default:
         throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
     }
+
+    LOG_DEBUG(log_,
+              "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
+                          << toString(whom) << "]");
+    return std::make_pair(true, is_heavy);
 }
 
 DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bool is_heavy, Poco::Logger * log_)
@@ -1148,18 +1159,17 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     fiu_do_on(FailPoints::force_triggle_foreground_flush, { should_foreground_flush = true; });
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
-        // Prevent too many tasks.
-        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
-        {
-            if (shutdown_called.load(std::memory_order_relaxed))
-                return;
+        if (shutdown_called.load(std::memory_order_relaxed))
+            return;
 
-            auto heavy = background_tasks.addTask(task, thread_type, log);
-            if (heavy)
-                blockable_background_pool_handle->wake();
-            else
-                background_task_handle->wake();
-        }
+        auto [added, heavy] = background_tasks.tryAddTask(task, thread_type, std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3), log);
+        // Prevent too many tasks.
+        if (!added)
+            return;
+        if (heavy)
+            blockable_background_pool_handle->wake();
+        else
+            background_task_handle->wake();
     };
 
     /// Flush is always try first.
