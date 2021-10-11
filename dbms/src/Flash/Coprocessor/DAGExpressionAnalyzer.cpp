@@ -961,63 +961,39 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // Note in the worst case(e.g select ts_col from table with Default encode), this will introduce two
 // useless casts to all the timestamp columns, however, since TiDB now use chunk encode as the default
 // encoding scheme, the worst case should happen rarely
-bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_ts_column)
+bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTS> & need_cast_column, const DAGQueryBlock & query_block)
 {
-    if (context.getTimezoneInfo().is_utc_timezone)
-        return false;
-
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
+    // For TimeZone
     tipb::Expr tz_expr;
     constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
-    String tz_col;
-    String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
-    for (size_t i = 0; i < is_ts_column.size(); i++)
+    String tz_col = getActions(tz_expr, actions);;
+    String timezone_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
+
+    // For Duration
+    String fsp_col;
+    String dur_func_name = "ConvertDurationFromInt64";
+    auto columns = query_block.source->tbl_scan().columns();
+    for (size_t i = 0; i < need_cast_column.size(); i++)
     {
-        if (is_ts_column[i])
+        if (context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTS::AppendTimeZoneCast)
         {
             if (tz_col.length() == 0)
                 tz_col = getActions(tz_expr, actions);
-            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, func_name, actions);
+            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             source_columns[i].name = casted_name;
             ret = true;
         }
-    }
-    NamesWithAliases project_cols;
-    for (auto & col : source_columns)
-        project_cols.emplace_back(col.name, col.name);
-    actions->add(ExpressionAction::project(project_cols));
-    return ret;
-}
 
-String DAGExpressionAnalyzer::appendDurationCast(
-    const String & fsp_expr,
-    const String & dur_expr,
-    const String & func_name,
-    ExpressionActionsPtr & actions)
-{
-    String cast_expr_name = applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
-    return cast_expr_name;
-}
-
-bool DAGExpressionAnalyzer::appendDurationCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_dur_column, const DAGQueryBlock & query_block)
-{
-    bool ret = false;
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsPtr actions = chain.getLastActions();
-    String fsp_col;
-    String func_name = "ConvertDurationFromInt64";
-    auto columns = query_block.source->tbl_scan().columns();
-    for (size_t i = 0; i < is_dur_column.size(); i++)
-    {
-        if (is_dur_column[i])
+        if (need_cast_column[i] == ExtraCastAfterTS::AppendDurationCast)
         {
             tipb::Expr fsp_expr;
             auto fsp = columns[i].decimal() < 0 ? 6 : columns[i].decimal();
             constructInt64LiteralTiExpr(fsp_expr, fsp);
             fsp_col = getActions(fsp_expr, actions);
-            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, func_name, actions);
+            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
             source_columns[i].name = casted_name;
             source_columns[i].type = std::make_shared<DataTypeMyDuration>(fsp);
             if (!(columns[i].flag() & (1 << 0)))
@@ -1032,6 +1008,16 @@ bool DAGExpressionAnalyzer::appendDurationCastsAfterTS(ExpressionActionsChain & 
         project_cols.emplace_back(col.name, col.name);
     actions->add(ExpressionAction::project(project_cols));
     return ret;
+}
+
+String DAGExpressionAnalyzer::appendDurationCast(
+        const String & fsp_expr,
+        const String & dur_expr,
+        const String & func_name,
+        ExpressionActionsPtr & actions)
+{
+    String cast_expr_name = applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
+    return cast_expr_name;
 }
 
 void DAGExpressionAnalyzer::appendJoin(
