@@ -974,7 +974,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
 
     // For Duration
     String fsp_col;
-    String dur_func_name = "ConvertDurationFromInt64";
+    String dur_func_name = "FunctionConvertDurationFromNanos";
     auto columns = query_block.source->tbl_scan().columns();
     for (size_t i = 0; i < need_cast_column.size(); i++)
     {
@@ -1349,7 +1349,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     }
     if (exprHasValidFieldType(expr))
     {
-        DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
+        DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
         if (expected_type->getName() != actual_type->getName())
         {
@@ -1421,7 +1421,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             tipb::Expr fsp_expr;
             auto fsp = expr.field_type().decimal() < 0 ? 6 : expr.field_type().decimal();
             constructInt64LiteralTiExpr(fsp_expr, fsp);
-            String func_name = "ConvertDurationFromInt64";
+            String func_name = "FunctionConvertDurationFromNanos";
             String fsp_col = getActions(fsp_expr, actions);
             String casted_name = appendDurationCast(fsp_col, ret, func_name, actions);
             ret = casted_name;

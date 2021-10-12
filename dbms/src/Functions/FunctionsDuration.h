@@ -24,11 +24,11 @@ namespace ErrorCodes
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
-class FunctionConvertDurationFromInt64 : public IFunction
+class FunctionConvertDurationFromNanos : public IFunction
 {
 public:
-    static constexpr auto name = "ConvertDurationFromInt64";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionConvertDurationFromInt64>(); };
+    static constexpr auto name = "FunctionConvertDurationFromNanos";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionConvertDurationFromNanos>(); };
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
     bool useDefaultImplementationForConstants() const override { return true; }

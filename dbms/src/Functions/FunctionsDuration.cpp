@@ -10,7 +10,7 @@
 
 namespace DB
 {
-DataTypePtr FunctionConvertDurationFromInt64::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
+DataTypePtr FunctionConvertDurationFromNanos::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
 {
     if (arguments.size() != 2)
     {
@@ -36,7 +36,7 @@ DataTypePtr FunctionConvertDurationFromInt64::getReturnTypeImpl(const ColumnsWit
     return std::make_shared<DataTypeMyDuration>(fsp);
 }
 
-void FunctionConvertDurationFromInt64::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
+void FunctionConvertDurationFromNanos::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
     block.getByPosition(result).column = std::move(block.getByPosition(arguments[0]).column);
 }
@@ -100,7 +100,7 @@ using FunctionDurationMicroSecond = FunctionDurationSplit<DurationSplitMicroSeco
 
 void registerFunctionsDuration(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionConvertDurationFromInt64>();
+    factory.registerFunction<FunctionConvertDurationFromNanos>();
 
     factory.registerFunction<FunctionDurationHour>();
     factory.registerFunction<FunctionDurationMinute>();
