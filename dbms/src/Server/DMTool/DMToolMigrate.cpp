@@ -19,7 +19,10 @@ bool isIgnoredInMigration(const DB::DM::DMFile & file, std::string & target)
 }
 bool needFrameMigration(const DB::DM::DMFile & file, std::string & target)
 {
-    return endsWith(target, ".mrk") || endsWith(target, ".dat") || endsWith(target, ".idx") || file.packStatFileName() == target;
+    return endsWith(target, ".mrk")
+        || endsWith(target, ".dat")
+        || endsWith(target, ".idx")
+        || file.packStatFileName() == target;
 }
 bool isRecognizable(const DB::DM::DMFile & file, std::string & target)
 {
