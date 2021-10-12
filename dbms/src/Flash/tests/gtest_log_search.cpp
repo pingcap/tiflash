@@ -77,8 +77,8 @@ TEST_F(LogSearch_Test, SearchDir)
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", "/1/test-err.log", 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", "", 0));
     ASSERT_TRUE(FilterFileByDatetime("/1/test-err.log", "/1/test-err.log", 0));
-    ASSERT_FALSE(FilterFileByDatetime("/1/2.log.123.gz", "/1/test-err.log", 0));
-    ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.....gz", "/1/test-err.log", 0));
+    ASSERT_TRUE(FilterFileByDatetime("/1/2.log.123.gz", "/1/test-err.log", 0));
+    ASSERT_TRUE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.....gz", "/1/test-err.log", 0));
     ASSERT_TRUE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.481.gz", "/1/test-err.log", 1633855377000)); // 1633855377000 : 2021-10-10 16:42:57
     ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-10-16:43:57.123.gz", "/1/test-err.log", 1633855377000));
 
