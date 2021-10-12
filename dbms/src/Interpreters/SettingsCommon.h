@@ -788,7 +788,7 @@ public:
         if (value == ChecksumAlgo::City128)
             return "city128";
         if (value == ChecksumAlgo::CRC32)
-            return "cec32";
+            return "crc32";
         if (value == ChecksumAlgo::CRC64)
             return "crc64";
         if (value == ChecksumAlgo::None)
@@ -809,7 +809,7 @@ private:
         if (s == "crc64")
             return ChecksumAlgo::CRC64;
         if (s == "none")
-            return ChecksumAlgo::CRC64;
+            return ChecksumAlgo::None;
 
         throw Exception("Unknown checksum algorithm: '" + s + "', must be one of 'xxh3', 'city128', 'crc32', 'crc64', 'none'", ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
