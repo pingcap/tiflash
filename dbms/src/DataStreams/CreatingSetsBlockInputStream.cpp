@@ -117,14 +117,14 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    workers.emplace_back(DefaultFiberPool::submit_job([this, &subquery = elem.second] { createOne(subquery); }).value());
+                    workers.push_back(DefaultFiberPool::submit_job([this, &subquery = elem.second] { createOne(subquery); }).value());
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
         for (auto & work : workers)
         {
-            work.get();
+            work.wait();
         }
 
         if (!exception_from_workers.empty())

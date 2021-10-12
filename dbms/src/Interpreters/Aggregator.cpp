@@ -1155,13 +1155,13 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
     {
         /// If this is not done, then in case of an exception, tasks will be destroyed before the threads are completed, and it will be bad.
         for (auto & f : futures)
-            f.get();
+            f.wait();
 
         throw;
     }
 
     for (auto & f : futures)
-        f.get();
+        f.wait();
 
     BlocksList blocks;
 
@@ -1447,7 +1447,7 @@ public:
         ///  because the threads access 'parallel_merge_data'.
         if (parallel_merge_data)
             for (auto & f : parallel_merge_data->futures)
-                f.get();
+                f.wait();
     }
 
 protected:
@@ -1972,7 +1972,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
         }
 
         for (auto & f : futures)
-            f.get();
+            f.wait();
 
         LOG_TRACE(log, "Merged partially aggregated two-level data.");
     }

@@ -255,8 +255,10 @@ template <bool for_last_response>
 void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
 {
     tipb::SelectResponse response;
+    /*
     if constexpr (for_last_response)
         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
+        */
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         partitionAndEncodeThenWriteBlocks<for_last_response>(blocks, response);

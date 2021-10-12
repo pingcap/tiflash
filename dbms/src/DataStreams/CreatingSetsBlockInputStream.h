@@ -29,7 +29,7 @@ public:
     ~CreatingSetsBlockInputStream()
     {
         for (auto & worker : workers)
-            worker.get();
+            worker.wait();
     }
 
     String getName() const override { return "CreatingSets"; }

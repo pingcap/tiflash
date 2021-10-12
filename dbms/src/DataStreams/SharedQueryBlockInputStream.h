@@ -1,9 +1,11 @@
 #pragma once
 
 #include <Common/FiberPool.hpp>
+#include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
+#include <thread>
 
 namespace DB
 {
@@ -19,9 +21,9 @@ public:
         const LogWithPrefixPtr & log_,
         bool run_in_thread_)
         : queue(1024)
+        , run_in_thread(run_in_thread_)
         , log(getMPPTaskLog(log_, getName()))
         , in(in_)
-        , run_in_thread(run_in_thread_)
     {
         children.push_back(in);
     }
@@ -53,7 +55,7 @@ public:
 
         /// Start reading thread.
         if (run_in_thread)
-            thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
+            thread = std::make_unique<std::thread>(ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); }));
         else
             future = DefaultFiberPool::submit_job([this] { fetchBlocks(); });
     }
@@ -69,13 +71,16 @@ public:
 
         if (run_in_thread)
         {
-            if (thread.joinable())
-                thread.join();
+            if (thread && thread->joinable())
+            {
+                thread->join();
+                thread.reset();
+            }
         }
         else
         {
             if (future.has_value())
-                future.value().get();
+                future.value().wait();
         }
         if (!exception_msg.empty())
             throw Exception(exception_msg);
@@ -158,7 +163,7 @@ private:
     bool read_suffixed = false;
 
     std::optional<boost::fibers::future<void>> future;
-    std::optional<boost::fibers::future<void>> thread;
+    std::unique_ptr<std::thread> thread;
     boost::fibers::mutex mutex;
 
     std::string exception_msg;

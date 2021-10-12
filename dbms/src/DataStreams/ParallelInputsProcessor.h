@@ -142,7 +142,7 @@ public:
 
         for (auto & thread : threads)
             if (thread.has_value())
-                thread.value().get();
+                thread.value().wait();
 
         threads.clear();
         joined_threads = true;

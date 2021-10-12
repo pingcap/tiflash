@@ -57,7 +57,7 @@ MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    current_memory_tracker = memory_tracker;
+    // current_memory_tracker = memory_tracker;
     closeAllTunnels("");
     LOG_DEBUG(log, "finish MPPTask: " << id.toString());
 }
@@ -285,7 +285,7 @@ void MPPTask::runImpl()
         return;
     }
 
-    current_memory_tracker = memory_tracker;
+    // current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();

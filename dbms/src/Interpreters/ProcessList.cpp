@@ -244,7 +244,7 @@ ProcessListEntry::~ProcessListEntry()
 
 void ProcessListElement::setQueryStreams(const BlockIO & io)
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     query_stream_in = io.in;
     query_stream_out = io.out;
@@ -257,7 +257,7 @@ void ProcessListElement::releaseQueryStreams()
     BlockOutputStreamPtr out;
 
     {
-        std::lock_guard<std::mutex> lock(query_streams_mutex);
+        std::lock_guard lock(query_streams_mutex);
 
         query_streams_status = QueryStreamsStatus::Released;
         in = std::move(query_stream_in);
@@ -269,14 +269,14 @@ void ProcessListElement::releaseQueryStreams()
 
 bool ProcessListElement::streamsAreReleased()
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     return query_streams_status == QueryStreamsStatus::Released;
 }
 
 bool ProcessListElement::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStreamPtr & out) const
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     if (query_streams_status != QueryStreamsStatus::Initialized)
         return false;

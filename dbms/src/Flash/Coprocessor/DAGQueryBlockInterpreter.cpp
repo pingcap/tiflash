@@ -343,7 +343,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
 
     pipeline.transform(
         [&](auto & stream) {
-            stream = std::make_shared<SharedQueryBlockInputStream>(10, stream, log, false);
+            stream = std::make_shared<SharedQueryBlockInputStream>(10, stream, log, true);
             });
 }
 
@@ -965,7 +965,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log);
-        input = std::make_shared<SharedQueryBlockInputStream>(10, input, log, false);
+        input = std::make_shared<SharedQueryBlockInputStream>(10, input, log, true);
         pipeline.streams.push_back(input);
         dag.getDAGContext().getRemoteInputStreams().push_back(input);
         task_start = task_end;

@@ -83,7 +83,7 @@ private:
     /// Be careful using it. For example, queries field could be modified concurrently.
     const ProcessListForUser * user_process_list = nullptr;
 
-    mutable std::mutex query_streams_mutex;
+    mutable boost::fibers::mutex query_streams_mutex;
 
     /// Streams with query results, point to BlockIO from executeQuery()
     /// This declaration is compatible with notes about BlockIO::process_list_entry:
@@ -111,7 +111,7 @@ public:
         priority_handle(std::move(priority_handle_))
     {
         memory_tracker.setDescription("(for query)");
-        current_memory_tracker = &memory_tracker;
+        // current_memory_tracker = &memory_tracker;
 
         if (memory_tracker_fault_probability)
             memory_tracker.setFaultProbability(memory_tracker_fault_probability);

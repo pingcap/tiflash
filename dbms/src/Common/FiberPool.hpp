@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <Common/setThreadName>
+#include <Common/setThreadName.h>
 #include <Common/BitHelpers.h>
 #include <boost/fiber/all.hpp> 
 

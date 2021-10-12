@@ -74,7 +74,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     LOG_WARNING(log, ss.str());
     for (auto & worker : cancel_workers)
     {
-        worker.value().get();
+        worker.value().wait();
     }
     MPPQueryTaskSet canceled_task_set;
     {
