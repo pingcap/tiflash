@@ -102,7 +102,6 @@ TEST_F(StringUpper, string_upper_all_unit_Test)
         executeFunction(
             "upperBinary",
             toConst("թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ")));
-
 }
 
 
