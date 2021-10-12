@@ -8,6 +8,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Flash/Mpp/MPPStringConverter.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
@@ -271,6 +272,12 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
+    if (log->debug())
+    {
+        log->debug("use MPPStringConverter");
+        auto converter = MPPStringConverter{context, *dag_req};
+        log->debug("mpp query executor:\n" + converter.buildMPPString());
+    }
     DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
