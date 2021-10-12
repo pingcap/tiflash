@@ -476,12 +476,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
 
 void DMFile::readConfiguration(const FileProviderPtr & file_provider)
 {
-    bool exist;
-    {
-        auto tester = Poco::File(configurationPath());
-        exist = tester.exists();
-    }
-    if (exist)
+    if (Poco::File(configurationPath()).exists())
     {
         auto file = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
         auto stream = InputStreamWrapper{file};
