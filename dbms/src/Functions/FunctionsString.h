@@ -189,8 +189,7 @@ public:
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
-          int to_case(int),
-          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
+          int to_case(int)>
 struct TiDBLowerUpperUTF8Impl
 {
     static void vector(const ColumnString::Chars_t & data,

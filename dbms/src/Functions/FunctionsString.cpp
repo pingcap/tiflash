@@ -473,9 +473,8 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
-          int to_case(int),
-          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::vector(
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vector(
     const ColumnString::Chars_t & data,
     const IColumn::Offsets & offsets,
     ColumnString::Chars_t & res_data,
@@ -488,9 +487,8 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case,
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
-          int to_case(int),
-          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::vector_fixed(
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vector_fixed(
     const ColumnString::Chars_t & data,
     size_t /*n*/,
     ColumnString::Chars_t & res_data)
@@ -501,9 +499,8 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case,
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
-          int to_case(int),
-          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::constant(
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::constant(
     const std::string & data,
     std::string & res_data)
 {
@@ -515,9 +512,8 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case,
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
-          int to_case(int),
-          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::toCase(
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::toCase(
     const UInt8 *& src,
     const UInt8 * src_end,
     UInt8 *& dst)
@@ -542,9 +538,8 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case,
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
-          int to_case(int),
-          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::array(
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::array(
     const UInt8 * src,
     const UInt8 * src_end,
     UInt8 * dst)
@@ -3864,9 +3859,9 @@ using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty,
 // using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
 using FunctionLengthUTF8 = FunctionStringOrArrayToT<LengthUTF8Impl, NameLengthUTF8, UInt64>;
 using FunctionLowerBinary = FunctionStringToString<TiDBLowerUpperBinaryImpl, NameLowerBinary>;
-using FunctionLowerUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'A', 'Z', CharUtil::unicodeToLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;
+using FunctionLowerUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'A', 'Z', CharUtil::unicodeToLower>, NameLowerUTF8>;
 using FunctionUpperBinary = FunctionStringToString<TiDBLowerUpperBinaryImpl, NameUpperBinary>;
-using FunctionUpperUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'a', 'z', CharUtil::unicodeToUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;
+using FunctionUpperUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'a', 'z', CharUtil::unicodeToUpper>, NameUpperUTF8>;
 using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseUTF8, true>;
 using FunctionTrimUTF8 = TrimUTF8Impl<NameTrim, true, true>;
 using FunctionLTrimUTF8 = TrimUTF8Impl<NameLTrim, true, false>;
