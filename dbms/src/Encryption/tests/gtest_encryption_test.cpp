@@ -214,6 +214,11 @@ try
     ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
     ASSERT_EQ(2, file_stat.st_nlink);
 
+    // Remove the origin file
+    auto origin_file = Poco::File(file_path);
+    ASSERT_TRUE(origin_file.exists());
+    origin_file.remove();
+
     // Read and check
     char buff_read[buff_size];
     RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(linked_file_path, -1, nullptr);
@@ -264,6 +269,11 @@ try
     struct stat file_stat;
     ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
     ASSERT_EQ(2, file_stat.st_nlink);
+
+    // Remove the origin file
+    auto origin_file = Poco::File(file_path);
+    ASSERT_TRUE(origin_file.exists());
+    origin_file.remove();
 
     // Read and check
     char buff_read[buff_size];
