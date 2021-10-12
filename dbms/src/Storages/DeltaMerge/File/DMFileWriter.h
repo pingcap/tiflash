@@ -16,6 +16,9 @@ namespace DB
 {
 namespace DM
 {
+namespace detail
+{
+}
 class DMFileWriter
 {
 public:
@@ -31,39 +34,33 @@ public:
                FileProviderPtr & file_provider,
                const WriteLimiterPtr & write_limiter_,
                bool do_index)
-            : plain_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                                             dmfile->colDataPath(file_base_name),
-                                                                                             dmfile->encryptionDataPath(file_base_name),
-                                                                                             false,
-                                                                                             write_limiter_,
-                                                                                             dmfile->configuration->getChecksumAlgorithm(),
-                                                                                             dmfile->configuration->getChecksumFrameLength())
-                                               : createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                                             dmfile->colDataPath(file_base_name),
-                                                                                             dmfile->encryptionDataPath(file_base_name),
-                                                                                             false,
-                                                                                             write_limiter_,
-                                                                                             0,
-                                                                                             0,
-                                                                                             max_compress_block_size))
+            : plain_file(createWriteBufferFromFileBaseByFileProvider(
+                WriteBufferParameterTable{
+                    .has_checksum = dmfile->configuration.has_value(),
+                    .file_provider = file_provider,
+                    .filename = dmfile->colDataPath(file_base_name),
+                    .encryption_path = dmfile->encryptionDataPath(file_base_name),
+                    .create_new_encryption_info = false,
+                    .write_limiter = write_limiter_,
+                    .buffer_size = max_compress_block_size,
+                    .checksum_algorithm = dmfile->configuration ? dmfile->configuration->getChecksumAlgorithm() : ChecksumAlgo::None,
+                    .checksum_frame_size = dmfile->configuration ? dmfile->configuration->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE}))
             , plain_layer(*plain_file)
             , compressed_buf(dmfile->configuration
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(plain_layer, compression_settings))
                                  : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(plain_layer, compression_settings)))
             , original_layer(*compressed_buf)
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
-            , mark_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                                            dmfile->colMarkPath(file_base_name),
-                                                                                            dmfile->encryptionMarkPath(file_base_name),
-                                                                                            false,
-                                                                                            write_limiter_,
-                                                                                            dmfile->configuration->getChecksumAlgorithm(),
-                                                                                            dmfile->configuration->getChecksumFrameLength())
-                                              : std::make_unique<WriteBufferFromFileProvider>(file_provider,
-                                                                                              dmfile->colMarkPath(file_base_name),
-                                                                                              dmfile->encryptionMarkPath(file_base_name),
-                                                                                              false,
-                                                                                              write_limiter_))
+            , mark_file(createWriteBufferFromFileBaseByFileProvider(
+                  WriteBufferParameterTable{
+                      .has_checksum = dmfile->configuration.has_value(),
+                      .file_provider = file_provider,
+                      .filename = dmfile->colMarkPath(file_base_name),
+                      .encryption_path = dmfile->encryptionMarkPath(file_base_name),
+                      .create_new_encryption_info = false,
+                      .write_limiter = write_limiter_,
+                      .checksum_algorithm = dmfile->configuration ? dmfile->configuration->getChecksumAlgorithm() : ChecksumAlgo::None,
+                      .checksum_frame_size = dmfile->configuration ? dmfile->configuration->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE}))
         {
         }
 
@@ -210,7 +207,10 @@ public:
     void write(const Block & block, const BlockProperty & block_property);
     void finalize();
 
-    const DMFilePtr getFile() const { return dmfile; }
+    const DMFilePtr getFile() const
+    {
+        return dmfile;
+    }
 
 private:
     void finalizeColumn(ColId col_id, DataTypePtr type);
