@@ -206,7 +206,7 @@ private:
 
     static constexpr const char * ARCHIVE_SUBDIR = "archive";
 
-    void archivePageFiles(const PageFileSet & page_files_to_archive);
+    void archivePageFiles(const PageFileSet & page_files_to_archive, bool remove_size);
 
     std::tuple<size_t, size_t> //
     gcRemoveObsoleteData(PageFileSet &                        page_files,
