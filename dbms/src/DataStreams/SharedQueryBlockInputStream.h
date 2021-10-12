@@ -13,10 +13,15 @@ namespace DB
 class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    SharedQueryBlockInputStream(size_t clients [[maybe_unused]], const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
+    SharedQueryBlockInputStream(
+        size_t clients [[maybe_unused]],
+        const BlockInputStreamPtr & in_,
+        const LogWithPrefixPtr & log_,
+        bool run_in_thread_)
         : queue(1024)
         , log(getMPPTaskLog(log_, getName()))
         , in(in_)
+        , run_in_thread(run_in_thread_)
     {
         children.push_back(in);
     }
@@ -47,7 +52,10 @@ public:
         read_prefixed = true;
 
         /// Start reading thread.
-        thread = DefaultFiberPool::submit_job([this] { fetchBlocks(); });
+        if (run_in_thread)
+            thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
+        else
+            future = DefaultFiberPool::submit_job([this] { fetchBlocks(); });
     }
 
     void readSuffix() override
@@ -57,9 +65,18 @@ public:
         if (read_suffixed)
             return;
         read_suffixed = true;
+        queue.close();
 
-        if (thread.has_value())
-            thread.value().get();
+        if (run_in_thread)
+        {
+            if (thread.joinable())
+                thread.join();
+        }
+        else
+        {
+            if (future.has_value())
+                future.value().get();
+        }
         if (!exception_msg.empty())
             throw Exception(exception_msg);
     }
@@ -79,11 +96,13 @@ protected:
             {
                 throw Exception(exception_msg);
             }
-            if (isCancelled() || read_suffixed)
+            if (isCancelled())
                 return {};
             auto res = queue.pop_wait_for(block, try_action_timeout);
             if (res == boost::fibers::channel_op_status::success)
                 return block;
+            if (res == boost::fibers::channel_op_status::closed)
+                return {};
         }
     }
 
@@ -97,21 +116,23 @@ protected:
                 Block block = in->read();
                 while (true)
                 {
-                    if (isCancelled() || read_suffixed)
+                    if (isCancelled())
                     {
                         // Notify waiting client.
                         queue.close();
                         break;
                     }
                     auto res = queue.push_wait_for(block, try_action_timeout);
-                    if (res == boost::fibers::channel_op_status::success)
+                    if (res == boost::fibers::channel_op_status::success ||
+                        res == boost::fibers::channel_op_status::closed)
                         break;
                 }
 
-                if (!block)
+                if (!block || queue.is_closed())
                     break;
             }
-            in->readSuffix();
+            if (!isCancelled())
+                in->readSuffix();
         }
         catch (Exception & e)
         {
@@ -132,9 +153,11 @@ private:
 
     boost::fibers::buffered_channel<Block> queue;
 
+    bool run_in_thread;
     bool read_prefixed = false;
     bool read_suffixed = false;
 
+    std::optional<boost::fibers::future<void>> future;
     std::optional<boost::fibers::future<void>> thread;
     boost::fibers::mutex mutex;
 
