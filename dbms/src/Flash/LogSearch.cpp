@@ -405,13 +405,13 @@ bool FilterFileByDatetime(
     if (endsWith(path, gz_suffix))
     {
         if (path.size() <= gz_suffix.size() + date_format_example.size())
-            return false;
+            return true;
 
         auto date_str = std::string(path.end() - gz_suffix.size() - date_format_example.size(), path.end() - gz_suffix.size());
 
         if (auto ts = readApproxiTimestamp(date_str.data(), date_format); ts == -1)
         {
-            return false;
+            return true;
         }
         else if (ts < start_time)
         {
