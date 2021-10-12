@@ -52,7 +52,7 @@ int migrateEntry(const std::vector<std::string> & opts);
 } // namespace DTTool::Migrate
 
 extern "C" {
-void run_raftstore_proxy_ffi(int argc, const char * const * argv, const DB::EngineStoreServerHelper *);
+__attribute__((weak)) void run_raftstore_proxy_ffi(int argc, const char * const * argv, const DB::EngineStoreServerHelper *);
 }
 
 namespace DTTool
@@ -173,6 +173,10 @@ template <typename Func, typename Args>
 void * CLIService<Func, Args>::RaftStoreProxyRunner::runRaftStoreProxyFfi(void * pv)
 {
     auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
+    if (nullptr == run_raftstore_proxy_ffi)
+    {
+        throw DB::Exception("proxy is not available");
+    }
     run_raftstore_proxy_ffi(static_cast<int>(parms.conf.args.size()), parms.conf.args.data(), parms.helper);
     return nullptr;
 }
