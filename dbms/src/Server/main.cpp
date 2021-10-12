@@ -21,10 +21,11 @@
 #if ENABLE_CLICKHOUSE_LOCAL
 #include "LocalServer.h"
 #endif
-#if ENABLE_TIFLASH_DMTOOL
-#include <Server/DMTool/DMTool.h>
+#if ENABLE_TIFLASH_DTTOOL
+#include <Server/DTTool/DTTool.h>
 #endif
 #include <Common/StringUtils/StringUtils.h>
+#include <Server/DTTool/DTTool.h>
 
 /// Universal executable for various clickhouse applications
 #if ENABLE_CLICKHOUSE_SERVER
@@ -127,8 +128,8 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
     {"clang++", mainEntryClickHouseClang},
     {"lld", mainEntryClickHouseLLD},
 #endif
-#if ENABLE_TIFLASH_DMTOOL
-    {"dttool", DTTool::mainEntryTiFlashDMTool},
+#if ENABLE_TIFLASH_DTTOOL
+    {"dttool", DTTool::mainEntryTiFlashDTTool},
 #endif
     {"version", mainEntryVersion},
     {"errgen", mainExportError}};

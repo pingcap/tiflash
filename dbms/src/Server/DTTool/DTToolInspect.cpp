@@ -1,5 +1,5 @@
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Server/DMTool/DMTool.h>
+#include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 
 #include <boost/program_options.hpp>

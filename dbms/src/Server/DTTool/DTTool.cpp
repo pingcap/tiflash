@@ -1,4 +1,4 @@
-#include <Server/DMTool/DMTool.h>
+#include <Server/DTTool/DTTool.h>
 
 #include <boost/program_options.hpp>
 #include <iostream>
@@ -9,7 +9,7 @@ namespace DTTool
 {
 // clang-format off
 static constexpr char MAIN_HELP[] =
-    "Usage: dmtool <subcommand> [args]\n"
+    "Usage: dttool <subcommand> [args]\n"
     "Available Subcommands:\n"
     "  help        Print help message and exit.\n"
     "  migrate     Migrate dmfile version.\n"
@@ -17,7 +17,7 @@ static constexpr char MAIN_HELP[] =
     "  bench       Benchmark dmfile IO performance.";
 // clang-format on
 
-int mainEntryTiFlashDMTool(int argc, char ** argv)
+int mainEntryTiFlashDTTool(int argc, char ** argv)
 {
     bpo::options_description options{"Delta Merge Tools"};
     bpo::variables_map vm;

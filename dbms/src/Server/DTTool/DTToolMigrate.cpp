@@ -3,7 +3,7 @@
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/ChecksumBuffer.h>
 #include <IO/IOSWrapper.h>
-#include <Server/DMTool/DMTool.h>
+#include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <fcntl.h>
 

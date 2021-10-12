@@ -1,4 +1,4 @@
-#include <Server/DMTool/DMTool.h>
+#include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>

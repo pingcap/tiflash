@@ -17,7 +17,7 @@
 
 namespace DTTool
 {
-int mainEntryTiFlashDMTool(int argc, char ** argv);
+int mainEntryTiFlashDTTool(int argc, char ** argv);
 }
 
 namespace DTTool::Bench
