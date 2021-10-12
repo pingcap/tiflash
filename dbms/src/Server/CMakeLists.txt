@@ -61,7 +61,7 @@ add_library (clickhouse-format-lib ${SPLIT_SHARED} Format.cpp)
 target_link_libraries (clickhouse-format-lib dbms clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 
 add_library(tiflash-dmtool-lib ${SPLIT_SHARED} DMTool/DMTool.cpp DMTool/DMToolBench.cpp DMTool/DMToolMigrate.cpp DMTool/DMToolInspect.cpp)
-target_link_libraries(tiflash-dmtool-lib dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY} ${TIFLASH_PROXY_LIBRARY})
+target_link_libraries(tiflash-dmtool-lib dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_include_directories(tiflash-dmtool-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
 
 if (USE_EMBEDDED_COMPILER)
