@@ -92,34 +92,63 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
 
     if (encode_type == tipb::EncodeType::TypeCHBlock)
     {
-        mpp::MPPDataPacket packet;
-        if constexpr (for_last_response)
+        if (dag_context.isMPPTask()) /// broadcast data among TiFlash nodes in MPP
         {
-            serializeToPacket(packet, response);
-        }
-        if (input_blocks.empty())
-        {
+            mpp::MPPDataPacket packet;
+            if constexpr (for_last_response)
+            {
+                serializeToPacket(packet, response);
+            }
+            if (input_blocks.empty())
+            {
+                if constexpr (for_last_response)
+                {
+                    writer->write(packet);
+                }
+                return;
+            }
+            for (auto & block : input_blocks)
+            {
+                chunk_codec_stream->encode(block, 0, block.rows());
+                packet.add_chunks(chunk_codec_stream->getString());
+                chunk_codec_stream->clear();
+            }
             writer->write(packet);
-            return;
         }
-        for (auto & block : input_blocks)
+        else /// passthrough data to a non-TiFlash node, like sending data to TiSpark
         {
-            chunk_codec_stream->encode(block, 0, block.rows());
-            packet.add_chunks(chunk_codec_stream->getString());
-            chunk_codec_stream->clear();
+            response.set_encode_type(encode_type);
+            if (input_blocks.empty())
+            {
+                if constexpr (for_last_response)
+                {
+                    writer->write(response);
+                }
+                return;
+            }
+            for (auto & block : input_blocks)
+            {
+                chunk_codec_stream->encode(block, 0, block.rows());
+                auto dag_chunk = response.add_chunks();
+                dag_chunk->set_rows_data(chunk_codec_stream->getString());
+                chunk_codec_stream->clear();
+            }
+            writer->write(response);
         }
-        writer->write(packet);
     }
-    else
+    else /// passthrough data to a TiDB node
     {
         response.set_encode_type(encode_type);
-        Int64 current_records_num = 0;
         if (input_blocks.empty())
         {
-            writer->write(response);
+            if constexpr (for_last_response)
+            {
+                writer->write(response);
+            }
             return;
         }
 
+        Int64 current_records_num = 0;
         for (auto & block : input_blocks)
         {
             size_t rows = block.rows();
@@ -149,6 +178,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     }
 }
 
+/// hash exchanging data among only TiFlash nodes.
 template <class StreamWriterPtr>
 template <bool for_last_response>
 void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(
@@ -175,7 +205,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         }
         if constexpr (for_last_response)
         {
-            serializeToPacket(packet[i], response);
+            if (i == 0)
+                serializeToPacket(packet[i], response);
         }
     }
     if (input_blocks.empty())

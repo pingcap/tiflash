@@ -51,9 +51,19 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
 {
+    tunnels[0]->write(packet);
     auto tunnels_size = tunnels.size();
-    for (size_t i = 0; i < tunnels_size; ++i)
-        tunnels[i]->write(packet);
+    if (tunnels_size > 1)
+    {
+        if (!packet.data().empty())
+        {
+            packet.mutable_data()->clear();
+        }
+        for (size_t i = 1; i < tunnels_size; ++i)
+        {
+            tunnels[i]->write(packet);
+        }
+    }
 }
 
 template <typename Tunnel>
@@ -68,6 +78,9 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t pa
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partition_id)
 {
+    if (partition_id != 0 && !packet.data().empty())
+        packet.mutable_data()->clear();
+
     tunnels[partition_id]->write(packet);
 }
 
