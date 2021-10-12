@@ -52,11 +52,8 @@ template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
 {
     auto tunnels_size = tunnels.size();
-    if (tunnels_size > 1)
-    {
-        for (size_t i = 0; i < tunnels_size; ++i)
-            tunnels[i]->write(packet);
-    }
+    for (size_t i = 0; i < tunnels_size; ++i)
+        tunnels[i]->write(packet);
 }
 
 template <typename Tunnel>
