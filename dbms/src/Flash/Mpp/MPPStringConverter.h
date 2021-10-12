@@ -39,7 +39,7 @@ private:
     Context & context;
     const tipb::DAGRequest & dag_request;
 
-    size_t current_level;
+    size_t current_level = 0;
 };
 
 } // namespace DB
