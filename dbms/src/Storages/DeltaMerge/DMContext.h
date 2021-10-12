@@ -109,9 +109,7 @@ public:
     ReadLimiterPtr getReadLimiter() const { return db_context.getReadLimiter(); }
     DM::DMConfigurationOpt createChecksumConfig(bool is_single_file) const
     {
-        return !is_single_file && STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2
-            ? std::make_optional<DM::DMChecksumConfig>(db_context)
-            : std::nullopt;
+        return DMChecksumConfig::fromDBContext(db_context, is_single_file);
     }
 };
 

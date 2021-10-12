@@ -123,11 +123,9 @@ public:
 
     bool initStoreIfDataDirExist() override;
 
-    DM::DMConfigurationOpt createChecksumConfig(bool is_single_file)
+    DM::DMConfigurationOpt createChecksumConfig(bool is_single_file) const
     {
-        return !is_single_file && STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2
-            ? std::make_optional<DM::DMChecksumConfig>(global_context)
-            : std::nullopt;
+        return DM::DMChecksumConfig::fromDBContext(global_context, is_single_file);
     }
 
 #ifndef DBMS_PUBLIC_GTEST

@@ -29,11 +29,6 @@ public:
     {
     }
 
-    explicit DMChecksumConfig(const DB::Context & context)
-        : DMChecksumConfig({}, context.getSettingsRef().dt_checksum_frame_size.get(), context.getSettingsRef().dm_checksum_algorithm.get())
-    {
-    }
-
     friend std::ostream & operator<<(std::ostream &, const DMChecksumConfig &);
 
     [[nodiscard]] size_t getChecksumFrameLength() const { return checksum_frame_length; }
@@ -79,11 +74,18 @@ public:
         }
     }
 
+    [[maybe_unused]] static std::optional<DMChecksumConfig> fromDBContext(const DB::Context & context, bool is_single_file);
+
 private:
-    size_t checksum_frame_length; // the length of checksum frame
-    DB::ChecksumAlgo checksum_algorithm; // the algorithm of checksum
-    std::map<std::string, std::string> embedded_checksum; // special checksums for meta files
-    std::map<std::string, std::string> debug_info; // debugging information
+    size_t checksum_frame_length; ///< the length of checksum frame
+    DB::ChecksumAlgo checksum_algorithm; ///< the algorithm of checksum
+    std::map<std::string, std::string> embedded_checksum; ///< special checksums for meta files
+    std::map<std::string, std::string> debug_info; ///< debugging information
+
+    explicit DMChecksumConfig(const DB::Context & context)
+        : DMChecksumConfig({}, context.getSettingsRef().dt_checksum_frame_size.get(), context.getSettingsRef().dt_checksum_algorithm.get())
+    {
+    }
 };
 
 
