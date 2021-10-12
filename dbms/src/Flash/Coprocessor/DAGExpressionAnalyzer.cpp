@@ -969,14 +969,15 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
     // For TimeZone
     tipb::Expr tz_expr;
     constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
-    String tz_col = getActions(tz_expr, actions);;
+    String tz_col = getActions(tz_expr, actions);
+    ;
     String timezone_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
 
     // For Duration
     String fsp_col;
-    String dur_func_name = "FunctionConvertDurationFromNanos";
+    static String dur_func_name = "FunctionConvertDurationFromNanos";
     auto columns = query_block.source->tbl_scan().columns();
-    for (size_t i = 0; i < need_cast_column.size(); i++)
+    for (size_t i = 0; i < need_cast_column.size(); ++i)
     {
         if (context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTS::AppendTimeZoneCast)
         {
@@ -1011,10 +1012,10 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
 }
 
 String DAGExpressionAnalyzer::appendDurationCast(
-        const String & fsp_expr,
-        const String & dur_expr,
-        const String & func_name,
-        ExpressionActionsPtr & actions)
+    const String & fsp_expr,
+    const String & dur_expr,
+    const String & func_name,
+    ExpressionActionsPtr & actions)
 {
     String cast_expr_name = applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
     return cast_expr_name;
