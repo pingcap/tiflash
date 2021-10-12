@@ -67,8 +67,7 @@ using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 
 class DMFile_Test : public DB::base::TiFlashStorageTestBasic
-    , //
-                    public testing::WithParamInterface<DMFileMode>
+    , public testing::WithParamInterface<DMFileMode>
 {
 public:
     DMFile_Test()
