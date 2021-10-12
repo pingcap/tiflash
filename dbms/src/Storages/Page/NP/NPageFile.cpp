@@ -1,30 +1,37 @@
 #include "NPageFile.h"
 
+#include <Poco/File.h>
+#include <Storages/Page/PageUtil.h>
+#include <stdlib.h>
+
 #include "PageSpec.h"
 #include "pagemap/BitMap.h"
-#include <Poco/File.h>
-#include <stdlib.h>
-#include <Storages/Page/PageUtil.h>
 
 namespace DB
 {
-
-NPageFile::NPageFile(String path_, FileProviderPtr file_provider_) 
+NPageFile::NPageFile(String path_, FileProviderPtr file_provider_)
     : file_provider{file_provider_}
     , path(path_)
     , log(&Poco::Logger::get("NewPageStorage"))
     , versioned_page_entries("NewPageStorage", version_set_config, log)
 {
+    if (Poco::File page_file_dir(path); !page_file_dir.exists())
+    {
+        page_file_dir.createDirectories();
+    }
+
     if (Poco::File page_file_data(path + PAGE_FILE_DATA); !page_file_data.exists())
     {
         page_file_data.createFile();
     }
 
-    // TBD: add a V3 magic number 
+    // TBD: add a V3 magic number
     if (Poco::File page_file_meta(path + PAGE_FILE_META); !page_file_meta.exists())
     {
         page_file_meta.createFile();
-    } else {
+    }
+    else
+    {
         meta_position = page_file_meta.getSize();
     }
 
@@ -45,13 +52,11 @@ NPageFile::NPageFile(String path_, FileProviderPtr file_provider_)
 
     data_reader = file_provider->newRandomAccessFile(
         path + PAGE_FILE_DATA,
-        EncryptionPath(path + PAGE_FILE_DATA, "")
-    );
+        EncryptionPath(path + PAGE_FILE_DATA, ""));
 
     meta_reader = file_provider->newRandomAccessFile(
         path + PAGE_FILE_META,
-        EncryptionPath(path + PAGE_FILE_META, "")
-    );
+        EncryptionPath(path + PAGE_FILE_META, ""));
 
     DB::MVCC::PageEntityRmHandler handler = [this](const DB::PageEntry & entry) {
         if (entry.size != 0)
@@ -75,7 +80,7 @@ void NPageFile::write(WriteBatch && write_batch)
     auto & writes = write_batch.getWrites();
     size_t write_batch_size = writes.size();
 
-    if (write_batch_size == 0 )
+    if (write_batch_size == 0)
     {
         return;
     }
@@ -90,7 +95,8 @@ void NPageFile::write(WriteBatch && write_batch)
     {
         total_data_sizes += write.size;
         data_sizes[index++] = write.size;
-        if (write.type == WriteBatch::WriteType::PUT || write.type == WriteBatch::WriteType::UPSERT){
+        if (write.type == WriteBatch::WriteType::PUT || write.type == WriteBatch::WriteType::UPSERT)
+        {
             meta_write_bytes += write.offsets.size() * sizeof(PFMetaFieldOffset);
         }
 
@@ -101,19 +107,20 @@ void NPageFile::write(WriteBatch && write_batch)
     /* page_map->getDataRange(data_sizes, write_batch_size, offsets_in_file, true); */
 
     auto offset_begin = page_map->getDataRange(total_data_sizes, true);
-    if (offset_begin != UINT64_MAX){
+    if (offset_begin != UINT64_MAX)
+    {
         page_map->splitDataInRange(data_sizes, write_batch_size, offsets_in_file, offset_begin, total_data_sizes);
     }
 
     char * meta_buffer = (char *)alloc(meta_write_bytes);
     char * data_buffer = (char *)alloc(total_data_sizes);
     SCOPE_EXIT({
-        free(meta_buffer,meta_write_bytes);
-        free(data_buffer,total_data_sizes);
+        free(meta_buffer, meta_write_bytes);
+        free(data_buffer, total_data_sizes);
     });
 
     char * meta_pos = meta_buffer;
-    auto header = PageUtil::cast<PFMetaHeader>(meta_pos); 
+    auto header = PageUtil::cast<PFMetaHeader>(meta_pos);
     header->bits.meta_byte_size = meta_write_bytes;
     header->bits.meta_seq_id = write_batch.getSequence();
     // TBD CRC
@@ -123,49 +130,52 @@ void NPageFile::write(WriteBatch && write_batch)
     index = 0;
     for (auto & write : writes)
     {
-        auto meta = PageUtil::cast<PFMeta>(meta_pos); 
+        auto meta = PageUtil::cast<PFMeta>(meta_pos);
         meta->pu.type = (UInt8)write.type;
         switch (write.type)
         {
-            case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT:{
-                meta->pu.page_id = write.page_id;
-                meta->pu.page_offset = offsets_in_file[index];
-                meta->pu.page_size = write.size;
-                meta->pu.field_offset_len = write.offsets.size();
-        
-                entry.offset = meta->pu.page_offset;
-                entry.size = write.size;
-                entry.field_offsets.swap(write.offsets);
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT:
+        {
+            meta->pu.page_id = write.page_id;
+            meta->pu.page_offset = offsets_in_file[index];
+            meta->pu.page_size = write.size;
+            meta->pu.field_offset_len = write.offsets.size();
 
-                for (size_t i = 0; i < entry.field_offsets.size(); ++i)
-                {
-                    auto field_offset = PageUtil::cast<PFMetaFieldOffset>(meta_pos);
-                    field_offset->bits.field_offset = (UInt64)entry.field_offsets[i].first;
-                }
+            entry.offset = meta->pu.page_offset;
+            entry.size = write.size;
+            entry.field_offsets.swap(write.offsets);
 
-                if (write.type == WriteBatch::WriteType::PUT)
-                    edit.put(write.page_id, entry);
-                else if (write.type == WriteBatch::WriteType::UPSERT)
-                    edit.upsertPage(write.page_id, entry);
-                break;
+            for (size_t i = 0; i < entry.field_offsets.size(); ++i)
+            {
+                auto field_offset = PageUtil::cast<PFMetaFieldOffset>(meta_pos);
+                field_offset->bits.field_offset = (UInt64)entry.field_offsets[i].first;
             }
-            case WriteBatch::WriteType::DEL:{
-                meta->del.page_id = write.page_id;
-                edit.del(write.page_id);
-                break;
-            }
-            case WriteBatch::WriteType::REF: {
-                meta->ref.page_id = write.page_id;
-                meta->ref.og_page_id = write.ori_page_id;
-                edit.ref(write.page_id, write.ori_page_id);
-                break;
-            }
+
+            if (write.type == WriteBatch::WriteType::PUT)
+                edit.put(write.page_id, entry);
+            else if (write.type == WriteBatch::WriteType::UPSERT)
+                edit.upsertPage(write.page_id, entry);
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            meta->del.page_id = write.page_id;
+            edit.del(write.page_id);
+            break;
+        }
+        case WriteBatch::WriteType::REF:
+        {
+            meta->ref.page_id = write.page_id;
+            meta->ref.og_page_id = write.ori_page_id;
+            edit.ref(write.page_id, write.ori_page_id);
+            break;
+        }
         }
         index++;
     }
 
-    for (size_t j = 0 ; j < write_batch_size ; j++)
+    for (size_t j = 0; j < write_batch_size; j++)
     {
         // std::cout << "buffer_need_write.size() : " << buffer_need_write.size() << std::endl;
         std::cout << "offsets_in_file[j] : " << offsets_in_file[j] << std::endl;
@@ -180,7 +190,7 @@ void NPageFile::write(WriteBatch && write_batch)
             if (data_sizes[i] != 0)
             {
                 // auto & buffer_need_write = writes[i].read_buffer->buffer();
-                
+
                 // Still need copy , because need compact data into single IO.
                 // it depends on we used un-align buffer.
                 // memcpy(data_buffer + range_move,buffer_need_write.begin(),buffer_need_write.size());
@@ -210,8 +220,8 @@ String NPageFile::getPath()
 
 void NPageFile::read(PageIdAndEntries & to_read, const PageHandler & handler)
 {
-    std::sort(to_read.begin(), to_read.end(), [](const PageIdAndEntry & a, const PageIdAndEntry & b) { 
-            return a.second.offset < b.second.offset;
+    std::sort(to_read.begin(), to_read.end(), [](const PageIdAndEntry & a, const PageIdAndEntry & b) {
+        return a.second.offset < b.second.offset;
     });
 
     size_t buf_size = 0;
@@ -257,7 +267,6 @@ void NPageFile::read(const std::vector<PageId> & page_ids, const PageHandler & h
     }
 
     read(to_read, handler);
-
 }
 
 void NPageFile::read(const PageId & page_id, const PageHandler & handler, SnapshotPtr snapshot)
@@ -274,4 +283,4 @@ void NPageFile::read(const PageId & page_id, const PageHandler & handler, Snapsh
     read(to_read, handler);
 }
 
-}
+} // namespace DB
