@@ -1137,8 +1137,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Trim2Args, "cast"},
     //{tipb::ScalarFuncSig::Trim3Args, "cast"},
     //{tipb::ScalarFuncSig::UnHex, "cast"},
-    {tipb::ScalarFuncSig::UpperUTF8, "upper"},
-    //{tipb::ScalarFuncSig::Upper, "upper"},
+    {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
+    {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
 
