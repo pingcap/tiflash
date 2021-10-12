@@ -138,6 +138,7 @@ protected:
             }
             if (!isCancelled())
                 in->readSuffix();
+            adaptive_yield();
         }
         catch (Exception & e)
         {

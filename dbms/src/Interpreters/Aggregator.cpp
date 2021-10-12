@@ -791,6 +791,8 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
         if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, no_more_keys))
             break;
+
+        adaptive_yield();
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
@@ -1132,6 +1134,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
             /// Select Arena to avoid race conditions
             Arena * arena = data_variants.aggregates_pools.at(thread_id).get();
             blocks.emplace_back(convertOneBucketToBlock(data_variants, method, arena, final, bucket));
+            adaptive_yield();
         }
         return blocks;
     };
@@ -1148,7 +1151,10 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
             tasks[thread_id] = std::packaged_task<BlocksList()>(
                 [thread_id, &converter] { return converter(thread_id); });
 
-            futures.push_back(DefaultFiberPool::submit_job([thread_id, &tasks] { tasks[thread_id](); }).value());
+            if (max_threads > 1)
+                futures.push_back(DefaultFiberPool::submit_job([thread_id, &tasks] { tasks[thread_id](); }).value());
+            else
+                tasks[thread_id]();
         }
     }
     catch (...)
@@ -1191,6 +1197,10 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     /// In what data structure is the data aggregated?
     if (data_variants.empty())
         return blocks;
+
+    if (data_variants.sizeWithoutOverflowRow() <= 100000 /// TODO Make a custom threshold.
+        || data_variants.isTwoLevel())
+        max_threads = 1;
 
     if (isCancelled())
         return BlocksList();
@@ -1864,7 +1874,7 @@ void NO_INLINE Aggregator::mergeWithoutKeyStreamsImpl(
 }
 
 
-void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t)
+void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t max_threads)
 {
     if (isCancelled())
         return;
@@ -1902,6 +1912,9 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
       */
     auto max_bucket = bucket_to_blocks.rbegin()->first;
     size_t has_two_level = max_bucket > 0;
+
+    if (total_input_rows <= 100000 || !has_two_level)
+        max_threads = 1;
 
     if (has_two_level)
     {
@@ -1952,6 +1965,8 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
                 APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
                 else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+
+                adaptive_yield();
             }
         };
 
@@ -1968,7 +1983,10 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
 
             auto task = std::bind(merge_bucket, bucket, aggregates_pool);
 
-            futures.push_back(DefaultFiberPool::submit_job(task).value());
+            if (max_threads > 1)
+                futures.push_back(DefaultFiberPool::submit_job(task).value());
+            else
+                task();
         }
 
         for (auto & f : futures)

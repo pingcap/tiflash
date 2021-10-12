@@ -205,6 +205,7 @@ private:
                     std::lock_guard lock(available_inputs_mutex);
                     available_inputs.push(unprepared_input);
                 }
+                adaptive_yield();
             }
 
             loop(thread_num);
@@ -231,7 +232,10 @@ private:
                 {
                     additional_input_at_end->readPrefix();
                     while (Block block = additional_input_at_end->read())
+                    {
                         publishPayload(additional_input_at_end, block, thread_num);
+                        adaptive_yield();
+                    }
                 }
                 catch (...)
                 {
@@ -296,6 +300,7 @@ private:
                 if (block)
                     publishPayload(input.in, block, thread_num);
             }
+            adaptive_yield();
         }
     }
 

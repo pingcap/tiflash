@@ -8,7 +8,16 @@
 #include <Common/BitHelpers.h>
 #include <boost/fiber/all.hpp> 
 
-        
+ inline thread_local bool g_run_in_fiber = false;
+
+inline void adaptive_yield()
+{
+    if (g_run_in_fiber)
+        boost::this_fiber::yield();
+    else
+        std::this_thread::yield();
+}
+       
 namespace FiberPool
 {
 
@@ -96,7 +105,6 @@ public:
     virtual void execute() = 0;
 };
 
-
 template<
     bool use_work_steal = true,
     template<typename> typename task_queue_t 
@@ -150,7 +158,7 @@ public:
 
     FiberPool(
             size_t no_of_threads,
-            size_t work_queue_size = 32)
+            size_t work_queue_size = 4096)
                 :   m_threads_no {no_of_threads},
             m_work_queue {work_queue_size}
     {
@@ -278,6 +286,7 @@ private:
      */
     void worker()
     {
+        g_run_in_fiber = true;
         setThreadName("FiberPool");
         // make this thread participate in shared_work 
         // fiber sharing
