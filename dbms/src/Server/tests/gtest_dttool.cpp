@@ -4,7 +4,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/PathPool.h>
-#include <TestUtils/TiFlashTestBasic.h>
+#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <ctime>
@@ -25,23 +25,20 @@ namespace DTTool::Inspect
 int inspectServiceMain(DB::Context & context, const InspectArgs & args);
 } // namespace DTTool::Inspect
 
-struct ManagedDMFile
+struct DTToolTest : public DB::base::TiFlashStorageTestBasic
 {
-    Poco::File dmfile_dir{};
-    Poco::File workdir_file{};
     DB::DM::DMFilePtr dmfile = nullptr;
-    ManagedDMFile(DB::Context & context)
+    static constexpr size_t column = 64;
+    static constexpr size_t size = 128;
+    static constexpr size_t field = 512;
+
+    void SetUp() override
     {
+        TiFlashStorageTestBasic::SetUp();
         using namespace DTTool::Bench;
-        static constexpr size_t column = 64;
-        static constexpr size_t size = 128;
-        static constexpr size_t field = 512;
-        auto current = ::time(nullptr);
+
         auto dev = std::random_device{};
         auto seed = dev();
-        auto workdir = fmt::format("/tmp/dttool-default-{}-{}", current, seed);
-        workdir_file = workdir;
-        workdir_file.createDirectory();
         auto engine = std::mt19937_64{seed};
         auto defines = DTTool::Bench::createColumnDefines(column);
         std::vector<DB::Block> blocks;
@@ -57,11 +54,11 @@ struct ManagedDMFile
             property.effective_num_rows = block_size;
             properties.push_back(property);
         }
-        auto path_pool = std::make_unique<DB::StoragePathPool>(context.getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, context, context.getSettingsRef());
+        auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
-            context,
+            *db_context,
             *path_pool,
             *storage_pool,
             /*hash_salt*/ 0,
@@ -69,12 +66,12 @@ struct ManagedDMFile
             dm_settings.not_compress_columns,
             false,
             1,
-            context.getSettingsRef());
+            db_context->getSettingsRef());
         // Write
         {
-            dmfile = DB::DM::DMFile::create(1, workdir, false, std::nullopt);
+            dmfile = DB::DM::DMFile::create(1, getTemporaryPath(), false, std::nullopt);
             {
-                auto stream = DB::DM::DMFileBlockOutputStream(context, dmfile, *defines);
+                auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);
                 stream.writePrefix();
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
@@ -83,32 +80,22 @@ struct ManagedDMFile
                 stream.writeSuffix();
             }
         }
-        dmfile_dir = Poco::File{workdir + "/dmf_1"};
-    }
-
-    ~ManagedDMFile()
-    {
-        dmfile.reset();
-        workdir_file.remove(true);
     }
 };
 
-TEST(DTToolMigrate, AllFileRecognizableOnDefault)
+
+TEST_F(DTToolTest, MigrationAllFileRecognizableOnDefault)
 {
-    auto context = DB::tests::TiFlashTestEnv::getContext();
-    ManagedDMFile file{context};
     std::vector<std::string> sub_files;
-    file.dmfile_dir.list(sub_files);
+    Poco::File(dmfile->path()).list(sub_files);
     for (auto & i : sub_files)
     {
-        EXPECT_TRUE(DTTool::Migrate::isRecognizable(*file.dmfile, i)) << " file: " << i;
+        EXPECT_TRUE(DTTool::Migrate::isRecognizable(*dmfile, i)) << " file: " << i;
     }
 }
 
-TEST(DTToolMigrate, MigrationSuccess)
+TEST_F(DTToolTest, MigrationSuccess)
 {
-    auto context = DB::tests::TiFlashTestEnv::getContext();
-    ManagedDMFile file{context};
     {
         auto args = DTTool::Migrate::MigrateArgs{
             .no_keep = false,
@@ -117,15 +104,15 @@ TEST(DTToolMigrate, MigrationSuccess)
             .version = 2,
             .frame = DBMS_DEFAULT_BUFFER_SIZE,
             .algorithm = DB::ChecksumAlgo::XXH3,
-            .workdir = file.workdir_file.path()};
+            .workdir = getTemporaryPath()};
 
-        EXPECT_EQ(DTTool::Migrate::migrateServiceMain(context, args), 0);
+        EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, args), 0);
     }
     {
         auto args = DTTool::Inspect::InspectArgs{
             .check = true,
             .file_id = 1,
-            .workdir = file.workdir_file.path()};
-        EXPECT_EQ(DTTool::Inspect::inspectServiceMain(context, args), 0);
+            .workdir = getTemporaryPath()};
+        EXPECT_EQ(DTTool::Inspect::inspectServiceMain(*db_context, args), 0);
     }
 }
