@@ -154,6 +154,7 @@ if (NOT ARCH_ARM)
 endif()
 
 target_link_libraries (clickhouse_common_io
+    PUBLIC
     common
     string_utils
     ${LINK_LIBRARIES_ONLY_ON_X86_64}
@@ -170,6 +171,7 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::core
     prometheus-cpp::push
     prometheus-cpp::pull
+    cpptoml
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 
@@ -203,7 +205,7 @@ if (Poco_Data_FOUND AND NOT USE_INTERNAL_POCO_LIBRARY)
 endif()
 
 if (Poco_NetSSL_FOUND)
-    target_link_libraries (clickhouse_common_io ${Poco_NetSSL_LIBRARY})
+    target_link_libraries (clickhouse_common_io PRIVATE ${Poco_NetSSL_LIBRARY})
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})

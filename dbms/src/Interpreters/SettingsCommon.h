@@ -5,6 +5,7 @@
 #include <Core/Field.h>
 #include <DataStreams/SizeLimits.h>
 #include <IO/CompressedStream.h>
+#include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Timespan.h>
@@ -22,6 +23,7 @@ extern const int UNKNOWN_TOTALS_MODE;
 extern const int UNKNOWN_COMPRESSION_METHOD;
 extern const int UNKNOWN_DISTRIBUTED_PRODUCT_MODE;
 extern const int UNKNOWN_GLOBAL_SUBQUERIES_METHOD;
+extern const int CANNOT_PARSE_BOOL;
 } // namespace ErrorCodes
 
 
@@ -41,7 +43,7 @@ public:
     SettingInt(IntType x = 0)
         : value(x)
     {}
-    SettingInt(const SettingInt & setting) { value.store(setting.value.load()); }
+    SettingInt(const SettingInt & setting);
 
     operator IntType() const { return value.load(); }
     SettingInt & operator=(IntType x)
@@ -55,51 +57,28 @@ public:
         return *this;
     }
 
-    String toString() const
-    {
-        return DB::toString(value.load());
-    }
+    String toString() const;
 
-    void set(IntType x)
-    {
-        value.store(x);
-        changed = true;
-    }
+    void set(IntType x);
 
-    void set(const Field & x)
-    {
-        set(applyVisitor(FieldVisitorConvertToNumber<IntType>(), x));
-    }
+    void set(const Field & x);
 
-    void set(const String & x)
-    {
-        set(parse<IntType>(x));
-    }
+    void set(const String & x);
 
-    void set(ReadBuffer & buf)
-    {
-        IntType x = 0;
-        readVarT(x, buf);
-        set(x);
-    }
+    void set(ReadBuffer & buf);
 
-    IntType get() const
-    {
-        return value.load();
-    }
+    IntType get() const;
 
-    void write(WriteBuffer & buf) const
-    {
-        writeVarT(value.load(), buf);
-    }
+    void write(WriteBuffer & buf) const;
 
 private:
     std::atomic<IntType> value;
 };
 
+
 using SettingUInt64 = SettingInt<UInt64>;
 using SettingInt64 = SettingInt<Int64>;
-using SettingBool = SettingUInt64;
+using SettingBool = SettingInt<bool>;
 
 
 /** Unlike SettingUInt64, supports the value of 'auto' - the number of processor cores without taking into account SMT.

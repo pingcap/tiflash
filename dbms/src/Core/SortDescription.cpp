@@ -1,13 +1,13 @@
-#include <sstream>
-#include <Core/SortDescription.h>
 #include <Columns/Collator.h>
+#include <Core/SortDescription.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
+
+#include <sstream>
 
 
 namespace DB
 {
-
 std::string SortColumnDescription::getID() const
 {
     WriteBufferFromOwnString out;
@@ -17,4 +17,4 @@ std::string SortColumnDescription::getID() const
     return out.str();
 }
 
-}
+} // namespace DB

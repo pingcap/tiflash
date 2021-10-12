@@ -13,6 +13,10 @@ extern const Metric OpenFileForRead;
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
 namespace DM
 {
 DMFileReader::Stream::Stream(DMFileReader & reader, //
@@ -146,7 +150,7 @@ DMFileReader::DMFileReader(const DMFilePtr & dmfile_,
                            bool enable_clean_read_,
                            UInt64 max_read_version_,
                            // filters
-                           const RowKeyRange & rowkey_range_,
+                           const RowKeyRanges & rowkey_ranges_,
                            const RSOperatorPtr & filter_,
                            const IdSetPtr & read_packs_,
                            // caches
@@ -165,10 +169,9 @@ DMFileReader::DMFileReader(const DMFilePtr & dmfile_,
     , read_columns(read_columns_)
     , enable_clean_read(enable_clean_read_)
     , max_read_version(max_read_version_)
-    , pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_range_, filter_, read_packs_, file_provider_, read_limiter)
+    , pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_ranges_, filter_, read_packs_, file_provider_, read_limiter)
     , handle_res(pack_filter.getHandleRes())
     , use_packs(pack_filter.getUsePacks())
-    , is_common_handle(rowkey_range_.is_common_handle)
     , skip_packs_by_column(read_columns.size(), 0)
     , hash_salt(hash_salt_)
     , mark_cache(mark_cache_)
@@ -184,7 +187,11 @@ DMFileReader::DMFileReader(const DMFilePtr & dmfile_,
         throw Exception("DMFile [" + DB::toString(dmfile->fileId())
                         + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
 
+    if (unlikely(rowkey_ranges_.empty()))
+        throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
+
     pack_filter.init();
+    is_common_handle = rowkey_ranges_[0].is_common_handle;
 
     for (const auto & cd : read_columns)
     {

@@ -1,16 +1,25 @@
 #include <Columns/ColumnArray.h>
 #include <Common/UTF8Helpers.h>
+#include <Common/Volnitsky.h>
+#include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
+#include <Functions/FunctionsRound.h>
 #include <Functions/FunctionsString.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
+#include <Functions/StringUtil.h>
+#include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
+#include <fmt/format.h>
+#include <fmt/printf.h>
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
 #include <thread>
-
 
 #if __SSE2__
 #include <emmintrin.h>
@@ -3022,83 +3031,685 @@ private:
     const Context & context;
 };
 
+class FunctionSubStringIndex : public IFunction
+{
+public:
+    static constexpr auto name = "substringIndex";
+    explicit FunctionSubStringIndex(const Context & context_)
+        : context(context_)
+    {}
 
-struct NameEmpty
-{
-    static constexpr auto name = "empty";
+    static FunctionPtr create(const Context & context)
+    {
+        return std::make_shared<FunctionSubStringIndex>(context);
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 3; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 3)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be {}.", getName(), toString(arguments.size()), 3),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!arguments[1]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!arguments[2]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeSubStringIndex<UInt8>(block, arguments, result)
+            || executeSubStringIndex<UInt16>(block, arguments, result)
+            || executeSubStringIndex<UInt32>(block, arguments, result)
+            || executeSubStringIndex<UInt64>(block, arguments, result)
+            || executeSubStringIndex<Int8>(block, arguments, result)
+            || executeSubStringIndex<Int16>(block, arguments, result)
+            || executeSubStringIndex<Int32>(block, arguments, result)
+            || executeSubStringIndex<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function  {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    const Context & context;
+
+    template <typename IntType>
+    bool executeSubStringIndex(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        ColumnPtr & column_str = block.getByPosition(arguments[0]).column;
+        ColumnPtr & column_delim = block.getByPosition(arguments[1]).column;
+        ColumnPtr & column_count = block.getByPosition(arguments[2]).column;
+        ColumnWithTypeAndName & column_result = block.getByPosition(result);
+
+        bool delim_const = column_delim->isColumnConst();
+        bool count_const = column_count->isColumnConst();
+
+        // TODO: differentiate vector and const
+        column_str = column_str->isColumnConst() ? column_str->convertToFullColumnIfConst() : column_str;
+        if (delim_const && count_const)
+        {
+            const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
+            const ColumnConst * delim_col = checkAndGetColumnConst<ColumnString>(column_delim.get());
+            const ColumnConst * count_col = checkAndGetColumnConst<ColumnVector<IntType>>(column_count.get());
+            if (str_col == nullptr || delim_col == nullptr || count_col == nullptr)
+            {
+                return false;
+            }
+            auto col_res = ColumnString::create();
+            IntType count = count_col->getValue<IntType>();
+            vectorConstConst(
+                str_col->getChars(),
+                str_col->getOffsets(),
+                delim_col->getValue<String>(),
+                accurate::lessOp(INT64_MAX, count) ? INT64_MAX : count,
+                col_res->getChars(),
+                col_res->getOffsets());
+            column_result.column = std::move(col_res);
+        }
+        else
+        {
+            column_delim = column_delim->isColumnConst() ? column_delim->convertToFullColumnIfConst() : column_delim;
+            column_count = column_count->isColumnConst() ? column_count->convertToFullColumnIfConst() : column_count;
+            const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
+            const ColumnString * delim_col = checkAndGetColumn<ColumnString>(column_delim.get());
+            const ColumnVector<IntType> * count_col = checkAndGetColumn<ColumnVector<IntType>>(column_count.get());
+            if (str_col == nullptr || delim_col == nullptr || count_col == nullptr)
+            {
+                return false;
+            }
+            auto col_res = ColumnString::create();
+            vectorVectorVector(
+                str_col->getChars(),
+                str_col->getOffsets(),
+                delim_col->getChars(),
+                delim_col->getOffsets(),
+                count_col->getData(),
+                col_res->getChars(),
+                col_res->getOffsets());
+            column_result.column = std::move(col_res);
+        }
+
+        return true;
+    }
+
+    static void vectorConstConst(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const std::string & delim,
+        const Int64 needCount,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_offsets.resize(offsets.size());
+        if (delim.empty() || needCount == 0)
+        {
+            // All result is ""
+            res_data.resize(offsets.size());
+            for (size_t i = 0; i < offsets.size(); ++i)
+            {
+                res_data[i] = '\0';
+                res_offsets[i] = i + 1;
+            }
+            return;
+        }
+
+        ColumnString::Offset res_offset = 0;
+        Volnitsky searcher(delim.c_str(), delim.size(), 0);
+        res_data.reserve(data.size());
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i) - 1;
+
+            subStringIndex(&data[data_offset], data_size, &searcher, delim.size(), needCount, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    template <typename IntType>
+    static void vectorVectorVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const ColumnString::Chars_t & delim_data,
+        const ColumnString::Offsets & delim_offsets,
+        const PaddedPODArray<IntType> & needCount,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        res_offsets.resize(offsets.size());
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i) - 1;
+            auto delim_offset = StringUtil::offsetAt(delim_offsets, i);
+            auto delim_size = StringUtil::sizeAt(delim_offsets, i) - 1; // ignore the trailing zero.
+            Int64 count = accurate::lessOp(INT64_MAX, needCount[i]) ? INT64_MAX : needCount[i];
+
+            if (delim_size == 0 || count == 0)
+            {
+                res_data.resize(res_data.size() + 1);
+                res_data[res_offset] = '\0';
+                ++res_offset;
+                res_offsets[i] = res_offset;
+                continue;
+            }
+            Volnitsky searcher(reinterpret_cast<const char *>(&delim_data[delim_offset]), delim_size, data_size);
+            subStringIndex(&data[data_offset], data_size, &searcher, delim_size, count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    static void subStringIndex(
+        const UInt8 * data_begin,
+        size_t data_size,
+        Volnitsky * delim_searcher,
+        size_t delim_size,
+        Int64 count,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset)
+    {
+        const UInt8 * begin = data_begin;
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data_size;
+        assert(delim_size != 0);
+        if (count > 0)
+        {
+            // Fast exit when count * delim_size > data_size
+            if (static_cast<Int64>(data_size / delim_size) < count)
+            {
+                copyDataToResult(res_data, res_offset, begin, end);
+                return;
+            }
+            while (pos < end)
+            {
+                const UInt8 * match = delim_searcher->search(pos, end - pos);
+                --count;
+                if (match == end || count == 0)
+                {
+                    copyDataToResult(res_data, res_offset, begin, match);
+                    break;
+                }
+                pos = match + delim_size;
+            }
+        }
+        else
+        {
+            std::vector<const UInt8 *> delim_pos;
+            // Fast exit when count * delim_size > data_size, or count == INT64_MIN
+            if (count == std::numeric_limits<Int64>::min() || static_cast<Int64>(data_size / delim_size) < -count)
+            {
+                copyDataToResult(res_data, res_offset, begin, end);
+                return;
+            }
+            count = -count;
+            // When count is negative, we need split string by delim.
+            while (pos < end)
+            {
+                const UInt8 * match = delim_searcher->search(pos, end - pos);
+                if (match == end)
+                {
+                    break;
+                }
+                delim_pos.push_back(match);
+                pos = match + delim_size;
+            }
+
+            if (count <= static_cast<Int64>(delim_pos.size()))
+            {
+                auto delim_count = delim_pos.size();
+                const UInt8 * match = delim_pos[delim_count - count];
+                begin = match + delim_size;
+            }
+            copyDataToResult(res_data, res_offset, begin, end);
+        }
+    }
+
+    static void copyDataToResult(
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset,
+        const UInt8 * begin,
+        const UInt8 * end)
+    {
+        res_data.resize(res_data.size() + (end - begin + 1));
+        memcpy(&res_data[res_offset], begin, end - begin);
+        res_data[res_offset + (end - begin)] = '\0';
+        res_offset += end - begin + 1;
+    }
 };
-struct NameNotEmpty
+
+template <typename Name, typename Format>
+class FormatImpl : public IFunction
 {
-    static constexpr auto name = "notEmpty";
+public:
+    static constexpr auto name = Name::name;
+    explicit FormatImpl(const Context & context_)
+        : context(context_)
+    {}
+
+    static FunctionPtr create(const Context & context_)
+    {
+        return std::make_shared<FormatImpl>(context_);
+    }
+
+    String getName() const override { return name; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto first_argument = arguments[0];
+        if (!first_argument->isNumber() && !first_argument->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (!arguments[1]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    /// string format(number/decimal, int/uint)
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & number_base_type = block.getByPosition(arguments[0]).type;
+        const auto & precision_base_type = block.getByPosition(arguments[1]).type;
+
+        auto col_res = ColumnString::create();
+        auto val_num = block.getByPosition(arguments[0]).column->size();
+
+        bool is_types_valid = getNumberType(number_base_type, [&](const auto & number_type, bool) {
+            using NumberType = std::decay_t<decltype(number_type)>;
+            using NumberFieldType = typename NumberType::FieldType;
+            using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
+            const auto * number_raw = block.getByPosition(arguments[0]).column.get();
+            TiDBDecimalRoundInfo info{number_type, number_type};
+
+            return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
+                using PrecisionType = std::decay_t<decltype(precision_type)>;
+                using PrecisionFieldType = typename PrecisionType::FieldType;
+                using PrecisionColVec = ColumnVector<PrecisionFieldType>;
+                const auto * precision_raw = block.getByPosition(arguments[1]).column.get();
+
+                if (const auto * col0_const = checkAndGetColumnConst<NumberColVec>(number_raw))
+                {
+                    const NumberFieldType & const_number = col0_const->template getValue<NumberFieldType>();
+
+                    if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
+                    {
+                        const auto & precision_array = col1_column->getData();
+                        for (size_t i = 0; i != val_num; ++i)
+                        {
+                            size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
+                            format(const_number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
+                        }
+                    }
+                    else
+                        return false;
+                }
+                else if (const auto * col0_column = checkAndGetColumn<NumberColVec>(number_raw))
+                {
+                    if (const auto * col1_const = checkAndGetColumnConst<PrecisionColVec>(precision_raw))
+                    {
+                        size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<PrecisionFieldType>());
+                        for (const auto & number : col0_column->getData())
+                            format(number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
+                    }
+                    else if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
+                    {
+                        const auto & number_array = col0_column->getData();
+                        const auto & precision_array = col1_column->getData();
+                        for (size_t i = 0; i != val_num; ++i)
+                        {
+                            size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
+                            format(number_array[i], max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
+                        }
+                    }
+                    else
+                        return false;
+                }
+                else
+                    return false;
+
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            });
+        });
+
+        if (!is_types_valid)
+            throw Exception(
+                fmt::format("Illegal types {}, {} arguments of function {}", number_base_type->getName(), precision_base_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    const Context & context;
+
+    /// format_max_decimals limits the maximum number of decimal digits for result of
+    /// function `format`, this value is same as `FORMAT_MAX_DECIMALS` in MySQL source code.
+    static constexpr size_t format_max_decimals = 30;
+
+    template <typename F>
+    static bool getNumberType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256,
+            DataTypeFloat32,
+            DataTypeFloat64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename F>
+    static bool getPrecisionType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename T>
+    static size_t getMaxNumDecimals(T precision)
+    {
+        static_assert(std::is_integral_v<T>);
+        if (accurate::lessOrEqualsOp(precision, 0))
+            return 0;
+        return std::min(static_cast<size_t>(precision), format_max_decimals);
+    }
+
+    template <typename T>
+    static T round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    {
+        if constexpr (IsDecimal<T>)
+            return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
+        else if constexpr (std::is_floating_point_v<T>)
+            return TiDBFloatingRound<T, T>::eval(number, max_num_decimals);
+        else
+        {
+            static_assert(std::is_integral_v<T>);
+            return number;
+        }
+    }
+
+    template <typename T>
+    static std::string number2Str(T number, const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    {
+        if constexpr (IsDecimal<T>)
+            return number.toString(info.output_scale);
+        else
+        {
+            static_assert(std::is_floating_point_v<T> || std::is_integral_v<T>);
+            return fmt::format("{}", number);
+        }
+    }
+
+    static void copyFromBuffer(const std::string & buffer, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
+    {
+        const size_t old_size = res_data.size();
+        const size_t size_to_append = buffer.size() + 1;
+        const size_t new_size = old_size + size_to_append;
+
+        res_data.resize(new_size);
+        memcpy(&res_data[old_size], buffer.c_str(), size_to_append);
+        res_offsets.push_back(new_size);
+    }
+
+    template <typename T>
+    static void format(
+        T number,
+        size_t max_num_decimals,
+        const TiDBDecimalRoundInfo & info,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        T round_number = round(number, max_num_decimals, info);
+        std::string round_number_str = number2Str(round_number, info);
+        std::string buffer = Format::apply(round_number_str, max_num_decimals);
+        copyFromBuffer(buffer, res_data, res_offsets);
+    }
 };
-struct NameLength
+
+struct FormatWithEnUS
 {
-    static constexpr auto name = "length";
+    static std::string apply(const std::string & number, size_t precision)
+    {
+        std::string buffer;
+        size_t number_part_start = 0;
+        if (number[0] == '-')
+        {
+            buffer += '-';
+            number_part_start = 1;
+        }
+
+        auto point_index = number.find('.');
+        if (point_index == std::string::npos)
+            point_index = number.size();
+
+        /// a comma can be used to group 3 digits in en_US locale, such as 12,345,678.00
+        constexpr int digit_grouping_size = 3;
+        constexpr char comma = ',';
+        auto integer_part_size = point_index - number_part_start;
+        const auto remainder = integer_part_size % digit_grouping_size;
+        auto integer_part_pos = number.cbegin() + number_part_start;
+        if (remainder != 0)
+        {
+            buffer.append(integer_part_pos, integer_part_pos + remainder);
+            buffer += comma;
+            integer_part_pos += remainder;
+        }
+        const auto integer_part_end = number.cbegin() + point_index;
+        for (; integer_part_pos != integer_part_end; integer_part_pos += digit_grouping_size)
+        {
+            buffer.append(integer_part_pos, integer_part_pos + digit_grouping_size);
+            buffer += comma;
+        }
+        buffer.pop_back();
+
+        if (precision > 0)
+        {
+            buffer += '.';
+            if (point_index == number.size()) /// no decimal part
+                buffer.append(precision, '0');
+            else
+            {
+                const auto decimal_part_size = number.size() - point_index - 1;
+                const auto decimal_part_start = integer_part_end + 1;
+                if (decimal_part_size >= precision)
+                    buffer.append(decimal_part_start, decimal_part_start + precision);
+                else
+                    buffer.append(decimal_part_start, number.cend()).append(precision - decimal_part_size, '0');
+            }
+        }
+        return buffer;
+    }
 };
-struct NameLengthUTF8
+
+class FunctionFormatWithLocale : public IFunction
 {
-    static constexpr auto name = "lengthUTF8";
+public:
+    struct NameFormatWithLocale
+    {
+        static constexpr auto name = "formatWithLocale";
+    };
+    template <typename Format>
+    using FormatImpl_t = FormatImpl<NameFormatWithLocale, Format>;
+
+    static constexpr auto name = NameFormatWithLocale::name;
+    explicit FunctionFormatWithLocale(const Context & context_)
+        : context(checkDagContextIsValid(context_))
+    {}
+
+    static FunctionPtr create(const Context & context_)
+    {
+        return std::make_shared<FunctionFormatWithLocale>(context_);
+    }
+
+    String getName() const override { return name; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+
+    size_t getNumberOfArguments() const override { return 3; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isNumber() && !first_argument->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        auto second_argument = removeNullable(arguments[1]);
+        if (!second_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", second_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        auto third_argument = removeNullable(arguments[2]);
+        if (!third_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", third_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        auto return_type = std::make_shared<DataTypeString>();
+        return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto * locale_raw = block.getByPosition(arguments[2]).column.get();
+        handleLocale(locale_raw);
+
+        /// TODO support switching different locale in a block.
+        static DefaultExecutable forward_function{std::make_shared<FormatImpl_t<FormatWithEnUS>>(context)};
+        const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
+        forward_function.execute(block, forward_arguments, result);
+    }
+
+private:
+    const Context & context;
+
+    /// Append warning when locale is not 'en_US'.
+    /// TODO support other locales after tidb has supported them.
+    void handleLocale(const IColumn * locale_raw) const
+    {
+        static const std::string supported_locale = "en_US";
+        using LocaleColVec = ColumnString;
+        const auto column_size = locale_raw->size();
+        if (const auto * locale_const = checkAndGetColumnConst<LocaleColVec>(locale_raw, true))
+        {
+            if (locale_const->onlyNull())
+            {
+                const auto & msg = genWarningMsg("NULL");
+                for (size_t i = 0; i != column_size; ++i)
+                    context.getDAGContext()->appendWarning(msg);
+            }
+            else
+            {
+                const String value = locale_const->getValue<String>();
+                if (!boost::iequals(value, supported_locale))
+                {
+                    const auto & msg = genWarningMsg(value);
+                    for (size_t i = 0; i != column_size; ++i)
+                        context.getDAGContext()->appendWarning(msg);
+                }
+            }
+        }
+        else
+        {
+            Field locale_field;
+            for (size_t i = 0; i != column_size; ++i)
+            {
+                locale_raw->get(i, locale_field);
+                if (locale_field.isNull())
+                    context.getDAGContext()->appendWarning(genWarningMsg("NULL"));
+                else
+                {
+                    String value = locale_field.get<String>();
+                    if (!boost::iequals(value, supported_locale))
+                        context.getDAGContext()->appendWarning(genWarningMsg(value));
+                }
+            }
+        }
+    }
+
+    static std::string genWarningMsg(const std::string & value)
+    {
+        return fmt::format("Unknown locale: \'{}\'", value);
+    }
+
+    static const Context & checkDagContextIsValid(const Context & context_)
+    {
+        if (!context_.getDAGContext())
+            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+        return context_;
+    }
 };
-struct NameLower
-{
-    static constexpr auto name = "lower";
-};
-struct NameUpper
-{
-    static constexpr auto name = "upper";
-};
-struct NameReverseUTF8
-{
-    static constexpr auto name = "reverseUTF8";
-};
-struct NameTrim
-{
-    static constexpr auto name = "trim";
-};
-struct NameLTrim
-{
-    static constexpr auto name = "ltrim";
-};
-struct NameRTrim
-{
-    static constexpr auto name = "rtrim";
-};
-struct NameTrimUTF8
-{
-    static constexpr auto name = "trimUTF8";
-};
-struct NameLTrimUTF8
-{
-    static constexpr auto name = "ltrimUTF8";
-};
-struct NameRTrimUTF8
-{
-    static constexpr auto name = "rtrimUTF8";
-};
-struct NameLPad
-{
-    static constexpr auto name = "lpad";
-};
-struct NameLPadUTF8
-{
-    static constexpr auto name = "lpadUTF8";
-};
-struct NameRPad
-{
-    static constexpr auto name = "rpad";
-};
-struct NameRPadUTF8
-{
-    static constexpr auto name = "rpadUTF8";
-};
-struct NameConcat
-{
-    static constexpr auto name = "concat";
-};
-struct NameConcatAssumeInjective
-{
-    static constexpr auto name = "concatAssumeInjective";
-};
+
+// clang-format off
+struct NameEmpty                 { static constexpr auto name = "empty"; };
+struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
+struct NameLength                { static constexpr auto name = "length"; };
+struct NameLengthUTF8            { static constexpr auto name = "lengthUTF8"; };
+struct NameLower                 { static constexpr auto name = "lower"; };
+struct NameUpper                 { static constexpr auto name = "upper"; };
+struct NameReverseUTF8           { static constexpr auto name = "reverseUTF8"; };
+struct NameTrim                  { static constexpr auto name = "trim"; };
+struct NameLTrim                 { static constexpr auto name = "ltrim"; };
+struct NameRTrim                 { static constexpr auto name = "rtrim"; };
+struct NameTrimUTF8              { static constexpr auto name = "trimUTF8"; };
+struct NameLTrimUTF8             { static constexpr auto name = "ltrimUTF8"; };
+struct NameRTrimUTF8             { static constexpr auto name = "rtrimUTF8"; };
+struct NameLPad                  { static constexpr auto name = "lpad"; };
+struct NameLPadUTF8              { static constexpr auto name = "lpadUTF8"; };
+struct NameRPad                  { static constexpr auto name = "rpad"; };
+struct NameRPadUTF8              { static constexpr auto name = "rpadUTF8"; };
+struct NameConcat                { static constexpr auto name = "concat"; };
+struct NameConcatAssumeInjective { static constexpr auto name = "concatAssumeInjective"; };
+struct NameFormat                { static constexpr auto name = "format"; };
+// clang-format on
 
 using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, UInt8>;
 using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty, UInt8>;
@@ -3114,6 +3725,7 @@ using FunctionLPadUTF8 = PadUTF8Impl<NameLPad, true>;
 using FunctionRPadUTF8 = PadUTF8Impl<NameRPad, false>;
 using FunctionConcat = ConcatImpl<NameConcat, false>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
+using FunctionFormat = FormatImpl<NameFormat, FormatWithEnUS>;
 
 
 void registerFunctionsString(FunctionFactory & factory)
@@ -3144,5 +3756,8 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionRightUTF8>();
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
+    factory.registerFunction<FunctionSubStringIndex>();
+    factory.registerFunction<FunctionFormat>();
+    factory.registerFunction<FunctionFormatWithLocale>();
 }
 } // namespace DB

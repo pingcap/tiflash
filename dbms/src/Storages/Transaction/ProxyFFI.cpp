@@ -138,10 +138,6 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
     }
 }
 
-uint8_t HandleCheckTerminated(EngineStoreServerWrap * server)
-{
-    return server->tmt->checkTerminated(std::memory_order_relaxed) ? 1 : 0;
-}
 
 StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
 {

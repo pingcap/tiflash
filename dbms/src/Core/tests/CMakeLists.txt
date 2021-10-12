@@ -1,4 +1,4 @@
-add_executable (exception exception.cpp)
+add_executable (exception exception.cpp gtest_decimal_comparison.cpp)
 target_link_libraries (exception clickhouse_common_io)
 
 add_executable (string_pool string_pool.cpp)

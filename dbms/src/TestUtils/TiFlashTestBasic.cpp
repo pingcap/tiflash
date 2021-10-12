@@ -1,4 +1,5 @@
 #include <Encryption/MockKeyManager.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -6,6 +7,7 @@
 namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
+std::unique_ptr<DAGContext> TiFlashTestEnv::dag_context = nullptr;
 
 void TiFlashTestEnv::initializeGlobalContext()
 {
@@ -22,13 +24,19 @@ void TiFlashTestEnv::initializeGlobalContext()
     // 1. capacity
     // 2. path pool
     // 3. TMTContext
+    // 4. DAGContext
 
     Strings testdata_path = {getTemporaryPath()};
     global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
 
     auto paths = getPathPool(testdata_path);
     global_context->setPathPool(
-        paths.first, paths.second, Strings{}, true, global_context->getPathCapacity(), global_context->getFileProvider());
+        paths.first,
+        paths.second,
+        Strings{},
+        true,
+        global_context->getPathCapacity(),
+        global_context->getFileProvider());
     TiFlashRaftConfig raft_config;
 
     raft_config.ignore_databases = {"default", "system"};
@@ -39,6 +47,9 @@ void TiFlashTestEnv::initializeGlobalContext()
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 
     global_context->getTMTContext().restore();
+
+    dag_context = std::make_unique<DB::DAGContext>();
+    global_context->setDAGContext(dag_context.get());
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)

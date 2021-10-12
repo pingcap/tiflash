@@ -641,7 +641,10 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
 
         if (data.hasPrimaryKey())
             src_streams.emplace_back(std::make_shared<MaterializingBlockInputStream>(
-                std::make_shared<ExpressionBlockInputStream>(BlockInputStreamPtr(std::move(input)), data.getPrimaryExpression())));
+                std::make_shared<ExpressionBlockInputStream>(
+                    BlockInputStreamPtr(std::move(input)),
+                    data.getPrimaryExpression(),
+                    nullptr)));
         else
             src_streams.emplace_back(std::move(input));
     }

@@ -15,6 +15,7 @@ list(APPEND page_storage_sources
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/PathCapacityMetrics.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/PathPool.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Interpreters/SettingsCommon.cpp
 )
 add_library(page_storage EXCLUDE_FROM_ALL
         ${page_storage_headers} ${page_storage_sources}

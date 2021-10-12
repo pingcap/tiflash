@@ -67,7 +67,6 @@ EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server,
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
 EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header);
-uint8_t HandleCheckTerminated(EngineStoreServerWrap * server);
 StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server);
 EngineStoreServerStatus HandleGetTiFlashStatus(EngineStoreServerWrap * server);
 RawCppPtr PreHandleSnapshot(

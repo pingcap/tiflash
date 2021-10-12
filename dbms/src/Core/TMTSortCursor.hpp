@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 union TMTCmpOptimizedRes
 {
     Int32 all;
@@ -21,7 +20,10 @@ static_assert(sizeof(TMTCmpOptimizedRes) == 4);
 /// order of sorting will always be pk -> version -> delmark
 template <bool just_diff, bool only_pk, TMTPKType pk_type>
 inline TMTCmpOptimizedRes cmpTMTCursor(
-    const ColumnRawPtrs & lsort_columns, const size_t lhs_pos, const ColumnRawPtrs & rsort_columns, const size_t rhs_pos)
+    const ColumnRawPtrs & lsort_columns,
+    const size_t lhs_pos,
+    const ColumnRawPtrs & rsort_columns,
+    const size_t rhs_pos)
 {
     TMTCmpOptimizedRes res{.all = 0};
 
@@ -104,8 +106,10 @@ struct TMTSortCursor
 {
     SortCursorImpl * impl = nullptr;
 
-    TMTSortCursor() {}
-    TMTSortCursor(SortCursorImpl * impl_) : impl(impl_) {}
+    TMTSortCursor() = default;
+    explicit TMTSortCursor(SortCursorImpl * impl_)
+        : impl(impl_)
+    {}
     SortCursorImpl * operator->() { return impl; }
     const SortCursorImpl * operator->() const { return impl; }
 
@@ -125,7 +129,7 @@ struct TMTSortCursor
 
         if constexpr (only_pk)
         {
-            return res.diffs[0] > 0 ? true : (res.diffs[0] < 0 ? false : (impl->order > rhs.impl->order));
+            return res.diffs[0] > 0 || (res.diffs[0] == 0 && (impl->order > rhs.impl->order));
         }
 
         return greaterAt(res, impl->order, rhs.impl->order);
@@ -143,20 +147,29 @@ struct TMTSortCursor
 
     static inline bool greaterAt(const TMTCmpOptimizedRes res, const size_t lorder, const size_t rorder)
     {
-        return res.diffs[0] > 0
-            ? true
-            : (res.diffs[0] < 0
-                      ? false
-                      : (res.diffs[1] > 0
-                                ? true
-                                : (res.diffs[1] < 0 ? false : (res.diffs[2] > 0 ? true : (res.diffs[2] < 0 ? false : (lorder > rorder))))));
+        auto compare = [](auto x, auto compare_next) __attribute__((always_inline))
+        {
+            // we have to explicitly set the capture here
+            // otherwise, GCC will complain about the
+            // initialization of closures
+            return [ x = std::move(x), compare_next = std::move(compare_next) ]() __attribute__((always_inline))
+            {
+                return x > 0 || (x == 0 && compare_next());
+            };
+        };
+        return compare(res.diffs[0], compare(res.diffs[1], compare(res.diffs[2], [=] { return lorder > rorder; })))();
     }
 
     static inline bool lessAtIgnOrder(const TMTCmpOptimizedRes res)
     {
-        return res.diffs[0] < 0
-            ? true
-            : (res.diffs[0] > 0 ? false : (res.diffs[1] < 0 ? true : (res.diffs[1] > 0 ? false : (res.diffs[2] < 0 ? true : false))));
+        auto compare = [&](auto x, auto compare_next) __attribute__((always_inline))
+        {
+            return [ x = std::move(x), compare_next = std::move(compare_next) ]() __attribute__((always_inline))
+            {
+                return x < 0 || (x == 0 && compare_next());
+            };
+        };
+        return compare(res.diffs[0], compare(res.diffs[1], compare(res.diffs[2], [] { return false; })))();
     }
 
     bool totallyLessOrEquals(const TMTSortCursor & rhs) const

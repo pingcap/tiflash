@@ -1,11 +1,12 @@
 #pragma once
 
-#include <cmath>
-#include <limits>
-#include <common/DecomposedFloat.h>
 #include <Common/NaNUtils.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
+#include <common/DecomposedFloat.h>
+
+#include <cmath>
+#include <limits>
 
 /** Preceptually-correct number comparisons.
   * Example: Int8(-1) != UInt8(255)
@@ -151,8 +152,8 @@ bool notEqualsOp(A a, B b)
 
 namespace DB
 {
-
-template <typename A, typename B> struct EqualsOp
+template <typename A, typename B>
+struct EqualsOp
 {
     /// An operation that gives the same result, if arguments are passed in reverse order.
     using SymmetricOp = EqualsOp<B, A>;
@@ -160,38 +161,45 @@ template <typename A, typename B> struct EqualsOp
     static UInt8 apply(A a, B b) { return accurate::equalsOp(a, b); }
 };
 
-template <typename A, typename B> struct NotEqualsOp
+template <typename A, typename B>
+struct NotEqualsOp
 {
     using SymmetricOp = NotEqualsOp<B, A>;
     static UInt8 apply(A a, B b) { return accurate::notEqualsOp(a, b); }
 };
 
-template <typename A, typename B> struct GreaterOp;
+template <typename A, typename B>
+struct GreaterOp;
 
-template <typename A, typename B> struct LessOp
+template <typename A, typename B>
+struct LessOp
 {
     using SymmetricOp = GreaterOp<B, A>;
     static UInt8 apply(A a, B b) { return accurate::lessOp(a, b); }
 };
 
-template <typename A, typename B> struct GreaterOp
+template <typename A, typename B>
+struct GreaterOp
 {
     using SymmetricOp = LessOp<B, A>;
     static UInt8 apply(A a, B b) { return accurate::greaterOp(a, b); }
 };
 
-template <typename A, typename B> struct GreaterOrEqualsOp;
+template <typename A, typename B>
+struct GreaterOrEqualsOp;
 
-template <typename A, typename B> struct LessOrEqualsOp
+template <typename A, typename B>
+struct LessOrEqualsOp
 {
     using SymmetricOp = GreaterOrEqualsOp<B, A>;
     static UInt8 apply(A a, B b) { return accurate::lessOrEqualsOp(a, b); }
 };
 
-template <typename A, typename B> struct GreaterOrEqualsOp
+template <typename A, typename B>
+struct GreaterOrEqualsOp
 {
     using SymmetricOp = LessOrEqualsOp<B, A>;
     static UInt8 apply(A a, B b) { return accurate::greaterOrEqualsOp(a, b); }
 };
 
-}
+} // namespace DB

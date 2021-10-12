@@ -1,15 +1,15 @@
 #pragma once
 
-#include <memory>
-#include <functional>
-#include <unordered_map>
 #include <DataTypes/IDataType.h>
+
 #include <ext/singleton.h>
+#include <functional>
+#include <memory>
+#include <unordered_map>
 
 
 namespace DB
 {
-
 class IDataType;
 using DataTypePtr = std::shared_ptr<const IDataType>;
 
@@ -54,4 +54,4 @@ private:
     friend class ext::singleton<DataTypeFactory>;
 };
 
-}
+} // namespace DB
