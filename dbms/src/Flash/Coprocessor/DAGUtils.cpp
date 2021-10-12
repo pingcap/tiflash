@@ -973,10 +973,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::AddDateDurationDecimal, "cast"},
 
     {tipb::ScalarFuncSig::Date, "toMyDate"},
-    {tipb::ScalarFuncSig::Hour, "hour"},
-    {tipb::ScalarFuncSig::Minute, "minute"},
-    {tipb::ScalarFuncSig::Second, "second"},
-    {tipb::ScalarFuncSig::MicroSecond, "microsecond"},
+    //{tipb::ScalarFuncSig::Hour, "cast"},
+    //{tipb::ScalarFuncSig::Minute, "cast"},
+    //{tipb::ScalarFuncSig::Second, "cast"},
+    //{tipb::ScalarFuncSig::MicroSecond, "cast"},
     {tipb::ScalarFuncSig::Month, "toMonth"},
     //{tipb::ScalarFuncSig::MonthName, "cast"},
 
