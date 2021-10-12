@@ -97,7 +97,7 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
     case TaskType::MergeDelta:
         is_heavy = true;
         // reserve some task space for light tasks
-        if (heavy_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
+        if (max_task_num > 1 && heavy_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
             return std::make_pair(false, is_heavy);
         heavy_tasks.push(task);
         break;
