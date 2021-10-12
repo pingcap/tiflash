@@ -970,8 +970,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
     tipb::Expr tz_expr;
     constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
     String tz_col = getActions(tz_expr, actions);
-    ;
-    String timezone_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
+    static String timezone_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
 
     // For Duration
     String fsp_col;
@@ -981,8 +980,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
     {
         if (context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTS::AppendTimeZoneCast)
         {
-            if (tz_col.length() == 0)
-                tz_col = getActions(tz_expr, actions);
+            tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             source_columns[i].name = casted_name;
             ret = true;
@@ -997,6 +995,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
             String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
             source_columns[i].name = casted_name;
             source_columns[i].type = std::make_shared<DataTypeMyDuration>(fsp);
+            // Check not_null flag
             if (!(columns[i].flag() & (1 << 0)))
             {
                 source_columns[i].type = makeNullable(source_columns[i].type);

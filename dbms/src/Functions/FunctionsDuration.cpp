@@ -12,14 +12,6 @@ namespace DB
 {
 DataTypePtr FunctionConvertDurationFromNanos::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
 {
-    if (arguments.size() != 2)
-    {
-        throw Exception(
-            fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2",
-                        getName(),
-                        toString(arguments.size())),
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    }
     if (!arguments[0].type->isInteger())
     {
         throw Exception(
