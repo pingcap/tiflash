@@ -46,10 +46,14 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             send_thread->join();
         }
         /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
-        MPPDataPacketPtr res;
         while (send_queue.size() > 0)
         {
-            send_queue.pop(res);
+            std::optional<MPPDataPacketPtr> pop_item = send_queue.pop();
+            if (!pop_item.has_value())
+            {
+                LOG_ERROR(log, "Failed to pop packet from send_queue in destructor");
+                break;
+            }
         }
     }
     catch (...)
@@ -70,7 +74,11 @@ void MPPTunnelBase<Writer>::close(const String & reason)
         try
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-            send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+            bool success = send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+            if (!success)
+            {
+                LOG_ERROR(log, "Failed to push packet into send_queue, tunnel: " << tunnel_id);
+            }
         }
         catch (...)
         {
@@ -79,7 +87,10 @@ void MPPTunnelBase<Writer>::close(const String & reason)
     }
     if (connected)
     {
-        send_queue.push(nullptr);
+        if (!send_queue.push(nullptr))
+        {
+            LOG_ERROR(log, "Failed to push end-singal(nullptr) into send_queue, tunnel: " << tunnel_id);
+        }
         /// should wait the errors being sent in abnormal cases.
         cv_for_finished.wait(lk, [&]() { return finished.load(); });
     }
@@ -108,14 +119,20 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
 
-        send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
+        if (!send_queue.push(std::make_shared<mpp::MPPDataPacket>(data)))
+        {
+            LOG_DEBUG(log, "Failed to push packet into send_queue when writing");
+        }
         if (close_after_write)
         {
             std::unique_lock<std::mutex> lk(mu);
             if (!finished)
             {
                 /// in abnormal cases, finished can be set in advance and pushing nullptr is also necessary
-                send_queue.push(nullptr);
+                if (!send_queue.push(nullptr))
+                {
+                    LOG_DEBUG(log, "Failed to push end-signal(nullptr) into send_queue when writing");
+                }
                 LOG_TRACE(log, "sending a nullptr to finish write.");
             }
         }
@@ -126,15 +143,24 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
-    if (is_local) return; // sendLoop is useless in local environment
+    if (is_local)
+        return; // sendLoop is useless in local environment
     try
     {
         /// TODO(fzh) reuse it later
         MPPDataPacketPtr res;
         while (!finished)
         {
-            send_queue.pop(res);
-            if (nullptr == res)
+            std::optional<MPPDataPacketPtr> pop_item = send_queue.pop();
+            if (pop_item.has_value())
+            {
+                res = pop_item.value();
+            }
+            else
+            {
+                LOG_ERROR(log, "Failed to pop packet from send_queue, tunnel:" << tunnel_id);
+            }
+            if (nullptr == res || !pop_item.has_value())
             {
                 finishWithLock();
                 return;
@@ -184,7 +210,10 @@ void MPPTunnelBase<Writer>::writeDone()
     waitUntilConnectedOrCancelled(lk);
     lk.unlock();
     /// in normal cases, send nullptr to notify finish
-    send_queue.push(nullptr);
+    if (!send_queue.push(nullptr))
+    {
+        LOG_ERROR(log, "Failed push end-signal(nullptr) into end_queue [MPPTunnelBase<Writer>::writeDone()]");
+    }
     waitForFinish();
     LOG_TRACE(log, "done to finish");
 }
@@ -197,8 +226,12 @@ std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
         MPPDataPacketPtr res;
         if (!finished)
         {
-            send_queue.pop(res);
-            if (nullptr == res)
+            std::optional<MPPDataPacketPtr> pop_item = send_queue.pop();
+            if (pop_item.has_value())
+            {
+                res = pop_item.value();
+            }
+            if (nullptr == res || !pop_item.has_value())
             {
                 finishWithLock();
             }

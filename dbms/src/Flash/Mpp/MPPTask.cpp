@@ -12,7 +12,6 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
-#include <Flash/var.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -239,8 +238,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        LOG_INFO(log, "addr_info, kGrpcLocalAddr: " << Tiflash::kGrpcLocalAddr << " local_meta.addr: "<< meta.address() << " task_meta.addr: " <<  task_meta.address());
-        bool is_local = Tiflash::kGrpcLocalAddr && (*Tiflash::kGrpcLocalAddr) == task_meta.address();
+        bool is_local = meta.address() == task_meta.address();
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, is_local);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
