@@ -1,4 +1,6 @@
+#include <Common/CPUAffinityManager.h>
 #include <Common/FailPoint.h>
+#include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -80,7 +82,7 @@ void MPPTask::finishWrite()
 void MPPTask::run()
 {
     memory_tracker = current_memory_tracker;
-    std::thread worker(&MPPTask::runImpl, this->shared_from_this());
+    auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
     worker.detach();
 }
 
@@ -225,12 +227,18 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     tunnel_set = std::make_shared<MPPTunnelSet>();
     const auto & exchangeSender = dag_req->root_executor().exchange_sender();
     std::chrono::seconds timeout(task_request.timeout());
+
+    auto task_cancelled_callback = [task = std::weak_ptr<MPPTask>(shared_from_this())] {
+        auto sp = task.lock();
+        return sp && sp->getStatus() == CANCELLED;
+    };
+
     for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, shared_from_this(), context.getSettings().max_threads);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
@@ -272,6 +280,7 @@ void MPPTask::preprocess()
 
 void MPPTask::runImpl()
 {
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
@@ -379,6 +388,7 @@ void MPPTask::writeErrToAllTunnels(const String & e)
 
 void MPPTask::cancel(const String & reason)
 {
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
     LOG_WARNING(log, "Begin cancel task: " + id.toString());
     while (true)
     {

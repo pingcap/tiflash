@@ -23,7 +23,7 @@ public:
     IColumnDummy()
         : s(0)
     {}
-    IColumnDummy(size_t s_)
+    explicit IColumnDummy(size_t s_)
         : s(s_)
     {}
 
@@ -47,8 +47,7 @@ public:
         return {};
     }
 
-    void insertData(const char *, size_t)
-        override
+    void insertData(const char *, size_t) override
     {
         ++s;
     }

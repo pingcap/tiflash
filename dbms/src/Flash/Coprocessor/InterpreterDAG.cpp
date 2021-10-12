@@ -11,6 +11,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <pingcap/coprocessor/Client.h>
 
 namespace DB
@@ -71,10 +72,11 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            context,
+            std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
             dag_query_block.source->exchange_receiver(),
             dag.getDAGContext().getMPPTaskMeta(),
-            max_streams);
+            max_streams,
+            log);
     }
 }
 
@@ -133,6 +135,7 @@ BlockIO InterpreterDAG::execute()
                 collators,
                 exchange_sender.tp(),
                 context.getSettings().dag_records_per_chunk,
+                context.getSettings().batch_send_min_limit,
                 dag.getEncodeType(),
                 dag.getResultFieldTypes(),
                 dag.getDAGContext(),

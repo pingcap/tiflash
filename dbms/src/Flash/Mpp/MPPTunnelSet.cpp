@@ -15,7 +15,8 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
 }
 } // namespace
 
-void MPPTunnelSet::clearExecutionSummaries(tipb::SelectResponse & response)
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::clearExecutionSummaries(tipb::SelectResponse & response)
 {
     /// can not use response.clear_execution_summaries() because
     /// TiDB assume all the executor should return execution summary
@@ -28,7 +29,8 @@ void MPPTunnelSet::clearExecutionSummaries(tipb::SelectResponse & response)
     }
 }
 
-void MPPTunnelSet::write(tipb::SelectResponse & response)
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 {
     auto packet = serializeToPacket(response);
     tunnels[0]->write(packet);
@@ -46,12 +48,16 @@ void MPPTunnelSet::write(tipb::SelectResponse & response)
     }
 }
 
-void MPPTunnelSet::write(tipb::SelectResponse & response, int16_t partition_id)
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t partition_id)
 {
     if (partition_id != 0 && response.execution_summaries_size() > 0)
         clearExecutionSummaries(response);
 
     tunnels[partition_id]->write(serializeToPacket(response));
 }
+
+/// Explicit template instantiations - to avoid code bloat in headers.
+template class MPPTunnelSetBase<MPPTunnel>;
 
 } // namespace DB

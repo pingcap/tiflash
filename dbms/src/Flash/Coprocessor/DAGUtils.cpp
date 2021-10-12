@@ -16,7 +16,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
 extern const int LOGICAL_ERROR;
 extern const int NOT_IMPLEMENTED;
@@ -1129,15 +1128,17 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Substring3ArgsUTF8, "substringUTF8"},
     //{tipb::ScalarFuncSig::Substring2Args, "cast"},
     //{tipb::ScalarFuncSig::Substring3Args, "cast"},
-    //{tipb::ScalarFuncSig::SubstringIndex, "cast"},
+    {tipb::ScalarFuncSig::SubstringIndex, "substringIndex"},
+    {tipb::ScalarFuncSig::Format, "format"},
+    {tipb::ScalarFuncSig::FormatWithLocale, "formatWithLocale"},
 
     //{tipb::ScalarFuncSig::ToBase64, "cast"},
     {tipb::ScalarFuncSig::Trim1Arg, "trim"},
     //{tipb::ScalarFuncSig::Trim2Args, "cast"},
     //{tipb::ScalarFuncSig::Trim3Args, "cast"},
     //{tipb::ScalarFuncSig::UnHex, "cast"},
-    {tipb::ScalarFuncSig::UpperUTF8, "upper"},
-    //{tipb::ScalarFuncSig::Upper, "upper"},
+    {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
+    {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
 
