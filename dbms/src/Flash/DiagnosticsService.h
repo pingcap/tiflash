@@ -27,11 +27,15 @@ public:
     ~DiagnosticsService() override {}
 
 public:
-    ::grpc::Status search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request,
+    ::grpc::Status search_log(
+        ::grpc::ServerContext * grpc_context,
+        const ::diagnosticspb::SearchLogRequest * request,
         ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream) override;
 
-    ::grpc::Status server_info(::grpc::ServerContext * grpc_context, const ::diagnosticspb::ServerInfoRequest * request,
-        ::diagnosticspb::ServerInfoResponse * response) override;
+    ::grpc::Status server_info(
+         ::grpc::ServerContext * grpc_context,
+         const ::diagnosticspb::ServerInfoRequest * request,
+         ::diagnosticspb::ServerInfoResponse * response) override;
 
 public:
     struct AvgLoad
