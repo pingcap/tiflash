@@ -340,6 +340,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     /// Set the limits and quota for reading data, the speed and time of the query.
     setQuotaAndLimitsOnTableScan(context, pipeline);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+
+    pipeline.transform(
+        [&](auto & stream) {
+            stream = std::make_shared<SharedQueryBlockInputStream>(10, stream, log, false);
+            });
 }
 
 void DAGQueryBlockInterpreter::prepareJoin(
@@ -960,6 +965,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log);
+        input = std::make_shared<SharedQueryBlockInputStream>(10, input, log, false);
         pipeline.streams.push_back(input);
         dag.getDAGContext().getRemoteInputStreams().push_back(input);
         task_start = task_end;
@@ -1183,7 +1189,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
         if (!query_block.isRootQueryBlock() && concurrency > 1)
         {
             BlockInputStreamPtr shared_query_block_input_stream
-                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
+                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log, false);
             pipeline.streams.assign(concurrency, shared_query_block_input_stream);
         }
     }
@@ -1193,7 +1199,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     {
         size_t concurrency = before_agg_streams;
         BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
+            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log, false);
         pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
 

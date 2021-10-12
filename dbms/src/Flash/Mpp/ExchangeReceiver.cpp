@@ -1,4 +1,5 @@
 #include <Common/CPUAffinityManager.h>
+#include <Common/ThreadFactory.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
 
@@ -42,8 +43,9 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     }
 
     for (auto & worker : workers)
-        if (worker.has_value())
-            worker.value().get();
+    {
+        worker.join();
+    }
 }
 
 template <typename RPCContext>
@@ -59,8 +61,8 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
     {
-        auto f = DefaultFiberPool::submit_job(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
-        workers.push_back(std::move(f));
+        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
+        workers.push_back(std::move(t));
     }
 }
 
@@ -171,7 +173,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     break;
 
                 using namespace std::chrono_literals;
-                boost::this_fiber::sleep_for(1s);
+                std::this_thread::sleep_for(1s);
             }
         }
         if (!status.ok())

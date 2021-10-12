@@ -99,7 +99,7 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::vector<std::optional<boost::fibers::future<void>>> workers;
+    std::vector<std::thread> workers;
     DAGSchema schema;
 
     boost::fibers::mutex mu;

@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/ThreadFactory.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
@@ -37,12 +38,11 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         if (!finished)
             writeDone();
-        if (send_thread.has_value())
-        {
-            send_thread.value().get();
-            send_thread.reset();
-        }
         send_queue.close();
+        if (nullptr != send_thread && send_thread->joinable())
+        {
+            send_thread->join();
+        }
     }
     catch (...)
     {
@@ -189,7 +189,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
-    send_thread = DefaultFiberPool::submit_job([this] { sendLoop(); });
+    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
 
     connected = true;
     cv_for_connected.notify_all();
