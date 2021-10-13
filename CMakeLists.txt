@@ -28,11 +28,11 @@ option (USE_CCACHE "Set to OFF to disable ccache" ON)
 include (cmake/find_ccache.cmake)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
-    message (STATUS "CMAKE_BUILD_TYPE is not set, set to default = RELWITHDEBINFO")
-    set (CMAKE_BUILD_TYPE "RELWITHDEBINFO")
+    set (CMAKE_BUILD_TYPE "RelWithDebInfo")
+    message (STATUS "CMAKE_BUILD_TYPE is not set, set to default = ${CMAKE_BUILD_TYPE}")
 endif ()
 string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UC)
-message (STATUS "CMAKE_BUILD_TYPE: " ${CMAKE_BUILD_TYPE} )
+message (STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 # ASan - build type with address sanitizer
 # UBSan - build type with undefined behaviour sanitizer
@@ -317,6 +317,10 @@ find_contrib_lib(metrohash)
 find_contrib_lib(btrie)
 find_contrib_lib(double-conversion)
 
+# Find libunwind, must be before jemalloc
+option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
+include (libs/libdaemon/cmake/find_unwind.cmake)
+
 # Need to process before "contrib" dir:
 include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
@@ -325,10 +329,6 @@ include (libs/libcommon/cmake/find_cctz.cmake)
 if (ENABLE_MYSQL_STORAGE)
     include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
 endif()
-
-option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
-
-include (libs/libdaemon/cmake/find_unwind.cmake)
 
 include (cmake/print_flags.cmake)
 
