@@ -42,33 +42,34 @@ public:
                FileProviderPtr & file_provider,
                const WriteLimiterPtr & write_limiter_,
                bool do_index)
-            : plain_file(createWriteBufferFromFileBaseByFileProvider(
-                WriteBufferParameterTable{
-                    .has_checksum = dmfile->configuration.has_value(),
-                    .file_provider = file_provider,
-                    .filename = dmfile->colDataPath(file_base_name),
-                    .encryption_path = dmfile->encryptionDataPath(file_base_name),
-                    .create_new_encryption_info = false,
-                    .write_limiter = write_limiter_,
-                    .buffer_size = max_compress_block_size,
-                    .checksum_algorithm = detail::getAlgorithmOrNone(*dmfile),
-                    .checksum_frame_size = detail::getFrameSizeOrDefault(*dmfile)}))
+            : plain_file(
+                WriteBufferByFileProviderBuilder(
+                    dmfile->configuration.has_value(),
+                    file_provider,
+                    dmfile->colDataPath(file_base_name),
+                    dmfile->encryptionDataPath(file_base_name),
+                    false,
+                    write_limiter_)
+                    .with_buffer_size(max_compress_block_size)
+                    .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
+                    .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
+                    .build())
             , plain_layer(*plain_file)
             , compressed_buf(dmfile->configuration
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(plain_layer, compression_settings))
                                  : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(plain_layer, compression_settings)))
             , original_layer(*compressed_buf)
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
-            , mark_file(createWriteBufferFromFileBaseByFileProvider(
-                  WriteBufferParameterTable{
-                      .has_checksum = dmfile->configuration.has_value(),
-                      .file_provider = file_provider,
-                      .filename = dmfile->colMarkPath(file_base_name),
-                      .encryption_path = dmfile->encryptionMarkPath(file_base_name),
-                      .create_new_encryption_info = false,
-                      .write_limiter = write_limiter_,
-                      .checksum_algorithm = detail::getAlgorithmOrNone(*dmfile),
-                      .checksum_frame_size = detail::getFrameSizeOrDefault(*dmfile)}))
+            , mark_file(WriteBufferByFileProviderBuilder(
+                            dmfile->configuration.has_value(),
+                            file_provider,
+                            dmfile->colMarkPath(file_base_name),
+                            dmfile->encryptionMarkPath(file_base_name),
+                            false,
+                            write_limiter_)
+                            .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
+                            .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
+                            .build())
         {
         }
 
