@@ -228,11 +228,6 @@ struct TiDBLowerUpperBinaryImpl
     }
 };
 
-struct NameLowerBinary
-{
-    static constexpr auto name = "lowerBinary";
-};
-
 template <typename Name, bool is_injective>
 class FunctionStringToString<TiDBLowerUpperBinaryImpl, Name, is_injective> : public IFunction
 {
