@@ -598,7 +598,7 @@ String DAGExpressionAnalyzer::applyFunction(
     const String & func_name,
     const Names & arg_names,
     ExpressionActionsPtr & actions,
-    TiDB::TiDBCollatorPtr & collator)
+    const TiDB::TiDBCollatorPtr & collator)
 {
     String result_name = genFuncString(func_name, arg_names, {collator});
     if (actions->getSampleBlock().has(result_name))
