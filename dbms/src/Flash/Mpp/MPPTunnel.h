@@ -70,9 +70,10 @@ private:
     std::condition_variable cv_for_finished;
 
     bool connected; // if the exchange in has connected this tunnel.
-    bool is_local; // if this tunnel used for local environment
 
     std::atomic<bool> finished; // if the tunnel has finished its connection.
+
+    bool is_local; // if this tunnel used for local environment
 
     Writer * writer;
 

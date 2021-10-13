@@ -102,27 +102,15 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
         bool is_local = req.req->sender_meta().address() == task_meta.address();
+        if (is_local) rpc_context->enableLocal();
         for (int i = 0; i < 10; i++)
         {
             std::shared_ptr<GRPCReceiverContext::Reader> reader;
 
             MPPTunnelPtr tunnel;
 
-            if (is_local)
-            {
-                std::tuple<MPPTunnelPtr, grpc::Status> localConnRetPair = DB::glbFlashService->EstablishMPPConnectionLocal(req.req.get());
-                tunnel = std::get<0>(localConnRetPair);
-                status = std::get<1>(localConnRetPair);
-                if (!status.ok())
-                {
-                    throw Exception("Exchange receiver meet error : " + status.error_message());
-                }
-            }
-            else
-            {
-                reader = rpc_context->makeReader(req);
-                reader->initialize();
-            }
+            reader = rpc_context->makeReader(req);
+            reader->initialize();
             std::shared_ptr<ReceivedPacket> packet;
             bool has_data = false;
             for (;;)
@@ -146,18 +134,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 }
                 packet->req_info = req_info;
                 packet->source_index = source_index;
-                bool success;
-                if (is_local)
-                {
-                    std::shared_ptr<mpp::MPPDataPacket> tmp_packet = tunnel->readForLocal();
-                    success = tmp_packet != nullptr;
-                    if (success)
-                        packet->packet = tmp_packet;
-                }
-                else
-                {
-                    success = reader->read(packet->packet.get());
-                }
+                bool success = reader->read(packet->packet);
                 if (!success)
                     break;
                 else
@@ -188,9 +165,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             {
                 break;
             }
-            if (!is_local)
-                status = reader->finish();
-            if (is_local || status.ok())
+            status = reader->finish();
+            if (status.ok())
             {
                 LOG_DEBUG(log, "finish read : " << req.debugString());
                 break;
