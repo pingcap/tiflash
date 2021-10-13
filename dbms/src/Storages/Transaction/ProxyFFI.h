@@ -77,11 +77,12 @@ RawCppPtr PreHandleSnapshot(
     uint64_t index,
     uint64_t term);
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
-HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView);
+HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
 void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
 void SetServerInfoResp(BaseBuffView, RawVoidPtr);
 BaseBuffView strIntoView(const std::string * str_ptr);
+CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 }
 } // namespace DB

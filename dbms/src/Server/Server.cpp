@@ -887,6 +887,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
         .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
         .fn_set_server_info_resp = SetServerInfoResp,
+        .fn_get_config = GetConfig,
     };
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
