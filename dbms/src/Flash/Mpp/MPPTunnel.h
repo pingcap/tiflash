@@ -83,6 +83,7 @@ private:
     int input_streams_num;
 
     std::unique_ptr<std::thread> send_thread;
+    boost::fibers::promise<void> send_done;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     boost::fibers::buffered_channel<MPPDataPacketPtr> send_queue;

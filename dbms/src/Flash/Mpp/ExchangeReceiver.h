@@ -100,6 +100,7 @@ private:
     const size_t max_buffer_size;
 
     std::vector<std::thread> workers;
+    std::vector<boost::fibers::promise<void>> workers_done;
     DAGSchema schema;
 
     boost::fibers::mutex mu;

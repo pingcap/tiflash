@@ -41,6 +41,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         send_queue.close();
         if (nullptr != send_thread && send_thread->joinable())
         {
+            send_done.get_future().wait();
             send_thread->join();
         }
     }
@@ -127,8 +128,7 @@ void MPPTunnelBase<Writer>::sendLoop()
             auto status = send_queue.pop(res);
             if (status == boost::fibers::channel_op_status::closed)
             {
-                finishWithLock();
-                return;
+                break;
             }
             else
             {
@@ -161,6 +161,7 @@ void MPPTunnelBase<Writer>::sendLoop()
     {
         finishWithLock();
     }
+    send_done.set_value();
 }
 
 /// done normally and being called exactly once after writing all packets

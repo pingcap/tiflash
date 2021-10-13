@@ -42,9 +42,10 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         cv.notify_all();
     }
 
-    for (auto & worker : workers)
+    for (size_t i = 0; i < source_num; ++i)
     {
-        worker.join();
+        workers_done[i].get_future().wait(); // avoid thread::join blocking in fiber
+        workers[i].join();
     }
 }
 
@@ -59,6 +60,7 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
+    workers_done.resize(source_num);
     for (size_t index = 0; index < source_num; ++index)
     {
         auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
@@ -214,6 +216,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
     else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
+    workers_done[source_index].set_value();
 }
 
 template <typename RPCContext>

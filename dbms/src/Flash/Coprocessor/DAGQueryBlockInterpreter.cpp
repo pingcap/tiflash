@@ -14,6 +14,7 @@
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/UnionWaitInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -71,13 +72,18 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     }
 }
 
-BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t max_threads, const LogWithPrefixPtr & log)
+BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t max_threads, const LogWithPrefixPtr & log, bool need_block = true)
 {
     BlockInputStreamPtr ret = nullptr;
     if (pipeline.streams_with_non_joined_data.size() == 1)
         ret = pipeline.streams_with_non_joined_data.at(0);
     else if (pipeline.streams_with_non_joined_data.size() > 1)
-        ret = std::make_shared<UnionBlockInputStream<>>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
+    {
+        if (need_block)
+            ret = std::make_shared<UnionBlockInputStream<>>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
+        else
+            ret = std::make_shared<UnionWaitInputStream>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log);
+    }
     pipeline.streams_with_non_joined_data.clear();
     return ret;
 }
@@ -608,7 +614,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     size_t stream_index = 0;
     right_pipeline.transform(
         [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, joinPtr, stream_index++, log); });
-    executeUnion(right_pipeline, max_streams, log);
+    executeUnion(right_pipeline, max_streams, log, false);
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
@@ -745,14 +751,17 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
     }
 }
 
-void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log)
+void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log, bool need_block)
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.size() == 0)
         return;
-    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log);
+    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log, need_block);
     if (pipeline.streams.size() > 0)
     {
-        pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, non_joined_data_stream, max_streams, log);
+        if (need_block)
+            pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, non_joined_data_stream, max_streams, log);
+        else
+            pipeline.firstStream() = std::make_shared<UnionWaitInputStream>(pipeline.streams, non_joined_data_stream, max_streams, log);
         pipeline.streams.resize(1);
     }
     else if (non_joined_data_stream != nullptr)

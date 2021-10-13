@@ -68,6 +68,7 @@ public:
             return;
         read_suffixed = true;
         queue.close();
+        finished.get_future().wait();
 
         if (run_in_thread)
         {
@@ -80,7 +81,10 @@ public:
         else
         {
             if (future.has_value())
+            {
                 future.value().wait();
+                future.reset();
+            }
         }
         if (!exception_msg.empty())
             throw Exception(exception_msg);
@@ -152,6 +156,8 @@ protected:
         {
             exception_msg = "other error";
         }
+
+        finished.set_value();
     }
 
 private:
@@ -166,6 +172,7 @@ private:
     std::optional<boost::fibers::future<void>> future;
     std::unique_ptr<std::thread> thread;
     boost::fibers::mutex mutex;
+    boost::fibers::promise<void> finished;
 
     std::string exception_msg;
 
