@@ -274,7 +274,6 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     if (log->debug())
     {
-        log->debug("use MPPStringConverter");
         auto converter = MPPStringConverter{context, *dag_req};
         log->debug("mpp query executor:\n" + converter.buildMPPString());
     }

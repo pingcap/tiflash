@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 class Context;
 
 class MPPStringConverter
@@ -23,18 +22,18 @@ public:
     String buildMPPString();
 
 private:
-    NamesAndTypes buildTSString(const tipb::TableScan & ts, std::stringstream & ss);
-    NamesAndTypes buildSelString(const tipb::Selection & sel, std::stringstream & ss);
-    NamesAndTypes buildLimitString(const tipb::Limit & limit, std::stringstream & ss);
-    NamesAndTypes buildProjString(const tipb::Projection & proj, std::stringstream & ss);
-    NamesAndTypes buildAggString(const tipb::Aggregation & agg, std::stringstream & ss);
-    NamesAndTypes buildTopNString(const tipb::TopN & topN, std::stringstream & ss);
-    NamesAndTypes buildJoinString(const tipb::Join & join, std::stringstream & ss);
-    NamesAndTypes buildExchangeSenderString(const tipb::ExchangeSender & exchange_sender, std::stringstream & ss);
-    NamesAndTypes buildExchangeReceiverString(const tipb::ExchangeReceiver & exchange_receiver, std::stringstream & ss);
+    NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & ts, std::stringstream & ss);
+    NamesAndTypes buildSelString(const String & executor_id, const tipb::Selection & sel, std::stringstream & ss);
+    NamesAndTypes buildLimitString(const String & executor_id, const tipb::Limit & limit, std::stringstream & ss);
+    NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection & proj, std::stringstream & ss);
+    NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation & agg, std::stringstream & ss);
+    NamesAndTypes buildTopNString(const String & executor_id, const tipb::TopN & topN, std::stringstream & ss);
+    NamesAndTypes buildJoinString(const String & executor_id, const tipb::Join & join, std::stringstream & ss);
+    NamesAndTypes buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, std::stringstream & ss);
+    NamesAndTypes buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, std::stringstream & ss);
     NamesAndTypes buildString(const tipb::Executor & executor, std::stringstream & ss);
 
-    String genPrefixString() { return String(2 * current_level, ' '); }
+    String genPrefixString() const { return String(2 * current_level, ' '); }
 
     Context & context;
     const tipb::DAGRequest & dag_request;
