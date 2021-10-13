@@ -271,7 +271,9 @@ public:
             return light_tasks.size() + heavy_tasks.size();
         }
 
-        bool addTask(const BackgroundTask & task, const ThreadType & whom, Poco::Logger * log_);
+        // first element of return value means whether task is added or not
+        // second element of return value means whether task is heavy or not
+        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, Poco::Logger * log_);
 
         BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
     };
