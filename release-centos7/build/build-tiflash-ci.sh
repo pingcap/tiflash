@@ -147,6 +147,9 @@ cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}"/fl
 cp -f "$build_dir/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 ldd "${INSTALL_DIR}/tiflash"
+
+ldd "${INSTALL_DIR/tiflash}" | grep 'libnsl.so' | grep '=>' | awk '{print $3}' | xargs -I {} cp {} "${INSTALL_DIR}"
+
 cd "${INSTALL_DIR}"
 chrpath -d libtiflash_proxy.so "${INSTALL_DIR}/tiflash"
 ldd "${INSTALL_DIR}/tiflash"
