@@ -77,7 +77,7 @@ public:
 
     void cancel() { resp_iter.cancel(); }
 
-    Int64 decodeChunks(std::shared_ptr<tipb::SelectResponse> & resp, std::queue<Block> & block_queue, const DataTypes & expected_types)
+    static Int64 decodeChunks(std::shared_ptr<tipb::SelectResponse> & resp, std::queue<Block> & block_queue, const DataTypes & expected_types, const DAGSchema & schema)
     {
         Int64 rows = 0;
         int chunk_size = resp->chunks_size();
@@ -131,7 +131,7 @@ public:
                 return {nullptr, true, "Encode type of coprocessor response is not CHBlock, "
                                        "maybe the version of some TiFlash node in the cluster is not match with this one",
                         false};
-            auto rows = decodeChunks(resp, block_queue, expected_types);
+            auto rows = decodeChunks(resp, block_queue, expected_types, schema);
             return {resp, false, "", false, rows};
         }
         else

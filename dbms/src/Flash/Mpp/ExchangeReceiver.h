@@ -91,8 +91,8 @@ public:
     ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types);
 
     void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
+
     Int64 decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types);
-    Int64 decodeChunks(std::shared_ptr<tipb::SelectResponse> & resp, std::queue<Block> & block_queue, const DataTypes & expected_types);
 
     size_t getSourceNum() { return source_num; }
     String getName() { return "ExchangeReceiver"; }

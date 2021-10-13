@@ -1,6 +1,7 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
@@ -228,66 +229,25 @@ void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMe
     res_buffer.pushEmpty(std::move(recv_msg));
     cv.notify_all();
 }
+
 template <typename RPCContext>
 Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
 {
     assert(recv_msg != nullptr);
     Int64 rows = 0;
-    if (!recv_msg->packet->chunks().empty())
-    {
-        int chunk_size = recv_msg->packet->chunks_size();
-        if (chunk_size == 0)
-            return rows;
 
-        /// ExchangeReceiverBase should receive chunks of TypeCHBlock
-        for (int i = 0; i < chunk_size; i++)
-        {
-            Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
-            rows += block.rows();
-            if (unlikely(block.rows() == 0))
-                continue;
-            assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
-            block_queue.push(std::move(block));
-        }
-    }
-    else if (!recv_msg->packet->data().empty())
-    {
-    }
-    return rows;
-}
-
-template <typename RPCContext>
-Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<tipb::SelectResponse> & resp, std::queue<Block> & block_queue, const DataTypes & expected_types)
-{
-    Int64 rows = 0;
-    int chunk_size = resp->chunks_size();
+    int chunk_size = recv_msg->packet->chunks_size();
     if (chunk_size == 0)
         return rows;
 
+    /// ExchangeReceiverBase should receive chunks of TypeCHBlock
     for (int i = 0; i < chunk_size; i++)
     {
-        Block block;
-        const tipb::Chunk & chunk = resp->chunks(i);
-        switch (resp->encode_type())
-        {
-        case tipb::EncodeType::TypeCHBlock:
-            block = CHBlockChunkCodec().decode(chunk.rows_data(), schema);
-            break;
-        case tipb::EncodeType::TypeChunk:
-            block = ArrowChunkCodec().decode(chunk.rows_data(), schema);
-            break;
-        case tipb::EncodeType::TypeDefault:
-            block = DefaultChunkCodec().decode(chunk.rows_data(), schema);
-            break;
-        default:
-            throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
-        }
-
+        Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
         rows += block.rows();
-
         if (unlikely(block.rows() == 0))
             continue;
-        assertBlockSchema(expected_types, block, "ExchangeReceiver decode chunks");
+        assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
         block_queue.push(std::move(block));
     }
     return rows;
@@ -346,7 +306,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 if (!resp_ptr->chunks().empty())
                 {
                     assert(recv_msg->packet->chunks().empty());
-                    result.rows = decodeChunks(resp_ptr, block_queue, expected_types);
+                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
                 }
             }
         }
