@@ -188,17 +188,21 @@ public:
         size_t data_file_offset = 0;
     };
 
-    class MetaLinkingReader;
-    using MetaLinkingReaderPtr = std::shared_ptr<MetaLinkingReader>;
+    class LinkingMetaAdapter;
+    using LinkingMetaAdapterPtr = std::shared_ptr<LinkingMetaAdapter>;
 
-    class MetaLinkingReader : private boost::noncopyable
+    // This reader is used to link meta file.
+    // After data linked, we need update meta with these step:
+    // 1. update sequence id
+    // 2. update crc
+    class LinkingMetaAdapter : private boost::noncopyable
     {
     public:
-        static MetaLinkingReaderPtr createFrom(PageFile & page_file);
+        static LinkingMetaAdapterPtr createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter = nullptr);
 
-        MetaLinkingReader(PageFile & page_file_); // should only called by `createFrom`
+        LinkingMetaAdapter(PageFile & page_file_); // should only called by `createFrom`
 
-        ~MetaLinkingReader();
+        ~LinkingMetaAdapter();
 
         bool hasNext() const;
 
@@ -207,13 +211,14 @@ public:
         std::pair<char *, size_t> getMetaInfo() { return {meta_buffer, meta_size}; };
 
     private:
-        bool initialize();
+        bool initialize(const ReadLimiterPtr & read_limiter);
 
     private:
         PageFile & page_file;
         char * meta_buffer = nullptr;
         size_t meta_size = 0;
         size_t meta_file_offset = 0;
+        // TODO: Should also use a limited size buffer for reading. Will be done later in #2794
     };
 
     struct MergingPtrComparator

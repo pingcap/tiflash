@@ -220,16 +220,16 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 // PageFile::MetaLinkingReader
 // =========================================================
 
-PageFile::MetaLinkingReader::MetaLinkingReader(PageFile & page_file_)
+PageFile::LinkingMetaAdapter::LinkingMetaAdapter(PageFile & page_file_)
     : page_file(page_file_)
 {}
 
-PageFile::MetaLinkingReader::~MetaLinkingReader()
+PageFile::LinkingMetaAdapter::~LinkingMetaAdapter()
 {
     page_file.free(meta_buffer, meta_size);
 }
 
-bool PageFile::MetaLinkingReader::initialize()
+bool PageFile::LinkingMetaAdapter::initialize(const ReadLimiterPtr & read_limiter)
 {
     const auto path = page_file.metaPath();
 
@@ -252,27 +252,27 @@ bool PageFile::MetaLinkingReader::initialize()
     SCOPE_EXIT({ underlying_file->close(); });
 
     meta_buffer = (char *)page_file.alloc(meta_size);
-    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, nullptr);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter);
 
     return true;
 }
 
-PageFile::MetaLinkingReaderPtr PageFile::MetaLinkingReader::createFrom(PageFile & page_file)
+PageFile::LinkingMetaAdapterPtr PageFile::LinkingMetaAdapter::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter)
 {
-    auto reader = std::make_shared<PageFile::MetaLinkingReader>(page_file);
-    if (!reader->initialize())
+    auto reader = std::make_shared<PageFile::LinkingMetaAdapter>(page_file);
+    if (!reader->initialize(read_limiter))
     {
         return nullptr;
     }
     return reader;
 }
 
-bool PageFile::MetaLinkingReader::hasNext() const
+bool PageFile::LinkingMetaAdapter::hasNext() const
 {
     return meta_file_offset < meta_size;
 }
 
-void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
+void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
 {
     char * meta_data_end = meta_buffer + meta_size;
     char * pos = meta_buffer + meta_file_offset;
@@ -683,9 +683,7 @@ PageFile::Writer::~Writer()
 
 void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
 {
-    char * linked_meta_data;
-    size_t linked_meta_size;
-    auto reader = PageFile::MetaLinkingReader::createFrom(linked_file);
+    auto reader = PageFile::LinkingMetaAdapter::createFrom(linked_file);
 
     if (!reader)
     {
@@ -702,6 +700,9 @@ void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::Sequence
     {
         reader->linkToNewSequenceNext(sid, edit, page_file.getFileId(), page_file.getLevel());
     }
+
+    char * linked_meta_data;
+    size_t linked_meta_size;
 
     std::tie(linked_meta_data, linked_meta_size) = reader->getMetaInfo();
 
