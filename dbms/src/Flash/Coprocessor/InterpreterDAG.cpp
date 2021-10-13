@@ -145,7 +145,7 @@ BlockIO InterpreterDAG::execute()
     }
 
     /// add union to run in parallel if needed
-    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
+    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log, false);
     if (!subqueriesForSets.empty())
     {
         const Settings & settings = context.getSettingsRef();

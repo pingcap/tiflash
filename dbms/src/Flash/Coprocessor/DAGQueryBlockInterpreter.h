@@ -46,7 +46,7 @@ public:
 
     BlockInputStreams execute();
 
-    static void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log);
+    static void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log, bool need_block = true);
 
 private:
     void executeRemoteQuery(DAGPipeline & pipeline);
