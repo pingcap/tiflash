@@ -52,7 +52,13 @@ int migrateEntry(const std::vector<std::string> & opts);
 } // namespace DTTool::Migrate
 
 extern "C" {
-__attribute__((weak)) void run_raftstore_proxy_ffi(int argc, const char * const * argv, const DB::EngineStoreServerHelper *);
+#ifdef __clang__
+__attribute__((weak_import))
+#else
+__attribute__((weak))
+#endif
+void
+run_raftstore_proxy_ffi(int argc, const char * const * argv, const DB::EngineStoreServerHelper *);
 }
 
 namespace DTTool
