@@ -18,6 +18,12 @@ namespace DM
 {
 namespace detail
 {
+DB::ChecksumAlgo getAlgorithmOrNone(DMFile& dmfile) {
+    return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumAlgorithm() : ChecksumAlgo::None;
+}
+size_t getFrameSizeOrDefault(DMFile& dmfile) {
+    return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE;
+}
 }
 class DMFileWriter
 {
@@ -43,8 +49,8 @@ public:
                     .create_new_encryption_info = false,
                     .write_limiter = write_limiter_,
                     .buffer_size = max_compress_block_size,
-                    .checksum_algorithm = dmfile->configuration ? dmfile->configuration->getChecksumAlgorithm() : ChecksumAlgo::None,
-                    .checksum_frame_size = dmfile->configuration ? dmfile->configuration->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE}))
+                    .checksum_algorithm = detail::getAlgorithmOrNone(*dmfile),
+                    .checksum_frame_size = detail::getFrameSizeOrDefault(*dmfile)}))
             , plain_layer(*plain_file)
             , compressed_buf(dmfile->configuration
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(plain_layer, compression_settings))
@@ -59,8 +65,8 @@ public:
                       .encryption_path = dmfile->encryptionMarkPath(file_base_name),
                       .create_new_encryption_info = false,
                       .write_limiter = write_limiter_,
-                      .checksum_algorithm = dmfile->configuration ? dmfile->configuration->getChecksumAlgorithm() : ChecksumAlgo::None,
-                      .checksum_frame_size = dmfile->configuration ? dmfile->configuration->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE}))
+                      .checksum_algorithm = detail::getAlgorithmOrNone(*dmfile),
+                      .checksum_frame_size = detail::getFrameSizeOrDefault(*dmfile)}))
         {
         }
 
