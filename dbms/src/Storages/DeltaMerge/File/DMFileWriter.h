@@ -18,11 +18,11 @@ namespace DM
 {
 namespace detail
 {
-DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
+static inline DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
 {
     return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumAlgorithm() : ChecksumAlgo::None;
 }
-size_t getFrameSizeOrDefault(DMFile & dmfile)
+static inline size_t getFrameSizeOrDefault(DMFile & dmfile)
 {
     return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE;
 }
