@@ -1,0 +1,107 @@
+# Preparation.
+=> DBGInvoke __enable_schema_sync_service('true')
+
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+
+=> DBGInvoke __drop_tidb_table(default, test2)
+=> drop table if exists default.test2
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+# Data.
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 default \'asTiDBType|time(6)\'')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(4, 0, 100, default, test)
+=> DBGInvoke __raft_insert_row(default, test, 4, 50, -1000)
+=> DBGInvoke __raft_insert_row(default, test, 4, 51, 0)
+=> DBGInvoke __raft_insert_row(default, test, 4, 52, 1000)
+=> DBGInvoke __raft_insert_row(default, test, 4, 53, 3020399000000000)
+=> DBGInvoke __raft_insert_row(default, test, 4, 54, -3020399000000000)
+=> DBGInvoke __raft_insert_row(default, test, 4, 55, -2880610123460000)
+=> DBGInvoke __raft_insert_row(default, test, 4, 56, 2880610123460000)
+
+=> DBGInvoke dag('select * from default.test',4,'encode_type:chunk')
+┌────────test.col_1─┐
+│  -00:00:00.000001 │
+│   00:00:00.000000 │
+│   00:00:00.000001 │
+│  838:59:59.000000 │
+│ -838:59:59.000000 │
+│ -800:10:10.123460 │
+│  800:10:10.123460 │
+└───────────────────┘
+
+=> DBGInvoke dag('select * from default.test',4,'encode_type:default')
+┌────────test.col_1─┐
+│  -00:00:00.000001 │
+│   00:00:00.000000 │
+│   00:00:00.000001 │
+│  838:59:59.000000 │
+│ -838:59:59.000000 │
+│ -800:10:10.123460 │
+│  800:10:10.123460 │
+└───────────────────┘
+
+=> DBGInvoke dag('select * from default.test',4,'encode_type:chblock')
+┌────────test.col_1─┐
+│  -00:00:00.000001 │
+│   00:00:00.000000 │
+│   00:00:00.000001 │
+│  838:59:59.000000 │
+│ -838:59:59.000000 │
+│ -800:10:10.123460 │
+│  800:10:10.123460 │
+└───────────────────┘
+
+
+=> DBGInvoke __mock_tidb_table(default, test2, 'col_1 default \'asTiDBType|time\'')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(5, 0, 100, default, test2)
+=> DBGInvoke __raft_insert_row(default, test2, 5, 50, -1000000000)
+=> DBGInvoke __raft_insert_row(default, test2, 5, 51, 0)
+=> DBGInvoke __raft_insert_row(default, test2, 5, 52, 1000000000)
+=> DBGInvoke __raft_insert_row(default, test2, 5, 53, 3020399000000000)
+=> DBGInvoke __raft_insert_row(default, test2, 5, 54, -3020399000000000)
+=> DBGInvoke __raft_insert_row(default, test2, 5, 55, -2880610000000000)
+=> DBGInvoke __raft_insert_row(default, test2, 5, 56, 2880610000000000)
+
+=> DBGInvoke dag('select * from default.test2',5,'encode_type:chunk')
+┌─test2.col_1─┐
+│   -00:00:01 │
+│    00:00:00 │
+│    00:00:01 │
+│   838:59:59 │
+│  -838:59:59 │
+│  -800:10:10 │
+│   800:10:10 │
+└─────────────┘
+
+=> DBGInvoke dag('select * from default.test2',5,'encode_type:default')
+┌─test2.col_1─┐
+│   -00:00:01 │
+│    00:00:00 │
+│    00:00:01 │
+│   838:59:59 │
+│  -838:59:59 │
+│  -800:10:10 │
+│   800:10:10 │
+└─────────────┘
+
+=> DBGInvoke dag('select * from default.test2',5,'encode_type:chblock')
+┌─test2.col_1─┐
+│   -00:00:01 │
+│    00:00:00 │
+│    00:00:01 │
+│   838:59:59 │
+│  -838:59:59 │
+│  -800:10:10 │
+│   800:10:10 │
+└─────────────┘
+
+
+# Clean up.
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+=> DBGInvoke __drop_tidb_table(default, test2)
+=> drop table if exists default.test2

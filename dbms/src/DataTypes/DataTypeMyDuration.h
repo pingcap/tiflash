@@ -27,6 +27,8 @@ public:
     bool equals(const IDataType & rhs) const override;
 
     int getFsp() const { return fsp; }
+
+    void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
 };
 
 

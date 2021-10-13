@@ -1,3 +1,5 @@
+#include <Columns/ColumnsNumber.h>
+#include <Common/MyDuration.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMyDuration.h>
@@ -17,6 +19,12 @@ DataTypeMyDuration::DataTypeMyDuration(int fsp_)
 bool DataTypeMyDuration::equals(const IDataType & rhs) const
 {
     return typeid(rhs) == typeid(*this) && fsp == static_cast<const DataTypeMyDuration &>(rhs).fsp;
+}
+
+void DataTypeMyDuration::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
+{
+    MyDuration dur(static_cast<const ColumnInt64 &>(column).getData()[row_num], fsp);
+    writeString(dur.toString(), ostr);
 }
 
 namespace ErrorCodes

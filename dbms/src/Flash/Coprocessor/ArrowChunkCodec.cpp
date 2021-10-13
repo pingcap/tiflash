@@ -46,7 +46,7 @@ Block ArrowChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schem
         std::vector<UInt8> null_bitmap;
         const auto & field = schema[column_index];
         const auto & name = field.first;
-        auto data_type = getDataTypeByColumnInfo(field.second);
+        auto data_type = getDataTypeByColumnInfoForComputingLayer(field.second);
         if (null_count > 0)
         {
             auto bit_map_length = (length + 7) / 8;

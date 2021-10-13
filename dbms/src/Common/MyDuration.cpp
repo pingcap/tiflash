@@ -1,5 +1,5 @@
 #include <Common/MyDuration.h>
-
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -40,5 +40,17 @@ UInt32 MyDuration::seconds() const
 UInt32 MyDuration::microsecond() const
 {
     return std::get<4>(splitDuration());
+}
+
+String MyDuration::toString() const
+{
+    auto [sign, hour, minute, second, microsecond] = splitDuration();
+    if (fsp == 0)
+    {
+        return fmt::format("{}{:02}:{:02}:{:02}", sign > 0 ? "" : "-", hour, minute, second);
+    }
+    auto fmt_str = fmt::format("{}{}{}", "{}{:02}:{:02}:{:02}.{:.", fsp, "}");
+    auto frac_str = fmt::format("{:06}", microsecond);
+    return fmt::format(fmt_str, sign > 0 ? "" : "-", hour, minute, second, frac_str);
 }
 } // namespace DB

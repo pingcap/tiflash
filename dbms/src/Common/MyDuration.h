@@ -32,5 +32,7 @@ public:
     UInt32 minutes() const;
     UInt32 seconds() const;
     UInt32 microsecond() const;
+
+    String toString() const;
 };
 } // namespace DB
