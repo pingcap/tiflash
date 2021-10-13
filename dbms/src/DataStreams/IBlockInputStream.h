@@ -1,20 +1,19 @@
 #pragma once
 
-#include <vector>
-#include <memory>
-#include <mutex>
-#include <shared_mutex>
-#include <functional>
-#include <boost/noncopyable.hpp>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <Storages/TableLockHolder.h>
 
+#include <boost/noncopyable.hpp>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
+#include <vector>
+
 
 namespace DB
 {
-
-
 class IBlockInputStream;
 
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
@@ -24,9 +23,9 @@ struct Progress;
 
 namespace ErrorCodes
 {
-    extern const int OUTPUT_IS_NOT_SORTED;
-    extern const int NOT_IMPLEMENTED;
-}
+extern const int OUTPUT_IS_NOT_SORTED;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
 
 /** Callback to track the progress of the query.
@@ -44,7 +43,7 @@ using FilterPtr = IColumn::Filter *;
 class IBlockInputStream : private boost::noncopyable
 {
 public:
-    IBlockInputStream() {}
+    IBlockInputStream() = default;
 
     /** Get data structure of the stream in a form of "header" block (it is also called "sample block").
       * Header block contains column names, data types, columns of size 0. Constant columns must have corresponding values.
@@ -80,7 +79,7 @@ public:
     virtual void readPrefix() {}
     virtual void readSuffix() {}
 
-    virtual ~IBlockInputStream() {}
+    virtual ~IBlockInputStream() = default;
 
     /** To output the data stream transformation tree (query execution plan).
       */
@@ -95,7 +94,7 @@ public:
 
     /** Must be called before read, readPrefix.
       */
-    void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1);
+    void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1) const;
 
     /** Check the depth of the pipeline.
       * If max_depth is specified and the `depth` is greater - throw an exception.
@@ -123,6 +122,8 @@ protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;
 
+    virtual void dumpExtra(std::ostream & ostr [[maybe_unused]]) const {};
+
 private:
     TableLockHolders table_locks;
 
@@ -133,4 +134,4 @@ private:
 };
 
 
-}
+} // namespace DB

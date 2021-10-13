@@ -690,6 +690,7 @@ public:
         /// What to count.
         ColumnNumbers keys;
         AggregateDescriptions aggregates;
+        Names key_names;
         size_t keys_size;
         size_t aggregates_size;
 
@@ -720,6 +721,7 @@ public:
             const Block & src_header_,
             const ColumnNumbers & keys_,
             const AggregateDescriptions & aggregates_,
+            const Names & key_names_,
             bool overflow_row_,
             size_t max_rows_to_group_by_,
             OverflowMode group_by_overflow_mode_,
@@ -732,6 +734,7 @@ public:
             : src_header(src_header_)
             , keys(keys_)
             , aggregates(aggregates_)
+            , key_names(key_names_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
             , overflow_row(overflow_row_)
@@ -750,9 +753,10 @@ public:
         Params(const Block & intermediate_header_,
                const ColumnNumbers & keys_,
                const AggregateDescriptions & aggregates_,
+               const Names & key_names_,
                bool overflow_row_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", collators_)
+            : Params(Block(), keys_, aggregates_, key_names_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, "", collators_)
         {
             intermediate_header = intermediate_header_;
         }

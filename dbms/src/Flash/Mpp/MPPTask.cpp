@@ -74,7 +74,7 @@ void MPPTask::closeAllTunnels(const String & reason)
 
 void MPPTask::finishWrite()
 {
-    for (auto it : tunnel_map)
+    for (const auto & it : tunnel_map)
     {
         it.second->writeDone();
     }
@@ -142,9 +142,7 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
         return true;
     auto meta_snap = current_region->dumpRegionMetaSnapshot();
-    if (meta_snap.ver != region_info.region_version)
-        return true;
-    return false;
+    return meta_snap.ver != region_info.region_version;
 }
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -169,7 +167,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         }
     }
     TMTContext & tmt_context = context.getTMTContext();
-    for (auto & r : task_request.regions())
+    for (const auto & r : task_request.regions())
     {
         RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
         if (region_info.key_ranges.empty())
@@ -196,8 +194,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     if (unlikely(task_request.timeout() < 0))
     {
         /// this is only for test
-        context.setSetting("mpp_task_timeout", (Int64)5);
-        context.setSetting("mpp_task_running_timeout", (Int64)10);
+        context.setSetting("mpp_task_timeout", static_cast<Int64>(5));
+        context.setSetting("mpp_task_running_timeout", static_cast<Int64>(10));
     }
     else
     {
@@ -226,7 +224,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 
     // register tunnels
     tunnel_set = std::make_shared<MPPTunnelSet>();
-    const auto & exchangeSender = dag_req->root_executor().exchange_sender();
+    const auto & exchange_sender = dag_req->root_executor().exchange_sender();
     std::chrono::seconds timeout(task_request.timeout());
 
     auto task_cancelled_callback = [task = std::weak_ptr<MPPTask>(shared_from_this())] {
@@ -234,11 +232,11 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         return sp && sp->getStatus() == CANCELLED;
     };
 
-    for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
+    for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
-        task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
+        task_meta.ParseFromString(exchange_sender.encoded_task_meta(i));
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, log);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
@@ -279,6 +277,9 @@ void MPPTask::preprocess()
     }
     DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
+    if (io.in && log->debug())
+    {
+    }
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;

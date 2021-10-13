@@ -44,6 +44,8 @@ protected:
 
     Block readImpl() override;
 
+    void dumpExtra(std::ostream & ostr) const override;
+
 private:
     const LogWithPrefixPtr log;
 
@@ -102,7 +104,7 @@ private:
 
     struct Handler
     {
-        Handler(ParallelAggregatingBlockInputStream & parent_)
+        explicit Handler(ParallelAggregatingBlockInputStream & parent_)
             : parent(parent_)
         {}
 
@@ -110,7 +112,7 @@ private:
         void onFinishThread(size_t thread_num);
         void onFinish();
         void onException(std::exception_ptr & exception, size_t thread_num);
-        String getName() const
+        static String getName()
         {
             return "ParallelAgg";
         }

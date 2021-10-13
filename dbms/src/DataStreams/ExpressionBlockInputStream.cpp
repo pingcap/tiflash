@@ -44,4 +44,39 @@ Block ExpressionBlockInputStream::readImpl()
     return res;
 }
 
+void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
+{
+    ostr << "expression: [ input: {";
+    const auto & input_columns = expression->getRequiredColumnsWithTypes();
+    if (!input_columns.empty())
+    {
+        auto iter = input_columns.cbegin();
+        ostr << iter->name << '(' << iter->type->getName() << ')';
+        for (; iter != input_columns.cend(); ++iter)
+        {
+            ostr << ", " <<  iter->name << '(' << iter->type->getName() << ')';
+        }
+    }
+    ostr << "} actions: {";
+    if (!expression->getActions().empty())
+    {
+        ostr << expression->getActions()[0].toString();
+        for (size_t i = 1; i < expression->getActions().size(); ++i)
+            ostr << "; " << expression->getActions()[i].toString();
+    }
+    ostr << "} output: {";
+    const auto & output = expression->getSampleBlock();
+    if (output.columns() > 0)
+    {
+        const auto & first = output.getByPosition(0);
+        ostr << first.name << '(' << first.type->getName() << ')';
+        for (size_t i = 1; i < output.columns(); ++i)
+        {
+            const auto & c = output.getByPosition(i);
+            ostr << ", " <<  c.name << '(' << c.type->getName() << ')';
+        }
+    }
+    ostr << "} ]";
+}
+
 } // namespace DB

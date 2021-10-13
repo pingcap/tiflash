@@ -117,6 +117,31 @@ Block ParallelAggregatingBlockInputStream::readImpl()
 }
 
 
+void ParallelAggregatingBlockInputStream::dumpExtra(std::ostream & ostr) const
+{
+    ostr << "max_threads: " << max_threads;
+    ostr << " final: " << (final ? "true" : "false");
+    ostr << " agg_funcs: [";
+    const auto & aggregates = params.aggregates;
+    if (!aggregates.empty())
+    {
+        ostr << aggregates[0].column_name;
+        for (size_t i = 1; i < aggregates.size(); ++i)
+            ostr << ", " << aggregates[i].column_name;
+    }
+
+    auto key_names = params.key_names;
+    ostr << "] keys: [";
+    if (!key_names.empty())
+    {
+        ostr << key_names[0];
+        for (size_t i = 1; i < key_names.size(); ++i)
+            ostr << ", " << key_names[i];
+    }
+    ostr << ']';
+}
+
+
 ParallelAggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(
     const std::string & path,
     const FileProviderPtr & file_provider_)
