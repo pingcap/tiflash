@@ -3835,6 +3835,7 @@ struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
 struct NameLength                { static constexpr auto name = "length"; };
 struct NameLengthUTF8            { static constexpr auto name = "lengthUTF8"; };
+struct NameLowerBinary           { static constexpr auto name = "lowerBinary"; };
 struct NameLowerUTF8             { static constexpr auto name = "lowerUTF8"; };
 struct NameUpperBinary           { static constexpr auto name = "upperBinary"; };
 struct NameUpperUTF8             { static constexpr auto name = "upperUTF8"; };
