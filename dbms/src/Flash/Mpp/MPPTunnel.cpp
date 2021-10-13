@@ -27,7 +27,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
-    , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
+    , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
     , log(&Poco::Logger::get(tunnel_id))
 {
 }
@@ -43,12 +43,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         {
             send_thread->join();
         }
-        /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
-        MPPDataPacketPtr res;
-        while (send_queue.size() > 0)
-        {
-            send_queue.pop(res);
-        }
+        clearSendQueue();
     }
     catch (...)
     {
@@ -120,6 +115,17 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
     }
 }
 
+/// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
+template <typename Writer>
+void MPPTunnelBase<Writer>::clearSendQueue()
+{
+    MPPDataPacketPtr res;
+    while (send_queue.size() > 0)
+    {
+        send_queue.pop(res);
+    }
+}
+
 /// to avoid being blocked when pop(), we should send nullptr into send_queue in all cases
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
@@ -133,6 +139,7 @@ void MPPTunnelBase<Writer>::sendLoop()
             send_queue.pop(res);
             if (nullptr == res)
             {
+                clearSendQueue();
                 finishWithLock();
                 return;
             }
@@ -140,6 +147,7 @@ void MPPTunnelBase<Writer>::sendLoop()
             {
                 if (!writer->Write(*res))
                 {
+                    clearSendQueue();
                     finishWithLock();
                     auto msg = " grpc writes failed.";
                     LOG_ERROR(log, msg);
@@ -196,7 +204,6 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
     send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
-
     connected = true;
     cv_for_connected.notify_all();
 }
