@@ -20,14 +20,14 @@ SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_EMBEDDED_COMPILER="FALSE"
 
-install_dir="$SRCPATH/release-centos7/tiflash"
+INSTALL_DIR="$SRCPATH/release-centos7/tiflash"
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so
 
-build_dir="$SRCPATH/release-centos7/build-release"
-rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
+BUILD_DIR="$SRCPATH/release-centos7/build-release"
+rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
 cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
@@ -42,12 +42,16 @@ cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
 make -j $NPROC tiflash
 
 # Reduce binary size by compressing.
-objcopy --compress-debug-sections=zlib-gnu "$build_dir/dbms/src/Server/tiflash"
+objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash"
 
-cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
-cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
+cp -f "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
+cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 
-ldd "$install_dir/tiflash"
-cd "$install_dir"
-chrpath -d libtiflash_proxy.so "$install_dir/tiflash"
-ldd "$install_dir/tiflash"
+ldd "${INSTALL_DIR}/tiflash"
+
+ldd "${INSTALL_DIR/tiflash}" | grep 'libnsl.so' | grep '=>' | awk '{print $3}' | xargs -I {} cp {} "${INSTALL_DIR}"
+
+cd "${INSTALL_DIR}"
+chrpath -d libtiflash_proxy.so "${INSTALL_DIR}/tiflash"
+ldd "${INSTALL_DIR}/tiflash"
+ls -lh "${INSTALL_DIR}"
