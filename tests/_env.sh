@@ -9,8 +9,7 @@ else
 fi
 # export build_dir="../cmake-build-debug"
 
-#export storage_bin="$build_dir/dbms/src/Server/tiflash"
-export storage_bin="/Users/mengxin/WorkSpace/PingCAP/tics/cmake-build-debug/dbms/src/Server/tiflash"
+export storage_bin="$build_dir/dbms/src/Server/tiflash"
 
 # Server address for connecting
 export storage_server="127.0.0.1"
