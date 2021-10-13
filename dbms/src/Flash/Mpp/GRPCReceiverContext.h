@@ -26,8 +26,14 @@ public:
 
     struct LocalEnv
     {
-        LocalEnv() :tunnel(nullptr), status() {}
-        LocalEnv(MPPTunnelPtr tunnel_, grpc::Status status_) :tunnel(tunnel_), status(status_) {}
+        LocalEnv()
+            : tunnel(nullptr)
+            , status()
+        {}
+        LocalEnv(MPPTunnelPtr tunnel_, grpc::Status status_)
+            : tunnel(tunnel_)
+            , status(status_)
+        {}
         MPPTunnelPtr tunnel;
         grpc::Status status;
     };
@@ -42,13 +48,16 @@ public:
         bool is_local;
 
         explicit Reader(const Request & req);
-        explicit Reader(const LocalEnv & env):call(nullptr), local_env(env), is_local(true) {};
+        explicit Reader(const LocalEnv & env)
+            : call(nullptr)
+            , local_env(env)
+            , is_local(true){};
         /// put the implementation of dtor in .cpp so we don't need to put the specialization of
         /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
         ~Reader();
 
         void initialize() const;
-        bool read(std::shared_ptr<mpp::MPPDataPacket> &packet) const;
+        bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const;
         StatusType finish() const;
         // std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request);
     };

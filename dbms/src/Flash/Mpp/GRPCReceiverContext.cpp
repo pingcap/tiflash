@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+
 #include <tuple>
 
 namespace pingcap
@@ -35,9 +36,10 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 namespace DB
 {
 GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_)
-    : cluster(cluster_), task_manager(task_manager_), is_local(false)
+    : cluster(cluster_)
+    , task_manager(task_manager_)
+    , is_local(false)
 {}
-
 
 
 GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
@@ -58,7 +60,7 @@ GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
     return req;
 }
 
-std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> &task_manager)
+std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
     std::string err_msg;
@@ -85,7 +87,7 @@ std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::
 
 std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(const GRPCReceiverContext::Request & request) const
 {
-    if (is_local) 
+    if (is_local)
     {
         std::tuple<MPPTunnelPtr, grpc::Status> localConnRetPair = EstablishMPPConnectionLocal(request.req.get(), task_manager);
         MPPTunnelPtr tunnel = std::get<0>(localConnRetPair);
@@ -102,7 +104,7 @@ std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(con
         // auto reader = std::make_shared<Reader>(local_env);
         return reader;
     }
-    else 
+    else
     {
         auto reader = std::make_shared<Reader>(request);
         reader->reader = cluster->rpc_client->sendStreamRequest(
@@ -134,10 +136,9 @@ void GRPCReceiverContext::Reader::initialize() const
     {
         reader->WaitForInitialMetadata();
     }
-    
 }
 
-bool GRPCReceiverContext::Reader::read(std::shared_ptr<mpp::MPPDataPacket> &packet) const
+bool GRPCReceiverContext::Reader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
 {
     if (is_local)
     {
@@ -151,12 +152,11 @@ bool GRPCReceiverContext::Reader::read(std::shared_ptr<mpp::MPPDataPacket> &pack
     {
         return reader->Read(packet.get());
     }
-    
 }
 
 GRPCReceiverContext::StatusType GRPCReceiverContext::Reader::finish() const
 {
-    if (is_local) 
+    if (is_local)
     {
         return ::grpc::Status::OK;
     }
