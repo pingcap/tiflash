@@ -1,8 +1,5 @@
 #include <Encryption/AESCTRCipherStream.h>
-<<<<<<< HEAD
-=======
 #include <Encryption/EncryptedRandomAccessFile.h>
->>>>>>> master
 #include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>

@@ -707,7 +707,7 @@ void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::Sequence
 
     PageUtil::writeFile(meta_file, 0, linked_meta_data, linked_meta_size, nullptr, false);
     PageUtil::syncFile(meta_file);
-    data_file->hardLink(linked_file.dataPath().c_str());
+    data_file->hardLink(linked_file.dataPath());
 }
 
 
