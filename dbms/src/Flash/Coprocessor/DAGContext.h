@@ -7,56 +7,74 @@
 #pragma GCC diagnostic pop
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
-
 class Context;
+class MPPTunnelSet;
 
 struct ProfileStreamsInfo
 {
     UInt32 qb_id;
     BlockInputStreams input_streams;
 };
-
+using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
 public:
     explicit DAGContext(const tipb::DAGRequest & dag_request)
-        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
-          return_executor_id(dag_request.has_root_executor() || dag_request.executors(0).has_executor_id()),
-          is_mpp_task(false),
-          is_root_mpp_task(false),
-          flags(dag_request.flags()),
-          sql_mode(dag_request.sql_mode()),
-          warnings(std::numeric_limits<int>::max()) {}
+        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
+        , is_mpp_task(false)
+        , is_root_mpp_task(false)
+        , tunnel_set(nullptr)
+        , flags(dag_request.flags())
+        , sql_mode(dag_request.sql_mode())
+        , warnings(std::numeric_limits<int>::max())
+    {
+        assert(dag_request.has_root_executor() || dag_request.executors_size() > 0);
+        return_executor_id = dag_request.has_root_executor() || dag_request.executors(0).has_executor_id();
+    }
 
     DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
-        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
-          return_executor_id(true),
-          is_mpp_task(true),
-          flags(dag_request.flags()),
-          sql_mode(dag_request.sql_mode()),
-          mpp_task_meta(meta_),
-          warnings(std::numeric_limits<int>::max())
+        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
+        , return_executor_id(true)
+        , is_mpp_task(true)
+        , tunnel_set(nullptr)
+        , flags(dag_request.flags())
+        , sql_mode(dag_request.sql_mode())
+        , mpp_task_meta(meta_)
+        , warnings(std::numeric_limits<int>::max())
     {
+        assert(dag_request.has_root_executor());
+
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
-        const auto & exchangeSender = dag_request.root_executor().exchange_sender();
-        exchange_sender_execution_summary_key = exchangeSender.child().executor_id();
+        const auto & exchange_sender = dag_request.root_executor().exchange_sender();
+        exchange_sender_execution_summary_key = exchange_sender.child().executor_id();
         is_root_mpp_task = false;
-        if (exchangeSender.encoded_task_meta_size() == 1)
+        if (exchange_sender.encoded_task_meta_size() == 1)
         {
             /// root mpp task always has 1 task_meta because there is only one TiDB
             /// node for each mpp query
             mpp::TaskMeta task_meta;
-            task_meta.ParseFromString(exchangeSender.encoded_task_meta(0));
+            task_meta.ParseFromString(exchange_sender.encoded_task_meta(0));
             is_root_mpp_task = task_meta.task_id() == -1;
         }
     }
+
+    DAGContext()
+        : collect_execution_summaries(false)
+        , is_mpp_task(false)
+        , is_root_mpp_task(false)
+        , tunnel_set(nullptr)
+        , flags(0)
+        , sql_mode(0)
+        , warnings(std::numeric_limits<int>::max())
+    {}
 
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
@@ -65,6 +83,7 @@ public:
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
     void handleInvalidTime(const String & msg, const TiFlashError & error);
+    void appendWarning(const String & msg, int32_t code = 0);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
     bool shouldClipToZero();
@@ -78,14 +97,16 @@ public:
     /// This method is not thread-safe.
     void consumeWarnings(std::vector<tipb::Error> & warnings_)
     {
-        warnings_.reserve(warnings.size());
-        for (size_t i = 0; i < warnings.size(); i++)
+        const size_t warnings_size = warnings.size();
+        warnings_.reserve(warnings_size);
+        for (size_t i = 0; i < warnings_size; ++i)
         {
             tipb::Error error;
             warnings.pop(error);
             warnings_.push_back(error);
         }
     }
+    void clearWarnings() { warnings.clear(); }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
@@ -110,8 +131,10 @@ public:
     bool return_executor_id;
     bool is_mpp_task;
     bool is_root_mpp_task;
-
+    MPPTunnelSetPtr tunnel_set;
     RegionInfoList retry_regions;
+
+    LogWithPrefixPtr mpp_task_log;
 
 private:
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo

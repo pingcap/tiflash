@@ -1,9 +1,9 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB
@@ -78,12 +78,17 @@ private:
     using Self = UnionBlockInputStream<mode>;
 
 public:
-    UnionBlockInputStream(BlockInputStreams inputs, BlockInputStreamPtr additional_input_at_end, size_t max_threads, const LogWithPrefixPtr & log_ = nullptr, ExceptionCallback exception_callback_ = ExceptionCallback())
+    UnionBlockInputStream(
+        BlockInputStreams inputs,
+        BlockInputStreamPtr additional_input_at_end,
+        size_t max_threads,
+        const LogWithPrefixPtr & log_,
+        ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(std::min(inputs.size(), max_threads))
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
-        , log(getLogWithPrefix(log_))
+        , log(getMPPTaskLog(log_, getName()))
     {
         children = inputs;
         if (additional_input_at_end)
@@ -293,6 +298,11 @@ private:
 
             parent.output_queue.push(exception);
             parent.cancel(false); /// Does not throw exceptions.
+        }
+
+        String getName() const
+        {
+            return "ParallelUnion";
         }
 
         Self & parent;

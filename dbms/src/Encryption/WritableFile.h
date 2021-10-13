@@ -27,7 +27,13 @@ public:
 
     virtual int fsync() = 0;
 
+<<<<<<< HEAD
     virtual void hardLink(const char * link_file) = 0;
+=======
+    // Create a new hard link file for `existing_file` to this file
+    // Note that it will close the file descriptor if it is opened.
+    virtual void hardLink(const std::string & existing_file) = 0;
+>>>>>>> master
 };
 
 using WritableFilePtr = std::shared_ptr<WritableFile>;

@@ -27,7 +27,9 @@ public:
     PSWriter(const PSPtr & ps_, DB::UInt32 index_)
         : ps(ps_)
         , index(index_)
-    {}
+    {
+        gen.seed(time(0));
+    }
 
     virtual String description() override
     {

@@ -1,10 +1,10 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/LogWithPrefix.h>
 #include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 
 #include <thread>
 
@@ -16,9 +16,9 @@ namespace DB
 class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_ = nullptr)
+    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
         : queue(clients)
-        , log(getLogWithPrefix(log_))
+        , log(getMPPTaskLog(log_, getName()))
         , in(in_)
     {
         children.push_back(in);
@@ -50,7 +50,7 @@ public:
         read_prefixed = true;
 
         /// Start reading thread.
-        thread = ThreadFactory().newThread([this] { fetchBlocks(); });
+        thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
     }
 
     void readSuffix() override

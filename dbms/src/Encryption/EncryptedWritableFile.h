@@ -34,7 +34,7 @@ public:
 
     int fsync() override { return file->fsync(); }
 
-    void hardLink(const char * link_file) override { file->hardLink(link_file); };
+    void hardLink(const std::string & existing_file) override { file->hardLink(existing_file); };
 
 private:
     WritableFilePtr file;

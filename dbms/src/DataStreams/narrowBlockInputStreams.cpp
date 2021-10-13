@@ -1,12 +1,12 @@
-#include <random>
-#include <pcg_random.hpp>
 #include <Common/randomSeed.h>
 #include <DataStreams/ConcatBlockInputStream.h>
+
+#include <pcg_random.hpp>
+#include <random>
 
 
 namespace DB
 {
-
 BlockInputStreams narrowBlockInputStreams(BlockInputStreams & inputs, size_t width)
 {
     size_t size = inputs.size();
@@ -29,9 +29,9 @@ BlockInputStreams narrowBlockInputStreams(BlockInputStreams & inputs, size_t wid
 
     BlockInputStreams res(width);
     for (size_t i = 0; i < width; ++i)
-        res[i] = std::make_shared<ConcatBlockInputStream>(partitions[i]);
+        res[i] = std::make_shared<ConcatBlockInputStream>(partitions[i], nullptr);
 
     return res;
 }
 
-}
+} // namespace DB

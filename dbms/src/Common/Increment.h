@@ -10,7 +10,7 @@ class Increment
 {
 public:
     /// path - the name of the file, including the path
-    Increment(const std::string & path_)
+    explicit Increment(const std::string & path_)
         : counter(path_)
     {}
 

@@ -1,15 +1,14 @@
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
-
 #include <Flash/Coprocessor/ArrowColCodec.h>
 #include <IO/Endian.h>
 
 namespace DB
 {
-
 class ArrowChunkCodecStream : public ChunkCodecStream
 {
 public:
-    explicit ArrowChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types)
+    explicit ArrowChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
+        : ChunkCodecStream(field_types)
     {
         ti_chunk = std::make_unique<TiDBChunk>(field_types);
     }
