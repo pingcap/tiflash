@@ -63,7 +63,7 @@ cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/lib
 
 ldd "${INSTALL_DIR}/tiflash"
 
-ldd "${INSTALL_DIR/tiflash}" | grep 'libnsl.so' | grep '=>' | awk '{print $3}' | xargs -I {} cp {} "${INSTALL_DIR}"
+ldd "${INSTALL_DIR}/tiflash" | grep 'libnsl.so' | grep '=>' | awk '{print $3}' | xargs -I {} cp {} "${INSTALL_DIR}"
 
 cd "${INSTALL_DIR}"
 chrpath -d libtiflash_proxy.so "${INSTALL_DIR}/tiflash"
