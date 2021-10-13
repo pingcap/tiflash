@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/MPMCQueue.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -91,8 +90,7 @@ private:
     std::unique_ptr<std::thread> send_thread;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    DB::MPMCQueue<MPPDataPacketPtr> send_queue;
-//    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
+    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
 
     Poco::Logger * log;
 };
