@@ -5,6 +5,7 @@
 #include <Common/Exception.h>
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 #include <linux/aio_abi.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -33,12 +34,12 @@ inline int io_destroy(aio_context_t ctx)
 }
 
 /// last argument is an array of pointers technically speaking
-inline int io_submit(aio_context_t ctx, int64_t nr, struct iocb * iocbpp[])
+inline int io_submit(aio_context_t ctx, Int64 nr, struct iocb * iocbpp[])
 {
     return syscall(__NR_io_submit, ctx, nr, iocbpp);
 }
 
-inline int io_getevents(aio_context_t ctx, int64_t min_nr, int64_t max_nr, io_event * events, struct timespec * timeout)
+inline int io_getevents(aio_context_t ctx, Int64 min_nr, Int64 max_nr, io_event * events, struct timespec * timeout)
 {
     return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
 }
