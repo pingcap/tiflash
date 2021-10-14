@@ -28,7 +28,14 @@ struct StreamWriter
     StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
         : writer(writer_)
     {}
-
+    void write(mpp::MPPDataPacket &)
+    {
+        throw Exception("StreamWriter::write(mpp::MPPDataPacket &) do not support writing MPPDataPacket!");
+    }
+    void write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t)
+    {
+        throw Exception("StreamWriter::write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
+    }
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
         ::coprocessor::BatchResponse resp;

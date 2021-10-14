@@ -1,5 +1,6 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/MPPTunnel.h>
@@ -112,7 +113,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
             reader = rpc_context->makeReader(req);
             reader->initialize();
-            std::shared_ptr<ReceivedPacket> packet;
+            std::shared_ptr<ReceivedMessage> recv_msg;
             bool has_data = false;
             for (;;)
             {
@@ -122,7 +123,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });
                     if (state == ExchangeReceiverState::NORMAL)
                     {
-                        res_buffer.popEmpty(packet);
+                        res_buffer.popEmpty(recv_msg);
                         cv.notify_all();
                     }
                     else
@@ -133,23 +134,23 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         break;
                     }
                 }
-                packet->req_info = req_info;
-                packet->source_index = source_index;
-                bool success = reader->read(packet->packet);
+                recv_msg->req_info = req_info;
+                recv_msg->source_index = source_index;
+                bool success = reader->read(recv_msg->packet);
                 if (!success)
                     break;
                 else
                     has_data = true;
-                if (packet->packet->has_error())
+                if (recv_msg->packet->has_error())
                 {
-                    throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                    throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
                 }
                 {
                     std::unique_lock<std::mutex> lock(mu);
                     cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
                     if (state == ExchangeReceiverState::NORMAL)
                     {
-                        res_buffer.pushObject(packet);
+                        res_buffer.pushObject(recv_msg);
                         cv.notify_all();
                     }
                     else
@@ -226,9 +227,42 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
+void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg)
 {
-    std::shared_ptr<ReceivedPacket> packet;
+    recv_msg->packet->Clear();
+    std::unique_lock<std::mutex> lock(mu);
+    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
+    res_buffer.pushEmpty(std::move(recv_msg));
+    cv.notify_all();
+}
+
+template <typename RPCContext>
+Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
+{
+    assert(recv_msg != nullptr);
+    Int64 rows = 0;
+
+    int chunk_size = recv_msg->packet->chunks_size();
+    if (chunk_size == 0)
+        return rows;
+
+    /// ExchangeReceiverBase should receive chunks of TypeCHBlock
+    for (int i = 0; i < chunk_size; i++)
+    {
+        Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
+        rows += block.rows();
+        if (unlikely(block.rows() == 0))
+            continue;
+        assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
+        block_queue.push(std::move(block));
+    }
+    return rows;
+}
+
+template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
+{
+    std::shared_ptr<ReceivedMessage> recv_msg;
     {
         std::unique_lock<std::mutex> lock(mu);
         cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != ExchangeReceiverState::NORMAL; });
@@ -248,7 +282,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         }
         else if (res_buffer.hasObjects())
         {
-            res_buffer.popObject(packet);
+            res_buffer.popObject(recv_msg);
             cv.notify_all();
         }
         else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
@@ -256,29 +290,43 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
-    assert(packet != nullptr && packet->packet != nullptr);
+    assert(recv_msg != nullptr && recv_msg->packet != nullptr);
     ExchangeReceiverResult result;
-    if (packet->packet->has_error())
+    if (recv_msg->packet->has_error())
     {
-        result = {nullptr, packet->source_index, packet->req_info, true, packet->packet->error().msg(), false};
+        result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, recv_msg->packet->error().msg(), false};
     }
     else
     {
-        auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(packet->packet->data()))
+        if (!recv_msg->packet->data().empty()) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
         {
-            result = {nullptr, packet->source_index, packet->req_info, true, "decode error", false};
+            auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+            if (!resp_ptr->ParseFromString(recv_msg->packet->data()))
+            {
+                result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, "decode error", false};
+            }
+            else
+            {
+                result = {resp_ptr, recv_msg->source_index, recv_msg->req_info, false, "", false};
+                /// If mocking TiFlash as TiDB, here should decode chunks from resp_ptr.
+                if (!resp_ptr->chunks().empty())
+                {
+                    assert(recv_msg->packet->chunks().empty());
+                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
+                }
+            }
         }
-        else
+        else /// the non-last packets
         {
-            result = {resp_ptr, packet->source_index, packet->req_info};
+            result = {nullptr, recv_msg->source_index, recv_msg->req_info, false, "", false};
+        }
+        if (!result.meet_error && !recv_msg->packet->chunks().empty())
+        {
+            assert(result.rows == 0);
+            result.rows = decodeChunks(recv_msg, block_queue, expected_types);
         }
     }
-    packet->packet->Clear();
-    std::unique_lock<std::mutex> lock(mu);
-    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
-    res_buffer.pushEmpty(std::move(packet));
-    cv.notify_all();
+    returnEmptyMsg(recv_msg);
     return result;
 }
 
