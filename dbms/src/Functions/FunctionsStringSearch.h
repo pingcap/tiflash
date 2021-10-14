@@ -101,7 +101,7 @@ public:
         {
             auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
             bool valid_args = true;
-            if (col_needle_const == nullptr || col_escape_const == nullptr)
+            if (col_escape_const == nullptr)
             {
                 valid_args = false;
             }
@@ -120,8 +120,7 @@ public:
             }
             if (!valid_args)
             {
-                throw Exception("2nd and 3rd arguments of function " + getName() + " must "
-                                                                                   "be constants, and the 3rd argument must between 0 and 255.");
+                throw Exception("3rd arguments of function " + getName() + " must be constants and between 0 and 255.");
             }
         }
 

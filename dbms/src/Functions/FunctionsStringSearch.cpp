@@ -592,10 +592,29 @@ struct MatchImpl
         }
     }
 
-    template <typename... Args>
-    static void vector_vector(Args &&...)
+    static void vector_vector(const ColumnString::Chars_t & haystack_data,
+                              const ColumnString::Offsets & haystack_offsets,
+                              const ColumnString::Chars_t & needle_data,
+                              const ColumnString::Offsets & needle_offsets,
+                              const UInt8 escape_char,
+                              const TiDB::TiDBCollatorPtr & collator,
+                              PaddedPODArray<UInt8> & res)
     {
-        throw Exception("Functions 'like' and 'match' don't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
+        size_t size = haystack_offsets.size();
+        std::string haystack_str(reinterpret_cast<const char *>(&haystack_data[0]), haystack_offsets[size - 1]);
+        std::string needle_str(reinterpret_cast<const char *>(&needle_data[0]), needle_offsets[size - 1]);
+
+        ColumnString::Offset prev_haystack_offset = 0;
+        ColumnString::Offset prev_needle_offset = 0;
+
+        for (size_t i = 0; i < size; i++)
+        {
+            size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
+            size_t haystack_size = haystack_offsets[i] - prev_haystack_offset - 1;
+            constant_constant(haystack_str.substr(prev_haystack_offset, haystack_size), needle_str.substr(prev_needle_offset, needle_size), escape_char, collator, res[i]);
+            prev_haystack_offset = haystack_offsets[i];
+            prev_needle_offset = needle_offsets[i];
+        }
     }
 
     /// Search different needles in single haystack.
