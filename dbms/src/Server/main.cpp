@@ -21,7 +21,11 @@
 #if ENABLE_CLICKHOUSE_LOCAL
 #include "LocalServer.h"
 #endif
+#if ENABLE_TIFLASH_DTTOOL
+#include <Server/DTTool/DTTool.h>
+#endif
 #include <Common/StringUtils/StringUtils.h>
+#include <Server/DTTool/DTTool.h>
 
 /// Universal executable for various clickhouse applications
 #if ENABLE_CLICKHOUSE_SERVER
@@ -91,7 +95,6 @@ int mainExportError(int argc, char ** argv)
 
 namespace
 {
-
 using MainFunc = int (*)(int, char **);
 
 
@@ -113,16 +116,23 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
     {"performance-test", mainEntryClickHousePerformanceTest},
 #endif
 #if ENABLE_CLICKHOUSE_TOOLS
-    {"extract-from-config", mainEntryClickHouseExtractFromConfig}, {"compressor", mainEntryClickHouseCompressor},
+    {"extract-from-config", mainEntryClickHouseExtractFromConfig},
+    {"compressor", mainEntryClickHouseCompressor},
     {"format", mainEntryClickHouseFormat},
 #endif
 #if ENABLE_CLICKHOUSE_COPIER
     {"copier", mainEntryClickHouseClusterCopier},
 #endif
 #if USE_EMBEDDED_COMPILER
-    {"clang", mainEntryClickHouseClang}, {"clang++", mainEntryClickHouseClang}, {"lld", mainEntryClickHouseLLD},
+    {"clang", mainEntryClickHouseClang},
+    {"clang++", mainEntryClickHouseClang},
+    {"lld", mainEntryClickHouseLLD},
 #endif
-    {"version", mainEntryVersion}, {"errgen", mainExportError}};
+#if ENABLE_TIFLASH_DTTOOL
+    {"dttool", DTTool::mainEntryTiFlashDTTool},
+#endif
+    {"version", mainEntryVersion},
+    {"errgen", mainExportError}};
 
 
 int printHelp(int, char **)

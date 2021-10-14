@@ -2,6 +2,7 @@
 #include <Common/TiFlashException.h>
 #include <Common/config_version.h>
 #include <IO/ChecksumBuffer.h>
+#include <Interpreters/Context.h>
 
 #include <map>
 #include <string>
@@ -73,11 +74,18 @@ public:
         }
     }
 
+    [[maybe_unused]] static std::optional<DMChecksumConfig> fromDBContext(const DB::Context & context, bool is_single_file);
+
 private:
-    size_t checksum_frame_length; // the length of checksum frame
-    DB::ChecksumAlgo checksum_algorithm; // the algorithm of checksum
-    std::map<std::string, std::string> embedded_checksum; // special checksums for meta files
-    std::map<std::string, std::string> debug_info; // debugging information
+    size_t checksum_frame_length; ///< the length of checksum frame
+    DB::ChecksumAlgo checksum_algorithm; ///< the algorithm of checksum
+    std::map<std::string, std::string> embedded_checksum; ///< special checksums for meta files
+    std::map<std::string, std::string> debug_info; ///< debugging information
+
+    explicit DMChecksumConfig(const DB::Context & context)
+        : DMChecksumConfig({}, context.getSettingsRef().dt_checksum_frame_size.get(), context.getSettingsRef().dt_checksum_algorithm.get())
+    {
+    }
 };
 
 
