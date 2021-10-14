@@ -3,8 +3,6 @@
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/File.h>
-#include <RaftStoreProxyFFI/ProxyFFI.h>
-#include <RaftStoreProxyFFI/VersionCheck.h>
 #include <Server/IServer.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <daemon/BaseDaemon.h>
@@ -205,9 +203,7 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
     using namespace DB;
     TiFlashProxyConfig proxy_conf(config());
     EngineStoreServerWrap tiflash_instance_wrap{};
-    auto helper = getEngineStoreServerHelper(
-        RAFT_STORE_PROXY_MAGIC_NUMBER,
-        RAFT_STORE_PROXY_VERSION,
+    auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
 
     typename RaftStoreProxyRunner::RunRaftStoreProxyParms parms{&helper, proxy_conf};
