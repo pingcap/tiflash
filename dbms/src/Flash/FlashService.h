@@ -50,8 +50,6 @@ public:
                                           const ::mpp::EstablishMPPConnectionRequest * request,
                                           ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
 
-    std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request);
-
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
 private:
@@ -69,6 +67,5 @@ private:
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };
 
-extern FlashService * glbFlashService;
 
 } // namespace DB

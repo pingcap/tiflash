@@ -126,7 +126,8 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
-    if (is_local) return; // sendLoop is useless in local environment
+    if (is_local)
+        return; // sendLoop is useless in local environment
     try
     {
         /// TODO(fzh) reuse it later
