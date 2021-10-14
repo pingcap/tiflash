@@ -3,7 +3,6 @@
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/File.h>
-#include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Server/IServer.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <daemon/BaseDaemon.h>
