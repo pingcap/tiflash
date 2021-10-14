@@ -334,7 +334,7 @@ public:
     String parentPath() const { return parent_path; }
     String folderPath() const;
 
-    bool linkPage(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
+    [[nodiscard]] bool linkPage(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     void createEncryptionInfo() const
     {
