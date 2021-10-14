@@ -84,4 +84,32 @@ void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
 void SetServerInfoResp(BaseBuffView, RawVoidPtr);
 BaseBuffView strIntoView(const std::string * str_ptr);
 }
+
+inline EngineStoreServerHelper getEngineStoreServerHelper(
+    uint32_t magic_number,
+    uint64_t version,
+    EngineStoreServerWrap * tiflash_instance_wrap)
+{
+    return EngineStoreServerHelper{
+        // a special number, also defined in proxy
+        .magic_number = magic_number,
+        .version = version,
+        .inner = tiflash_instance_wrap,
+        .fn_gen_cpp_string = GenCppRawString,
+        .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
+        .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
+        .fn_atomic_update_proxy = AtomicUpdateProxy,
+        .fn_handle_destroy = HandleDestroy,
+        .fn_handle_ingest_sst = HandleIngestSST,
+        .fn_handle_compute_store_stats = HandleComputeStoreStats,
+        .fn_handle_get_engine_store_server_status = HandleGetTiFlashStatus,
+        .fn_pre_handle_snapshot = PreHandleSnapshot,
+        .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
+        .fn_handle_http_request = HandleHttpRequest,
+        .fn_check_http_uri_available = CheckHttpUriAvailable,
+        .fn_gc_raw_cpp_ptr = GcRawCppPtr,
+        .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
+        .fn_set_server_info_resp = SetServerInfoResp,
+    };
+}
 } // namespace DB
