@@ -228,7 +228,7 @@ public:
     PageFile() = default;
     /// Recover a page file from disk.
     static std::pair<PageFile, Type>
-    recover(const String & parent_path, const FileProviderPtr & file_provider, const String & page_file_name, bool check_invalid, Poco::Logger * log);
+    recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, bool check_invalid, Poco::Logger * log);
     /// Create a new page file.
     static PageFile newPageFile(PageFileId file_id,
                                 UInt32 level,
