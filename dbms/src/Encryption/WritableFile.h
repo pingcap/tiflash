@@ -26,6 +26,10 @@ public:
     virtual bool isClosed() = 0;
 
     virtual int fsync() = 0;
+
+    // Create a new hard link file for `existing_file` to this file
+    // Note that it will close the file descriptor if it is opened.
+    virtual void hardLink(const std::string & existing_file) = 0;
 };
 
 using WritableFilePtr = std::shared_ptr<WritableFile>;
