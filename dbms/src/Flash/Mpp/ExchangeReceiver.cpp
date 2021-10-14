@@ -1,7 +1,6 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
-#include <Flash/FlashService.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <fmt/core.h>
@@ -108,9 +107,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         for (int i = 0; i < 10; i++)
         {
             std::shared_ptr<GRPCReceiverContext::Reader> reader;
-
-            MPPTunnelPtr tunnel;
-
             reader = rpc_context->makeReader(req);
             reader->initialize();
             std::shared_ptr<ReceivedMessage> recv_msg;

@@ -53,7 +53,11 @@ static constexpr char MIGRATE_HELP[] =
 struct DirLock
 {
     int dir{};
+#if __APPLE__ && __clang__
+    struct flock lock{};
+#else
     flock lock{};
+#endif
     std::string workdir_lock;
 
     explicit DirLock(const std::string & workdir_)

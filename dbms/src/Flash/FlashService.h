@@ -1,13 +1,11 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
-#include <Flash/Mpp/MPPTunnel.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
-#include <tuple>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/tikvpb.grpc.pb.h>
@@ -66,6 +64,5 @@ private:
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };
-
 
 } // namespace DB
