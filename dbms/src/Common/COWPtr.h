@@ -115,7 +115,7 @@ protected:
 
         /// Initializing from temporary of compatible type.
         template <typename U>
-        mutable_ptr(mutable_ptr<U> && other)
+        explicit mutable_ptr(mutable_ptr<U> && other)
             : Base(std::move(other))
         {}
 
