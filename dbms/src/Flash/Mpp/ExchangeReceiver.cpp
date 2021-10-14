@@ -1,8 +1,6 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
-#include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
-#include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <fmt/core.h>
 

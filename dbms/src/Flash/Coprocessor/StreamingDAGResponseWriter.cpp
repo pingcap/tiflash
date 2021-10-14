@@ -205,6 +205,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         }
         if constexpr (for_last_response)
         {
+            /// Sending the response to only one node, default the first one.
             if (i == 0)
                 serializeToPacket(packet[i], response);
         }
