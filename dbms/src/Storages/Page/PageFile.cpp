@@ -828,7 +828,7 @@ PageFile::PageFile(PageFileId file_id_,
 }
 
 std::pair<PageFile, PageFile::Type>
-PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, bool check_invalid, Poco::Logger * log)
+PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log)
 {
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
         && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
@@ -857,7 +857,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     {
         pf.type = Type::Legacy;
         // ensure meta exist
-        if (check_invalid && !Poco::File(pf.metaPath()).exists())
+        if (!Poco::File(pf.metaPath()).exists())
         {
             LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
             return {{}, Type::Invalid};
@@ -868,13 +868,13 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     else if (ss[0] == folder_prefix_formal)
     {
         // ensure both meta && data exist
-        if (check_invalid && !Poco::File(pf.metaPath()).exists())
+        if (!Poco::File(pf.metaPath()).exists())
         {
             LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
             return {{}, Type::Invalid};
         }
 
-        if (check_invalid && !Poco::File(pf.dataPath()).exists())
+        if (!Poco::File(pf.dataPath()).exists())
         {
             LOG_INFO(log, "Broken page without data file, ignored: " + pf.dataPath());
             return {{}, Type::Invalid};
@@ -885,7 +885,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     else if (ss[0] == folder_prefix_checkpoint)
     {
         pf.type = Type::Checkpoint;
-        if (check_invalid && !Poco::File(pf.metaPath()).exists())
+        if (!Poco::File(pf.metaPath()).exists())
         {
             LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
             return {{}, Type::Invalid};
