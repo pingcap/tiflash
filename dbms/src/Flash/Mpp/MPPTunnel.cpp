@@ -139,7 +139,6 @@ void MPPTunnelBase<Writer>::sendLoop()
             send_queue.pop(res);
             if (nullptr == res)
             {
-                clearSendQueue();
                 finishWithLock();
                 return;
             }
@@ -147,7 +146,6 @@ void MPPTunnelBase<Writer>::sendLoop()
             {
                 if (!writer->Write(*res))
                 {
-                    clearSendQueue();
                     finishWithLock();
                     auto msg = " grpc writes failed.";
                     LOG_ERROR(log, msg);
@@ -242,6 +240,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::
 template <typename Writer>
 void MPPTunnelBase<Writer>::finishWithLock()
 {
+    clearSendQueue();
     std::unique_lock<std::mutex> lk(mu);
     finished = true;
     cv_for_finished.notify_all();
