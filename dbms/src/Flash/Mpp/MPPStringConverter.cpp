@@ -14,7 +14,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int UNKNOWN_TABLE;
-extern const int COP_BAD_DAG_REQUEST;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
@@ -24,12 +23,12 @@ void namesAndTypesToString(const NamesAndTypes & namesAndTypes, std::stringstrea
     {
         return;
     }
-    const auto & first = namesAndTypes[0];
-    ss << first.name << '[' << first.type->getName() << ']';
-    for (size_t i = 1; i < namesAndTypes.size(); ++i)
+    auto iter = namesAndTypes.cbegin();
+    ss << iter->name << '[' << iter->type->getName() << ']';
+    ++iter;
+    for (; iter != namesAndTypes.cend(); ++iter)
     {
-        const auto & names_and_type = namesAndTypes[i];
-        ss << ", " << names_and_type.name << '[' << names_and_type.type->getName() << ']';
+        ss << ", " << iter->name << '[' << iter->type->getName() << ']';
     }
 }
 
@@ -39,11 +38,12 @@ void exprsToString(const google::protobuf::RepeatedPtrField<::tipb::Expr> & expr
     {
         return;
     }
-    const auto & first = exprs[0];
-    ss << exprToString(first, input_column);
-    for (int i = 1; i < exprs.size(); ++i)
+    auto iter = exprs.cbegin();
+    ss << exprToString(*iter, input_column);
+    ++iter;
+    for (; iter != exprs.cend(); ++iter)
     {
-        ss << ", " << exprToString(exprs[i], input_column);
+        ss << ", " << exprToString(*iter, input_column);
     }
 }
 
@@ -53,11 +53,13 @@ void byItemsToString(const google::protobuf::RepeatedPtrField<::tipb::ByItem> & 
     {
         return;
     }
-    const auto & first = byItems[0];
-    ss << exprToString(first.expr(), input_column);
-    for (int i = 1; i < byItems.size(); ++i)
+
+    auto iter = byItems.cbegin();
+    ss << exprToString(iter->expr(), input_column);
+    ++iter;
+    for (; iter != byItems.cend(); ++iter)
     {
-        ss << ", " << exprToString(byItems[i].expr(), input_column);
+        ss << ", " << exprToString(iter->expr(), input_column);
     }
 }
 

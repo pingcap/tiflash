@@ -49,9 +49,11 @@ void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
     ostr << "expression: [ actions: {";
     if (!expression->getActions().empty())
     {
-        ostr << expression->getActions()[0].toString();
-        for (size_t i = 1; i < expression->getActions().size(); ++i)
-            ostr << "; " << expression->getActions()[i].toString();
+        auto iter = expression->getActions().cbegin();
+        ostr << iter->toString();
+        ++iter;
+        for (; iter != expression->getActions().cend(); ++iter)
+            ostr << "; " << iter->toString();
     }
     ostr << "} input: {";
     const auto & input_columns = expression->getRequiredColumnsWithTypes();
@@ -59,10 +61,9 @@ void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
     {
         auto iter = input_columns.cbegin();
         ostr << iter->name << '(' << iter->type->getName() << ')';
+        ++iter;
         for (; iter != input_columns.cend(); ++iter)
-        {
             ostr << ", " <<  iter->name << '(' << iter->type->getName() << ')';
-        }
     }
     ostr << "} output: {";
     const auto & output = expression->getSampleBlock();
