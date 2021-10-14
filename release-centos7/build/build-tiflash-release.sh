@@ -20,7 +20,7 @@ SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_EMBEDDED_COMPILER="FALSE"
 
-INSTALL_DIR="$SRCPATH/release-centos7/tiflash"
+INSTALL_DIR="${SRCPATH}/release-centos7/tiflash"
 
 if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd "$SRCPATH/contrib/kvproto"
@@ -40,10 +40,10 @@ rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so
 
-BUILD_DIR="$SRCPATH/release-centos7/build-release"
+BUILD_DIR="${SRCPATH}/release-centos7/build-release"
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
-cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
+cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
       -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
       -DENABLE_ICU=OFF \
@@ -53,7 +53,7 @@ cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
       -Wno-dev \
       -DUSE_CCACHE=OFF
 
-make -j $NPROC tiflash
+make -j ${NPROC} tiflash
 
 # Reduce binary size by compressing.
 objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash"
