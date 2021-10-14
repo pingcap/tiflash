@@ -167,7 +167,7 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
             if (name == PageStorage::ARCHIVE_SUBDIR)
                 continue;
 
-            auto [page_file, page_file_type] = PageFile::recover(directory, file_provider, name, page_file_log);
+            auto [page_file, page_file_type] = PageFile::recover(directory, file_provider, name, option.check_invalid_files, page_file_log);
             if (page_file_type == PageFile::Type::Formal)
                 page_files.insert(page_file);
             else if (page_file_type == PageFile::Type::Legacy)
@@ -249,6 +249,7 @@ void PageStorage::restore()
 #endif
     opt.ignore_legacy = false;
     opt.ignore_checkpoint = false;
+    opt.check_invalid_files = true;
     PageFileSet page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     /// Restore current version from both formal and legacy page files
@@ -838,6 +839,7 @@ void PageStorage::drop()
     opt.ignore_checkpoint = false;
     opt.ignore_legacy = false;
     opt.remove_tmp_files = false;
+    opt.check_invalid_files = false;
     auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     for (const auto & page_file : page_files)
@@ -974,6 +976,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
     }
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
+    opt.check_invalid_files = false;
     auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
     if (unlikely(page_files.empty()))
     {

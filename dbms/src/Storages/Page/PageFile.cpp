@@ -828,7 +828,7 @@ PageFile::PageFile(PageFileId file_id_,
 }
 
 std::pair<PageFile, PageFile::Type>
-PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log)
+PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, bool check_invalid, Poco::Logger * log)
 {
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
         && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
@@ -853,47 +853,49 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         pf.type = Type::Temp;
         return {pf, Type::Temp};
     }
-    else if (ss[0] == folder_prefix_legacy)
+    if (check_invalid)
     {
-        pf.type = Type::Legacy;
-        // ensure meta exist
-        if (!Poco::File(pf.metaPath()).exists())
+        if (ss[0] == folder_prefix_legacy)
         {
-            LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
-            return {{}, Type::Invalid};
-        }
+            pf.type = Type::Legacy;
+            // ensure meta exist
+            if (!Poco::File(pf.metaPath()).exists())
+            {
+                LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
+                return {{}, Type::Invalid};
+            }
 
-        return {pf, Type::Legacy};
+            return {pf, Type::Legacy};
+        }
+        else if (ss[0] == folder_prefix_formal)
+        {
+            // ensure both meta && data exist
+            if (!Poco::File(pf.metaPath()).exists())
+            {
+                LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
+                return {{}, Type::Invalid};
+            }
+
+            if (!Poco::File(pf.dataPath()).exists())
+            {
+                LOG_INFO(log, "Broken page without data file, ignored: " + pf.dataPath());
+                return {{}, Type::Invalid};
+            }
+            return {pf, Type::Formal};
+        }
+        else if (ss[0] == folder_prefix_checkpoint)
+        {
+            pf.type = Type::Checkpoint;
+            if (!Poco::File(pf.metaPath()).exists())
+            {
+                LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
+                return {{}, Type::Invalid};
+            }
+            pf.type = Type::Checkpoint;
+
+            return {pf, Type::Checkpoint};
+        }
     }
-    else if (ss[0] == folder_prefix_formal)
-    {
-        // ensure both meta && data exist
-        if (!Poco::File(pf.metaPath()).exists())
-        {
-            LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
-            return {{}, Type::Invalid};
-        }
-
-        if (!Poco::File(pf.dataPath()).exists())
-        {
-            LOG_INFO(log, "Broken page without data file, ignored: " + pf.dataPath());
-            return {{}, Type::Invalid};
-        }
-        return {pf, Type::Formal};
-    }
-    else if (ss[0] == folder_prefix_checkpoint)
-    {
-        pf.type = Type::Checkpoint;
-        if (!Poco::File(pf.metaPath()).exists())
-        {
-            LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
-            return {{}, Type::Invalid};
-        }
-        pf.type = Type::Checkpoint;
-
-        return {pf, Type::Checkpoint};
-    }
-
     LOG_INFO(log, "Unrecognized file prefix, ignored: " + page_file_name);
     return {{}, Type::Invalid};
 }
