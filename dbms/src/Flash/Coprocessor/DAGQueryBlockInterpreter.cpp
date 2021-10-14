@@ -407,8 +407,8 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
         if (!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i)))
             throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
         DataTypes types;
-        types.emplace_back(getDataTypeByFieldType(join.left_join_keys(i).field_type()));
-        types.emplace_back(getDataTypeByFieldType(join.right_join_keys(i).field_type()));
+        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.left_join_keys(i).field_type()));
+        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.right_join_keys(i).field_type()));
         DataTypePtr common_type = getLeastSupertype(types);
         key_types.emplace_back(common_type);
     }
