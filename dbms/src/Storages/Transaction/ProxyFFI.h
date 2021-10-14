@@ -2,6 +2,7 @@
 
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <RaftStoreProxyFFI/VersionCheck.h>
 #include <Storages/Transaction/ColumnFamily.h>
 
 #include <atomic>
@@ -77,23 +78,22 @@ RawCppPtr PreHandleSnapshot(
     uint64_t index,
     uint64_t term);
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
-HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView);
+HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
 void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
 void SetServerInfoResp(BaseBuffView, RawVoidPtr);
 BaseBuffView strIntoView(const std::string * str_ptr);
+CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 }
 
-inline EngineStoreServerHelper getEngineStoreServerHelper(
-    uint32_t magic_number,
-    uint64_t version,
+inline EngineStoreServerHelper GetEngineStoreServerHelper(
     EngineStoreServerWrap * tiflash_instance_wrap)
 {
     return EngineStoreServerHelper{
         // a special number, also defined in proxy
-        .magic_number = magic_number,
-        .version = version,
+        .magic_number = RAFT_STORE_PROXY_MAGIC_NUMBER,
+        .version = RAFT_STORE_PROXY_VERSION,
         .inner = tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
@@ -110,6 +110,7 @@ inline EngineStoreServerHelper getEngineStoreServerHelper(
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
         .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
         .fn_set_server_info_resp = SetServerInfoResp,
+        .fn_get_config = GetConfig,
     };
 }
 } // namespace DB
