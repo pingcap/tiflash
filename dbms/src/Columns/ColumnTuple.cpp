@@ -128,7 +128,7 @@ void ColumnTuple::popBack(size_t n)
 StringRef ColumnTuple::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
     size_t values_size = 0;
-    for (auto & column : columns)
+    for (const auto & column : columns)
         values_size += column->serializeValueIntoArena(n, arena, begin, collator, sort_key_container).size;
 
     return StringRef(begin, values_size);
@@ -144,13 +144,13 @@ const char * ColumnTuple::deserializeAndInsertFromArena(const char * pos, const 
 
 void ColumnTuple::updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
-    for (auto & column : columns)
+    for (const auto & column : columns)
         column->updateHashWithValue(n, hash, collator, sort_key_container);
 }
 
 void ColumnTuple::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
 {
-    for (auto & column : columns)
+    for (const auto & column : columns)
         column->updateHashWithValues(hash_values, collator, sort_key_container);
 }
 
@@ -254,9 +254,9 @@ struct ColumnTuple::Less
 
     bool operator()(size_t a, size_t b) const
     {
-        for (ColumnRawPtrs::const_iterator it = plain_columns.begin(); it != plain_columns.end(); ++it)
+        for (const auto * plain_column : plain_columns)
         {
-            int res = (*it)->compareAt(a, b, **it, nan_direction_hint);
+            int res = plain_column->compareAt(a, b, *plain_column, nan_direction_hint);
             if (res < 0)
                 return positive;
             else if (res > 0)
