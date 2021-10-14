@@ -180,20 +180,21 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
                 if (!option.ignore_checkpoint)
                     page_files.insert(page_file);
             }
-            else
+            else if (page_file_type == PageFile::Type::Temp)
             {
-                // For Temp and Invalid
                 if (option.remove_tmp_files)
                 {
-                    if (page_file_type == PageFile::Type::Temp)
-                    {
-                        page_file.deleteEncryptionInfo();
-                    }
-
-                    // Remove temp and invalid file.
-                    if (Poco::File file(directory + "/" + name); option.remove_invalid_files && file.exists())
+                    page_file.deleteEncryptionInfo();
+                    // Remove temp files.
+                    if (Poco::File file(directory + "/" + name); file.exists())
                         file.remove(true);
                 }
+            }
+            else
+            {
+                // Remove invalid files.
+                if (Poco::File file(directory + "/" + name); option.remove_invalid_files && file.exists())
+                    file.remove(true);
             }
         }
     }
