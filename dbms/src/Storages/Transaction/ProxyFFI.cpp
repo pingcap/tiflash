@@ -426,7 +426,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
         stream.close();
         /** the returned str must be formated as TOML, proxy will parse and show in form of JASON.
          *  curl `http://{status-addr}/config`, got:
-         *  {{"raftstore-proxy":xxxx,"engine-store":xxx}
+         *  {"raftstore-proxy":xxxx,"engine-store":xxx}
          *
          *  if proxy can NOT parse it, return 500 Internal Server Error.
          * */
