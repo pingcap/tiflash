@@ -1430,7 +1430,8 @@ public:
       *  which are all either single-level, or are two-level.
       */
     MergingAndConvertingBlockInputStream(const Aggregator & aggregator_, ManyAggregatedDataVariants & data_, bool final_, size_t threads_)
-        : aggregator(aggregator_)
+        : log(getLogWithPrefix(aggregator_.log, "Aggregator"))
+        , aggregator(aggregator_)
         , data(data_)
         , final(final_)
         , threads(threads_)
@@ -1439,7 +1440,7 @@ public:
         if (!data.empty() && threads > data[0]->aggregates_pools.size())
         {
             Arenas & first_pool = data[0]->aggregates_pools;
-            for (size_t j = first_pool.size(); j < threads; j++)
+            for (size_t j = first_pool.size(); j < threads; ++j)
                 first_pool.emplace_back(std::make_shared<Arena>());
         }
     }
@@ -1450,7 +1451,7 @@ public:
 
     ~MergingAndConvertingBlockInputStream()
     {
-        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Waiting for threads to finish");
+        LOG_TRACE(log, "Waiting for threads to finish");
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
@@ -1546,6 +1547,7 @@ protected:
     }
 
 private:
+    const LogWithPrefixPtr log;
     const Aggregator & aggregator;
     ManyAggregatedDataVariants data;
     bool final;

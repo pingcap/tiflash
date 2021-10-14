@@ -103,7 +103,8 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 params,
                 final,
                 temporary_data_merge_threads,
-                temporary_data_merge_threads);
+                temporary_data_merge_threads,
+                log);
         }
 
         executed = true;
@@ -119,9 +120,9 @@ Block ParallelAggregatingBlockInputStream::readImpl()
 
 void ParallelAggregatingBlockInputStream::dumpExtra(std::ostream & ostr) const
 {
-    ostr << "max_threads: " << max_threads;
-    ostr << " final: " << (final ? "true" : "false");
-    ostr << " agg_funcs: [";
+    ostr << "max_threads: [" << max_threads;
+    ostr << "] final: [" << (final ? "true" : "false");
+    ostr << "] agg_funcs: [";
     const auto & aggregates = params.aggregates;
     if (!aggregates.empty())
     {

@@ -46,7 +46,14 @@ Block ExpressionBlockInputStream::readImpl()
 
 void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
 {
-    ostr << "expression: [ input: {";
+    ostr << "expression: [ actions: {";
+    if (!expression->getActions().empty())
+    {
+        ostr << expression->getActions()[0].toString();
+        for (size_t i = 1; i < expression->getActions().size(); ++i)
+            ostr << "; " << expression->getActions()[i].toString();
+    }
+    ostr << "} input: {";
     const auto & input_columns = expression->getRequiredColumnsWithTypes();
     if (!input_columns.empty())
     {
@@ -56,13 +63,6 @@ void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
         {
             ostr << ", " <<  iter->name << '(' << iter->type->getName() << ')';
         }
-    }
-    ostr << "} actions: {";
-    if (!expression->getActions().empty())
-    {
-        ostr << expression->getActions()[0].toString();
-        for (size_t i = 1; i < expression->getActions().size(); ++i)
-            ostr << "; " << expression->getActions()[i].toString();
     }
     ostr << "} output: {";
     const auto & output = expression->getSampleBlock();
