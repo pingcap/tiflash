@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
@@ -40,7 +40,7 @@ public:
         size_t max_threads,
         const LogWithPrefixPtr & log_,
         ExceptionCallback exception_callback_ = ExceptionCallback())
-        : output_queue(std::min(inputs.size(), max_threads))
+        : output_queue(max_threads * 4)
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
@@ -108,18 +108,17 @@ protected:
             /** Let's read everything up to the end, so that ParallelInputsProcessor is not blocked when trying to insert into the queue.
               * Maybe there is an exception in the queue.
               */
-            std::exception_ptr res;
             while (true)
             {
                 //std::cerr << "popping\n";
-                output_queue.pop(res);
+                auto res = output_queue.pop();
 
-                if (res)
+                if (res.has_value() && res.value())
                 {
                     if (!exception)
-                        exception = res;
+                        exception = res.value();
                     else if (Exception * e = exception_cast<Exception *>(exception))
-                        e->addMessage("\n" + getExceptionMessage(res, false));
+                        e->addMessage("\n" + getExceptionMessage(res.value(), false));
                 }
                 else
                     break;
@@ -180,7 +179,7 @@ protected:
     }
 
 private:
-    using OutputQueue = ConcurrentBoundedQueue<std::exception_ptr>;
+    using OutputQueue = MPMCQueue<std::exception_ptr>;
 
 private:
     /** The queue of the finished blocks. Also, you can put an exception instead of a block.

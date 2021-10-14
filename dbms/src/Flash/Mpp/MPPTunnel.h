@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -60,6 +60,8 @@ private:
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
 
+    void stopSendLoop(bool check_loop_error);
+
     std::mutex mu;
     std::condition_variable cv_for_connected;
     std::condition_variable cv_for_finished;
@@ -84,7 +86,7 @@ private:
     std::unique_ptr<std::thread> send_thread;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
+    MPMCQueue<MPPDataPacketPtr> send_queue;
 
     Poco::Logger * log;
 };

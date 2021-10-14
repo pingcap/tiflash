@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/RecyclableBuffer.h>
+#include <Common/MPMCQueue.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -104,10 +104,10 @@ private:
     std::vector<std::thread> workers;
     DAGSchema schema;
 
+    MPMCQueue<std::shared_ptr<ReceivedPacket>> empty_buffer;
+    MPMCQueue<std::shared_ptr<ReceivedPacket>> full_buffer;
+
     std::mutex mu;
-    std::condition_variable cv;
-    /// should lock `mu` when visit these members
-    RecyclableBuffer<ReceivedPacket> res_buffer;
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;

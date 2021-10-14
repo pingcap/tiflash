@@ -17,8 +17,9 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , source_num(pb_exchange_receiver.encoded_task_meta_size())
     , task_meta(meta)
     , max_streams(max_streams_)
-    , max_buffer_size(max_streams_ * 2)
-    , res_buffer(max_buffer_size)
+    , max_buffer_size(max_streams_ * 4)
+    , empty_buffer(max_buffer_size)
+    , full_buffer(max_buffer_size)
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
@@ -30,6 +31,9 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         schema.push_back(std::make_pair(name, info));
     }
 
+    for (size_t i = 0; i < max_buffer_size; ++i)
+        empty_buffer.push(std::make_shared<ReceivedPacket>());
+
     setUpConnection();
 }
 
@@ -39,7 +43,8 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     {
         std::unique_lock<std::mutex> lk(mu);
         state = ExchangeReceiverState::CLOSED;
-        cv.notify_all();
+        empty_buffer.cancel();
+        full_buffer.cancel();
     }
 
     for (auto & worker : workers)
@@ -53,7 +58,8 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 {
     std::unique_lock<std::mutex> lk(mu);
     state = ExchangeReceiverState::CANCELED;
-    cv.notify_all();
+    empty_buffer.cancel();
+    full_buffer.cancel();
 }
 
 template <typename RPCContext>
@@ -104,27 +110,21 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         {
             auto reader = rpc_context->makeReader(req);
             reader->initialize();
-            std::shared_ptr<ReceivedPacket> packet;
             bool has_data = false;
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
+                auto pop_res = empty_buffer.pop();
+                if (!pop_res.has_value())
                 {
                     std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });
-                    if (state == ExchangeReceiverState::NORMAL)
-                    {
-                        res_buffer.popEmpty(packet);
-                        cv.notify_all();
-                    }
-                    else
-                    {
-                        meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                        LOG_WARNING(log, local_err_msg);
-                        break;
-                    }
+                    assert(state != ExchangeReceiverState::NORMAL);
+                    meet_error = true;
+                    local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+                    LOG_WARNING(log, local_err_msg);
+                    break;
                 }
+                std::shared_ptr<ReceivedPacket> packet = std::move(pop_res.value());
                 packet->req_info = req_info;
                 packet->source_index = source_index;
                 bool success = reader->read(packet->packet.get());
@@ -136,21 +136,15 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 {
                     throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
                 }
+                auto push_res = full_buffer.push(std::move(packet));
+                if (!push_res)
                 {
                     std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
-                    if (state == ExchangeReceiverState::NORMAL)
-                    {
-                        res_buffer.pushObject(packet);
-                        cv.notify_all();
-                    }
-                    else
-                    {
-                        meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                        LOG_WARNING(log, local_err_msg);
-                        break;
-                    }
+                    assert(state != ExchangeReceiverState::NORMAL);
+                    meet_error = true;
+                    local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+                    LOG_WARNING(log, local_err_msg);
+                    break;
                 }
             }
             // if meet error, such as decode packect fails, it will not retry.
@@ -207,12 +201,19 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         if (meet_error && err_msg.empty())
             err_msg = local_err_msg;
         copy_live_conn = live_connections;
-        cv.notify_all();
     }
     LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
 
-    if (copy_live_conn == 0)
-        LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
+    if (meet_error)
+    {
+        empty_buffer.cancel();
+        full_buffer.cancel();
+    }
+    else if (copy_live_conn == 0)
+    {
+        empty_buffer.finish();
+        full_buffer.finish();
+    }
     else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
 }
@@ -220,11 +221,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
 {
-    std::shared_ptr<ReceivedPacket> packet;
+    auto res = full_buffer.pop();
+    if (!res.has_value())
     {
         std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != ExchangeReceiverState::NORMAL; });
-
         if (state != ExchangeReceiverState::NORMAL)
         {
             String msg;
@@ -238,17 +238,13 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
                 msg = "Unknown error";
             return {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
-        else if (res_buffer.hasObjects())
-        {
-            res_buffer.popObject(packet);
-            cv.notify_all();
-        }
         else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
         {
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
     }
     assert(packet != nullptr && packet->packet != nullptr);
+    auto packet = std::move(res.value());
     ExchangeReceiverResult result;
     if (packet->packet->has_error())
     {
@@ -267,10 +263,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         }
     }
     packet->packet->Clear();
-    std::unique_lock<std::mutex> lock(mu);
-    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
-    res_buffer.pushEmpty(std::move(packet));
-    cv.notify_all();
+    empty_buffer.push(std::move(packet));
     return result;
 }
 

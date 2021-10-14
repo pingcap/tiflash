@@ -32,10 +32,13 @@ struct WaitingNode
 
     void pushBack(WaitingNode & node)
     {
-        node.prev = prev;
-        node.next = this;
-        prev->next = &node;
-        prev = &node;
+        if (node.next == &node)
+        {
+            node.prev = prev;
+            node.next = this;
+            prev->next = &node;
+            prev = &node;
+        }
     }
 
     void removeSelfFromList()
@@ -188,23 +191,27 @@ private:
         std::unique_lock<std::mutex> & lock,
         WaitingNode & head,
         WaitingNode & node,
-        Pred pred,
+        Pred & pred,
         const TimePoint * deadline)
     {
-        head.pushBack(node);
-        if (deadline)
-            node.cv.wait_until(lock, *deadline, pred);
-        else
-            node.cv.wait(lock, pred);
-        /// removeSelfFromList is adaptive for both conditions.
-        node.removeSelfFromList();
+        do {
+            head.pushBack(node);
+            if (deadline)
+                node.cv.wait_until(lock, *deadline);
+            else
+                node.cv.wait(lock);
+            node.removeSelfFromList();
+        } while (!pred());
     }
 
     ALWAYS_INLINE void notifyNext(WaitingNode & head)
     {
         auto * next = head.next;
         if (next != &head)
+        {
+            next->removeSelfFromList();
             next->cv.notify_one();
+        }
     }
 
     std::optional<T> popObj(const TimePoint * deadline = nullptr)
@@ -218,10 +225,7 @@ private:
             };
 
             std::unique_lock lock(mu);
-            if (isCancelled())
-                return res;
-
-            if (read_pos >= write_pos)
+            if (!pred())
                 wait(lock, reader_head, node, pred, deadline);
 
             /// double check status after potential wait
@@ -258,10 +262,7 @@ private:
         };
 
         std::unique_lock lock(mu);
-        if (!isNormal())
-            return false;
-
-        if (write_pos - read_pos >= capacity)
+        if (!pred())
             wait(lock, writer_head, node, pred, deadline);
 
         /// double check status after potential wait

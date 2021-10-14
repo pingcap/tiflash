@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -17,7 +17,7 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
-        : queue(clients)
+        : queue(clients * 4)
         , log(getMPPTaskLog(log_, getName()))
         , in(in_)
     {
@@ -60,6 +60,7 @@ public:
         if (read_suffixed)
             return;
         read_suffixed = true;
+        queue.cancel();
 
         if (thread.joinable())
             thread.join();
@@ -75,18 +76,20 @@ protected:
         if (!read_prefixed)
             throw Exception("read operation called before readPrefix");
 
-        Block block;
-        do
+        while (true)
         {
             if (!exception_msg.empty())
             {
                 throw Exception(exception_msg);
             }
-            if (isCancelled() || read_suffixed)
+            if (isCancelled())
                 return {};
-        } while (!queue.tryPop(block, try_action_millisecionds));
-
-        return block;
+            auto res = queue.tryPop(try_action_timeout);
+            if (res.has_value())
+                return res.value();
+            if (queue.getStatus() == MPMCQueueStatus::CANCELLED)
+                return {};
+        };
     }
 
     void fetchBlocks()
@@ -97,17 +100,21 @@ protected:
             while (!isCancelled())
             {
                 Block block = in->read();
-                do
+                auto queue_status = MPMCQueueStatus::NORMAL;
+                while (true)
                 {
-                    if (isCancelled() || read_suffixed)
+                    if (isCancelled())
                     {
                         // Notify waiting client.
-                        queue.tryEmplace(0);
+                        queue.cancel();
                         break;
                     }
-                } while (!queue.tryPush(block, try_action_millisecionds));
+                    auto res = queue.tryPush(block, try_action_timeout);
+                    if (res || (queue_status = queue.getStatus()) == MPMCQueueStatus::CANCELLED)
+                        break;
+                }
 
-                if (!block)
+                if (!block || queue_status == MPMCQueueStatus::CANCELLED)
                     break;
             }
             in->readSuffix();
@@ -127,9 +134,9 @@ protected:
     }
 
 private:
-    static constexpr UInt64 try_action_millisecionds = 200;
+    static constexpr auto try_action_timeout = std::chrono::milliseconds(200);
 
-    ConcurrentBoundedQueue<Block> queue;
+    MPMCQueue<Block> queue;
 
     bool read_prefixed = false;
     bool read_suffixed = false;
