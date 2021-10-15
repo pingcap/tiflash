@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 class Exception : public Poco::Exception
 {
 public:
