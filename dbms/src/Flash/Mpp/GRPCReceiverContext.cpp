@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
 namespace pingcap
@@ -33,8 +34,11 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
+using BoolPromise = boost::fibers::promise<bool>; 
+
 GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_)
     : cluster(cluster_)
+    , log(&Poco::Logger::get("GRPCReceiverContext"))
 {}
 
 GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
@@ -57,11 +61,22 @@ GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
 
 std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(const GRPCReceiverContext::Request & request) const
 {
+    auto promise = std::make_unique<BoolPromise>();
+    auto future = promise->get_future();
     auto reader = std::make_shared<Reader>(request);
-    reader->reader = cluster->rpc_client->sendStreamRequest(
+    reader->log = log;
+    reader->reader = cluster->rpc_client->sendStreamRequestAsync(
         request.req->sender_meta().address(),
         &reader->client_context,
-        *reader->call);
+        *reader->call,
+        GRPCCompletionQueuePool::Instance()->pickQueue(),
+        promise.release());
+
+    future.wait();
+    auto res = future.get();
+    if (!res)
+        throw Exception("Send async stream request fail");
+
     return reader;
 }
 
@@ -80,17 +95,28 @@ GRPCReceiverContext::Reader::~Reader()
 
 void GRPCReceiverContext::Reader::initialize() const
 {
-    reader->WaitForInitialMetadata();
 }
 
 bool GRPCReceiverContext::Reader::read(mpp::MPPDataPacket * packet) const
 {
-    return reader->Read(packet);
+    auto promise = std::make_unique<BoolPromise>();
+    auto future = promise->get_future();
+    reader->Read(packet, promise.release());
+
+    future.wait();
+    auto res = future.get();
+    return res;
 }
 
 GRPCReceiverContext::StatusType GRPCReceiverContext::Reader::finish() const
 {
-    return reader->Finish();
+    auto promise = std::make_unique<BoolPromise>();
+    auto future = promise->get_future();
+    auto status = getStatusOK();
+    reader->Finish(&status, promise.release());
+
+    future.wait();
+    return status;
 }
 
 } // namespace DB

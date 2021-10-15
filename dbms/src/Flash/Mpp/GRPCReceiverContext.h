@@ -1,5 +1,6 @@
 #pragma once
 
+#include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpc++/grpc++.h>
 #include <kvproto/mpp.pb.h>
@@ -27,7 +28,8 @@ public:
     {
         std::unique_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
         grpc::ClientContext client_context;
-        std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
+        std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
+        Poco::Logger * log = nullptr;
 
         explicit Reader(const Request & req);
         /// put the implementation of dtor in .cpp so we don't need to put the specialization of
@@ -55,5 +57,6 @@ public:
 
 private:
     pingcap::kv::Cluster * cluster;
+    Poco::Logger * log;
 };
 } // namespace DB

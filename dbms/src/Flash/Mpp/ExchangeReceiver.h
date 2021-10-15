@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Common/FiberPool.hpp>
-#include <Common/RecyclableBuffer.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -99,14 +98,14 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::vector<std::thread> workers;
-    std::vector<boost::fibers::promise<void>> workers_done;
+    std::vector<boost::fibers::future<void>> workers_done;
     DAGSchema schema;
 
+    boost::fibers::buffered_channel<std::shared_ptr<ReceivedPacket>> empty_buffer;
+    boost::fibers::buffered_channel<std::shared_ptr<ReceivedPacket>> full_buffer;
+
     boost::fibers::mutex mu;
-    boost::fibers::condition_variable cv;
     /// should lock `mu` when visit these members
-    RecyclableBuffer<ReceivedPacket> res_buffer;
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;

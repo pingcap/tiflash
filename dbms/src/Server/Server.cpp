@@ -24,6 +24,7 @@
 #include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
@@ -953,6 +954,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
         global_context->initializeFileProvider(key_manager, false);
     }
+
+    (void)GRPCCompletionQueuePool::Instance()->pickQueue();
 
     /// ===== Paths related configuration initialized start ===== ///
     /// Note that theses global variables should be initialized by the following order:

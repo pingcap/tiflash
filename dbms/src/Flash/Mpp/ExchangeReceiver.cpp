@@ -17,8 +17,9 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , source_num(pb_exchange_receiver.encoded_task_meta_size())
     , task_meta(meta)
     , max_streams(max_streams_)
-    , max_buffer_size(max_streams_ * 2)
-    , res_buffer(max_buffer_size)
+    , max_buffer_size(1024)
+    , empty_buffer(max_buffer_size)
+    , full_buffer(max_buffer_size)
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
@@ -30,6 +31,12 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         schema.push_back(std::make_pair(name, info));
     }
 
+    LOG_DEBUG(log, "initial push empty packets");
+    while (empty_buffer.try_push(std::make_shared<ReceivedPacket>()) == boost::fibers::channel_op_status::success)
+    {
+        /// do nothing
+    }
+
     setUpConnection();
 }
 
@@ -39,33 +46,32 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     {
         std::unique_lock lk(mu);
         state = ExchangeReceiverState::CLOSED;
-        cv.notify_all();
     }
 
+    empty_buffer.close();
+    full_buffer.close();
+
     for (size_t i = 0; i < source_num; ++i)
-    {
-        workers_done[i].get_future().wait(); // avoid thread::join blocking in fiber
-        workers[i].join();
-    }
+        workers_done[i].wait();
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-    std::unique_lock lk(mu);
-    state = ExchangeReceiverState::CANCELED;
-    cv.notify_all();
+    {
+        std::unique_lock lk(mu);
+        state = ExchangeReceiverState::CANCELED;
+    }
+    empty_buffer.close();
+    full_buffer.close();
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
-    workers_done.resize(source_num);
+    LOG_DEBUG(log, "setUpConnection");
     for (size_t index = 0; index < source_num; ++index)
-    {
-        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
-        workers.push_back(std::move(t));
-    }
+        workers_done.emplace_back(DefaultFiberPool::submit_job(&ExchangeReceiverBase<RPCContext>::readLoop, this, index).value());
 }
 
 static inline String getReceiverStateStr(const ExchangeReceiverState & s)
@@ -110,22 +116,17 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
+                auto res = empty_buffer.pop(packet);
+                if (res != boost::fibers::channel_op_status::success)
                 {
                     std::unique_lock lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });
-                    if (state == ExchangeReceiverState::NORMAL)
-                    {
-                        res_buffer.popEmpty(packet);
-                        cv.notify_all();
-                    }
-                    else
-                    {
-                        meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                        LOG_WARNING(log, local_err_msg);
-                        break;
-                    }
+                    assert(state != ExchangeReceiverState::NORMAL);
+                    meet_error = true;
+                    local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+                    LOG_WARNING(log, local_err_msg);
+                    break;
                 }
+                LOG_DEBUG(log, "got one empty packet");
                 packet->req_info = req_info;
                 packet->source_index = source_index;
                 bool success = reader->read(packet->packet.get());
@@ -133,26 +134,22 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     break;
                 else
                     has_data = true;
+                LOG_DEBUG(log, "read one packet");
                 if (packet->packet->has_error())
                 {
                     throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
                 }
+                res = full_buffer.push(std::move(packet));
+                if (res != boost::fibers::channel_op_status::success)
                 {
                     std::unique_lock lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
-                    if (state == ExchangeReceiverState::NORMAL)
-                    {
-                        res_buffer.pushObject(packet);
-                        cv.notify_all();
-                    }
-                    else
-                    {
-                        meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                        LOG_WARNING(log, local_err_msg);
-                        break;
-                    }
+                    assert(state != ExchangeReceiverState::NORMAL);
+                    meet_error = true;
+                    local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+                    LOG_WARNING(log, local_err_msg);
+                    break;
                 }
+                LOG_DEBUG(log, "pushed one full packet");
             }
             // if meet error, such as decode packect fails, it will not retry.
             if (meet_error)
@@ -208,25 +205,26 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         if (meet_error && err_msg.empty())
             err_msg = local_err_msg;
         copy_live_conn = live_connections;
-        cv.notify_all();
     }
     LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
 
-    if (copy_live_conn == 0)
-        LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
+    if (meet_error || copy_live_conn == 0)
+    {
+        empty_buffer.close();
+        full_buffer.close();
+    }
     else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
-    workers_done[source_index].set_value();
 }
 
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
 {
     std::shared_ptr<ReceivedPacket> packet;
+    auto res = full_buffer.pop(packet);
+    if (res != boost::fibers::channel_op_status::success)
     {
         std::unique_lock lock(mu);
-        cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != ExchangeReceiverState::NORMAL; });
-
         if (state != ExchangeReceiverState::NORMAL)
         {
             String msg;
@@ -239,11 +237,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
             else
                 msg = "Unknown error";
             return {nullptr, 0, "ExchangeReceiver", true, msg, false};
-        }
-        else if (res_buffer.hasObjects())
-        {
-            res_buffer.popObject(packet);
-            cv.notify_all();
         }
         else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
         {
@@ -269,10 +262,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
         }
     }
     packet->packet->Clear();
-    std::unique_lock lock(mu);
-    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
-    res_buffer.pushEmpty(std::move(packet));
-    cv.notify_all();
+    empty_buffer.push(std::move(packet));
     return result;
 }
 
