@@ -180,19 +180,21 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
                 if (!option.ignore_checkpoint)
                     page_files.insert(page_file);
             }
-            else
+            else if (page_file_type == PageFile::Type::Temp)
             {
-                // For Temp and Invalid
                 if (option.remove_tmp_files)
                 {
-                    if (page_file_type == PageFile::Type::Temp)
-                    {
-                        page_file.deleteEncryptionInfo();
-                    }
-                    // Remove temp and invalid file.
+                    page_file.deleteEncryptionInfo();
+                    // Remove temp files.
                     if (Poco::File file(directory + "/" + name); file.exists())
                         file.remove(true);
                 }
+            }
+            else
+            {
+                // Remove invalid files.
+                if (Poco::File file(directory + "/" + name); option.remove_invalid_files && file.exists())
+                    file.remove(true);
             }
         }
     }
@@ -249,6 +251,7 @@ void PageStorage::restore()
 #endif
     opt.ignore_legacy = false;
     opt.ignore_checkpoint = false;
+    opt.remove_invalid_files = true;
     PageFileSet page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     /// Restore current version from both formal and legacy page files
@@ -838,6 +841,7 @@ void PageStorage::drop()
     opt.ignore_checkpoint = false;
     opt.ignore_legacy = false;
     opt.remove_tmp_files = false;
+    opt.remove_invalid_files = false;
     auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     for (const auto & page_file : page_files)
@@ -974,6 +978,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
     }
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
+    opt.remove_invalid_files = false;
     auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
     if (unlikely(page_files.empty()))
     {
