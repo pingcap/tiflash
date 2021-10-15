@@ -1,3 +1,4 @@
+#include <DataStreams/DumpUtils.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ExpressionActions.h>
@@ -47,36 +48,14 @@ Block ExpressionBlockInputStream::readImpl()
 void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
 {
     ostr << "expression: [ actions: {";
-    if (!expression->getActions().empty())
-    {
-        auto iter = expression->getActions().cbegin();
-        ostr << iter->toString();
-        ++iter;
-        for (; iter != expression->getActions().cend(); ++iter)
-            ostr << "; " << iter->toString();
-    }
+    const auto & actions = expression->getActions();
+    dumpIter(actions.cbegin(), actions.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.toString(); }, "; ");
     ostr << "} input: {";
     const auto & input_columns = expression->getRequiredColumnsWithTypes();
-    if (!input_columns.empty())
-    {
-        auto iter = input_columns.cbegin();
-        ostr << iter->name << '(' << iter->type->getName() << ')';
-        ++iter;
-        for (; iter != input_columns.cend(); ++iter)
-            ostr << ", " <<  iter->name << '(' << iter->type->getName() << ')';
-    }
+    dumpIter(input_columns.cbegin(), input_columns.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
     ostr << "} output: {";
     const auto & output = expression->getSampleBlock();
-    if (output.columns() > 0)
-    {
-        const auto & first = output.getByPosition(0);
-        ostr << first.name << '(' << first.type->getName() << ')';
-        for (size_t i = 1; i < output.columns(); ++i)
-        {
-            const auto & c = output.getByPosition(i);
-            ostr << ", " <<  c.name << '(' << c.type->getName() << ')';
-        }
-    }
+    dumpIter(output.cbegin(), output.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
     ostr << "} ]";
 }
 

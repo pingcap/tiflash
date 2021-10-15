@@ -1,5 +1,6 @@
 #include <Common/ClickHouseRevision.h>
 
+#include <DataStreams/DumpUtils.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
@@ -79,21 +80,10 @@ void AggregatingBlockInputStream::dumpExtra(std::ostream & ostr) const
     ostr << "final: [" << (final ? "true" : "false");
     ostr << "] agg_funcs: [";
     const auto & aggregates = params.aggregates;
-    if (!aggregates.empty())
-    {
-        ostr << aggregates[0].column_name;
-        for (size_t i = 1; i < aggregates.size(); ++i)
-            ostr << ", " << aggregates[i].column_name;
-    }
-
-    auto key_names = params.key_names;
+    dumpIter(aggregates.cbegin(), aggregates.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.column_name; });
     ostr << "] keys: [";
-    if (!key_names.empty())
-    {
-        ostr << key_names[0];
-        for (size_t i = 1; i < key_names.size(); ++i)
-            ostr << ", " << key_names[i];
-    }
+    const auto & key_names = params.key_names;
+    dumpIter(key_names.cbegin(), key_names.cend(), ostr, [](const String & s, std::ostream & os) { os << s; });
     ostr << ']';
 }
 

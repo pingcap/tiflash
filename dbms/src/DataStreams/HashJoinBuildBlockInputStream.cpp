@@ -1,5 +1,6 @@
-
+#include <DataStreams/DumpUtils.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
+
 namespace DB
 {
 
@@ -10,21 +11,6 @@ Block HashJoinBuildBlockInputStream::readImpl()
         return block;
     join->insertFromBlock(block, stream_index);
     return block;
-}
-
-void namesToString(Names names, std::ostream & ostr)
-{
-    if (names.empty())
-    {
-        return;
-    }
-
-    auto iter = names.cbegin();
-    ostr << *iter++;
-    for (; iter != names.cend(); ++iter)
-    {
-        ostr << ", " << *iter;
-    }
 }
 
 void HashJoinBuildBlockInputStream::dumpExtra(std::ostream & ostr) const
@@ -45,7 +31,8 @@ void HashJoinBuildBlockInputStream::dumpExtra(std::ostream & ostr) const
         throw TiFlashException("Unknown join type", Errors::Coprocessor::Internal);
     ostr << "build_concurrency: [" << join->getBuildConcurrency() << "] join_kind: [" << join_type_it->second;
     ostr << "] key_names_left: [";
-    namesToString(join->getLeftJoinKeys(), ostr);
+    const auto & key_names_left = join->getLeftJoinKeys();
+    dumpIter(key_names_left.cbegin(), key_names_left.cend(), ostr, [](const String & s, std::ostream & os) { os << s; });
     ostr << "]";
 }
 

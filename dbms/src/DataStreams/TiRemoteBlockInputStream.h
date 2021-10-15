@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DataStreams/DumpUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
@@ -199,16 +200,7 @@ protected:
     void dumpExtra(std::ostream & ostr) const override
     {
         ostr << "output_schema: [";
-        if (sample_block.columns() > 0)
-        {
-            const auto & first = sample_block.getByPosition(0);
-            ostr << first.name << '(' << first.type->getName() << ')';
-            for (size_t i = 1; i < sample_block.columns(); ++i)
-            {
-                const auto & c = sample_block.getByPosition(i);
-                ostr << ", " << c.name << '(' << c.type->getName() << ')';
-            }
-        }
+        dumpIter(sample_block.cbegin(), sample_block.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
         ostr << ']';
     }
 };
