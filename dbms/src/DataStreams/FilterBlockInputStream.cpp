@@ -218,7 +218,12 @@ void FilterBlockInputStream::dumpExtra(std::ostream & ostr) const
 {
     ostr << "expression: [ actions: {";
     const auto & actions = expression->getActions();
-    dumpIter(actions.cbegin(), actions.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.toString(); }, "; ");
+    dumpIter(
+        actions.cbegin(),
+        actions.cend(),
+        ostr,
+        [](const auto & s, std::ostream & os) { os << s.toString(); },
+        "; ");
     ostr << "} input: {";
     const auto & input_columns = expression->getRequiredColumnsWithTypes();
     dumpIter(input_columns.cbegin(), input_columns.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
