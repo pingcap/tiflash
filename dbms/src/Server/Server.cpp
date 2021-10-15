@@ -37,7 +37,6 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
-#include <RaftStoreProxyFFI/VersionCheck.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
@@ -866,9 +865,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashProxyConfig proxy_conf(config());
     EngineStoreServerWrap tiflash_instance_wrap{};
-    auto helper = getEngineStoreServerHelper(
-        RAFT_STORE_PROXY_MAGIC_NUMBER,
-        RAFT_STORE_PROXY_VERSION,
+    auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
