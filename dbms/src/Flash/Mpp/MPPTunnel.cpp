@@ -29,7 +29,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
-    , send_queue(input_steams_num_ * 5) /// TODO(fzh) set a reasonable parameter
+    , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
     , log(getMPPTaskLog(log_, tunnel_id))
 {
 }
@@ -45,12 +45,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         {
             send_thread->join();
         }
-        /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
-        MPPDataPacketPtr res;
-        while (send_queue.size() > 0)
-        {
-            send_queue.pop(res);
-        }
+        clearSendQueue();
     }
     catch (...)
     {
@@ -119,6 +114,17 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 LOG_TRACE(log, "sending a nullptr to finish write.");
             }
         }
+    }
+}
+
+/// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
+template <typename Writer>
+void MPPTunnelBase<Writer>::clearSendQueue()
+{
+    MPPDataPacketPtr res;
+    while (send_queue.size() > 0)
+    {
+        send_queue.pop(res);
     }
 }
 
@@ -198,7 +204,6 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
     send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
-
     connected = true;
     cv_for_connected.notify_all();
 }
@@ -237,6 +242,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::
 template <typename Writer>
 void MPPTunnelBase<Writer>::finishWithLock()
 {
+    clearSendQueue();
     std::unique_lock<std::mutex> lk(mu);
     finished = true;
     cv_for_finished.notify_all();

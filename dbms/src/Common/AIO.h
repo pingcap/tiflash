@@ -5,6 +5,7 @@
 #include <Common/Exception.h>
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 #include <linux/aio_abi.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -33,12 +34,12 @@ inline int io_destroy(aio_context_t ctx)
 }
 
 /// last argument is an array of pointers technically speaking
-inline int io_submit(aio_context_t ctx, long nr, struct iocb * iocbpp[])
+inline int io_submit(aio_context_t ctx, Int64 nr, struct iocb * iocbpp[])
 {
     return syscall(__NR_io_submit, ctx, nr, iocbpp);
 }
 
-inline int io_getevents(aio_context_t ctx, long min_nr, long max_nr, io_event * events, struct timespec * timeout)
+inline int io_getevents(aio_context_t ctx, Int64 min_nr, Int64 max_nr, io_event * events, struct timespec * timeout)
 {
     return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
 }
@@ -48,7 +49,7 @@ struct AIOContext : private boost::noncopyable
 {
     aio_context_t ctx;
 
-    AIOContext(unsigned int nr_events = 128)
+    explicit AIOContext(unsigned int nr_events = 128)
     {
         ctx = 0;
         if (io_setup(nr_events, &ctx) < 0)
@@ -128,7 +129,7 @@ class AIOContextPool : public ext::singleton<AIOContextPool>
         }
     }
 
-    int getCompletionEvents(io_event events[], const int max_events)
+    int getCompletionEvents(io_event events[], const int max_events) const
     {
         timespec timeout{timeout_sec, 0};
 
@@ -203,11 +204,10 @@ public:
         /// store id in AIO request for further identification
         iocb.aio_data = request_id;
 
-        auto num_requests = 0;
         struct iocb * requests[]{&iocb};
 
         /// submit a request
-        while ((num_requests = io_submit(aio_context.ctx, 1, requests)) < 0)
+        while (io_submit(aio_context.ctx, 1, requests) < 0)
         {
             if (errno == EAGAIN)
                 /// wait until at least one event has been completed (or a spurious wakeup) and try again
