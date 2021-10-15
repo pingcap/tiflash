@@ -861,6 +861,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
             LOG_INFO(log, "Broken page without data file, ignored: " + pf.dataPath());
             return {{}, Type::Invalid};
         }
+
         return {pf, Type::Formal};
     }
     else if (ss[0] == folder_prefix_checkpoint)
@@ -871,7 +872,6 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
             LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
             return {{}, Type::Invalid};
         }
-        pf.type = Type::Checkpoint;
 
         return {pf, Type::Checkpoint};
     }
