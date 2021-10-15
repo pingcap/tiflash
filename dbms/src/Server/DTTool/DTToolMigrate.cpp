@@ -54,7 +54,9 @@ struct DirLock
 {
     int dir{};
 #if __APPLE__ && __clang__
-    struct flock lock{};
+    struct flock lock
+    {
+    };
 #else
     flock lock{};
 #endif
