@@ -217,7 +217,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 } // namespace PageMetaFormat
 
 // =========================================================
-// PageFile::MetaLinkingReader
+// PageFile::LinkingMetaAdapter
 // =========================================================
 
 PageFile::LinkingMetaAdapter::LinkingMetaAdapter(PageFile & page_file_)
@@ -327,7 +327,7 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
     }
 
-    // change the wb checksum
+    // update the wb sequence id
     PageUtil::put<WriteBatch::SequenceID>(sequence_pos, sid);
     char * checksum_pos = meta_buffer + meta_file_offset;
     checksum_pos += wb_bytes_without_checksum;
@@ -404,6 +404,7 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
         }
     }
 
+    // update the checksum since sequence id && page file id, level have been changed
     const auto new_checksum = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
     PageUtil::put<PageMetaFormat::Checksum>(checksum_pos, new_checksum);
 
@@ -681,7 +682,7 @@ PageFile::Writer::~Writer()
     closeFd();
 }
 
-void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
+void PageFile::Writer::hardlinkFrom(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
 {
     auto reader = PageFile::LinkingMetaAdapter::createFrom(linked_file);
 
@@ -1266,16 +1267,16 @@ size_t PageFile::setCheckpoint()
     return removeDataIfExists();
 }
 
-bool PageFile::linkPage(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
+bool PageFile::linkFrom(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
 {
     auto writer = this->createWriter(false, false);
     try
     {
         // FIXME : need test it with DataKeyManager
-        file_provider->linkEncryptionInfo(metaEncryptionPath(), page_file.metaEncryptionPath());
-        file_provider->linkEncryptionInfo(dataEncryptionPath(), page_file.dataEncryptionPath());
+        file_provider->linkEncryptionInfo(page_file.metaEncryptionPath(), metaEncryptionPath());
+        file_provider->linkEncryptionInfo(page_file.dataEncryptionPath(), dataEncryptionPath());
 
-        writer->pageFileLink(page_file, sid, edit);
+        writer->hardlinkFrom(page_file, sid, edit);
         setFileAppendPos(page_file.getMetaFileSize(), page_file.getDataFileSize());
 
         return true;

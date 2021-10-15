@@ -207,7 +207,7 @@ TEST(PageFile_test, PageFileLink)
     ASSERT_GT(writer->write(batch, edit), 0);
     PageFile pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
     WriteBatch::SequenceID sid = 100;
-    ASSERT_TRUE(pf1.linkPage(pf0, sid, edit));
+    ASSERT_TRUE(pf1.linkFrom(pf0, sid, edit));
 
     pf0.destroy();
 
@@ -264,7 +264,7 @@ TEST(PageFile_test, EncryptedPageFileLink)
     ASSERT_GT(writer->write(batch, edit), 0);
     PageFile pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
     WriteBatch::SequenceID sid = 100;
-    ASSERT_TRUE(pf1.linkPage(pf0, sid, edit));
+    ASSERT_TRUE(pf1.linkFrom(pf0, sid, edit));
 
     pf0.destroy();
 

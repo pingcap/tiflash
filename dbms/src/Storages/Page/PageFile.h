@@ -38,7 +38,7 @@ public:
         const String & parentPath() const;
         PageFileIdAndLevel fileIdLevel() const;
 
-        void pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
+        void hardlinkFrom(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     private:
         void closeFd();
@@ -334,7 +334,7 @@ public:
     String parentPath() const { return parent_path; }
     String folderPath() const;
 
-    [[nodiscard]] bool linkPage(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
+    [[nodiscard]] bool linkFrom(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     void createEncryptionInfo() const
     {
