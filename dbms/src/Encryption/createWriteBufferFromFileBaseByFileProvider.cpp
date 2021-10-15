@@ -18,7 +18,7 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-WriteBufferFromFileBase *
+std::unique_ptr<WriteBufferFromFileBase>
 createWriteBufferFromFileBaseByFileProvider(
     const FileProviderPtr & file_provider,
     const std::string & filename_,
@@ -36,7 +36,7 @@ createWriteBufferFromFileBaseByFileProvider(
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
         ProfileEvents::increment(ProfileEvents::CreatedWriteBufferOrdinary);
-        return new WriteBufferFromFileProvider(
+        return std::make_unique<WriteBufferFromFileProvider>(
             file_provider,
             filename_,
             encryption_path_,
