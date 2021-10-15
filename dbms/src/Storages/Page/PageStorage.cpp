@@ -252,15 +252,10 @@ void PageStorage::restore()
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
     opt.remove_tmp_files = false;
 #endif
-<<<<<<< HEAD
-    opt.ignore_legacy      = false;
-    opt.ignore_checkpoint  = false;
-=======
-    opt.ignore_legacy = false;
-    opt.ignore_checkpoint = false;
+    opt.ignore_legacy        = false;
+    opt.ignore_checkpoint    = false;
     opt.remove_invalid_files = true;
->>>>>>> f09f229a3a (FIX exception: GC removed normal file which just created (#3216))
-    PageFileSet page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
+    PageFileSet page_files   = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     /// Restore current version from both formal and legacy page files
 
@@ -374,11 +369,11 @@ void PageStorage::restore()
         for (auto & page_file : page_files)
         {
             // Checkpoint file is always stored on `delegator`'s default path, so no need to insert it's location here
-            size_t idx_in_delta_paths = delegator->addPageFileUsedSize(
-                page_file.fileIdLevel(),
-                page_file.getDiskSize(),
-                page_file.parentPath(),
-                /*need_insert_location*/ page_file.getType() != PageFile::Type::Checkpoint);
+            size_t idx_in_delta_paths
+                = delegator->addPageFileUsedSize(page_file.fileIdLevel(),
+                                                 page_file.getDiskSize(),
+                                                 page_file.parentPath(),
+                                                 /*need_insert_location*/ page_file.getType() != PageFile::Type::Checkpoint);
             // Try best to reuse writable page files
             if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
@@ -841,23 +836,20 @@ void PageStorage::drop()
     LOG_DEBUG(log, storage_name << " is going to drop");
 
     ListPageFilesOption opt;
-    opt.ignore_checkpoint = false;
-<<<<<<< HEAD
-    opt.ignore_legacy     = false;
-    opt.remove_tmp_files  = false;
-    auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
-=======
-    opt.ignore_legacy = false;
-    opt.remove_tmp_files = false;
+    opt.ignore_checkpoint    = false;
+    opt.ignore_legacy        = false;
+    opt.remove_tmp_files     = false;
     opt.remove_invalid_files = false;
-    auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
->>>>>>> f09f229a3a (FIX exception: GC removed normal file which just created (#3216))
+    auto page_files          = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     for (const auto & page_file : page_files)
     {
         // All checkpoint file is stored on `delegator`'s default path and we didn't record it's location as other types of PageFile,
         // so we need set `remove_from_default_path` to true to distinguish this situation.
-        delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize(), /*meta_left*/ false, /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
+        delegator->removePageFile(page_file.fileIdLevel(),
+                                  page_file.getDiskSize(),
+                                  /*meta_left*/ false,
+                                  /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
     }
 
     /// FIXME: Note that these drop directories actions are not atomic, may leave some broken files on disk.
@@ -986,13 +978,9 @@ bool PageStorage::gc(bool not_skip)
         external_pages = external_pages_scanner();
     }
     ListPageFilesOption opt;
-    opt.remove_tmp_files = true;
-<<<<<<< HEAD
-    auto page_files      = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
-=======
+    opt.remove_tmp_files     = true;
     opt.remove_invalid_files = false;
-    auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
->>>>>>> f09f229a3a (FIX exception: GC removed normal file which just created (#3216))
+    auto page_files          = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
     if (unlikely(page_files.empty()))
     {
         // In case the directory are removed by accident
@@ -1229,7 +1217,10 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
                 page_file.deleteEncryptionInfo();
                 // All checkpoint file is stored on `delegator`'s default path and we didn't record it's location as other types of PageFile,
                 // so we need set `remove_from_default_path` to true to distinguish this situation.
-                delegator->removePageFile(page_file.fileIdLevel(), file_size, /*meta_left*/ false, /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
+                delegator->removePageFile(page_file.fileIdLevel(),
+                                          file_size,
+                                          /*meta_left*/ false,
+                                          /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
             }
         }
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
@@ -1300,7 +1291,10 @@ PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_file
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
             // All checkpoint file is stored on `delegator`'s default path and we didn't record it's location as other types of PageFile,
             // so we need set `remove_from_default_path` to true to distinguish this situation.
-            delegator->removePageFile(page_id_and_lvl, bytes_removed, /*meta_left*/ true, /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
+            delegator->removePageFile(page_id_and_lvl,
+                                      bytes_removed,
+                                      /*meta_left*/ true,
+                                      /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
             num_data_removed += 1;
         }
     }
