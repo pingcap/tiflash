@@ -45,11 +45,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
-        for (auto & execution_summary : resp.execution_summaries())
+        for (const auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
-                auto & executor_id = execution_summary.executor_id();
+                const auto & executor_id = execution_summary.executor_id();
                 execution_summaries[index][executor_id].time_processed_ns = execution_summary.time_processed_ns();
                 execution_summaries[index][executor_id].num_produced_rows = execution_summary.num_produced_rows();
                 execution_summaries[index][executor_id].num_iterations = execution_summary.num_iterations();
@@ -69,11 +69,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             return;
         }
         auto & execution_summaries_map = execution_summaries[index];
-        for (auto & execution_summary : resp.execution_summaries())
+        for (const auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
-                auto & executor_id = execution_summary.executor_id();
+                const auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
                     LOG_WARNING(log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
@@ -194,6 +194,23 @@ public:
 
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
+
+protected:
+    void dumpExtra(std::ostream & ostr) const override
+    {
+        ostr << "output_schema: [";
+        if (sample_block.columns() > 0)
+        {
+            const auto & first = sample_block.getByPosition(0);
+            ostr << first.name << '(' << first.type->getName() << ')';
+            for (size_t i = 1; i < sample_block.columns(); ++i)
+            {
+                const auto & c = sample_block.getByPosition(i);
+                ostr << ", " << c.name << '(' << c.type->getName() << ')';
+            }
+        }
+        ostr << ']';
+    }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;

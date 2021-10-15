@@ -1,15 +1,13 @@
-#include <math.h>
-
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <math.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_DEEP_PIPELINE;
+extern const int TOO_DEEP_PIPELINE;
 }
 
 /** It's safe to access children without mutex as long as these methods are called before first call to read, readPrefix.
@@ -51,9 +49,9 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
         throw Exception("Query pipeline is too deep. Maximum: " + toString(max_depth), ErrorCodes::TOO_DEEP_PIPELINE);
 
     size_t res = 0;
-    for (BlockInputStreams::const_iterator it = children.begin(); it != children.end(); ++it)
+    for (const auto & it : children)
     {
-        size_t child_depth = (*it)->checkDepth(level + 1);
+        size_t child_depth = it->checkDepth(level + 1);
         if (child_depth > res)
             res = child_depth;
     }
@@ -62,33 +60,33 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
 }
 
 
-void IBlockInputStream::dumpTree(std::ostream & ostr, size_t indent, size_t multiplier)
+void IBlockInputStream::dumpTree(std::ostream & ostr, size_t indent, size_t multiplier) const
 {
-    ostr << String(indent, ' ') << getName();
+    ostr << String(2 * indent, ' ') << getName();
     if (multiplier > 1)
         ostr << " × " << multiplier;
-    //ostr << ": " << getHeader().dumpStructure();
-    ostr << std::endl;
+    ostr << " extra: {";
+    dumpExtra(ostr);
+    ostr << '}' << std::endl;
     ++indent;
 
     /// If the subtree is repeated several times, then we output it once with the multiplier.
     using Multipliers = std::map<String, size_t>;
     Multipliers multipliers;
 
-    for (BlockInputStreams::const_iterator it = children.begin(); it != children.end(); ++it)
-        ++multipliers[(*it)->getTreeID()];
+    for (const auto & it : children)
+        ++multipliers[it->getTreeID()];
 
-    for (BlockInputStreams::iterator it = children.begin(); it != children.end(); ++it)
+    for (const auto & it : children)
     {
-        String id = (*it)->getTreeID();
+        String id = it->getTreeID();
         size_t & subtree_multiplier = multipliers[id];
-        if (subtree_multiplier != 0)    /// Already printed subtrees are marked with zero in the array of multipliers.
+        if (subtree_multiplier != 0) /// Already printed subtrees are marked with zero in the array of multipliers.
         {
-            (*it)->dumpTree(ostr, indent, subtree_multiplier);
+            it->dumpTree(ostr, indent, subtree_multiplier);
             subtree_multiplier = 0;
         }
     }
 }
 
-}
-
+} // namespace DB

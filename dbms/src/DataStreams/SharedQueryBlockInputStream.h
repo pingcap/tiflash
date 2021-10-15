@@ -17,7 +17,8 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
-        : queue(clients)
+        : buffer_size(clients)
+        , queue(clients)
         , log(getMPPTaskLog(log_, getName()))
         , in(in_)
     {
@@ -126,8 +127,15 @@ protected:
         }
     }
 
+    void dumpExtra(std::ostream & ostr) const override
+    {
+        ostr << "buffer_size: " << buffer_size;
+    }
+
 private:
     static constexpr UInt64 try_action_millisecionds = 200;
+
+    size_t buffer_size;
 
     ConcurrentBoundedQueue<Block> queue;
 

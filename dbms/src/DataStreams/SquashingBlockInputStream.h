@@ -24,6 +24,8 @@ public:
 protected:
     Block readImpl() override;
 
+    void dumpExtra(std::ostream & ostr) const override;
+
 private:
     SquashingTransform transform;
     bool all_read = false;
