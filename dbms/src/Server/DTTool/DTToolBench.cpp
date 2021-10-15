@@ -158,7 +158,7 @@ DB::Block createBlock(size_t column_number, size_t start, size_t row_number, std
         IColumn::MutablePtr m_col = pk_col.type->createColumn();
         for (size_t i = 0; i < row_number; i++)
         {
-            Field field = Int64(start + i);
+            Field field = static_cast<DB::Int64>(start + i);
             m_col->insert(field);
             acc += 8;
         }
@@ -171,7 +171,7 @@ DB::Block createBlock(size_t column_number, size_t start, size_t row_number, std
         IColumn::MutablePtr m_col = version_col.type->createColumn();
         for (size_t i = 0; i < row_number; ++i)
         {
-            Field field = (start + i) * 10;
+            Field field = static_cast<DB::UInt64>((start + i) * 10);
             m_col->insert(field);
             acc += 8;
         }
