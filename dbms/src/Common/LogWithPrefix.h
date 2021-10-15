@@ -77,18 +77,19 @@ public:
 
 private:
     Poco::Logger * log;
+    // prefix must be ascii.
     const String prefix;
 
     static String addSuffixSpace(const String & str)
     {
-        if (str.empty() || std::isspace(*str.cend()))
+        if (str.empty() || std::isspace(str.back()))
             return str;
         else
             return str + ' ';
     }
 };
 
-[[maybe_unused]] std::shared_ptr<LogWithPrefix> static getLogWithPrefix(const std::shared_ptr<LogWithPrefix> & log = nullptr, const String & name = "name: N/A")
+inline std::shared_ptr<LogWithPrefix> static getLogWithPrefix(const LogWithPrefixPtr & log = nullptr, const String & name = "name: N/A")
 {
     if (log == nullptr)
     {

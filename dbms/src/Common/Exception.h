@@ -2,27 +2,20 @@
 
 #include <Common/StackTrace.h>
 #include <Poco/Exception.h>
+#include <common/logger_useful.h>
 
 #include <cerrno>
 #include <memory>
 #include <vector>
 
-namespace Poco
-{
-class Logger;
-}
-
-
 namespace DB
 {
-class LogWithPrefix;
-using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
 
 class Exception : public Poco::Exception
 {
 public:
-    Exception() {} /// For deferred initialization.
-    Exception(const std::string & msg, int code = 0)
+    Exception() = default; /// For deferred initialization.
+    explicit Exception(const std::string & msg, int code = 0)
         : Poco::Exception(msg, code)
     {}
     Exception(const std::string & msg, const std::string & arg, int code = 0)
@@ -55,7 +48,7 @@ private:
 class ErrnoException : public Exception
 {
 public:
-    ErrnoException(const std::string & msg, int code = 0, int saved_errno_ = 0)
+    explicit ErrnoException(const std::string & msg, int code = 0, int saved_errno_ = 0)
         : Exception(msg, code)
         , saved_errno(saved_errno_)
     {}
@@ -81,14 +74,6 @@ using Exceptions = std::vector<std::exception_ptr>;
 [[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int the_errno = errno);
 
 
-/** Try to write an exception to the log (and forget about it).
-  * Can be used in destructors in the catch-all block.
-  */
-void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
-void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
-void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
-
-
 /** Prints current exception in canonical format.
   * with_stacktrace - prints stack trace for DB::Exception.
   * check_embedded_stacktrace - if DB::Exception has embedded stacktrace then
@@ -98,6 +83,23 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
 
 /// Returns error code from ErrorCodes
 int getCurrentExceptionCode();
+
+
+/** Try to write an exception to the log (and forget about it).
+  * Can be used in destructors in the catch-all block.
+  */
+void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
+template <typename LoggerPointer>
+void tryLogCurrentException(const LoggerPointer & logger, const std::string & start_of_message = "")
+{
+    try
+    {
+        LOG_ERROR(logger, start_of_message << (start_of_message.empty() ? "" : ": ") << getCurrentExceptionMessage(true));
+    }
+    catch (...)
+    {
+    }
+}
 
 
 /// An execution status of any piece of code, contains return code and optional error
@@ -124,8 +126,18 @@ struct ExecutionStatus
 
 
 void tryLogException(std::exception_ptr e, const char * log_name, const std::string & start_of_message = "");
-void tryLogException(std::exception_ptr e, Poco::Logger * logger, const std::string & start_of_message = "");
-void tryLogException(std::exception_ptr e, const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
+template <typename LoggerPointer>
+void tryLogException(std::exception_ptr e, const LoggerPointer & logger, const std::string & start_of_message = "")
+{
+    try
+    {
+        std::rethrow_exception(std::move(e));
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, start_of_message);
+    }
+}
 
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace = false);
 std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace);
