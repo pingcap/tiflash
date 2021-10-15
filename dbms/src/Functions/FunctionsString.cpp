@@ -346,9 +346,10 @@ template <char not_case_lower_bound,
           char flip_case_mask,
           int to_case(int),
           void cyrillic_to_case(ConstPtr<UInt8> &, Ptr<UInt8> &)>
-__attribute__((always_inline)) inline void toCaseImpl(ConstPtr<UInt8> & src,
-                                                      const ConstPtr<UInt8> src_end,
-                                                      Ptr<UInt8> & dst)
+__attribute__((always_inline)) inline void toCaseImpl(
+    ConstPtr<UInt8> & src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> & dst)
 {
     if (src[0] <= ascii_upper_bound)
     {
