@@ -46,7 +46,14 @@ void MockKeyManager::deleteFile(const String & fname, bool throw_on_error)
         {
             throw DB::Exception(fmt::format("Can't find file which name is {}", fname), DB::ErrorCodes::LOGICAL_ERROR);
         }
-        files.erase(std::remove(files.begin(), files.end(), fname), files.end());
+        for (auto iter = files.begin(); iter < files.end(); iter++)
+        {
+            if (*iter == fname)
+            {
+                files.erase(iter);
+                break;
+            }
+        }
     }
 }
 
