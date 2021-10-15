@@ -8,6 +8,7 @@
 #include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/WriteBufferProxy.h>
+#include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
@@ -15,6 +16,17 @@ namespace DB
 {
 namespace DM
 {
+namespace detail
+{
+static inline DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
+{
+    return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumAlgorithm() : ChecksumAlgo::None;
+}
+static inline size_t getFrameSizeOrDefault(DMFile & dmfile)
+{
+    return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE;
+}
+} // namespace detail
 class DMFileWriter
 {
 public:
@@ -30,24 +42,34 @@ public:
                FileProviderPtr & file_provider,
                const WriteLimiterPtr & write_limiter_,
                bool do_index)
-            : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                     dmfile->colDataPath(file_base_name),
-                                                                     dmfile->encryptionDataPath(file_base_name),
-                                                                     false,
-                                                                     write_limiter_,
-                                                                     0,
-                                                                     0,
-                                                                     max_compress_block_size))
+            : plain_file(
+                WriteBufferByFileProviderBuilder(
+                    dmfile->configuration.has_value(),
+                    file_provider,
+                    dmfile->colDataPath(file_base_name),
+                    dmfile->encryptionDataPath(file_base_name),
+                    false,
+                    write_limiter_)
+                    .with_buffer_size(max_compress_block_size)
+                    .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
+                    .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
+                    .build())
             , plain_layer(*plain_file)
-            , compressed_buf(plain_layer, compression_settings)
-            , original_layer(compressed_buf)
+            , compressed_buf(dmfile->configuration
+                                 ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(plain_layer, compression_settings))
+                                 : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(plain_layer, compression_settings)))
+            , original_layer(*compressed_buf)
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
-            , mark_file(
-                  file_provider,
-                  dmfile->colMarkPath(file_base_name),
-                  dmfile->encryptionMarkPath(file_base_name),
-                  false,
-                  write_limiter_)
+            , mark_file(WriteBufferByFileProviderBuilder(
+                            dmfile->configuration.has_value(),
+                            file_provider,
+                            dmfile->colMarkPath(file_base_name),
+                            dmfile->encryptionMarkPath(file_base_name),
+                            false,
+                            write_limiter_)
+                            .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
+                            .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
+                            .build())
         {
         }
 
@@ -55,27 +77,27 @@ public:
         {
             // Note that this method won't flush minmaxes.
             original_layer.next();
-            compressed_buf.next();
+            compressed_buf->next();
             plain_layer.next();
             plain_file->next();
 
             plain_file->sync();
-            mark_file.sync();
+            mark_file->sync();
         }
 
         // Get written bytes of `plain_file` && `mark_file`. Should be called after `flush`.
         // Note that this class don't take responsible for serializing `minmaxes`,
         // bytes of `minmaxes` won't be counted in this method.
-        size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file.getPositionInFile(); }
+        size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file->getPositionInFile(); }
 
-        /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
+        /// original_layer -> compressed_buf -> plain_layer -> plain_file
         WriteBufferFromFileBasePtr plain_file;
         WriteBufferProxy plain_layer;
-        CompressedWriteBuffer<> compressed_buf;
+        WriteBufferPtr compressed_buf;
         WriteBufferProxy original_layer;
 
         MinMaxIndexPtr minmaxes;
-        WriteBufferFromFileProvider mark_file;
+        WriteBufferFromFileBasePtr mark_file;
     };
     using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
@@ -194,7 +216,10 @@ public:
     void write(const Block & block, const BlockProperty & block_property);
     void finalize();
 
-    const DMFilePtr getFile() const { return dmfile; }
+    const DMFilePtr getFile() const
+    {
+        return dmfile;
+    }
 
 private:
     void finalizeColumn(ColId col_id, DataTypePtr type);
