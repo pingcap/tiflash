@@ -102,12 +102,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
         bool is_local = req.req->sender_meta().address() == task_meta.address();
-        if (is_local)
-            rpc_context->enableLocal();
         for (int i = 0; i < 10; i++)
         {
-            std::shared_ptr<GRPCReceiverContext::Reader> reader;
-            reader = rpc_context->makeReader(req);
+            std::shared_ptr<GRPCReceiverContext::Reader> reader = rpc_context->makeReader(req, is_local);
             reader->initialize();
             std::shared_ptr<ReceivedMessage> recv_msg;
             bool has_data = false;

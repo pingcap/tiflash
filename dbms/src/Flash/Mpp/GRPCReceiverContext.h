@@ -69,21 +69,15 @@ public:
         const tipb::ExchangeReceiver & pb_exchange_receiver,
         const ::mpp::TaskMeta & task_meta) const;
 
-    std::shared_ptr<Reader> makeReader(const Request & request) const;
+    std::shared_ptr<Reader> makeReader(const Request & request, bool is_local = false) const;
 
     static StatusType getStatusOK()
     {
         return ::grpc::Status::OK;
     }
 
-    void enableLocal()
-    {
-        is_local = true;
-    }
-
 private:
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<MPPTaskManager> task_manager;
-    bool is_local;
 };
 } // namespace DB

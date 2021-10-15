@@ -38,7 +38,6 @@ namespace DB
 GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_)
     : cluster(cluster_)
     , task_manager(task_manager_)
-    , is_local(false)
 {}
 
 
@@ -85,7 +84,7 @@ std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::
     return std::make_tuple(tunnel, grpc::Status::OK);
 }
 
-std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(const GRPCReceiverContext::Request & request) const
+std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(const GRPCReceiverContext::Request & request, bool is_local) const
 {
     if (is_local)
     {
