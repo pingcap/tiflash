@@ -14,17 +14,6 @@ namespace DB
 {
 namespace DM
 {
-namespace detail
-{
-static inline DB::ChecksumAlgo getAlgorithmOrNone(DMFile & dmfile)
-{
-    return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumAlgorithm() : ChecksumAlgo::None;
-}
-static inline size_t getFrameSizeOrDefault(DMFile & dmfile)
-{
-    return dmfile.getConfiguration() ? dmfile.getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE;
-}
-} // namespace detail
 class DMFileWriter
 {
 public:
@@ -49,8 +38,10 @@ public:
                     false,
                     write_limiter_)
                     .with_buffer_size(max_compress_block_size)
-                    .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
-                    .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
+                    .with_checksum_algorithm(
+                        dmfile->getConfiguration() ? dmfile->getConfiguration()->getChecksumAlgorithm() : ChecksumAlgo::None)
+                    .with_checksum_frame_size(
+                        dmfile->getConfiguration() ? dmfile->getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE)
                     .build())
             , compressed_buf(dmfile->configuration
                                  ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(*plain_file, compression_settings))
@@ -63,8 +54,10 @@ public:
                             dmfile->encryptionMarkPath(file_base_name),
                             false,
                             write_limiter_)
-                            .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
-                            .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
+                            .with_checksum_algorithm(
+                                dmfile->getConfiguration() ? dmfile->getConfiguration()->getChecksumAlgorithm() : ChecksumAlgo::None)
+                            .with_checksum_frame_size(
+                                dmfile->getConfiguration() ? dmfile->getConfiguration()->getChecksumFrameLength() : DBMS_DEFAULT_BUFFER_SIZE)
                             .build())
         {
         }
