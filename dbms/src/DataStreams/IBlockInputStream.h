@@ -94,7 +94,7 @@ public:
 
     /** Must be called before read, readPrefix.
       */
-    void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1) const;
+    void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1);
 
     /** Check the depth of the pipeline.
       * If max_depth is specified and the `depth` is greater - throw an exception.
@@ -121,8 +121,6 @@ public:
 protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;
-
-    virtual void dumpExtra(std::ostream & ostr [[maybe_unused]]) const {};
 
 private:
     TableLockHolders table_locks;

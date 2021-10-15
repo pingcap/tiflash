@@ -75,7 +75,7 @@ int main(int argc, char ** argv)
         DataTypes empty_list_of_types;
         aggregate_descriptions[0].function = factory.get("count", empty_list_of_types);
 
-        Aggregator::Params params(stream->getHeader(), {0, 1}, aggregate_descriptions, {"s1", "s2"}, false, TiDB::dummy_collators);
+        Aggregator::Params params(stream->getHeader(), {0, 1}, aggregate_descriptions, false, TiDB::dummy_collators);
 
         Aggregator aggregator(params);
 

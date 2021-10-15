@@ -27,8 +27,6 @@ public:
 protected:
     Block readImpl() override;
 
-    void dumpExtra(std::ostream & ostr) const override;
-
 private:
     JoinPtr join;
     size_t stream_index;

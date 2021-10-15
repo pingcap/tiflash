@@ -686,7 +686,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
         header,
         keys,
         aggregates,
-        key_names,
         false,
         settings.max_rows_to_group_by,
         settings.group_by_overflow_mode,

@@ -22,11 +22,11 @@ String IBlockInputStream::getTreeID() const
     if (!children.empty())
     {
         s << "(";
-        for (BlockInputStreams::const_iterator it = children.begin(); it != children.end(); ++it)
+        auto it = children.begin();
+        s << (*it++)->getTreeID();
+        for (; it != children.end(); ++it)
         {
-            if (it != children.begin())
-                s << ", ";
-            s << (*it)->getTreeID();
+            s << ", " << (*it)->getTreeID();
         }
         s << ")";
     }
@@ -60,14 +60,13 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
 }
 
 
-void IBlockInputStream::dumpTree(std::ostream & ostr, size_t indent, size_t multiplier) const
+void IBlockInputStream::dumpTree(std::ostream & ostr, size_t indent, size_t multiplier)
 {
-    ostr << String(2 * indent, ' ') << getName();
+    ostr << String(indent, ' ') << getName();
     if (multiplier > 1)
         ostr << " × " << multiplier;
-    ostr << " extra: {";
-    dumpExtra(ostr);
-    ostr << '}' << std::endl;
+    //ostr << ": " << getHeader().dumpStructure();
+    ostr << std::endl;
     ++indent;
 
     /// If the subtree is repeated several times, then we output it once with the multiplier.

@@ -44,8 +44,6 @@ protected:
 
     Block readImpl() override;
 
-    void dumpExtra(std::ostream & ostr) const override;
-
 private:
     const LogWithPrefixPtr log;
 

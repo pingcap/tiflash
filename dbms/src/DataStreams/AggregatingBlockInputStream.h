@@ -44,8 +44,6 @@ public:
 protected:
     Block readImpl() override;
 
-    void dumpExtra(std::ostream & ostr) const override;
-
     LogWithPrefixPtr log;
 
     Aggregator::Params params;

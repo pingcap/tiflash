@@ -45,10 +45,6 @@ public:
       */
     Result add(Block && block);
 
-    size_t getMinBlockSizeRows() const { return min_block_size_rows; }
-
-    size_t getMinBlockSizeBytes() const { return min_block_size_bytes; }
-
 private:
     size_t min_block_size_rows;
     size_t min_block_size_bytes;

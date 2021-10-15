@@ -194,23 +194,6 @@ public:
 
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
-
-protected:
-    void dumpExtra(std::ostream & ostr) const override
-    {
-        ostr << "output_schema: [";
-        if (sample_block.columns() > 0)
-        {
-            const auto & first = sample_block.getByPosition(0);
-            ostr << first.name << '(' << first.type->getName() << ')';
-            for (size_t i = 1; i < sample_block.columns(); ++i)
-            {
-                const auto & c = sample_block.getByPosition(i);
-                ostr << ", " << c.name << '(' << c.type->getName() << ')';
-            }
-        }
-        ostr << ']';
-    }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;
