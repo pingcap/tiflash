@@ -525,7 +525,10 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     }
 
     if (kind == ASTTableJoin::Kind::Cross_AntiLeftOuterSemi)
+    {
         columns_added_by_join.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
+        join_output_columns.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
+    }
 
     DataTypes join_key_types;
     getJoinKeyTypes(join, join_key_types);
@@ -613,7 +616,12 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
-    right_query.join->setSampleBlock(right_query.source->getHeader());
+    auto sample_block = right_query.source->getHeader();
+    if (kind == ASTTableJoin::Kind::Cross_AntiLeftOuterSemi)
+    {
+        sample_block.insert(ColumnWithTypeAndName(std::make_shared<DataTypeInt8>(), "non-matched"));
+    }
+    right_query.join->setSampleBlock(sample_block);
     dag.getDAGContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;

@@ -288,7 +288,7 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     return input_col[column_index].name;
 }
 
-// for some historical or unknown reasons, TiDB might set a invalid
+// for some historical or unknown reasons, TiDB might set an invalid
 // field type. This function checks if the expr has a valid field type
 // so far the known invalid field types are:
 // 1. decimal type with scale == -1
