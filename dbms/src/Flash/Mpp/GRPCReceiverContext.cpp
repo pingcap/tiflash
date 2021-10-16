@@ -95,13 +95,8 @@ std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(con
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
         }
-        LocalEnv local_env(tunnel, status);
-        auto reader = std::make_shared<Reader>(request);
-        reader->task_manager = task_manager;
-        reader->is_local = is_local;
-        reader->local_env = local_env;
-        // auto reader = std::make_shared<Reader>(local_env);
-        return reader;
+        LocalEnv local_env(tunnel);
+        return std::make_shared<Reader>(local_env);
     }
     else
     {

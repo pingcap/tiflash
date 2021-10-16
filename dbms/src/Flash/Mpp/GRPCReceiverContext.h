@@ -28,14 +28,11 @@ public:
     {
         LocalEnv()
             : tunnel(nullptr)
-            , status()
         {}
-        LocalEnv(MPPTunnelPtr tunnel_, grpc::Status status_)
+        LocalEnv(MPPTunnelPtr tunnel_)
             : tunnel(tunnel_)
-            , status(status_)
         {}
         MPPTunnelPtr tunnel;
-        grpc::Status status;
     };
 
     struct Reader
@@ -43,7 +40,6 @@ public:
         std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
         grpc::ClientContext client_context;
         std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
-        std::shared_ptr<MPPTaskManager> task_manager;
         LocalEnv local_env;
         bool is_local;
 
@@ -59,7 +55,6 @@ public:
         void initialize() const;
         bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const;
         StatusType finish() const;
-        // std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request);
     };
 
     explicit GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_ = nullptr);
