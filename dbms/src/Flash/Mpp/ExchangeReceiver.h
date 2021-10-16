@@ -101,7 +101,8 @@ private:
     std::vector<boost::fibers::future<void>> workers_done;
     DAGSchema schema;
 
-    boost::fibers::buffered_channel<std::shared_ptr<ReceivedPacket>> full_buffer;
+    using Channel = boost::fibers::buffered_channel<std::shared_ptr<ReceivedPacket>>;
+    std::vector<std::unique_ptr<Channel>> channels;
 
     boost::fibers::mutex mu;
     /// should lock `mu` when visit these members

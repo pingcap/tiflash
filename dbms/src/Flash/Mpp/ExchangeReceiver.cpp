@@ -5,6 +5,9 @@
 
 namespace DB
 {
+static thread_local size_t push_channel_index = std::hash<std::thread::id>()(std::this_thread::get_id());
+static thread_local size_t pop_channel_index = std::hash<std::thread::id>()(std::this_thread::get_id());
+
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
@@ -18,7 +21,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , task_meta(meta)
     , max_streams(max_streams_)
     , max_buffer_size(128)
-    , full_buffer(max_buffer_size)
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
@@ -28,6 +30,11 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         String name = "exchange_receiver_" + std::to_string(i);
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
         schema.push_back(std::make_pair(name, info));
+    }
+
+    for (size_t i = 0; i < 4; ++i)
+    {
+        channels.push_back(std::make_unique<Channel>(max_buffer_size));
     }
 
     setUpConnection();
@@ -41,7 +48,8 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         state = ExchangeReceiverState::CLOSED;
     }
 
-    full_buffer.close();
+    for (const auto & channel : channels)
+        channel->close();
 
     for (size_t i = 0; i < source_num; ++i)
         workers_done[i].wait();
@@ -54,7 +62,8 @@ void ExchangeReceiverBase<RPCContext>::cancel()
         std::unique_lock lk(mu);
         state = ExchangeReceiverState::CANCELED;
     }
-    full_buffer.close();
+    for (const auto & channel : channels)
+        channel->close();
 }
 
 template <typename RPCContext>
@@ -130,7 +139,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     {
                         throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
                     }
-                    auto res = full_buffer.push(std::move(packet));
+                    auto res = channels[push_channel_index++ % channels.size()]->push(std::move(packet));
                     if (res != boost::fibers::channel_op_status::success)
                     {
                         meet_error = true;
@@ -204,7 +213,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
     if (meet_error || copy_live_conn == 0)
     {
-        full_buffer.close();
+        for (const auto & channel : channels)
+            channel->close();
     }
     else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
@@ -214,8 +224,23 @@ template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
 {
     std::shared_ptr<ReceivedPacket> packet;
-    auto res = full_buffer.pop(packet);
-    if (res != boost::fibers::channel_op_status::success)
+    static constexpr auto timeout = std::chrono::milliseconds(1);
+    auto res = boost::fibers::channel_op_status::empty;
+    for (size_t i = 0; i < channels.size() && res == boost::fibers::channel_op_status::empty; ++i)
+        res = channels[pop_channel_index++ % channels.size()]->try_pop(packet);
+    if (res == boost::fibers::channel_op_status::empty)
+    {
+        do
+        {
+            res = channels[pop_channel_index++ % channels.size()]->pop_wait_for(packet, timeout);
+        } while (res == boost::fibers::channel_op_status::timeout);
+    }
+    if (res == boost::fibers::channel_op_status::closed)
+    {
+        for (size_t i = 0; i < channels.size() && res == boost::fibers::channel_op_status::closed; ++i)
+            res = channels[pop_channel_index++ % channels.size()]->pop(packet);
+    }
+    if (res == boost::fibers::channel_op_status::closed)
     {
         std::unique_lock lock(mu);
         if (state != ExchangeReceiverState::NORMAL)
