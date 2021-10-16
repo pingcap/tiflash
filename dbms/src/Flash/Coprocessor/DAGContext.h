@@ -74,7 +74,7 @@ public:
         }
     }
 
-    DAGContext(UInt64 max_error_count_)
+    explicit DAGContext(UInt64 max_error_count_)
         : collect_execution_summaries(false)
         , is_mpp_task(false)
         , is_root_mpp_task(false)
