@@ -163,7 +163,8 @@ using ConstPtr = T const *;
 // there is a bug in tree-optimizer for GCC < 7.3.1,
 // which will result in wrong code generation for avx512.
 #ifdef __GNUC__
-#define TIFLASH_UPPER_LOWER_ASCII_FALLBACK ((!__GNUC_PREREQ(7, 3)) || (__GNUC_PATCHLEVEL__ < 1))
+#define TIFLASH_UPPER_LOWER_ASCII_NO_FALLBACK \
+    (__GNUC_PREREQ(7, 4) || (__GNUC_PREREQ(7, 3) && __GNUC_PATCHLEVEL__ >= 1))
 #else
 #define TIFLASH_UPPER_LOWER_ASCII_FALLBACK 0
 #endif
@@ -178,20 +179,20 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
      const ConstPtr<UInt8> src_end,
      Ptr<UInt8> dst),
     {
-#if TIFLASH_UPPER_LOWER_ASCII_FALLBACK
-        static constexpr UInt8 mask_shift = __builtin_ctz(flip_case_mask);
-        for (; src < src_end; ++src, ++dst)
-        {
-            auto data = static_cast<UInt8>(*src <= not_case_upper_bound)
-                & static_cast<UInt8>(*src >= not_case_lower_bound);
-            *dst = *src ^ (data << mask_shift);
-        }
-#else
+#if TIFLASH_UPPER_LOWER_ASCII_NO_FALLBACK
         for (; src < src_end; ++src, ++dst)
             if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
                 *dst = *src ^ flip_case_mask;
             else
                 *dst = *src;
+#else
+        static constexpr UInt8 mask_shift = __builtin_ctz(flip_case_mask);
+        for (; src < src_end; ++src, ++dst)
+        {
+            auto data = static_cast<UInt8>(*src <= not_case_upper_bound)
+                        & static_cast<UInt8>(*src >= not_case_lower_bound);
+            *dst = *src ^ (data << mask_shift);
+        }
 #endif
     })
 } // namespace
