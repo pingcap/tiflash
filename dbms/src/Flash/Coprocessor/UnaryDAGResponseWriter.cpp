@@ -12,7 +12,12 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-UnaryDAGResponseWriter::UnaryDAGResponseWriter(tipb::SelectResponse * dag_response_, Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
+UnaryDAGResponseWriter::UnaryDAGResponseWriter(
+    tipb::SelectResponse * dag_response_,
+    Int64 records_per_chunk_,
+    tipb::EncodeType encode_type_,
+    std::vector<tipb::FieldType> result_field_types_,
+    DAGContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
     , dag_response(dag_response_)
 {
