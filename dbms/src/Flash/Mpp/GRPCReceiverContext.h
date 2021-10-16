@@ -38,6 +38,7 @@ public:
 
         void initialize() const;
         bool read(mpp::MPPDataPacket * packet) const;
+        size_t batchRead(const std::vector<mpp::MPPDataPacket *> & packets) const;
         StatusType finish() const;
     };
 

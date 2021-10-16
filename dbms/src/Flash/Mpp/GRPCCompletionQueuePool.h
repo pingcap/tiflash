@@ -22,6 +22,12 @@ public:
     {
         return queues[next.fetch_add(1, std::memory_order_acq_rel) % queues.size()];
     }
+
+    struct Callback
+    {
+        virtual void run(bool ok) = 0;
+        virtual ~Callback() = default;
+    };
 private:
     explicit GRPCCompletionQueuePool(size_t count)
         : queues(count)
@@ -44,9 +50,7 @@ private:
                 LOG_DEBUG(log, "Thread end index = " << index);
                 break;
             }
-            using Promise = boost::fibers::promise<bool>;
-            std::unique_ptr<Promise> promise(reinterpret_cast<Promise *>(got_tag));
-            promise->set_value(ok);
+            reinterpret_cast<Callback *>(got_tag)->run(ok);
         }
     }
 

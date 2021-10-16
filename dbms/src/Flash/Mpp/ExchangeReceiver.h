@@ -101,7 +101,6 @@ private:
     std::vector<boost::fibers::future<void>> workers_done;
     DAGSchema schema;
 
-    boost::fibers::buffered_channel<std::shared_ptr<ReceivedPacket>> empty_buffer;
     boost::fibers::buffered_channel<std::shared_ptr<ReceivedPacket>> full_buffer;
 
     boost::fibers::mutex mu;

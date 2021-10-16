@@ -17,8 +17,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , source_num(pb_exchange_receiver.encoded_task_meta_size())
     , task_meta(meta)
     , max_streams(max_streams_)
-    , max_buffer_size(1024)
-    , empty_buffer(max_buffer_size)
+    , max_buffer_size(128)
     , full_buffer(max_buffer_size)
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
     , state(ExchangeReceiverState::NORMAL)
@@ -29,12 +28,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
         String name = "exchange_receiver_" + std::to_string(i);
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
         schema.push_back(std::make_pair(name, info));
-    }
-
-    LOG_DEBUG(log, "initial push empty packets");
-    while (empty_buffer.try_push(std::make_shared<ReceivedPacket>()) == boost::fibers::channel_op_status::success)
-    {
-        /// do nothing
     }
 
     setUpConnection();
@@ -48,7 +41,6 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         state = ExchangeReceiverState::CLOSED;
     }
 
-    empty_buffer.close();
     full_buffer.close();
 
     for (size_t i = 0; i < source_num; ++i)
@@ -62,7 +54,6 @@ void ExchangeReceiverBase<RPCContext>::cancel()
         std::unique_lock lk(mu);
         state = ExchangeReceiverState::CANCELED;
     }
-    empty_buffer.close();
     full_buffer.close();
 }
 
@@ -100,6 +91,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
     Int64 send_task_id = -1;
     Int64 recv_task_id = task_meta.task_id();
 
+    static constexpr size_t batch_packets_size = 16;
+
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
@@ -111,45 +104,46 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         {
             auto reader = rpc_context->makeReader(req);
             reader->initialize();
-            std::shared_ptr<ReceivedPacket> packet;
             bool has_data = false;
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                auto res = empty_buffer.pop(packet);
-                if (res != boost::fibers::channel_op_status::success)
+                std::vector<std::shared_ptr<ReceivedPacket>> received_packets;
+                std::vector<mpp::MPPDataPacket*> raw_packets;
+                received_packets.reserve(batch_packets_size);
+                raw_packets.reserve(batch_packets_size);
+                for (size_t i = 0; i < batch_packets_size; ++i)
                 {
-                    std::unique_lock lock(mu);
-                    assert(state != ExchangeReceiverState::NORMAL);
-                    meet_error = true;
-                    local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                    LOG_WARNING(log, local_err_msg);
-                    break;
+                    auto packet = std::make_shared<ReceivedPacket>();
+                    packet->req_info = req_info;
+                    packet->source_index = source_index;
+                    raw_packets.push_back(packet->packet.get());
+                    received_packets.push_back(std::move(packet));
                 }
-                LOG_DEBUG(log, "got one empty packet");
-                packet->req_info = req_info;
-                packet->source_index = source_index;
-                bool success = reader->read(packet->packet.get());
-                if (!success)
-                    break;
-                else
-                    has_data = true;
-                LOG_DEBUG(log, "read one packet");
-                if (packet->packet->has_error())
+                size_t cnt = reader->batchRead(raw_packets);
+                has_data = cnt > 0;
+                LOG_DEBUG(log, "read packets " << cnt);
+                for (size_t i = 0; i < cnt; ++i)
                 {
-                    throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                    auto & packet = received_packets[i];
+                    if (packet->packet->has_error())
+                    {
+                        throw Exception("Exchange receiver meet error : " + packet->packet->error().msg());
+                    }
+                    auto res = full_buffer.push(std::move(packet));
+                    if (res != boost::fibers::channel_op_status::success)
+                    {
+                        meet_error = true;
+                        std::unique_lock lock(mu);
+                        assert(state != ExchangeReceiverState::NORMAL);
+                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+                        LOG_WARNING(log, local_err_msg);
+                        break;
+                    }
+                    LOG_DEBUG(log, "pushed one full packet");
                 }
-                res = full_buffer.push(std::move(packet));
-                if (res != boost::fibers::channel_op_status::success)
-                {
-                    std::unique_lock lock(mu);
-                    assert(state != ExchangeReceiverState::NORMAL);
-                    meet_error = true;
-                    local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                    LOG_WARNING(log, local_err_msg);
+                if (meet_error || cnt < batch_packets_size)
                     break;
-                }
-                LOG_DEBUG(log, "pushed one full packet");
             }
             // if meet error, such as decode packect fails, it will not retry.
             if (meet_error)
@@ -210,7 +204,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
     if (meet_error || copy_live_conn == 0)
     {
-        empty_buffer.close();
         full_buffer.close();
     }
     else if (copy_live_conn < 0)
@@ -261,8 +254,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult()
             result = {resp_ptr, packet->source_index, packet->req_info};
         }
     }
-    packet->packet->Clear();
-    empty_buffer.push(std::move(packet));
     return result;
 }
 

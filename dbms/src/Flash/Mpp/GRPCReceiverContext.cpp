@@ -34,7 +34,56 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
+namespace
+{
 using BoolPromise = boost::fibers::promise<bool>; 
+using SizePromise = boost::fibers::promise<size_t>; 
+
+struct PromiseCallback : public GRPCCompletionQueuePool::Callback
+{
+    BoolPromise promise;
+
+    void run(bool ok) override
+    {
+        promise.set_value(ok);
+        delete this;
+    }
+};
+
+struct BatchReadCallback : public GRPCCompletionQueuePool::Callback
+{
+    SizePromise promise;
+    size_t read_index = 0;
+    const std::vector<mpp::MPPDataPacket *> & packets;
+    ::grpc::ClientAsyncReader<::mpp::MPPDataPacket> & reader;
+
+    BatchReadCallback(
+        const std::vector<mpp::MPPDataPacket *> & packets_,
+        ::grpc::ClientAsyncReader<::mpp::MPPDataPacket> & reader_)
+        : packets(packets_)
+        , reader(reader_)
+    {
+    }
+
+    void run(bool ok) override
+    {
+        if (!ok)
+        {
+            promise.set_value(read_index);
+            delete this;
+            return;
+        }
+        ++read_index;
+        if (read_index == packets.size())
+        {
+            promise.set_value(read_index);
+            delete this;
+            return;
+        }
+        reader.Read(packets[read_index], this);
+    }
+};
+} // namespace
 
 GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_)
     : cluster(cluster_)
@@ -61,8 +110,8 @@ GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
 
 std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(const GRPCReceiverContext::Request & request) const
 {
-    auto promise = std::make_unique<BoolPromise>();
-    auto future = promise->get_future();
+    auto callback = std::make_unique<PromiseCallback>();
+    auto future = callback->promise.get_future();
     auto reader = std::make_shared<Reader>(request);
     reader->log = log;
     reader->reader = cluster->rpc_client->sendStreamRequestAsync(
@@ -70,7 +119,7 @@ std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(con
         &reader->client_context,
         *reader->call,
         GRPCCompletionQueuePool::Instance()->pickQueue(),
-        promise.release());
+        callback.release());
 
     future.wait();
     auto res = future.get();
@@ -99,21 +148,31 @@ void GRPCReceiverContext::Reader::initialize() const
 
 bool GRPCReceiverContext::Reader::read(mpp::MPPDataPacket * packet) const
 {
-    auto promise = std::make_unique<BoolPromise>();
-    auto future = promise->get_future();
-    reader->Read(packet, promise.release());
+    auto callback = std::make_unique<PromiseCallback>();
+    auto future = callback->promise.get_future();
+    reader->Read(packet, callback.release());
 
     future.wait();
     auto res = future.get();
     return res;
 }
 
+size_t GRPCReceiverContext::Reader::batchRead(const std::vector<mpp::MPPDataPacket *> & packets) const
+{
+    auto callback = std::make_unique<BatchReadCallback>(packets, *reader);
+    auto future = callback->promise.get_future();
+    reader->Read(packets[0], callback.release());
+
+    future.wait();
+    return future.get();
+}
+
 GRPCReceiverContext::StatusType GRPCReceiverContext::Reader::finish() const
 {
-    auto promise = std::make_unique<BoolPromise>();
-    auto future = promise->get_future();
+    auto callback = std::make_unique<PromiseCallback>();
+    auto future = callback->promise.get_future();
     auto status = getStatusOK();
-    reader->Finish(&status, promise.release());
+    reader->Finish(&status, callback.release());
 
     future.wait();
     return status;
