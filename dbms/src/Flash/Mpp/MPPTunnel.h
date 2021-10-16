@@ -65,6 +65,9 @@ private:
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
 
+    /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
+    void clearSendQueue();
+
     std::mutex mu;
     std::condition_variable cv_for_connected;
     std::condition_variable cv_for_finished;
