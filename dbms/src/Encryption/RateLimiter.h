@@ -71,7 +71,9 @@ public:
     void updateMaxBytesPerSec(Int64 max_bytes_per_sec);
 
     size_t setStop();
+#ifndef DBMS_PUBLIC_GTEST
 protected:
+#endif
     virtual bool canGrant(Int64 bytes);
     virtual void consumeBytes(Int64 bytes);
     virtual void refillAndAlloc();
@@ -82,10 +84,21 @@ protected:
         return rate_limit_per_sec_ / refill_period_per_second;
     }
 
+    // Just for test
+    size_t pendingCount()
+    {
+        std::lock_guard lock(request_mutex);
+        return req_queue.size();
+    }
+
     // used to represent pending request
     struct Request
     {
-        explicit Request(Int64 bytes) : remaining_bytes(bytes), bytes(bytes), granted(false) {}
+        explicit Request(Int64 bytes)
+            : remaining_bytes(bytes)
+            , bytes(bytes)
+            , granted(false)
+        {}
         Int64 remaining_bytes;
         Int64 bytes;
         std::condition_variable cv;
@@ -190,12 +203,16 @@ public:
         Int64 bg_read_bytes;
         std::chrono::time_point<std::chrono::system_clock> update_time;
 
-        IOInfo() : total_write_bytes(0), total_read_bytes(0), bg_write_bytes(0), bg_read_bytes(0) {}
+        IOInfo()
+            : total_write_bytes(0)
+            , total_read_bytes(0)
+            , bg_write_bytes(0)
+            , bg_read_bytes(0)
+        {}
 
         std::string toString() const
         {
-            return fmt::format("total_write_bytes {} total_read_bytes {} bg_write_bytes {} bg_read_bytes {}", total_write_bytes,
-                total_read_bytes, bg_write_bytes, bg_read_bytes);
+            return fmt::format("total_write_bytes {} total_read_bytes {} bg_write_bytes {} bg_read_bytes {}", total_write_bytes, total_read_bytes, bg_write_bytes, bg_read_bytes);
         }
     };
 
@@ -242,10 +259,10 @@ class LimiterStat
 {
 public:
     LimiterStat(UInt64 alloc_bytes_, UInt64 elapsed_ms_, UInt64 refill_period_ms_, Int64 refill_bytes_per_period_)
-        : alloc_bytes(alloc_bytes_),
-          elapsed_ms(elapsed_ms_),
-          refill_period_ms(refill_period_ms_),
-          refill_bytes_per_period(refill_bytes_per_period_)
+        : alloc_bytes(alloc_bytes_)
+        , elapsed_ms(elapsed_ms_)
+        , refill_period_ms(refill_period_ms_)
+        , refill_bytes_per_period(refill_bytes_per_period_)
     {
         assert(refill_period_ms > 0);
         assert(refill_bytes_per_period > 0);
@@ -256,7 +273,13 @@ public:
     {
         return fmt::format(
             "alloc_bytes {} elapsed_ms {} refill_period_ms {} refill_bytes_per_period {} avg_bytes_per_sec {} max_bytes_per_sec {} pct {}",
-            alloc_bytes, elapsed_ms, refill_period_ms, refill_bytes_per_period, avgBytesPerSec(), maxBytesPerSec(), pct());
+            alloc_bytes,
+            elapsed_ms,
+            refill_period_ms,
+            refill_bytes_per_period,
+            avgBytesPerSec(),
+            maxBytesPerSec(),
+            pct());
     }
 
     Int64 avgBytesPerSec() const { return alloc_bytes * 1000 / elapsed_ms; }
@@ -275,21 +298,20 @@ private:
 
 using LimiterStatUPtr = std::unique_ptr<LimiterStat>;
 
-// IOLimitTuner will 
+// IOLimitTuner will
 class IOLimitTuner
 {
 public:
-    IOLimitTuner(LimiterStatUPtr bg_write_stat_, LimiterStatUPtr fg_write_stat_, LimiterStatUPtr bg_read_stat_,
-        LimiterStatUPtr fg_read_stat_, const StorageIORateLimitConfig & io_config_);
+    IOLimitTuner(LimiterStatUPtr bg_write_stat_, LimiterStatUPtr fg_write_stat_, LimiterStatUPtr bg_read_stat_, LimiterStatUPtr fg_read_stat_, const StorageIORateLimitConfig & io_config_);
 
     String toString() const
     {
         return fmt::format("bg_write {} fg_write {} bg_read {} fg_read {} io_config {}",
-            bg_write_stat ? bg_write_stat->toString() : "null",
-            fg_write_stat ? fg_write_stat->toString() : "null",
-            bg_read_stat ? bg_read_stat->toString() : "null",
-            fg_read_stat ? fg_read_stat->toString() : "null",
-            io_config.toString());
+                           bg_write_stat ? bg_write_stat->toString() : "null",
+                           fg_write_stat ? fg_write_stat->toString() : "null",
+                           bg_read_stat ? bg_read_stat->toString() : "null",
+                           fg_read_stat ? fg_read_stat->toString() : "null",
+                           io_config.toString());
     }
 
     struct TuneResult
@@ -306,8 +328,12 @@ public:
         {
             return fmt::format("max_bg_read_bytes_per_sec {} max_fg_read_bytes_per_sec {} read_tuned {} max_bg_write_bytes_per_sec {} "
                                "max_fg_write_bytes_per_sec {} write_tuned {}",
-                max_bg_read_bytes_per_sec, max_fg_read_bytes_per_sec, read_tuned, max_bg_write_bytes_per_sec, max_fg_write_bytes_per_sec,
-                write_tuned);
+                               max_bg_read_bytes_per_sec,
+                               max_fg_read_bytes_per_sec,
+                               read_tuned,
+                               max_bg_write_bytes_per_sec,
+                               max_fg_write_bytes_per_sec,
+                               write_tuned);
         };
 
         bool operator==(const TuneResult & a) const
@@ -323,7 +349,10 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    int limiterCount() const { return writeLimiterCount() + readLimiterCount(); }
+    int limiterCount() const
+    {
+        return writeLimiterCount() + readLimiterCount();
+    }
     int writeLimiterCount() const { return (bg_write_stat != nullptr) + (fg_write_stat != nullptr); }
     int readLimiterCount() const { return (bg_read_stat != nullptr) + (fg_read_stat != nullptr); }
 
@@ -376,8 +405,7 @@ private:
     // Retunes <bg, fg, has_tune>
     std::tuple<Int64, Int64, bool> tuneWrite(Int64 max_bytes_per_sec) const;
     // <bg, fg, has_tune>
-    std::tuple<Int64, Int64, bool> tuneBgFg(Int64 max_bytes_per_sec, const LimiterStatUPtr & bg, Int64 config_bg_max_bytes_per_sec,
-        const LimiterStatUPtr & fg, Int64 config_fg_max_bytes_per_sec) const;
+    std::tuple<Int64, Int64, bool> tuneBgFg(Int64 max_bytes_per_sec, const LimiterStatUPtr & bg, Int64 config_bg_max_bytes_per_sec, const LimiterStatUPtr & fg, Int64 config_fg_max_bytes_per_sec) const;
     // Returns true if to_add and to_sub are changed.
     bool calculate(Int64 & to_add, Int64 & to_sub, Int64 delta) const;
 
@@ -390,13 +418,20 @@ private:
         Int64 config_max_bytes_per_sec;
 
         TuneInfo(Int64 max, Int64 avg, Watermark wm, Int64 config_max)
-            : max_bytes_per_sec(max), avg_bytes_per_sec(avg), watermark(wm), config_max_bytes_per_sec(config_max)
+            : max_bytes_per_sec(max)
+            , avg_bytes_per_sec(avg)
+            , watermark(wm)
+            , config_max_bytes_per_sec(config_max)
         {}
 
         String toString() const
         {
             return fmt::format(
-                "max {} avg {} watermark {} config_max {}", max_bytes_per_sec, avg_bytes_per_sec, watermark, config_max_bytes_per_sec);
+                "max {} avg {} watermark {} config_max {}",
+                max_bytes_per_sec,
+                avg_bytes_per_sec,
+                watermark,
+                config_max_bytes_per_sec);
         }
     };
     // <max_bytes_per_sec1, max_bytes_per_sec2, has_tuned>
