@@ -37,11 +37,10 @@ void DefaultChunkCodecStream::encode(const Block & block, size_t start, size_t e
     }
 }
 
-Block DefaultChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schema)
+Block DefaultChunkCodec::decode(const String & data, const DAGSchema & schema)
 {
     std::vector<std::vector<Field>> rows;
     std::vector<Field> curr_row;
-    const std::string & data = chunk.rows_data();
     size_t cursor = 0;
     while (cursor < data.size())
     {

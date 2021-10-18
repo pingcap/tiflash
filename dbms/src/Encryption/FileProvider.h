@@ -53,7 +53,11 @@ public:
 
     void deleteEncryptionInfo(const EncryptionPath & encryption_path_, bool throw_on_error = true) const;
 
-    void linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const;
+    // Please check `ln -h`
+    // It will be link_encryption_name_ link to src_encryption_path_
+    // For example: file0 have some data, file1 want to keep same data as file0
+    //  Then call linkEncryptionInfo(file0,file1);
+    void linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & link_encryption_name_) const;
 
     bool isFileEncrypted(const EncryptionPath & encryption_path_) const;
 

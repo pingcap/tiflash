@@ -2488,7 +2488,7 @@ void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_r
 {
     auto codec = getCodec(dag_response.encode_type());
     for (const auto & chunk : dag_response.chunks())
-        blocks.emplace_back(codec->decode(chunk, schema));
+        blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
 }
 
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)

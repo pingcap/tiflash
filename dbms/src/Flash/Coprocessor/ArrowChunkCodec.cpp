@@ -30,9 +30,8 @@ void ArrowChunkCodecStream::encode(const Block & block, size_t start, size_t end
     ti_chunk->buildDAGChunkFromBlock(block, field_types, start, end);
 }
 
-Block ArrowChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schema)
+Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
 {
-    const String & row_data = chunk.rows_data();
     const char * start = row_data.c_str();
     const char * pos = start;
     int column_index = 0;

@@ -187,17 +187,95 @@ public:
     }
 };
 
-struct NameLowerUTF8
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+struct TiDBLowerUpperUTF8Impl
 {
-    static constexpr auto name = "lowerUTF8";
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets);
+
+    static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
+
+    static void constant(const std::string & data, std::string & res_data);
+
+    /** Converts a single code point starting at `src` to desired case, storing result starting at `dst`.
+     *    `src` and `dst` are incremented by corresponding sequence lengths. */
+    static void toCase(const UInt8 *& src, const UInt8 * src_end, UInt8 *& dst);
+
+private:
+    static constexpr auto ascii_upper_bound = '\x7f';
+    static constexpr auto flip_case_mask = 'A' ^ 'a';
+
+    static void array(const UInt8 * src, const UInt8 * src_end, UInt8 * dst);
 };
-struct NameUpperUTF8
+
+struct TiDBLowerUpperBinaryImpl
 {
-    static constexpr auto name = "upperUTF8";
+    static void vector(const ColumnString::Chars_t &,
+                       const ColumnString::Offsets &,
+                       ColumnString::Chars_t &,
+                       ColumnString::Offsets &)
+    {
+        throw Exception("the TiDB function of lower or upper for binary should do noting.");
+    }
+
+    static void vector_fixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
+    {
+        throw Exception("the TiDB function of lower or upper for binary should do noting.");
+    }
 };
 
+template <typename Name, bool is_injective>
+class FunctionStringToString<TiDBLowerUpperBinaryImpl, Name, is_injective> : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    static FunctionPtr create(const Context &)
+    {
+        return std::make_shared<FunctionStringToString>();
+    }
 
-using FunctionLowerUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;
-using FunctionUpperUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;
+    String getName() const override
+    {
+        return name;
+    }
 
+    size_t getNumberOfArguments() const override
+    {
+        return 1;
+    }
+
+    bool isInjective(const Block &) const override
+    {
+        return is_injective;
+    }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return arguments[0];
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr column = block.getByPosition(arguments[0]).column;
+        if (checkAndGetColumn<ColumnString>(column.get()) || checkAndGetColumn<ColumnFixedString>(column.get()))
+        {
+            block.getByPosition(result).column = column;
+        }
+        else
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 } // namespace DB
