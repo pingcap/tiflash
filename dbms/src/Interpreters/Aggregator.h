@@ -13,6 +13,7 @@
 #include <Common/HashTable/StringHashMap.h>
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashMap.h>
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Encryption/FileProvider.h>

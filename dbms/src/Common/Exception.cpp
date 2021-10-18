@@ -52,6 +52,22 @@ void tryLogCurrentException(const char * log_name, const std::string & start_of_
     tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
 }
 
+void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message)
+{
+    tryLogCurrentException(logger->getLog(), start_of_message);
+}
+
+void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message)
+{
+    try
+    {
+        LOG_ERROR(logger, start_of_message << (start_of_message.empty() ? "" : ": ") << getCurrentExceptionMessage(true));
+    }
+    catch (...)
+    {
+    }
+}
+
 std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded_stacktrace)
 {
     std::stringstream stream;
@@ -144,18 +160,6 @@ void rethrowFirstException(const Exceptions & exceptions)
             std::rethrow_exception(exception);
 }
 
-
-void tryLogException(std::exception_ptr e, const char * log_name, const std::string & start_of_message)
-{
-    try
-    {
-        std::rethrow_exception(std::move(e));
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log_name, start_of_message);
-    }
-}
 
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace)
 {
