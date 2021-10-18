@@ -50,7 +50,7 @@ bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) con
     }
 }
 
-bool TOMLConfiguration::find_parent(const std::string & key, TOMLTablePtr & parent, std::string & child_key)
+bool TOMLConfiguration::findParent(const std::string & key, TOMLTablePtr & parent, std::string & child_key)
 {
     auto pos = key.find_last_of('.');
 
@@ -85,7 +85,7 @@ void TOMLConfiguration::setRaw(const std::string & key, const std::string & valu
 {
     TOMLTablePtr parent;
     std::string child_key;
-    if (!find_parent(key, parent, child_key))
+    if (!findParent(key, parent, child_key))
         throw Poco::NotFoundException("Key not found in TOML configuration", key);
 
     parent->erase(child_key);
@@ -100,8 +100,8 @@ void TOMLConfiguration::enumerate(const std::string & key, Keys & range) const
     if (!table)
         return;
 
-    for (auto it = table->begin(); it != table->end(); it++)
-        range.push_back(it->first);
+    for (auto & it : *table)
+        range.push_back(it.first);
 }
 
 void TOMLConfiguration::removeRaw(const std::string & key)
@@ -109,7 +109,7 @@ void TOMLConfiguration::removeRaw(const std::string & key)
     TOMLTablePtr parent;
     std::string child_key;
 
-    if (find_parent(key, parent, child_key))
+    if (findParent(key, parent, child_key))
         parent->erase(child_key);
 }
 
