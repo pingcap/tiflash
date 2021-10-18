@@ -17,57 +17,55 @@ http_port = 8123
 
 ## Storage paths settings.
 # [storage]
-    ## The storage format version in storage engine. Valid values: 1, 2 (experimental).
-    ## format_version = 1
+## The storage format version in storage engine. Valid values: 1, 2 (experimental).
+## format_version = 1
 
-    ## Controls the total write rate of background tasks in bytes per second, 0 means no limit
-    ## bg_task_io_rate_limit = 104857600
+## If there are multiple SSD disks on the machine,
+## specify the path list on `storage.main.dir` can improve TiFlash performance.
 
-    ## If there are multiple SSD disks on the machine,
-    ## specify the path list on `storage.main.dir` can improve TiFlash performance.
+## If there are multiple disks with different IO metrics (e.g. one SSD and some HDDs)
+## on the machine, 
+## set `storage.latest.dir` to store the latest data on SSD (disks with higher IOPS metrics)
+## set `storage.main.dir` to store the main data on HDD (disks with lower IOPS metrics)
+## can improve TiFlash performance.
 
-    ## If there are multiple disks with different IO metrics (e.g. one SSD and some HDDs)
-    ## on the machine, 
-    ## set `storage.latest.dir` to store the latest data on SSD (disks with higher IOPS metrics)
-    ## set `storage.main.dir` to store the main data on HDD (disks with lower IOPS metrics)
-    ## can improve TiFlash performance.
+# [storage.main]
+## The path to store main data.
+# e.g.
+# dir = [ "/data0/tiflash" ] 
+# or
+# dir = [ "/data0/tiflash", "/data1/tiflash" ]
 
-    # [storage.main]
-    ## The path to store main data.
-    # e.g.
-    # dir = [ "/data0/tiflash" ] 
-    # or
-    # dir = [ "/data0/tiflash", "/data1/tiflash" ]
+## Store capacity of each path, i.e. max data size allowed.
+## If it is not set, or is set to 0s, the actual disk capacity is used.
+## Note that we don't support human-readable big numbers(like "10GB") yet.
+## Please set in the specified number of bytes.
+# e.g.
+# capacity = [ 10737418240, 10737418240 ]
 
-    ## Store capacity of each path, i.e. max data size allowed.
-    ## If it is not set, or is set to 0s, the actual disk capacity is used.
-    ## Note that we don't support human-readable big numbers(like "10GB") yet.
-    ## Please set in the specified number of bytes.
-    # e.g.
-    # capacity = [ 10737418240, 10737418240 ]
+# [storage.latest]
+## The path(s) to store latest data.
+## If not set, it will be the same with `storage.main.dir`.
+# dir = [ ]
 
-    # [storage.latest]
-    ## The path(s) to store latest data.
-    ## If not set, it will be the same with `storage.main.dir`.
-    # dir = [ ]
+## Store capacity of each path, i.e. max data size allowed.
+## If it is not set, or is set to 0s, the actual disk capacity is used.
+# e.g.
+# capacity = [ 10737418240, 10737418240 ]
 
-    ## Store capacity of each path, i.e. max data size allowed.
-    ## If it is not set, or is set to 0s, the actual disk capacity is used.
-    # e.g.
-    # capacity = [ 10737418240, 10737418240 ]
+# [storage.raft]
+## The path(s) to store Raft data.
+## If not set, it will be the paths in `storage.latest.dir` appended with "/kvstore".
+# dir = [ ]
 
-    # [storage.raft]
-    ## The path(s) to store Raft data.
-    ## If not set, it will be the paths in `storage.latest.dir` appended with "/kvstore".
-    # dir = [ ]
+# [storage.io_rate_limit]
+## The max I/O bandwith. Default value is 0 and I/O rate limit is disabled.
+# max_bytes_per_sec = 268435456
+## max_read_bytes_per_sec and max_write_bytes_per_sec are the same meaning as max_bytes_per_sec,
+## but for disk that read bandwidth and write bandwith are calculated separatly, such as GCP's persistent disks.
+# max_read_bytes_per_sec = 0
+# max_write_bytes_per_sec = 0
 
-    # [storage.io_rate_limit]
-    ## The max I/O bandwith. Default value is 0 and I/O rate limit is disabled.
-    # max_bytes_per_sec = 268435456
-    ## max_read_bytes_per_sec and max_write_bytes_per_sec are the same meaning as max_bytes_per_sec,
-    ## but for disk that read bandwidth and write bandwith are calculated separatly, such as GCP's persistent disks.
-    # max_read_bytes_per_sec = 0
-    # max_write_bytes_per_sec = 0
 [flash]
 	tidb_status_addr = "tidb0:10080"
 	service_addr = "0.0.0.0:3930"
