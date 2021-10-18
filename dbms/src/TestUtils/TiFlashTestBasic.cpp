@@ -23,7 +23,6 @@ void TiFlashTestEnv::initializeGlobalContext()
     // 1. capacity
     // 2. path pool
     // 3. TMTContext
-    // 4. DAGContext
 
     Strings testdata_path = {getTemporaryPath()};
     global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
