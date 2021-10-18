@@ -2819,7 +2819,7 @@ public:
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & ) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes &) const override
     {
         return std::make_shared<DataTypeMyDateTime>();
     }
@@ -2827,7 +2827,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & , size_t result) const override
+    void executeImpl(Block & block, const ColumnNumbers &, size_t result) const override
     {
         int row_count = block.rows();
         auto col_to = ColumnVector<DataTypeMyDateTime::FieldType>::create(row_count);
