@@ -3647,10 +3647,18 @@ private:
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        T round_number = round(number, max_num_decimals, info);
-        std::string round_number_str = number2Str(round_number, info);
-        std::string buffer = Format::apply(round_number_str, max_num_decimals);
-        copyFromBuffer(buffer, res_data, res_offsets);
+        if constexpr (std::is_same_v<T, Float32>)
+        {
+            Float64 cast_as_double = number;
+            format(cast_as_double, max_num_decimals, info, res_data, res_offsets);
+        }
+        else
+        {
+            T round_number = round(number, max_num_decimals, info);
+            std::string round_number_str = number2Str(round_number, info);
+            std::string buffer = Format::apply(round_number_str, max_num_decimals);
+            copyFromBuffer(buffer, res_data, res_offsets);
+        }
     }
 };
 
