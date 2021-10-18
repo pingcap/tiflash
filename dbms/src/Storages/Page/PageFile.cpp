@@ -707,7 +707,11 @@ void PageFile::Writer::hardlinkFrom(PageFile & linked_file, WriteBatch::Sequence
 
     std::tie(linked_meta_data, linked_meta_size) = reader->getMetaInfo();
 
+#ifndef NDEBUG
     PageUtil::writeFile(meta_file, 0, linked_meta_data, linked_meta_size, nullptr, false);
+#else
+    PageUtil::writeFile(meta_file, 0, linked_meta_data, linked_meta_size, nullptr);
+#endif
     PageUtil::syncFile(meta_file);
     data_file->hardLink(linked_file.dataPath());
 }
