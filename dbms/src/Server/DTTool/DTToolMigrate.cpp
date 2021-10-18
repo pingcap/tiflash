@@ -53,7 +53,7 @@ static constexpr char MIGRATE_HELP[] =
 struct DirLock
 {
     int dir{};
-    flock lock{};
+    struct flock lock{};
     std::string workdir_lock;
 
     explicit DirLock(const std::string & workdir_)
