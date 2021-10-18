@@ -99,7 +99,7 @@ public:
 
     size_t size() const
     {
-        return m_size();
+        return mSize();
     }
 
     bool empty() const
@@ -208,12 +208,12 @@ public:
 private:
     char * data;
 
-    size_t & m_size()
+    size_t & mSize()
     {
         return reinterpret_cast<size_t *>(data)[-1];
     }
 
-    size_t m_size() const
+    size_t mSize() const
     {
         return reinterpret_cast<const size_t *>(data)[-1];
     }
@@ -243,7 +243,7 @@ private:
 
         data = new char[size_ * sizeof(T) + sizeof(size_t)];
         data += sizeof(size_t);
-        m_size() = size_;
+        mSize() = size_;
 
         if (!dont_init_elems)
             for (size_t i = 0; i < size_; ++i)
