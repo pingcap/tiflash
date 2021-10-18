@@ -802,6 +802,14 @@ String MyDateTime::toString(int fsp) const
     return result;
 }
 
+MyDateTime MyDateTime::getLocalSystemDateTime()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm *tm_ptr = localtime(&ts.tv_sec);
+    return MyDateTime(tm_ptr->tm_year+1900, tm_ptr->tm_mon+1, tm_ptr->tm_mday, tm_ptr->tm_hour, tm_ptr->tm_min, tm_ptr->tm_sec, ts.tv_nsec / 1000);
+}
+
 inline bool isZeroDate(UInt64 time)
 {
     return time == 0;

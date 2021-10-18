@@ -105,6 +105,8 @@ struct MyDateTime : public MyTimeBase
     {}
 
     String toString(int fsp) const;
+
+    static MyDateTime getLocalSystemDateTime();
 };
 
 struct MyDate : public MyTimeBase

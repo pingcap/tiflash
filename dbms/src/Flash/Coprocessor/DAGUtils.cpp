@@ -983,8 +983,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::YearWeekWithoutMode, "cast"},
 
     //{tipb::ScalarFuncSig::GetFormat, "cast"},
-    //{tipb::ScalarFuncSig::SysDateWithFsp, "cast"},
-    //{tipb::ScalarFuncSig::SysDateWithoutFsp, "cast"},
+    {tipb::ScalarFuncSig::SysDateWithFsp, "getSysDateWithFsp"},
+    {tipb::ScalarFuncSig::SysDateWithoutFsp, "getSysDateWithoutFsp"},
     //{tipb::ScalarFuncSig::CurrentDate, "cast"},
     //{tipb::ScalarFuncSig::CurrentTime0Arg, "cast"},
     //{tipb::ScalarFuncSig::CurrentTime1Arg, "cast"},

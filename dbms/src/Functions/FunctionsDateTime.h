@@ -2787,6 +2787,69 @@ private:
     }
 };
 
+struct GetSysDateWithFsp
+{
+public:
+    static constexpr auto name = "getSysDateWithFsp";
+};
+
+struct GetSysDateWithoutFsp
+{
+public:
+    static constexpr auto name = "getSysDateWithoutFsp";
+};
+
+template <typename Transform>
+class FunctionSysDate : public IFunction
+{
+public:
+    static constexpr auto name = Transform::name;
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionSysDate>(); };
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override
+    {
+        if (Transform::name == GetSysDateWithFsp::name)
+            return 1;
+        else if (Transform::name == GetSysDateWithoutFsp::name)
+            return 0;
+        else
+            throw TiFlashException("Invalid function name " + Transform::name, Errors::Coprocessor::BadRequest);
+    }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (Transform::name == GetSysDateWithFsp::name && 1 == getNumberOfArguments() && !arguments[0]->isInteger())
+        {
+            throw TiFlashException("First argument for function " + getName() + "  must be Int", Errors::Coprocessor::BadRequest);
+        }
+
+        return std::make_shared<DataTypeMyDateTime>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        auto row_count = block.rows();
+        auto col_to = ColumnVector<MyDateTime>::create(row_count);
+        auto & vec_to = col_to->getData();
+
+        if (0 == getNumberOfArguments())
+        {
+            MyDateTime sys_date = MyDateTime::getLocalSystemDateTime();
+            vec_to.resize(row_count);
+            for (int i = 0; i < row_count; ++i)
+            {
+                vec_to[i] = sys_date;
+            }
+        }
+        block.getByPosition(result).column = std::move(col_to);
+    }
+};
+
 
 using FunctionToYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToYearImpl>;
 using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQuarterImpl>;
