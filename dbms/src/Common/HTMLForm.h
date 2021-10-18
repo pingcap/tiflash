@@ -13,14 +13,14 @@
   */
 struct HTMLForm : public Poco::Net::HTMLForm
 {
-    HTMLForm(const Poco::Net::HTTPRequest & request)
+    explicit HTMLForm(const Poco::Net::HTTPRequest & request)
     {
         Poco::URI uri(request.getURI());
         std::istringstream istr(uri.getRawQuery());
         readUrl(istr);
     }
 
-    HTMLForm(const Poco::URI & uri)
+    explicit HTMLForm(const Poco::URI & uri)
     {
         std::istringstream istr(uri.getRawQuery());
         readUrl(istr);
