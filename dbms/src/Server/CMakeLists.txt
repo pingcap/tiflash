@@ -60,9 +60,13 @@ target_link_libraries (clickhouse-compressor-lib clickhouse_common_io ${Boost_PR
 add_library (clickhouse-format-lib ${SPLIT_SHARED} Format.cpp)
 target_link_libraries (clickhouse-format-lib dbms clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 
-add_library(tiflash-dttool-lib ${SPLIT_SHARED} DTTool/DTTool.cpp DTTool/DTToolBench.cpp DTTool/DTToolMigrate.cpp DTTool/DTToolInspect.cpp)
-target_link_libraries(tiflash-dttool-lib dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
+add_library(tiflash-dttool-lib ${SPLIT_SHARED} DTTool/DTToolBench.cpp DTTool/DTToolMigrate.cpp DTTool/DTToolInspect.cpp)
+target_link_libraries(tiflash-dttool-lib PUBLIC dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_include_directories(tiflash-dttool-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
+
+add_library(tiflash-dttool-entry-object OBJECT DTTool/DTTool.cpp)
+target_link_libraries(tiflash-dttool-entry-object tiflash-dttool-lib ${TIFLASH_PROXY_LIBRARY})
+target_include_directories(tiflash-dttool-entry-object PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
 
 if (USE_EMBEDDED_COMPILER)
     link_directories (${LLVM_LIBRARY_DIRS})
@@ -88,7 +92,7 @@ if (CLICKHOUSE_SPLIT_BINARY)
     add_executable (clickhouse-format clickhouse-format.cpp)
     target_link_libraries (clickhouse-format clickhouse-format-lib)
     add_executable (tiflash-dttool DTTool/tiflash-dttool.cpp)
-    target_link_libraries (tiflash-dttool tiflash-dttool-lib)
+    target_link_libraries (tiflash-dttool tiflash-dttool-entry-object)
 
     set (CLICKHOUSE_ALL_TARGETS clickhouse-server clickhouse-client clickhouse-local clickhouse-benchmark clickhouse-performance-test
             clickhouse-extract-from-config clickhouse-format)
@@ -131,7 +135,7 @@ else ()
         target_link_libraries (tiflash clickhouse-performance-test-lib)
     endif ()
     if (ENABLE_TIFLASH_DTTOOL)
-        target_link_libraries(tiflash tiflash-dttool-lib)
+        target_link_libraries(tiflash tiflash-dttool-entry-object)
     endif ()
     if (ENABLE_CLICKHOUSE_TOOLS)
     target_link_libraries (tiflash
