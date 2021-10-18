@@ -9,12 +9,12 @@
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
 # Data.
-=> DBGInvoke __mock_tidb_table(default, test1, 'col_1 default \'asTiDBType|time(6)\'')
+=> DBGInvoke __mock_tidb_table(default, test1, 'col_1 MyDuration(6)')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __put_region(4, 0, 100, default, test1)
 => DBGInvoke __put_region(5, 100, 200, default, test1)
 
-=> DBGInvoke __mock_tidb_table(default, test2, 'col_1 default \'asTiDBType|time(6)\'')
+=> DBGInvoke __mock_tidb_table(default, test2, 'col_1 MyDuration(6)')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __put_region(6, 0, 100, default, test2)
 => DBGInvoke __put_region(7, 100, 200, default, test2)

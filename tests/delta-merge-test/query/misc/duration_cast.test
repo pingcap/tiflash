@@ -55,7 +55,7 @@
 └───────────────────┘
 
 
-=> DBGInvoke __mock_tidb_table(default, test2, 'col_1 default \'asTiDBType|time\'')
+=> DBGInvoke __mock_tidb_table(default, test2, 'col_1 MyDuration')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __put_region(5, 0, 100, default, test2)
 => DBGInvoke __raft_insert_row(default, test2, 5, 50, -1000000000)

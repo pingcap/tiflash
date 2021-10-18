@@ -442,6 +442,10 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
         column_info.decimal = type->getFraction();
 
+    // Fill decimal for duration.
+    if (auto type = checkAndGetDataType<DataTypeMyDuration>(nested_type))
+        column_info.decimal = type->getFsp();
+
     // Fill elems for enum.
     if (checkDataType<DataTypeEnum16>(nested_type))
     {

@@ -951,7 +951,8 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
     return cast_expr_name;
 }
 
-// add timezone cast after table scan, this is used for session level timezone support
+// appendExtraCastsAfterTS will append extra casts after tablescan if needed.
+// 1) add timezone cast after table scan, this is used for session level timezone support
 // the basic idea of supporting session level timezone is that:
 // 1. for every timestamp column used in the dag request, after reading it from table scan,
 //    we add cast function to convert its timezone to the timezone specified in DAG request
@@ -960,7 +961,10 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 //    convert the session level timezone to UTC timezone.
 // Note in the worst case(e.g select ts_col from table with Default encode), this will introduce two
 // useless casts to all the timestamp columns, however, since TiDB now use chunk encode as the default
-// encoding scheme, the worst case should happen rarely
+// encoding scheme, the worst case should happen rarely.
+// 2) add duration cast after table scan, this is ued for calculation of duration in TiFlash.
+// TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
+// Int64 to duration.
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTS> & need_cast_column, const DAGQueryBlock & query_block)
 {
     bool ret = false;
