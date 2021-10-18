@@ -64,7 +64,7 @@ add_library(tiflash-dttool-lib ${SPLIT_SHARED} DTTool/DTToolBench.cpp DTTool/DTT
 target_link_libraries(tiflash-dttool-lib PUBLIC dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_include_directories(tiflash-dttool-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
 
-add_library(tiflash-dttool-entry-object OBJECT DTTool/DTTool.cpp)
+add_library(tiflash-dttool-entry-object STATIC DTTool/DTTool.cpp)
 target_link_libraries(tiflash-dttool-entry-object tiflash-dttool-lib ${TIFLASH_PROXY_LIBRARY})
 target_include_directories(tiflash-dttool-entry-object PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
 
