@@ -5,7 +5,7 @@ namespace DB
 {
 std::tuple<Int32, Int32, Int32, Int32, Int32> MyDuration::splitDuration() const
 {
-    int sign = 1, hours, minutes, seconds, fraction;
+    int sign = 1, hours, minutes, seconds, micro_seconds;
     Int64 t = nanos;
     if (t < 0)
     {
@@ -18,8 +18,8 @@ std::tuple<Int32, Int32, Int32, Int32, Int32> MyDuration::splitDuration() const
     t -= minutes * MINUTE;
     seconds = t / SECOND;
     t -= seconds * SECOND;
-    fraction = t / MICRO_SECOND;
-    return std::tuple<int, int, int, int, int>(sign, hours, minutes, seconds, fraction);
+    micro_seconds = t / MICRO_SECOND;
+    return std::tuple<int, int, int, int, int>(sign, hours, minutes, seconds, micro_seconds);
 }
 
 UInt32 MyDuration::hours() const

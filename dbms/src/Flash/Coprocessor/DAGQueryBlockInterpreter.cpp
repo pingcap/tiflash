@@ -301,7 +301,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
-    need_add_cost_column_flag_for_tablescan = std::move(storage_interpreter.is_need_add_cast_column);
+    need_add_cast_column_flag_for_tablescan = std::move(storage_interpreter.is_need_add_cast_column);
 
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
@@ -1052,7 +1052,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         *analyzer,
         query_block,
         conditions,
-        need_add_cost_column_flag_for_tablescan,
+        need_add_cast_column_flag_for_tablescan,
         keep_session_timezone_info,
         final_project);
 

@@ -978,9 +978,8 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
     auto columns = query_block.source->tbl_scan().columns();
     for (size_t i = 0; i < need_cast_column.size(); ++i)
     {
-        if (context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTS::AppendTimeZoneCast)
+        if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTS::AppendTimeZoneCast)
         {
-            tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             source_columns[i].name = casted_name;
             ret = true;
@@ -994,12 +993,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
             fsp_col = getActions(fsp_expr, actions);
             String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
             source_columns[i].name = casted_name;
-            source_columns[i].type = std::make_shared<DataTypeMyDuration>(fsp);
-            // Check not_null flag
-            if (!(columns[i].flag() & (1 << 0)))
-            {
-                source_columns[i].type = makeNullable(source_columns[i].type);
-            }
+            source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
             ret = true;
         }
     }
