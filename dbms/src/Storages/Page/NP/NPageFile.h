@@ -15,6 +15,34 @@ namespace DB
 #define PAGE_FILE_DATA "page_file_data"
 #define PAGE_FILE_META "page_file_meta"
 
+
+class NPageFileFlat
+{
+public:
+
+    enum FlatTypes 
+    {
+        TRUNCATE_FILE_END = 1,
+        SEQUENCE_AT_END = 2,
+    };
+
+    class NPageFileFlatRules : Allocator<false>
+    {
+    public:
+        bool measure();
+        void flat();
+        void getType();
+    private:
+        int type;
+    };
+
+    NPageFileFlat(NPageMapPtr page_map_);
+
+private:
+    std::vector<NPageFileFlatRules> rules;
+    NPageMapPtr page_map;
+};
+
 class NPageFile : Allocator<false>
 {
     using VersionedPageEntries = PageEntriesVersionSetWithDelta;
