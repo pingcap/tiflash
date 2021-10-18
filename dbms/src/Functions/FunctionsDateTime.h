@@ -2787,16 +2787,16 @@ private:
     }
 };
 
-struct GetSysDateWithFsp
+struct SysDateWithFsp
 {
 public:
-    static constexpr auto name = "getSysDateWithFsp";
+    static constexpr auto name = "sysDateWithFsp";
 };
 
-struct GetSysDateWithoutFsp
+struct SysDateWithoutFsp
 {
 public:
-    static constexpr auto name = "getSysDateWithoutFsp";
+    static constexpr auto name = "sysDateWithoutFsp";
 };
 
 template <typename Transform>
@@ -2806,46 +2806,40 @@ public:
     static constexpr auto name = Transform::name;
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionSysDate>(); };
 
-    String getName() const override { return name; }
+    String getName() const override { return Transform::name; }
 
     size_t getNumberOfArguments() const override
     {
-        if (Transform::name == GetSysDateWithFsp::name)
-            return 1;
-        else if (Transform::name == GetSysDateWithoutFsp::name)
+        if (SysDateWithoutFsp::name == getName())
             return 0;
+        else if (SysDateWithFsp::name == getName())
+            return 1;
         else
-            throw TiFlashException("Invalid function name " + Transform::name, Errors::Coprocessor::BadRequest);
+            throw Exception("Number of arguments for function " + getName() + " doesn't match. ",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & ) const override
     {
-        if (Transform::name == GetSysDateWithFsp::name && 1 == getNumberOfArguments() && !arguments[0]->isInteger())
-        {
-            throw TiFlashException("First argument for function " + getName() + "  must be Int", Errors::Coprocessor::BadRequest);
-        }
-
         return std::make_shared<DataTypeMyDateTime>();
     }
 
-    bool useDefaultImplementationForConstants() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    void executeImpl(Block & block, const ColumnNumbers & , size_t result) const override
     {
-        auto row_count = block.rows();
-        auto col_to = ColumnVector<MyDateTime>::create(row_count);
+        int row_count = block.rows();
+        auto col_to = ColumnVector<DataTypeMyDateTime::FieldType>::create(row_count);
         auto & vec_to = col_to->getData();
 
-        if (0 == getNumberOfArguments())
+        MyDateTime sys_date = MyDateTime::getLocalSystemDateTime();
+        vec_to.resize(row_count);
+        for (int i = 0; i < row_count; ++i)
         {
-            MyDateTime sys_date = MyDateTime::getLocalSystemDateTime();
-            vec_to.resize(row_count);
-            for (int i = 0; i < row_count; ++i)
-            {
-                vec_to[i] = sys_date;
-            }
+            vec_to[i] = sys_date.toPackedUInt();
         }
+
         block.getByPosition(result).column = std::move(col_to);
     }
 };
@@ -2898,5 +2892,8 @@ using FunctionSubtractDays = FunctionDateOrDateTimeAddInterval<SubtractDaysImpl>
 using FunctionSubtractWeeks = FunctionDateOrDateTimeAddInterval<SubtractWeeksImpl>;
 using FunctionSubtractMonths = FunctionDateOrDateTimeAddInterval<SubtractMonthsImpl>;
 using FunctionSubtractYears = FunctionDateOrDateTimeAddInterval<SubtractYearsImpl>;
+
+using FunctionSysDateWithFsp = FunctionSysDate<SysDateWithFsp>;
+using FunctionSysDateWithoutFsp = FunctionSysDate<SysDateWithoutFsp>;
 
 } // namespace DB

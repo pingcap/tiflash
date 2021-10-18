@@ -112,6 +112,9 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionSubtractMonths>();
     factory.registerFunction<FunctionSubtractYears>();
 
+    factory.registerFunction<FunctionSysDateWithFsp>();
+    factory.registerFunction<FunctionSysDateWithoutFsp>();
+
     factory.registerFunction<FunctionDateDiff>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTiDBTimestampDiff>();
     factory.registerFunction<FunctionExtractMyDateTime>();
