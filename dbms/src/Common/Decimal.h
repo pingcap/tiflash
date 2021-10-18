@@ -146,7 +146,7 @@ struct Decimal
 
     Decimal(const Decimal<T> & d) = default;
     Decimal() = default;
-    Decimal(T v_)
+    Decimal(T v_) // NOLINT(google-explicit-constructor)
         : value(v_)
     {}
 
@@ -156,18 +156,18 @@ struct Decimal
     String toString(ScaleType) const;
 
     template <typename U, std::enable_if_t<std::is_same_v<U, Int256> || std::is_same_v<U, Int512> || std::is_integral_v<U> || std::is_same_v<U, Int128>> * = nullptr>
-    operator U() const
+    explicit operator U() const
     {
         return static_cast<U>(value);
     }
 
     template <typename U, std::enable_if_t<sizeof(U) >= sizeof(T)> * = nullptr>
-    operator Decimal<U>() const
+    explicit operator Decimal<U>() const
     {
         return static_cast<U>(value);
     }
 
-    operator T() const
+    explicit operator T() const
     {
         return value;
     }
@@ -364,33 +364,33 @@ public:
         }
     }
 
-    Int256 get(PrecType idx) const
+    Int256 _get(PrecType idx) const
     {
         return number[idx];
     }
 
-    static Int256 Get(PrecType idx)
+    static Int256 get(PrecType idx)
     {
-        return instance().get(idx);
+        return instance()._get(idx);
     }
 
-    static Int256 MaxValue()
+    static Int256 maxValue()
     {
-        return Get(maxDecimalPrecision<Decimal256>());
+        return get(maxDecimalPrecision<Decimal256>());
     }
 };
 
 template <typename T>
 inline typename T::NativeType getScaleMultiplier(ScaleType scale)
 {
-    return static_cast<typename T::NativeType>(DecimalMaxValue::Get(scale) + 1);
+    return static_cast<typename T::NativeType>(DecimalMaxValue::get(scale) + 1);
 }
 
 template <typename T>
 inline void checkDecimalOverflow(Decimal<T> v, PrecType prec)
 {
-    auto maxValue = DecimalMaxValue::Get(prec);
-    if (v.value > maxValue || v.value < -maxValue)
+    auto max_value = DecimalMaxValue::get(prec);
+    if (v.value > max_value || v.value < -max_value)
     {
         throw TiFlashException("Decimal value overflow", Errors::Decimal::Overflow);
     }
@@ -460,15 +460,15 @@ std::enable_if_t<std::is_floating_point_v<T>, U> ToDecimal(T value, ScaleType sc
     {
         value *= 10;
     }
-    if (std::abs(value) > static_cast<T>(DecimalMaxValue::Get(decimal_max_prec)))
+    if (std::abs(value) > static_cast<T>(DecimalMaxValue::get(decimal_max_prec)))
     {
         throw TiFlashException("Decimal value overflow", Errors::Decimal::Overflow);
     }
     // rounding
-    T tenTimesValue = value * 10;
+    T ten_times_value = value * 10;
     using UType = typename U::NativeType;
     UType v(value);
-    if (Int256(tenTimesValue) % 10 >= 5)
+    if (Int256(ten_times_value) % 10 >= 5)
     {
         v++;
     }
@@ -496,13 +496,13 @@ std::enable_if_t<IsDecimal<T>, U> ToDecimal(const T & v, ScaleType v_scale, Scal
     }
     else
     {
-        bool need2Round = false;
+        bool need_to_round = false;
         for (ScaleType i = scale; i < v_scale; i++)
         {
-            need2Round = (value < 0 ? -value : value) % 10 >= 5;
+            need_to_round = (value < 0 ? -value : value) % 10 >= 5;
             value /= 10;
         }
-        if (need2Round)
+        if (need_to_round)
         {
             if (value < 0)
                 value--;
