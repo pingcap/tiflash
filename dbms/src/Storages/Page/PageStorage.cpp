@@ -252,14 +252,9 @@ void PageStorage::restore()
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
     opt.remove_tmp_files = false;
 #endif
-<<<<<<< HEAD
-    opt.ignore_legacy      = false;
-    opt.ignore_checkpoint  = false;
-=======
     opt.ignore_legacy = false;
     opt.ignore_checkpoint = false;
     opt.remove_invalid_files = true;
->>>>>>> f09f229a3a (FIX exception: GC removed normal file which just created (#3216))
     PageFileSet page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     /// Restore current version from both formal and legacy page files
@@ -836,16 +831,10 @@ void PageStorage::drop()
 
     ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
-<<<<<<< HEAD
-    opt.ignore_legacy     = false;
-    opt.remove_tmp_files  = false;
-    auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
-=======
     opt.ignore_legacy = false;
     opt.remove_tmp_files = false;
     opt.remove_invalid_files = false;
     auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
->>>>>>> f09f229a3a (FIX exception: GC removed normal file which just created (#3216))
 
     for (const auto & page_file : page_files)
         delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize(), false);
@@ -977,12 +966,8 @@ bool PageStorage::gc(bool not_skip)
     }
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
-<<<<<<< HEAD
-    auto page_files      = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
-=======
     opt.remove_invalid_files = false;
     auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
->>>>>>> f09f229a3a (FIX exception: GC removed normal file which just created (#3216))
     if (unlikely(page_files.empty()))
     {
         // In case the directory are removed by accident
