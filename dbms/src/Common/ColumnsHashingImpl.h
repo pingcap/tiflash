@@ -270,14 +270,14 @@ template <typename Key>
 class BaseStateKeysFixed<Key, true>
 {
 protected:
-    BaseStateKeysFixed(const ColumnRawPtrs & key_columns)
+    explicit BaseStateKeysFixed(const ColumnRawPtrs & key_columns)
     {
         null_maps.reserve(key_columns.size());
         actual_columns.reserve(key_columns.size());
 
         for (const auto & col : key_columns)
         {
-            if (auto * nullable_col = checkAndGetColumn<ColumnNullable>(col))
+            if (const auto * nullable_col = checkAndGetColumn<ColumnNullable>(col))
             {
                 actual_columns.push_back(&nullable_col->getNestedColumn());
                 null_maps.push_back(&nullable_col->getNullMapColumn());
@@ -331,7 +331,7 @@ template <typename Key>
 class BaseStateKeysFixed<Key, false>
 {
 protected:
-    BaseStateKeysFixed(const ColumnRawPtrs & columns)
+    explicit BaseStateKeysFixed(const ColumnRawPtrs & columns)
         : actual_columns(columns)
     {}
 
