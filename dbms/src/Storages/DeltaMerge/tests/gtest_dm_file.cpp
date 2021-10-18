@@ -36,18 +36,28 @@ TEST(DMFileWriterFlags_test, SetClearFlags)
     EXPECT_TRUE(flags.isSingleFile());
 }
 
-String paramToString(const ::testing::TestParamInfo<DMFile::Mode> & info)
+enum class DMFileMode
+{
+    SingleFile,
+    DirectoryLegacy,
+    DirectoryChecksum
+};
+
+String paramToString(const ::testing::TestParamInfo<DMFileMode> & info)
 {
     const auto mode = info.param;
 
     String name;
     switch (mode)
     {
-    case DMFile::Mode::SINGLE_FILE:
+    case DMFileMode::SingleFile:
         name = "single_file";
         break;
-    case DMFile::Mode::FOLDER:
+    case DMFileMode::DirectoryLegacy:
         name = "folder";
+        break;
+    case DMFileMode::DirectoryChecksum:
+        name = "folder_checksum";
         break;
     }
     return name;
@@ -57,7 +67,7 @@ using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 
 class DMFile_Test : public DB::base::TiFlashStorageTestBasic
-    , public testing::WithParamInterface<DMFile::Mode>
+    , public testing::WithParamInterface<DMFileMode>
 {
 public:
     DMFile_Test()
@@ -72,11 +82,12 @@ public:
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode = GetParam();
-        bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+        bool single_file_mode = mode == DMFileMode::SingleFile;
+        auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
-        dm_file = DMFile::create(1, parent_path, single_file_mode);
+        dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
 
@@ -253,9 +264,10 @@ try
     dm_file.reset();
 
     auto mode = GetParam();
-    bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+    bool single_file_mode = mode == DMFileMode::SingleFile;
+    auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
-    dm_file = DMFile::create(id, parent_path, single_file_mode);
+    dm_file = DMFile::create(id, parent_path, single_file_mode, std::move(configuration));
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
     DMFile::ListOptions options;
@@ -1101,14 +1113,14 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFile_Test,
-                        testing::Values(DMFile::Mode::FOLDER, DMFile::Mode::SINGLE_FILE),
+                        testing::Values(DMFileMode::SingleFile, DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
                         paramToString);
 
 
 /// DMFile test for clustered index
 class DMFile_Clustered_Index_Test : public DB::base::TiFlashStorageTestBasic
     , //
-                                    public testing::WithParamInterface<DMFile::Mode>
+                                    public testing::WithParamInterface<DMFileMode>
 {
 public:
     DMFile_Clustered_Index_Test()
@@ -1121,11 +1133,12 @@ public:
         path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode = GetParam();
-        bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+        bool single_file_mode = mode == DMFileMode::SingleFile;
+        auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, DB::Settings());
-        dm_file = DMFile::create(0, path, single_file_mode);
+        dm_file = DMFile::create(0, path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
 
@@ -1720,7 +1733,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFile_DDL_Test,
-                        testing::Values(DMFile::Mode::FOLDER, DMFile::Mode::SINGLE_FILE),
+                        testing::Values(DMFileMode::SingleFile, DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
                         paramToString);
 
 } // namespace tests
