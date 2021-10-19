@@ -1,12 +1,12 @@
 #include <Columns/ColumnString.h>
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsString.h>
-#include <Functions/registerFunctions.h>
-#include <Interpreters/Context.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsString.h>
+#include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
 #include <vector>
@@ -21,21 +21,8 @@ namespace DB
 {
 namespace tests
 {
-
-class StringPosition : public ::testing::Test
+class StringPosition : public DB::tests::FunctionTest
 {
-protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
 };
 
 // test string and fixed string
@@ -46,11 +33,11 @@ TEST_F(StringPosition, str_and_fixed_str_Test)
     auto & factory = FunctionFactory::instance();
 
     // case insensitive
-    std::vector<String> c0_var_strs{   "ell",     "LL",    "3",     "ElL",   "ye",    "aaaa",  "world", "",      "",      "biu"  };
-    std::vector<String> c1_var_strs{   "hello",   "HELLO", "23333", "HeLlO", "hey",   "a",     "WoRlD", "",      "ping",  ""     };
+    std::vector<String> c0_var_strs{"ell", "LL", "3", "ElL", "ye", "aaaa", "world", "", "", "biu"};
+    std::vector<String> c1_var_strs{"hello", "HELLO", "23333", "HeLlO", "hey", "a", "WoRlD", "", "ping", ""};
 
-    std::vector<String> c0_fixed_strs{ "ell",     "LLo",   "333",   "ElL",   "yye",   "aaa",   "orl",   "321",   "xzx",   "biu"  };
-    std::vector<String> c1_fixed_strs{ "hello",   "HELLO", "23333", "HeLlO", "heyyy", "aaaaa", "WoRlD", "12345", "apple", "b_i_u"};
+    std::vector<String> c0_fixed_strs{"ell", "LLo", "333", "ElL", "yye", "aaa", "orl", "321", "xzx", "biu"};
+    std::vector<String> c1_fixed_strs{"hello", "HELLO", "23333", "HeLlO", "heyyy", "aaaaa", "WoRlD", "12345", "apple", "b_i_u"};
 
     // var-var
     std::vector<Int64> result0{2, 3, 2, 0, 0, 0, 0, 1, 1, 0};
@@ -84,7 +71,7 @@ TEST_F(StringPosition, str_and_fixed_str_Test)
             c0_strs = c0_fixed_strs;
             c1_strs = c1_fixed_strs;
             results = result1;
-            
+
             csp0 = ColumnFixedString::create(3);
             csp1 = ColumnFixedString::create(5);
         }
@@ -108,7 +95,7 @@ TEST_F(StringPosition, str_and_fixed_str_Test)
             csp0 = ColumnFixedString::create(3);
             csp1 = ColumnString::create();
         }
-        
+
         for (size_t i = 0; i < c0_strs.size(); i++)
         {
             csp0->insert(Field(c0_strs[i].c_str(), c0_strs[i].size()));
@@ -135,7 +122,7 @@ TEST_F(StringPosition, str_and_fixed_str_Test)
         const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
 
         Field resField;
-        
+
         for (size_t t = 0; t < results.size(); t++)
         {
             res_string->get(t, resField);
@@ -153,11 +140,11 @@ TEST_F(StringPosition, utf8_str_and_fixed_str_Test)
     auto & factory = FunctionFactory::instance();
 
     // case insensitive
-    std::vector<String> c0_var_strs{   "好",     "平凯",      "aa哈",       "？！",      "呵呵呵",  "233",      "嗯？？" };
-    std::vector<String> c1_var_strs{   "ni好",   "平凯星辰",  "啊啊aaa哈哈", "？？！！",  "呵呵呵",  "哈哈2333",  "嗯？" };
+    std::vector<String> c0_var_strs{"好", "平凯", "aa哈", "？！", "呵呵呵", "233", "嗯？？"};
+    std::vector<String> c1_var_strs{"ni好", "平凯星辰", "啊啊aaa哈哈", "？？！！", "呵呵呵", "哈哈2333", "嗯？"};
 
-    std::vector<String> c0_fixed_strs{ "好",     "凯",        "哈",         "！",        "嗯",      "二",       "？"   };
-    std::vector<String> c1_fixed_strs{ "好de_",  "平凯",      "aaa哈",      "！？",      "嗯嗯",     "2二33",    "？？" };
+    std::vector<String> c0_fixed_strs{"好", "凯", "哈", "！", "嗯", "二", "？"};
+    std::vector<String> c1_fixed_strs{"好de_", "平凯", "aaa哈", "！？", "嗯嗯", "2二33", "？？"};
 
     // var-var
     std::vector<Int64> result0{3, 1, 4, 2, 1, 3, 0};
@@ -191,7 +178,7 @@ TEST_F(StringPosition, utf8_str_and_fixed_str_Test)
             c0_strs = c0_fixed_strs;
             c1_strs = c1_fixed_strs;
             results = result1;
-            
+
             csp0 = ColumnFixedString::create(3);
             csp1 = ColumnFixedString::create(6);
         }
@@ -215,7 +202,7 @@ TEST_F(StringPosition, utf8_str_and_fixed_str_Test)
             csp0 = ColumnFixedString::create(3);
             csp1 = ColumnString::create();
         }
-        
+
         for (size_t i = 0; i < c0_strs.size(); i++)
         {
             csp0->insert(Field(c0_strs[i].c_str(), c0_strs[i].size()));
@@ -242,7 +229,7 @@ TEST_F(StringPosition, utf8_str_and_fixed_str_Test)
         const ColumnInt64 * res_string = checkAndGetColumn<ColumnInt64>(res);
 
         Field resField;
-        
+
         for (size_t t = 0; t < results.size(); t++)
         {
             res_string->get(t, resField);
@@ -259,8 +246,8 @@ TEST_F(StringPosition, null_Test)
 
     auto & factory = FunctionFactory::instance();
 
-    std::vector<String> c0_strs{"aa", "c",  "香锅",      "cap",     "f"};
-    std::vector<String> c1_strs{"a",  "cc", "麻辣v香锅", "pingcap", "f"};
+    std::vector<String> c0_strs{"aa", "c", "香锅", "cap", "f"};
+    std::vector<String> c1_strs{"a", "cc", "麻辣v香锅", "pingcap", "f"};
     std::vector<Int64> results{0, 0, 4, 5, 0};
 
     std::vector<int> c0_null_map{0, 1, 0, 0, 1};
@@ -270,7 +257,7 @@ TEST_F(StringPosition, null_Test)
     auto input_str_col0 = ColumnString::create();
     auto input_str_col1 = ColumnString::create();
     for (size_t i = 0; i < c0_strs.size(); i++)
-    { 
+    {
         Field field0(c0_strs[i].c_str(), c0_strs[i].size());
         Field field1(c1_strs[i].c_str(), c1_strs[i].size());
         input_str_col0->insert(field0);
@@ -279,8 +266,8 @@ TEST_F(StringPosition, null_Test)
 
     auto input_null_map0 = ColumnUInt8::create(c0_strs.size(), 0);
     auto input_null_map1 = ColumnUInt8::create(c1_strs.size(), 0);
-    ColumnUInt8::Container &input_vec_null_map0 = input_null_map0->getData();
-    ColumnUInt8::Container &input_vec_null_map1 = input_null_map1->getData();
+    ColumnUInt8::Container & input_vec_null_map0 = input_null_map0->getData();
+    ColumnUInt8::Container & input_vec_null_map1 = input_null_map1->getData();
     for (size_t i = 0; i < c0_null_map.size(); i++)
     {
         input_vec_null_map0[i] = c0_null_map[i];
