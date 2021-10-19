@@ -53,13 +53,15 @@ static constexpr char MIGRATE_HELP[] =
 struct DirLock
 {
     int dir{};
-    flock lock{};
+    struct flock lock
+    {
+    };
     std::string workdir_lock;
 
     explicit DirLock(const std::string & workdir_)
         : workdir_lock(workdir_ + "/LOCK")
     {
-        dir = ::open(workdir_lock.c_str(), O_RDWR | O_CREAT | O_EXCL);
+        dir = ::open(workdir_lock.c_str(), O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP);
         if (dir == -1)
         {
             throw DB::ErrnoException(fmt::format("cannot open target for lock: {}", workdir_lock), 0, errno);
