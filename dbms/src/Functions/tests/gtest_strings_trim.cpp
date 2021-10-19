@@ -48,7 +48,7 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("trim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -124,7 +124,7 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("trim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -211,7 +211,7 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("trim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -301,7 +301,7 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("trim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -380,7 +380,7 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("trim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -455,7 +455,7 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("trim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -529,7 +529,7 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("trim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
