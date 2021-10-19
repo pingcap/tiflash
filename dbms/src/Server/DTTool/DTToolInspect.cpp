@@ -106,7 +106,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 }
 
 
-int inspectEntry(const std::vector<std::string> & opts)
+int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_function)
 {
     bpo::options_description options{"Delta Merge Inspect"};
     bpo::variables_map vm;
@@ -140,7 +140,7 @@ int inspectEntry(const std::vector<std::string> & opts)
         auto file_id = vm["file-id"].as<size_t>();
         auto config_file = vm["config-file"].as<std::string>();
         auto args = InspectArgs{check, file_id, workdir};
-        CLIService service(inspectServiceMain, args, config_file);
+        CLIService service(inspectServiceMain, args, config_file, ffi_function);
         return service.run({""});
     }
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)
