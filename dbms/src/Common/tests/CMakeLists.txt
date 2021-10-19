@@ -81,6 +81,9 @@ target_link_libraries(mytime_test clickhouse_common_io clickhouse_functions gtes
 add_executable(rw_lock_test gtest_rw_lock.cpp)
 target_link_libraries(rw_lock_test clickhouse_common_io clickhouse_functions gtest_main)
 
+add_executable (symbol_index symbol_index.cpp)
+target_link_libraries (symbol_index PRIVATE clickhouse_common_io)
+
 # performance tests
 
 add_executable (uint128_perf uint128_perf.cpp)
