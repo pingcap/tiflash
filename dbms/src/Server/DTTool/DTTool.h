@@ -12,6 +12,7 @@
 #include <vector>
 #define _TO_STRING(X) #X
 #define TO_STRING(X) _TO_STRING(X)
+using RaftStoreFFIFunc = void (*)(int argc, const char * const * argv, const DB::EngineStoreServerHelper *);
 
 namespace DTTool
 {
@@ -31,7 +32,7 @@ struct InspectArgs
     size_t file_id;
     std::string workdir;
 };
-int inspectEntry(const std::vector<std::string> & opts);
+int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_function);
 } // namespace DTTool::Inspect
 
 namespace DTTool::Migrate
@@ -46,18 +47,8 @@ struct MigrateArgs
     DB::ChecksumAlgo algorithm;
     std::string workdir;
 };
-int migrateEntry(const std::vector<std::string> & opts);
+int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_function);
 } // namespace DTTool::Migrate
-
-extern "C" {
-#ifdef __clang__
-__attribute__((weak_import))
-#else
-__attribute__((weak))
-#endif
-void
-run_raftstore_proxy_ffi(int argc, const char * const * argv, const DB::EngineStoreServerHelper *);
-}
 
 namespace DTTool
 {
@@ -86,6 +77,7 @@ struct CLIService : public BaseDaemon
         {
             const DB::EngineStoreServerHelper * helper;
             const TiFlashProxyConfig & conf;
+            const RaftStoreFFIFunc ffi_function;
 
             /// set big enough stack size to avoid runtime error like stack-overflow.
             size_t stack_size = 1024 * 1024 * 20;
@@ -106,10 +98,11 @@ struct CLIService : public BaseDaemon
     };
 
     Func func;
+    RaftStoreFFIFunc ffi_function;
     const Args & args;
     std::unique_ptr<DB::Context> global_context;
 
-    explicit CLIService(Func func_, const Args & args_, const std::string & config_file);
+    explicit CLIService(Func func_, const Args & args_, const std::string & config_file, RaftStoreFFIFunc ffi_function = nullptr);
 
     int main(const std::vector<std::string> &) override;
 };
@@ -177,17 +170,18 @@ template <typename Func, typename Args>
 void * CLIService<Func, Args>::RaftStoreProxyRunner::runRaftStoreProxyFfi(void * pv)
 {
     auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
-    if (nullptr == run_raftstore_proxy_ffi)
+    if (nullptr == parms.ffi_function)
     {
         throw DB::Exception("proxy is not available");
     }
-    run_raftstore_proxy_ffi(static_cast<int>(parms.conf.args.size()), parms.conf.args.data(), parms.helper);
+    parms.ffi_function(static_cast<int>(parms.conf.args.size()), parms.conf.args.data(), parms.helper);
     return nullptr;
 }
 
 template <typename Func, typename Args>
-CLIService<Func, Args>::CLIService(Func func_, const Args & args_, const std::string & config_file)
+CLIService<Func, Args>::CLIService(Func func_, const Args & args_, const std::string & config_file, RaftStoreFFIFunc ffi_function)
     : func(std::move(func_))
+    , ffi_function(ffi_function)
     , args(args_)
 {
     config_path = config_file;
@@ -206,7 +200,7 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
 
-    typename RaftStoreProxyRunner::RunRaftStoreProxyParms parms{&helper, proxy_conf};
+    typename RaftStoreProxyRunner::RunRaftStoreProxyParms parms{&helper, proxy_conf, ffi_function};
     RaftStoreProxyRunner proxy_runner(std::move(parms));
 
     proxy_runner.run();

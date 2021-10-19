@@ -308,7 +308,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
     return 0;
 }
 
-int migrateEntry(const std::vector<std::string> & opts)
+int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_function)
 {
     bpo::options_description options{"Delta Merge Migration"};
     bpo::variables_map vm;
@@ -384,7 +384,7 @@ int migrateEntry(const std::vector<std::string> & opts)
             }
         }
 
-        CLIService service(migrateServiceMain, args, vm["config-file"].as<std::string>());
+        CLIService service(migrateServiceMain, args, vm["config-file"].as<std::string>(), ffi_function);
         return service.run({""});
     }
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)
