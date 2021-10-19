@@ -156,7 +156,7 @@ struct Decimal
     String toString(ScaleType) const;
 
     template <typename U, std::enable_if_t<std::is_same_v<U, Int256> || std::is_same_v<U, Int512> || std::is_integral_v<U> || std::is_same_v<U, Int128>> * = nullptr>
-    explicit operator U() const
+    operator U() const // NOLINT(google-explicit-constructor)
     {
         return static_cast<U>(value);
     }
@@ -167,7 +167,7 @@ struct Decimal
         return static_cast<U>(value);
     }
 
-    explicit operator T() const
+    operator T() const // NOLINT(google-explicit-constructor)
     {
         return value;
     }
