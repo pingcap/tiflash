@@ -27,11 +27,7 @@ TEST(PageUtils_test, ReadWriteFile)
         buff_write[i] = i % 0xFF;
     }
     WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
-#ifndef NDEBUG
     PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, true);
-#else
-    PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr);
-#endif
     PageUtil::syncFile(file_for_write);
     file_for_write->close();
 
@@ -68,11 +64,7 @@ TEST(PageUtils_test, BigReadWriteFile)
             buff_write[i] = i % 0xFF;
         }
 
-#ifndef NDEBUG
         PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, false);
-#else
-        PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr);
-#endif
         PageUtil::syncFile(file_for_write);
         file_for_write->close();
 
