@@ -183,7 +183,11 @@ static void * getCallerAddress(const ucontext_t & context)
     return reinterpret_cast<void *>(context.uc_mcontext.gregs[REG_RIP]);
 #endif
 #elif defined(__aarch64__)
+#if defined(__arm64__) || defined(__arm64) /// Apple arm cpu
+    return reinterpret_cast<void *>(context.uc_mcontext->__ss.__pc);
+#else /// arm server
     return reinterpret_cast<void *>(context.uc_mcontext.pc);
+#endif
 #else
     return nullptr;
 #endif
