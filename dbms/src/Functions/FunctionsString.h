@@ -228,6 +228,14 @@ struct TiDBLowerUpperBinaryImpl
     }
 };
 
+typedef enum
+{
+    trim_both_default, // trims from both direction by default
+    trim_both, // trims from both direction with explicit notation
+    trim_leading, // trims from left
+    trim_trailing // trims from right
+} trim_direction_type;
+
 template <typename Name, bool is_injective>
 class FunctionStringToString<TiDBLowerUpperBinaryImpl, Name, is_injective> : public IFunction
 {
