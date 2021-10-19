@@ -2830,9 +2830,9 @@ public:
     static void array(const UInt64 sysdate_packet, const Int32 row_count, UInt64 * dst)
     {
         UInt64 * dst_end = dst + row_count;
+#if __SSE2__
         const auto uint64_sse = sizeof(__m128i) / sizeof(UInt64);
         auto * uint64_end_sse = dst + (dst_end - dst) / uint64_sse * uint64_sse;
-#if __SSE2__
         while (dst < uint64_end_sse)
         {
             _mm_store_si128(reinterpret_cast<__m128i *>(dst), _mm_set_epi64x(sysdate_packet, sysdate_packet));
