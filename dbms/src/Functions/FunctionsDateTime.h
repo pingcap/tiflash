@@ -2827,18 +2827,34 @@ public:
     bool useDefaultImplementationForConstants() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
+    static void array(const UInt64 sysdate_packet, const Int32 row_count, UInt64 * dst)
+    {
+        UInt64 * dst_end = dst + row_count;
+        const auto uint64_sse = sizeof(__m128i) / sizeof(UInt64);
+        auto * uint64_end_sse = dst + (dst_end - dst) / uint64_sse * uint64_sse;
+#if __SSE2__
+        while (dst < uint64_end_sse)
+        {
+            _mm_store_si128(reinterpret_cast<__m128i *>(dst), _mm_set_epi64x(sysdate_packet, sysdate_packet));
+            dst += uint64_sse;
+        }
+#endif
+        while (dst < dst_end)
+        {
+            *dst = sysdate_packet;
+            dst++;
+        }
+    }
+
     void executeImpl(Block & block, const ColumnNumbers &, size_t result) const override
     {
-        int row_count = block.rows();
+        const int row_count = block.rows();
+        const UInt64 sysdate_packet = MyDateTime::getLocalSystemDateTime().toPackedUInt();
         auto col_to = ColumnVector<DataTypeMyDateTime::FieldType>::create(row_count);
         auto & vec_to = col_to->getData();
-
-        MyDateTime sys_date = MyDateTime::getLocalSystemDateTime();
         vec_to.resize(row_count);
-        for (int i = 0; i < row_count; ++i)
-        {
-            vec_to[i] = sys_date.toPackedUInt();
-        }
+        if (row_count > 0)
+            array(sysdate_packet, row_count, &vec_to[0]);
 
         block.getByPosition(result).column = std::move(col_to);
     }
