@@ -162,7 +162,7 @@ struct Decimal
     }
 
     template <typename U, std::enable_if_t<sizeof(U) >= sizeof(T)> * = nullptr>
-    explicit operator Decimal<U>() const
+    operator Decimal<U>() const // NOLINT(google-explicit-constructor)
     {
         return static_cast<U>(value);
     }
