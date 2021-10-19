@@ -19,29 +19,29 @@ try
 {
     // column, const, const
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"www.", "ww.pi", "w.pi", ".pin"}),
+        createColumn<Nullable<String>>({"www.", "ww.p", "w.pi", ".pin"}),
         executeFunction(
             "substringUTF8",
             createColumn<Nullable<String>>({"www.pingcap.com", "ww.pingcap.com", "w.pingcap.com", ".pingcap.com"}),
-            createConstColumn<Nullable<Int16>>(4, 1),
-            createConstColumn<Nullable<Int16>>(4, 4)));
+            createConstColumn<Nullable<Int64>>(4, 1),
+            createConstColumn<Nullable<Int64>>(4, 4)));
     // const, const, const
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"www."}),
+        createConstColumn<Nullable<String>>(1, "www."),
         executeFunction(
             "substringUTF8",
             createConstColumn<Nullable<String>>(1, "www.pingcap.com"),
-            createConstColumn<Nullable<Int16>>(1, 1),
-            createConstColumn<Nullable<Int16>>(1, 4)));
+            createConstColumn<Nullable<Int64>>(1, 1),
+            createConstColumn<Nullable<Int64>>(1, 4)));
     // Test Null
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, "www."}),
         executeFunction(
-            "substringIndex",
+            "substringUTF8",
             createColumn<Nullable<String>>(
                 {{}, "www.pingcap.com"}),
-            createConstColumn<Nullable<Int16>>(2, 1),
-            createConstColumn<Nullable<Int16>>(2, 4)));
+            createConstColumn<Nullable<Int64>>(2, 1),
+            createConstColumn<Nullable<Int64>>(2, 4)));
 }
 CATCH
 
