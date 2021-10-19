@@ -349,7 +349,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
         //  we fix the codec issue.
         if (exprHasValidFieldType(expr))
         {
-            target_type = getDataTypeByFieldType(expr.field_type());
+            target_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         }
         else
         {
@@ -374,7 +374,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
         }
         else
         {
-            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldTypeForComputingLayer(expr.field_type()) : flash_type;
         }
         // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
         target_type = removeNullable(target_type);

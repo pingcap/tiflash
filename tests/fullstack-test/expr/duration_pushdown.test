@@ -21,3 +21,11 @@ mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflas
 | 700:10:10.1235  |
 | -700:10:10.1235 |
 +-----------------+
+
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a='700:10:10.123500' from t;
++----------------------+
+| a='700:10:10.123500' |
++----------------------+
+|                    1 |
+|                    0 |
++----------------------+

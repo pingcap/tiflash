@@ -1413,17 +1413,6 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions);
             ret = casted_name;
         }
-        if (expr.field_type().tp() == TiDB::TypeTime)
-        {
-            /// append duration cast for duration literal
-            tipb::Expr fsp_expr;
-            auto fsp = expr.field_type().decimal() < 0 ? 6 : expr.field_type().decimal();
-            constructInt64LiteralTiExpr(fsp_expr, fsp);
-            String func_name = "FunctionConvertDurationFromNanos";
-            String fsp_col = getActions(fsp_expr, actions);
-            String casted_name = appendDurationCast(fsp_col, ret, func_name, actions);
-            ret = casted_name;
-        }
     }
     else if (isColumnExpr(expr))
     {
