@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -722,6 +723,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log);
         pipeline.streams.resize(1);
+        restoreConcurrency(pipeline, before_agg_streams, log);
     }
     else
     {
@@ -755,6 +757,23 @@ void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_s
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.size() == 0)
         return;
+    if (pipeline.streams.size() > 1 && pipeline.streams_with_non_joined_data.empty())
+    {
+        bool all_same = true;
+        for (const auto & stream : pipeline.streams)
+        {
+            if (stream != pipeline.streams[0])
+            {
+                all_same = false;
+                break;
+            }
+        }
+        if (all_same)
+        {
+            pipeline.streams.resize(1);
+            return;
+        }
+    }
     auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log, need_block);
     if (pipeline.streams.size() > 0)
     {
@@ -1121,7 +1140,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     LOG_INFO(log,
              "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
 
-    dag.getDAGContext().final_concurrency = pipeline.streams.size();
+    dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
     if (res.need_aggregate)
     {
         // execute aggregation
@@ -1155,6 +1174,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
+
+    restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
 
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
@@ -1195,22 +1216,10 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     {
         size_t concurrency = pipeline.streams.size();
         executeUnion(pipeline, max_streams, log);
-        if (!query_block.isRootQueryBlock() && concurrency > 1)
-        {
-            BlockInputStreamPtr shared_query_block_input_stream
-                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log, false);
-            pipeline.streams.assign(concurrency, shared_query_block_input_stream);
-        }
+        restoreConcurrency(pipeline, concurrency, log);
     }
 
     /// expand concurrency after agg
-    if (!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size() == 1)
-    {
-        size_t concurrency = before_agg_streams;
-        BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log, false);
-        pipeline.streams.assign(concurrency, shared_query_block_input_stream);
-    }
 
     return pipeline.streams;
 }

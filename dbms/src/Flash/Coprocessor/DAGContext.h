@@ -118,7 +118,7 @@ public:
 
     std::pair<bool, double> getTableScanThroughput();
 
-    size_t final_concurrency;
+    size_t final_concurrency = 1;
     Int64 compile_time_ns;
     String table_scan_executor_id = "";
     String exchange_sender_executor_id = "";
