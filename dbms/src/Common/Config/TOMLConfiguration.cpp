@@ -100,7 +100,7 @@ void TOMLConfiguration::enumerate(const std::string & key, Keys & range) const
     if (!table)
         return;
 
-    for (auto & it : *table)
+    for (const auto & it : *table)
         range.push_back(it.first);
 }
 
