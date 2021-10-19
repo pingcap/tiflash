@@ -356,6 +356,17 @@ class DecimalMaxValue final : public ext::singleton<DecimalMaxValue>
     Int256 number[decimal_max_prec + 1];
 
 public:
+    static Int256 get(PrecType idx)
+    {
+        return instance().getInternal(idx);
+    }
+
+    static Int256 maxValue()
+    {
+        return get(maxDecimalPrecision<Decimal256>());
+    }
+
+private:
     DecimalMaxValue()
     {
         for (PrecType i = 1; i <= decimal_max_prec; i++)
@@ -364,19 +375,9 @@ public:
         }
     }
 
-    Int256 _get(PrecType idx) const
+    Int256 getInternal(PrecType idx) const
     {
         return number[idx];
-    }
-
-    static Int256 get(PrecType idx)
-    {
-        return instance()._get(idx);
-    }
-
-    static Int256 maxValue()
-    {
-        return get(maxDecimalPrecision<Decimal256>());
     }
 };
 
