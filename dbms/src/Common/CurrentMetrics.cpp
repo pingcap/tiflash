@@ -18,6 +18,8 @@
     M(OpenFileForRead)                          \
     M(OpenFileForWrite)                         \
     M(OpenFileForReadWrite)                     \
+    M(MMappedFiles)                             \
+    M(MMappedFileBytes)                         \
     M(SendExternalTables)                       \
     M(QueryThread)                              \
     M(ReadonlyReplica)                          \

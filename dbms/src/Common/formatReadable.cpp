@@ -1,4 +1,5 @@
 #include <Common/formatReadable.h>
+#include <IO/WriteBuffer.h>
 #include <IO/DoubleConverter.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
