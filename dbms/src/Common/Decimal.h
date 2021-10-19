@@ -468,7 +468,7 @@ std::enable_if_t<std::is_floating_point_v<T>, U> ToDecimal(T value, ScaleType sc
     T ten_times_value = value * 10;
     using UType = typename U::NativeType;
     UType v(value);
-    if (Int256(ten_times_value) % 10 >= 5)
+    if (static_cast<Int256>(ten_times_value) % 10 >= 5)
     {
         v++;
     }
