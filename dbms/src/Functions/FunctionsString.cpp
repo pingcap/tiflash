@@ -3603,12 +3603,12 @@ private:
     }
 
     template <typename T>
-    static T round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    static auto round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
         if constexpr (IsDecimal<T>)
             return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
         else if constexpr (std::is_floating_point_v<T>)
-            return TiDBFloatingRound<T, T>::eval(number, max_num_decimals);
+            return TiDBFloatingRound<T, Float64>::eval(number, max_num_decimals);
         else
         {
             static_assert(std::is_integral_v<T>);
@@ -3647,7 +3647,7 @@ private:
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        T round_number = round(number, max_num_decimals, info);
+        auto round_number = round(number, max_num_decimals, info);
         std::string round_number_str = number2Str(round_number, info);
         std::string buffer = Format::apply(round_number_str, max_num_decimals);
         copyFromBuffer(buffer, res_data, res_offsets);

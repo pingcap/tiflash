@@ -188,29 +188,29 @@ try
 {
     const std::string func_name = "format";
 
-    // float64, int
-    // vector, vector
+    /// float64, int
+    /// vector, vector
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"12,332.1235", "12,332.1000", "12,332", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),
         executeFunction(
             func_name,
             createColumn<Nullable<Float64>>({12332.123456, 12332.1, 12332.2, 12332.3, 12332.3, -12332.3, -999.9999, -333.333, 0}),
             createColumn<Nullable<Int64>>({4, 4, 0, -1, 31, 5, 1, 2, {}})));
-    // vector, const
+    /// vector, const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"12,332.123", "12,332.100", "-12,332.300", "-1,000.000", "-333.333"}),
         executeFunction(
             func_name,
             createColumn<Nullable<Float64>>({12332.123456, 12332.1, -12332.3, -999.9999, -333.333}),
             createConstColumn<Nullable<Int16>>(5, 3)));
-    // const, vector
+    /// const, vector
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"-999.9999", "-1,000", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
         executeFunction(
             func_name,
             createConstColumn<Nullable<Float64>>(7, -999.9999),
             createColumn<Nullable<Int32>>({4, 0, -1, 31, 5, 1, 2})));
-    // const, const
+    /// const, const
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(1, "-1,000.000"),
         executeFunction(
@@ -218,29 +218,29 @@ try
             createConstColumn<Nullable<Float64>>(1, -999.9999),
             createConstColumn<Nullable<Int8>>(1, 3)));
 
-    // float64, uint
-    // vector, vector
+    /// float64, uint
+    /// vector, vector
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"12,332.1235", "12,332.1000", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33"}),
         executeFunction(
             func_name,
             createColumn<Nullable<Float64>>({12332.123456, 12332.1, 12332.2, 12332.3, -12332.3, -999.9999, -333.333}),
             createColumn<Nullable<UInt64>>({4, 4, 0, 31, 5, 1, 2})));
-    // vector, const
+    /// vector, const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"12,332.123", "12,332.100", "-12,332.300", "-1,000.000", "-333.333"}),
         executeFunction(
             func_name,
             createColumn<Nullable<Float64>>({12332.123456, 12332.1, -12332.3, -999.9999, -333.333}),
             createConstColumn<Nullable<UInt16>>(8, 3)));
-    // const, vector
+    /// const, vector
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"-999.9999", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
         executeFunction(
             func_name,
             createConstColumn<Nullable<Float64>>(6, -999.9999),
             createColumn<Nullable<UInt32>>({4, 0, 31, 5, 1, 2})));
-    // const, const
+    /// const, const
     ASSERT_COLUMN_EQ(
         createConstColumn<Nullable<String>>(1, "-1,000.000"),
         executeFunction(
@@ -248,11 +248,22 @@ try
             createConstColumn<Nullable<Float64>>(1, -999.9999),
             createConstColumn<Nullable<UInt8>>(1, 3)));
 
+    /// float32, int
+    /// const, const
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(1, "12.123"),
+        executeFunction(
+            func_name,
+            createConstColumn<Nullable<Float32>>(1, 12.1235),
+            createConstColumn<Nullable<UInt8>>(1, 3)));
+
+    /// decimal
     formatDecimalTestCase<Decimal32>(9);
     formatDecimalTestCase<Decimal64>(18);
     formatDecimalTestCase<Decimal128>(38);
     formatDecimalTestCase<Decimal256>(65);
 
+    /// int
     formatIntegerTestCase<Int8>();
     formatIntegerTestCase<Int16>();
     formatIntegerTestCase<Int32>();

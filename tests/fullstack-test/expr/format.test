@@ -5,6 +5,12 @@ mysql> insert into test.t values (12.1235, 12.1235, 12.1235, 1234, 5, 'en_US'),(
 
 func> wait_table test t
 
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(a, e, f) as float_val from test.t
+float_val
+12.12350
+12.1235
+12.123
+
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(b, e, f) as double_val from test.t
 double_val
 12.12350
