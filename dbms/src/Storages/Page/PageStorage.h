@@ -86,6 +86,7 @@ public:
         bool remove_tmp_files  = false;
         bool ignore_legacy     = false;
         bool ignore_checkpoint = false;
+        bool remove_invalid_files = false;
     };
 
     using VersionedPageEntries = PageEntriesVersionSetWithDelta;
