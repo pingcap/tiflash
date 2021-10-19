@@ -2791,12 +2791,14 @@ struct SysDateWithFsp
 {
 public:
     static constexpr auto name = "sysDateWithFsp";
+    static constexpr auto arguments_number = 1;
 };
 
 struct SysDateWithoutFsp
 {
 public:
     static constexpr auto name = "sysDateWithoutFsp";
+    static constexpr auto arguments_number = 0;
 };
 
 template <typename Transform>
@@ -2810,13 +2812,7 @@ public:
 
     size_t getNumberOfArguments() const override
     {
-        if (SysDateWithoutFsp::name == getName())
-            return 0;
-        else if (SysDateWithFsp::name == getName())
-            return 1;
-        else
-            throw Exception("Number of arguments for function " + getName() + " doesn't match. ",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        return Transform::arguments_number;
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes &) const override
@@ -2842,7 +2838,7 @@ public:
         while (dst < dst_end)
         {
             *dst = sysdate_packet;
-            dst++;
+            ++dst;
         }
     }
 
