@@ -40,8 +40,8 @@ try
             "substringIndex",
             createColumn<Nullable<String>>(
                 {{}, "www.pingcap.com"}),
-                createConstColumn<Nullable<Int16>>(2, 1),
-                createConstColumn<Nullable<Int16>>(2, 4)));
+            createConstColumn<Nullable<Int16>>(2, 1),
+            createConstColumn<Nullable<Int16>>(2, 4)));
 }
 CATCH
 
