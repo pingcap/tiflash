@@ -12,5 +12,4 @@ void restoreConcurrency(DAGPipeline & pipeline, size_t concurrency, const LogWit
         pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
 }
-}
-
+} // namespace DB

@@ -7,4 +7,3 @@ namespace DB
 {
 void restoreConcurrency(DAGPipeline & pipeline, size_t concurrency, const LogWithPrefixPtr & log);
 } // namespace DB
-
