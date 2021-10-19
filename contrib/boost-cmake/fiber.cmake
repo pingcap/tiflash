@@ -1,4 +1,4 @@
-set (FIBER_LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/boost/libs/fiber)
+set (BOOST_FIBER_LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/boost/libs/fiber)
 
 if(WIN32 AND NOT CMAKE_CXX_PLATFORM_ID MATCHES "Cygwin")
   set(_default_target windows)
@@ -18,22 +18,22 @@ message(STATUS "Boost.Fiber: NUMA target OS is ${BOOST_FIBER_NUMA_TARGET_OS}")
 # boost_fiber
 
 add_library(boost_fiber
-  ${FIBER_LIBRARY_DIR}/src/algo/algorithm.cpp
-  ${FIBER_LIBRARY_DIR}/src/algo/round_robin.cpp
-  ${FIBER_LIBRARY_DIR}/src/algo/shared_work.cpp
-  ${FIBER_LIBRARY_DIR}/src/algo/work_stealing.cpp
-  ${FIBER_LIBRARY_DIR}/src/barrier.cpp
-  ${FIBER_LIBRARY_DIR}/src/condition_variable.cpp
-  ${FIBER_LIBRARY_DIR}/src/context.cpp
-  ${FIBER_LIBRARY_DIR}/src/fiber.cpp
-  ${FIBER_LIBRARY_DIR}/src/future.cpp
-  ${FIBER_LIBRARY_DIR}/src/mutex.cpp
-  ${FIBER_LIBRARY_DIR}/src/properties.cpp
-  ${FIBER_LIBRARY_DIR}/src/recursive_mutex.cpp
-  ${FIBER_LIBRARY_DIR}/src/recursive_timed_mutex.cpp
-  ${FIBER_LIBRARY_DIR}/src/scheduler.cpp
-  ${FIBER_LIBRARY_DIR}/src/timed_mutex.cpp
-  ${FIBER_LIBRARY_DIR}/src/waker.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/algo/algorithm.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/algo/round_robin.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/algo/shared_work.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/algo/work_stealing.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/barrier.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/condition_variable.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/context.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/fiber.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/future.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/mutex.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/properties.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/recursive_mutex.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/recursive_timed_mutex.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/scheduler.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/timed_mutex.cpp
+  ${BOOST_FIBER_LIBRARY_DIR}/src/waker.cpp
 )
 
 add_library(Boost::fiber ALIAS boost_fiber)
@@ -58,20 +58,20 @@ endif()
 # boost_fiber_numa
 
 if(BOOST_FIBER_NUMA_TARGET_OS STREQUAL none)
-  set(NUMA_SOURCES
-    ${FIBER_LIBRARY_DIR}/src/numa/pin_thread.cpp
-    ${FIBER_LIBRARY_DIR}/src/numa/topology.cpp
+  set(BOOST_FIBER_NUMA_SOURCES
+    ${BOOST_FIBER_LIBRARY_DIR}/src/numa/pin_thread.cpp
+    ${BOOST_FIBER_LIBRARY_DIR}/src/numa/topology.cpp
   )
 else()
-  set(NUMA_SOURCES
-    ${FIBER_LIBRARY_DIR}/src/numa/${BOOST_FIBER_NUMA_TARGET_OS}/pin_thread.cpp
-    ${FIBER_LIBRARY_DIR}/src/numa/${BOOST_FIBER_NUMA_TARGET_OS}/topology.cpp
+  set(BOOST_FIBER_NUMA_SOURCES
+    ${BOOST_FIBER_LIBRARY_DIR}/src/numa/${BOOST_FIBER_NUMA_TARGET_OS}/pin_thread.cpp
+    ${BOOST_FIBER_LIBRARY_DIR}/src/numa/${BOOST_FIBER_NUMA_TARGET_OS}/topology.cpp
   )
 endif()
 
 add_library(boost_fiber_numa
-  ${NUMA_SOURCES}
-  ${FIBER_LIBRARY_DIR}/src/numa/algo/work_stealing.cpp
+  ${BOOST_FIBER_NUMA_SOURCES}
+  ${BOOST_FIBER_LIBRARY_DIR}/src/numa/algo/work_stealing.cpp
 )
 
 add_library(Boost::fiber_numa ALIAS boost_fiber_numa)

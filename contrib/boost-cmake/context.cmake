@@ -1,4 +1,4 @@
-set (CONTEXT_LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/boost/libs/context)
+set (BOOST_CONTEXT_LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/boost/libs/context)
 
 # Build features
 
@@ -115,10 +115,10 @@ endif()
 
 set(_asm_suffix ${BOOST_CONTEXT_ARCHITECTURE}_${BOOST_CONTEXT_ABI}_${BOOST_CONTEXT_BINARY_FORMAT}_${BOOST_CONTEXT_ASSEMBLER}${BOOST_CONTEXT_ASM_SUFFIX})
 
-set(ASM_SOURCES
-  ${CONTEXT_LIBRARY_DIR}/src/asm/make_${_asm_suffix}
-  ${CONTEXT_LIBRARY_DIR}/src/asm/jump_${_asm_suffix}
-  ${CONTEXT_LIBRARY_DIR}/src/asm/ontop_${_asm_suffix}
+set(BOOST_CONTEXT_ASM_SOURCES
+  ${BOOST_CONTEXT_LIBRARY_DIR}/src/asm/make_${_asm_suffix}
+  ${BOOST_CONTEXT_LIBRARY_DIR}/src/asm/jump_${_asm_suffix}
+  ${BOOST_CONTEXT_LIBRARY_DIR}/src/asm/ontop_${_asm_suffix}
 )
 
 unset(_asm_suffix)
@@ -127,32 +127,32 @@ unset(_asm_suffix)
 
 if(BOOST_CONTEXT_IMPLEMENTATION STREQUAL "fcontext")
 
-  set(IMPL_SOURCES ${ASM_SOURCES})
+  set(BOOST_CONTEXT_IMPL_SOURCES ${BOOST_CONTEXT_ASM_SOURCES})
 
   if(BOOST_CONTEXT_ASSEMBLER STREQUAL masm AND BOOST_CONTEXT_ARCHITECTURE STREQUAL i386)
-      set_source_files_properties(${ASM_SOURCES} PROPERTIES COMPILE_FLAGS "/safeseh")
+      set_source_files_properties(${BOOST_CONTEXT_ASM_SOURCES} PROPERTIES COMPILE_FLAGS "/safeseh")
   endif()
 
 else()
-  set(IMPL_SOURCES
-    ${CONTEXT_LIBRARY_DIR}/src/continuation.cpp
-    ${CONTEXT_LIBRARY_DIR}/src/fiber.cpp
+  set(BOOST_CONTEXT_IMPL_SOURCES
+    ${BOOST_CONTEXT_LIBRARY_DIR}/src/continuation.cpp
+    ${BOOST_CONTEXT_LIBRARY_DIR}/src/fiber.cpp
   )
 endif()
 
 if(WIN32 AND NOT CMAKE_CXX_PLATFORM_ID MATCHES "Cygwin")
-  set(STACK_TRAITS_SOURCES
-    ${CONTEXT_LIBRARY_DIR}/src/windows/stack_traits.cpp
+  set(BOOST_CONTEXT_STACK_TRAITS_SOURCES
+    ${BOOST_CONTEXT_LIBRARY_DIR}/src/windows/stack_traits.cpp
   )
 else()
-  set(STACK_TRAITS_SOURCES
-    ${CONTEXT_LIBRARY_DIR}/src/posix/stack_traits.cpp
+  set(BOOST_CONTEXT_STACK_TRAITS_SOURCES
+    ${BOOST_CONTEXT_LIBRARY_DIR}/src/posix/stack_traits.cpp
   )
 endif()
 
 add_library(boost_context
-  ${IMPL_SOURCES}
-  ${STACK_TRAITS_SOURCES}
+  ${BOOST_CONTEXT_IMPL_SOURCES}
+  ${BOOST_CONTEXT_STACK_TRAITS_SOURCES}
 )
 
 add_library(Boost::context ALIAS boost_context)
