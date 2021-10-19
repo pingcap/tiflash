@@ -1695,6 +1695,611 @@ private:
     }
 };
 
+
+template <typename Name, bool ltrim, bool rtrim>
+class TrimImpl : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    explicit TrimImpl() {}
+    static FunctionPtr create(const Context &)
+    {
+        return std::make_shared<TrimImpl>();
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override { return true; }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 0;
+    }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.empty() || arguments.size() > 2)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                                + ", should be 1 or 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            const auto arg = arguments[arg_idx].get();
+            if (!arg->isStringOrFixedString())
+                throw Exception{
+                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+        }
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
+    {
+        if (arguments.size() == 1)
+            executeTrim(block, arguments, result);
+        else if (arguments.size() == 2)
+            executeTrimWs(block, arguments, result);
+        else
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                                + ", should beat least 1.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    }
+
+private:
+    void executeTrim(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
+        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
+
+        auto c_res = ColumnString::create();
+
+        if (c0_string)
+            trim<ltrim, rtrim, StringSource, StringSink>(StringSource(*c0_string), StringSink(*c_res, c0->size()));
+        else if (c0_const_string)
+            trim<ltrim, rtrim, ConstSource<StringSource>, StringSink>(ConstSource<StringSource>(*c0_const_string), StringSink(*c_res, c0->size()));
+        else
+            throw Exception{"Argument of function " + getName() + " must be string", ErrorCodes::ILLEGAL_COLUMN};
+
+        block.getByPosition(result).column = std::move(c_res);
+    }
+
+    void executeTrimWs(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
+        const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
+
+        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1);
+        const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
+        const ColumnConst * c1_const_string = checkAndGetColumnConst<ColumnString>(c1);
+
+        auto c_res = ColumnString::create();
+
+        if (c0_string && c1_string)
+            trim<ltrim, rtrim, StringSource, StringSource, StringSink>(StringSource(*c0_string), StringSource(*c1_string), StringSink(*c_res, c0->size()));
+        else if (c0_string && c1_const_string)
+            trim<ltrim, rtrim, StringSource, ConstSource<StringSource>, StringSink>(StringSource(*c0_string), ConstSource<StringSource>(*c1_const_string), StringSink(*c_res, c0->size()));
+        else if (c0_const_string && c1_string)
+            trim<ltrim, rtrim, ConstSource<StringSource>, StringSource, StringSink>(ConstSource<StringSource>(*c0_const_string), StringSource(*c1_string), StringSink(*c_res, c0->size()));
+        else if (c0_const_string && c1_const_string)
+            trim<ltrim, rtrim, ConstSource<StringSource>, ConstSource<StringSource>, StringSink>(ConstSource<StringSource>(*c0_const_string), ConstSource<StringSource>(*c1_const_string), StringSink(*c_res, c0->size()));
+        else
+            throw Exception{"Argument of function " + getName() + " must be string", ErrorCodes::ILLEGAL_COLUMN};
+
+        block.getByPosition(result).column = std::move(c_res);
+    }
+};
+
+
+template <typename Name, bool ltrim, bool rtrim>
+class TrimUTF8Impl : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    explicit TrimUTF8Impl() {}
+    static FunctionPtr create(const Context &)
+    {
+        return std::make_shared<TrimUTF8Impl>();
+    }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override { return true; }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 0;
+    }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.empty() || arguments.size() > 2)
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                    + ", should be 1 or 2.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            const auto arg = arguments[arg_idx].get();
+            if (!arg->isStringOrFixedString())
+                throw Exception{
+                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function "
+                        + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+        }
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
+    {
+        if (arguments.size() == 1)
+            executeTrim(block, arguments, result);
+        else if (arguments.size() == 2)
+            executeTrimWs(block, arguments, result);
+        else
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                    + ", should beat least 1.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    }
+
+private:
+    void executeTrim(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
+        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
+
+        auto c_res = ColumnString::create();
+
+        if (c0_string)
+            vector(c0_string->getChars(), c0_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
+        else if (c0_const_string)
+        {
+            auto c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
+            vector(c0_c_string->getChars(), c0_c_string->getOffsets(), c0_const_string->size(), c_res->getChars(), c_res->getOffsets());
+        }
+        else
+            throw Exception{"Argument of function " + getName() + " must be string", ErrorCodes::ILLEGAL_COLUMN};
+
+        block.getByPosition(result).column = std::move(c_res);
+    }
+
+    void executeTrimWs(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
+        const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
+
+        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
+        const ColumnConst * c1_const_string = checkAndGetColumnConst<ColumnString>(c1);
+        auto column_trim_string = checkAndGetColumn<ColumnString>(c1_const_string->getDataColumnPtr().get());
+
+        auto c_res = ColumnString::create();
+
+        if (c0_string)
+            vectorWS(c0_string->getChars(), c0_string->getOffsets(), column_trim_string->getChars(), column_trim_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
+        else if (c0_const_string)
+        {
+            auto c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
+            vectorWS(c0_c_string->getChars(), c0_c_string->getOffsets(), c0_const_string->size(), column_trim_string->getChars(), column_trim_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
+        }
+        else
+            throw Exception{"Argument of function " + getName() + " must be string", ErrorCodes::ILLEGAL_COLUMN};
+
+        block.getByPosition(result).column = std::move(c_res);
+    }
+
+    static void vectorWS(const ColumnString::Chars_t & data,
+                         const ColumnString::Offsets & offsets,
+                         const ColumnString::Chars_t & trim_data,
+                         const ColumnString::Offsets & trim_offsets,
+                         ColumnString::Chars_t & res_data,
+                         ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            ColumnString::Offset len = UTF8::countCodePoints(&data[prev_offset], offsets[i] - prev_offset - 1);
+            ColumnString::Offset trim_len = UTF8::countCodePoints(&trim_data[0], trim_offsets[0] - 1);
+
+            ColumnString::Offset per_offset = 0;
+            ColumnString::Offset per_end_offset = offsets[i] - 1 - prev_offset;
+
+            size_t start = 0, end = 0;
+
+            if (ltrim)
+            {
+                for (start = 0; start < len; ++start)
+                {
+                    size_t bytes, trim_bytes;
+
+                    if (data[prev_offset + per_offset] < 0xBF)
+                        bytes = 1;
+                    else if (data[prev_offset + per_offset] < 0xE0)
+                        bytes = 2;
+                    else if (data[prev_offset + per_offset] < 0xF0)
+                        bytes = 3;
+                    else
+                        bytes = 1;
+
+                    ColumnString::Offset per_trim_offset = 0;
+                    size_t trim_start;
+                    for (trim_start = 0; trim_start < trim_len; ++trim_start)
+                    {
+                        if (trim_data[per_trim_offset] < 0xBF)
+                            trim_bytes = 1;
+                        else if (trim_data[per_trim_offset] < 0xE0)
+                            trim_bytes = 2;
+                        else if (trim_data[per_trim_offset] < 0xF0)
+                            trim_bytes = 3;
+                        else
+                            trim_bytes = 1;
+
+                        if (bytes == trim_bytes && memcmp(&trim_data[per_trim_offset], &data[prev_offset + per_offset], bytes) == 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            per_trim_offset += trim_bytes;
+                        }
+                    }
+                    if (trim_start == trim_len)
+                    {
+                        /// not in the exclude set
+                        break;
+                    }
+                    else
+                    {
+                        per_offset += bytes;
+                    }
+                }
+            }
+
+            if (rtrim)
+            {
+                for (end = len - 1; end >= start; --end)
+                {
+                    size_t trim_bytes = 0;
+
+                    ColumnString::Offset per_trim_offset = 0;
+                    size_t trim_start;
+                    for (trim_start = 0; trim_start < trim_len; ++trim_start)
+                    {
+                        if (trim_data[per_trim_offset] < 0xBF)
+                            trim_bytes = 1;
+                        else if (trim_data[per_trim_offset] < 0xE0)
+                            trim_bytes = 2;
+                        else if (trim_data[per_trim_offset] < 0xF0)
+                            trim_bytes = 3;
+                        else
+                            trim_bytes = 1;
+
+                        if (memcmp(&trim_data[per_trim_offset], &data[prev_offset + per_end_offset - trim_bytes], trim_bytes) == 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            per_trim_offset += trim_bytes;
+                        }
+                    }
+                    if (trim_start == trim_len)
+                    {
+                        /// not in the exclude set
+                        break;
+                    }
+                    else
+                    {
+                        per_end_offset -= trim_bytes;
+                    }
+                }
+            }
+
+            if (per_end_offset > per_offset)
+            {
+                memcpy(&res_data[res_offset], &data[prev_offset + per_offset], per_end_offset - per_offset);
+                res_offset += per_end_offset - per_offset;
+            }
+            res_data[res_offset] = 0;
+            ++res_offset;
+
+            prev_offset = offsets[i];
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    static void vectorWS(const ColumnString::Chars_t & data,
+                         const ColumnString::Offsets & offsets,
+                         size_t size,
+                         const ColumnString::Chars_t & trim_data,
+                         const ColumnString::Offsets & trim_offsets,
+                         ColumnString::Chars_t & res_data,
+                         ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size() * size);
+        res_offsets.resize(size);
+
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            ColumnString::Offset len = UTF8::countCodePoints(&data[0], offsets[0] - 1);
+            ColumnString::Offset trim_len = UTF8::countCodePoints(&trim_data[0], trim_offsets[0] - 1);
+
+            ColumnString::Offset per_offset = 0;
+            ColumnString::Offset per_end_offset = offsets[0] - 1;
+
+            size_t start = 0, end = 0;
+
+            if (ltrim)
+            {
+                for (start = 0; start < len; ++start)
+                {
+                    size_t bytes, trim_bytes;
+
+                    if (data[per_offset] < 0xBF)
+                        bytes = 1;
+                    else if (data[per_offset] < 0xE0)
+                        bytes = 2;
+                    else if (data[per_offset] < 0xF0)
+                        bytes = 3;
+                    else
+                        bytes = 1;
+
+                    ColumnString::Offset per_trim_offset = 0;
+                    size_t trim_start;
+                    for (trim_start = 0; trim_start < trim_len; ++trim_start)
+                    {
+                        if (trim_data[per_trim_offset] < 0xBF)
+                            trim_bytes = 1;
+                        else if (trim_data[per_trim_offset] < 0xE0)
+                            trim_bytes = 2;
+                        else if (trim_data[per_trim_offset] < 0xF0)
+                            trim_bytes = 3;
+                        else
+                            trim_bytes = 1;
+
+                        if (bytes == trim_bytes && memcmp(&trim_data[per_trim_offset], &data[per_offset], bytes) == 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            per_trim_offset += trim_bytes;
+                        }
+                    }
+                    if (trim_start == trim_len)
+                    {
+                        /// not in the exclude set
+                        break;
+                    }
+                    else
+                    {
+                        per_offset += bytes;
+                    }
+                }
+            }
+
+            if (rtrim)
+            {
+                for (end = len - 1; end >= start; --end)
+                {
+                    size_t trim_bytes = 0;
+
+                    ColumnString::Offset per_trim_offset = 0;
+                    size_t trim_start;
+                    for (trim_start = 0; trim_start < trim_len; ++trim_start)
+                    {
+                        if (trim_data[per_trim_offset] < 0xBF)
+                            trim_bytes = 1;
+                        else if (trim_data[per_trim_offset] < 0xE0)
+                            trim_bytes = 2;
+                        else if (trim_data[per_trim_offset] < 0xF0)
+                            trim_bytes = 3;
+                        else
+                            trim_bytes = 1;
+
+                        if (memcmp(&trim_data[per_trim_offset], &data[per_end_offset - trim_bytes], trim_bytes) == 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            per_trim_offset += trim_bytes;
+                        }
+                    }
+                    if (trim_start == trim_len)
+                    {
+                        /// not in the exclude set
+                        break;
+                    }
+                    else
+                    {
+                        per_end_offset -= trim_bytes;
+                    }
+                }
+            }
+
+            if (per_end_offset > per_offset)
+            {
+                memcpy(&res_data[res_offset], &data[per_offset], per_end_offset - per_offset);
+                res_offset += per_end_offset - per_offset;
+            }
+            res_data[res_offset] = 0;
+            ++res_offset;
+
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            ColumnString::Offset len;
+            len = UTF8::countCodePoints(&data[prev_offset], offsets[i] - prev_offset - 1);
+
+            ColumnString::Offset per_offset = 0;
+            ColumnString::Offset per_end_offset;
+            per_end_offset = offsets[i] - 1 - prev_offset;
+
+            size_t start = 0, end = 0;
+
+            if (ltrim)
+            {
+                for (start = 0; start < len; ++start)
+                {
+                    size_t bytes;
+
+                    if (data[prev_offset + per_offset] < 0xBF)
+                        bytes = 1;
+                    else if (data[prev_offset + per_offset] < 0xE0)
+                        bytes = 2;
+                    else if (data[prev_offset + per_offset] < 0xF0)
+                        bytes = 3;
+                    else
+                        bytes = 1;
+
+                    if (bytes != 1 || memcmp(" ", &data[prev_offset + per_offset], bytes) != 0)
+                    {
+                        break;
+                    }
+
+                    per_offset += bytes;
+                }
+            }
+
+            if (rtrim)
+            {
+                for (end = len - 1; end >= start; --end)
+                {
+                    if (memcmp(" ", &data[prev_offset + per_end_offset - 1], 1) != 0)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        per_end_offset -= 1;
+                    }
+                }
+            }
+
+            if (per_end_offset > per_offset)
+            {
+                memcpy(&res_data[res_offset], &data[prev_offset + per_offset], per_end_offset - per_offset);
+                res_offset += per_end_offset - per_offset;
+            }
+            res_data[res_offset] = 0;
+            ++res_offset;
+
+            prev_offset = offsets[i];
+
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       size_t size, /// num of rows
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size() * size);
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            ColumnString::Offset len;
+            len = UTF8::countCodePoints(&data[prev_offset], offsets[0] - 1);
+
+            ColumnString::Offset per_offset = 0;
+            ColumnString::Offset per_end_offset;
+            per_end_offset = offsets[0] - 1;
+
+            size_t start = 0, end = 0;
+
+            if (ltrim)
+            {
+                for (start = 0; start < len; ++start)
+                {
+                    size_t bytes;
+
+                    if (data[prev_offset + per_offset] < 0xBF)
+                        bytes = 1;
+                    else if (data[prev_offset + per_offset] < 0xE0)
+                        bytes = 2;
+                    else if (data[prev_offset + per_offset] < 0xF0)
+                        bytes = 3;
+                    else
+                        bytes = 1;
+
+                    if (bytes != 1 || memcmp(" ", &data[prev_offset + per_offset], bytes) != 0)
+                    {
+                        break;
+                    }
+
+                    per_offset += bytes;
+                }
+            }
+
+            if (rtrim)
+            {
+                for (end = len - 1; end >= start; --end)
+                {
+                    if (memcmp(" ", &data[prev_offset + per_end_offset - 1], 1) != 0)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        per_end_offset -= 1;
+                    }
+                }
+            }
+
+            if (per_end_offset > per_offset)
+            {
+                memcpy(&res_data[res_offset], &data[prev_offset + per_offset], per_end_offset - per_offset);
+                res_offset += per_end_offset - per_offset;
+            }
+            res_data[res_offset] = 0;
+            ++res_offset;
+
+            prev_offset = 0;
+
+            res_offsets[i] = res_offset;
+        }
+    }
+};
+
 template <typename Name, bool ltrim, bool rtrim>
 class FunctionTiDBTrim : public IFunction
 {
@@ -1727,7 +2332,7 @@ public:
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
             const auto arg = arguments[arg_idx].get();
-            if (arg_idx < 2 && !arg->isStringOrFixedString())
+            if (arg_idx < 2 && !arg->isString())
                 throw Exception{
                     "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function "
                         + getName(),
@@ -3541,9 +4146,9 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionUpperUTF8>();
     factory.registerFunction<FunctionReverse>();
     factory.registerFunction<FunctionReverseUTF8>();
-    factory.registerFunction<FunctionTrim>();
-    factory.registerFunction<FunctionLTrim>();
-    factory.registerFunction<FunctionRTrim>();
+    factory.registerFunction<FunctionTrim>("tidbTrim", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionLTrim>("tidbLTrim", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionRTrim>("tidbRTrim", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionLPadUTF8>();
     factory.registerFunction<FunctionRPadUTF8>();
     factory.registerFunction<FunctionConcat>();
