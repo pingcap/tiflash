@@ -756,7 +756,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
         log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
         log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
-        log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, config.getRawString("logger.compress", "true"));
+        log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
         log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
         log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
@@ -780,7 +780,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
         error_log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
         error_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
-        error_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, config.getRawString("logger.compress", "true"));
+        error_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
         error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
         error_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));

@@ -3,15 +3,22 @@
 #include <Common/Volnitsky.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Functions/CharUtil.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
+#include <Functions/FunctionsRound.h>
 #include <Functions/FunctionsString.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/StringUtil.h>
+#include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
+#include <fmt/format.h>
 #include <fmt/printf.h>
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
 #include <thread>
 
@@ -392,6 +399,147 @@ template <char not_case_lower_bound,
           int to_case(int),
           void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
 void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::array(
+    const UInt8 * src,
+    const UInt8 * src_end,
+    UInt8 * dst)
+{
+#if __SSE2__
+    const auto bytes_sse = sizeof(__m128i);
+    auto src_end_sse = src + (src_end - src) / bytes_sse * bytes_sse;
+
+    /// SSE2 packed comparison operate on signed types, hence compare (c < 0) instead of (c > 0x7f)
+    const auto v_zero = _mm_setzero_si128();
+    const auto v_not_case_lower_bound = _mm_set1_epi8(not_case_lower_bound - 1);
+    const auto v_not_case_upper_bound = _mm_set1_epi8(not_case_upper_bound + 1);
+    const auto v_flip_case_mask = _mm_set1_epi8(flip_case_mask);
+
+    while (src < src_end_sse)
+    {
+        const auto chars = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src));
+
+        /// check for ASCII
+        const auto is_not_ascii = _mm_cmplt_epi8(chars, v_zero);
+        const auto mask_is_not_ascii = _mm_movemask_epi8(is_not_ascii);
+
+        /// ASCII
+        if (mask_is_not_ascii == 0)
+        {
+            const auto is_not_case
+                = _mm_and_si128(_mm_cmpgt_epi8(chars, v_not_case_lower_bound), _mm_cmplt_epi8(chars, v_not_case_upper_bound));
+            const auto mask_is_not_case = _mm_movemask_epi8(is_not_case);
+
+            /// everything in correct case ASCII
+            if (mask_is_not_case == 0)
+                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), chars);
+            else
+            {
+                /// ASCII in mixed case
+                /// keep `flip_case_mask` only where necessary, zero out elsewhere
+                const auto xor_mask = _mm_and_si128(v_flip_case_mask, is_not_case);
+
+                /// flip case by applying calculated mask
+                const auto cased_chars = _mm_xor_si128(chars, xor_mask);
+
+                /// store result back to destination
+                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), cased_chars);
+            }
+
+            src += bytes_sse, dst += bytes_sse;
+        }
+        else
+        {
+            /// UTF-8
+            const auto expected_end = src + bytes_sse;
+
+            while (src < expected_end)
+                toCase(src, src_end, dst);
+
+            /// adjust src_end_sse by pushing it forward or backward
+            const auto diff = src - expected_end;
+            if (diff != 0)
+            {
+                if (src_end_sse + diff < src_end)
+                    src_end_sse += diff;
+                else
+                    src_end_sse -= bytes_sse - diff;
+            }
+        }
+    }
+#endif
+    /// handle remaining symbols
+    while (src < src_end)
+        toCase(src, src_end, dst);
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vector(
+    const ColumnString::Chars_t & data,
+    const IColumn::Offsets & offsets,
+    ColumnString::Chars_t & res_data,
+    IColumn::Offsets & res_offsets)
+{
+    res_data.resize(data.size());
+    res_offsets.assign(offsets);
+    array(data.data(), data.data() + data.size(), res_data.data());
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vector_fixed(
+    const ColumnString::Chars_t & data,
+    size_t /*n*/,
+    ColumnString::Chars_t & res_data)
+{
+    res_data.resize(data.size());
+    array(data.data(), data.data() + data.size(), res_data.data());
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::constant(
+    const std::string & data,
+    std::string & res_data)
+{
+    res_data.resize(data.size());
+    array(reinterpret_cast<const UInt8 *>(data.data()),
+          reinterpret_cast<const UInt8 *>(data.data() + data.size()),
+          reinterpret_cast<UInt8 *>(&res_data[0]));
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::toCase(
+    const UInt8 *& src,
+    const UInt8 * src_end,
+    UInt8 *& dst)
+{
+    if (src[0] <= ascii_upper_bound)
+    {
+        if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
+            *dst++ = *src++ ^ flip_case_mask;
+        else
+            *dst++ = *src++;
+    }
+    else
+    {
+        static const Poco::UTF8Encoding utf8;
+
+        if (const auto chars = utf8.convert(to_case(utf8.convert(src)), dst, src_end - src))
+            src += chars, dst += chars;
+        else
+            ++src, ++dst;
+    }
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::array(
     const UInt8 * src,
     const UInt8 * src_end,
     UInt8 * dst)
@@ -1265,7 +1413,7 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -3295,89 +3443,426 @@ private:
     }
 };
 
-struct NameEmpty
+template <typename Name, typename Format>
+class FormatImpl : public IFunction
 {
-    static constexpr auto name = "empty";
+public:
+    static constexpr auto name = Name::name;
+    explicit FormatImpl(const Context & context_)
+        : context(context_)
+    {}
+
+    static FunctionPtr create(const Context & context_)
+    {
+        return std::make_shared<FormatImpl>(context_);
+    }
+
+    String getName() const override { return name; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto first_argument = arguments[0];
+        if (!first_argument->isNumber() && !first_argument->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (!arguments[1]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    /// string format(number/decimal, int/uint)
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & number_base_type = block.getByPosition(arguments[0]).type;
+        const auto & precision_base_type = block.getByPosition(arguments[1]).type;
+
+        auto col_res = ColumnString::create();
+        auto val_num = block.getByPosition(arguments[0]).column->size();
+
+        bool is_types_valid = getNumberType(number_base_type, [&](const auto & number_type, bool) {
+            using NumberType = std::decay_t<decltype(number_type)>;
+            using NumberFieldType = typename NumberType::FieldType;
+            using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
+            const auto * number_raw = block.getByPosition(arguments[0]).column.get();
+            TiDBDecimalRoundInfo info{number_type, number_type};
+
+            return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
+                using PrecisionType = std::decay_t<decltype(precision_type)>;
+                using PrecisionFieldType = typename PrecisionType::FieldType;
+                using PrecisionColVec = ColumnVector<PrecisionFieldType>;
+                const auto * precision_raw = block.getByPosition(arguments[1]).column.get();
+
+                if (const auto * col0_const = checkAndGetColumnConst<NumberColVec>(number_raw))
+                {
+                    const NumberFieldType & const_number = col0_const->template getValue<NumberFieldType>();
+
+                    if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
+                    {
+                        const auto & precision_array = col1_column->getData();
+                        for (size_t i = 0; i != val_num; ++i)
+                        {
+                            size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
+                            format(const_number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
+                        }
+                    }
+                    else
+                        return false;
+                }
+                else if (const auto * col0_column = checkAndGetColumn<NumberColVec>(number_raw))
+                {
+                    if (const auto * col1_const = checkAndGetColumnConst<PrecisionColVec>(precision_raw))
+                    {
+                        size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<PrecisionFieldType>());
+                        for (const auto & number : col0_column->getData())
+                            format(number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
+                    }
+                    else if (const auto * col1_column = checkAndGetColumn<PrecisionColVec>(precision_raw))
+                    {
+                        const auto & number_array = col0_column->getData();
+                        const auto & precision_array = col1_column->getData();
+                        for (size_t i = 0; i != val_num; ++i)
+                        {
+                            size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
+                            format(number_array[i], max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
+                        }
+                    }
+                    else
+                        return false;
+                }
+                else
+                    return false;
+
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            });
+        });
+
+        if (!is_types_valid)
+            throw Exception(
+                fmt::format("Illegal types {}, {} arguments of function {}", number_base_type->getName(), precision_base_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    const Context & context;
+
+    /// format_max_decimals limits the maximum number of decimal digits for result of
+    /// function `format`, this value is same as `FORMAT_MAX_DECIMALS` in MySQL source code.
+    static constexpr size_t format_max_decimals = 30;
+
+    template <typename F>
+    static bool getNumberType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256,
+            DataTypeFloat32,
+            DataTypeFloat64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename F>
+    static bool getPrecisionType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename T>
+    static size_t getMaxNumDecimals(T precision)
+    {
+        static_assert(std::is_integral_v<T>);
+        if (accurate::lessOrEqualsOp(precision, 0))
+            return 0;
+        return std::min(static_cast<size_t>(precision), format_max_decimals);
+    }
+
+    template <typename T>
+    static auto round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    {
+        if constexpr (IsDecimal<T>)
+            return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
+        else if constexpr (std::is_floating_point_v<T>)
+            return TiDBFloatingRound<T, Float64>::eval(number, max_num_decimals);
+        else
+        {
+            static_assert(std::is_integral_v<T>);
+            return number;
+        }
+    }
+
+    template <typename T>
+    static std::string number2Str(T number, const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    {
+        if constexpr (IsDecimal<T>)
+            return number.toString(info.output_scale);
+        else
+        {
+            static_assert(std::is_floating_point_v<T> || std::is_integral_v<T>);
+            return fmt::format("{}", number);
+        }
+    }
+
+    static void copyFromBuffer(const std::string & buffer, ColumnString::Chars_t & res_data, ColumnString::Offsets & res_offsets)
+    {
+        const size_t old_size = res_data.size();
+        const size_t size_to_append = buffer.size() + 1;
+        const size_t new_size = old_size + size_to_append;
+
+        res_data.resize(new_size);
+        memcpy(&res_data[old_size], buffer.c_str(), size_to_append);
+        res_offsets.push_back(new_size);
+    }
+
+    template <typename T>
+    static void format(
+        T number,
+        size_t max_num_decimals,
+        const TiDBDecimalRoundInfo & info,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        auto round_number = round(number, max_num_decimals, info);
+        std::string round_number_str = number2Str(round_number, info);
+        std::string buffer = Format::apply(round_number_str, max_num_decimals);
+        copyFromBuffer(buffer, res_data, res_offsets);
+    }
 };
-struct NameNotEmpty
+
+struct FormatWithEnUS
 {
-    static constexpr auto name = "notEmpty";
+    static std::string apply(const std::string & number, size_t precision)
+    {
+        std::string buffer;
+        size_t number_part_start = 0;
+        if (number[0] == '-')
+        {
+            buffer += '-';
+            number_part_start = 1;
+        }
+
+        auto point_index = number.find('.');
+        if (point_index == std::string::npos)
+            point_index = number.size();
+
+        /// a comma can be used to group 3 digits in en_US locale, such as 12,345,678.00
+        constexpr int digit_grouping_size = 3;
+        constexpr char comma = ',';
+        auto integer_part_size = point_index - number_part_start;
+        const auto remainder = integer_part_size % digit_grouping_size;
+        auto integer_part_pos = number.cbegin() + number_part_start;
+        if (remainder != 0)
+        {
+            buffer.append(integer_part_pos, integer_part_pos + remainder);
+            buffer += comma;
+            integer_part_pos += remainder;
+        }
+        const auto integer_part_end = number.cbegin() + point_index;
+        for (; integer_part_pos != integer_part_end; integer_part_pos += digit_grouping_size)
+        {
+            buffer.append(integer_part_pos, integer_part_pos + digit_grouping_size);
+            buffer += comma;
+        }
+        buffer.pop_back();
+
+        if (precision > 0)
+        {
+            buffer += '.';
+            if (point_index == number.size()) /// no decimal part
+                buffer.append(precision, '0');
+            else
+            {
+                const auto decimal_part_size = number.size() - point_index - 1;
+                const auto decimal_part_start = integer_part_end + 1;
+                if (decimal_part_size >= precision)
+                    buffer.append(decimal_part_start, decimal_part_start + precision);
+                else
+                    buffer.append(decimal_part_start, number.cend()).append(precision - decimal_part_size, '0');
+            }
+        }
+        return buffer;
+    }
 };
-struct NameLength
+
+class FunctionFormatWithLocale : public IFunction
 {
-    static constexpr auto name = "length";
+public:
+    struct NameFormatWithLocale
+    {
+        static constexpr auto name = "formatWithLocale";
+    };
+    template <typename Format>
+    using FormatImpl_t = FormatImpl<NameFormatWithLocale, Format>;
+
+    static constexpr auto name = NameFormatWithLocale::name;
+    explicit FunctionFormatWithLocale(const Context & context_)
+        : context(checkDagContextIsValid(context_))
+    {}
+
+    static FunctionPtr create(const Context & context_)
+    {
+        return std::make_shared<FunctionFormatWithLocale>(context_);
+    }
+
+    String getName() const override { return name; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+
+    size_t getNumberOfArguments() const override { return 3; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isNumber() && !first_argument->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        auto second_argument = removeNullable(arguments[1]);
+        if (!second_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", second_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        auto third_argument = removeNullable(arguments[2]);
+        if (!third_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", third_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        auto return_type = std::make_shared<DataTypeString>();
+        return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto * locale_raw = block.getByPosition(arguments[2]).column.get();
+        handleLocale(locale_raw);
+
+        /// TODO support switching different locale in a block.
+        static DefaultExecutable forward_function{std::make_shared<FormatImpl_t<FormatWithEnUS>>(context)};
+        const ColumnNumbers forward_arguments{arguments[0], arguments[1]};
+        forward_function.execute(block, forward_arguments, result);
+    }
+
+private:
+    const Context & context;
+
+    /// Append warning when locale is not 'en_US'.
+    /// TODO support other locales after tidb has supported them.
+    void handleLocale(const IColumn * locale_raw) const
+    {
+        static const std::string supported_locale = "en_US";
+        using LocaleColVec = ColumnString;
+        const auto column_size = locale_raw->size();
+        if (const auto * locale_const = checkAndGetColumnConst<LocaleColVec>(locale_raw, true))
+        {
+            if (locale_const->onlyNull())
+            {
+                const auto & msg = genWarningMsg("NULL");
+                for (size_t i = 0; i != column_size; ++i)
+                    context.getDAGContext()->appendWarning(msg);
+            }
+            else
+            {
+                const String value = locale_const->getValue<String>();
+                if (!boost::iequals(value, supported_locale))
+                {
+                    const auto & msg = genWarningMsg(value);
+                    for (size_t i = 0; i != column_size; ++i)
+                        context.getDAGContext()->appendWarning(msg);
+                }
+            }
+        }
+        else
+        {
+            Field locale_field;
+            for (size_t i = 0; i != column_size; ++i)
+            {
+                locale_raw->get(i, locale_field);
+                if (locale_field.isNull())
+                    context.getDAGContext()->appendWarning(genWarningMsg("NULL"));
+                else
+                {
+                    String value = locale_field.get<String>();
+                    if (!boost::iequals(value, supported_locale))
+                        context.getDAGContext()->appendWarning(genWarningMsg(value));
+                }
+            }
+        }
+    }
+
+    static std::string genWarningMsg(const std::string & value)
+    {
+        return fmt::format("Unknown locale: \'{}\'", value);
+    }
+
+    static const Context & checkDagContextIsValid(const Context & context_)
+    {
+        if (!context_.getDAGContext())
+            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+        return context_;
+    }
 };
-struct NameLengthUTF8
-{
-    static constexpr auto name = "lengthUTF8";
-};
-struct NameLower
-{
-    static constexpr auto name = "lower";
-};
-struct NameUpper
-{
-    static constexpr auto name = "upper";
-};
-struct NameReverseUTF8
-{
-    static constexpr auto name = "reverseUTF8";
-};
-struct NameTrim
-{
-    static constexpr auto name = "trim";
-};
-struct NameLTrim
-{
-    static constexpr auto name = "ltrim";
-};
-struct NameRTrim
-{
-    static constexpr auto name = "rtrim";
-};
-struct NameTrimUTF8
-{
-    static constexpr auto name = "trimUTF8";
-};
-struct NameLTrimUTF8
-{
-    static constexpr auto name = "ltrimUTF8";
-};
-struct NameRTrimUTF8
-{
-    static constexpr auto name = "rtrimUTF8";
-};
-struct NameLPad
-{
-    static constexpr auto name = "lpad";
-};
-struct NameLPadUTF8
-{
-    static constexpr auto name = "lpadUTF8";
-};
-struct NameRPad
-{
-    static constexpr auto name = "rpad";
-};
-struct NameRPadUTF8
-{
-    static constexpr auto name = "rpadUTF8";
-};
-struct NameConcat
-{
-    static constexpr auto name = "concat";
-};
-struct NameConcatAssumeInjective
-{
-    static constexpr auto name = "concatAssumeInjective";
-};
+
+// clang-format off
+struct NameEmpty                 { static constexpr auto name = "empty"; };
+struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
+struct NameLength                { static constexpr auto name = "length"; };
+struct NameLengthUTF8            { static constexpr auto name = "lengthUTF8"; };
+struct NameLowerBinary           { static constexpr auto name = "lowerBinary"; };
+struct NameLowerUTF8             { static constexpr auto name = "lowerUTF8"; };
+struct NameUpperBinary           { static constexpr auto name = "upperBinary"; };
+struct NameUpperUTF8             { static constexpr auto name = "upperUTF8"; };
+struct NameReverseUTF8           { static constexpr auto name = "reverseUTF8"; };
+struct NameTrim                  { static constexpr auto name = "trim"; };
+struct NameLTrim                 { static constexpr auto name = "ltrim"; };
+struct NameRTrim                 { static constexpr auto name = "rtrim"; };
+struct NameTrimUTF8              { static constexpr auto name = "trimUTF8"; };
+struct NameLTrimUTF8             { static constexpr auto name = "ltrimUTF8"; };
+struct NameRTrimUTF8             { static constexpr auto name = "rtrimUTF8"; };
+struct NameLPad                  { static constexpr auto name = "lpad"; };
+struct NameLPadUTF8              { static constexpr auto name = "lpadUTF8"; };
+struct NameRPad                  { static constexpr auto name = "rpad"; };
+struct NameRPadUTF8              { static constexpr auto name = "rpadUTF8"; };
+struct NameConcat                { static constexpr auto name = "concat"; };
+struct NameConcatAssumeInjective { static constexpr auto name = "concatAssumeInjective"; };
+struct NameFormat                { static constexpr auto name = "format"; };
+// clang-format on
 
 using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, UInt8>;
 using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty, UInt8>;
 // using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
 using FunctionLengthUTF8 = FunctionStringOrArrayToT<LengthUTF8Impl, NameLengthUTF8, UInt64>;
-using FunctionLower = FunctionStringToString<LowerUpperImpl<'A', 'Z'>, NameLower>;
-using FunctionUpper = FunctionStringToString<LowerUpperImpl<'a', 'z'>, NameUpper>;
+using FunctionLowerBinary = FunctionStringToString<TiDBLowerUpperBinaryImpl, NameLowerBinary>;
+using FunctionLowerUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'A', 'Z', CharUtil::unicodeToLower>, NameLowerUTF8>;
+using FunctionUpperBinary = FunctionStringToString<TiDBLowerUpperBinaryImpl, NameUpperBinary>;
+using FunctionUpperUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'a', 'z', CharUtil::unicodeToUpper>, NameUpperUTF8>;
 using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseUTF8, true>;
 using FunctionTrimUTF8 = TrimUTF8Impl<NameTrim, true, true>;
 using FunctionLTrimUTF8 = TrimUTF8Impl<NameLTrim, true, false>;
@@ -3386,6 +3871,7 @@ using FunctionLPadUTF8 = PadUTF8Impl<NameLPad, true>;
 using FunctionRPadUTF8 = PadUTF8Impl<NameRPad, false>;
 using FunctionConcat = ConcatImpl<NameConcat, false>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
+using FunctionFormat = FormatImpl<NameFormat, FormatWithEnUS>;
 
 
 void registerFunctionsString(FunctionFactory & factory)
@@ -3394,8 +3880,8 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionNotEmpty>();
     factory.registerFunction<FunctionLength>();
     factory.registerFunction<FunctionLengthUTF8>();
-    factory.registerFunction<FunctionLower>();
-    factory.registerFunction<FunctionUpper>();
+    factory.registerFunction<FunctionLowerBinary>();
+    factory.registerFunction<FunctionUpperBinary>();
     factory.registerFunction<FunctionLowerUTF8>();
     factory.registerFunction<FunctionUpperUTF8>();
     factory.registerFunction<FunctionReverse>();
@@ -3417,5 +3903,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionASCII>();
     factory.registerFunction<FunctionPosition>();
     factory.registerFunction<FunctionSubStringIndex>();
+    factory.registerFunction<FunctionFormat>();
+    factory.registerFunction<FunctionFormatWithLocale>();
 }
 } // namespace DB
