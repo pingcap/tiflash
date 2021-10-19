@@ -1757,60 +1757,6 @@ private:
     }
 };
 
-
-struct NamePosition
-{
-    static constexpr auto name = "position";
-};
-struct NamePositionUTF8
-{
-    static constexpr auto name = "positionUTF8";
-};
-struct NamePositionCaseInsensitive
-{
-    static constexpr auto name = "positionCaseInsensitive";
-};
-struct NamePositionCaseInsensitiveUTF8
-{
-    static constexpr auto name = "positionCaseInsensitiveUTF8";
-};
-struct NameMatch
-{
-    static constexpr auto name = "match";
-};
-struct NameLike
-{
-    static constexpr auto name = "like";
-};
-struct NameLike3Args
-{
-    static constexpr auto name = "like3Args";
-};
-struct NameNotLike
-{
-    static constexpr auto name = "notLike";
-};
-struct NameExtract
-{
-    static constexpr auto name = "extract";
-};
-struct NameReplaceOne
-{
-    static constexpr auto name = "replaceOne";
-};
-struct NameReplaceAll
-{
-    static constexpr auto name = "replaceAll";
-};
-struct NameReplaceRegexpOne
-{
-    static constexpr auto name = "replaceRegexpOne";
-};
-struct NameReplaceRegexpAll
-{
-    static constexpr auto name = "replaceRegexpAll";
-};
-
 // using FunctionPosition = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveASCII>, NamePosition>;
 using FunctionPositionUTF8 = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveUTF8>, NamePositionUTF8>;
 using FunctionPositionCaseInsensitive = FunctionsStringSearch<PositionImpl<PositionCaseInsensitiveASCII>, NamePositionCaseInsensitive>;
