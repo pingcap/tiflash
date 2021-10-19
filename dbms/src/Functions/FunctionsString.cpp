@@ -3603,23 +3603,18 @@ private:
     }
 
     template <typename T>
-    struct Round
+    static auto round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
-        using RoundType = std::conditional_t<std::is_same_v<T, Float32>, Float64, T>;
-
-        static RoundType round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
+        if constexpr (IsDecimal<T>)
+            return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
+        else if constexpr (std::is_floating_point_v<T>)
+            return TiDBFloatingRound<T, Float64>::eval(number, max_num_decimals);
+        else
         {
-            if constexpr (IsDecimal<T>)
-                return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
-            else if constexpr (std::is_floating_point_v<T>)
-                return TiDBFloatingRound<T, Float64>::eval(number, max_num_decimals);
-            else
-            {
-                static_assert(std::is_integral_v<T>);
-                return number;
-            }
+            static_assert(std::is_integral_v<T>);
+            return number;
         }
-    };
+    }
 
     template <typename T>
     static std::string number2Str(T number, const TiDBDecimalRoundInfo & info [[maybe_unused]])
@@ -3652,7 +3647,7 @@ private:
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        auto round_number = Round<T>::round(number, max_num_decimals, info);
+        auto round_number = round(number, max_num_decimals, info);
         std::string round_number_str = number2Str(round_number, info);
         std::string buffer = Format::apply(round_number_str, max_num_decimals);
         copyFromBuffer(buffer, res_data, res_offsets);
