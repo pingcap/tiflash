@@ -9,13 +9,10 @@
 
 namespace DB
 {
-
 namespace tests
 {
-
 namespace
 {
-
 template <typename T>
 using Limits = std::numeric_limits<T>;
 
@@ -75,10 +72,7 @@ struct TestCase
     static constexpr size_t id = id_;
 };
 
-using TestCases = ::testing::Types<TestCase<Int64, Int64>, TestCase<UInt64, UInt64>, TestCase<Float64, Float64>,
-    TestCase<DecimalField32, DecimalField32, 0>, TestCase<DecimalField32, DecimalField32, 1>, TestCase<DecimalField32, DecimalField32, 2>,
-    TestCase<DecimalField256, DecimalField256>, TestCase<DecimalField128, DecimalField128>, TestCase<DecimalField64, DecimalField32>,
-    TestCase<DecimalField128, DecimalField64>, TestCase<DecimalField256, DecimalField64>>;
+using TestCases = ::testing::Types<TestCase<Int64, Int64>, TestCase<UInt64, UInt64>, TestCase<Float64, Float64>, TestCase<DecimalField32, DecimalField32, 0>, TestCase<DecimalField32, DecimalField32, 1>, TestCase<DecimalField32, DecimalField32, 2>, TestCase<DecimalField256, DecimalField256>, TestCase<DecimalField128, DecimalField128>, TestCase<DecimalField64, DecimalField32>, TestCase<DecimalField128, DecimalField64>, TestCase<DecimalField256, DecimalField64>>;
 
 template <typename InputType, typename OutputType, size_t id = 0>
 auto getTestData();
@@ -86,8 +80,7 @@ auto getTestData();
 template <>
 auto getTestData<Int64, Int64>()
 {
-    return TestData<Int64, Int64>{0, 0, 0, 0, {0, 1, -1, Limits<Int64>::max(), Limits<Int64>::min(), std::nullopt},
-        {0, 1, -1, Limits<Int64>::max(), Limits<Int64>::min(), std::nullopt}};
+    return TestData<Int64, Int64>{0, 0, 0, 0, {0, 1, -1, Limits<Int64>::max(), Limits<Int64>::min(), std::nullopt}, {0, 1, -1, Limits<Int64>::max(), Limits<Int64>::min(), std::nullopt}};
 };
 
 template <>
@@ -100,41 +93,28 @@ template <>
 auto getTestData<Float64, Float64>()
 {
     double large_value = std::pow(10.0, 100.0);
-    return TestData<Float64, Float64>{0, 0, 0, 0,
-        {-5.5, -4.5, -3.5, -2.5, -1.5, -0.6, -0.5, -0.4, 0.0, 0.4, 0.5, 0.6, 1.5, 2.5, 3.5, 4.5, 5.5, large_value, std::nullopt},
-        {-6.0, -4.0, -4.0, -2.0, -2.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 4.0, 4.0, 6.0, large_value, std::nullopt}};
+    return TestData<Float64, Float64>{0, 0, 0, 0, {-5.5, -4.5, -3.5, -2.5, -1.5, -0.6, -0.5, -0.4, 0.0, 0.4, 0.5, 0.6, 1.5, 2.5, 3.5, 4.5, 5.5, large_value, std::nullopt}, {-6.0, -4.0, -4.0, -2.0, -2.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 4.0, 4.0, 6.0, large_value, std::nullopt}};
 }
 
 // Decimal(9, 0) -> Decimal(9, 0)
 template <>
 auto getTestData<DecimalField32, DecimalField32, 0>()
 {
-    return TestData<DecimalField32, DecimalField32>{9, 0, 9, 0,
-        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "999999999", "-999999999", std::nullopt}),
-        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "999999999", "-999999999", std::nullopt})};
+    return TestData<DecimalField32, DecimalField32>{9, 0, 9, 0, parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "999999999", "-999999999", std::nullopt}), parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", "999999999", "-999999999", std::nullopt})};
 }
 
 // Decimal(9, 1) -> Decimal(9, 0)
 template <>
 auto getTestData<DecimalField32, DecimalField32, 1>()
 {
-    return TestData<DecimalField32, DecimalField32>{9, 1, 9, 0,
-        parseDecimalArray<DecimalField32>(9, 1,
-            {"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", "99999999.9", "-99999999.9",
-                std::nullopt}),
-        parseDecimalArray<DecimalField32>(
-            9, 0, {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", "100000000", "-100000000", std::nullopt})};
+    return TestData<DecimalField32, DecimalField32>{9, 1, 9, 0, parseDecimalArray<DecimalField32>(9, 1, {"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", "99999999.9", "-99999999.9", std::nullopt}), parseDecimalArray<DecimalField32>(9, 0, {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", "100000000", "-100000000", std::nullopt})};
 }
 
 // Decimal(9, 9) -> Decimal(1, 0)
 template <>
 auto getTestData<DecimalField32, DecimalField32, 2>()
 {
-    return TestData<DecimalField32, DecimalField32>{9, 9, 1, 0,
-        parseDecimalArray<DecimalField32>(9, 9,
-            {"0.000000000", "0.000000001", "-0.000000001", "0.500000000", "-0.500000000", "0.999999999", "-0.999999999",
-                std::nullopt}),
-        parseDecimalArray<DecimalField32>(1, 0, {"0", "0", "0", "1", "-1", "1", "-1", std::nullopt})};
+    return TestData<DecimalField32, DecimalField32>{9, 9, 1, 0, parseDecimalArray<DecimalField32>(9, 9, {"0.000000000", "0.000000001", "-0.000000001", "0.500000000", "-0.500000000", "0.999999999", "-0.999999999", std::nullopt}), parseDecimalArray<DecimalField32>(1, 0, {"0", "0", "0", "1", "-1", "1", "-1", std::nullopt})};
 }
 
 // Decimal(65, 0) -> Decimal(65, 0)
@@ -143,9 +123,7 @@ auto getTestData<DecimalField256, DecimalField256>()
 {
     std::string extreme(65, '9');
 
-    return TestData<DecimalField256, DecimalField256>{65, 0, 65, 0,
-        parseDecimalArray<DecimalField256>(65, 0, {"0", "1", "-1", extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField256>(65, 0, {"0", "1", "-1", extreme, "-" + extreme, std::nullopt})};
+    return TestData<DecimalField256, DecimalField256>{65, 0, 65, 0, parseDecimalArray<DecimalField256>(65, 0, {"0", "1", "-1", extreme, "-" + extreme, std::nullopt}), parseDecimalArray<DecimalField256>(65, 0, {"0", "1", "-1", extreme, "-" + extreme, std::nullopt})};
 }
 
 // Decimal(38, 1) -> Decimal(38, 0)
@@ -155,11 +133,7 @@ auto getTestData<DecimalField128, DecimalField128>()
     auto extreme = std::string(37, '9') + ".9";
     auto rounded_extreme = '1' + std::string(37, '0');
 
-    return TestData<DecimalField128, DecimalField128>{38, 1, 38, 0,
-        parseDecimalArray<DecimalField128>(38, 1,
-            {"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField128>(
-            38, 0, {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
+    return TestData<DecimalField128, DecimalField128>{38, 1, 38, 0, parseDecimalArray<DecimalField128>(38, 1, {"-2.5", "-1.5", "-0.6", "-0.5", "-0.4", "0.0", "0.4", "0.5", "0.6", "1.5", "2.5", extreme, "-" + extreme, std::nullopt}), parseDecimalArray<DecimalField128>(38, 0, {"-3", "-2", "-1", "-1", "0", "0", "0", "1", "1", "2", "3", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
 }
 
 // Decimal(18, 10) -> Decimal(9, 0)
@@ -171,9 +145,7 @@ auto getTestData<DecimalField64, DecimalField32>()
     auto extreme = std::string(8, '9') + '.' + std::string(10, '9');
     auto rounded_extreme = '1' + std::string(8, '0');
 
-    return TestData<DecimalField64, DecimalField32>{18, 10, 9, 0,
-        parseDecimalArray<DecimalField64>(18, 10, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
+    return TestData<DecimalField64, DecimalField32>{18, 10, 9, 0, parseDecimalArray<DecimalField64>(18, 10, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}), parseDecimalArray<DecimalField32>(9, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
 }
 
 // Decimal(25, 10) -> Decimal(16, 0)
@@ -185,9 +157,7 @@ auto getTestData<DecimalField128, DecimalField64>()
     auto extreme = std::string(15, '9') + '.' + std::string(10, '9');
     auto rounded_extreme = '1' + std::string(15, '0');
 
-    return TestData<DecimalField128, DecimalField64>{25, 10, 16, 0,
-        parseDecimalArray<DecimalField128>(25, 10, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField64>(16, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
+    return TestData<DecimalField128, DecimalField64>{25, 10, 16, 0, parseDecimalArray<DecimalField128>(25, 10, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}), parseDecimalArray<DecimalField64>(16, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
 }
 
 // Decimal(40, 30) -> Decimal(11, 0)
@@ -199,28 +169,14 @@ auto getTestData<DecimalField256, DecimalField64>()
     auto extreme = std::string(10, '9') + '.' + std::string(30, '9');
     auto rounded_extreme = '1' + std::string(10, '0');
 
-    return TestData<DecimalField256, DecimalField64>{40, 30, 11, 0,
-        parseDecimalArray<DecimalField256>(40, 30, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}),
-        parseDecimalArray<DecimalField64>(11, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
+    return TestData<DecimalField256, DecimalField64>{40, 30, 11, 0, parseDecimalArray<DecimalField256>(40, 30, {"0" + zeros, "0" + half, "-0" + half, extreme, "-" + extreme, std::nullopt}), parseDecimalArray<DecimalField64>(11, 0, {"0", "1", "-1", rounded_extreme, "-" + rounded_extreme, std::nullopt})};
 }
 
 } // namespace
 
 template <typename T>
-class TestFunctionsRound : public ::testing::Test
+class TestFunctionsRound : public DB::tests::FunctionTest
 {
-public:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (Exception &)
-        {
-            // maybe other tests have already registered.
-        }
-    }
 };
 
 TYPED_TEST_CASE(TestFunctionsRound, TestCases);
