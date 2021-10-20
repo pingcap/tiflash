@@ -802,12 +802,14 @@ String MyDateTime::toString(int fsp) const
     return result;
 }
 
-MyDateTime MyDateTime::getLocalSystemDateTime()
+MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezoneInfo)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
-    struct tm * tm_ptr = localtime(&ts.tv_sec);
-    return MyDateTime(tm_ptr->tm_year + 1900, tm_ptr->tm_mon + 1, tm_ptr->tm_mday, tm_ptr->tm_hour, tm_ptr->tm_min, tm_ptr->tm_sec, ts.tv_nsec / 1000);
+    if (timezoneInfo.is_name_based)
+        return convertUTC2TimeZone(ts.tv_sec, ts.tv_nsec / 1000, *timezoneInfo.timezone);
+    else
+        return convertUTC2TimeZoneByOffset(ts.tv_sec, ts.tv_nsec / 1000, timezoneInfo.timezone_offset, *timezoneInfo.timezone);
 }
 
 inline bool isZeroDate(UInt64 time)
@@ -844,6 +846,25 @@ void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, c
         throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
     MyDateTime to_my_time(time_zone.toYear(epoch), time_zone.toMonth(epoch), time_zone.toDayOfMonth(epoch), time_zone.toHour(epoch), time_zone.toMinute(epoch), time_zone.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
+}
+
+
+MyDateTime convertUTC2TimeZone(size_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to)
+{
+    if (utc_ts < 0)
+        return MyDateTime(0);
+    time_t epoch = utc_ts;
+    return MyDateTime(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), micro_second);
+}
+
+
+MyDateTime convertUTC2TimeZoneByOffset(size_t utc_ts, UInt32 micro_second, Int64 offset, const DateLUTImpl & time_zone_to)
+{
+    if (utc_ts < 0)
+        return MyDateTime(0);
+    time_t epoch = utc_ts;
+    epoch += offset;
+    return MyDateTime(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), micro_second);
 }
 
 // the implementation is the same as TiDB

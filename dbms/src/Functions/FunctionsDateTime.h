@@ -18,6 +18,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Poco/String.h>
 #include <common/DateLUT.h>
 
@@ -2806,7 +2807,9 @@ class FunctionSysDate : public IFunction
 {
 public:
     static constexpr auto name = Transform::name;
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionSysDate>(); };
+    static FunctionPtr create(const Context & context_) { return std::make_shared<FunctionSysDate>(context_); };
+    FunctionSysDate(const Context & context_)
+        : context(context_){};
 
     String getName() const override { return Transform::name; }
 
@@ -2845,7 +2848,7 @@ public:
     void executeImpl(Block & block, const ColumnNumbers &, size_t result) const override
     {
         const int row_count = block.rows();
-        const UInt64 sysdate_packet = MyDateTime::getLocalSystemDateTime().toPackedUInt();
+        const UInt64 sysdate_packet = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo()).toPackedUInt();
         auto col_to = ColumnVector<DataTypeMyDateTime::FieldType>::create(row_count);
         auto & vec_to = col_to->getData();
         vec_to.resize(row_count);
@@ -2854,6 +2857,9 @@ public:
 
         block.getByPosition(result).column = std::move(col_to);
     }
+
+private:
+    const Context & context;
 };
 
 
