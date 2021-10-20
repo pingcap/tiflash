@@ -32,7 +32,7 @@ unset(_default_abi)
 
 ## Arch-and-model
 
-if(ARCH_ARM)
+if(ARCH_AARCH64)
   set(_default_arch arm64)
 else()
   set(_default_arch x86_64)
