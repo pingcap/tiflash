@@ -32,10 +32,8 @@ unset(_default_abi)
 
 ## Arch-and-model
 
-math(EXPR _bits "${CMAKE_SIZEOF_VOID_P}*8")
-
-if(_bits EQUAL 32)
-  set(_default_arch i386)
+if(ARCH_ARM)
+  set(_default_arch arm64)
 else()
   set(_default_arch x86_64)
 endif()
