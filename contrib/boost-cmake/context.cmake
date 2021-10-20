@@ -21,7 +21,7 @@ unset(_default_binfmt)
 
 if(WIN32)
   set(_default_abi ms)
-elseif(APPLE AND ARCH_AARCH64)
+elseif(ARCH_AARCH64)
   set(_default_abi aapcs)
 else()
   set(_default_abi sysv)
