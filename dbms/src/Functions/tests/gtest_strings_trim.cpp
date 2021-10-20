@@ -584,10 +584,52 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
 TEST_F(StringTrim, strTrimTest)
 try
 {
-    // 1 arg
+    // trim(const)
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "x"),
+        executeFunction("tidbTrim", createConstColumn<Nullable<String>>(5, " x ")));
+
+    // trim(const from const)
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "a"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x")));
+
+    // trim(leading|trailing|both const from const)
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "a"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "a"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "ax"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "xa"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+
+
+    // trim(column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"xx aa", "xxaa xx", "\t aa \t", "", {}}),
         executeFunction("tidbTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"xx aa", "xxaa xx", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}})));
 
     // trim(column from column)
     ASSERT_COLUMN_EQ(
@@ -615,6 +657,32 @@ try
         executeFunction("tidbTrim",
                         createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
                         createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+                        createColumn<String>({"x", "x", "x", "x", "x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({" aa", "aa xx ", "axxa \t", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<String>({"x", "x", "x", "x", "x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<String>({"xx", "xx", "xx", "xx", "xx"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<String>({" x", " x", " x", " x", " x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({" aa ", "aa xx ", "a \tx", "axx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<String>({" x", "x", "xx", "xxa", " x"})));
 
     // trim(both|leading|trailing column from column)
     ASSERT_COLUMN_EQ(

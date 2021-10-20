@@ -2322,6 +2322,8 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {2}; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.empty() || arguments.size() > 3)
@@ -2346,6 +2348,11 @@ public:
 
         return std::make_shared<DataTypeString>();
     }
+
+    static constexpr Int8 trim_both_default = 0; // trims from both direction by default
+    static constexpr Int8 trim_both = 1; // trims from both direction with explicit notation
+    static constexpr Int8 trim_leading = 2; // trims from left
+    static constexpr Int8 trim_trailing = 3; // trims from right
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
@@ -2386,7 +2393,7 @@ private:
 
         auto res_col = ColumnString::create();
 
-        if (data_const)
+        if (data_const && !remstr_const)
         {
             const ColumnConst * data_col = checkAndGetColumnConst<ColumnString>(column_data.get());
             const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
@@ -2394,7 +2401,7 @@ private:
             std::string data = data_col->getValue<String>();
             constVector(is_ltrim, is_rtrim, (UInt8 *)data.c_str(), data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
         }
-        else if (remstr_const)
+        else if (remstr_const && !data_const)
         {
             const ColumnConst * remstr_col = checkAndGetColumnConst<ColumnString>(column_remstr.get());
             const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
@@ -2416,6 +2423,8 @@ private:
     void executeTrim3Args(Block & block, const ColumnNumbers & arguments, const size_t result) const
     {
         ColumnPtr & column_direction = block.getByPosition(arguments[2]).column;
+        if (!column_direction->isColumnConst())
+            throw Exception("3nd argument of function " + getName() + " must be constant.");
         const ColumnConst * direction_col_int8 = checkAndGetColumnConst<ColumnInt8>(column_direction.get());
 
         int8_t direction = direction_col_int8->getValue<Int8>();
@@ -2475,14 +2484,15 @@ private:
     }
 
     // trim(column), trim(const from column)
-    static void vectorConst(bool is_ltrim,
-                            bool is_rtrim,
-                            const ColumnString::Chars_t & data,
-                            const ColumnString::Offsets & offsets,
-                            UInt8 * remstr,
-                            size_t remstr_size,
-                            ColumnString::Chars_t & res_data,
-                            ColumnString::Offsets & res_offsets)
+    static void vectorConst(
+        bool is_ltrim,
+        bool is_rtrim,
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        UInt8 * remstr,
+        size_t remstr_size,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -2499,14 +2509,15 @@ private:
     }
 
     // trim(column from const)
-    static void constVector(bool is_ltrim,
-                            bool is_rtrim,
-                            UInt8 * data,
-                            size_t data_size,
-                            const ColumnString::Chars_t & remstr,
-                            const ColumnString::Offsets & remstr_offsets,
-                            ColumnString::Chars_t & res_data,
-                            ColumnString::Offsets & res_offsets)
+    static void constVector(
+        bool is_ltrim,
+        bool is_rtrim,
+        UInt8 * data,
+        size_t data_size,
+        const ColumnString::Chars_t & remstr,
+        const ColumnString::Offsets & remstr_offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(remstr.size());
         size_t size = remstr_offsets.size();
@@ -2523,14 +2534,15 @@ private:
     }
 
     // trim(column from column)
-    static void vectorVector(bool is_ltrim,
-                             bool is_rtrim,
-                             const ColumnString::Chars_t & data,
-                             const ColumnString::Offsets & offsets,
-                             const ColumnString::Chars_t & remstr,
-                             const ColumnString::Offsets & remstr_offsets,
-                             ColumnString::Chars_t & res_data,
-                             ColumnString::Offsets & res_offsets)
+    static void vectorVector(
+        bool is_ltrim,
+        bool is_rtrim,
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const ColumnString::Chars_t & remstr,
+        const ColumnString::Offsets & remstr_offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -4103,7 +4115,7 @@ struct NameReverseUTF8           { static constexpr auto name = "reverseUTF8"; }
 struct NameTrim                  { static constexpr auto name = "trim"; };
 struct NameLTrim                 { static constexpr auto name = "ltrim"; };
 struct NameRTrim                 { static constexpr auto name = "rtrim"; };
-struct NameTiDBTrim              { static constexpr auto name = "tidbTRim"; };
+struct NameTiDBTrim              { static constexpr auto name = "tidbTrim"; };
 struct NameTiDBLTrim             { static constexpr auto name = "tidbLTrim"; };
 struct NameTiDBRTrim             { static constexpr auto name = "tidbRTrim"; };
 struct NameLPad                  { static constexpr auto name = "lpad"; };
