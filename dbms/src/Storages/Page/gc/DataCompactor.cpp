@@ -362,7 +362,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
                      << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
 
         PageEntriesEdit edit_;
-        if (!hard_link_file.linkPage(const_cast<PageFile &>(page_file), compact_seq, edit_))
+        if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit_))
         {
             hard_link_file.destroy();
             continue;
