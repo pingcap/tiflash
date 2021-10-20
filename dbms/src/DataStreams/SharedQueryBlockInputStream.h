@@ -90,6 +90,11 @@ public:
             throw Exception(exception_msg);
     }
 
+    BlockInputStreamPtr getNestedInputStream() const
+    {
+        return children.back();
+    }
+
 protected:
     Block readImpl() override
     {

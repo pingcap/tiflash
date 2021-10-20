@@ -770,7 +770,9 @@ void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_s
         }
         if (all_same)
         {
-            pipeline.streams.resize(1);
+            auto shared_query_stream = std::dynamic_pointer_cast<SharedQueryBlockInputStream>(pipeline.firstStream());
+            assert(shared_query_stream);
+            pipeline.streams.assign(1, shared_query_stream->getNestedInputStream());
             return;
         }
     }
@@ -1218,8 +1220,6 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
         executeUnion(pipeline, max_streams, log);
         restoreConcurrency(pipeline, concurrency, log);
     }
-
-    /// expand concurrency after agg
 
     return pipeline.streams;
 }
