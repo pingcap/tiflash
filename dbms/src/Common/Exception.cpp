@@ -149,9 +149,9 @@ int getCurrentExceptionCode()
 
 void rethrowFirstException(const Exceptions & exceptions)
 {
-    for (size_t i = 0, size = exceptions.size(); i < size; ++i)
-        if (exceptions[i])
-            std::rethrow_exception(exceptions[i]);
+    for (const auto & exception : exceptions)
+        if (exception)
+            std::rethrow_exception(exception);
 }
 
 
