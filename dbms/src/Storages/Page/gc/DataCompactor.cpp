@@ -41,7 +41,7 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
 {
     ValidPages valid_pages = collectValidPagesInPageFile(snapshot);
     Result result;
-    const auto & candidates = selectCandidateFiles(page_files, valid_pages, writing_files);
+    const auto candidates = selectCandidateFiles(page_files, valid_pages, writing_files);
 
     result.candidate_size = candidates.compact_candidates.size();
     result.bytes_migrate = candidates.total_valid_bytes;
@@ -56,9 +56,7 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
         std::tie(migrate_entries_edit, result.bytes_written) = migratePages(
             snapshot,
             valid_pages,
-            candidates.compact_candidates,
-            candidates.files_without_valid_pages,
-            candidates.invalid_candidates,
+            candidates,
             result.num_migrate_pages);
     }
     else
@@ -122,7 +120,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     // Those files without valid pages, we need to log them down later
     PageFileSet files_without_valid_pages;
     // Those files have high vaild rate with big size, we need update thier sid.
-    PageFileSet invalid_candidates;
+    PageFileSet hardlink_candidates;
 
     size_t candidate_total_size = 0;
     size_t num_migrate_pages = 0;
@@ -148,12 +146,6 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
             valid_page_count = it->second.second.size();
         }
 
-        if (likely(config.gc_force_hardlink_rate < 1.0) && valid_rate > config.gc_force_hardlink_rate && file_size > config.file_max_size)
-        {
-            invalid_candidates.emplace(page_file);
-            continue;
-        }
-
         // Don't gc writing page file.
         bool is_candidate = !writing_files.contains(page_file.fileIdLevel())
             && (valid_rate < config.gc_max_valid_rate //
@@ -176,6 +168,12 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
             // and move GC forward. Instead, it cause higher write amplification while rewriting one PageFile to a
             // new one.
             files_without_valid_pages.emplace(page_file);
+            continue;
+        }
+
+        if (likely(config.gc_force_hardlink_rate <= 1.0) && valid_rate > config.gc_force_hardlink_rate && file_size > config.file_max_size)
+        {
+            hardlink_candidates.emplace(page_file);
             continue;
         }
 
@@ -215,8 +213,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         }
     }
 
-    struct CompactCandidates compact_candidates = {candidates, files_without_valid_pages, invalid_candidates, candidate_total_size, num_migrate_pages};
-    return std::move(compact_candidates);
+    return CompactCandidates{std::move(candidates), std::move(files_without_valid_pages), std::move(hardlink_candidates), candidate_total_size, num_migrate_pages};
 }
 
 template <typename SnapshotPtr>
@@ -224,16 +221,14 @@ std::tuple<PageEntriesEdit, size_t> //
 DataCompactor<SnapshotPtr>::migratePages( //
     const SnapshotPtr & snapshot,
     const ValidPages & files_valid_pages,
-    const PageFileSet & candidates,
-    const PageFileSet & files_without_valid_pages,
-    const PageFileSet & invalid_candidates,
+    const CompactCandidates & candidates,
     const size_t migrate_page_count) const
 {
-    if (candidates.empty())
+    if (candidates.compact_candidates.empty())
         return {PageEntriesEdit{}, 0};
 
-    // merge `candidates` to PageFile which PageId = max of all `candidates` and level = level + 1
-    auto [largest_file_id, level] = candidates.rbegin()->fileIdLevel();
+    // merge `compact_candidates` to PageFile which PageId = max of all `compact_candidates` and level = level + 1
+    auto [largest_file_id, level] = candidates.compact_candidates.rbegin()->fileIdLevel();
     const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
     // In case that those files are hold by snapshot and do migratePages to same `migrate_file_id` again, we need to check
@@ -283,14 +278,14 @@ DataCompactor<SnapshotPtr>::migratePages( //
         PageFile::Type::Temp,
         page_file_log);
     LOG_INFO(log,
-             storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
+             storage_name << " GC decide to migrate " << candidates.compact_candidates.size() << " files, containing " << migrate_page_count
                           << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel() << ", path " << pf_parent_path);
 
     PageEntriesEdit gc_file_edit;
     size_t bytes_written = 0;
     MigrateInfos migrate_infos;
     {
-        for (auto & page_file : files_without_valid_pages)
+        for (auto & page_file : candidates.files_without_valid_pages)
         {
             if (auto it = files_valid_pages.find(page_file.fileIdLevel()); it == files_valid_pages.end())
             {
@@ -308,7 +303,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
     {
         PageStorage::OpenReadFiles data_readers;
         // To keep the order of all PageFiles' meta, `compact_seq` should be maximum of all candidates.
-        for (auto & page_file : candidates)
+        for (auto & page_file : candidates.compact_candidates)
         {
             if (page_file.getType() != PageFile::Type::Formal)
             {
@@ -345,10 +340,20 @@ DataCompactor<SnapshotPtr>::migratePages( //
     logMigrationDetails(migrate_infos, migrate_file_id);
 
     // Do invaild pages move
-    PageEntriesEdit invalid_migrate_entries_edit;
+    PageEntriesEdit hardlink_migrate_entries_edit;
 
-    for (auto & page_file : invalid_candidates)
+    for (auto & page_file : candidates.hardlink_candidates)
     {
+        const PageFileIdAndLevel hardlink_file_id{page_file.getFileId(), page_file.getLevel() + 1};
+        if (PageFile::isPageFileExist(hardlink_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
+            || PageFile::isPageFileExist(hardlink_file_id, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
+        {
+            LOG_INFO(log,
+                     storage_name << " GC link to PageFile_" //
+                                  << hardlink_file_id.first << "_" << hardlink_file_id.second << " is done before.");
+            continue;
+        }
+
         PageFile hard_link_file = PageFile::newPageFile(
             page_file.getFileId(),
             page_file.getLevel() + 1,
@@ -367,11 +372,11 @@ DataCompactor<SnapshotPtr>::migratePages( //
             hard_link_file.destroy();
             continue;
         }
-        invalid_migrate_entries_edit.add(edit_);
+        hardlink_migrate_entries_edit.concate(edit_);
         hard_link_file.setFormal();
     }
 
-    gc_file_edit.add(invalid_migrate_entries_edit);
+    gc_file_edit.concate(hardlink_migrate_entries_edit);
 
     if (gc_file_edit.empty())
     {

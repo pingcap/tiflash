@@ -47,7 +47,7 @@ public:
         records.emplace_back(record);
     }
 
-    void add(PageEntriesEdit & edit)
+    void concate(PageEntriesEdit & edit)
     {
         auto records_ = edit.getRecords();
         records.insert(records.end(), records_.begin(), records_.end());

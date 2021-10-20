@@ -51,7 +51,7 @@ public:
         SettingUInt64 file_meta_roll_size = PAGE_META_ROLL_SIZE;
 
         // When the value of gc_force_hardlink_rate is less than 1,
-        // It means that candidates whose vaild rate is less than this value will be forced to hardlink(This will reduce the gc duration).
+        // It means that candidates whose valid rate is greater than this value will be forced to hardlink(This will reduce the gc duration).
         // Otherwise, if gc_force_hardlink_rate equal 1, hardlink won't happen
         SettingDouble gc_force_hardlink_rate = 0.8;
 
