@@ -10,6 +10,7 @@
 
 namespace DB
 {
+
 class Context;
 
 class DAGStringConverter

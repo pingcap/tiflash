@@ -1,19 +1,20 @@
 #pragma once
 
+#include <vector>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
+#include <functional>
+#include <boost/noncopyable.hpp>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <Storages/TableLockHolder.h>
 
-#include <boost/noncopyable.hpp>
-#include <functional>
-#include <memory>
-#include <mutex>
-#include <shared_mutex>
-#include <vector>
-
 
 namespace DB
 {
+
+
 class IBlockInputStream;
 
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
@@ -23,9 +24,9 @@ struct Progress;
 
 namespace ErrorCodes
 {
-extern const int OUTPUT_IS_NOT_SORTED;
-extern const int NOT_IMPLEMENTED;
-} // namespace ErrorCodes
+    extern const int OUTPUT_IS_NOT_SORTED;
+    extern const int NOT_IMPLEMENTED;
+}
 
 
 /** Callback to track the progress of the query.
@@ -43,7 +44,7 @@ using FilterPtr = IColumn::Filter *;
 class IBlockInputStream : private boost::noncopyable
 {
 public:
-    IBlockInputStream() = default;
+    IBlockInputStream() {}
 
     /** Get data structure of the stream in a form of "header" block (it is also called "sample block").
       * Header block contains column names, data types, columns of size 0. Constant columns must have corresponding values.
@@ -79,7 +80,7 @@ public:
     virtual void readPrefix() {}
     virtual void readSuffix() {}
 
-    virtual ~IBlockInputStream() = default;
+    virtual ~IBlockInputStream() {}
 
     /** To output the data stream transformation tree (query execution plan).
       */
@@ -132,4 +133,4 @@ private:
 };
 
 
-} // namespace DB
+}

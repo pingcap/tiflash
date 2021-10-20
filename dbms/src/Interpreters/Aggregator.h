@@ -691,7 +691,6 @@ public:
         /// What to count.
         ColumnNumbers keys;
         AggregateDescriptions aggregates;
-        Names key_names;
         size_t keys_size;
         size_t aggregates_size;
 
@@ -776,7 +775,7 @@ public:
     };
 
 
-    Aggregator(const Params & params_, const LogWithPrefixPtr & log_ = nullptr);
+    explicit Aggregator(const Params & params_, const LogWithPrefixPtr & log_ = nullptr);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);

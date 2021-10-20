@@ -123,19 +123,6 @@ struct ExecutionStatus
 };
 
 
-template <typename LoggerT>
-void tryLogException(std::exception_ptr e, const LoggerT & logger, const std::string & start_of_message = "")
-{
-    try
-    {
-        std::rethrow_exception(std::move(e));
-    }
-    catch (...)
-    {
-        tryLogCurrentException(logger, start_of_message);
-    }
-}
-
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace = false);
 std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace);
 

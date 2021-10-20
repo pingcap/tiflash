@@ -45,11 +45,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
-        for (const auto & execution_summary : resp.execution_summaries())
+        for (auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
-                const auto & executor_id = execution_summary.executor_id();
+                auto & executor_id = execution_summary.executor_id();
                 execution_summaries[index][executor_id].time_processed_ns = execution_summary.time_processed_ns();
                 execution_summaries[index][executor_id].num_produced_rows = execution_summary.num_produced_rows();
                 execution_summaries[index][executor_id].num_iterations = execution_summary.num_iterations();
@@ -69,11 +69,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             return;
         }
         auto & execution_summaries_map = execution_summaries[index];
-        for (const auto & execution_summary : resp.execution_summaries())
+        for (auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
-                const auto & executor_id = execution_summary.executor_id();
+                auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
                     LOG_WARNING(log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
