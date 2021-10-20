@@ -217,19 +217,19 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 } // namespace PageMetaFormat
 
 // =========================================================
-// PageFile::MetaLinkingReader
+// PageFile::LinkingMetaAdapter
 // =========================================================
 
-PageFile::MetaLinkingReader::MetaLinkingReader(PageFile & page_file_)
+PageFile::LinkingMetaAdapter::LinkingMetaAdapter(PageFile & page_file_)
     : page_file(page_file_)
 {}
 
-PageFile::MetaLinkingReader::~MetaLinkingReader()
+PageFile::LinkingMetaAdapter::~LinkingMetaAdapter()
 {
     page_file.free(meta_buffer, meta_size);
 }
 
-bool PageFile::MetaLinkingReader::initialize()
+bool PageFile::LinkingMetaAdapter::initialize(const ReadLimiterPtr & read_limiter)
 {
     const auto path = page_file.metaPath();
 
@@ -252,27 +252,27 @@ bool PageFile::MetaLinkingReader::initialize()
     SCOPE_EXIT({ underlying_file->close(); });
 
     meta_buffer = (char *)page_file.alloc(meta_size);
-    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, nullptr);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter);
 
     return true;
 }
 
-PageFile::MetaLinkingReaderPtr PageFile::MetaLinkingReader::createFrom(PageFile & page_file)
+PageFile::LinkingMetaAdapterPtr PageFile::LinkingMetaAdapter::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter)
 {
-    auto reader = std::make_shared<PageFile::MetaLinkingReader>(page_file);
-    if (!reader->initialize())
+    auto reader = std::make_shared<PageFile::LinkingMetaAdapter>(page_file);
+    if (!reader->initialize(read_limiter))
     {
         return nullptr;
     }
     return reader;
 }
 
-bool PageFile::MetaLinkingReader::hasNext() const
+bool PageFile::LinkingMetaAdapter::hasNext() const
 {
     return meta_file_offset < meta_size;
 }
 
-void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
+void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
 {
     char * meta_data_end = meta_buffer + meta_size;
     char * pos = meta_buffer + meta_file_offset;
@@ -327,7 +327,7 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
     }
 
-    // change the wb checksum
+    // update the wb sequence id
     PageUtil::put<WriteBatch::SequenceID>(sequence_pos, sid);
     char * checksum_pos = meta_buffer + meta_file_offset;
     checksum_pos += wb_bytes_without_checksum;
@@ -404,6 +404,7 @@ void PageFile::MetaLinkingReader::linkToNewSequenceNext(WriteBatch::SequenceID s
         }
     }
 
+    // update the checksum since sequence id && page file id, level have been changed
     const auto new_checksum = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
     PageUtil::put<PageMetaFormat::Checksum>(checksum_pos, new_checksum);
 
@@ -681,11 +682,9 @@ PageFile::Writer::~Writer()
     closeFd();
 }
 
-void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
+void PageFile::Writer::hardlinkFrom(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
 {
-    char * linked_meta_data;
-    size_t linked_meta_size;
-    auto reader = PageFile::MetaLinkingReader::createFrom(linked_file);
+    auto reader = PageFile::LinkingMetaAdapter::createFrom(linked_file);
 
     if (!reader)
     {
@@ -703,11 +702,14 @@ void PageFile::Writer::pageFileLink(PageFile & linked_file, WriteBatch::Sequence
         reader->linkToNewSequenceNext(sid, edit, page_file.getFileId(), page_file.getLevel());
     }
 
+    char * linked_meta_data;
+    size_t linked_meta_size;
+
     std::tie(linked_meta_data, linked_meta_size) = reader->getMetaInfo();
 
-    PageUtil::writeFile(meta_file, 0, linked_meta_data, linked_meta_size, nullptr, false);
+    PageUtil::writeFile(meta_file, 0, linked_meta_data, linked_meta_size, nullptr);
     PageUtil::syncFile(meta_file);
-    data_file->hardLink(linked_file.dataPath().c_str());
+    data_file->hardLink(linked_file.dataPath());
 }
 
 
@@ -733,7 +735,6 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Wr
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-#ifndef NDEBUG
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
         PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, enable_failpoint);
         if (sync_on_write)
@@ -741,15 +742,6 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const Wr
     };
     write_buf(data_file, page_file.data_file_pos, data_buf, false);
     write_buf(meta_file, page_file.meta_file_pos, meta_buf, true);
-#else
-    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter);
-        if (sync_on_write)
-            PageUtil::syncFile(file);
-    };
-    write_buf(data_file, page_file.data_file_pos, data_buf);
-    write_buf(meta_file, page_file.meta_file_pos, meta_buf);
-#endif
 
     fiu_do_on(FailPoints::exception_before_page_file_write_sync,
               { // Mock that writing page file meta is not completed
@@ -1111,6 +1103,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
             LOG_INFO(log, "Broken page without data file, ignored: " + pf.dataPath());
             return {{}, Type::Invalid};
         }
+
         return {pf, Type::Formal};
     }
     else if (ss[0] == folder_prefix_checkpoint)
@@ -1121,7 +1114,6 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
             LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
             return {{}, Type::Invalid};
         }
-        pf.type = Type::Checkpoint;
 
         return {pf, Type::Checkpoint};
     }
@@ -1265,16 +1257,16 @@ size_t PageFile::setCheckpoint()
     return removeDataIfExists();
 }
 
-bool PageFile::linkPage(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
+bool PageFile::linkFrom(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit)
 {
     auto writer = this->createWriter(false, false);
     try
     {
         // FIXME : need test it with DataKeyManager
-        file_provider->linkEncryptionInfo(metaEncryptionPath(), page_file.metaEncryptionPath());
-        file_provider->linkEncryptionInfo(dataEncryptionPath(), page_file.dataEncryptionPath());
+        file_provider->linkEncryptionInfo(page_file.metaEncryptionPath(), metaEncryptionPath());
+        file_provider->linkEncryptionInfo(page_file.dataEncryptionPath(), dataEncryptionPath());
 
-        writer->pageFileLink(page_file, sid, edit);
+        writer->hardlinkFrom(page_file, sid, edit);
         setFileAppendPos(page_file.getMetaFileSize(), page_file.getDataFileSize());
 
         return true;

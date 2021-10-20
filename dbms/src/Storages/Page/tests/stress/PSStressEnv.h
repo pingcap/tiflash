@@ -66,7 +66,6 @@ struct StressEnv
     size_t read_delay_ms = 0;
     size_t num_writer_slots = 1;
     size_t avg_page_size_mb = 1;
-    size_t rand_seed = 0x123987;
     size_t status_interval = 1;
     size_t situation_mask = 0;
 
@@ -79,7 +78,7 @@ struct StressEnv
             "{{ "
             "num_writers: {}, num_readers: {}, clean_before_run: {}"
             ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
-            ", avg_page_size_mb: {}, rand_seed: {:08x} paths: [{}] failpoints: [{}]"
+            ", avg_page_size_mb: {}, paths: [{}], failpoints: [{}]"
             ", status_interval: {}, situation_mask : {}"
             " }}",
             num_writers,
@@ -89,7 +88,6 @@ struct StressEnv
             read_delay_ms,
             num_writer_slots,
             avg_page_size_mb,
-            rand_seed,
             fmt::join(paths.begin(), paths.end(), ","),
             fmt::join(failpoints.begin(), failpoints.end(), ","),
             status_interval,

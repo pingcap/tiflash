@@ -31,7 +31,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , aggregates_size(params.aggregates_size)
     , handler(*this)
     , processor(inputs, additional_input_at_end, max_threads, handler)
-    , log(getLogWithPrefix(log_))
+    , log(getMPPTaskLog(log_, getName()))
 {
     children = inputs;
     if (additional_input_at_end)

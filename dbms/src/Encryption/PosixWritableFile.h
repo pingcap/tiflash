@@ -49,7 +49,7 @@ public:
 
     int fsync() override;
 
-    void hardLink(const char * link_file) override;
+    void hardLink(const std::string & existing_file) override;
 
 private:
     void doOpenFile(bool truncate_when_exists_, int flags, mode_t mode);

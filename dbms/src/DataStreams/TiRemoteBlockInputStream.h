@@ -39,7 +39,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    const std::shared_ptr<LogWithPrefix> log;
+    const LogWithPrefixPtr log;
 
     uint64_t total_rows;
 
@@ -105,7 +105,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     bool fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult();
+        auto result = remote_reader->nextResult(block_queue, expected_types);
         if (result.meet_error)
         {
             LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
@@ -113,67 +113,39 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         }
         if (result.eof)
             return false;
-        if (result.resp->has_error())
+        if (result.resp != nullptr && result.resp->has_error())
         {
             LOG_WARNING(log, "remote reader meets error: " << result.resp->error().DebugString());
             throw Exception(result.resp->error().DebugString());
         }
-
-        if constexpr (is_streaming_reader)
+        /// only the last response contains execution summaries
+        if (result.resp != nullptr)
         {
-            addRemoteExecutionSummaries(*result.resp, result.call_index, true);
-        }
-        else
-        {
-            addRemoteExecutionSummaries(*result.resp, 0, false);
-        }
-
-        int chunk_size = result.resp->chunks_size();
-        if (chunk_size == 0)
-            return fetchRemoteResult();
-
-        for (int i = 0; i < chunk_size; i++)
-        {
-            Block block;
-            const tipb::Chunk & chunk = result.resp->chunks(i);
-            switch (result.resp->encode_type())
+            if constexpr (is_streaming_reader)
             {
-            case tipb::EncodeType::TypeCHBlock:
-                block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            case tipb::EncodeType::TypeChunk:
-                block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            case tipb::EncodeType::TypeDefault:
-                block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            default:
-                throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
+                addRemoteExecutionSummaries(*result.resp, result.call_index, true);
             }
-
-            total_rows += block.rows();
-
-            LOG_TRACE(
-                log,
-                fmt::format("recv {} rows from remote for {}, total recv row num: {}", block.rows(), result.req_info, total_rows));
-
-            if (unlikely(block.rows() == 0))
-                continue;
-            assertBlockSchema(expected_types, block, getName());
-            block_queue.push(std::move(block));
+            else
+            {
+                addRemoteExecutionSummaries(*result.resp, 0, false);
+            }
         }
-        if (block_queue.empty())
+        total_rows += result.rows;
+        LOG_TRACE(
+            log,
+            fmt::format("recv {} rows from remote for {}, total recv row num: {}", result.rows, result.req_info, total_rows));
+        if (result.rows == 0)
             return fetchRemoteResult();
         return true;
     }
 
 public:
-    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const LogWithPrefixPtr & log_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
         , execution_summaries_inited(source_num)
-        , log(getLogWithPrefix(log_, getName()))
+        , log(getMPPTaskLog(log_, getName()))
         , total_rows(0)
     {
         // generate sample block

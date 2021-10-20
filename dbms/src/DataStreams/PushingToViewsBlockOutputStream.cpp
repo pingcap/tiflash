@@ -5,11 +5,15 @@
 
 namespace DB
 {
-
 PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
-    const String & database, const String & table, const StoragePtr & storage,
-    const Context & context_, const ASTPtr & query_ptr_, bool no_destination)
-    : context(context_), query_ptr(query_ptr_)
+    const String & database,
+    const String & table,
+    const StoragePtr & storage,
+    const Context & context_,
+    const ASTPtr & query_ptr_,
+    bool no_destination)
+    : context(context_)
+    , query_ptr(query_ptr_)
 {
     /** TODO This is a very important line. At any insertion into the table one of streams should own lock.
       * Although now any insertion into the table is done via PushingToViewsBlockOutputStream,
@@ -36,7 +40,11 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
 
             auto query = materialized_view.getInnerQuery();
             BlockOutputStreamPtr out = std::make_shared<PushingToViewsBlockOutputStream>(
-                database_table.first, database_table.second, dependent_table, *views_context, ASTPtr());
+                database_table.first,
+                database_table.second,
+                dependent_table,
+                *views_context,
+                ASTPtr());
             views.emplace_back(ViewInfo{std::move(query), database_table.first, database_table.second, std::move(out)});
         }
     }
@@ -66,7 +74,10 @@ void PushingToViewsBlockOutputStream::write(const Block & block)
             /// even when only one block is inserted into the parent table (e.g. if the query is a GROUP BY
             /// and two-level aggregation is triggered).
             in = std::make_shared<SquashingBlockInputStream>(
-                in, context.getSettingsRef().min_insert_block_size_rows, context.getSettingsRef().min_insert_block_size_bytes);
+                in,
+                context.getSettingsRef().min_insert_block_size_rows,
+                context.getSettingsRef().min_insert_block_size_bytes,
+                nullptr);
 
             in->readPrefix();
 
@@ -83,4 +94,4 @@ void PushingToViewsBlockOutputStream::write(const Block & block)
     }
 }
 
-}
+} // namespace DB

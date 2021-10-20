@@ -207,7 +207,13 @@ TEST(PageFile_test, PageFileLink)
     ASSERT_GT(writer->write(batch, edit), 0);
     PageFile pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
     WriteBatch::SequenceID sid = 100;
+<<<<<<< HEAD
     ASSERT_TRUE(pf1.linkPage(pf0, sid, edit));
+=======
+    ASSERT_TRUE(pf1.linkFrom(pf0, sid, edit));
+
+    pf0.destroy();
+>>>>>>> master
 
     auto reader = PageFile::MetaMergingReader::createFrom(pf1);
     while (reader->hasNext())
@@ -217,6 +223,11 @@ TEST(PageFile_test, PageFileLink)
 
     auto sequence = reader->writeBatchSequence();
     ASSERT_EQ(sequence, sid);
+<<<<<<< HEAD
+=======
+    ASSERT_EQ(reader->fileIdLevel().first, page_id);
+    ASSERT_EQ(reader->fileIdLevel().second, 1);
+>>>>>>> master
 }
 
 TEST(PageFile_test, EncryptedPageFileLink)
@@ -260,7 +271,9 @@ TEST(PageFile_test, EncryptedPageFileLink)
     ASSERT_GT(writer->write(batch, edit), 0);
     PageFile pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
     WriteBatch::SequenceID sid = 100;
-    ASSERT_TRUE(pf1.linkPage(pf0, sid, edit));
+    ASSERT_TRUE(pf1.linkFrom(pf0, sid, edit));
+
+    pf0.destroy();
 
     auto reader = PageFile::MetaMergingReader::createFrom(pf1);
     while (reader->hasNext())
@@ -270,6 +283,8 @@ TEST(PageFile_test, EncryptedPageFileLink)
 
     auto sequence = reader->writeBatchSequence();
     ASSERT_EQ(sequence, sid);
+    ASSERT_EQ(reader->fileIdLevel().first, page_id);
+    ASSERT_EQ(reader->fileIdLevel().second, 1);
 }
 
 } // namespace tests

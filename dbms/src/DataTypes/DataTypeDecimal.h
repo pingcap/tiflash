@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ARGUMENT_OUT_OF_BOUND;
@@ -43,9 +42,13 @@ public:
     static constexpr size_t maxPrecision() { return maxDecimalPrecision<T>(); }
 
     // If scale is omitted, the default is 0. If precision is omitted, the default is 10.
-    DataTypeDecimal() : DataTypeDecimal(10, 0) {}
+    DataTypeDecimal()
+        : DataTypeDecimal(10, 0)
+    {}
 
-    DataTypeDecimal(size_t precision_, size_t scale_) : precision(precision_), scale(scale_)
+    DataTypeDecimal(size_t precision_, size_t scale_)
+        : precision(precision_)
+        , scale(scale_)
     {
         if (precision > decimal_max_prec || scale > precision || scale > decimal_max_scale)
         {
@@ -129,7 +132,7 @@ public:
     template <typename U>
     typename T::NativeType scaleFactorFor(const DataTypeDecimal<U> & x) const
     {
-        if (scale < x.getScale())
+        if (getScale() < x.getScale())
         {
             return 1;
         }
@@ -164,8 +167,8 @@ inline DataTypePtr createDecimal(UInt64 prec, UInt64 scale)
 
     if (static_cast<UInt64>(scale) > prec)
         throw Exception("Negative scales and scales larger than precision are not supported. precision:" + DB::toString(prec)
-                + ", scale:" + DB::toString(scale),
-            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                            + ", scale:" + DB::toString(scale),
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (prec <= maxDecimalPrecision<Decimal32>())
     {
@@ -195,7 +198,8 @@ inline bool IsDecimalDataType(const DataTypePtr & type)
 }
 template <typename T, typename U>
 typename std::enable_if_t<(sizeof(T) >= sizeof(U)), const DataTypeDecimal<T>> decimalResultType(
-    const DataTypeDecimal<T> & tx, const DataTypeDecimal<U> & ty)
+    const DataTypeDecimal<T> & tx,
+    const DataTypeDecimal<U> & ty)
 {
     UInt32 scale = (tx.getScale() > ty.getScale() ? tx.getScale() : ty.getScale());
     return DataTypeDecimal<T>(maxDecimalPrecision<T>(), scale);
@@ -203,7 +207,8 @@ typename std::enable_if_t<(sizeof(T) >= sizeof(U)), const DataTypeDecimal<T>> de
 
 template <typename T, typename U>
 typename std::enable_if_t<(sizeof(T) < sizeof(U)), const DataTypeDecimal<U>> decimalResultType(
-    const DataTypeDecimal<T> & tx, const DataTypeDecimal<U> & ty)
+    const DataTypeDecimal<T> & tx,
+    const DataTypeDecimal<U> & ty)
 {
     UInt32 scale = (tx.getScale() > ty.getScale() ? tx.getScale() : ty.getScale());
     return DataTypeDecimal<U>(maxDecimalPrecision<U>(), scale);
@@ -239,24 +244,24 @@ inline UInt32 leastDecimalPrecisionFor(TypeIndex int_type)
 {
     switch (int_type)
     {
-        case TypeIndex::Int8:
-            [[fallthrough]];
-        case TypeIndex::UInt8:
-            return 3;
-        case TypeIndex::Int16:
-            [[fallthrough]];
-        case TypeIndex::UInt16:
-            return 5;
-        case TypeIndex::Int32:
-            [[fallthrough]];
-        case TypeIndex::UInt32:
-            return 10;
-        case TypeIndex::Int64:
-            return 19;
-        case TypeIndex::UInt64:
-            return 20;
-        default:
-            break;
+    case TypeIndex::Int8:
+        [[fallthrough]];
+    case TypeIndex::UInt8:
+        return 3;
+    case TypeIndex::Int16:
+        [[fallthrough]];
+    case TypeIndex::UInt16:
+        return 5;
+    case TypeIndex::Int32:
+        [[fallthrough]];
+    case TypeIndex::UInt32:
+        return 10;
+    case TypeIndex::Int64:
+        return 19;
+    case TypeIndex::UInt64:
+        return 20;
+    default:
+        break;
     }
     return 0;
 }

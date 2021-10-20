@@ -183,19 +183,21 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
                 if (!option.ignore_checkpoint)
                     page_files.insert(page_file);
             }
-            else
+            else if (page_file_type == PageFile::Type::Temp)
             {
-                // For Temp and Invalid
                 if (option.remove_tmp_files)
                 {
-                    if (page_file_type == PageFile::Type::Temp)
-                    {
-                        page_file.deleteEncryptionInfo();
-                    }
-                    // Remove temp and invalid file.
+                    page_file.deleteEncryptionInfo();
+                    // Remove temp files.
                     if (Poco::File file(directory + "/" + name); file.exists())
                         file.remove(true);
                 }
+            }
+            else
+            {
+                // Remove invalid files.
+                if (Poco::File file(directory + "/" + name); option.remove_invalid_files && file.exists())
+                    file.remove(true);
             }
         }
     }
@@ -252,6 +254,7 @@ void PageStorage::restore()
 #endif
     opt.ignore_legacy = false;
     opt.ignore_checkpoint = false;
+    opt.remove_invalid_files = true;
     PageFileSet page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     /// Restore current version from both formal and legacy page files
@@ -350,7 +353,9 @@ void PageStorage::restore()
         for (auto & pf : page_files_to_remove)
             LOG_TRACE(log, storage_name << pf.toString());
 #else
-        archivePageFiles(page_files_to_remove);
+        // when restore `PageStorage`, the `PageFile` in `page_files_to_remove` is not counted in the total size,
+        // so no need to remove its' size here again.
+        archivePageFiles(page_files_to_remove, false);
 #endif
         removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool { return page_files_to_remove.count(pf) > 0; });
     }
@@ -363,11 +368,12 @@ void PageStorage::restore()
         // Only insert location of PageFile when it storing delta data
         for (auto & page_file : page_files)
         {
+            // Checkpoint file is always stored on `delegator`'s default path, so no need to insert it's location here
             size_t idx_in_delta_paths = delegator->addPageFileUsedSize(
                 page_file.fileIdLevel(),
                 page_file.getDiskSize(),
                 page_file.parentPath(),
-                /*need_insert_location*/ true);
+                /*need_insert_location*/ page_file.getType() != PageFile::Type::Checkpoint);
             // Try best to reuse writable page files
             if (page_file.reusableForWrite() && isPageFileSizeFitsWritable(page_file, config))
             {
@@ -838,10 +844,15 @@ void PageStorage::drop()
     opt.ignore_checkpoint = false;
     opt.ignore_legacy = false;
     opt.remove_tmp_files = false;
+    opt.remove_invalid_files = false;
     auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     for (const auto & page_file : page_files)
-        delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize(), false);
+    {
+        // All checkpoint file is stored on `delegator`'s default path and we didn't record it's location as other types of PageFile,
+        // so we need set `remove_from_default_path` to true to distinguish this situation.
+        delegator->removePageFile(page_file.fileIdLevel(), page_file.getDiskSize(), /*meta_left*/ false, /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
+    }
 
     /// FIXME: Note that these drop directories actions are not atomic, may leave some broken files on disk.
 
@@ -970,6 +981,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
     }
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
+    opt.remove_invalid_files = false;
     auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
     if (unlikely(page_files.empty()))
     {
@@ -1127,7 +1139,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
         PageFileSet page_files_to_archive;
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
             = compactor.tryCompact(std::move(page_files), writing_files_snapshot);
-        archivePageFiles(page_files_to_archive);
+        archivePageFiles(page_files_to_archive, true);
         gc_context.num_files_archive_in_compact_legacy = page_files_to_archive.size();
     }
 
@@ -1173,7 +1185,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
     return gc_context.compact_result.do_compaction;
 }
 
-void PageStorage::archivePageFiles(const PageFileSet & page_files)
+void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_size)
 {
     const Poco::Path archive_path(delegator->defaultPath(), PageStorage::ARCHIVE_SUBDIR);
     Poco::File archive_dir(archive_path);
@@ -1193,11 +1205,13 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
             if (Poco::File file(path); file.exists())
             {
                 // To ensure the atomic of deletion, move to the `archive` dir first and then remove the PageFile dir.
-                auto file_size = page_file.getDiskSize();
+                auto file_size = remove_size ? page_file.getDiskSize() : 0;
                 file.moveTo(dest);
                 file.remove(true);
                 page_file.deleteEncryptionInfo();
-                delegator->removePageFile(page_file.fileIdLevel(), file_size, false);
+                // All checkpoint file is stored on `delegator`'s default path and we didn't record it's location as other types of PageFile,
+                // so we need set `remove_from_default_path` to true to distinguish this situation.
+                delegator->removePageFile(page_file.fileIdLevel(), file_size, /*meta_left*/ false, /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
             }
         }
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
@@ -1266,7 +1280,9 @@ PageStorage::gcRemoveObsoleteData(PageFileSet & page_files,
             // Don't touch the <file_id, level> that are used for the sorting then you could
             // work around by using a const_cast
             size_t bytes_removed = const_cast<PageFile &>(page_file).setLegacy();
-            delegator->removePageFile(page_id_and_lvl, bytes_removed, true);
+            // All checkpoint file is stored on `delegator`'s default path and we didn't record it's location as other types of PageFile,
+            // so we need set `remove_from_default_path` to true to distinguish this situation.
+            delegator->removePageFile(page_id_and_lvl, bytes_removed, /*meta_left*/ true, /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
             num_data_removed += 1;
         }
     }
