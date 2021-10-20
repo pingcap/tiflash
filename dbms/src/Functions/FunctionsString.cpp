@@ -163,10 +163,10 @@ using ConstPtr = T const *;
 // there is a bug in tree-optimizer for GCC < 7.3.1,
 // which will result in wrong code generation for avx512.
 #ifdef __GNUC__
-#define TIFLASH_UPPER_LOWER_ASCII_NO_FALLBACK \
+#define TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT \
     (__GNUC_PREREQ(7, 4) || (__GNUC_PREREQ(7, 3) && __GNUC_PATCHLEVEL__ >= 1))
 #else
-#define TIFLASH_UPPER_LOWER_ASCII_FALLBACK 0
+#define TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT 1
 #endif
 
 TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
@@ -179,7 +179,7 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
      const ConstPtr<UInt8> src_end,
      Ptr<UInt8> dst),
     {
-#if TIFLASH_UPPER_LOWER_ASCII_NO_FALLBACK
+#if TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT
         for (; src < src_end; ++src, ++dst)
             if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
                 *dst = *src ^ flip_case_mask;
