@@ -11,9 +11,13 @@
 #include <Poco/UTF8Encoding.h>
 #include <Poco/Unicode.h>
 
-
 namespace DB
 {
+namespace tests
+{
+class StringsLowerUpperUtf8_Simple_Test;
+class StringsLowerUpperUtf8_Random_Test;
+} // namespace tests
 namespace ErrorCodes
 {
 extern const int ILLEGAL_COLUMN;
@@ -120,13 +124,13 @@ struct LowerUpperUTF8Impl
      *    `src` and `dst` are incremented by corresponding sequence lengths. */
     static void toCase(const UInt8 *& src, const UInt8 * src_end, UInt8 *& dst);
 
-#ifndef TIFLASH_GTEST_STRINGS_FLIP_CASE
 private:
-#endif
     static constexpr auto ascii_upper_bound = '\x7f';
     static constexpr auto flip_case_mask = 'A' ^ 'a';
-
     static void array(const UInt8 * src, const UInt8 * src_end, UInt8 * dst);
+
+    friend ::DB::tests::StringsLowerUpperUtf8_Simple_Test;
+    friend ::DB::tests::StringsLowerUpperUtf8_Random_Test;
 };
 
 

@@ -7,7 +7,6 @@
 #if __SSE2__
 #include <emmintrin.h>
 #endif
-#define TIFLASH_GTEST_STRINGS_FLIP_CASE
 #include <Functions/FunctionsString.h>
 
 namespace DB
