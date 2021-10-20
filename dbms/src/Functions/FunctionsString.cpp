@@ -2305,7 +2305,7 @@ class FunctionTiDBTrim : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit FunctionTiDBTrim() {}
+    FunctionTiDBTrim() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<FunctionTiDBTrim>();
@@ -2349,24 +2349,25 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    static constexpr Int8 trim_both_default = 0; // trims from both direction by default
-    static constexpr Int8 trim_both = 1; // trims from both direction with explicit notation
-    static constexpr Int8 trim_leading = 2; // trims from left
-    static constexpr Int8 trim_trailing = 3; // trims from right
-
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        if (arguments.size() == 1)
+        switch (arguments.size())
+        {
+        case 1:
             executeTrim(block, arguments, result);
-        else if (arguments.size() == 2)
+            break;
+        case 2:
             executeTrim2Args(ltrim, rtrim, block, arguments, result);
-        else if (arguments.size() == 3)
+            break;
+        case 3:
             executeTrim3Args(block, arguments, result);
-        else
+            break;
+        default:
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
                     + ", should beat least 1.",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
     }
 
 private:
@@ -2377,7 +2378,7 @@ private:
 
         const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
-        std::string default_rem = " ";
+        static const std::string default_rem = " ";
         vectorConst(true, true, data_col->getChars(), data_col->getOffsets(), (UInt8 *)default_rem.c_str(), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
 
         block.getByPosition(result).column = std::move(res_col);
@@ -2427,6 +2428,10 @@ private:
             throw Exception("3nd argument of function " + getName() + " must be constant.");
         const ColumnConst * direction_col_int8 = checkAndGetColumnConst<ColumnInt8>(column_direction.get());
 
+        static constexpr Int8 trim_both_default = 0; // trims from both direction by default
+        static constexpr Int8 trim_both = 1; // trims from both direction with explicit notation
+        static constexpr Int8 trim_leading = 2; // trims from left
+        static constexpr Int8 trim_trailing = 3; // trims from right
         int8_t direction = direction_col_int8->getValue<Int8>();
         switch (direction)
         {
