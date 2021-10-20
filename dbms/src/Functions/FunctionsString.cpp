@@ -1,4 +1,5 @@
 #include <Columns/ColumnArray.h>
+#include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/Volnitsky.h>
 #include <Core/AccurateComparison.h>
@@ -21,11 +22,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
 #include <thread>
-
-#if __SSE2__
-#include <emmintrin.h>
-#endif
-
 
 namespace DB
 {
@@ -156,6 +152,50 @@ struct LengthUTF8Impl
     }
 };
 
+namespace
+{
+template <class T>
+using Ptr = T *;
+
+template <class T>
+using ConstPtr = T const *;
+
+// there is a bug in tree-optimizer for GCC < 7.3.1,
+// which will result in wrong code generation for avx512.
+#ifdef __GNUC__
+#define TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT \
+    (__GNUC_PREREQ(7, 4) || (__GNUC_PREREQ(7, 3) && __GNUC_PATCHLEVEL__ >= 1))
+#else
+#define TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT 1
+#endif
+
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (char not_case_lower_bound, char not_case_upper_bound, char flip_case_mask),
+    (not_case_lower_bound, not_case_upper_bound, flip_case_mask),
+    void,
+    lowerUpperAsciiArrayImpl,
+    (src, src_end, dst),
+    (ConstPtr<UInt8> src,
+     const ConstPtr<UInt8> src_end,
+     Ptr<UInt8> dst),
+    {
+#if TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT
+        for (; src < src_end; ++src, ++dst)
+            if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
+                *dst = *src ^ flip_case_mask;
+            else
+                *dst = *src;
+#else
+        static constexpr UInt8 mask_shift = __builtin_ctz(flip_case_mask);
+        for (; src < src_end; ++src, ++dst)
+        {
+            auto data = static_cast<UInt8>(*src <= not_case_upper_bound)
+                & static_cast<UInt8>(*src >= not_case_lower_bound);
+            *dst = *src ^ (data << mask_shift);
+        }
+#endif
+    })
+} // namespace
 
 template <char not_case_lower_bound, char not_case_upper_bound>
 struct LowerUpperImpl
@@ -179,41 +219,8 @@ struct LowerUpperImpl
 private:
     static void array(const UInt8 * src, const UInt8 * src_end, UInt8 * dst)
     {
-        const auto flip_case_mask = 'A' ^ 'a';
-
-#if __SSE2__
-        const auto bytes_sse = sizeof(__m128i);
-        const auto src_end_sse = src_end - (src_end - src) % bytes_sse;
-
-        const auto v_not_case_lower_bound = _mm_set1_epi8(not_case_lower_bound - 1);
-        const auto v_not_case_upper_bound = _mm_set1_epi8(not_case_upper_bound + 1);
-        const auto v_flip_case_mask = _mm_set1_epi8(flip_case_mask);
-
-        for (; src < src_end_sse; src += bytes_sse, dst += bytes_sse)
-        {
-            /// load 16 sequential 8-bit characters
-            const auto chars = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src));
-
-            /// find which 8-bit sequences belong to range [case_lower_bound, case_upper_bound]
-            const auto is_not_case
-                = _mm_and_si128(_mm_cmpgt_epi8(chars, v_not_case_lower_bound), _mm_cmplt_epi8(chars, v_not_case_upper_bound));
-
-            /// keep `flip_case_mask` only where necessary, zero out elsewhere
-            const auto xor_mask = _mm_and_si128(v_flip_case_mask, is_not_case);
-
-            /// flip case by applying calculated mask
-            const auto cased_chars = _mm_xor_si128(chars, xor_mask);
-
-            /// store result back to destination
-            _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), cased_chars);
-        }
-#endif
-
-        for (; src < src_end; ++src, ++dst)
-            if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
-                *dst = *src ^ flip_case_mask;
-            else
-                *dst = *src;
+        static constexpr auto flip_case_mask = 'A' ^ 'a';
+        lowerUpperAsciiArrayImpl<not_case_lower_bound, not_case_upper_bound, flip_case_mask>(src, src_end, dst);
     }
 };
 
@@ -349,14 +356,18 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
           reinterpret_cast<UInt8 *>(&res_data[0]));
 }
 
+namespace
+{
 template <char not_case_lower_bound,
           char not_case_upper_bound,
+          char ascii_upper_bound,
+          char flip_case_mask,
           int to_case(int),
-          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::toCase(
-    const UInt8 *& src,
-    const UInt8 * src_end,
-    UInt8 *& dst)
+          void cyrillic_to_case(ConstPtr<UInt8> &, Ptr<UInt8> &)>
+__attribute__((always_inline)) inline void toCaseImpl(
+    ConstPtr<UInt8> & src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> & dst)
 {
     if (src[0] <= ascii_upper_bound)
     {
@@ -396,79 +407,191 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
+          char ascii_upper_bound,
+          char flip_case_mask,
+          int to_case(int)>
+__attribute__((always_inline)) inline void toCaseImplTiDB(
+    ConstPtr<UInt8> & src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> & dst)
+{
+    if (src[0] <= ascii_upper_bound)
+    {
+        if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
+            *dst++ = *src++ ^ flip_case_mask;
+        else
+            *dst++ = *src++;
+    }
+    else
+    {
+        static const Poco::UTF8Encoding utf8;
+
+        if (const auto chars = utf8.convert(to_case(utf8.convert(src)), dst, src_end - src))
+            src += chars, dst += chars;
+        else
+            ++src, ++dst;
+    }
+}
+
+} // namespace
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int),
+          void cyrillic_to_case(ConstPtr<UInt8> &, Ptr<UInt8> &)>
+void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::toCase(
+    ConstPtr<UInt8> & src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> & dst)
+{
+    toCaseImpl<
+        not_case_lower_bound,
+        not_case_upper_bound,
+        ascii_upper_bound,
+        flip_case_mask,
+        to_case,
+        cyrillic_to_case>(src, src_end, dst);
+}
+
+namespace
+{
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (char not_case_lower_bound,
+     char not_case_upper_bound,
+     char ascii_upper_bound,
+     char flip_case_mask,
+     int to_case(int),
+     void cyrillic_to_case(const UInt8 *&, UInt8 *&)),
+    (not_case_lower_bound,
+     not_case_upper_bound,
+     ascii_upper_bound,
+     flip_case_mask,
+     to_case,
+     cyrillic_to_case),
+    void,
+    lowerUpperUTF8ArrayImpl,
+    (src, src_end, dst),
+    (ConstPtr<UInt8> & src,
+     const ConstPtr<UInt8> src_end,
+     Ptr<UInt8> & dst),
+    {
+        static const auto flip_mask = SimdWord::fromSingle<int8_t>(flip_case_mask);
+        while (src + WORD_SIZE < src_end)
+        {
+            auto word = SimdWord::fromUnaligned(src);
+            auto ascii_check = SimdWord{};
+            ascii_check.as_int8 = word.as_int8 >= 0;
+            if (ascii_check.isByteAllMarked())
+            {
+                auto range_check = SimdWord{};
+                auto selected = SimdWord{};
+                range_check.as_int8 = (word.as_int8 >= not_case_lower_bound) & (word.as_int8 <= not_case_upper_bound);
+                selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
+                word.as_int8 ^= selected.as_int8;
+                word.toUnaligned(dst);
+                src += WORD_SIZE;
+                dst += WORD_SIZE;
+            }
+            else
+            {
+                auto expected_end = src + WORD_SIZE;
+                while (src < expected_end)
+                {
+                    toCaseImpl<
+                        not_case_lower_bound,
+                        not_case_upper_bound,
+                        ascii_upper_bound,
+                        flip_case_mask,
+                        to_case,
+                        cyrillic_to_case>(src, src_end, dst);
+                }
+            }
+        }
+        while (src < src_end)
+            toCaseImpl<
+                not_case_lower_bound,
+                not_case_upper_bound,
+                ascii_upper_bound,
+                flip_case_mask,
+                to_case,
+                cyrillic_to_case>(src, src_end, dst);
+    })
+
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (char not_case_lower_bound,
+     char not_case_upper_bound,
+     char ascii_upper_bound,
+     char flip_case_mask,
+     int to_case(int)),
+    (not_case_lower_bound,
+     not_case_upper_bound,
+     ascii_upper_bound,
+     flip_case_mask,
+     to_case),
+    void,
+    lowerUpperUTF8ArrayImplTiDB,
+    (src, src_end, dst),
+    (ConstPtr<UInt8> & src,
+     const ConstPtr<UInt8> src_end,
+     Ptr<UInt8> & dst),
+    {
+        static const auto flip_mask = SimdWord::fromSingle<int8_t>(flip_case_mask);
+        while (src + WORD_SIZE < src_end)
+        {
+            auto word = SimdWord::fromUnaligned(src);
+            auto ascii_check = SimdWord{};
+            ascii_check.as_int8 = word.as_int8 >= 0;
+            if (ascii_check.isByteAllMarked())
+            {
+                auto range_check = SimdWord{};
+                auto selected = SimdWord{};
+                range_check.as_int8 = (word.as_int8 >= not_case_lower_bound) & (word.as_int8 <= not_case_upper_bound);
+                selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
+                word.as_int8 ^= selected.as_int8;
+                word.toUnaligned(dst);
+                src += WORD_SIZE;
+                dst += WORD_SIZE;
+            }
+            else
+            {
+                auto expected_end = src + WORD_SIZE;
+                while (src < expected_end)
+                {
+                    toCaseImplTiDB<
+                        not_case_lower_bound,
+                        not_case_upper_bound,
+                        ascii_upper_bound,
+                        flip_case_mask,
+                        to_case>(src, src_end, dst);
+                }
+            }
+        }
+        while (src < src_end)
+            toCaseImplTiDB<
+                not_case_lower_bound,
+                not_case_upper_bound,
+                ascii_upper_bound,
+                flip_case_mask,
+                to_case>(src, src_end, dst);
+    })
+} // namespace
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
           int to_case(int),
           void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
 void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::array(
-    const UInt8 * src,
-    const UInt8 * src_end,
-    UInt8 * dst)
+    ConstPtr<UInt8> src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> dst)
 {
-#if __SSE2__
-    const auto bytes_sse = sizeof(__m128i);
-    auto src_end_sse = src + (src_end - src) / bytes_sse * bytes_sse;
-
-    /// SSE2 packed comparison operate on signed types, hence compare (c < 0) instead of (c > 0x7f)
-    const auto v_zero = _mm_setzero_si128();
-    const auto v_not_case_lower_bound = _mm_set1_epi8(not_case_lower_bound - 1);
-    const auto v_not_case_upper_bound = _mm_set1_epi8(not_case_upper_bound + 1);
-    const auto v_flip_case_mask = _mm_set1_epi8(flip_case_mask);
-
-    while (src < src_end_sse)
-    {
-        const auto chars = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src));
-
-        /// check for ASCII
-        const auto is_not_ascii = _mm_cmplt_epi8(chars, v_zero);
-        const auto mask_is_not_ascii = _mm_movemask_epi8(is_not_ascii);
-
-        /// ASCII
-        if (mask_is_not_ascii == 0)
-        {
-            const auto is_not_case
-                = _mm_and_si128(_mm_cmpgt_epi8(chars, v_not_case_lower_bound), _mm_cmplt_epi8(chars, v_not_case_upper_bound));
-            const auto mask_is_not_case = _mm_movemask_epi8(is_not_case);
-
-            /// everything in correct case ASCII
-            if (mask_is_not_case == 0)
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), chars);
-            else
-            {
-                /// ASCII in mixed case
-                /// keep `flip_case_mask` only where necessary, zero out elsewhere
-                const auto xor_mask = _mm_and_si128(v_flip_case_mask, is_not_case);
-
-                /// flip case by applying calculated mask
-                const auto cased_chars = _mm_xor_si128(chars, xor_mask);
-
-                /// store result back to destination
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), cased_chars);
-            }
-
-            src += bytes_sse, dst += bytes_sse;
-        }
-        else
-        {
-            /// UTF-8
-            const auto expected_end = src + bytes_sse;
-
-            while (src < expected_end)
-                toCase(src, src_end, dst);
-
-            /// adjust src_end_sse by pushing it forward or backward
-            const auto diff = src - expected_end;
-            if (diff != 0)
-            {
-                if (src_end_sse + diff < src_end)
-                    src_end_sse += diff;
-                else
-                    src_end_sse -= bytes_sse - diff;
-            }
-        }
-    }
-#endif
-    /// handle remaining symbols
-    while (src < src_end)
-        toCase(src, src_end, dst);
+    lowerUpperUTF8ArrayImpl<
+        not_case_lower_bound,
+        not_case_upper_bound,
+        ascii_upper_bound,
+        flip_case_mask,
+        to_case,
+        cyrillic_to_case>(src, src_end, dst);
 }
 
 template <char not_case_lower_bound,
@@ -518,22 +641,12 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
     const UInt8 * src_end,
     UInt8 *& dst)
 {
-    if (src[0] <= ascii_upper_bound)
-    {
-        if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
-            *dst++ = *src++ ^ flip_case_mask;
-        else
-            *dst++ = *src++;
-    }
-    else
-    {
-        static const Poco::UTF8Encoding utf8;
-
-        if (const auto chars = utf8.convert(to_case(utf8.convert(src)), dst, src_end - src))
-            src += chars, dst += chars;
-        else
-            ++src, ++dst;
-    }
+    toCaseImplTiDB<
+        not_case_lower_bound,
+        not_case_upper_bound,
+        ascii_upper_bound,
+        flip_case_mask,
+        to_case>(src, src_end, dst);
 }
 
 template <char not_case_lower_bound,
@@ -544,72 +657,12 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
     const UInt8 * src_end,
     UInt8 * dst)
 {
-#if __SSE2__
-    const auto bytes_sse = sizeof(__m128i);
-    auto src_end_sse = src + (src_end - src) / bytes_sse * bytes_sse;
-
-    /// SSE2 packed comparison operate on signed types, hence compare (c < 0) instead of (c > 0x7f)
-    const auto v_zero = _mm_setzero_si128();
-    const auto v_not_case_lower_bound = _mm_set1_epi8(not_case_lower_bound - 1);
-    const auto v_not_case_upper_bound = _mm_set1_epi8(not_case_upper_bound + 1);
-    const auto v_flip_case_mask = _mm_set1_epi8(flip_case_mask);
-
-    while (src < src_end_sse)
-    {
-        const auto chars = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src));
-
-        /// check for ASCII
-        const auto is_not_ascii = _mm_cmplt_epi8(chars, v_zero);
-        const auto mask_is_not_ascii = _mm_movemask_epi8(is_not_ascii);
-
-        /// ASCII
-        if (mask_is_not_ascii == 0)
-        {
-            const auto is_not_case
-                = _mm_and_si128(_mm_cmpgt_epi8(chars, v_not_case_lower_bound), _mm_cmplt_epi8(chars, v_not_case_upper_bound));
-            const auto mask_is_not_case = _mm_movemask_epi8(is_not_case);
-
-            /// everything in correct case ASCII
-            if (mask_is_not_case == 0)
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), chars);
-            else
-            {
-                /// ASCII in mixed case
-                /// keep `flip_case_mask` only where necessary, zero out elsewhere
-                const auto xor_mask = _mm_and_si128(v_flip_case_mask, is_not_case);
-
-                /// flip case by applying calculated mask
-                const auto cased_chars = _mm_xor_si128(chars, xor_mask);
-
-                /// store result back to destination
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), cased_chars);
-            }
-
-            src += bytes_sse, dst += bytes_sse;
-        }
-        else
-        {
-            /// UTF-8
-            const auto expected_end = src + bytes_sse;
-
-            while (src < expected_end)
-                toCase(src, src_end, dst);
-
-            /// adjust src_end_sse by pushing it forward or backward
-            const auto diff = src - expected_end;
-            if (diff != 0)
-            {
-                if (src_end_sse + diff < src_end)
-                    src_end_sse += diff;
-                else
-                    src_end_sse -= bytes_sse - diff;
-            }
-        }
-    }
-#endif
-    /// handle remaining symbols
-    while (src < src_end)
-        toCase(src, src_end, dst);
+    lowerUpperUTF8ArrayImplTiDB<
+        not_case_lower_bound,
+        not_case_upper_bound,
+        ascii_upper_bound,
+        flip_case_mask,
+        to_case>(src, src_end, dst);
 }
 
 /** If the string is encoded in UTF-8, then it selects a substring of code points in it.
@@ -3873,6 +3926,11 @@ using FunctionConcat = ConcatImpl<NameConcat, false>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
 using FunctionFormat = FormatImpl<NameFormat, FormatWithEnUS>;
 
+// export for tests
+template struct LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>;
+template struct LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>;
+template struct LowerUpperImpl<'A', 'Z'>;
+template struct LowerUpperImpl<'a', 'z'>;
 
 void registerFunctionsString(FunctionFactory & factory)
 {
