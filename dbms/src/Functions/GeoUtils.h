@@ -1,10 +1,11 @@
 #pragma once
-#include <Core/Types.h>
-#include <Core/Defines.h>
-#include <Columns/IColumn.h>
 #include <Columns/ColumnVector.h>
-#include <Core/TypeListNumber.h>
+#include <Columns/IColumn.h>
 #include <Common/typeid_cast.h>
+#include <Core/Defines.h>
+#include <Core/TypeListNumber.h>
+#include <Core/Types.h>
+
 #include <ext/range.h>
 
 /// Warning in boost::geometry during template strategy substitution.
@@ -21,25 +22,25 @@
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
 
 #include <boost/geometry.hpp>
+#include <boost/geometry/algorithms/comparable_distance.hpp>
+#include <boost/geometry/geometries/multi_polygon.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
-#include <boost/geometry/geometries/multi_polygon.hpp>
 #include <boost/geometry/geometries/segment.hpp>
-#include <boost/geometry/algorithms/comparable_distance.hpp>
 #include <boost/geometry/strategies/cartesian/distance_pythagoras.hpp>
 
 #pragma GCC diagnostic pop
 
-#include <array>
-#include <vector>
-#include <iterator>
-#include <cmath>
-#include <algorithm>
 #include <IO/WriteBufferFromString.h>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <iterator>
+#include <vector>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -48,8 +49,6 @@ extern const int LOGICAL_ERROR;
 
 namespace GeoUtils
 {
-
-
 template <typename Polygon>
 UInt64 getPolygonAllocatedBytes(const Polygon & polygon)
 {
@@ -58,7 +57,9 @@ UInt64 getPolygonAllocatedBytes(const Polygon & polygon)
     using RingType = typename Polygon::ring_type;
     using ValueType = typename RingType::value_type;
 
-    auto sizeOfRing = [](const RingType & ring) { return sizeof(ring) + ring.capacity() * sizeof(ValueType); };
+    auto sizeOfRing = [](const RingType & ring) {
+        return sizeof(ring) + ring.capacity() * sizeof(ValueType);
+    };
 
     size += sizeOfRing(polygon.outer());
 
@@ -94,7 +95,9 @@ public:
     using Segment = boost::geometry::model::segment<Point>;
 
     explicit PointInPolygonWithGrid(const Polygon & polygon, UInt16 grid_size = 8)
-            : grid_size(std::max<UInt16>(1, grid_size)), polygon(polygon) {}
+        : grid_size(std::max<UInt16>(1, grid_size))
+        , polygon(polygon)
+    {}
 
     void init();
 
@@ -166,7 +169,10 @@ private:
     void calcGridAttributes(Box & box);
 
     template <typename T>
-    T ALWAYS_INLINE getCellIndex(T row, T col) const { return row * grid_size + col; }
+    T ALWAYS_INLINE getCellIndex(T row, T col) const
+    {
+        return row * grid_size + col;
+    }
 
     /// Complex case. Will check intersection directly.
     inline void addComplexPolygonCell(size_t index, const Box & box);
@@ -215,7 +221,7 @@ void PointInPolygonWithGrid<CoordinateType>::init()
 
 template <typename CoordinateType>
 void PointInPolygonWithGrid<CoordinateType>::calcGridAttributes(
-        PointInPolygonWithGrid<CoordinateType>::Box & box)
+    PointInPolygonWithGrid<CoordinateType>::Box & box)
 {
     boost::geometry::envelope(polygon, box);
 
@@ -303,29 +309,28 @@ bool PointInPolygonWithGrid<CoordinateType>::contains(CoordinateType x, Coordina
 
     switch (cell.type)
     {
-        case CellType::inner:
-            return true;
-        case CellType::outer:
-            return false;
-        case CellType::singleLine:
-            return cell.half_planes[0].contains(x, y);
-        case CellType::pairOfLinesSinglePolygon:
-            return cell.half_planes[0].contains(x, y) && cell.half_planes[1].contains(x, y);
-        case CellType::pairOfLinesDifferentPolygons:
-            return cell.half_planes[0].contains(x, y) || cell.half_planes[1].contains(x, y);
-        case CellType::complexPolygon:
-            return boost::geometry::within(Point(x, y), polygons[cell.index_of_inner_polygon]);
-        default:
-            return false;
-
+    case CellType::inner:
+        return true;
+    case CellType::outer:
+        return false;
+    case CellType::singleLine:
+        return cell.half_planes[0].contains(x, y);
+    case CellType::pairOfLinesSinglePolygon:
+        return cell.half_planes[0].contains(x, y) && cell.half_planes[1].contains(x, y);
+    case CellType::pairOfLinesDifferentPolygons:
+        return cell.half_planes[0].contains(x, y) || cell.half_planes[1].contains(x, y);
+    case CellType::complexPolygon:
+        return boost::geometry::within(Point(x, y), polygons[cell.index_of_inner_polygon]);
+    default:
+        return false;
     }
 }
 
 template <typename CoordinateType>
 typename PointInPolygonWithGrid<CoordinateType>::Distance
 PointInPolygonWithGrid<CoordinateType>::distance(
-        const PointInPolygonWithGrid<CoordinateType>::Point & point,
-        const PointInPolygonWithGrid<CoordinateType>::Polygon & polygon)
+    const PointInPolygonWithGrid<CoordinateType>::Point & point,
+    const PointInPolygonWithGrid<CoordinateType>::Polygon & polygon)
 {
     const auto & outer = polygon.outer();
     Distance distance = 0;
@@ -341,8 +346,8 @@ PointInPolygonWithGrid<CoordinateType>::distance(
 template <typename CoordinateType>
 std::vector<typename PointInPolygonWithGrid<CoordinateType>::HalfPlane>
 PointInPolygonWithGrid<CoordinateType>::findHalfPlanes(
-        const PointInPolygonWithGrid<CoordinateType>::Box & box,
-        const PointInPolygonWithGrid<CoordinateType>::Polygon & intersection)
+    const PointInPolygonWithGrid<CoordinateType>::Box & box,
+    const PointInPolygonWithGrid<CoordinateType>::Polygon & intersection)
 {
     std::vector<HalfPlane> half_planes;
     Polygon bound;
@@ -367,7 +372,8 @@ PointInPolygonWithGrid<CoordinateType>::findHalfPlanes(
 
 template <typename CoordinateType>
 void PointInPolygonWithGrid<CoordinateType>::addComplexPolygonCell(
-        size_t index, const PointInPolygonWithGrid<CoordinateType>::Box & box)
+    size_t index,
+    const PointInPolygonWithGrid<CoordinateType>::Box & box)
 {
     cells[index].type = CellType::complexPolygon;
     cells[index].index_of_inner_polygon = polygons.size();
@@ -392,7 +398,8 @@ void PointInPolygonWithGrid<CoordinateType>::addComplexPolygonCell(
 
 template <typename CoordinateType>
 void PointInPolygonWithGrid<CoordinateType>::addCell(
-        size_t index, const PointInPolygonWithGrid<CoordinateType>::Box & empty_box)
+    size_t index,
+    const PointInPolygonWithGrid<CoordinateType>::Box & empty_box)
 {
     const auto & min_corner = empty_box.min_corner();
     const auto & max_corner = empty_box.max_corner();
@@ -403,14 +410,13 @@ void PointInPolygonWithGrid<CoordinateType>::addCell(
         cells[index].type = CellType::inner;
     else
         cells[index].type = CellType::outer;
-
 }
 
 template <typename CoordinateType>
 void PointInPolygonWithGrid<CoordinateType>::addCell(
-        size_t index,
-        const PointInPolygonWithGrid<CoordinateType>::Box & box,
-        const PointInPolygonWithGrid<CoordinateType>::Polygon & intersection)
+    size_t index,
+    const PointInPolygonWithGrid<CoordinateType>::Box & box,
+    const PointInPolygonWithGrid<CoordinateType>::Polygon & intersection)
 {
     if (!intersection.inners().empty())
         addComplexPolygonCell(index, box);
@@ -436,10 +442,10 @@ void PointInPolygonWithGrid<CoordinateType>::addCell(
 
 template <typename CoordinateType>
 void PointInPolygonWithGrid<CoordinateType>::addCell(
-        size_t index,
-        const PointInPolygonWithGrid<CoordinateType>::Box & box,
-        const PointInPolygonWithGrid<CoordinateType>::Polygon & first,
-        const PointInPolygonWithGrid<CoordinateType>::Polygon & second)
+    size_t index,
+    const PointInPolygonWithGrid<CoordinateType>::Box & box,
+    const PointInPolygonWithGrid<CoordinateType>::Polygon & first,
+    const PointInPolygonWithGrid<CoordinateType>::Polygon & second)
 {
     if (!first.inners().empty() || !second.inners().empty())
         addComplexPolygonCell(index, box);
@@ -471,7 +477,9 @@ public:
     using Polygon = boost::geometry::model::polygon<Point, false>;
     using Box = boost::geometry::model::box<Point>;
 
-    explicit PointInPolygon(const Polygon & polygon) : polygon(polygon) {}
+    explicit PointInPolygon(const Polygon & polygon)
+        : polygon(polygon)
+    {}
 
     void init()
     {
@@ -534,18 +542,18 @@ ColumnPtr pointInPolygon(const ColumnVector<T> & x, const ColumnVector<U> & y, P
     return result;
 }
 
-template <typename ... Types>
+template <typename... Types>
 struct CallPointInPolygon;
 
-template <typename Type, typename ... Types>
-struct CallPointInPolygon<Type, Types ...>
+template <typename Type, typename... Types>
+struct CallPointInPolygon<Type, Types...>
 {
     template <typename T, typename PointInPolygonImpl>
     static ColumnPtr call(const ColumnVector<T> & x, const IColumn & y, PointInPolygonImpl && impl)
     {
         if (auto column = typeid_cast<const ColumnVector<Type> *>(&y))
             return pointInPolygon(x, *column, impl);
-        return CallPointInPolygon<Types ...>::template call<T>(x, y, impl);
+        return CallPointInPolygon<Types...>::template call<T>(x, y, impl);
     }
 
     template <typename PointInPolygonImpl>
@@ -554,7 +562,7 @@ struct CallPointInPolygon<Type, Types ...>
         using Impl = typename ApplyTypeListForClass<::DB::GeoUtils::CallPointInPolygon, TypeListNumbers>::Type;
         if (auto column = typeid_cast<const ColumnVector<Type> *>(&x))
             return Impl::template call<Type>(*column, y, impl);
-        return CallPointInPolygon<Types ...>::call(x, y, impl);
+        return CallPointInPolygon<Types...>::call(x, y, impl);
     }
 };
 
@@ -588,10 +596,13 @@ float calcLinestringRotation(const Linestring & points)
     using Point = std::decay_t<decltype(*points.begin())>;
     float rotation = 0;
 
-    auto sqrLength = [](const Point & point) { return point.x() * point.x() + point.y() * point.y(); };
-    auto vecProduct = [](const Point & from, const Point & to) { return from.x() * to.y() - from.y() * to.x(); };
-    auto getVector = [](const Point & from, const Point & to) -> Point
-    {
+    auto sqrLength = [](const Point & point) {
+        return point.x() * point.x() + point.y() * point.y();
+    };
+    auto vecProduct = [](const Point & from, const Point & to) {
+        return from.x() * to.y() - from.y() * to.x();
+    };
+    auto getVector = [](const Point & from, const Point & to) -> Point {
         return Point(to.x() - from.x(), to.y() - from.y());
     };
 
@@ -644,11 +655,14 @@ std::string serialize(Polygon && polygon)
 
         using RingType = typename std::decay_t<Polygon>::ring_type;
 
-        auto serializeFloat = [&buffer](float value) { buffer.write(reinterpret_cast<char *>(&value), sizeof(value)); };
-        auto serializeSize = [&buffer](size_t size) { buffer.write(reinterpret_cast<char *>(&size), sizeof(size)); };
+        auto serializeFloat = [&buffer](float value) {
+            buffer.write(reinterpret_cast<char *>(&value), sizeof(value));
+        };
+        auto serializeSize = [&buffer](size_t size) {
+            buffer.write(reinterpret_cast<char *>(&size), sizeof(size));
+        };
 
-        auto serializeRing = [& serializeFloat, & serializeSize](const RingType & ring)
-        {
+        auto serializeRing = [&serializeFloat, &serializeSize](const RingType & ring) {
             serializeSize(ring.size());
             for (const auto & point : ring)
             {
@@ -669,6 +683,6 @@ std::string serialize(Polygon && polygon)
 }
 
 
-} /// GeoUtils
+} // namespace GeoUtils
 
-} /// DB
+} // namespace DB
