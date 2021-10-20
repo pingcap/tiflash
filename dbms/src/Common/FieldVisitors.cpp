@@ -96,7 +96,7 @@ String FieldVisitorDump::operator()(const Array & x) const
 
 String FieldVisitorDump::operator()(const Tuple & x_def) const
 {
-    auto & x = x_def.toUnderType();
+    const auto & x = x_def.toUnderType();
     WriteBufferFromOwnString wb;
 
     wb.write("Tuple_(", 7);
@@ -189,7 +189,7 @@ String FieldVisitorToString::operator()(const Array & x) const
 
 String FieldVisitorToString::operator()(const Tuple & x_def) const
 {
-    auto & x = x_def.toUnderType();
+    const auto & x = x_def.toUnderType();
     WriteBufferFromOwnString wb;
 
     writeChar('(', wb);
@@ -278,7 +278,7 @@ String FieldVisitorToDebugString::operator()(const Array & x) const
 
 String FieldVisitorToDebugString::operator()(const Tuple & x_def) const
 {
-    auto & x = x_def.toUnderType();
+    const auto & x = x_def.toUnderType();
     WriteBufferFromOwnString wb;
 
     writeChar('(', wb);
