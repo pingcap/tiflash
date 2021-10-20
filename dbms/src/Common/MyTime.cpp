@@ -851,17 +851,13 @@ void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, c
 
 MyDateTime convertUTC2TimeZone(size_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to)
 {
-    time_t epoch = utc_ts;
-    return MyDateTime(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), micro_second);
+    return MyDateTime(time_zone_to.toYear(utc_ts), time_zone_to.toMonth(utc_ts), time_zone_to.toDayOfMonth(utc_ts), time_zone_to.toHour(utc_ts), time_zone_to.toMinute(utc_ts), time_zone_to.toSecond(utc_ts), micro_second);
 }
 
 
 MyDateTime convertUTC2TimeZoneByOffset(size_t utc_ts, UInt32 micro_second, Int64 offset, const DateLUTImpl & time_zone_to)
 {
-    if (utc_ts < 0)
-        return MyDateTime(0);
-    time_t epoch = utc_ts;
-    epoch += offset;
+    time_t epoch = utc_ts + offset;
     return MyDateTime(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), micro_second);
 }
 
