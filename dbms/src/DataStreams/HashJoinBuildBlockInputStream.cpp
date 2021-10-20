@@ -12,19 +12,4 @@ Block HashJoinBuildBlockInputStream::readImpl()
     return block;
 }
 
-void namesToString(Names names, std::ostream & ostr)
-{
-    if (names.empty())
-    {
-        return;
-    }
-
-    auto iter = names.cbegin();
-    ostr << *iter++;
-    for (; iter != names.cend(); ++iter)
-    {
-        ostr << ", " << *iter;
-    }
-}
-
 } // namespace DB
