@@ -132,7 +132,7 @@ void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & path)
     }
 }
 
-bool ConfigReloader::FilesChangesTracker::isDifferOrNewerThan(const FilesChangesTracker & rhs)
+bool ConfigReloader::FilesChangesTracker::isDifferOrNewerThan(const FilesChangesTracker & rhs) const
 {
     return (files.size() != rhs.files.size()) || !std::equal(files.begin(), files.end(), rhs.files.begin(), FileWithTimestamp::isTheSame);
 }
