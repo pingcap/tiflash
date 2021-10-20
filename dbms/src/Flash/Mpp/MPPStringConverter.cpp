@@ -1,7 +1,7 @@
 #include <Common/TiFlashException.h>
-#include <Core/QueryProcessingStage.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/MPPStringConverter.h>
+#include <IO/Operators.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -17,7 +17,7 @@ extern const int UNKNOWN_TABLE;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-void namesAndTypesToString(const NamesAndTypes & namesAndTypes, std::stringstream & ss)
+void namesAndTypesToString(const NamesAndTypes & namesAndTypes, WriteBufferFromOwnString & ss)
 {
     if (namesAndTypes.empty())
     {
@@ -32,7 +32,7 @@ void namesAndTypesToString(const NamesAndTypes & namesAndTypes, std::stringstrea
     }
 }
 
-void exprsToString(const google::protobuf::RepeatedPtrField<::tipb::Expr> & exprs, const NamesAndTypes & input_column, std::stringstream & ss)
+void exprsToString(const google::protobuf::RepeatedPtrField<::tipb::Expr> & exprs, const NamesAndTypes & input_column, WriteBufferFromOwnString & ss)
 {
     if (exprs.empty())
     {
@@ -47,7 +47,7 @@ void exprsToString(const google::protobuf::RepeatedPtrField<::tipb::Expr> & expr
     }
 }
 
-void byItemsToString(const google::protobuf::RepeatedPtrField<::tipb::ByItem> & byItems, const NamesAndTypes & input_column, std::stringstream & ss)
+void byItemsToString(const google::protobuf::RepeatedPtrField<::tipb::ByItem> & byItems, const NamesAndTypes & input_column, WriteBufferFromOwnString & ss)
 {
     if (byItems.empty())
     {
@@ -63,7 +63,7 @@ void byItemsToString(const google::protobuf::RepeatedPtrField<::tipb::ByItem> & 
     }
 }
 
-NamesAndTypes MPPStringConverter::buildTSString(const String & executor_id, const tipb::TableScan & ts, std::stringstream & ss)
+NamesAndTypes MPPStringConverter::buildTSString(const String & executor_id, const tipb::TableScan & ts, WriteBufferFromOwnString & ss)
 {
     TableID table_id;
     if (ts.has_table_id())
@@ -112,11 +112,11 @@ NamesAndTypes MPPStringConverter::buildTSString(const String & executor_id, cons
     return columns_from_ts;
 }
 
-NamesAndTypes MPPStringConverter::buildSelString(const String & executor_id, const tipb::Selection & sel, std::stringstream & ss)
+NamesAndTypes MPPStringConverter::buildSelString(const String & executor_id, const tipb::Selection & sel, WriteBufferFromOwnString & ss)
 {
     auto input_column = buildString(sel.child(), ss);
     String child_str = ss.str();
-    ss.str("");
+    ss.restart();
     ss << genPrefixString() << executor_id << " ( conditions: {";
     exprsToString(sel.conditions(), input_column, ss);
     ss << "} )\n"
@@ -124,22 +124,22 @@ NamesAndTypes MPPStringConverter::buildSelString(const String & executor_id, con
     return input_column;
 }
 
-NamesAndTypes MPPStringConverter::buildLimitString(const String & executor_id, const tipb::Limit & limit, std::stringstream & ss)
+NamesAndTypes MPPStringConverter::buildLimitString(const String & executor_id, const tipb::Limit & limit, WriteBufferFromOwnString & ss)
 {
     auto input_column = buildString(limit.child(), ss);
     String child_str = ss.str();
-    ss.str("");
+    ss.restart();
     auto limit_count = limit.limit();
     ss << genPrefixString() << executor_id << " ( limit_count: " << limit_count << " )\n"
        << child_str;
     return input_column;
 }
 
-NamesAndTypes MPPStringConverter::buildProjString(const String & executor_id, const tipb::Projection & proj, std::stringstream & ss)
+NamesAndTypes MPPStringConverter::buildProjString(const String & executor_id, const tipb::Projection & proj, WriteBufferFromOwnString & ss)
 {
     auto input_column = buildString(proj.child(), ss);
     String child_str = ss.str();
-    ss.str("");
+    ss.restart();
     NamesAndTypes columns_from_proj;
     for (const auto & expr : proj.exprs())
     {
@@ -154,11 +154,11 @@ NamesAndTypes MPPStringConverter::buildProjString(const String & executor_id, co
     return columns_from_proj;
 }
 
-NamesAndTypes MPPStringConverter::buildAggString(const String & executor_id, const tipb::Aggregation & agg, std::stringstream & ss)
+NamesAndTypes MPPStringConverter::buildAggString(const String & executor_id, const tipb::Aggregation & agg, WriteBufferFromOwnString & ss)
 {
     auto input_column = buildString(agg.child(), ss);
     String child_str = ss.str();
-    ss.str("");
+    ss.restart();
     NamesAndTypes columns_from_agg;
     for (const auto & agg_func : agg.agg_func())
     {
@@ -188,11 +188,11 @@ NamesAndTypes MPPStringConverter::buildAggString(const String & executor_id, con
     return columns_from_agg;
 }
 
-NamesAndTypes MPPStringConverter::buildTopNString(const String & executor_id, const tipb::TopN & topN, std::stringstream & ss)
+NamesAndTypes MPPStringConverter::buildTopNString(const String & executor_id, const tipb::TopN & topN, WriteBufferFromOwnString & ss)
 {
     auto input_column = buildString(topN.child(), ss);
     String child_str = ss.str();
-    ss.str("");
+    ss.restart();
     ss << genPrefixString() << executor_id << " ( order_by: {";
     byItemsToString(topN.order_by(), input_column, ss);
     ss << "} )\n"
@@ -200,16 +200,16 @@ NamesAndTypes MPPStringConverter::buildTopNString(const String & executor_id, co
     return input_column;
 }
 
-NamesAndTypes MPPStringConverter::buildJoinString(const String & executor_id, const tipb::Join & join, std::stringstream & ss)
+NamesAndTypes MPPStringConverter::buildJoinString(const String & executor_id, const tipb::Join & join, WriteBufferFromOwnString & ss)
 {
     if (join.children_size() != 2)
         throw TiFlashException("Join executor children size not equal to 2", Errors::Coprocessor::BadRequest);
     auto left_input_column = buildString(join.children(0), ss);
     String left_child_str = ss.str();
-    ss.str("");
+    ss.restart();
     auto right_input_column = buildString(join.children(1), ss);
     String right_child_str = ss.str();
-    ss.str("");
+    ss.restart();
 
     ss << genPrefixString() << executor_id << " ( left_join_keys: {";
     exprsToString(join.left_join_keys(), left_input_column, ss);
@@ -228,11 +228,11 @@ NamesAndTypes MPPStringConverter::buildJoinString(const String & executor_id, co
     return left_input_column;
 }
 
-std::vector<NameAndTypePair> MPPStringConverter::buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, std::stringstream & ss)
+std::vector<NameAndTypePair> MPPStringConverter::buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, WriteBufferFromOwnString & ss)
 {
     auto input_column = buildString(exchange_sender.child(), ss);
     String child_str = ss.str();
-    ss.str("");
+    ss.restart();
     ss << genPrefixString() << executor_id << " ( send_columns: {";
     namesAndTypesToString(input_column, ss);
     ss << "} partition_keys: {";
@@ -242,7 +242,7 @@ std::vector<NameAndTypePair> MPPStringConverter::buildExchangeSenderString(const
     return input_column;
 }
 
-NamesAndTypes MPPStringConverter::buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, std::stringstream & ss)
+NamesAndTypes MPPStringConverter::buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, WriteBufferFromOwnString & ss)
 {
     NamesAndTypes columns_from_exchange_receiver;
     for (int i = 0; i < exchange_receiver.field_types_size(); ++i)
@@ -257,6 +257,8 @@ NamesAndTypes MPPStringConverter::buildExchangeReceiverString(const String & exe
     return columns_from_exchange_receiver;
 }
 
+namespace
+{
 struct CurrentLevelCounter
 {
     size_t & current_level;
@@ -271,8 +273,10 @@ struct CurrentLevelCounter
         --current_level;
     }
 };
+} // namespace
 
-NamesAndTypes MPPStringConverter::buildString(const tipb::Executor & executor, std::stringstream & ss)
+
+NamesAndTypes MPPStringConverter::buildString(const tipb::Executor & executor, WriteBufferFromOwnString & ss)
 {
     if (!executor.has_executor_id())
         throw TiFlashException("Tree struct based executor must have executor id", Errors::Coprocessor::BadRequest);
@@ -317,14 +321,15 @@ MPPStringConverter::MPPStringConverter(Context & context_, const tipb::DAGReques
 
 String MPPStringConverter::buildMPPString()
 {
-    std::stringstream mpp_buf;
+    WriteBufferFromOwnString mpp_buf;
+
     if (!dag_request.has_root_executor())
     {
         throw TiFlashException("dag_request is illegal for mpp query", Errors::Coprocessor::BadRequest);
     }
     const tipb::Executor & executor = dag_request.root_executor();
     buildString(executor, mpp_buf);
-    return mpp_buf.str();
+    return mpp_buf.releaseStr();
 }
 
 } // namespace DB
