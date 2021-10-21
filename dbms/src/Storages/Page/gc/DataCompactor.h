@@ -72,7 +72,7 @@ private:
     };
 
     bool
-    isPageFileExistInAllPath(const PageFileIdAndLevel & file_id_and_level);
+    isPageFileExistInAllPath(const PageFileIdAndLevel & file_id_and_level) const;
 
     CompactCandidates
     selectCandidateFiles(const PageFileSet & page_files,

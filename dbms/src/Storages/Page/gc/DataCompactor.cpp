@@ -217,13 +217,13 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
 }
 
 template <typename SnapshotPtr>
-bool DataCompactor<SnapshotPtr>::isPageFileExistInAllPath(const PageFileIdAndLevel & file_id_and_level)
+bool DataCompactor<SnapshotPtr>::isPageFileExistInAllPath(const PageFileIdAndLevel & file_id_and_level) const
 {
     const auto paths = delegator->listPaths();
     for (const auto & pf_parent_path : paths)
     {
-        if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
-            || PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
+        if (PageFile::isPageFileExist(file_id_and_level, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
+            || PageFile::isPageFileExist(file_id_and_level, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
         {
             return true;
         }
@@ -268,14 +268,13 @@ DataCompactor<SnapshotPtr>::migratePages( //
     // We need to check existence for multi disks deployment, or we may generate the same file id
     // among different disks, some of them will be ignored by the PageFileSet because of duplicated
     // file id while restoring from disk
-    if (checkFileExist(migrate_file_id))
+    if (isPageFileExistInAllPath(migrate_file_id))
     {
         LOG_INFO(log,
                  storage_name << " GC migration to PageFile_" //
                               << migrate_file_id.first << "_" << migrate_file_id.second << " is done before.");
         return {PageEntriesEdit{}, 0};
     }
-
     // else the PageFile is not exists in all paths, continue migration.
 
 
