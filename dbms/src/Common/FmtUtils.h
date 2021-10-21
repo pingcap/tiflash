@@ -25,6 +25,10 @@ public:
         return fmt::to_string(buffer);
     }
 
+    void resize(size_t count) { buffer.resize(count); }
+    void reserve(size_t capacity) { buffer.reserve(capacity); }
+    void clear() { buffer.clear(); }
+
 private:
     fmt::memory_buffer buffer;
 };
