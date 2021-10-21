@@ -3,9 +3,6 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <cctz/civil_time.h>
-#include <cctz/time_zone.h>
-#include <cctz/zone_info_source.h>
 #include <fmt/core.h>
 
 namespace DB
