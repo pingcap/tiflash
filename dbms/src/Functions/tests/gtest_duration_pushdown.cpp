@@ -12,7 +12,7 @@ namespace DB
 {
 namespace tests
 {
-class DurationPushDown : public ::testing::Test
+class DurationPushDown : public DB::tests::FunctionTest
 {
 protected:
     static void SetUpTestCase()
