@@ -1,8 +1,8 @@
 #include <Columns/ColumnString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
@@ -18,22 +18,8 @@ namespace DB
 {
 namespace tests
 {
-
-
-class StringTrim : public ::testing::Test
+class StringTrim : public DB::tests::FunctionTest
 {
-protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
 };
 
 

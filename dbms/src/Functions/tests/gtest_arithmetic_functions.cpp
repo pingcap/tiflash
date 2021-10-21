@@ -2,14 +2,13 @@
 #include <Columns/ColumnString.h>
 #include <Common/Exception.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -24,8 +23,7 @@ namespace DB
 {
 namespace tests
 {
-
-class TestBinaryArithmeticFunctions : public ::testing::Test
+class TestBinaryArithmeticFunctions : public DB::tests::FunctionTest
 {
 protected:
     template <typename T>
@@ -77,18 +75,6 @@ protected:
             return ReturnType(value, scale);
         }
     };
-
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
 
     void checkNullConstantResult(const ColumnWithTypeAndName & result, size_t size)
     {
@@ -753,25 +739,16 @@ try
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(
-            std::make_tuple(7, 3), 
-            {
-                DecimalField32(700, 3), DecimalField32(-700, 3), DecimalField32(700, 3),
-                DecimalField32(-700, 3), {}, {}, {}, {}
-            }),
+            std::make_tuple(7, 3),
+            {DecimalField32(700, 3), DecimalField32(-700, 3), DecimalField32(700, 3), DecimalField32(-700, 3), {}, {}, {}, {}}),
         executeFunction(
             func_name,
             createColumn<Nullable<Decimal32>>(
-                std::make_tuple(7, 3), 
-                {
-                    DecimalField32(3300, 3), DecimalField32(-3300, 3), DecimalField32(3300, 3),
-                    DecimalField32(-3300, 3), DecimalField32(1000, 3), {}, DecimalField32(0,3), {}
-                }),
+                std::make_tuple(7, 3),
+                {DecimalField32(3300, 3), DecimalField32(-3300, 3), DecimalField32(3300, 3), DecimalField32(-3300, 3), DecimalField32(1000, 3), {}, DecimalField32(0, 3), {}}),
             createColumn<Nullable<Decimal32>>(
-                std::make_tuple(7, 3), 
-                {
-                    DecimalField32(1300, 3), DecimalField32(1300, 3), DecimalField32(-1300, 3),
-                    DecimalField32(-1300, 3), DecimalField32(0, 3), DecimalField32(0, 3), {}, {}
-                })));
+                std::make_tuple(7, 3),
+                {DecimalField32(1300, 3), DecimalField32(1300, 3), DecimalField32(-1300, 3), DecimalField32(-1300, 3), DecimalField32(0, 3), DecimalField32(0, 3), {}, {}})));
 
     // decimal overflow test.
 
@@ -779,28 +756,28 @@ try
     // scaling 999'999'999 (Decimal(9, 0)) to Decimal(9, 8) needs to multiply it with 1'0000'0000.
     // if it uses Int32, it will overflow and get wrong result (something like 0.69325056).
 
-#define MODULO_OVERFLOW_TESTCASE(Decimal, precision) \
-    do { \
-        using NativeType = Decimal::NativeType;\
-        using FieldType = DecimalField<Decimal>;\
-        auto prec = (precision);\
-        auto & builder = DecimalMaxValue::instance(); \
-        auto max_scale = std::min(decimal_max_scale, static_cast<ScaleType>(prec) - 1); \
-        auto exp10_x = static_cast<NativeType>(builder.Get(max_scale)) + 1; /* exp10_x: 10^x */ \
-        auto decimal_max = exp10_x * 10 - 1; \
-        auto zero = static_cast<NativeType>(0); /* for Int256 */ \
-        ASSERT_COLUMN_EQ(\
-            createColumn<Nullable<Decimal>>(std::make_tuple(prec, max_scale), {FieldType(zero, max_scale)}),\
-            executeFunction(\
-                func_name,\
-                createColumn<Nullable<Decimal>>(std::make_tuple(prec, 0), {FieldType(decimal_max, 0)}),\
-                createColumn<Nullable<Decimal>>(std::make_tuple(prec, max_scale), {FieldType(exp10_x, max_scale)})));\
-        ASSERT_COLUMN_EQ(\
-            createColumn<Nullable<Decimal>>(std::make_tuple(prec, max_scale), {FieldType(exp10_x, max_scale)}),\
-            executeFunction(\
-                func_name,\
-                createColumn<Nullable<Decimal>>(std::make_tuple(prec, max_scale), {FieldType(exp10_x, max_scale)}),\
-                createColumn<Nullable<Decimal>>(std::make_tuple(prec, 0), {FieldType(decimal_max, 0)})));\
+#define MODULO_OVERFLOW_TESTCASE(Decimal, precision)                                                                  \
+    do                                                                                                                \
+    {                                                                                                                 \
+        using NativeType = Decimal::NativeType;                                                                       \
+        using FieldType = DecimalField<Decimal>;                                                                      \
+        auto prec = (precision);                                                                                      \
+        auto max_scale = std::min(decimal_max_scale, static_cast<ScaleType>(prec) - 1);                               \
+        auto exp10_x = static_cast<NativeType>(DecimalMaxValue::get(max_scale)) + 1; /* exp10_x: 10^x */              \
+        auto decimal_max = exp10_x * 10 - 1;                                                                          \
+        auto zero = static_cast<NativeType>(0); /* for Int256 */                                                      \
+        ASSERT_COLUMN_EQ(                                                                                             \
+            createColumn<Nullable<Decimal>>(std::make_tuple(prec, max_scale), {FieldType(zero, max_scale)}),          \
+            executeFunction(                                                                                          \
+                func_name,                                                                                            \
+                createColumn<Nullable<Decimal>>(std::make_tuple(prec, 0), {FieldType(decimal_max, 0)}),               \
+                createColumn<Nullable<Decimal>>(std::make_tuple(prec, max_scale), {FieldType(exp10_x, max_scale)}))); \
+        ASSERT_COLUMN_EQ(                                                                                             \
+            createColumn<Nullable<Decimal>>(std::make_tuple(prec, max_scale), {FieldType(exp10_x, max_scale)}),       \
+            executeFunction(                                                                                          \
+                func_name,                                                                                            \
+                createColumn<Nullable<Decimal>>(std::make_tuple(prec, max_scale), {FieldType(exp10_x, max_scale)}),   \
+                createColumn<Nullable<Decimal>>(std::make_tuple(prec, 0), {FieldType(decimal_max, 0)})));             \
     } while (false)
 
     MODULO_OVERFLOW_TESTCASE(Decimal32, 9);
@@ -867,11 +844,7 @@ try
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>(
-            {
-                0.19999999999999996, -0.19999999999999996, 0.19999999999999996, -0.19999999999999996,
-                1.0999999999999996, -1.0999999999999996, 1.0999999999999996, -1.0999999999999996,
-                {}, 0.0, {}, {}, {}, {}
-            }),
+            {0.19999999999999996, -0.19999999999999996, 0.19999999999999996, -0.19999999999999996, 1.0999999999999996, -1.0999999999999996, 1.0999999999999996, -1.0999999999999996, {}, 0.0, {}, {}, {}, {}}),
         executeFunction(
             func_name,
             createColumn<Nullable<Float64>>({1.3, -1.3, 1.3, -1.3, 3.3, -3.3, 3.3, -3.3, 12.34, 0.0, 0.0, 0.0, {}, {}}),
@@ -960,8 +933,7 @@ CATCH
 TEST_F(TestBinaryArithmeticFunctions, ModuloExtra)
 try
 {
-    std::unordered_map<String, DataTypePtr> data_type_map =
-    {
+    std::unordered_map<String, DataTypePtr> data_type_map = {
         {"Int64", makeDataType<Nullable<Int64>>()},
         {"UInt64", makeDataType<Nullable<UInt64>>()},
         {"Float64", makeDataType<Nullable<Float64>>()},
@@ -971,38 +943,38 @@ try
         {"Decimal256", makeDataType<Nullable<Decimal256>>(65, 20)},
     };
 
-    auto makeResultDataType = [&](const String & typeName, size_t precision [[maybe_unused]], size_t scale [[maybe_unused]])
-    {
+    auto makeResultDataType = [&](const String & typeName, size_t precision [[maybe_unused]], size_t scale [[maybe_unused]]) {
         if (typeName.find("Decimal") != String::npos)
             return makeNullable(createDecimal(precision, scale));
         return data_type_map[typeName];
     };
 
-#define MODULO_TESTCASE(Left, Right, Result, precision, left_scale, right_scale, result_scale) \
-    do {\
-        auto prec = (precision);\
-        auto result_data_type = makeResultDataType(#Result, prec, result_scale);\
-        auto left_data_type = data_type_map[#Left];\
-        auto right_data_type = data_type_map[#Right];\
-        ColumnWithTypeAndName expect_column{\
-            makeColumn<Nullable<Result>>(\
-                result_data_type,\
-                InferredDataVector<Nullable<Result>>({{}, GetValue<Result, result_scale>::Zero(), GetValue<Result, result_scale>::Zero(), {}, {}, {}, {}})),\
-            result_data_type,\
-            "result"};\
-        ColumnWithTypeAndName left_column{\
-            makeColumn<Nullable<Left>>(\
-                left_data_type,\
-                InferredDataVector<Nullable<Left>>({GetValue<Left, left_scale>::Max(), GetValue<Left, left_scale>::Zero(), GetValue<Left, left_scale>::One(), GetValue<Left, left_scale>::Zero(), {}, {}, {}})),\
-            left_data_type,\
-            "left"};\
-        ColumnWithTypeAndName right_column{\
-            makeColumn<Nullable<Right>>(\
-                right_data_type,\
+#define MODULO_TESTCASE(Left, Right, Result, precision, left_scale, right_scale, result_scale)                                                                                                                                                             \
+    do                                                                                                                                                                                                                                                     \
+    {                                                                                                                                                                                                                                                      \
+        auto prec = (precision);                                                                                                                                                                                                                           \
+        auto result_data_type = makeResultDataType(#Result, prec, result_scale);                                                                                                                                                                           \
+        auto left_data_type = data_type_map[#Left];                                                                                                                                                                                                        \
+        auto right_data_type = data_type_map[#Right];                                                                                                                                                                                                      \
+        ColumnWithTypeAndName expect_column{                                                                                                                                                                                                               \
+            makeColumn<Nullable<Result>>(                                                                                                                                                                                                                  \
+                result_data_type,                                                                                                                                                                                                                          \
+                InferredDataVector<Nullable<Result>>({{}, GetValue<Result, result_scale>::Zero(), GetValue<Result, result_scale>::Zero(), {}, {}, {}, {}})),                                                                                               \
+            result_data_type,                                                                                                                                                                                                                              \
+            "result"};                                                                                                                                                                                                                                     \
+        ColumnWithTypeAndName left_column{                                                                                                                                                                                                                 \
+            makeColumn<Nullable<Left>>(                                                                                                                                                                                                                    \
+                left_data_type,                                                                                                                                                                                                                            \
+                InferredDataVector<Nullable<Left>>({GetValue<Left, left_scale>::Max(), GetValue<Left, left_scale>::Zero(), GetValue<Left, left_scale>::One(), GetValue<Left, left_scale>::Zero(), {}, {}, {}})),                                           \
+            left_data_type,                                                                                                                                                                                                                                \
+            "left"};                                                                                                                                                                                                                                       \
+        ColumnWithTypeAndName right_column{                                                                                                                                                                                                                \
+            makeColumn<Nullable<Right>>(                                                                                                                                                                                                                   \
+                right_data_type,                                                                                                                                                                                                                           \
                 InferredDataVector<Nullable<Right>>({GetValue<Right, right_scale>::Zero(), GetValue<Right, right_scale>::Max(), GetValue<Right, right_scale>::One(), {}, GetValue<Right, right_scale>::Zero(), GetValue<Right, right_scale>::Max(), {}})), \
-            right_data_type,\
-            "right"};\
-        ASSERT_COLUMN_EQ(expect_column, executeFunction("modulo", left_column, right_column));\
+            right_data_type,                                                                                                                                                                                                                               \
+            "right"};                                                                                                                                                                                                                                      \
+        ASSERT_COLUMN_EQ(expect_column, executeFunction("modulo", left_column, right_column));                                                                                                                                                             \
     } while (false)
 
     MODULO_TESTCASE(Int64, Int64, Int64, 0, 0, 0, 0);
