@@ -530,7 +530,7 @@ ADD_TEST(CancelEmpty, 4, 4);
 ADD_TEST(CancelConcurrentPop, 4);
 ADD_TEST(CancelConcurrentPush, 4);
 
-TEST_F(TestMPMCQueue, ExceptionSafe)
+TEST_F(TestMPMCQueue, DISABLED_ExceptionSafe)
 try
 {
     MPMCQueue<ThrowInjectable> queue(10);

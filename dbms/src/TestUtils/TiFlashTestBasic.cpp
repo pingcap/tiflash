@@ -37,8 +37,8 @@ void TiFlashTestEnv::initializeGlobalContext()
         global_context->getFileProvider());
     TiFlashRaftConfig raft_config;
 
-    raft_config.ignore_databases = {"default", "system"};
-    raft_config.engine = TiDB::StorageEngine::TMT;
+    raft_config.ignore_databases = {"system"};
+    raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.disable_bg_flush = false;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
