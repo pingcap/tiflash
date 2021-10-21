@@ -59,6 +59,23 @@
 
 namespace DB::TargetSpecific
 {
+struct SkipTarget
+{
+};
+#define TIFLASH_TARGET_SPECIFIC_DEFINE_SKIP_TARGET(RETURN, NAME, ARCH, ...)              \
+    __VA_ARGS__                                                                          \
+    struct _TiflashSkip_##ARCH##_Target_##NAME : public ::DB::TargetSpecific::SkipTarget \
+    {                                                                                    \
+        using ReturnType = RETURN;                                                       \
+        struct Checker                                                                   \
+        {                                                                                \
+            __attribute__((pure, always_inline)) static bool runtimeSupport()            \
+            {                                                                            \
+                return false;                                                            \
+            }                                                                            \
+        };                                                                               \
+    };
+
 #define TIFLASH_DECLARE_GENERIC_FUNCTION(TPARMS, RETURN, NAME, ...)                           \
     TPARMS                                                                                    \
     struct _TiflashGenericTarget_##NAME                                                       \
@@ -102,8 +119,9 @@ struct AVXChecker
     }
 };
 #else
-#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(...)
-#define TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE) ::DB::TargetSpecific::SkipTarget<TYPE>
+#define TIFLASH_DECLARE_AVX_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
+    TIFLASH_TARGET_SPECIFIC_DEFINE_SKIP_TARGET(RETURN, NAME, AVX, TPARMS)
+#define TIFLASH_AVX_DISPATCH_UNIT(NAME, TYPE) _TiflashSkip_AVX_Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX(...)
 #endif
 
@@ -140,8 +158,9 @@ struct AVX512Checker
     }
 };
 #else
-#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(...)
-#define TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE) ::DB::TargetSpecific::SkipTarget<TYPE>
+#define TIFLASH_DECLARE_AVX512_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
+    TIFLASH_TARGET_SPECIFIC_DEFINE_SKIP_TARGET(RETURN, NAME, AVX512, TPARMS)
+#define TIFLASH_AVX512_DISPATCH_UNIT(NAME, TYPE) _TiflashSkip_AVX512_Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_AVX512(...)
 #endif
 
@@ -175,23 +194,12 @@ struct SSE4Checker
     }
 };
 #else
-#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(...)
-#define TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE) ::DB::TargetSpecific::SkipTarget<TYPE>
+#define TIFLASH_DECLARE_SSE4_SPECIFIC_FUNCTION(TPARMS, RETURN, NAME, ...) \
+    TIFLASH_TARGET_SPECIFIC_DEFINE_SKIP_TARGET(RETURN, NAME, SSE4, TPARMS)
+#define TIFLASH_SSE4_DISPATCH_UNIT(NAME, TYPE) _TiflashSkip_SSE4_Target_##NAME
 #define TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION_SSE4(...)
 #endif
 
-template <class T>
-struct SkipTarget
-{
-    using ReturnType = T;
-    struct Checker
-    {
-        __attribute__((pure, always_inline)) static bool runtimeSupport()
-        {
-            return false;
-        }
-    };
-};
 
 template <typename Head, typename... Tail>
 struct Dispatch
@@ -199,7 +207,7 @@ struct Dispatch
     template <typename... Args>
     __attribute__((always_inline)) static typename Head::ReturnType invoke(Args &&... args)
     {
-        if constexpr (!std::is_same_v<Head, SkipTarget<typename Head::ReturnType>>)
+        if constexpr (!std::is_base_of_v<SkipTarget, Head>)
         {
             if (Head::Checker::runtimeSupport())
             {
