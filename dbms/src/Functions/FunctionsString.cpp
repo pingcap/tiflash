@@ -162,7 +162,7 @@ using ConstPtr = T const *;
 
 // there is a bug in tree-optimizer for GCC < 7.3.1,
 // which will result in wrong code generation for avx512.
-#ifndef __clang__
+#if defined(__GNUC_PREREQ) && defined(__GNUC_PATCHLEVEL__)
 #define TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT \
     (__GNUC_PREREQ(7, 4) || (__GNUC_PREREQ(7, 3) && __GNUC_PATCHLEVEL__ >= 1))
 #else
