@@ -114,7 +114,7 @@ bool checkMatch(const String & test_case, //
     return rows != 0;
 }
 
-bool checkMatch(const String & test_case, Context & context, String type, String value, const RSOperatorPtr & filter)
+bool checkMatch(const String & test_case, Context & context, const String & type, const String & value, const RSOperatorPtr & filter)
 {
     // The first three values are pk, version and del_mark.
     // For del_mark, 1 means deleted.
@@ -122,7 +122,7 @@ bool checkMatch(const String & test_case, Context & context, String type, String
     return checkMatch(test_case, context, type, tuples, filter);
 }
 
-bool checkDelMatch(const String & test_case, Context & context, String type, String value, const RSOperatorPtr & filter)
+bool checkDelMatch(const String & test_case, Context & context, const String & type, const String & value, const RSOperatorPtr & filter)
 {
     // The first three values are pk, version and del_mark.
     // For del_mark, 1 means deleted.
@@ -130,7 +130,7 @@ bool checkDelMatch(const String & test_case, Context & context, String type, Str
     return checkMatch(test_case, context, type, tuples, filter);
 }
 
-bool checkPkMatch(const String & test_case, Context & context, String type, String pk_value, const RSOperatorPtr & filter, bool is_common_handle)
+bool checkPkMatch(const String & test_case, Context & context, const String & type, const String & pk_value, const RSOperatorPtr & filter, bool is_common_handle)
 {
     // The first three values are pk, version and del_mark.
     // For del_mark, 1 means deleted.
@@ -256,18 +256,18 @@ try
     values.push_back({"test_2", 100});
     values.push_back({"test_3", 0});
     auto enum8_type = std::make_shared<DataTypeEnum8>(values);
-    ASSERT_EQ(RoughCheck::Cmp<EqualsOp>::compare(Field((String) "test"), enum8_type, (Int8) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test_2"), enum8_type, (Int8) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test_3"), enum8_type, (Int8) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8) 49), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOp>::compare(Field((String) "test"), enum8_type, (Int8) 49), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8) 49), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test_3"), enum8_type, (Int8) -1), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOp>::compare(Field((String) "test"), enum8_type, (Int8) 51), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8) 51), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test_2"), enum8_type, (Int8) 101), true);
+    ASSERT_EQ(RoughCheck::Cmp<EqualsOp>::compare(Field((String) "test"), enum8_type, (Int8)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test_2"), enum8_type, (Int8)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test_3"), enum8_type, (Int8)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8)49), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOp>::compare(Field((String) "test"), enum8_type, (Int8)49), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8)49), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test_3"), enum8_type, (Int8)-1), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOp>::compare(Field((String) "test"), enum8_type, (Int8)51), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum8_type, (Int8)51), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test_2"), enum8_type, (Int8)101), true);
 }
 CATCH
 
@@ -279,18 +279,18 @@ try
     values.push_back({"test_2", 100});
     values.push_back({"test_3", 0});
     auto enum16_type = std::make_shared<DataTypeEnum16>(values);
-    ASSERT_EQ(RoughCheck::Cmp<EqualsOp>::compare(Field((String) "test"), enum16_type, (Int16) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test_2"), enum16_type, (Int16) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test_3"), enum16_type, (Int16) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16) 49), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOp>::compare(Field((String) "test"), enum16_type, (Int16) 49), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16) 49), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test_3"), enum16_type, (Int16) -1), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOp>::compare(Field((String) "test"), enum16_type, (Int16) 51), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16) 50), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16) 51), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test_2"), enum16_type, (Int16) 101), true);
+    ASSERT_EQ(RoughCheck::Cmp<EqualsOp>::compare(Field((String) "test"), enum16_type, (Int16)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test_2"), enum16_type, (Int16)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test_3"), enum16_type, (Int16)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<NotEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16)49), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOp>::compare(Field((String) "test"), enum16_type, (Int16)49), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16)49), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Field((String) "test_3"), enum16_type, (Int16)-1), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOp>::compare(Field((String) "test"), enum16_type, (Int16)51), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16)50), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16)51), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test_2"), enum16_type, (Int16)101), true);
 }
 CATCH
 } // namespace tests
