@@ -40,7 +40,6 @@ void ErrorExporter::writeError(const TiFlashError & error)
         error.description.data(),
         error.workaround.data());
     DB::writeString(buffer, wb);
-    return;
 }
 
 void ErrorExporter::flush()
