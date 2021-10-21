@@ -424,8 +424,8 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
         LOG_INFO(
             log,
-                  __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
-                                      << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+            __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
+                                << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
     };
 
     auto sync_schema = [&] {
