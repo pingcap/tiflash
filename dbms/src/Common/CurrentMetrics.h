@@ -72,7 +72,7 @@ private:
     }
 
 public:
-    Increment(Metric metric, Value amount = 1)
+    explicit Increment(Metric metric, Value amount = 1)
         : Increment(&values[metric], amount)
     {}
 
