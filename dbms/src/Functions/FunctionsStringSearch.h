@@ -6,7 +6,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -99,7 +99,7 @@ public:
         UInt8 escape_char = CH_ESCAPE_CHAR;
         if (has_3_args)
         {
-            auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
+            const auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
             bool valid_args = true;
             if (col_escape_const == nullptr)
             {
@@ -115,7 +115,7 @@ public:
                 }
                 else
                 {
-                    escape_char = (UInt8)c;
+                    escape_char = static_cast<UInt8>(c);
                 }
             }
             if (!valid_args)
@@ -128,7 +128,7 @@ public:
         {
             ResultType res{};
             String needle_string = col_needle_const->getValue<String>();
-            Impl::constant_constant(col_haystack_const->getValue<String>(), needle_string, escape_char, collator, res);
+            Impl::constantConstant(col_haystack_const->getValue<String>(), needle_string, escape_char, collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
         }
@@ -142,7 +142,7 @@ public:
         const ColumnString * col_needle_vector = checkAndGetColumn<ColumnString>(&*column_needle);
 
         if (col_haystack_vector && col_needle_vector)
-            Impl::vector_vector(col_haystack_vector->getChars(),
+            Impl::vectorVector(col_haystack_vector->getChars(),
                                 col_haystack_vector->getOffsets(),
                                 col_needle_vector->getChars(),
                                 col_needle_vector->getOffsets(),
@@ -152,10 +152,15 @@ public:
         else if (col_haystack_vector && col_needle_const)
         {
             String needle_string = col_needle_const->getValue<String>();
-            Impl::vector_constant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(), needle_string, escape_char, collator, vec_res);
+            Impl::vectorConstant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(), needle_string, escape_char, collator, vec_res);
         }
         else if (col_haystack_const && col_needle_vector)
-            Impl::constant_vector(col_haystack_const->getValue<String>(), col_needle_vector->getChars(), col_needle_vector->getOffsets(), escape_char, collator, vec_res);
+        {
+            auto haystack = col_haystack_const->getValue<String>();
+            const ColumnString::Chars_t & needle_chars = col_needle_vector->getChars();
+            const IColumn::Offsets & needle_offsets = col_needle_vector->getOffsets();
+            Impl::constantVector(haystack, needle_chars, needle_offsets, escape_char, collator, vec_res);
+        }
         else
             throw Exception("Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
                                 + block.getByPosition(arguments[1]).column->getName()
@@ -233,58 +238,5 @@ public:
                 "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
-};
-
-struct NamePosition
-{
-    static constexpr auto name = "position";
-};
-struct NamePositionUTF8
-{
-    static constexpr auto name = "positionUTF8";
-};
-struct NamePositionCaseInsensitive
-{
-    static constexpr auto name = "positionCaseInsensitive";
-};
-struct NamePositionCaseInsensitiveUTF8
-{
-    static constexpr auto name = "positionCaseInsensitiveUTF8";
-};
-struct NameMatch
-{
-    static constexpr auto name = "match";
-};
-struct NameLike
-{
-    static constexpr auto name = "like";
-};
-struct NameLike3Args
-{
-    static constexpr auto name = "like3Args";
-};
-struct NameNotLike
-{
-    static constexpr auto name = "notLike";
-};
-struct NameExtract
-{
-    static constexpr auto name = "extract";
-};
-struct NameReplaceOne
-{
-    static constexpr auto name = "replaceOne";
-};
-struct NameReplaceAll
-{
-    static constexpr auto name = "replaceAll";
-};
-struct NameReplaceRegexpOne
-{
-    static constexpr auto name = "replaceRegexpOne";
-};
-struct NameReplaceRegexpAll
-{
-    static constexpr auto name = "replaceRegexpAll";
 };
 } // namespace DB

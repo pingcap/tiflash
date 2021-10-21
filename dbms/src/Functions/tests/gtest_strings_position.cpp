@@ -23,8 +23,6 @@ namespace tests
 {
 class StringPosition : public DB::tests::FunctionTest
 {
-<<<<<<< HEAD
-=======
 protected:
     static void SetUpTestCase()
     {
@@ -37,7 +35,6 @@ protected:
             // Maybe another test has already registered, ignore exception here.
         }
     }
->>>>>>> 2640a11cf (add test)
 };
 
 // test string and fixed string

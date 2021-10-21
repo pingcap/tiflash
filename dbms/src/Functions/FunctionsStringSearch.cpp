@@ -107,7 +107,7 @@ struct PositionCaseSensitiveUTF8
     static size_t countChars(const char * begin, const char * end)
     {
         size_t res = 0;
-        for (auto it = begin; it != end; ++it)
+        for (const char * it = begin; it != end; ++it)
             if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
                 ++res;
         return res;
@@ -136,7 +136,7 @@ struct PositionCaseInsensitiveUTF8
     static size_t countChars(const char * begin, const char * end)
     {
         size_t res = 0;
-        for (auto it = begin; it != end; ++it)
+        for (const char * it = begin; it != end; ++it)
             if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
                 ++res;
         return res;
@@ -154,7 +154,7 @@ struct PositionImpl
     using ResultType = UInt64;
 
     /// Find one substring in many strings.
-    static void vector_constant(const ColumnString::Chars_t & data,
+    static void vectorConstant(const ColumnString::Chars_t & data,
                                 const ColumnString::Offsets & offsets,
                                 const std::string & needle,
                                 const UInt8 escape_char,
@@ -199,7 +199,7 @@ struct PositionImpl
     }
 
     /// Search for substring in string.
-    static void constant_constant(std::string data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, UInt64 & res)
+    static void constantConstant(std::string data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, UInt64 & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -214,7 +214,7 @@ struct PositionImpl
     }
 
     /// Search each time for a different single substring inside each time different string.
-    static void vector_vector(const ColumnString::Chars_t & haystack_data,
+    static void vectorVector(const ColumnString::Chars_t & haystack_data,
                               const ColumnString::Offsets & haystack_offsets,
                               const ColumnString::Chars_t & needle_data,
                               const ColumnString::Offsets & needle_offsets,
@@ -264,7 +264,7 @@ struct PositionImpl
     }
 
     /// Find many substrings in one line.
-    static void constant_vector(const String & haystack,
+    static void constantVector(const String & haystack,
                                 const ColumnString::Chars_t & needle_data,
                                 const ColumnString::Offsets & needle_offsets,
                                 const UInt8 escape_char,
@@ -406,11 +406,12 @@ template <bool like, bool revert = false>
 struct MatchImpl
 {
     using ResultType = UInt8;
+    Poco::Logger * log = &Poco::Logger::get("MatchImpl");
 
-    static void vector_constant(const ColumnString::Chars_t & data,
+    static void vectorConstant(const ColumnString::Chars_t & data,
                                 const ColumnString::Offsets & offsets,
                                 const std::string & orig_pattern,
-                                const UInt8 escape_char,
+                                UInt8 escape_char,
                                 const TiDB::TiDBCollatorPtr & collator,
                                 PaddedPODArray<UInt8> & res)
     {
@@ -574,7 +575,11 @@ struct MatchImpl
         }
     }
 
-    static void constant_constant(const std::string & data, const std::string & orig_pattern, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, UInt8 & res)
+    static void constantConstant(const std::string & data,
+                                 const std::string & orig_pattern,
+                                 UInt8 escape_char,
+                                 const TiDB::TiDBCollatorPtr & collator,
+                                 UInt8 & res)
     {
         if (collator != nullptr)
         {
@@ -592,36 +597,50 @@ struct MatchImpl
         }
     }
 
-    static void vector_vector(const ColumnString::Chars_t & haystack_data,
-                              const ColumnString::Offsets & haystack_offsets,
-                              const ColumnString::Chars_t & needle_data,
-                              const ColumnString::Offsets & needle_offsets,
-                              const UInt8 escape_char,
-                              const TiDB::TiDBCollatorPtr & collator,
-                              PaddedPODArray<UInt8> & res)
+    static void vectorVector(const ColumnString::Chars_t & haystack_data,
+                             const ColumnString::Offsets & haystack_offsets,
+                             const ColumnString::Chars_t & needle_data,
+                             const ColumnString::Offsets & needle_offsets,
+                             UInt8 escape_char,
+                             const TiDB::TiDBCollatorPtr & collator,
+                             PaddedPODArray<UInt8> & res)
     {
         size_t size = haystack_offsets.size();
-        std::string haystack_str(reinterpret_cast<const char *>(&haystack_data[0]), haystack_offsets[size - 1]);
-        std::string needle_str(reinterpret_cast<const char *>(&needle_data[0]), needle_offsets[size - 1]);
 
         ColumnString::Offset prev_haystack_offset = 0;
         ColumnString::Offset prev_needle_offset = 0;
 
-        for (size_t i = 0; i < size; i++)
+        for (size_t i = 0; i < size; ++i)
         {
             size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
             size_t haystack_size = haystack_offsets[i] - prev_haystack_offset - 1;
-            constant_constant(haystack_str.substr(prev_haystack_offset, haystack_size), needle_str.substr(prev_needle_offset, needle_size), escape_char, collator, res[i]);
+            std::string haystack_str(reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset]), haystack_size);
+            std::string needle_str(reinterpret_cast<const char *>(&needle_data[prev_needle_offset]), needle_size);
+            constantConstant(haystack_str, needle_str, escape_char, collator, res[i]);
             prev_haystack_offset = haystack_offsets[i];
             prev_needle_offset = needle_offsets[i];
         }
     }
 
     /// Search different needles in single haystack.
-    template <typename... Args>
-    static void constant_vector(Args &&...)
+    static void constantVector(const std::string & haystack_data,
+                               const ColumnString::Chars_t & needle_data,
+                               const ColumnString::Offsets & needle_offsets,
+                               UInt8 escape_char,
+                               const TiDB::TiDBCollatorPtr & collator,
+                               PaddedPODArray<UInt8> & res)
     {
-        throw Exception("Functions 'like' and 'match' don't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
+        size_t size = needle_offsets.size();
+
+        ColumnString::Offset prev_needle_offset = 0;
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
+            std::string needle_str(reinterpret_cast<const char *>(&needle_data[prev_needle_offset]), needle_size);
+            constantConstant(haystack_data, needle_str, escape_char, collator, res[i]);
+            prev_needle_offset = needle_offsets[i];
+        }
     }
 };
 
@@ -1755,6 +1774,59 @@ private:
             throw Exception("Argument at index 2 and 3 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
+};
+
+struct NamePosition
+{
+    static constexpr auto name = "position";
+};
+struct NamePositionUTF8
+{
+    static constexpr auto name = "positionUTF8";
+};
+struct NamePositionCaseInsensitive
+{
+    static constexpr auto name = "positionCaseInsensitive";
+};
+struct NamePositionCaseInsensitiveUTF8
+{
+    static constexpr auto name = "positionCaseInsensitiveUTF8";
+};
+struct NameMatch
+{
+    static constexpr auto name = "match";
+};
+struct NameLike
+{
+    static constexpr auto name = "like";
+};
+struct NameLike3Args
+{
+    static constexpr auto name = "like3Args";
+};
+struct NameNotLike
+{
+    static constexpr auto name = "notLike";
+};
+struct NameExtract
+{
+    static constexpr auto name = "extract";
+};
+struct NameReplaceOne
+{
+    static constexpr auto name = "replaceOne";
+};
+struct NameReplaceAll
+{
+    static constexpr auto name = "replaceAll";
+};
+struct NameReplaceRegexpOne
+{
+    static constexpr auto name = "replaceRegexpOne";
+};
+struct NameReplaceRegexpAll
+{
+    static constexpr auto name = "replaceRegexpAll";
 };
 
 // using FunctionPosition = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveASCII>, NamePosition>;
