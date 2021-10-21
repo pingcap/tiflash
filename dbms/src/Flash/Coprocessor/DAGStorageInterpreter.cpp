@@ -507,12 +507,12 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     }
 
     auto print_retry_regions = [this] {
-        auto out = fmt::memory_buffer();
-        fmtAppend(out, "Start to retry {} regions (", region_retry.size());
+        FmtBuffer buffer;
+        buffer.append("Start to retry {} regions (", region_retry.size());
         for (const auto & r : region_retry)
-            fmtAppend(out, "{},", r.get().region_id);
-        fmtAppend(out, ")");
-        return fmt::to_string(out);
+            buffer.append("{},", r.get().region_id);
+        buffer.append(")");
+        return buffer.toString();
     };
     LOG_INFO(log, print_retry_regions());
 
