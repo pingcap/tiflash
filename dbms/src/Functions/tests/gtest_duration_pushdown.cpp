@@ -49,10 +49,9 @@ try
     ASSERT_COLUMN_EQ(
         result_col2,
         executeFunction(
-                "FunctionConvertDurationFromNanos",
-                createConstColumn<Int64>(3, 3),
-                createConstColumn<Int64>(3, 2))
-        );
+            "FunctionConvertDurationFromNanos",
+            createConstColumn<Int64>(3, 3),
+            createConstColumn<Int64>(3, 2)));
 }
 CATCH
 } // namespace tests
