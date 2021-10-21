@@ -71,6 +71,9 @@ private:
         size_t num_migrate_pages;
     };
 
+    bool
+    isPageFileExistInAllPath(const PageFileIdAndLevel & file_id_and_level);
+
     CompactCandidates
     selectCandidateFiles(const PageFileSet & page_files,
                          const ValidPages & files_valid_pages,

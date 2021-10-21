@@ -217,6 +217,21 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
 }
 
 template <typename SnapshotPtr>
+bool DataCompactor<SnapshotPtr>::isPageFileExistInAllPath(const PageFileIdAndLevel & file_id_and_level)
+{
+    const auto paths = delegator->listPaths();
+    for (const auto & pf_parent_path : paths)
+    {
+        if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
+            || PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename SnapshotPtr>
 std::tuple<PageEntriesEdit, size_t> //
 DataCompactor<SnapshotPtr>::migratePages( //
     const SnapshotPtr & snapshot,
@@ -249,24 +264,20 @@ DataCompactor<SnapshotPtr>::migratePages( //
     //   Some how PageFile_1000_0 don't get deleted (maybe there is a snapshot that need to read Pages inside it) and
     //   we start a new round of GC. PageFile_998_0(again), PageFile_999_0(new), PageFile_1000_0(again) are picked into
     //   candidates and 1000_0 is the largest file_id.
+
+    // We need to check existence for multi disks deployment, or we may generate the same file id
+    // among different disks, some of them will be ignored by the PageFileSet because of duplicated
+    // file id while restoring from disk
+    if (checkFileExist(migrate_file_id))
     {
-        // We need to check existence for multi disks deployment, or we may generate the same file id
-        // among different disks, some of them will be ignored by the PageFileSet because of duplicated
-        // file id while restoring from disk
-        const auto paths = delegator->listPaths();
-        for (const auto & pf_parent_path : paths)
-        {
-            if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
-                || PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
-            {
-                LOG_INFO(log,
-                         storage_name << " GC migration to PageFile_" //
-                                      << migrate_file_id.first << "_" << migrate_file_id.second << " is done before.");
-                return {PageEntriesEdit{}, 0};
-            }
-        }
-        // else the PageFile is not exists in all paths, continue migration.
+        LOG_INFO(log,
+                 storage_name << " GC migration to PageFile_" //
+                              << migrate_file_id.first << "_" << migrate_file_id.second << " is done before.");
+        return {PageEntriesEdit{}, 0};
     }
+
+    // else the PageFile is not exists in all paths, continue migration.
+
 
     // Choose one path for creating a tmp PageFile for migration
     const String pf_parent_path = delegator->choosePath(migrate_file_id);
@@ -339,14 +350,10 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
     logMigrationDetails(migrate_infos, migrate_file_id);
 
-    // Do invaild pages move
-    PageEntriesEdit hardlink_migrate_entries_edit;
-
     for (auto & page_file : candidates.hardlink_candidates)
     {
         const PageFileIdAndLevel hardlink_file_id{page_file.getFileId(), page_file.getLevel() + 1};
-        if (PageFile::isPageFileExist(hardlink_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log)
-            || PageFile::isPageFileExist(hardlink_file_id, pf_parent_path, file_provider, PageFile::Type::Legacy, page_file_log))
+        if (isPageFileExistInAllPath(hardlink_file_id))
         {
             LOG_INFO(log,
                      storage_name << " GC link to PageFile_" //
@@ -372,11 +379,10 @@ DataCompactor<SnapshotPtr>::migratePages( //
             hard_link_file.destroy();
             continue;
         }
-        hardlink_migrate_entries_edit.concate(edit_);
-        hard_link_file.setFormal();
-    }
 
-    gc_file_edit.concate(hardlink_migrate_entries_edit);
+        hard_link_file.setFormal();
+        gc_file_edit.concate(edit_);
+    }
 
     if (gc_file_edit.empty())
     {
