@@ -11,7 +11,7 @@ class FunctionTimerTask : public Poco::Util::TimerTask
 public:
     using Task = std::function<void()>;
 
-    FunctionTimerTask(Task task_)
+    explicit FunctionTimerTask(Task task_)
         : task(task_)
     {}
 

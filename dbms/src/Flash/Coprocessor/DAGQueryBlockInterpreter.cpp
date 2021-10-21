@@ -10,7 +10,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -21,6 +20,7 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -1106,7 +1106,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     LOG_INFO(log,
              "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
 
-    dag.getDAGContext().final_concurrency = pipeline.streams.size();
+    dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
     if (res.need_aggregate)
     {
         // execute aggregation
@@ -1180,22 +1180,13 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     {
         size_t concurrency = pipeline.streams.size();
         executeUnion(pipeline, max_streams, log);
-        if (!query_block.isRootQueryBlock() && concurrency > 1)
-        {
-            BlockInputStreamPtr shared_query_block_input_stream
-                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
-            pipeline.streams.assign(concurrency, shared_query_block_input_stream);
-        }
+        if (!query_block.isRootQueryBlock())
+            restoreConcurrency(pipeline, concurrency, log);
     }
 
     /// expand concurrency after agg
-    if (!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size() == 1)
-    {
-        size_t concurrency = before_agg_streams;
-        BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
-        pipeline.streams.assign(concurrency, shared_query_block_input_stream);
-    }
+    if (!query_block.isRootQueryBlock())
+        restoreConcurrency(pipeline, before_agg_streams, log);
 
     return pipeline.streams;
 }

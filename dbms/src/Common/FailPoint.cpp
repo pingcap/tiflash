@@ -82,7 +82,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 namespace FailPoints
 {
-#define M(NAME) extern const char NAME[] = #NAME "";
+#define M(NAME) extern const char(NAME)[] = #NAME "";
 APPLY_FOR_FAILPOINTS_ONCE(M)
 APPLY_FOR_FAILPOINTS(M)
 APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
