@@ -18,3 +18,10 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; select * from t where a like
 +------+------+
 | aaaa | %a%  |
 +------+------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from t where 'a' like b;
++------+------+
+| a    | b    |
++------+------+
+| aaaa | %a%  |
++------+------+
