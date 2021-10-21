@@ -155,11 +155,11 @@ struct PositionImpl
 
     /// Find one substring in many strings.
     static void vectorConstant(const ColumnString::Chars_t & data,
-                                const ColumnString::Offsets & offsets,
-                                const std::string & needle,
-                                const UInt8 escape_char,
-                                const TiDB::TiDBCollatorPtr & collator,
-                                PaddedPODArray<UInt64> & res)
+                               const ColumnString::Offsets & offsets,
+                               const std::string & needle,
+                               const UInt8 escape_char,
+                               const TiDB::TiDBCollatorPtr & collator,
+                               PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -215,12 +215,12 @@ struct PositionImpl
 
     /// Search each time for a different single substring inside each time different string.
     static void vectorVector(const ColumnString::Chars_t & haystack_data,
-                              const ColumnString::Offsets & haystack_offsets,
-                              const ColumnString::Chars_t & needle_data,
-                              const ColumnString::Offsets & needle_offsets,
-                              const UInt8 escape_char,
-                              const TiDB::TiDBCollatorPtr & collator,
-                              PaddedPODArray<UInt64> & res)
+                             const ColumnString::Offsets & haystack_offsets,
+                             const ColumnString::Chars_t & needle_data,
+                             const ColumnString::Offsets & needle_offsets,
+                             const UInt8 escape_char,
+                             const TiDB::TiDBCollatorPtr & collator,
+                             PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -265,11 +265,11 @@ struct PositionImpl
 
     /// Find many substrings in one line.
     static void constantVector(const String & haystack,
-                                const ColumnString::Chars_t & needle_data,
-                                const ColumnString::Offsets & needle_offsets,
-                                const UInt8 escape_char,
-                                const TiDB::TiDBCollatorPtr & collator,
-                                PaddedPODArray<UInt64> & res)
+                               const ColumnString::Chars_t & needle_data,
+                               const ColumnString::Offsets & needle_offsets,
+                               const UInt8 escape_char,
+                               const TiDB::TiDBCollatorPtr & collator,
+                               PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -409,11 +409,11 @@ struct MatchImpl
     Poco::Logger * log = &Poco::Logger::get("MatchImpl");
 
     static void vectorConstant(const ColumnString::Chars_t & data,
-                                const ColumnString::Offsets & offsets,
-                                const std::string & orig_pattern,
-                                UInt8 escape_char,
-                                const TiDB::TiDBCollatorPtr & collator,
-                                PaddedPODArray<UInt8> & res)
+                               const ColumnString::Offsets & offsets,
+                               const std::string & orig_pattern,
+                               UInt8 escape_char,
+                               const TiDB::TiDBCollatorPtr & collator,
+                               PaddedPODArray<UInt8> & res)
     {
         if (collator != nullptr)
         {

@@ -143,12 +143,12 @@ public:
 
         if (col_haystack_vector && col_needle_vector)
             Impl::vectorVector(col_haystack_vector->getChars(),
-                                col_haystack_vector->getOffsets(),
-                                col_needle_vector->getChars(),
-                                col_needle_vector->getOffsets(),
-                                escape_char,
-                                collator,
-                                vec_res);
+                               col_haystack_vector->getOffsets(),
+                               col_needle_vector->getChars(),
+                               col_needle_vector->getOffsets(),
+                               escape_char,
+                               collator,
+                               vec_res);
         else if (col_haystack_vector && col_needle_const)
         {
             String needle_string = col_needle_const->getValue<String>();
