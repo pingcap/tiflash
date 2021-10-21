@@ -11,7 +11,7 @@ namespace tests
 TEST(PageFile_test, Compare)
 {
     // clean up
-    const String path = TiFlashTestEnv::getTemporaryPath("page_file_test");
+    const String path = TiFlashTestEnv::getTemporaryPath("page_file_compare");
     {
         if (Poco::File p(path); p.exists())
         {
