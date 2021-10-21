@@ -11,7 +11,7 @@ namespace tests
 TEST(PageFile_test, Compare)
 {
     // clean up
-    const String path = TiFlashTestEnv::getTemporaryPath() + "/page_file_test";
+    const String path = TiFlashTestEnv::getTemporaryPath("page_file_test");
     {
         if (Poco::File p(path); p.exists())
         {
@@ -25,18 +25,18 @@ TEST(PageFile_test, Compare)
 
     {
         // Create files for tests
-        PageFile checkpoint_pf = PageFile::newPageFile(55, 0, path, file_provider, PageFile::Type::Temp, log);
+        PageFile checkpoint_pf = PageFile::newPageFile(155, 0, path, file_provider, PageFile::Type::Temp, log);
         auto writer = checkpoint_pf.createWriter(false, true);
         checkpoint_pf.setCheckpoint();
-        PageFile pf0 = PageFile::newPageFile(2, 0, path, file_provider, PageFile::Type::Formal, log);
+        PageFile pf0 = PageFile::newPageFile(12, 0, path, file_provider, PageFile::Type::Formal, log);
         writer = pf0.createWriter(false, true);
-        PageFile pf1 = PageFile::newPageFile(55, 1, path, file_provider, PageFile::Type::Formal, log);
+        PageFile pf1 = PageFile::newPageFile(155, 1, path, file_provider, PageFile::Type::Formal, log);
         writer = pf1.createWriter(false, true);
     }
 
-    PageFile checkpoint_pf = PageFile::openPageFileForRead(55, 0, path, file_provider, PageFile::Type::Checkpoint, log);
-    PageFile pf0 = PageFile::openPageFileForRead(2, 0, path, file_provider, PageFile::Type::Formal, log);
-    PageFile pf1 = PageFile::openPageFileForRead(55, 1, path, file_provider, PageFile::Type::Formal, log);
+    PageFile checkpoint_pf = PageFile::openPageFileForRead(155, 0, path, file_provider, PageFile::Type::Checkpoint, log);
+    PageFile pf0 = PageFile::openPageFileForRead(12, 0, path, file_provider, PageFile::Type::Formal, log);
+    PageFile pf1 = PageFile::openPageFileForRead(155, 1, path, file_provider, PageFile::Type::Formal, log);
 
     PageFile::Comparator comp;
     ASSERT_EQ(comp(pf0, pf1), true);
