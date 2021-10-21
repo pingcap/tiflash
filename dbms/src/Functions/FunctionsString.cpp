@@ -162,7 +162,7 @@ using ConstPtr = T const *;
 
 // there is a bug in tree-optimizer for GCC < 7.3.1,
 // which will result in wrong code generation for avx512.
-#ifdef __GNUC__
+#if defined(__GNUC_PREREQ) && defined(__GNUC_PATCHLEVEL__)
 #define TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT \
     (__GNUC_PREREQ(7, 4) || (__GNUC_PREREQ(7, 3) && __GNUC_PATCHLEVEL__ >= 1))
 #else
@@ -475,7 +475,7 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
      const ConstPtr<UInt8> src_end,
      Ptr<UInt8> & dst),
     {
-        static const auto flip_mask = SimdWord::fromSingle<int8_t>(flip_case_mask);
+        static const auto flip_mask = SimdWord::template fromSingle<int8_t>(flip_case_mask);
         while (src + WORD_SIZE < src_end)
         {
             auto word = SimdWord::fromUnaligned(src);
@@ -535,7 +535,7 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
      const ConstPtr<UInt8> src_end,
      Ptr<UInt8> & dst),
     {
-        static const auto flip_mask = SimdWord::fromSingle<int8_t>(flip_case_mask);
+        static const auto flip_mask = SimdWord::template fromSingle<int8_t>(flip_case_mask);
         while (src + WORD_SIZE < src_end)
         {
             auto word = SimdWord::fromUnaligned(src);
