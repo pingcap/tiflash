@@ -3,6 +3,9 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <cctz/civil_time.h>
+#include <cctz/time_zone.h>
+#include <cctz/zone_info_source.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -86,6 +89,31 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns)
 {
     auto & factory = FunctionFactory::instance();
+
+    Block block(columns);
+    ColumnNumbers cns;
+    for (size_t i = 0; i < columns.size(); ++i)
+        cns.push_back(i);
+
+    auto bp = factory.tryGet(func_name, context);
+    if (!bp)
+        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+    auto func = bp->build(columns);
+    block.insert({nullptr, func->getReturnType(), "res"});
+    func->execute(block, cns, columns.size());
+    return block.getByPosition(columns.size());
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunctionAndSetTimezone(const String & func_name, const ColumnsWithTypeAndName & columns, const Int64 offset)
+{
+    auto & factory = FunctionFactory::instance();
+
+    auto & timezone_info = context.getTimezoneInfo();
+    timezone_info.is_name_based = false;
+    timezone_info.timezone_offset = offset;
+    timezone_info.timezone = &DateLUT::instance("UTC");
+    timezone_info.timezone_name = "";
+    timezone_info.is_utc_timezone = offset == 0;
 
     Block block(columns);
     ColumnNumbers cns;

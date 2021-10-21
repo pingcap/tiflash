@@ -2848,12 +2848,12 @@ public:
     void executeImpl(Block & block, const ColumnNumbers &, size_t result) const override
     {
         const int row_count = block.rows();
-        const UInt64 sysdate_packet = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo()).toPackedUInt();
+        const UInt64 sysdate_packed = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo()).toPackedUInt();
         auto col_to = ColumnVector<DataTypeMyDateTime::FieldType>::create(row_count);
         auto & vec_to = col_to->getData();
         vec_to.resize(row_count);
         if (row_count > 0)
-            array(sysdate_packet, row_count, &vec_to[0]);
+            array(sysdate_packed, row_count, &vec_to[0]);
 
         block.getByPosition(result).column = std::move(col_to);
     }
