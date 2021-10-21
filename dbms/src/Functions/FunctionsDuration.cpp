@@ -30,7 +30,7 @@ DataTypePtr FunctionConvertDurationFromNanos::getReturnTypeImpl(const ColumnsWit
 
 void FunctionConvertDurationFromNanos::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
 {
-    block.getByPosition(result).column = std::move(block.getByPosition(arguments[0]).column);
+    block.getByPosition(result).column = block.getByPosition(arguments[0]).column;
 }
 
 void registerFunctionsDuration(FunctionFactory & factory)
