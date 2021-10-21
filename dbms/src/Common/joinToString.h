@@ -24,7 +24,7 @@ inline void joinIter(
     toStringFunc(*iter++, buf);
     for (; iter != end; ++iter)
     {
-        buf.template append(delimiter);
+        buf.append(delimiter);
         toStringFunc(*iter, buf);
     }
 }

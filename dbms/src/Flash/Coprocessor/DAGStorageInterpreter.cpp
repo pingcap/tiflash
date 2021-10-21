@@ -508,9 +508,9 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
 
     auto print_retry_regions = [this] {
         FmtBuffer buffer;
-        buffer.append("Start to retry {} regions (", region_retry.size());
+        buffer.fmtAppend("Start to retry {} regions (", region_retry.size());
         for (const auto & r : region_retry)
-            buffer.append("{},", r.get().region_id);
+            buffer.fmtAppend("{},", r.get().region_id);
         buffer.append(")");
         return buffer.toString();
     };
