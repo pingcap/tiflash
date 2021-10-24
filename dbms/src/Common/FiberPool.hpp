@@ -209,6 +209,7 @@ public:
         // the fiber completes
         auto result_future = task.get_future();
 
+        /*
         if (g_run_in_fiber)
         {
             boost::fibers::fiber(launch_policy,
@@ -218,6 +219,7 @@ public:
                     }).detach();
             return std::make_optional(std::move(result_future));
         }
+        */
 
         // finally submit the packaged task into work queue
         auto status = m_work_queue.push(
