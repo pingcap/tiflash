@@ -1,4 +1,6 @@
 #include <Common/Exception.h>
+#include <Common/FiberPool.hpp>
+#include <Common/IOThreadPool.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
@@ -25,7 +27,14 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
         grpc::CompletionQueue & cq,
         void * call)
     {
-        return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call);
+        auto job = [&] { return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call); };
+        if (g_run_in_fiber)
+        {
+            auto future = DB::IOThreadPool::instance().schedule(job);
+            future.wait();
+            return future.get();
+        }
+        return job();
     }
 };
 

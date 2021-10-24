@@ -1,4 +1,6 @@
 #include <Common/FailPoint.h>
+#include <Common/FiberPool.hpp>
+#include <Common/IOThreadPool.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -153,7 +155,17 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
 
     if (!mvcc_query_info->regions_query_info.empty())
-        doLocalRead(pipeline, settings.max_block_size);
+    {
+        auto job = [&] { doLocalRead(pipeline, settings.max_block_size); };
+        if (g_run_in_fiber)
+        {
+            auto future = IOThreadPool::instance().schedule(job);
+            future.wait();
+            future.get();
+        }
+        else
+            job();
+    }
 
     for (auto & region_info : dag.getRegionsForRemoteRead())
         region_retry.emplace_back(region_info);

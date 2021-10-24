@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/IOThreadPool.h>
 #include <Common/ThreadFactory.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
@@ -39,10 +40,10 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         if (!finished)
             writeDone();
         send_queue.close();
-        if (nullptr != send_thread && send_thread->joinable())
+        if (send_thread.has_value())
         {
-            send_done.get_future().wait();
-            send_thread->join();
+            send_thread.value().wait();
+            send_thread.value().get();
         }
     }
     catch (...)
@@ -161,7 +162,6 @@ void MPPTunnelBase<Writer>::sendLoop()
     {
         finishWithLock();
     }
-    send_done.set_value();
 }
 
 /// done normally and being called exactly once after writing all packets
@@ -190,7 +190,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
-    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+    send_thread = IOThreadPool::instance().schedule([this] { sendLoop(); });
 
     connected = true;
     cv_for_connected.notify_all();

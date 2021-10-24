@@ -5,6 +5,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/IOThreadPool.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -956,6 +957,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     (void)GRPCCompletionQueuePool::Instance()->pickQueue();
+    (void)IOThreadPool::instance();
 
     /// ===== Paths related configuration initialized start ===== ///
     /// Note that theses global variables should be initialized by the following order:

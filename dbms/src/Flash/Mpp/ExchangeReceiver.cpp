@@ -175,7 +175,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     break;
 
                 using namespace std::chrono_literals;
-                std::this_thread::sleep_for(1s);
+                boost::this_fiber::sleep_for(1s);
             }
         }
         if (!status.ok())

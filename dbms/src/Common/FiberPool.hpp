@@ -8,7 +8,7 @@
 #include <Common/BitHelpers.h>
 #include <boost/fiber/all.hpp> 
 
- inline thread_local bool g_run_in_fiber = false;
+inline thread_local bool g_run_in_fiber = false;
 
 inline void adaptive_yield()
 {
@@ -208,6 +208,16 @@ public:
         // get future for obtaining future result when 
         // the fiber completes
         auto result_future = task.get_future();
+
+        if (g_run_in_fiber)
+        {
+            boost::fibers::fiber(launch_policy,
+                    [task = std::move(task)]() mutable
+                    {
+                        task();
+                    }).detach();
+            return std::make_optional(std::move(result_future));
+        }
 
         // finally submit the packaged task into work queue
         auto status = m_work_queue.push(

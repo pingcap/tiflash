@@ -1,11 +1,11 @@
 #pragma once
 
 #include <Common/FiberPool.hpp>
+#include <Common/IOThreadPool.h>
 #include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
-#include <thread>
 
 namespace DB
 {
@@ -53,9 +53,8 @@ public:
             return;
         read_prefixed = true;
 
-        /// Start reading thread.
         if (run_in_thread)
-            thread = std::make_unique<std::thread>(ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); }));
+            future = IOThreadPool::instance().schedule([this] { fetchBlocks(); });
         else
             future = DefaultFiberPool::submit_job([this] { fetchBlocks(); });
     }
@@ -68,23 +67,11 @@ public:
             return;
         read_suffixed = true;
         queue.close();
-        finished.get_future().wait();
 
-        if (run_in_thread)
+        if (future.has_value())
         {
-            if (thread && thread->joinable())
-            {
-                thread->join();
-                thread.reset();
-            }
-        }
-        else
-        {
-            if (future.has_value())
-            {
-                future.value().wait();
-                future.reset();
-            }
+            future.value().wait();
+            future.reset();
         }
         if (!exception_msg.empty())
             throw Exception(exception_msg);
@@ -161,8 +148,6 @@ protected:
         {
             exception_msg = "other error";
         }
-
-        finished.set_value();
     }
 
 private:
@@ -175,9 +160,7 @@ private:
     bool read_suffixed = false;
 
     std::optional<boost::fibers::future<void>> future;
-    std::unique_ptr<std::thread> thread;
     boost::fibers::mutex mutex;
-    boost::fibers::promise<void> finished;
 
     std::string exception_msg;
 
