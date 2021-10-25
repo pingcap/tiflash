@@ -1,10 +1,10 @@
 mysql> drop table if exists test.t;
 mysql> create table test.t(a char(20), b char(20));
-mysql> insert into test.t values("xxaxx", "x");
-mysql> insert into test.t values(" xxaxx", "x");
-mysql> insert into test.t values(" x x axx", " x");
-mysql> insert into test.t values("测试xx测试", "测试");
-mysql> insert into test.t values("测试xx测试", "测");
+mysql> insert into test.t values('xxaxx', 'x');
+mysql> insert into test.t values(' xxaxx', 'x');
+mysql> insert into test.t values(' x x axx', ' x');
+mysql> insert into test.t values('测试xx测试', '测试');
+mysql> insert into test.t values('测试xx测试', '测');
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
@@ -30,9 +30,9 @@ mysql> select trim(b from a) from test.t;
 | 试xx测试       |
 +----------------+
 
-mysql> select trim("x" from a) from test.t;
+mysql> select trim('x' from a) from test.t;
 +------------------+
-| trim("x" from a) |
+| trim('x' from a) |
 +------------------+
 | a                |
 |  xxa             |
@@ -63,9 +63,9 @@ mysql> select trim(leading b from a) from test.t;
 | 试xx测试               |
 +------------------------+
 
-mysql> select trim(leading "x" from a) from test.t;
+mysql> select trim(leading 'x' from a) from test.t;
 +--------------------------+
-| trim(leading "x" from a) |
+| trim(leading 'x' from a) |
 +--------------------------+
 | axx                      |
 |  xxaxx                   |
@@ -96,9 +96,9 @@ mysql> select trim(both b from a) from test.t;
 | 试xx测试            |
 +---------------------+
 
-mysql> select trim(both "x" from a) from test.t;
+mysql> select trim(both 'x' from a) from test.t;
 +-----------------------+
-| trim(both "x" from a) |
+| trim(both 'x' from a) |
 +-----------------------+
 | a                     |
 |  xxa                  |
@@ -129,9 +129,9 @@ mysql> select trim(trailing b from a) from test.t;
 | 测试xx测试              |
 +-------------------------+
 
-mysql> select trim(trailing "x" from a) from test.t;
+mysql> select trim(trailing 'x' from a) from test.t;
 +---------------------------+
-| trim(trailing "x" from a) |
+| trim(trailing 'x' from a) |
 +---------------------------+
 | xxa                       |
 |  xxa                      |
@@ -140,23 +140,23 @@ mysql> select trim(trailing "x" from a) from test.t;
 | 测试xx测试                |
 +---------------------------+
 
-mysql> select trim("x" from "x a x");
+mysql> select trim('x' from 'x a x');
 +------------------------+
-| trim("x" from "x a x") |
+| trim('x' from 'x a x') |
 +------------------------+
 |  a                     |
 +------------------------+
 
-mysql> select trim(leading from " x a x ");
+mysql> select trim(leading from ' x a x ');
 +------------------------------+
-| trim(leading from " x a x ") |
+| trim(leading from ' x a x ') |
 +------------------------------+
 | x a x                        |
 +------------------------------+
 
-mysql> select trim(leading null from " x a x ");
+mysql> select trim(leading null from ' x a x ');
 +-----------------------------------+
-| trim(leading null from " x a x ") |
+| trim(leading null from ' x a x ') |
 +-----------------------------------+
 | NULL                              |
 +-----------------------------------+
