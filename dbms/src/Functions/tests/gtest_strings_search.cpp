@@ -71,10 +71,10 @@ try
         std::optional<std::string> b;
     };
     std::vector<NullableCase> nullable_cases = {
-            {std::nullopt, std::nullopt, ""},
-            {std::nullopt, "a", std::nullopt},
-            {std::nullopt, std::nullopt, std::nullopt},
-            {1, "a", "%"},
+        {std::nullopt, std::nullopt, ""},
+        {std::nullopt, "a", std::nullopt},
+        {std::nullopt, std::nullopt, std::nullopt},
+        {1, "a", "%"},
     };
 
     InferredDataVector<Nullable<String>> nullable_haystack_raw = {};
