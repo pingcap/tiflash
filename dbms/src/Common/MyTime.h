@@ -165,9 +165,9 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
 
 void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone);
 
-MyDateTime convertUTC2TimeZone(size_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to);
+MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to);
 
-MyDateTime convertUTC2TimeZoneByOffset(size_t utc_ts, UInt32 micro_second, Int64 offset, const DateLUTImpl & time_zone_to);
+MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64 offset, const DateLUTImpl & time_zone_to);
 
 int calcDayNum(int year, int month, int day);
 
