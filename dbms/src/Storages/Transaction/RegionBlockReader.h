@@ -123,6 +123,13 @@ public:
     {
         return read(columns.getNamesOfPhysical(), data_list, force_decode);
     }
+
+    std::tuple<Block, bool> read2(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode);
+
+    inline std::tuple<Block, bool> read2(RegionDataReadInfoList & data_list, bool force_decode)
+    {
+        return read(columns.getNamesOfPhysical(), data_list, force_decode);
+    }
 };
 
 } // namespace DB

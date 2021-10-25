@@ -52,6 +52,47 @@ private:
     size_t ori_cap;
 };
 
+// ColumnID => <ColumnPtr, <name, type>>
+struct ColumnDataInfoMap2
+{
+    using ColTypeInfo = std::tuple<MutableColumnPtr, NameAndTypePair>;
+    using ColTypeInfoData = std::vector<ColTypeInfo>;
+
+    ColumnDataInfoMap2(const size_t cap, const ColumnID empty_id)
+    {
+        column_data.reserve(cap);
+        column_map.set_empty_key(empty_id);
+        ori_cap = column_data.capacity();
+    }
+
+    /// Notice: iterator of std::vector will invalid after the capacity changed, so !!! must set the capacity big enough
+    void checkValid() const
+    {
+        if (ori_cap != column_data.capacity())
+            throw Exception("ColumnDataInfoMap capacity changes", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    void insert(const ColumnID col_id, MutableColumnPtr && ptr, NameAndTypePair && name_pair, const size_t cap)
+    {
+        column_data.emplace_back(std::move(ptr), std::move(name_pair));
+        column_map.insert(std::make_pair(col_id, column_data.end() - 1));
+        getMutableColumnPtr(col_id)->reserve(cap);
+    }
+
+    MutableColumnPtr & getMutableColumnPtr(const ColumnID col_id) { return getMutableColumnPtr((*this)[col_id]); }
+    static MutableColumnPtr & getMutableColumnPtr(ColTypeInfo & info) { return std::get<0>(info); }
+
+    NameAndTypePair & getNameAndTypePair(const ColumnID col_id) { return getNameAndTypePair((*this)[col_id]); }
+    static NameAndTypePair & getNameAndTypePair(ColTypeInfo & info) { return std::get<1>(info); }
+
+    ColTypeInfo & operator[](const ColumnID col_id) { return *column_map[col_id]; }
+
+private:
+    ColTypeInfoData column_data;
+    google::dense_hash_map<ColumnID, ColTypeInfoData::iterator> column_map;
+    size_t ori_cap;
+};
+
 struct DecodedRecordData
 {
     DecodedRecordData(const size_t cap)
