@@ -224,6 +224,16 @@ void DAGQueryBlock::fillOutputFieldTypes()
     {
         return;
     }
+    /// the top block has exchangeSender, which decides the output fields, keeping the same with exchangeReceiver
+    if(exchangeSender != nullptr && exchangeSender->has_exchange_sender() && !exchangeSender->exchange_sender().all_field_types().empty())
+    {
+        for (auto & field_type : exchangeSender->exchange_sender().all_field_types())
+        {
+            output_field_types.push_back(field_type);
+        }
+        return;
+    }
+    /// the non-top block
     if (source->tp() == tipb::ExecType::TypeJoin)
     {
         for (auto & field_type : children[0]->output_field_types)
