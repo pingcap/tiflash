@@ -142,6 +142,11 @@ try
         size_t bytes_written = 0;
         std::tie(std::ignore, bytes_written) = compactor.migratePages(snapshot, valid_pages, DataCompactor<MockSnapshotPtr>::CompactCandidates{std::move(candidates), PageFileSet{}, PageFileSet{}, 0, 0}, 0);
         ASSERT_EQ(bytes_written, 0) << "should not apply migration";
+
+
+        // Don't remove this logic. Because these fail points may not be consumed. Then it will affect the next test.
+        FailPointHelper::disableFailPoint(FailPoints::force_formal_page_file_not_exists);
+        FailPointHelper::disableFailPoint(FailPoints::force_legacy_or_checkpoint_page_file_exists);
     }
 
     {
