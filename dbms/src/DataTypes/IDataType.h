@@ -1,14 +1,14 @@
 #pragma once
 
-#include <memory>
 #include <Common/COWPtr.h>
-#include <boost/noncopyable.hpp>
 #include <Core/Field.h>
+
+#include <boost/noncopyable.hpp>
+#include <memory>
 
 
 namespace DB
 {
-
 class ReadBuffer;
 class WriteBuffer;
 
@@ -87,7 +87,9 @@ public:
         /// Index of tuple element, starting at 1.
         String tuple_element_name;
 
-        Substream(Type type) : type(type) {}
+        Substream(Type type)
+            : type(type)
+        {}
     };
 
     using SubstreamPath = std::vector<Substream>;
@@ -100,8 +102,8 @@ public:
     void enumerateStreams(const StreamCallback & callback, SubstreamPath && path) const { enumerateStreams(callback, path); }
     void enumerateStreams(const StreamCallback & callback) const { enumerateStreams(callback, {}); }
 
-    using OutputStreamGetter = std::function<WriteBuffer*(const SubstreamPath &)>;
-    using InputStreamGetter = std::function<ReadBuffer*(const SubstreamPath &)>;
+    using OutputStreamGetter = std::function<WriteBuffer *(const SubstreamPath &)>;
+    using InputStreamGetter = std::function<ReadBuffer *(const SubstreamPath &)>;
 
     /** 'offset' and 'limit' are used to specify range.
       * limit = 0 - means no limit.
@@ -478,4 +480,4 @@ public:
 };
 
 
-}
+} // namespace DB

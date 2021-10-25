@@ -1,0 +1,62 @@
+mysql> drop table if exists test.t;
+mysql> create table if not exists test.t(a char(20), b int, c double);
+
+mysql> insert into test.t values('www.pingcap.com', 12345, 123.45);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select substring_index(a, '.', 2), substring_index(b, '.', 2), substring_index(c, '.', -1) from test.t;
++----------------------------+----------------------------+-----------------------------+
+| substring_index(a, '.', 2) | substring_index(b, '.', 2) | substring_index(c, '.', -1) |
++----------------------------+----------------------------+-----------------------------+
+| www.pingcap                | 12345                      | 45                          |
++----------------------------+----------------------------+-----------------------------+
+
+mysql> drop table if exists test.t;
+mysql> create table if not exists test.t(a varchar(100), b varchar(100), c int);
+mysql> insert into test.t values('www.pingcap.com', '.' , 1);
+mysql> insert into test.t values('www.pingcap.com', '.' , 2);
+mysql> insert into test.t values('www.pingcap.com', '.' , -2);
+mysql> insert into test.t values('www.pingcap.com', '.' , 100);
+mysql> insert into test.t values('www.pingcap.com', '.' , -100);
+
+mysql> insert into test.t values('www......pingcap....com', '..' , 1);
+mysql> insert into test.t values('www......pingcap....com', '..' , 2);
+mysql> insert into test.t values('www......pingcap....com', '..' , -2);
+mysql> insert into test.t values('www......pingcap....com', '..' , 3);
+mysql> insert into test.t values('www......pingcap....com', '..' , -4);
+
+mysql> insert into test.t values('测试测试测试测试abcd测试', '测' , 1);
+mysql> insert into test.t values('测试测试测试测试abcd测试', '试' , 2);
+mysql> insert into test.t values('测试测试abcd测试测试abcd测试', '试a' , -1);
+mysql> insert into test.t values('测试测试abcd测试测试abcd测试', 'bc' , 1);
+mysql> insert into test.t values('测试测试测试测试abcd测试', '试测' , 1);
+
+mysql> insert into test.t values(NULL, '测' , 1);
+mysql> insert into test.t values('测试', NULL , 2);
+mysql> insert into test.t values('测试', '试' , NULL);
+
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select substring_index(a, b, c) from test.t;
+substring_index(a, b, c)
+www
+www.pingcap
+pingcap.com
+www.pingcap.com
+www.pingcap.com
+www
+www..
+..com
+www....
+..pingcap....com
+
+测试测
+bcd测试
+测试测试a
+测
+NULL
+NULL
+NULL
+
+

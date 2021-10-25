@@ -38,15 +38,14 @@ StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, cha
     {
         /// serialize Decimal256 in `Non-trivial, Binary` way, the serialization logical is
         /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L149
-        size_t mem_size = 0;
         const typename T::NativeType::backend_type & val = data[n].value.backend();
         bool s = val.sign();
         size_t limb_count = val.size();
 
-        mem_size = sizeof(bool) + sizeof(size_t) + limb_count * sizeof(boost::multiprecision::limb_type);
+        size_t mem_size = sizeof(bool) + sizeof(size_t) + limb_count * sizeof(boost::multiprecision::limb_type);
 
-        auto pos = arena.allocContinue(mem_size, begin);
-        auto current_pos = pos;
+        auto * pos = arena.allocContinue(mem_size, begin);
+        auto * current_pos = pos;
         memcpy(current_pos, &s, sizeof(bool));
         current_pos += sizeof(bool);
 
@@ -59,7 +58,7 @@ StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, cha
     }
     else
     {
-        auto pos = arena.allocContinue(sizeof(T), begin);
+        auto * pos = arena.allocContinue(sizeof(T), begin);
         memcpy(pos, &data[n], sizeof(T));
         return StringRef(pos, sizeof(T));
     }
@@ -190,14 +189,28 @@ MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
     {
         auto & new_col = static_cast<Self &>(*res);
         new_col.data.resize(size);
-
         size_t count = std::min(this->size(), size);
-        memcpy(new_col.data.data(), data.data(), count * sizeof(data[0]));
-
-        if (size > count)
+        if constexpr (is_Decimal256)
         {
-            void * tail = &new_col.data[count];
-            memset(tail, 0, (size - count) * sizeof(T));
+            for (size_t i = 0; i != count; ++i)
+                new_col.data[i] = data[i];
+
+            if (size > count)
+            {
+                T zero{};
+                for (size_t i = count; i != size; ++i)
+                    new_col.data[i] = zero;
+            }
+        }
+        else
+        {
+            memcpy(new_col.data.data(), data.data(), count * sizeof(data[0]));
+
+            if (size > count)
+            {
+                void * tail = &new_col.data[count];
+                memset(tail, 0, (size - count) * sizeof(T));
+            }
         }
     }
 
@@ -205,11 +218,18 @@ MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
 }
 
 template <typename T>
-void ColumnDecimal<T>::insertData(const char * src, size_t /*length*/)
+void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*length*/)
 {
-    T tmp;
-    memcpy(&tmp, src, sizeof(T));
-    data.emplace_back(tmp);
+    if constexpr (is_Decimal256)
+    {
+        throw Exception("insertData is not supported for " + IColumn::getName());
+    }
+    else
+    {
+        T tmp;
+        memcpy(&tmp, src, sizeof(T));
+        data.emplace_back(tmp);
+    }
 }
 
 template <typename T>
@@ -223,7 +243,15 @@ void ColumnDecimal<T>::insertRangeFrom(const IColumn & src, size_t start, size_t
 
     size_t old_size = data.size();
     data.resize(old_size + length);
-    memcpy(data.data() + old_size, &src_vec.data[start], length * sizeof(data[0]));
+    if constexpr (is_Decimal256)
+    {
+        for (size_t i = 0; i != length; ++i)
+            data[i + old_size] = src_vec.data[i + start];
+    }
+    else
+    {
+        memcpy(data.data() + old_size, &src_vec.data[start], length * sizeof(data[0]));
+    }
 }
 
 #pragma GCC diagnostic pop

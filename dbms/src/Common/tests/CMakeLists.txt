@@ -86,3 +86,6 @@ target_link_libraries(rw_lock_test clickhouse_common_io clickhouse_functions gte
 
 add_executable (uint128_perf uint128_perf.cpp)
 target_link_libraries (uint128_perf clickhouse_common_io)
+
+add_executable (mpmc_queue_perftest mpmc_queue_perftest.cpp)
+target_link_libraries (mpmc_queue_perftest clickhouse_common_io)

@@ -24,7 +24,7 @@ public:
     // Read stream for single column
     struct Stream
     {
-        Stream(DMFileReader & reader, //
+        Stream(DMFileReader & reader,
                ColId col_id,
                const String & file_name_base,
                size_t aio_threshold,
@@ -47,36 +47,37 @@ public:
             return single_file_mode ? (*mark_with_sizes)[i].mark.offset_in_decompressed_block : (*marks)[i].offset_in_decompressed_block;
         }
 
-        std::unique_ptr<CompressedReadBufferFromFileProvider<>> buf;
+        std::unique_ptr<CompressedSeekableReaderBuffer> buf;
     };
     using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
 
-    DMFileReader(const DMFilePtr & dmfile_,
-                 const ColumnDefines & read_columns_,
-                 // Only set this param to true when
-                 // 1. There is no delta.
-                 // 2. You don't need pk, version and delete_tag columns
-                 // If you have no idea what it means, then simply set it to false.
-                 bool enable_clean_read_,
-                 // The the MVCC filter version. Used by clean read check.
-                 UInt64 max_data_version_,
-                 // filters
-                 const RowKeyRange & rowkey_range_,
-                 const RSOperatorPtr & filter_,
-                 const IdSetPtr & read_packs_, // filter by pack index
-                 // caches
-                 UInt64 hash_salt_,
-                 const MarkCachePtr & mark_cache_,
-                 const MinMaxIndexCachePtr & index_cache_,
-                 bool enable_column_cache_,
-                 const ColumnCachePtr & column_cache_,
-                 size_t aio_threshold,
-                 size_t max_read_buffer_size,
-                 const FileProviderPtr & file_provider_,
-                 const ReadLimiterPtr & read_limiter,
-                 size_t rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD,
-                 bool read_one_pack_every_time_ = false);
+    DMFileReader(
+        const DMFilePtr & dmfile_,
+        const ColumnDefines & read_columns_,
+        // Only set this param to true when
+        // 1. There is no delta.
+        // 2. You don't need pk, version and delete_tag columns
+        // If you have no idea what it means, then simply set it to false.
+        bool enable_clean_read_,
+        // The the MVCC filter version. Used by clean read check.
+        UInt64 max_data_version_,
+        // filters
+        const RowKeyRanges & rowkey_ranges_,
+        const RSOperatorPtr & filter_,
+        const IdSetPtr & read_packs_, // filter by pack index
+        // caches
+        UInt64 hash_salt_,
+        const MarkCachePtr & mark_cache_,
+        const MinMaxIndexCachePtr & index_cache_,
+        bool enable_column_cache_,
+        const ColumnCachePtr & column_cache_,
+        size_t aio_threshold,
+        size_t max_read_buffer_size,
+        const FileProviderPtr & file_provider_,
+        const ReadLimiterPtr & read_limiter,
+        size_t rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD,
+        bool read_one_pack_every_time_ = false);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
