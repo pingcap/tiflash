@@ -12,7 +12,7 @@ namespace DB
 DataTypeMyDuration::DataTypeMyDuration(UInt64 fsp_)
     : fsp(fsp_)
 {
-    if (fsp < 0 || fsp > 6)
+    if (fsp > 6)
         throw Exception("fsp must >= 0 and <= 6", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 

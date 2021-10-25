@@ -3,7 +3,7 @@
 
 namespace DB
 {
-std::tuple<Int32, Int32, Int32, Int32, Int32> MyDuration::splitDuration() const
+DurationParts MyDuration::splitDuration() const
 {
     int sign = 1, hours, minutes, seconds, micro_seconds;
     Int64 t = nanos;
@@ -12,34 +12,34 @@ std::tuple<Int32, Int32, Int32, Int32, Int32> MyDuration::splitDuration() const
         t = -t;
         sign = -1;
     }
-    hours = t / HOUR;
-    t -= hours * HOUR;
-    minutes = t / MINUTE;
-    t -= minutes * MINUTE;
-    seconds = t / SECOND;
-    t -= seconds * SECOND;
-    micro_seconds = t / MICRO_SECOND;
-    return std::tuple<int, int, int, int, int>(sign, hours, minutes, seconds, micro_seconds);
+    hours = t / NANOS_PER_HOUR;
+    t -= hours * NANOS_PER_HOUR;
+    minutes = t / NANOS_PER_MINUTE;
+    t -= minutes * NANOS_PER_MINUTE;
+    seconds = t / NANOS_PER_SECOND;
+    t -= seconds * NANOS_PER_SECOND;
+    micro_seconds = t / NANOS_PER_MICRO;
+    return DurationParts{sign, hours, minutes, seconds, micro_seconds};
 }
 
-UInt32 MyDuration::hours() const
+Int32 MyDuration::hours() const
 {
-    return std::get<1>(splitDuration());
+    return splitDuration().hour;
 }
 
-UInt32 MyDuration::minutes() const
+Int32 MyDuration::minutes() const
 {
-    return std::get<2>(splitDuration());
+    return splitDuration().minute;
 }
 
-UInt32 MyDuration::seconds() const
+Int32 MyDuration::seconds() const
 {
-    return std::get<3>(splitDuration());
+    return splitDuration().second;
 }
 
-UInt32 MyDuration::microSecond() const
+Int32 MyDuration::microSecond() const
 {
-    return std::get<4>(splitDuration());
+    return splitDuration().microsecond;
 }
 
 String MyDuration::toString() const
