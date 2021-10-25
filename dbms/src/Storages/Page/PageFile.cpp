@@ -1308,7 +1308,7 @@ bool PageFile::isExist() const
     Poco::File folder(folderPath());
     Poco::File data_file(dataPath());
     Poco::File meta_file(metaPath());
-    std::cout << "type : " << type << " , "
+    std::cout << "type : " << (int)type << " , "
               << "folder : " << folder.path() << " , "
               << "data_file : " << data_file.path() << " , "
               << "meta_file : " << meta_file.path() << " , "
