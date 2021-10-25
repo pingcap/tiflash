@@ -43,6 +43,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     uint64_t total_rows;
 
+    std::map<tipb::EncodeType, std::unique_ptr<ChunkCodec>> codecs;
+
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
         for (auto & execution_summary : resp.execution_summaries())
@@ -136,20 +138,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         {
             Block block;
             const tipb::Chunk & chunk = result.resp->chunks(i);
-            switch (result.resp->encode_type())
-            {
-            case tipb::EncodeType::TypeCHBlock:
-                block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            case tipb::EncodeType::TypeChunk:
-                block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            case tipb::EncodeType::TypeDefault:
-                block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
-                break;
-            default:
+            auto it = codecs.find(result.resp->encode_type());
+            if (it == end(codecs))
                 throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
-            }
+
+            block = it->second->decode(chunk, remote_reader->getOutputSchema());
 
             total_rows += block.rows();
 
@@ -191,6 +184,10 @@ public:
         }
         execution_summaries.resize(source_num);
         sample_block = Block(columns);
+
+        codecs.emplace(tipb::TypeCHBlock, std::make_unique<CHBlockChunkCodec>());
+        codecs.emplace(tipb::TypeChunk, std::make_unique<ArrowChunkCodec>());
+        codecs.emplace(tipb::TypeDefault, std::make_unique<DefaultChunkCodec>());
     }
 
     Block getHeader() const override { return sample_block; }

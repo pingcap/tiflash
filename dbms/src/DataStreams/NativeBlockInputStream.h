@@ -58,7 +58,7 @@ class NativeBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     /// provide output column names explicitly
-    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, std::vector<String> && output_names_);
+    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, std::vector<String> && output_names_, std::map<String, DataTypePtr> * cached_data_types_ = nullptr);
     /// If a non-zero server_revision is specified, additional block information may be expected and read.
     NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_);
 
@@ -94,6 +94,8 @@ private:
     PODArray<double> avg_value_size_hints;
 
     std::vector<String> output_names;
+    /// owned by callers
+    std::map<String, DataTypePtr> * cached_data_types = nullptr;
 
     void updateAvgValueSizeHints(const Block & block);
 };
