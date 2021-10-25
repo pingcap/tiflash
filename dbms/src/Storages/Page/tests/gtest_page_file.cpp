@@ -58,7 +58,7 @@ TEST(PageFile_test, Compare)
     ASSERT_EQ(pf_set.rbegin()->getType(), PageFile::Type::Formal);
     ASSERT_EQ(pf_set.rbegin()->fileIdLevel(), pf1.fileIdLevel());
     ASSERT_TRUE(pf_set.rbegin()->isExist());
-
+    /*
     // Test `isPageFileExist`
     ASSERT_TRUE(PageFile::isPageFileExist(checkpoint_pf.fileIdLevel(), path, file_provider, PageFile::Type::Checkpoint, log));
     ASSERT_TRUE(PageFile::isPageFileExist(pf0.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
@@ -68,6 +68,7 @@ TEST(PageFile_test, Compare)
     pf1.setLegacy();
     ASSERT_FALSE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
     ASSERT_TRUE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Legacy, log));
+*/
 }
 
 TEST(Page_test, GetField)

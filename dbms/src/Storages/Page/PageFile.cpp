@@ -1314,7 +1314,7 @@ bool PageFile::isExist() const
               << "meta_file : " << meta_file.path() << " , "
               << "folder exist : " << folder.exists() << " , "
               << "meta_file exist : " << meta_file.exists() << " , "
-              << "data_file exist: " << data_file.path()
+              << "data_file exist: " << data_file.exists()
               << std::endl;
     if (likely(type == Type::Formal))
     {
