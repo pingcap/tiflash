@@ -89,7 +89,7 @@ private:
     }
 };
 
-inline std::shared_ptr<LogWithPrefix> static getLogWithPrefix(const LogWithPrefixPtr & log = nullptr, const String & name = "name: N/A")
+inline LogWithPrefixPtr getLogWithPrefix(const LogWithPrefixPtr & log = nullptr, const String & name = "name: N/A")
 {
     if (log == nullptr)
     {
