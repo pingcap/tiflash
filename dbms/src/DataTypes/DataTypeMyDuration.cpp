@@ -9,16 +9,16 @@
 
 namespace DB
 {
-DataTypeMyDuration::DataTypeMyDuration(int fsp_)
+DataTypeMyDuration::DataTypeMyDuration(UInt64 fsp_)
+    : fsp(fsp_)
 {
-    fsp = fsp_;
     if (fsp < 0 || fsp > 6)
         throw Exception("fsp must >= 0 and <= 6", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
 bool DataTypeMyDuration::equals(const IDataType & rhs) const
 {
-    return typeid(rhs) == typeid(*this) && fsp == static_cast<const DataTypeMyDuration &>(rhs).fsp;
+    return (&rhs == this) || (typeid(rhs) == typeid(*this) && fsp == static_cast<const DataTypeMyDuration &>(rhs).fsp);
 }
 
 void DataTypeMyDuration::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -45,7 +45,7 @@ static DataTypePtr create(const ASTPtr & arguments)
     if (!arg || arg->value.getType() != Field::Types::UInt64)
         throw Exception("Parameter for MyDuration data type must be uint literal", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    return std::make_shared<DataTypeMyDuration>(arg->value.get<int>());
+    return std::make_shared<DataTypeMyDuration>(arg->value.get<UInt64>());
 }
 
 void registerDataTypeDuration(DataTypeFactory & factory)

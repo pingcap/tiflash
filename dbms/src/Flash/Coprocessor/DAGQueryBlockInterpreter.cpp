@@ -115,14 +115,14 @@ struct AnalysisResult
 // add timezone cast for timestamp type, this is used to support session level timezone
 bool addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
-    const std::vector<ExtraCastAfterTS> & need_cast_column,
+    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     ExpressionActionsChain & chain,
     const DAGQueryBlock & query_block)
 {
     bool has_need_cast_column = false;
     for (auto b : need_cast_column)
     {
-        has_need_cast_column |= (b != ExtraCastAfterTS::None);
+        has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
     }
     if (!has_need_cast_column)
         return false;
@@ -134,7 +134,7 @@ AnalysisResult analyzeExpressions(
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
-    const std::vector<ExtraCastAfterTS> & is_need_cast_column,
+    const std::vector<ExtraCastAfterTSMode> & is_need_cast_column,
     bool keep_session_timezone_info,
     NamesWithAliases & final_project)
 {

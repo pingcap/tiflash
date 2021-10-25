@@ -965,7 +965,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // 2) add duration cast after table scan, this is ued for calculation of duration in TiFlash.
 // TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
 // Int64 to duration.
-bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTS> & need_cast_column, const DAGQueryBlock & query_block)
+bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTSMode> & need_cast_column, const DAGQueryBlock & query_block)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
@@ -974,25 +974,27 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
     tipb::Expr tz_expr;
     constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
     String tz_col = getActions(tz_expr, actions);
-    static String timezone_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
+    static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
+    static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffset";
+    const String & timezone_func_name = context.getTimezoneInfo().is_name_based ? convert_time_zone_form_utc : convert_time_zone_by_offset;
 
     // For Duration
     String fsp_col;
-    static String dur_func_name = "FunctionConvertDurationFromNanos";
-    auto columns = query_block.source->tbl_scan().columns();
+    static const String dur_func_name = "FunctionConvertDurationFromNanos";
+    const auto & columns = query_block.source->tbl_scan().columns();
     for (size_t i = 0; i < need_cast_column.size(); ++i)
     {
-        if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTS::AppendTimeZoneCast)
+        if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
         {
             String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             source_columns[i].name = casted_name;
             ret = true;
         }
 
-        if (need_cast_column[i] == ExtraCastAfterTS::AppendDurationCast)
+        if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
         {
             tipb::Expr fsp_expr;
-            auto fsp = columns[i].decimal() < 0 ? 6 : columns[i].decimal();
+            auto fsp = (columns[i].decimal() < 0 || columns[i].decimal() > 6) ? 6 : columns[i].decimal();
             constructInt64LiteralTiExpr(fsp_expr, fsp);
             fsp_col = getActions(fsp_expr, actions);
             String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
@@ -1014,8 +1016,7 @@ String DAGExpressionAnalyzer::appendDurationCast(
     const String & func_name,
     ExpressionActionsPtr & actions)
 {
-    String cast_expr_name = applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
-    return cast_expr_name;
+    return applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
 }
 
 void DAGExpressionAnalyzer::appendJoin(

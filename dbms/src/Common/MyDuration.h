@@ -31,7 +31,7 @@ public:
     UInt32 hours() const;
     UInt32 minutes() const;
     UInt32 seconds() const;
-    UInt32 microsecond() const;
+    UInt32 microSecond() const;
 
     String toString() const;
 };

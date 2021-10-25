@@ -7,10 +7,10 @@ namespace DB
 {
 class DataTypeMyDuration final : public DataTypeNumberBase<Int64>
 {
-    int fsp;
+    UInt64 fsp;
 
 public:
-    explicit DataTypeMyDuration(int fsp_ = 0);
+    explicit DataTypeMyDuration(UInt64 fsp_ = 0);
 
     const char * getFamilyName() const override { return "MyDuration"; }
 
@@ -26,7 +26,7 @@ public:
 
     bool equals(const IDataType & rhs) const override;
 
-    int getFsp() const { return fsp; }
+    UInt64 getFsp() const { return fsp; }
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
 };

@@ -20,7 +20,7 @@ class Set;
 using DAGSetPtr = std::shared_ptr<DAGSet>;
 using DAGPreparedSets = std::unordered_map<const tipb::Expr *, DAGSetPtr>;
 
-enum class ExtraCastAfterTS
+enum class ExtraCastAfterTSMode
 {
     None,
     AppendTimeZoneCast,
@@ -85,7 +85,7 @@ public:
         ExpressionActionsPtr & actions,
         const TiDB::TiDBCollatorPtr & collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
-    bool appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTS> & is_ts_column, const DAGQueryBlock & query_block);
+    bool appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTSMode> & is_ts_column, const DAGQueryBlock & query_block);
     bool appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     String appendDurationCast(const String & dr_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);

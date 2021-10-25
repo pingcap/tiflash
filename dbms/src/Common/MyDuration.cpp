@@ -37,7 +37,7 @@ UInt32 MyDuration::seconds() const
     return std::get<3>(splitDuration());
 }
 
-UInt32 MyDuration::microsecond() const
+UInt32 MyDuration::microSecond() const
 {
     return std::get<4>(splitDuration());
 }
