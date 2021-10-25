@@ -18,6 +18,48 @@ func> wait_table test t
 func> wait_table test tt
 
 mysql> use test;  set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;  Select DD,NDD,IDD from tt join  ( (select d as DD, nd as NDD, id as IDD from t) union all (select d as DD, 0 as NDD, id as IDD from t) union all (select d as DD, nd as NDD, 0 as IDD from t)  ) u on tt.id = u.IDD;
++------+------+------+
+| DD   | NDD  | IDD  |
++------+------+------+
+|    0 |    0 |    0 |
+|    0 |    0 |    0 |
+|    0 |    0 |    0 |
+| NULL |    2 |    0 |
+|    1 |    1 |    0 |
+|    1 |    1 |    1 |
+|    1 |    0 |    1 |
+| NULL |    2 |    2 |
+| NULL |    0 |    2 |
+|    0 |    0 |    0 |
+|    0 |    0 |    0 |
+|    0 |    0 |    0 |
+| NULL |    2 |    0 |
+|    1 |    1 |    0 |
+|    1 |    1 |    1 |
+|    1 |    0 |    1 |
+| NULL |    2 |    2 |
+| NULL |    0 |    2 |
+|    0 |    0 |    0 |
+|    0 |    0 |    0 |
+|    0 |    0 |    0 |
+| NULL |    2 |    0 |
+|    1 |    1 |    0 |
+|    1 |    1 |    1 |
+|    1 |    0 |    1 |
+| NULL |    2 |    2 |
+| NULL |    0 |    2 |
+|    0 |    0 |    0 |
+|    0 |    0 |    0 |
+|    0 |    0 |    0 |
+| NULL |    2 |    0 |
+|    1 |    1 |    0 |
+|    1 |    1 |    1 |
+|    1 |    0 |    1 |
+| NULL |    2 |    2 |
+| NULL |    0 |    2 |
++------+------+------+
+
+mysql> use test;  set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; Select IDD from tt join  ( (select 127 as IDD from t) union all (select id as IDD from t)  ) u on tt.id = u.IDD;
 +------+
 | IDD  |
 +------+
@@ -33,4 +75,22 @@ mysql> use test;  set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1;  Select DD,N
 |    0 |
 |    1 |
 |    2 |
++------+
+
+mysql> use test;  set @@tidb_allow_mpp=1; set @@tidb_enforce_mpp=1; Select IDD from tt join  ( (select 127 as IDD from t) union all (select 1 as IDD from t)  ) u on tt.id = u.IDD;
++------+
+| IDD  |
++------+
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
 +------+
