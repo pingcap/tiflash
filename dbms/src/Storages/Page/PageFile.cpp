@@ -1308,18 +1308,9 @@ bool PageFile::isExist() const
     Poco::File folder(folderPath());
     Poco::File data_file(dataPath());
     Poco::File meta_file(metaPath());
-    std::cout << "type : " << (int)type << " , "
-              << "folder : " << folder.path() << " , "
-              << "data_file : " << data_file.path() << " , "
-              << "meta_file : " << meta_file.path() << " , "
-              << "folder exist : " << folder.exists() << " , "
-              << "meta_file exist : " << meta_file.exists() << " , "
-              << "data_file exist: " << data_file.exists()
-              << std::endl;
     if (likely(type == Type::Formal))
     {
         fiu_do_on(FailPoints::force_formal_page_file_not_exists, { return false; });
-
         return (folder.exists() && data_file.exists() && meta_file.exists());
     }
     else if (type == Type::Legacy || type == Type::Checkpoint)
