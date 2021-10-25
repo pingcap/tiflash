@@ -1430,7 +1430,7 @@ public:
       *  which are all either single-level, or are two-level.
       */
     MergingAndConvertingBlockInputStream(const Aggregator & aggregator_, ManyAggregatedDataVariants & data_, bool final_, size_t threads_)
-        : log(getLogWithPrefix(aggregator_.log, "Aggregator"))
+        : log(getLogWithPrefix(aggregator_.log, "MergingAndConvertingBlockInputStream"))
         , aggregator(aggregator_)
         , data(data_)
         , final(final_)
