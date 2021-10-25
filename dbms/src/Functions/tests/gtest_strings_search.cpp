@@ -1,29 +1,18 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsStringSearch.h>
 #include <Functions/registerFunctions.h>
-#include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/FunctionTestUtils.h>
 
 namespace DB
 {
 namespace tests
 {
-class StringMatch : public ::testing::Test
+class StringMatch : public FunctionTest
 {
-protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Just Ignore the exception, maybe another test has already registered.
-        }
-    }
 };
 
 TEST_F(StringMatch, Like3ArgsVectorWithVector)
+try
 {
     /**
      * With LIKE you can use the following two wildcard characters in the pattern:
@@ -55,55 +44,27 @@ TEST_F(StringMatch, Like3ArgsVectorWithVector)
         {0, "abab", "_b_"},
     };
 
-    MutableColumnPtr csp0(ColumnString::create());
-    MutableColumnPtr csp1(ColumnString::create());
-
-    auto cc2 = ColumnInt32::create();
-    ColumnInt32::Container & vec = cc2->getData();
-    vec.resize(1);
-    vec[0] = Int32('\\');
-    ColumnPtr ccp2(ColumnConst::create(cc2->getPtr(), 1));
-    std::vector<int> results;
+    InferredDataVector<Nullable<String>> haystack_raw = {};
+    InferredDataVector<Nullable<String>> needle_raw = {};
+    InferredDataVector<Nullable<UInt8>> result_raw = {};
 
     for (auto && cas : cases)
     {
-        csp0->insert(Field(cas.a.c_str(), cas.a.size()));
-        csp1->insert(Field(cas.b.c_str(), cas.b.size()));
-        results.push_back(cas.match);
+        haystack_raw.push_back(cas.a);
+        needle_raw.push_back(cas.b);
+        result_raw.push_back(cas.match);
     }
 
-    Block test_block;
-    auto ctn0 = ColumnWithTypeAndName(std::move(csp0), std::make_shared<DataTypeString>(), "test_like_0");
-    auto ctn1 = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_like_1");
-    auto ctn2 = ColumnWithTypeAndName(std::move(ccp2), std::make_shared<DataTypeInt32>(), "test_like_2");
-    ColumnsWithTypeAndName ctns{ctn0, ctn1, ctn2};
-    test_block.insert(ctn0);
-    test_block.insert(ctn1);
-    test_block.insert(ctn2);
-    // for results
-    test_block.insert({});
-    ColumnNumbers cns{0, 1, 2};
+    auto haystack = createColumn<Nullable<String>>(haystack_raw, "haystack");
+    auto needle = createColumn<Nullable<String>>(needle_raw, "needle");
+    auto escape = createConstColumn<Nullable<Int32>>(1, static_cast<Int32>('\\'));
+    auto expected = createColumn<Nullable<UInt8>>(result_raw, "result");
 
-    Context context = TiFlashTestEnv::getContext();
+    auto result = executeFunction("like3Args", {haystack, needle, escape});
 
-    auto & factory = FunctionFactory::instance();
-
-    auto like_func = factory.tryGet("like3Args", context);
-    ASSERT_TRUE(like_func != nullptr);
-    ASSERT_FALSE(like_func->isVariadic());
-
-    like_func->build(ctns)->execute(test_block, cns, 3);
-    const IColumn * res = test_block.getByPosition(3).column.get();
-    const ColumnUInt8 * res_string = checkAndGetColumn<ColumnUInt8>(res);
-
-    Field res_field;
-    for (size_t t = 0; t < results.size(); t++)
-    {
-        res_string->get(t, res_field);
-        Int64 res_val = res_field.get<UInt8>();
-        EXPECT_EQ(results[t], res_val);
-    }
+    ASSERT_COLUMN_EQ(expected, result);
 }
+CATCH
 
 TEST_F(StringMatch, Like3ArgsConstantWithVector)
 try
@@ -126,59 +87,22 @@ try
 
     for (auto && cas : cases)
     {
-        MutableColumnPtr cc0 = ColumnString::create();
-        cc0->insert(Field(cas.src.c_str(), cas.src.size()));
-        ColumnPtr ccp0 = ColumnConst::create(cc0->getPtr(), 1);
-
-        MutableColumnPtr csp1 = ColumnString::create();
-        std::vector<int> results;
+        InferredDataVector<Nullable<String>> needle_raw = {};
+        InferredDataVector<Nullable<UInt8>> result_raw = {};
 
         for (auto && pat : cas.pat)
         {
-            csp1->insert(Field(pat.first.c_str(), pat.first.size()));
-            results.push_back(pat.second);
+            needle_raw.push_back(pat.first);
+            result_raw.push_back(pat.second);
         }
 
-        auto cc2 = ColumnInt32::create();
-        ColumnInt32::Container & vec = cc2->getData();
-        vec.resize(1);
-        vec[0] = Int32('\\');
-        ColumnPtr ccp2(ColumnConst::create(cc2->getPtr(), 1));
+        auto haystack = createConstColumn<Nullable<String>>(1, cas.src);
+        auto needle = createColumn<Nullable<String>>(needle_raw);
+        auto escape = createConstColumn<Nullable<Int32>>(1, static_cast<Int32>('\\'));
+        auto expected = createColumn<Nullable<UInt8>>(result_raw);
 
-
-        Block test_block;
-        auto ctn0 = ColumnWithTypeAndName(std::move(ccp0), std::make_shared<DataTypeString>(), "test_like_0");
-        auto ctn1 = ColumnWithTypeAndName(std::move(csp1), std::make_shared<DataTypeString>(), "test_like_1");
-        auto ctn2 = ColumnWithTypeAndName(std::move(ccp2), std::make_shared<DataTypeInt32>(), "test_like_2");
-        ColumnsWithTypeAndName ctns{ctn0, ctn1, ctn2};
-        test_block.insert(ctn0);
-        test_block.insert(ctn1);
-        test_block.insert(ctn2);
-        // for results
-        test_block.insert({});
-        ColumnNumbers cns{0, 1, 2};
-
-        Context context = TiFlashTestEnv::getContext();
-
-        auto & factory = FunctionFactory::instance();
-
-        auto like_func = factory.tryGet("like3Args", context);
-        ASSERT_TRUE(like_func != nullptr);
-        ASSERT_FALSE(like_func->isVariadic());
-
-        auto func = like_func->build(ctns);
-        func->execute(test_block, cns, 3);
-
-        const IColumn * res = test_block.getByPosition(3).column.get();
-        const ColumnUInt8 * res_string = checkAndGetColumn<ColumnUInt8>(res);
-
-        Field res_field;
-        for (size_t t = 0; t < results.size(); t++)
-        {
-            res_string->get(t, res_field);
-            Int64 res_val = res_field.get<UInt8>();
-            EXPECT_EQ(results[t], res_val);
-        }
+        auto result = executeFunction("like3Args", {haystack, needle, escape});
+        ASSERT_COLUMN_EQ(expected, result);
     }
 }
 CATCH
