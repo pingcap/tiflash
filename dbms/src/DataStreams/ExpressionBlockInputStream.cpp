@@ -47,7 +47,7 @@ Block ExpressionBlockInputStream::readImpl()
 
 void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
 {
-    ostr << "expression: [ actions: {";
+    ostr << "expression: [actions: {";
     const auto & actions = expression->getActions();
     dumpIter(
         actions.cbegin(),
@@ -61,7 +61,7 @@ void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
     ostr << "} output: {";
     const auto & output = expression->getSampleBlock();
     dumpIter(output.cbegin(), output.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
-    ostr << "} ]";
+    ostr << "}]";
 }
 
 } // namespace DB

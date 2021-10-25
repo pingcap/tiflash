@@ -30,10 +30,10 @@ public:
         bool ready = false;
         Block block;
 
-        Result(bool ready_)
+        explicit Result(bool ready_)
             : ready(ready_)
         {}
-        Result(Block && block_)
+        explicit Result(Block && block_)
             : ready(true)
             , block(std::move(block_))
         {}

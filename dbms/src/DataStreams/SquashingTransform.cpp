@@ -60,7 +60,7 @@ SquashingTransform::Result SquashingTransform::add(Block && block)
     }
 
     /// Squashed block is not ready.
-    return false;
+    return Result(false);
 }
 
 
