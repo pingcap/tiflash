@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
@@ -66,63 +65,66 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
 /// construct DAGQueryBlock from a tree struct based executors, which is the
 /// format after supporting join in dag request
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
-    : id(id_), root(&root_), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
+    : id(id_)
+    , root(&root_)
+    , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
+    , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
     while (!isSourceNode(current) && current->has_executor_id())
     {
         switch (current->tp())
         {
-            case tipb::ExecType::TypeSelection:
-                if (current->selection().child().tp() == tipb::ExecType::TypeAggregation
-                    || current->selection().child().tp() == tipb::ExecType::TypeStreamAgg)
-                {
-                    /// if the selection is after the aggregation, then it is having, need to be
-                    /// executed after aggregation.
-                    // todo We should refine the DAGQueryBlock so DAGQueryBlockInterpreter
-                    //  could compile the executor in DAG request directly without these preprocess.
-                    GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
-                    assignOrThrowException(&having, current, HAVING_NAME);
-                    having_name = current->executor_id();
-                }
-                else
-                {
-                    GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
-                    assignOrThrowException(&selection, current, SEL_NAME);
-                    selection_name = current->executor_id();
-                }
-                current = &current->selection().child();
-                break;
-            case tipb::ExecType::TypeAggregation:
-            case tipb::ExecType::TypeStreamAgg:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
-                assignOrThrowException(&aggregation, current, AGG_NAME);
-                aggregation_name = current->executor_id();
-                collectOutPutFieldTypesFromAgg(output_field_types, current->aggregation());
-                current = &current->aggregation().child();
-                break;
-            case tipb::ExecType::TypeLimit:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
-                assignOrThrowException(&limitOrTopN, current, LIMIT_NAME);
-                limitOrTopN_name = current->executor_id();
-                current = &current->limit().child();
-                break;
-            case tipb::ExecType::TypeTopN:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
-                assignOrThrowException(&limitOrTopN, current, TOPN_NAME);
-                limitOrTopN_name = current->executor_id();
-                current = &current->topn().child();
-                break;
-            case tipb::ExecType::TypeExchangeSender:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
-                assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
-                exchangeServer_name = current->executor_id();
-                current = &current->exchange_sender().child();
-                break;
-            case tipb::ExecType::TypeIndexScan:
-                throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), Errors::Coprocessor::Internal);
-            default:
-                throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
+        case tipb::ExecType::TypeSelection:
+            if (current->selection().child().tp() == tipb::ExecType::TypeAggregation
+                || current->selection().child().tp() == tipb::ExecType::TypeStreamAgg)
+            {
+                /// if the selection is after the aggregation, then it is having, need to be
+                /// executed after aggregation.
+                // todo We should refine the DAGQueryBlock so DAGQueryBlockInterpreter
+                //  could compile the executor in DAG request directly without these preprocess.
+                GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
+                assignOrThrowException(&having, current, HAVING_NAME);
+                having_name = current->executor_id();
+            }
+            else
+            {
+                GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
+                assignOrThrowException(&selection, current, SEL_NAME);
+                selection_name = current->executor_id();
+            }
+            current = &current->selection().child();
+            break;
+        case tipb::ExecType::TypeAggregation:
+        case tipb::ExecType::TypeStreamAgg:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
+            assignOrThrowException(&aggregation, current, AGG_NAME);
+            aggregation_name = current->executor_id();
+            collectOutPutFieldTypesFromAgg(output_field_types, current->aggregation());
+            current = &current->aggregation().child();
+            break;
+        case tipb::ExecType::TypeLimit:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
+            assignOrThrowException(&limitOrTopN, current, LIMIT_NAME);
+            limitOrTopN_name = current->executor_id();
+            current = &current->limit().child();
+            break;
+        case tipb::ExecType::TypeTopN:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
+            assignOrThrowException(&limitOrTopN, current, TOPN_NAME);
+            limitOrTopN_name = current->executor_id();
+            current = &current->topn().child();
+            break;
+        case tipb::ExecType::TypeExchangeSender:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
+            assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
+            exchangeServer_name = current->executor_id();
+            current = &current->exchange_sender().child();
+            break;
+        case tipb::ExecType::TypeIndexScan:
+            throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), Errors::Coprocessor::Internal);
+        default:
+            throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
         }
     }
 
@@ -158,61 +160,65 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
 /// construct DAGQueryBlock from a list struct based executors, which is the
 /// format before supporting join in dag request
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors)
-    : id(id_), root(nullptr), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
+    : id(id_)
+    , root(nullptr)
+    , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
+    , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     for (int i = (int)executors.size() - 1; i >= 0; i--)
     {
         switch (executors[i].tp())
         {
-            case tipb::ExecType::TypeTableScan:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
-                assignOrThrowException(&source, &executors[i], SOURCE_NAME);
-                /// use index as the prefix for executor name so when we sort by
-                /// the executor name, it will result in the same order as it is
-                /// in the dag_request, this is needed when filling execution_summary
-                /// in DAGDriver
-                if (executors[i].has_executor_id())
-                    source_name = executors[i].executor_id();
-                else
-                    source_name = std::to_string(i) + "_tablescan";
-                break;
-            case tipb::ExecType::TypeSelection:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
-                assignOrThrowException(&selection, &executors[i], SEL_NAME);
-                if (executors[i].has_executor_id())
-                    selection_name = executors[i].executor_id();
-                else
-                    selection_name = std::to_string(i) + "_selection";
-                break;
-            case tipb::ExecType::TypeStreamAgg:
-            case tipb::ExecType::TypeAggregation:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
-                assignOrThrowException(&aggregation, &executors[i], AGG_NAME);
-                if (executors[i].has_executor_id())
-                    aggregation_name = executors[i].executor_id();
-                else
-                    aggregation_name = std::to_string(i) + "_aggregation";
-                collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
-                break;
-            case tipb::ExecType::TypeTopN:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
-                assignOrThrowException(&limitOrTopN, &executors[i], TOPN_NAME);
-                if (executors[i].has_executor_id())
-                    limitOrTopN_name = executors[i].executor_id();
-                else
-                    limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
-                break;
-            case tipb::ExecType::TypeLimit:
-                GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
-                assignOrThrowException(&limitOrTopN, &executors[i], LIMIT_NAME);
-                if (executors[i].has_executor_id())
-                    limitOrTopN_name = executors[i].executor_id();
-                else
-                    limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
-                break;
-            default:
-                throw TiFlashException(
-                    "Unsupported executor in DAG request: " + executors[i].DebugString(), Errors::Coprocessor::Unimplemented);
+        case tipb::ExecType::TypeTableScan:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
+            assignOrThrowException(&source, &executors[i], SOURCE_NAME);
+            /// use index as the prefix for executor name so when we sort by
+            /// the executor name, it will result in the same order as it is
+            /// in the dag_request, this is needed when filling execution_summary
+            /// in DAGDriver
+            if (executors[i].has_executor_id())
+                source_name = executors[i].executor_id();
+            else
+                source_name = std::to_string(i) + "_tablescan";
+            break;
+        case tipb::ExecType::TypeSelection:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
+            assignOrThrowException(&selection, &executors[i], SEL_NAME);
+            if (executors[i].has_executor_id())
+                selection_name = executors[i].executor_id();
+            else
+                selection_name = std::to_string(i) + "_selection";
+            break;
+        case tipb::ExecType::TypeStreamAgg:
+        case tipb::ExecType::TypeAggregation:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
+            assignOrThrowException(&aggregation, &executors[i], AGG_NAME);
+            if (executors[i].has_executor_id())
+                aggregation_name = executors[i].executor_id();
+            else
+                aggregation_name = std::to_string(i) + "_aggregation";
+            collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
+            break;
+        case tipb::ExecType::TypeTopN:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
+            assignOrThrowException(&limitOrTopN, &executors[i], TOPN_NAME);
+            if (executors[i].has_executor_id())
+                limitOrTopN_name = executors[i].executor_id();
+            else
+                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
+            break;
+        case tipb::ExecType::TypeLimit:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
+            assignOrThrowException(&limitOrTopN, &executors[i], LIMIT_NAME);
+            if (executors[i].has_executor_id())
+                limitOrTopN_name = executors[i].executor_id();
+            else
+                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
+            break;
+        default:
+            throw TiFlashException(
+                "Unsupported executor in DAG request: " + executors[i].DebugString(),
+                Errors::Coprocessor::Unimplemented);
         }
     }
     fillOutputFieldTypes();
@@ -225,8 +231,9 @@ void DAGQueryBlock::fillOutputFieldTypes()
         return;
     }
     /// the top block has exchangeSender, which decides the output fields, keeping the same with exchangeReceiver
-    if(exchangeSender != nullptr && exchangeSender->has_exchange_sender() && !exchangeSender->exchange_sender().all_field_types().empty())
+    if (exchangeSender != nullptr && exchangeSender->has_exchange_sender() && !exchangeSender->exchange_sender().all_field_types().empty())
     {
+        output_field_types.clear();
         for (auto & field_type : exchangeSender->exchange_sender().all_field_types())
         {
             output_field_types.push_back(field_type);
