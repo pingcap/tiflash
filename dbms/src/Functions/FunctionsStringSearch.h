@@ -6,7 +6,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {

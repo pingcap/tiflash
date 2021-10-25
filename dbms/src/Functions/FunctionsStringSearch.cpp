@@ -406,7 +406,6 @@ template <bool like, bool revert = false>
 struct MatchImpl
 {
     using ResultType = UInt8;
-    Poco::Logger * log = &Poco::Logger::get("MatchImpl");
 
     static void vectorConstant(const ColumnString::Chars_t & data,
                                const ColumnString::Offsets & offsets,

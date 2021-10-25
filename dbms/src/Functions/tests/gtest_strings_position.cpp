@@ -23,18 +23,6 @@ namespace tests
 {
 class StringPosition : public DB::tests::FunctionTest
 {
-protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registered, ignore exception here.
-        }
-    }
 };
 
 // test string and fixed string
