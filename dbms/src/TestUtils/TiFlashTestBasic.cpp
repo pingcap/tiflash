@@ -1,4 +1,5 @@
 #include <Encryption/MockKeyManager.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -28,7 +29,12 @@ void TiFlashTestEnv::initializeGlobalContext()
 
     auto paths = getPathPool(testdata_path);
     global_context->setPathPool(
-        paths.first, paths.second, Strings{}, true, global_context->getPathCapacity(), global_context->getFileProvider());
+        paths.first,
+        paths.second,
+        Strings{},
+        true,
+        global_context->getPathCapacity(),
+        global_context->getFileProvider());
     TiFlashRaftConfig raft_config;
 
     raft_config.ignore_databases = {"default", "system"};

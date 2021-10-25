@@ -29,7 +29,7 @@ public:
         friend class PageFile;
 
     public:
-        Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
+        Writer(PageFile &, bool sync_on_write, bool truncate_if_exists = true);
         ~Writer();
 
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
@@ -37,6 +37,8 @@ public:
 
         const String & parentPath() const;
         PageFileIdAndLevel fileIdLevel() const;
+
+        void hardlinkFrom(PageFile & linked_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     private:
         void closeFd();
@@ -186,6 +188,39 @@ public:
         size_t data_file_offset = 0;
     };
 
+    class LinkingMetaAdapter;
+    using LinkingMetaAdapterPtr = std::shared_ptr<LinkingMetaAdapter>;
+
+    // This reader is used to link meta file.
+    // After data linked, we need update meta with these step:
+    // 1. update sequence id
+    // 2. update crc
+    class LinkingMetaAdapter : private boost::noncopyable
+    {
+    public:
+        static LinkingMetaAdapterPtr createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter = nullptr);
+
+        LinkingMetaAdapter(PageFile & page_file_); // should only called by `createFrom`
+
+        ~LinkingMetaAdapter();
+
+        bool hasNext() const;
+
+        void linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level);
+
+        std::pair<char *, size_t> getMetaInfo() { return {meta_buffer, meta_size}; };
+
+    private:
+        bool initialize(const ReadLimiterPtr & read_limiter);
+
+    private:
+        PageFile & page_file;
+        char * meta_buffer = nullptr;
+        size_t meta_size = 0;
+        size_t meta_file_offset = 0;
+        // TODO: Should also use a limited size buffer for reading. Will be done later in #2794
+    };
+
     struct MergingPtrComparator
     {
         bool operator()(const MetaMergingReaderPtr & lhs, const MetaMergingReaderPtr & rhs) const
@@ -298,6 +333,8 @@ public:
 
     String parentPath() const { return parent_path; }
     String folderPath() const;
+
+    [[nodiscard]] bool linkFrom(PageFile & page_file, WriteBatch::SequenceID sid, PageEntriesEdit & edit);
 
     void createEncryptionInfo() const
     {

@@ -2,6 +2,8 @@
 
 #include <Encryption/KeyManager.h>
 
+#include <vector>
+
 namespace DB
 {
 class MockKeyManager : public KeyManager
@@ -17,20 +19,19 @@ public:
 
     FileEncryptionInfo newFile(const String & fname) override;
 
-    void deleteFile(const String & fname, bool /*throw_on_error*/) override { std::ignore = fname; }
+    void deleteFile(const String & fname, bool /*throw_on_error*/) override;
 
-    void linkFile(const String & src_fname, const String & dst_fname) override
-    {
-        std::ignore = src_fname;
-        std::ignore = dst_fname;
-    }
+    void linkFile(const String & src_fname, const String & dst_fname) override;
+
+private:
+    bool fileExist(const String & fname) const;
 
 private:
     const static EncryptionMethod default_method;
     const static unsigned char default_key[33];
     const static unsigned char default_iv[17];
+    std::vector<String> files;
 
-private:
     EncryptionMethod method;
     String key;
     String iv;

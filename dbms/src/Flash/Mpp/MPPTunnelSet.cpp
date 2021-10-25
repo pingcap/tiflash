@@ -15,7 +15,8 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
 }
 } // namespace
 
-void MPPTunnelSet::clearExecutionSummaries(tipb::SelectResponse & response)
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::clearExecutionSummaries(tipb::SelectResponse & response)
 {
     /// can not use response.clear_execution_summaries() because
     /// TiDB assume all the executor should return execution summary
@@ -28,7 +29,8 @@ void MPPTunnelSet::clearExecutionSummaries(tipb::SelectResponse & response)
     }
 }
 
-void MPPTunnelSet::write(tipb::SelectResponse & response)
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 {
     auto packet = serializeToPacket(response);
     tunnels[0]->write(packet);
@@ -46,12 +48,43 @@ void MPPTunnelSet::write(tipb::SelectResponse & response)
     }
 }
 
-void MPPTunnelSet::write(tipb::SelectResponse & response, int16_t partition_id)
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
+{
+    tunnels[0]->write(packet);
+    auto tunnels_size = tunnels.size();
+    if (tunnels_size > 1)
+    {
+        if (!packet.data().empty())
+        {
+            packet.mutable_data()->clear();
+        }
+        for (size_t i = 1; i < tunnels_size; ++i)
+        {
+            tunnels[i]->write(packet);
+        }
+    }
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t partition_id)
 {
     if (partition_id != 0 && response.execution_summaries_size() > 0)
         clearExecutionSummaries(response);
 
     tunnels[partition_id]->write(serializeToPacket(response));
 }
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partition_id)
+{
+    if (partition_id != 0 && !packet.data().empty())
+        packet.mutable_data()->clear();
+
+    tunnels[partition_id]->write(packet);
+}
+
+/// Explicit template instantiations - to avoid code bloat in headers.
+template class MPPTunnelSetBase<MPPTunnel>;
 
 } // namespace DB

@@ -23,20 +23,30 @@ struct ProfileStreamsInfo
     BlockInputStreams input_streams;
 };
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
+
+UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
+{
+    /// todo max_error_count is a system variable in mysql, TiDB should put it into dag request, now use the default value instead
+    return 1024;
+}
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
 public:
     explicit DAGContext(const tipb::DAGRequest & dag_request)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
-        , return_executor_id(dag_request.has_root_executor() || dag_request.executors(0).has_executor_id())
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , tunnel_set(nullptr)
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
-        , warnings(std::numeric_limits<int>::max())
-    {}
+        , max_recorded_error_count(getMaxErrorCount(dag_request))
+        , warnings(max_recorded_error_count)
+        , warning_count(0)
+    {
+        assert(dag_request.has_root_executor() || dag_request.executors_size() > 0);
+        return_executor_id = dag_request.has_root_executor() || dag_request.executors(0).has_executor_id();
+    }
 
     DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
@@ -46,21 +56,37 @@ public:
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
         , mpp_task_meta(meta_)
-        , warnings(std::numeric_limits<int>::max())
+        , max_recorded_error_count(getMaxErrorCount(dag_request))
+        , warnings(max_recorded_error_count)
+        , warning_count(0)
     {
+        assert(dag_request.has_root_executor());
+
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
-        const auto & exchangeSender = dag_request.root_executor().exchange_sender();
-        exchange_sender_execution_summary_key = exchangeSender.child().executor_id();
+        const auto & exchange_sender = dag_request.root_executor().exchange_sender();
+        exchange_sender_execution_summary_key = exchange_sender.child().executor_id();
         is_root_mpp_task = false;
-        if (exchangeSender.encoded_task_meta_size() == 1)
+        if (exchange_sender.encoded_task_meta_size() == 1)
         {
             /// root mpp task always has 1 task_meta because there is only one TiDB
             /// node for each mpp query
             mpp::TaskMeta task_meta;
-            task_meta.ParseFromString(exchangeSender.encoded_task_meta(0));
+            task_meta.ParseFromString(exchange_sender.encoded_task_meta(0));
             is_root_mpp_task = task_meta.task_id() == -1;
         }
     }
+
+    explicit DAGContext(UInt64 max_error_count_)
+        : collect_execution_summaries(false)
+        , is_mpp_task(false)
+        , is_root_mpp_task(false)
+        , tunnel_set(nullptr)
+        , flags(0)
+        , sql_mode(0)
+        , max_recorded_error_count(max_error_count_)
+        , warnings(max_recorded_error_count)
+        , warning_count(0)
+    {}
 
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
@@ -69,27 +95,33 @@ public:
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
     void handleInvalidTime(const String & msg, const TiFlashError & error);
+    void appendWarning(const String & msg, int32_t code = 0);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
     bool shouldClipToZero();
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
     {
-        if (!warnings.tryPush(warning))
-            throw TiFlashException("Too many warnings, exceeds limit of 2147483647", Errors::Coprocessor::Internal);
+        if (warning_count.fetch_add(1, std::memory_order_acq_rel) < max_recorded_error_count)
+        {
+            warnings.tryPush(warning);
+        }
     }
     /// Consume all warnings. Once this method called, every warning will be cleared.
     /// This method is not thread-safe.
     void consumeWarnings(std::vector<tipb::Error> & warnings_)
     {
-        warnings_.reserve(warnings.size());
-        for (size_t i = 0; i < warnings.size(); i++)
+        const size_t warnings_size = warnings.size();
+        warnings_.reserve(warnings_size);
+        for (size_t i = 0; i < warnings_size; ++i)
         {
             tipb::Error error;
             warnings.pop(error);
             warnings_.push_back(error);
         }
     }
+    void clearWarnings() { warnings.clear(); }
+    UInt64 getWarningCount() { return warning_count; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
@@ -105,7 +137,7 @@ public:
 
     std::pair<bool, double> getTableScanThroughput();
 
-    size_t final_concurrency;
+    size_t final_concurrency = 1;
     Int64 compile_time_ns;
     String table_scan_executor_id = "";
     String exchange_sender_executor_id = "";
@@ -134,7 +166,11 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
+    /// max_recorded_error_count is the max error/warning need to be recorded in warnings
+    UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;
+    /// warning_count is the actual warning count during the entire execution
+    std::atomic<UInt64> warning_count;
 };
 
 } // namespace DB

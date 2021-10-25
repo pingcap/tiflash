@@ -117,12 +117,12 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
     key_manager->deleteFile(encryption_path_.full_path, throw_on_error);
 }
 
-void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const
+void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & link_encryption_name_) const
 {
     // delete the encryption info for dst_path if any
-    if (isFileEncrypted(dst_encryption_path_))
-        key_manager->deleteFile(dst_encryption_path_.full_path, true);
-    key_manager->linkFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);
+    if (isFileEncrypted(link_encryption_name_))
+        key_manager->deleteFile(link_encryption_name_.full_path, true);
+    key_manager->linkFile(src_encryption_path_.full_path, link_encryption_name_.full_path);
 }
 
 bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) const

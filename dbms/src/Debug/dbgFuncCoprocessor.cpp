@@ -372,7 +372,12 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         root_tm.set_task_id(-1);
         root_tm.set_partition_id(-1);
         std::shared_ptr<ExchangeReceiver> exchange_receiver
-            = std::make_shared<ExchangeReceiver>(context, tipb_exchange_receiver, root_tm, 10);
+            = std::make_shared<ExchangeReceiver>(
+                std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
+                tipb_exchange_receiver,
+                root_tm,
+                10,
+                nullptr);
         BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, nullptr);
         return ret;
     }
@@ -2479,7 +2484,7 @@ void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_r
 {
     auto codec = getCodec(dag_response.encode_type());
     for (const auto & chunk : dag_response.chunks())
-        blocks.emplace_back(codec->decode(chunk, schema));
+        blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
 }
 
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
