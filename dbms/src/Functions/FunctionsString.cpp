@@ -2426,13 +2426,13 @@ private:
         ColumnPtr & column_direction = block.getByPosition(arguments[2]).column;
         if (!column_direction->isColumnConst())
             throw Exception("3nd argument of function " + getName() + " must be constant.");
-        const ColumnConst * direction_col_int8 = checkAndGetColumnConst<ColumnInt8>(column_direction.get());
+        const ColumnConst * direction_col = checkAndGetColumn<ColumnConst>(column_direction.get());
 
-        static constexpr Int8 trim_both_default = 0; // trims from both direction by default
-        static constexpr Int8 trim_both = 1; // trims from both direction with explicit notation
-        static constexpr Int8 trim_leading = 2; // trims from left
-        static constexpr Int8 trim_trailing = 3; // trims from right
-        int8_t direction = direction_col_int8->getValue<Int8>();
+        static constexpr Int64 trim_both_default = 0; // trims from both direction by default
+        static constexpr Int64 trim_both = 1; // trims from both direction with explicit notation
+        static constexpr Int64 trim_leading = 2; // trims from left
+        static constexpr Int64 trim_trailing = 3; // trims from right
+        Int64 direction = direction_col->getInt(0);
         switch (direction)
         {
         case trim_both_default:
