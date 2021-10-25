@@ -6,16 +6,20 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-UnaryDAGResponseWriter::UnaryDAGResponseWriter(tipb::SelectResponse * dag_response_, Int64 records_per_chunk_,
-    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
-    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_), dag_response(dag_response_)
+UnaryDAGResponseWriter::UnaryDAGResponseWriter(
+    tipb::SelectResponse * dag_response_,
+    Int64 records_per_chunk_,
+    tipb::EncodeType encode_type_,
+    std::vector<tipb::FieldType> result_field_types_,
+    DAGContext & dag_context_)
+    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
+    , dag_response(dag_response_)
 {
     if (encode_type == tipb::EncodeType::TypeDefault)
     {
@@ -51,6 +55,7 @@ void UnaryDAGResponseWriter::appendWarningsToDAGResponse()
         // TODO: consider using allocated warnings to prevent copy?
         warn->CopyFrom(warning);
     }
+    dag_response->set_warning_count(dag_context.getWarningCount());
 }
 
 void UnaryDAGResponseWriter::finishWrite()
@@ -58,8 +63,8 @@ void UnaryDAGResponseWriter::finishWrite()
     if (current_records_num > 0)
     {
         encodeChunkToDAGResponse();
-        appendWarningsToDAGResponse();
     }
+    appendWarningsToDAGResponse();
     addExecuteSummaries(*dag_response, false);
 }
 
