@@ -40,7 +40,7 @@ public:
     std::unique_ptr<ReadBuffer> read_buffer;
     Block sample_block;
 
-    virtual ~BaseExternalTable(){};
+    virtual ~BaseExternalTable() = default;
 
     /// Initialize read_buffer, depending on the data source. By default, does nothing.
     virtual void initReadBuffer(){};
@@ -78,8 +78,8 @@ protected:
         std::cerr << "name " << name << std::endl;
         std::cerr << "format " << format << std::endl;
         std::cerr << "structure: \n";
-        for (size_t i = 0; i < structure.size(); ++i)
-            std::cerr << "\t" << structure[i].first << " " << structure[i].second << std::endl;
+        for (const auto & col_dt : structure)
+            std::cerr << "\t" << col_dt.first << " " << col_dt.second << std::endl;
     }
 
     static std::vector<std::string> split(const std::string & s, const std::string & d)
@@ -116,11 +116,11 @@ private:
     {
         const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
-        for (size_t i = 0; i < structure.size(); ++i)
+        for (const auto & col_dt : structure)
         {
             ColumnWithTypeAndName column;
-            column.name = structure[i].first;
-            column.type = data_type_factory.get(structure[i].second);
+            column.name = col_dt.first;
+            column.type = data_type_factory.get(col_dt.second);
             column.column = column.type->createColumn();
             sample_block.insert(std::move(column));
         }
@@ -141,7 +141,7 @@ public:
     }
 
     /// Extract parameters from variables_map, which is built on the client command line
-    ExternalTable(const boost::program_options::variables_map & external_options)
+    explicit ExternalTable(const boost::program_options::variables_map & external_options)
     {
         if (external_options.count("file"))
             file = external_options["file"].as<std::string>();

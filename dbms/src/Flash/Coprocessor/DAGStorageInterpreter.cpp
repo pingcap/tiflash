@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -421,9 +422,10 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     };
 
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
-        LOG_DEBUG(log,
-                  __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
-                                      << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+        LOG_INFO(
+            log,
+            __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
+                                << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
     };
 
     auto sync_schema = [&] {
@@ -432,7 +434,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
+        LOG_INFO(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
     };
 
     /// Try get storage and lock once.
@@ -503,14 +505,16 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     {
         context.getQueryContext().getDAGContext()->retry_regions.push_back(r.get());
     }
-    LOG_DEBUG(log, ({
-                  std::stringstream ss;
-                  ss << "Start to retry " << region_retry.size() << " regions (";
-                  for (auto & r : region_retry)
-                      ss << r.get().region_id << ",";
-                  ss << ")";
-                  ss.str();
-              }));
+
+    auto print_retry_regions = [this] {
+        FmtBuffer buffer;
+        buffer.append("Start to retry {} regions (", region_retry.size());
+        for (const auto & r : region_retry)
+            buffer.append("{},", r.get().region_id);
+        buffer.append(")");
+        return buffer.toString();
+    };
+    LOG_INFO(log, print_retry_regions());
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;

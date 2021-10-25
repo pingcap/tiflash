@@ -53,13 +53,15 @@ static constexpr char MIGRATE_HELP[] =
 struct DirLock
 {
     int dir{};
-    flock lock{};
+    struct flock lock
+    {
+    };
     std::string workdir_lock;
 
     explicit DirLock(const std::string & workdir_)
         : workdir_lock(workdir_ + "/LOCK")
     {
-        dir = ::open(workdir_lock.c_str(), O_RDWR | O_CREAT | O_EXCL);
+        dir = ::open(workdir_lock.c_str(), O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP);
         if (dir == -1)
         {
             throw DB::ErrnoException(fmt::format("cannot open target for lock: {}", workdir_lock), 0, errno);
@@ -306,7 +308,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
     return 0;
 }
 
-int migrateEntry(const std::vector<std::string> & opts)
+int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_function)
 {
     bpo::options_description options{"Delta Merge Migration"};
     bpo::variables_map vm;
@@ -382,7 +384,7 @@ int migrateEntry(const std::vector<std::string> & opts)
             }
         }
 
-        CLIService service(migrateServiceMain, args, vm["config-file"].as<std::string>());
+        CLIService service(migrateServiceMain, args, vm["config-file"].as<std::string>(), ffi_function);
         return service.run({""});
     }
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)
