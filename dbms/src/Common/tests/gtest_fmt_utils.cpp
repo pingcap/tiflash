@@ -9,10 +9,10 @@ TEST(FmtUtils_test, TestFmtBuffer)
 {
     FmtBuffer buffer;
     buffer.append("{").append("test").append("}");
-    ASSERT_TRUE(buffer.toString() == "{test}");
+    ASSERT_EQ(buffer.toString(), "{test}");
 
     buffer.fmtAppend(" fmt append {}", "test");
-    ASSERT_TRUE(buffer.toString() == "{test} fmt append test");
+    ASSERT_EQ(buffer.toString(), "{test} fmt append test");
 }
 
 } // namespace tests

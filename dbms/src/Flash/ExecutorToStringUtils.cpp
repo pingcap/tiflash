@@ -1,7 +1,8 @@
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Common/joinToString.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/ExecutorStringConverter.h>
+#include <Flash/ExecutorToStringUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
@@ -18,6 +19,8 @@ extern const int UNKNOWN_TABLE;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
+namespace
+{
 inline FmtBuffer & appendNamesAndTypes(FmtBuffer & buf, const NamesAndTypes & names_and_types)
 {
     joinIter(names_and_types.cbegin(), names_and_types.cend(), buf, [](const auto & nt, FmtBuffer & fb) { fb.append(nt.name).append("[").append(nt.type->getName()).append("]"); });
@@ -36,13 +39,10 @@ inline FmtBuffer & appendByItems(FmtBuffer & buf, const google::protobuf::Repeat
     return buf;
 }
 
-namespace
-{
 const std::unordered_map<tipb::ExchangeType, String> exchange_type_map{
     {tipb::PassThrough, "PassThrough"},
     {tipb::Broadcast, "Broadcast"},
     {tipb::Hash, "Hash"}};
-} // namespace
 
 inline const String & getExchangeTypeString(tipb::ExchangeType exchange_type)
 {
@@ -51,19 +51,16 @@ inline const String & getExchangeTypeString(tipb::ExchangeType exchange_type)
         throw TiFlashException("Unknown exchange type", Errors::Coprocessor::Internal);
     return exchange_type_it->second;
 }
+} // namespace
 
-NamesAndTypes ExecutorStringConverter::buildTSString(const String & executor_id, const tipb::TableScan & ts, FmtBuffer & buf)
+NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & ts, Context & context, FmtBuffer & buf)
 {
-    TableID table_id;
-    if (ts.has_table_id())
-    {
-        table_id = ts.table_id();
-    }
-    else
+    if (!ts.has_table_id())
     {
         // do not have table id
         throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
     }
+    TableID table_id = ts.table_id();
     auto & tmt_ctx = context.getTMTContext();
     auto storage = tmt_ctx.getStorages().get(table_id);
     if (storage == nullptr)
@@ -100,10 +97,10 @@ NamesAndTypes ExecutorStringConverter::buildTSString(const String & executor_id,
     return columns_from_ts;
 }
 
-NamesAndTypes ExecutorStringConverter::buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, FmtBuffer & buf)
+NamesAndTypes buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, FmtBuffer & buf)
 {
     NamesAndTypes columns_from_exchange_receiver;
-    for (int i = 0; i < exchange_receiver.field_types_size(); ++i)
+    for (int i = 0; i != exchange_receiver.field_types_size(); ++i)
     {
         String name = executor_id + "_" + std::to_string(i);
         auto type = getDataTypeByFieldType(exchange_receiver.field_types(i));
@@ -115,20 +112,20 @@ NamesAndTypes ExecutorStringConverter::buildExchangeReceiverString(const String 
     return columns_from_exchange_receiver;
 }
 
-NamesAndTypes ExecutorStringConverter::buildSelString(const String & executor_id, const tipb::Selection & sel, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes & buildSelString(const String & executor_id, const tipb::Selection & sel, NamesAndTypes & input_column, FmtBuffer & buf)
 {
     buf.append(executor_id).append(" (conditions: {");
     appendExprs(buf, sel.conditions(), input_column).append("})");
     return input_column;
 }
 
-NamesAndTypes ExecutorStringConverter::buildLimitString(const String & executor_id, const tipb::Limit & limit, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes & buildLimitString(const String & executor_id, const tipb::Limit & limit, NamesAndTypes & input_column, FmtBuffer & buf)
 {
-    buf.append(executor_id).append(" (limit: ").append(std::to_string(limit.limit())).append(")");
+    buf.append(executor_id).fmtAppend(" (limit: {}", limit.limit()).append(")");
     return input_column;
 }
 
-NamesAndTypes ExecutorStringConverter::buildProjString(const String & executor_id, const tipb::Projection & proj, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection & proj, NamesAndTypes & input_column, FmtBuffer & buf)
 {
     NamesAndTypes columns_from_proj;
     for (const auto & expr : proj.exprs())
@@ -142,7 +139,7 @@ NamesAndTypes ExecutorStringConverter::buildProjString(const String & executor_i
     return columns_from_proj;
 }
 
-NamesAndTypes ExecutorStringConverter::buildAggString(const String & executor_id, const tipb::Aggregation & agg, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation & agg, NamesAndTypes & input_column, FmtBuffer & buf)
 {
     NamesAndTypes columns_from_agg;
     for (const auto & agg_func : agg.agg_func())
@@ -171,14 +168,14 @@ NamesAndTypes ExecutorStringConverter::buildAggString(const String & executor_id
     return columns_from_agg;
 }
 
-NamesAndTypes ExecutorStringConverter::buildTopNString(const String & executor_id, const tipb::TopN & top_n, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes & buildTopNString(const String & executor_id, const tipb::TopN & top_n, NamesAndTypes & input_column, FmtBuffer & buf)
 {
-    buf.append(executor_id).append(" (limit: ").append(std::to_string(top_n.limit())).append(" order_by: {");
+    buf.append(executor_id).fmtAppend(" (limit: {}", top_n.limit()).append(" order_by: {");
     appendByItems(buf, top_n.order_by(), input_column).append("})");
     return input_column;
 }
 
-NamesAndTypes ExecutorStringConverter::buildJoinString(const String & executor_id, const tipb::Join & join, NamesAndTypes & left_input_column, NamesAndTypes & right_input_column, FmtBuffer & buf)
+NamesAndTypes & buildJoinString(const String & executor_id, const tipb::Join & join, NamesAndTypes & left_input_column, NamesAndTypes & right_input_column, FmtBuffer & buf)
 {
     buf.append(executor_id).append(" (left_join_keys: {");
     appendExprs(buf, join.left_join_keys(), left_input_column).append("} left_conditions: {");
@@ -190,7 +187,7 @@ NamesAndTypes ExecutorStringConverter::buildJoinString(const String & executor_i
     return left_input_column;
 }
 
-std::vector<NameAndTypePair> ExecutorStringConverter::buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes & buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, NamesAndTypes & input_column, FmtBuffer & buf)
 {
     buf.append(executor_id).append(" (columns: {");
     appendNamesAndTypes(buf, input_column).append("} partition_keys: {");
@@ -198,9 +195,5 @@ std::vector<NameAndTypePair> ExecutorStringConverter::buildExchangeSenderString(
     buf.append(getExchangeTypeString(exchange_sender.tp())).append(")");
     return input_column;
 }
-
-ExecutorStringConverter::ExecutorStringConverter(Context & context_)
-    : context(context_)
-{}
 
 } // namespace DB

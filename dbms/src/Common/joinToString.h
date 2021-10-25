@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/FmtUtils.h>
+#include <common/StringRef.h>
 
 #include <functional>
 #include <iterator>
@@ -10,22 +11,23 @@ namespace DB
 {
 template <typename Iter, typename FF>
 inline void joinIter(
-    Iter iter,
+    Iter first,
     Iter end,
-    FmtBuffer & buf [[maybe_unused]],
-    FF toStringFunc [[maybe_unused]],
-    const std::string & delimiter [[maybe_unused]] = ", ")
+    FmtBuffer & buf,
+    FF && toStringFunc,
+    StringRef delimiter = ", ")
 {
-    if (iter == end)
+    if (first == end)
     {
         return;
     }
 
-    toStringFunc(*iter++, buf);
-    for (; iter != end; ++iter)
+    toStringFunc(*first, buf);
+    ++first;
+    for (; first != end; ++first)
     {
         buf.append(delimiter);
-        toStringFunc(*iter, buf);
+        toStringFunc(*first, buf);
     }
 }
 } // namespace DB
