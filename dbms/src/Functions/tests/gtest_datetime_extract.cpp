@@ -3,8 +3,8 @@
 #include <Common/Exception.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsDateTime.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
@@ -20,20 +20,8 @@ namespace DB
 {
 namespace tests
 {
-class TestDateTimeExtract : public ::testing::Test
+class TestDateTimeExtract : public DB::tests::FunctionTest
 {
-protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
 };
 
 // Disabled for now, since we haven't supported ExtractFromString yet

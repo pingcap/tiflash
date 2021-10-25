@@ -1176,7 +1176,7 @@ struct TiDBDecimalRound
             scaled_value *= PowForOutput::result[-difference];
 
         // check overflow and construct result.
-        if (scaled_value > DecimalMaxValue::Get(info.output_prec))
+        if (scaled_value > DecimalMaxValue::get(info.output_prec))
             throw TiFlashException("Data truncated", Errors::Decimal::Overflow);
 
         auto result = static_cast<typename OutputType::NativeType>(scaled_value);

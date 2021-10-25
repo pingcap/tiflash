@@ -18,8 +18,8 @@ namespace DB
 class Exception : public Poco::Exception
 {
 public:
-    Exception() {} /// For deferred initialization.
-    Exception(const std::string & msg, int code = 0)
+    Exception() = default; /// For deferred initialization.
+    explicit Exception(const std::string & msg, int code = 0)
         : Poco::Exception(msg, code)
     {}
     Exception(const std::string & msg, const std::string & arg, int code = 0)
@@ -52,7 +52,7 @@ private:
 class ErrnoException : public Exception
 {
 public:
-    ErrnoException(const std::string & msg, int code = 0, int saved_errno_ = 0)
+    explicit ErrnoException(const std::string & msg, int code = 0, int saved_errno_ = 0)
         : Exception(msg, code)
         , saved_errno(saved_errno_)
     {}
@@ -75,7 +75,7 @@ private:
 using Exceptions = std::vector<std::exception_ptr>;
 
 
-[[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int the_errno = errno);
+[[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int e = errno);
 
 
 /** Try to write an exception to the log (and forget about it).
