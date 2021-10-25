@@ -2432,7 +2432,7 @@ private:
         const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
         static const std::string default_rem = " ";
-        vectorConst(true, true, data_col->getChars(), data_col->getOffsets(), (UInt8 *)default_rem.c_str(), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
+        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)default_rem.c_str(), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
 
         block.getByPosition(result).column = std::move(res_col);
     }
