@@ -111,8 +111,6 @@ private:
 
     Exception err;
 
-    size_t applied_concurrency = 0;
-
     friend class MPPTaskManager;
 };
 

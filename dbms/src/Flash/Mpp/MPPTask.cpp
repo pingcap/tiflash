@@ -1,5 +1,4 @@
 #include <Common/CPUAffinityManager.h>
-#include <Common/ConcurrencyManager.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -60,8 +59,6 @@ MPPTask::~MPPTask()
     /// to current_memory_tracker in the destructor
     // current_memory_tracker = memory_tracker;
     closeAllTunnels("");
-    if (applied_concurrency)
-        ConcurrencyManager::instance().release(applied_concurrency);
     LOG_DEBUG(log, "finish MPPTask: " << id.toString());
 }
 
@@ -209,9 +206,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
             context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
         }
     }
-    size_t origin_max_threads = context.getSettingsRef().max_threads;
-    applied_concurrency = ConcurrencyManager::instance().apply(origin_max_threads);
-    context.setSetting("max_threads", applied_concurrency);
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
 
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
@@ -242,7 +236,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
         task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettingsRef().max_threads);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
