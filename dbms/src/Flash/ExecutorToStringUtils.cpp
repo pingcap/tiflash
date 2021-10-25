@@ -10,6 +10,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
+#include <common/StringRef.h>
 
 namespace DB
 {
@@ -23,19 +24,19 @@ namespace
 {
 inline FmtBuffer & appendNamesAndTypes(FmtBuffer & buf, const NamesAndTypes & names_and_types)
 {
-    joinIter(names_and_types.cbegin(), names_and_types.cend(), buf, [](const auto & nt, FmtBuffer & fb) { fb.append(nt.name).append("[").append(nt.type->getName()).append("]"); });
+    joinIterToString(names_and_types.cbegin(), names_and_types.cend(), buf, [](const auto & nt, FmtBuffer & fb) { fb.append(nt.name).append("[").append(nt.type->getName()).append("]"); });
     return buf;
 }
 
 inline FmtBuffer & appendExprs(FmtBuffer & buf, const google::protobuf::RepeatedPtrField<::tipb::Expr> & exprs, const NamesAndTypes & input_column)
 {
-    joinIter(exprs.cbegin(), exprs.cend(), buf, [&](const auto & expr, FmtBuffer & fb) { fb.append(exprToString(expr, input_column)); });
+    joinIterToString(exprs.cbegin(), exprs.cend(), buf, [&](const auto & expr, FmtBuffer & fb) { fb.append(exprToString(expr, input_column)); });
     return buf;
 }
 
 inline FmtBuffer & appendByItems(FmtBuffer & buf, const google::protobuf::RepeatedPtrField<::tipb::ByItem> & byItems, const NamesAndTypes & input_column)
 {
-    joinIter(byItems.cbegin(), byItems.cend(), buf, [&](const auto & byItem, FmtBuffer & fb) { fb.append(exprToString(byItem.expr(), input_column)); });
+    joinIterToString(byItems.cbegin(), byItems.cend(), buf, [&](const auto & byItem, FmtBuffer & fb) { fb.append(exprToString(byItem.expr(), input_column)); });
     return buf;
 }
 
@@ -44,12 +45,29 @@ const std::unordered_map<tipb::ExchangeType, String> exchange_type_map{
     {tipb::Broadcast, "Broadcast"},
     {tipb::Hash, "Hash"}};
 
-inline const String & getExchangeTypeString(tipb::ExchangeType exchange_type)
+inline StringRef getExchangeTypeString(tipb::ExchangeType exchange_type)
 {
     auto exchange_type_it = exchange_type_map.find(exchange_type);
     if (exchange_type_it == exchange_type_map.end())
         throw TiFlashException("Unknown exchange type", Errors::Coprocessor::Internal);
     return exchange_type_it->second;
+}
+
+const std::unordered_map<tipb::JoinType, String> join_type_map{
+    {tipb::TypeInnerJoin, "Inner"},
+    {tipb::TypeLeftOuterJoin, "Left"},
+    {tipb::TypeRightOuterJoin, "Right"},
+    {tipb::TypeSemiJoin, "Semi"},
+    {tipb::TypeAntiSemiJoin, "AntiSemi"},
+    {tipb::TypeLeftOuterSemiJoin, "LeftOuterSemi"},
+    {tipb::TypeAntiLeftOuterSemiJoin, "AntiLeftOuterSemi"}};
+
+inline StringRef getJoinTypeString(tipb::JoinType join_type)
+{
+    auto join_type_it = join_type_map.find(join_type);
+    if (join_type_it == join_type_map.end())
+        throw TiFlashException("Unknown join type", Errors::Coprocessor::Internal);
+    return join_type_it->second;
 }
 } // namespace
 
@@ -177,13 +195,15 @@ NamesAndTypes & buildTopNString(const String & executor_id, const tipb::TopN & t
 
 NamesAndTypes & buildJoinString(const String & executor_id, const tipb::Join & join, NamesAndTypes & left_input_column, NamesAndTypes & right_input_column, FmtBuffer & buf)
 {
-    buf.append(executor_id).append(" (left_join_keys: {");
+    StringRef join_type = join.has_join_type() ? getJoinTypeString(join.join_type()) : "unknown";
+    buf.append(executor_id).append(" (join_type: ").append(join_type).append(" left_join_keys: {");
     appendExprs(buf, join.left_join_keys(), left_input_column).append("} left_conditions: {");
     appendExprs(buf, join.left_conditions(), left_input_column).append("} right_join_keys: {");
     appendExprs(buf, join.right_join_keys(), right_input_column).append("} right_conditions: {");
     appendExprs(buf, join.right_conditions(), right_input_column).append("} other_conditions: {");
     left_input_column.insert(left_input_column.end(), right_input_column.cbegin(), right_input_column.cend());
-    appendExprs(buf, join.other_conditions(), left_input_column).append("})");
+    appendExprs(buf, join.other_conditions(), left_input_column).append("} other_eq_conditions_from_in: {");
+    appendExprs(buf, join.other_eq_conditions_from_in(), left_input_column).append("})");
     return left_input_column;
 }
 

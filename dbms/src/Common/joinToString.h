@@ -10,7 +10,7 @@
 namespace DB
 {
 template <typename Iter, typename FF>
-inline void joinIter(
+inline void joinIterToString(
     Iter first,
     Iter end,
     FmtBuffer & buf,

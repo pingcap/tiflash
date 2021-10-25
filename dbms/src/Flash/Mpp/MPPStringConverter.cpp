@@ -38,7 +38,7 @@ String genPrefixString(size_t level)
 NamesAndTypes buildString(const tipb::Executor & executor, FmtBuffer & buf, size_t & level, Context & context);
 
 template <typename Unary, typename FF>
-NamesAndTypes buildUnaryExecutor(const Unary & unary, FmtBuffer & buf, size_t & level, Context & context, FF build_self_func)
+NamesAndTypes buildUnaryExecutor(const Unary & unary, FmtBuffer & buf, size_t & level, Context & context, FF && build_self_func)
 {
     auto input_column = buildString(unary.child(), buf, level, context);
     String child_str = buf.toString();
@@ -119,10 +119,10 @@ NamesAndTypes buildJoinString(const String & executor_id, const tipb::Join & joi
     buf.clear();
 
     buf.append(genPrefixString(level));
-    auto output_column = buildJoinString(executor_id, join, left_input_column, right_input_column, buf);
+    auto & output_column = buildJoinString(executor_id, join, left_input_column, right_input_column, buf);
     buf.append("\n").append(left_child_str).append("\n").append(right_child_str);
 
-    return left_input_column;
+    return output_column;
 }
 
 NamesAndTypes buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, FmtBuffer & buf, size_t & level, Context & context)
