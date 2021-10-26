@@ -21,7 +21,7 @@ def doCheckout(commit, refspec) {
 def checkoutTiCS(commit, pullId) {
     def refspec = "+refs/heads/*:refs/remotes/origin/*"
     if (pullId) {
-        refspec += " +refs/pull/${pullId}/*:refs/remotes/origin/pr/${pullId}/*"
+        refspec = " +refs/pull/${pullId}/*:refs/remotes/origin/pr/${pullId}/*"
     }
     try {
         doCheckout(commit, refspec)

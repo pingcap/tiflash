@@ -5,13 +5,12 @@
 
 namespace DB
 {
-
 class ColumnNothing final : public COWPtrHelper<IColumnDummy, ColumnNothing>
 {
 private:
     friend class COWPtrHelper<IColumnDummy, ColumnNothing>;
 
-    ColumnNothing(size_t s_)
+    explicit ColumnNothing(size_t s_)
     {
         s = s_;
     }
@@ -25,4 +24,4 @@ public:
     bool canBeInsideNullable() const override { return true; }
 };
 
-}
+} // namespace DB

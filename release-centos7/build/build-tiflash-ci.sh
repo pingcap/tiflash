@@ -130,9 +130,10 @@ make -j ${NPROC} tiflash
 # copy gtest binary under Debug mode
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
     make -j ${NPROC} page_ctl
-    make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing
+    make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing gtests_libdaemon
     cp -f "${BUILD_DIR}/dbms/gtests_dbms" "${INSTALL_DIR}/"
     cp -f "${BUILD_DIR}/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
+    cp -f "${BUILD_DIR}/libs/libdaemon/src/tests/gtests_libdaemon" "${INSTALL_DIR}/"
 fi
 
 ccache -s
@@ -150,6 +151,9 @@ cp -r "${SRCPATH}/cluster_manage/dist/flash_cluster_manager" "${INSTALL_DIR}"/fl
 cp -f "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "${INSTALL_DIR}/libtiflash_proxy.so"
 ldd "${INSTALL_DIR}/tiflash"
+
+ldd "${INSTALL_DIR}/tiflash" | grep 'libnsl.so' | grep '=>' | awk '{print $3}' | xargs -I {} cp {} "${INSTALL_DIR}"
+
 cd "${INSTALL_DIR}"
 chrpath -d libtiflash_proxy.so "${INSTALL_DIR}/tiflash"
 ldd "${INSTALL_DIR}/tiflash"

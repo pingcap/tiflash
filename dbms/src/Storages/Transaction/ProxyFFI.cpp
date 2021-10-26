@@ -138,10 +138,6 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
     }
 }
 
-uint8_t HandleCheckTerminated(EngineStoreServerWrap * server)
-{
-    return server->tmt->checkTerminated(std::memory_order_relaxed) ? 1 : 0;
-}
 
 StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
 {
@@ -240,7 +236,6 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpc
         req_strs.emplace_back(r.SerializeAsString());
     }
     CppStrVec data(std::move(req_strs));
-    assert(req_strs.empty());
     auto outer_view = data.intoOuterView();
     BatchReadIndexRes res;
     res.reserve(req.size());
@@ -415,6 +410,32 @@ void SetServerInfoResp(BaseBuffView view, RawVoidPtr ptr)
 {
     using diagnosticspb::ServerInfoResponse;
     reinterpret_cast<ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);
+}
+
+CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_t full)
+{
+    std::string config_file_path;
+    try
+    {
+        config_file_path = server->tmt->getContext().getConfigRef().getString("config-file");
+        std::ifstream stream(config_file_path);
+        if (!stream)
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+        auto * s = RawCppString::New((std::istreambuf_iterator<char>(stream)),
+                                     std::istreambuf_iterator<char>());
+        stream.close();
+        /** the returned str must be formated as TOML, proxy will parse and show in form of JASON.
+         *  curl `http://{status-addr}/config`, got:
+         *  {"raftstore-proxy":xxxx,"engine-store":xxx}
+         *
+         *  if proxy can NOT parse it, return 500 Internal Server Error.
+         * */
+        return CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}};
+    }
+    catch (...)
+    {
+        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+    }
 }
 
 } // namespace DB

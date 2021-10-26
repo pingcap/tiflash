@@ -13,7 +13,9 @@ namespace DB
 class DefaultChunkCodecStream : public ChunkCodecStream
 {
 public:
-    explicit DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types) {}
+    explicit DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types)
+        : ChunkCodecStream(field_types)
+    {}
     WriteBufferFromOwnString ss;
     String getString() override { return ss.releaseStr(); }
     void encode(const Block & block, size_t start, size_t end) override;
@@ -35,11 +37,10 @@ void DefaultChunkCodecStream::encode(const Block & block, size_t start, size_t e
     }
 }
 
-Block DefaultChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schema)
+Block DefaultChunkCodec::decode(const String & data, const DAGSchema & schema)
 {
     std::vector<std::vector<Field>> rows;
     std::vector<Field> curr_row;
-    const std::string & data = chunk.rows_data();
     size_t cursor = 0;
     while (cursor < data.size())
     {

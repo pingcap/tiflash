@@ -22,7 +22,7 @@ void DeltaPackFile::calculateStat(const DMContext & context)
     auto hash_salt = context.hash_salt;
 
     auto pack_filter
-        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, segment_range, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
+        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, {segment_range}, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
@@ -71,7 +71,7 @@ void DPFileReader::initStream()
                                                            context.hash_salt,
                                                            pack.getFile(),
                                                            *col_defs,
-                                                           pack.segment_range,
+                                                           RowKeyRanges{pack.segment_range},
                                                            RSOperatorPtr{},
                                                            ColumnCachePtr{},
                                                            IdSetPtr{});

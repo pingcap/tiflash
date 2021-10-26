@@ -4,13 +4,15 @@
 
 namespace DB
 {
-
 /// delta_mode means when for a streaming call, return the delta execution summary
 /// because TiDB is not aware of the streaming call when it handle the execution summaries
 /// so we need to "pretend to be a unary call", can be removed if TiDB support streaming
 /// call's execution summaries directly
 void DAGResponseWriter::fillTiExecutionSummary(
-    tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id, bool delta_mode)
+    tipb::ExecutorExecutionSummary * execution_summary,
+    ExecutionSummary & current,
+    const String & executor_id,
+    bool delta_mode)
 {
     auto & prev_stats = previous_execution_stats[executor_id];
 
@@ -27,7 +29,8 @@ void DAGResponseWriter::fillTiExecutionSummary(
 
 template <typename RemoteBlockInputStream>
 void mergeRemoteExecuteSummaries(
-    RemoteBlockInputStream * input_stream, std::unordered_map<String, std::vector<ExecutionSummary>> & execution_summaries)
+    RemoteBlockInputStream * input_stream,
+    std::unordered_map<String, std::vector<ExecutionSummary>> & execution_summaries)
 {
     size_t source_num = input_stream->getSourceNum();
     for (size_t s_index = 0; s_index < source_num; s_index++)
@@ -122,11 +125,14 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
 }
 
 DAGResponseWriter::DAGResponseWriter(
-    Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
-    : records_per_chunk(records_per_chunk_),
-      encode_type(encode_type_),
-      result_field_types(std::move(result_field_types_)),
-      dag_context(dag_context_)
+    Int64 records_per_chunk_,
+    tipb::EncodeType encode_type_,
+    std::vector<tipb::FieldType> result_field_types_,
+    DAGContext & dag_context_)
+    : records_per_chunk(records_per_chunk_)
+    , encode_type(encode_type_)
+    , result_field_types(std::move(result_field_types_))
+    , dag_context(dag_context_)
 {
     for (auto & p : dag_context.getProfileStreamsMap())
     {
@@ -140,7 +146,8 @@ DAGResponseWriter::DAGResponseWriter(
         && encode_type != tipb::EncodeType::TypeDefault)
     {
         throw TiFlashException(
-            "Only Default/Arrow/CHBlock encode type is supported in DAGBlockOutputStream.", Errors::Coprocessor::Unimplemented);
+            "Only Default/Arrow/CHBlock encode type is supported in DAGBlockOutputStream.",
+            Errors::Coprocessor::Unimplemented);
     }
 }
 

@@ -108,7 +108,7 @@ public:
         active_threads = max_threads;
         threads.reserve(max_threads);
         for (size_t i = 0; i < max_threads; ++i)
-            threads.emplace_back(ThreadFactory(true, "ParalInputsProc").newThread([this, i] { thread(i); }));
+            threads.emplace_back(ThreadFactory(true, handler.getName()).newThread([this, i] { thread(i); }));
     }
 
     /// Ask all sources to stop earlier than they run out.
