@@ -1,0 +1,163 @@
+# display_name = "TiFlash"
+
+## The listening host for supporting services such as TPC/HTTP. It is recommended to configure it as "0.0.0.0", which means to listen on all IP addresses of this machine.
+# listen_host = "0.0.0.0"
+## The cache size limit of the metadata of a data block. Generally, you do not need to change this value.
+# mark_cache_size = 5368709120
+## The cache size limit of the min-max index of a data block. Generally, you do not need to change this value.
+# minmax_index_cache_size = 5368709120
+## The TiFlash TCP service port.
+# tcp_port = 9000
+## The TiFlash HTTP service port.
+# http_port = 8123
+
+## The path in which the TiFlash temporary files are stored. By default it is the first directory in storage.latest.dir appended with "/tmp".
+# tmp_path = "/tidb-data/tiflash-9000/tmp"
+
+## Storage paths settings.
+[storage]
+## The storage format version in storage engine. Valid values: 1, 2.
+## format_version = 2
+
+## If there are multiple SSD disks on the machine,
+## specify the path list on `storage.main.dir` can improve TiFlash performance.
+
+## If there are multiple disks with different IO metrics (e.g. one SSD and some HDDs)
+## on the machine, 
+## set `storage.latest.dir` to store the latest data on SSD (disks with higher IOPS metrics)
+## set `storage.main.dir` to store the main data on HDD (disks with lower IOPS metrics)
+## can improve TiFlash performance.
+
+[storage.main]
+## The list of directories to store the main data. More than 90% of the total data is stored in
+## the directory list.
+# dir = [ "/tidb-data/tiflash-9000" ]
+## or
+# dir = [ "/ssd0/tidb-data/tiflash", "/ssd1/tidb-data/tiflash" ]
+## The maximum storage capacity of each directory in storage.main.dir.
+## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
+## Note that human-readable numbers such as "10GB" are not supported yet.
+## Numbers are specified in bytes.
+## The size of the capacity list should be the same with the dir size.
+## For example:
+# capacity = [ 10737418240, 10737418240 ]
+
+[storage.latest]
+## The list of directories to store the latest data. About 10% of the total data is stored in
+## the directory list. The directories (or directory) listed here require higher IOPS
+## metrics than those in storage.main.dir.
+## If it is not set (by default), the values of storage.main.dir are used.
+# dir = [ ]
+## The maximum storage capacity of each directory in storage.latest.dir.
+## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
+# capacity = [ 10737418240, 10737418240 ]
+## The maximum storage capacity of each directory in storage.main.dir.
+## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
+## Note that human-readable numbers such as "10GB" are not supported yet.
+## Numbers are specified in bytes.
+## The size of the capacity list should be the same with the dir size.
+## For example:
+# capacity = [ 10737418240, 10737418240 ]
+
+[storage.raft]
+## The path(s) to store Raft data.
+## If not set, it will be the paths in `storage.latest.dir` appended with "/kvstore".
+# dir = [ ]
+
+[storage.io_rate_limit]
+## This configuration item determines whether to limit the I/O traffic, which is disabled by default. This traffic limit in TiFlash is suitable for cloud storage that has the disk bandwidth of a small and specific size.
+## The total I/O bandwidth for disk reads and writes. The unit is bytes and the default value is 0, which means the I/O traffic is not limited by default.
+# max_bytes_per_sec = 0
+## max_read_bytes_per_sec and max_write_bytes_per_sec have similar meanings to max_bytes_per_sec. max_read_bytes_per_sec means the total I/O bandwidth for disk reads, and max_write_bytes_per_sec means the total I/O bandwidth for disk writes.
+## These configuration items limit I/O bandwidth for disk reads and writes separately. You can use them for cloud storage that calculates the limit of I/O bandwidth for disk reads and writes separately, such as the Persistent Disk provided by Google Cloud Platform.
+## When the value of max_bytes_per_sec is not 0, max_bytes_per_sec is prioritized.
+# max_read_bytes_per_sec = 0
+# max_write_bytes_per_sec = 0
+
+## The following parameters control the bandwidth weights assigned to different I/O traffic types. Generally, you do not need to adjust these parameters.
+## TiFlash internally divides I/O requests into four types: foreground writes, background writes, foreground reads, background reads.
+## When the I/O traffic limit is initialized, TiFlash assigns the bandwidth according to the following weight ratio.
+## The following  default configurations indicate that each type of traffic gets a weight of 25% (25 / (25 + 25 + 25 + 25) = 25%).
+## If the weight is configured to 0, the corresponding I/O traffic is not limited.
+# foreground_write_weight = 25
+# background_write_weight = 25
+# foreground_read_weight = 25
+# background_read_weight = 25
+## TiFlash supports automatically tuning the traffic limit for different I/O types according to the current I/O load. Sometimes, the tuned bandwidth might exceed the weight ratio set above.
+## auto_tune_sec indicates the interval of automatic tuning. The unit is seconds. If the value of auto_tune_sec is 0, the automatic tuning is disabled.
+# auto_tune_sec = 5
+
+[flash]
+# tidb_status_addr = "tidb0:10080"
+# service_addr = "0.0.0.0:3930"
+# compact_log_min_period = "120"
+# compact_log_min_rows = "40960"
+# compact_log_min_bytes = "33554432"
+# replica_read_max_thread = "1"
+# batch_read_index_timeout_ms = "10000"
+# wait_index_timeout_ms = "300000"
+# wait_region_ready_timeout_sec = "1200"
+[flash.flash_cluster]
+# update_rule_interval = 5
+[flash.proxy]
+# addr = "0.0.0.0:20170"
+# advertise-addr = "tiflash0:20170"
+# data-dir = "/data"
+# config = "/proxy.toml"
+# log-file = "/log/proxy.log"
+# engine-addr = "tiflash0:3930"
+# status-addr = "0.0.0.0:20181"
+# advertise-status-addr = "tiflash0:20181"
+
+[logger]
+# count = 10
+# errorlog = "/tmp/tiflash/log/error.log"
+# size = "1000M"
+# log = "/tmp/tiflash/log/server.log"
+# level = "trace"
+
+[application]
+# runAsDaemon = true
+
+[raft]
+# pd_addr = "pd0:2379"
+# ignore_databases = "system,default"
+# specify which storage engine we use. tmt or dt 
+# storage_engine = "dt"
+
+[raft.snapshot]
+# The way to apply snapshot data
+# The value is one of "block" / "file1" / "file2".
+# method = "file1"
+
+[profiles]
+[profiles.default]
+## The default value is true. This parameter determines whether the segment
+## of DeltaTree Storage Engine uses logical split.
+## Using the logical split can reduce the write amplification, and improve the write speed.
+## However, these are at the cost of disk space waste.
+# dt_enable_logical_split = true
+## The memory usage limit for the generated intermediate data when a single
+## coprocessor query is executed. The default value is 0, which means no limit.
+# max_memory_usage = 0
+## The memory usage limit for the generated intermediate data when all queries
+## are executed. The default value is 0 (in bytes), which means no limit.
+# max_memory_usage_for_all_queries = 0
+## New in v5.0. This item specifies the maximum number of cop requests that TiFlash Coprocessor executes at the same time. If the number of requests exceeds the specified value, the exceeded requests will queue. If the configuration value is set to 0 or not set, the default value is used, which is twice the number of physical cores.
+# cop_pool_size = 0
+## New in v5.0. This item specifies the maximum number of batch requests that TiFlash Coprocessor executes at the same time. If the number of requests exceeds the specified value, the exceeded requests will queue. If the configuration value is set to 0 or not set, the default value is used, which is twice the number of physical cores.
+# batch_cop_pool_size = 0
+## Security settings take effect starting from v4.0.5.
+
+[security]
+## Path of the file that contains a list of trusted SSL CAs. If set, the following settings
+## cert_path and key_path are also needed.
+# ca_path = "/path/to/ca.pem"
+## Path of the file that contains X509 certificate in PEM format.
+# cert_path = "/path/to/tiflash-server.pem"
+## Path of the file that contains X509 key in PEM format.
+# key_path = "/path/to/tiflash-server-key.pem"
+## New in v5.0. This configuration item enables or disables log redaction. If the configuration value
+## is set to true, all user data in the log will be replaced by ?.
+## Note that you also need to set security.redact-info-log for tiflash-learner's logging in tiflash-learner.toml.
+# redact_info_log = false
