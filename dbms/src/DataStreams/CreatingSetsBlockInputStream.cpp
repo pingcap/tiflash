@@ -110,6 +110,8 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setFinishBuildTable(false);
             }
         }
+        start_thds = 0;
+        end_thds = 0;
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
@@ -120,7 +122,7 @@ void CreatingSetsBlockInputStream::createAll()
                         return;
                     start_thds++;
                     glb_thd_pool->schedule([this, &item = elem.second] {this->createOne(item);});
-//                    createOne(elem.second);
+                //    createOne(elem.second);
 //                    workers.emplace_back(ThreadFactory(true, "CreatingSets").newThread([this, &subquery = elem.second] { createOne(subquery); }));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
@@ -128,7 +130,7 @@ void CreatingSetsBlockInputStream::createAll()
         }
         {
             std::unique_lock<std::mutex> lk(thd_mu);
-            end_cv.wait(lk, [&]{return start_thds == end_thds;});
+            end_cv.wait(lk, [&]{return start_thds.load() == end_thds.load();});
         }
 //        for (auto & work : workers)
 //        {

@@ -152,7 +152,7 @@ public:
 
         {
             std::unique_lock<std::mutex> lk(thd_mu);
-            end_cv.wait(thd_mu, [&]{return end_threads == max_threads;});
+            end_cv.wait(lk, [&]{return end_threads == max_threads;});
         }
 //        for (auto & thread : threads)
 //            thread.join();

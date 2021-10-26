@@ -189,7 +189,8 @@ void CPUAffinityManager::setAffinity(pid_t tid, const cpu_set_t & cpu_set) const
 
 bool CPUAffinityManager::enable() const
 {
-    return 0 < query_cpu_percent && query_cpu_percent < 100 && cpu_cores > 1;
+    return false;
+    // return 0 < query_cpu_percent && query_cpu_percent < 100 && cpu_cores > 1;
 }
 
 std::string CPUAffinityManager::cpuSetToString(const cpu_set_t & cpu_set) const

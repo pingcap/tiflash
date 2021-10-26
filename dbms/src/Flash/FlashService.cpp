@@ -38,7 +38,7 @@ FlashService::FlashService(IServer & server_)
     size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with " << cop_pool_size << " threads to handle cop requests.");
-    cop_pool = std::make_unique<ThreadPool>(2000, [] { setThreadName("cop-pool"); });
+    cop_pool = std::make_unique<ThreadPool>(3000, [] { setThreadName("cop-pool"); });
     glb_thd_pool = cop_pool.get();
 
     size_t batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
