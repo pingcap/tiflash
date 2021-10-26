@@ -27,7 +27,7 @@ extern const int LIMIT_EXCEEDED;
 class Throttler
 {
 public:
-    Throttler(size_t max_speed_, const std::shared_ptr<Throttler> & parent = nullptr)
+    explicit Throttler(size_t max_speed_, const std::shared_ptr<Throttler> & parent = nullptr)
         : max_speed(max_speed_)
         , limit_exceeded_exception_message("")
         , parent(parent)

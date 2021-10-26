@@ -31,7 +31,7 @@ struct TiFlashSecurityConfig
     grpc::SslCredentialsOptions options;
 
 public:
-    TiFlashSecurityConfig() {}
+    TiFlashSecurityConfig() = default;
 
     TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
     {
@@ -93,9 +93,9 @@ public:
             verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
         }
         Poco::StringTokenizer string_tokens(verify_cns, ",");
-        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+        for (const auto & string_token: string_tokens)
         {
-            std::string cn = Poco::trim(*it);
+            std::string cn = Poco::trim(string_token);
             if (cn.size() > 2 && cn[0] == '\"' && cn[cn.size() - 1] == '\"')
             {
                 cn = cn.substr(1, cn.size() - 2);
