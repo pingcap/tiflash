@@ -74,6 +74,8 @@ ccache -o compression=true
 ccache -o compression_level=6
 if [[ ${UPDATE_CCACHE} == "false" ]]; then
   ccache -o read_only=true
+else
+  ccache -o read_only=false
 fi
 ccache -z
 
