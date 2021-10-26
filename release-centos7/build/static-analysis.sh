@@ -3,15 +3,15 @@
 function check_src_path() {
   SRC_PATH=$1
   if [[ ! -d "${SRC_PATH}" ]]; then
-      echo "no header file in ${SRC_PATH}"
-      exit 1
+    echo "no header file in ${SRC_PATH}"
+    exit 1
   fi
 }
 
 ENABLE_CLANG_TIDY_CHECK=${ENABLE_CLANG_TIDY_CHECK:-true}
 
 if [[ "${ENABLE_CLANG_TIDY_CHECK}" == "true" ]]; then
-  command -v clang-tidy > /dev/null 2>&1
+  command -v clang-tidy >/dev/null 2>&1
   if [[ $? != 0 ]]; then
     curl -o "/usr/local/bin/clang-tidy" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-tidy-12
     chmod +x "/usr/local/bin/clang-tidy"
@@ -28,8 +28,14 @@ fi
 
 set -ueox pipefail
 
-SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
+SCRIPTPATH="$(
+  cd "$(dirname "$0")"
+  pwd -P
+)"
+SRCPATH=${1:-$(
+  cd $SCRIPTPATH/../..
+  pwd -P
+)}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 
 # check with clang-tidy after build to generate kvproto & tipb & re2_st.
