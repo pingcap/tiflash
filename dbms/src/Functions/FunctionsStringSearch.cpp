@@ -407,12 +407,13 @@ struct MatchImpl
 {
     using ResultType = UInt8;
 
-    static void vectorConstant(const ColumnString::Chars_t & data,
-                               const ColumnString::Offsets & offsets,
-                               const std::string & orig_pattern,
-                               UInt8 escape_char,
-                               const TiDB::TiDBCollatorPtr & collator,
-                               PaddedPODArray<UInt8> & res)
+    static void vectorConstant(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const std::string & orig_pattern,
+        UInt8 escape_char,
+        const TiDB::TiDBCollatorPtr & collator,
+        PaddedPODArray<UInt8> & res)
     {
         if (collator != nullptr)
         {
@@ -574,11 +575,12 @@ struct MatchImpl
         }
     }
 
-    static void constantConstant(const std::string & data,
-                                 const std::string & orig_pattern,
-                                 UInt8 escape_char,
-                                 const TiDB::TiDBCollatorPtr & collator,
-                                 UInt8 & res)
+    static void constantConstant(
+        const std::string & data,
+        const std::string & orig_pattern,
+        UInt8 escape_char,
+        const TiDB::TiDBCollatorPtr & collator,
+        UInt8 & res)
     {
         if (collator != nullptr)
         {
@@ -596,13 +598,14 @@ struct MatchImpl
         }
     }
 
-    static void vectorVector(const ColumnString::Chars_t & haystack_data,
-                             const ColumnString::Offsets & haystack_offsets,
-                             const ColumnString::Chars_t & needle_data,
-                             const ColumnString::Offsets & needle_offsets,
-                             UInt8 escape_char,
-                             const TiDB::TiDBCollatorPtr & collator,
-                             PaddedPODArray<UInt8> & res)
+    static void vectorVector(
+        const ColumnString::Chars_t & haystack_data,
+        const ColumnString::Offsets & haystack_offsets,
+        const ColumnString::Chars_t & needle_data,
+        const ColumnString::Offsets & needle_offsets,
+        UInt8 escape_char,
+        const TiDB::TiDBCollatorPtr & collator,
+        PaddedPODArray<UInt8> & res)
     {
         size_t size = haystack_offsets.size();
 
@@ -623,12 +626,13 @@ struct MatchImpl
     }
 
     /// Search different needles in single haystack.
-    static void constantVector(const std::string & haystack_data,
-                               const ColumnString::Chars_t & needle_data,
-                               const ColumnString::Offsets & needle_offsets,
-                               UInt8 escape_char,
-                               const TiDB::TiDBCollatorPtr & collator,
-                               PaddedPODArray<UInt8> & res)
+    static void constantVector(
+        const std::string & haystack_data,
+        const ColumnString::Chars_t & needle_data,
+        const ColumnString::Offsets & needle_offsets,
+        UInt8 escape_char,
+        const TiDB::TiDBCollatorPtr & collator,
+        PaddedPODArray<UInt8> & res)
     {
         size_t size = needle_offsets.size();
         res.resize(size);
