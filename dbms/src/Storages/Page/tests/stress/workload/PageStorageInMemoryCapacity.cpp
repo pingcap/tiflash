@@ -147,9 +147,9 @@ private:
         size_t page_writen = (single_writer_page_nums * options.num_writers);
         assert(page_writen != 0);
 
-        LOG_INFO(StressEnv::logger, fmt::format("After gen : {} pages"
-                                                "virtual memory used : {} MB,"
-                                                "resident memory used : {} MB,"
+        LOG_INFO(StressEnv::logger, fmt::format("After gen: {} pages"
+                                                "virtual memory used: {} MB,"
+                                                "resident memory used: {} MB,"
                                                 "total memory is {} , It is estimated that {} pages can be stored in the virtual memory,"
                                                 "It is estimated that {} pages can be stored in the resident memory.",
                                                 page_writen,

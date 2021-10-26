@@ -59,7 +59,7 @@ private:
         String toString() const
         {
             return fmt::format(
-                "{} lastest used: {} , avg used: {} , top used: {}.",
+                "{} lastest used: {}, avg used: {}, top used: {}.",
                 name,
                 lastest,
                 loop_times == 0 ? 0 : (summary / loop_times),

@@ -153,7 +153,7 @@ public:
         {
             if (options.situation_mask & it.first)
             {
-                debug_string += fmt::format("   Name: {} , Mask: {}. ", it.second.first, it.first);
+                debug_string += fmt::format("   Name: {}, Mask: {}. ", it.second.first, it.first);
             }
         }
         return debug_string;

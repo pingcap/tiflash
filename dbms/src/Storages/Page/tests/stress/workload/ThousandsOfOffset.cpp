@@ -34,7 +34,7 @@ private:
                            options.paths[0] + "/" + name());
     }
 
-    static DB::PageFieldSizes divideRedPackage(size_t amount, size_t nums)
+    static DB::PageFieldSizes divideFields(size_t amount, size_t nums)
     {
         DB::PageFieldSizes field_sizes;
         size_t rest_amount = amount;
@@ -67,7 +67,7 @@ private:
             stop_watch.start();
 
             auto buffer_size = 1 * DB::MB;
-            auto field_size = divideRedPackage(buffer_size, 1000);
+            auto field_size = divideFields(buffer_size, 1000);
 
             startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setFieldSize(field_size);
@@ -89,7 +89,7 @@ private:
             stop_watch.start();
 
             auto buffer_size = 1 * DB::MB;
-            auto field_size = divideRedPackage(buffer_size, 1000);
+            auto field_size = divideFields(buffer_size, 1000);
 
             startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setFieldSize(field_size);
@@ -111,7 +111,7 @@ private:
             stop_watch.start();
 
             auto buffer_size = 100 * 1024;
-            auto field_size = divideRedPackage(buffer_size, 1000);
+            auto field_size = divideFields(buffer_size, 1000);
 
             startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setFieldSize(field_size);
@@ -133,7 +133,7 @@ private:
             stop_watch.start();
 
             auto buffer_size = 100 * 1024;
-            auto field_size = divideRedPackage(buffer_size, 1000);
+            auto field_size = divideFields(buffer_size, 1000);
 
             startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setFieldSize(field_size);

@@ -77,11 +77,11 @@ struct StressEnv
     {
         return fmt::format(
             "{{ "
-            "num_writers: {}, num_readers: {}, init_pages: {} ,clean_before_run: {}"
+            "num_writers: {}, num_readers: {}, init_pages: {}, clean_before_run: {}"
             ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
             ", avg_page_size_mb: {}, paths: [{}], failpoints: [{}]"
-            ", status_interval: {}, situation_mask: {} , verify: {}"
-            " }}",
+            ", status_interval: {}, situation_mask: {}, verify: {}."
+            "}}",
             num_writers,
             num_readers,
             init_pages,

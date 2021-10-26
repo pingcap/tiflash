@@ -210,7 +210,7 @@ void PSCommonWriter::setBatchBufferRange(size_t min, size_t max)
     }
 }
 
-void PSCommonWriter::setFieldSize(DB::PageFieldSizes data_sizes_)
+void PSCommonWriter::setFieldSize(const DB::PageFieldSizes & data_sizes_)
 {
     data_sizes = data_sizes_;
 }
@@ -338,23 +338,23 @@ DB::PageIds PSWindowReader::genRandomPageIds()
 
     std::normal_distribution<> distribution{static_cast<double>(window_size),
                                             static_cast<double>(sigma)};
-    auto random = std::round(distribution(gen));
+    auto rand_id = std::round(distribution(gen));
 
-    random = read_boundary - window_size + random;
+    rand_id = read_boundary - window_size + rand_id;
 
     // Bigger than window right boundary
-    if (random > read_boundary)
+    if (rand_id > read_boundary)
     {
-        random = read_boundary;
+        rand_id = read_boundary;
     }
 
     // Smaller than window left boundary
-    if (random < 0)
+    if (rand_id < 0)
     {
-        random = std::abs(random);
+        rand_id = std::abs(rand_id);
     }
 
-    for (size_t i = random; i < page_read_once + random; ++i)
+    for (size_t i = rand_id; i < page_read_once + rand_id; ++i)
     {
         bool writing = false;
         for (size_t j = 0; j < writer_nums; j++)

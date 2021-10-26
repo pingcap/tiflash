@@ -93,7 +93,7 @@ public:
 
     void setBatchBufferRange(size_t min, size_t max);
 
-    void setFieldSize(DB::PageFieldSizes data_sizes);
+    void setFieldSize(const DB::PageFieldSizes & data_sizes);
 
 protected:
     std::vector<DB::ReadBufferPtr> buff_ptrs;
