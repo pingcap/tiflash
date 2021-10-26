@@ -613,6 +613,7 @@ struct MatchImpl
         {
             size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
             size_t haystack_size = haystack_offsets[i] - prev_haystack_offset - 1;
+            // TODO: remove the copy, use raw char array directly
             std::string haystack_str(reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset]), haystack_size);
             std::string needle_str(reinterpret_cast<const char *>(&needle_data[prev_needle_offset]), needle_size);
             constantConstant(haystack_str, needle_str, escape_char, collator, res[i]);
@@ -630,12 +631,14 @@ struct MatchImpl
                                PaddedPODArray<UInt8> & res)
     {
         size_t size = needle_offsets.size();
+        res.resize(size);
 
         ColumnString::Offset prev_needle_offset = 0;
 
         for (size_t i = 0; i < size; ++i)
         {
             size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
+            // TODO: remove the copy, use raw char array directly
             std::string needle_str(reinterpret_cast<const char *>(&needle_data[prev_needle_offset]), needle_size);
             constantConstant(haystack_data, needle_str, escape_char, collator, res[i]);
             prev_needle_offset = needle_offsets[i];

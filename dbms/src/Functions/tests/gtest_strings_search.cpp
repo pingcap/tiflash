@@ -48,7 +48,7 @@ try
     InferredDataVector<String> needle_raw = {};
     InferredDataVector<UInt8> result_raw = {};
 
-    for (auto && cas : cases)
+    for (auto & cas : cases)
     {
         haystack_raw.push_back(cas.a);
         needle_raw.push_back(cas.b);
@@ -81,7 +81,7 @@ try
     InferredDataVector<Nullable<String>> nullable_needle_raw = {};
     InferredDataVector<Nullable<UInt8>> nullable_result_raw = {};
 
-    for (auto && cas : nullable_cases)
+    for (auto & cas : nullable_cases)
     {
         nullable_haystack_raw.push_back(cas.a);
         nullable_needle_raw.push_back(cas.b);
@@ -118,12 +118,12 @@ try
         {"aab", {{"aab", 1}, {"ab_", 0}, {"a_a", 0}, {"a__", 1}}},
     };
 
-    for (auto && cas : cases)
+    for (auto & cas : cases)
     {
         InferredDataVector<Nullable<String>> needle_raw = {};
         InferredDataVector<Nullable<UInt8>> result_raw = {};
 
-        for (auto && pat : cas.pat)
+        for (auto & pat : cas.pat)
         {
             needle_raw.push_back(pat.first);
             result_raw.push_back(pat.second);

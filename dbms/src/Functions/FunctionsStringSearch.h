@@ -158,7 +158,6 @@ public:
             auto haystack = col_haystack_const->getValue<String>();
             const ColumnString::Chars_t & needle_chars = col_needle_vector->getChars();
             const IColumn::Offsets & needle_offsets = col_needle_vector->getOffsets();
-            vec_res.resize(column_needle->size());
             Impl::constantVector(haystack, needle_chars, needle_offsets, escape_char, collator, vec_res);
         }
         else
