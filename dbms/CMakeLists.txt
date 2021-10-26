@@ -291,14 +291,14 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
             NAME tiflash_gcovr_coverage
             BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
             DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
-            EXECUTABLE "gtests_dbms"
+            EXECUTABLE echo "please run gtests manually"
         )
     else ()
         setup_target_for_coverage_lcov (
             NAME tiflash_coverage_lcov
             BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
             DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
-            EXECUTABLE "gtests_dbms"
+            EXECUTABLE echo "please run gtests manually"
         )
     endif ()
 endif ()
