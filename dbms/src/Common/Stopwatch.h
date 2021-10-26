@@ -30,7 +30,7 @@ public:
     /** CLOCK_MONOTONIC works relatively efficient (~15 million calls/sec) and doesn't lead to syscall.
       * Pass CLOCK_MONOTONIC_COARSE, if you need better performance with acceptable cost of several milliseconds of inaccuracy.
       */
-    Stopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC)
+    explicit Stopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC)
         : clock_type(clock_type_)
     {
         start();
@@ -70,7 +70,7 @@ private:
 class AtomicStopwatch
 {
 public:
-    AtomicStopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC)
+    explicit AtomicStopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC)
         : clock_type(clock_type_)
     {
         restart();
@@ -105,11 +105,11 @@ public:
     {
         AtomicStopwatch * parent = nullptr;
 
-        Lock() {}
+        Lock() = default;
 
-        operator bool() const { return parent != nullptr; }
+        explicit operator bool() const { return parent != nullptr; }
 
-        Lock(AtomicStopwatch * parent)
+        explicit Lock(AtomicStopwatch * parent)
             : parent(parent)
         {}
 
