@@ -7,6 +7,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
@@ -127,6 +128,7 @@ BlockIO InterpreterDAG::execute()
                 collators.emplace_back(nullptr);
             }
         }
+        restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
         pipeline.transform([&](auto & stream) {
             // construct writer
             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
@@ -135,6 +137,7 @@ BlockIO InterpreterDAG::execute()
                 collators,
                 exchange_sender.tp(),
                 context.getSettings().dag_records_per_chunk,
+                context.getSettings().batch_send_min_limit,
                 dag.getEncodeType(),
                 dag.getResultFieldTypes(),
                 dag.getDAGContext(),

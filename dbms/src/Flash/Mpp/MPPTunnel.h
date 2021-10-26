@@ -60,6 +60,9 @@ private:
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
 
+    /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
+    void clearSendQueue();
+
     std::mutex mu;
     std::condition_variable cv_for_connected;
     std::condition_variable cv_for_finished;
@@ -76,6 +79,8 @@ private:
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
+
+    String send_loop_msg;
 
     int input_streams_num;
 

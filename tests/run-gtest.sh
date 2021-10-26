@@ -21,6 +21,7 @@ cd "$build_dir"
 tests=(
 	"gtests_dbms"
 	"gtests_libcommon"
+	"gtests_libdaemon"
 	#"gtests_tmt" # included in gtests_dbms
 )
 

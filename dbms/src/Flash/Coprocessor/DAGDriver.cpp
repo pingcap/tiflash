@@ -116,6 +116,7 @@ try
             collators,
             tipb::ExchangeType::PassThrough,
             context.getSettings().dag_records_per_chunk,
+            context.getSettings().batch_send_min_limit,
             dag.getEncodeType(),
             dag.getResultFieldTypes(),
             dag_context,
@@ -151,7 +152,7 @@ try
         {
             // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
             // Throw exception to prevent receiver from getting wrong response.
-            if (p_stream->getProfileInfo().bytes > std::numeric_limits<int>::max())
+            if (accurate::greaterOp(p_stream->getProfileInfo().bytes, std::numeric_limits<int>::max()))
                 throw TiFlashException("DAG response is too big, please check config about region size or region merge scheduler",
                                        Errors::Coprocessor::Internal);
         }

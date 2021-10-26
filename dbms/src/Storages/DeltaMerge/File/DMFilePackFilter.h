@@ -1,11 +1,12 @@
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Common/TiFlashMetrics.h>
 
 namespace ProfileEvents
 {
@@ -205,14 +206,33 @@ private:
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
         auto load = [&]() {
-            auto index_buf
-                = ReadBufferFromFileProvider(file_provider,
-                                             dmfile->colIndexPath(file_name_base),
-                                             dmfile->encryptionIndexPath(file_name_base),
-                                             std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)),
-                                             read_limiter);
-            index_buf.seek(dmfile->colIndexOffset(file_name_base));
-            return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
+            if (!dmfile->configuration)
+            {
+                auto index_buf = ReadBufferFromFileProvider(
+                    file_provider,
+                    dmfile->colIndexPath(file_name_base),
+                    dmfile->encryptionIndexPath(file_name_base),
+                    std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)),
+                    read_limiter);
+                index_buf.seek(dmfile->colIndexOffset(file_name_base));
+                return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
+            }
+            else
+            {
+                auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
+                                                                            dmfile->colIndexPath(file_name_base),
+                                                                            dmfile->encryptionIndexPath(file_name_base),
+                                                                            dmfile->colIndexSize(file_name_base),
+                                                                            read_limiter,
+                                                                            dmfile->configuration->getChecksumAlgorithm(),
+                                                                            dmfile->configuration->getChecksumFrameLength());
+                index_buf->seek(dmfile->colIndexOffset(file_name_base));
+                auto file_size = dmfile->colIndexSize(file_name_base);
+                auto header_size = dmfile->configuration->getChecksumHeaderLength();
+                auto frame_total_size = dmfile->configuration->getChecksumFrameLength();
+                auto frame_count = file_size / frame_total_size + (file_size % frame_total_size != 0);
+                return MinMaxIndex::read(*type, *index_buf, file_size - header_size * frame_count);
+            }
         };
         MinMaxIndexPtr minmax_index;
         if (index_cache)

@@ -50,7 +50,7 @@ public:
         read_prefixed = true;
 
         /// Start reading thread.
-        thread = ThreadFactory().newThread([this] { fetchBlocks(); });
+        thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
     }
 
     void readSuffix() override

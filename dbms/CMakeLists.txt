@@ -171,6 +171,7 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::core
     prometheus-cpp::push
     prometheus-cpp::pull
+    cpptoml
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 
@@ -269,7 +270,7 @@ if (ENABLE_TESTS)
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
+    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions tiflash-dttool-lib)
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 endif ()

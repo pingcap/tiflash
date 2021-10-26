@@ -1,8 +1,8 @@
 #include <Columns/ColumnString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
@@ -18,22 +18,8 @@ namespace DB
 {
 namespace tests
 {
-
-
-class StringTrim : public ::testing::Test
+class StringTrim : public DB::tests::FunctionTest
 {
-protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
 };
 
 
@@ -62,7 +48,7 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("trim", context);
+    auto bp = factory.tryGet("tidbTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -81,7 +67,7 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
     }
 
     // test ltrim
-    bp = factory.tryGet("ltrim", context);
+    bp = factory.tryGet("tidbLTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -98,7 +84,7 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
     }
 
     // test rtrim
-    bp = factory.tryGet("rtrim", context);
+    bp = factory.tryGet("tidbRTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -138,14 +124,14 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("trim", context);
+    auto bp = factory.tryGet("tidbTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 1);
 
     const IColumn * res = testBlock.getByPosition(1).column.get();
-    const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
+    const ColumnConst * c0_string = checkAndGetColumn<ColumnConst>(res);
 
 
     Field resField;
@@ -159,13 +145,13 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     }
 
     // test ltrim
-    bp = factory.tryGet("ltrim", context);
+    bp = factory.tryGet("tidbLTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 2);
     res = testBlock.getByPosition(2).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
+    c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"hello   ", "hello   ", "hello   ", "hello   ", "hello   "};
     for (size_t t = 0; t < results.size(); t++)
@@ -176,13 +162,13 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
     }
 
     // test rtrim
-    bp = factory.tryGet("rtrim", context);
+    bp = factory.tryGet("tidbRTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 3);
     res = testBlock.getByPosition(3).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
+    c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {
         "  hello",
@@ -206,7 +192,7 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     MutableColumnPtr cp = ColumnString::create();
     cp->insert(Field("  hello   ", 10));
     MutableColumnPtr excp = ColumnString::create();
-    excp->insert(Field(" hoe", 10));
+    excp->insert(Field("  he", 4));
 
     ColumnPtr csp = ColumnConst::create(cp->getPtr(), 5);
     ColumnPtr excsp = ColumnConst::create(excp->getPtr(), 5);
@@ -225,19 +211,19 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("trim", context);
+    auto bp = factory.tryGet("tidbTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 2);
 
     const IColumn * res = testBlock.getByPosition(2).column.get();
-    const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
+    const ColumnConst * c0_string = checkAndGetColumn<ColumnConst>(res);
 
 
     Field resField;
 
-    std::vector<String> results{"ll", "ll", "ll", "ll", "ll"};
+    std::vector<String> results{"llo   ", "llo   ", "llo   ", "llo   ", "llo   "};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -246,13 +232,13 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     }
 
     // test ltrim
-    bp = factory.tryGet("ltrim", context);
+    bp = factory.tryGet("tidbLTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 2);
     res = testBlock.getByPosition(2).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
+    c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"llo   ", "llo   ", "llo   ", "llo   ", "llo   "};
     for (size_t t = 0; t < results.size(); t++)
@@ -263,20 +249,20 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
     }
 
     // test rtrim
-    bp = factory.tryGet("rtrim", context);
+    bp = factory.tryGet("tidbRTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 3);
     res = testBlock.getByPosition(3).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
+    c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {
-        "  hell",
-        "  hell",
-        "  hell",
-        "  hell",
-        "  hell",
+        "  hello   ",
+        "  hello   ",
+        "  hello   ",
+        "  hello   ",
+        "  hello   ",
     };
     for (size_t t = 0; t < results.size(); t++)
     {
@@ -292,8 +278,8 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
 
     auto & factory = FunctionFactory::instance();
 
-    std::vector<String> strs{"  你好   ", "   上海", "北京晨凯", "     ", "你好, world"};
-    String trim = "你好上 ";
+    std::vector<String> strs{"  你好   ", "   上海", "北京晨凯", "     ", "  你好, world  "};
+    String trim = " ";
 
     MutableColumnPtr csp = ColumnString::create();
     for (const auto & str : strs)
@@ -315,7 +301,7 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("trim", context);
+    auto bp = factory.tryGet("tidbTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -324,7 +310,7 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
 
     Field resField;
-    std::vector<String> results{"", "海", "北京晨凯", "", ", world"};
+    std::vector<String> results{"你好", "上海", "北京晨凯", "", "你好, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -333,7 +319,7 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     }
 
     // test ltrim
-    bp = factory.tryGet("ltrim", context);
+    bp = factory.tryGet("tidbLTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -341,7 +327,7 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     res = testBlock.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
-    results = {"", "海", "北京晨凯", "", ", world"};
+    results = {"你好   ", "上海", "北京晨凯", "", "你好, world  "};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -350,7 +336,7 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     }
 
     // test rtrim
-    bp = factory.tryGet("rtrim", context);
+    bp = factory.tryGet("tidbRTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -358,7 +344,7 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
     res = testBlock.getByPosition(2).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
-    results = {"", "   上海", "北京晨凯", "", "你好, world"};
+    results = {"  你好", "   上海", "北京晨凯", "", "  你好, world"};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -374,7 +360,7 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     auto & factory = FunctionFactory::instance();
 
     String str = "  你好   ";
-    String trim = " 你 ";
+    String trim = "  你";
 
     MutableColumnPtr cp = ColumnString::create();
     cp->insert(Field(str.c_str(), str.size()));
@@ -394,16 +380,16 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("trim", context);
+    auto bp = factory.tryGet("tidbTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 2);
     const IColumn * res = testBlock.getByPosition(2).column.get();
-    const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
+    const ColumnConst * c0_string = checkAndGetColumn<ColumnConst>(res);
 
     Field resField;
-    std::vector<String> results{"好", "好", "好", "好", "好"};
+    std::vector<String> results{"好   ", "好   ", "好   ", "好   ", "好   "};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -412,13 +398,13 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     }
 
     // test ltrim
-    bp = factory.tryGet("ltrim", context);
+    bp = factory.tryGet("tidbLTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 2);
     res = testBlock.getByPosition(2).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
+    c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"好   ", "好   ", "好   ", "好   ", "好   "};
     for (size_t t = 0; t < results.size(); t++)
@@ -429,15 +415,15 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
     }
 
     // test rtrim
-    bp = factory.tryGet("rtrim", context);
+    bp = factory.tryGet("tidbRTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 2);
     res = testBlock.getByPosition(2).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
+    c0_string = checkAndGetColumn<ColumnConst>(res);
 
-    results = {"  你好", "  你好", "  你好", "  你好", "  你好"};
+    results = {"  你好   ", "  你好   ", "  你好   ", "  你好   ", "  你好   "};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -469,7 +455,7 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("trim", context);
+    auto bp = factory.tryGet("tidbTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -487,7 +473,7 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
     }
 
     // test ltrim
-    bp = factory.tryGet("ltrim", context);
+    bp = factory.tryGet("tidbLTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -504,7 +490,7 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
     }
 
     // test rtrim
-    bp = factory.tryGet("rtrim", context);
+    bp = factory.tryGet("tidbRTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -543,13 +529,13 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("trim", context);
+    auto bp = factory.tryGet("tidbTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 1);
     const IColumn * res = testBlock.getByPosition(1).column.get();
-    const ColumnString * c0_string = checkAndGetColumn<ColumnString>(res);
+    const ColumnConst * c0_string = checkAndGetColumn<ColumnConst>(res);
 
     Field resField;
     std::vector<String> results{"你好", "你好", "你好", "你好", "你好"};
@@ -561,13 +547,13 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
     }
 
     // test ltrim
-    bp = factory.tryGet("ltrim", context);
+    bp = factory.tryGet("tidbLTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 1);
     res = testBlock.getByPosition(1).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
+    c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"你好   ", "你好   ", "你好   ", "你好   ", "你好   "};
     for (size_t t = 0; t < results.size(); t++)
@@ -578,13 +564,13 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
     }
 
     // test rtrim
-    bp = factory.tryGet("rtrim", context);
+    bp = factory.tryGet("tidbRTrim", context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
     bp->build(ctns)->execute(testBlock, cns, 1);
     res = testBlock.getByPosition(1).column.get();
-    c0_string = checkAndGetColumn<ColumnString>(res);
+    c0_string = checkAndGetColumn<ColumnConst>(res);
 
     results = {"  你好", "  你好", "  你好", "  你好", "  你好"};
     for (size_t t = 0; t < results.size(); t++)
@@ -594,6 +580,303 @@ TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
         EXPECT_EQ(results[t], s);
     }
 }
+
+TEST_F(StringTrim, strTrimTest)
+try
+{
+    // trim(const)
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "x"),
+        executeFunction("tidbTrim", createConstColumn<Nullable<String>>(5, " x ")));
+
+    // trim(const from const)
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "a"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x")));
+
+    // trim(leading|trailing|both const from const)
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "a"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "a"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "ax"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, "xa"),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xax"),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+
+
+    // trim(column)
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"xx aa", "xxaa xx", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"xx aa", "xxaa xx", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}})));
+
+    // trim(column from column)
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa ", "aa xx ", "a \tx", "axx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+                        createColumn<String>({"x", "x", "x", "x", "x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({" aa", "aa xx ", "axxa \t", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<String>({"x", "x", "x", "x", "x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<String>({"xx", "xx", "xx", "xx", "xx"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<String>({" x", " x", " x", " x", " x"})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({" aa ", "aa xx ", "a \tx", "axx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<String>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<String>({" x", "x", "xx", "xxa", " x"})));
+
+    // trim(both|leading|trailing column from column)
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \txxx", "aaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \t", "xxaa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"x", "x", "x", "x", "x"}),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"x aa", "aa xx ", "axxa \tx", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"x aa", "aa xx ", "axxa \txxx", "aaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \tx", "xxaa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xxx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx"}),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" x x aa ", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", " x", " x", " x", " x"}),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa ", "aa xx ", "a \tx", "axx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa ", "aa xx ", "a \tx", "axx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa  x", "aa xx ", "a \txxx", "axx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" x x aa ", "xaa xx ", "xxa \tx", "xxaaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({" x x aa  x", "xaa xx ", "xxa \txxx", "xxaaxx", {}}),
+                        createColumn<Nullable<String>>({" x", "x", "xx", "xxa", " x"}),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+
+    // trim(const from column)
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createConstColumn<Nullable<String>>(5, "x")));
+
+    // trim(column from const)
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"ax ", "ax x", "x x", "xxax", {}}),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xxax x"),
+                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}})));
+
+    // trim(both|leading|trailing const from column)
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \t", "aa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({" aa", "aa xx ", "axxa \txxx", "aaxx", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \t", "xxaa", {}}),
+        executeFunction("tidbTrim",
+                        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "axxa \txxx", "xxaaxx", {}}),
+                        createConstColumn<Nullable<String>>(5, "x"),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+
+    // trim(both|leading|trailing column from const)
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"ax ", "ax x", "x x", "xxax", {}}),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xxax x"),
+                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
+                        createConstColumn<Nullable<Int8>>(5, 0)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"ax ", "ax x", "x x", "xxax", {}}),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xxax x"),
+                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
+                        createConstColumn<Nullable<Int8>>(5, 1)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"ax x", "ax x", "x x", "xxax x", {}}),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xxax x"),
+                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
+                        createConstColumn<Nullable<Int8>>(5, 2)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"xxax ", "xxax x", "xxax x", "xxax", {}}),
+        executeFunction("tidbTrim",
+                        createConstColumn<Nullable<String>>(5, "xxax x"),
+                        createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
+                        createConstColumn<Nullable<Int8>>(5, 3)));
+}
+CATCH
 
 } // namespace tests
 } // namespace DB
