@@ -1,11 +1,9 @@
 #include <Common/FmtUtils.h>
 #include <gtest/gtest.h>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
-TEST(FmtUtils_test, TestFmtBuffer)
+TEST(FmtUtilsTest, TestFmtBuffer)
 {
     FmtBuffer buffer;
     buffer.append("{").append("test").append("}");
@@ -14,6 +12,4 @@ TEST(FmtUtils_test, TestFmtBuffer)
     buffer.fmtAppend(" fmt append {}", "test");
     ASSERT_EQ(buffer.toString(), "{test} fmt append test");
 }
-
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

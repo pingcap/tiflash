@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/joinToString.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -289,7 +290,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                 // clean all streams from local because we are not sure the correctness of those streams
                 pipeline.streams.clear();
                 const auto & dag_regions = dag.getRegions();
-                std::stringstream ss;
+                FmtBuffer buffer;
                 // Normally there is only few regions need to retry when super batch is enabled. Retry to read
                 // from local first. However, too many retry in different places may make the whole process
                 // time out of control. We limit the number of retries to 1 now.
@@ -305,7 +306,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
                             {
                                 region_retry.emplace_back(region_iter->second);
-                                ss << region_iter->first << ",";
+                                buffer.fmtAppend("{},", region_iter->first);
                             }
                             iter = regions_query_info.erase(iter);
                         }
@@ -316,7 +317,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     }
                     LOG_WARNING(log,
                                 "RegionException after read from storage, regions ["
-                                    << ss.str() << "], message: " << e.message()
+                                    << buffer.toString() << "], message: " << e.message()
                                     << (regions_query_info.empty() ? "" : ", retry to read from local"));
                     if (unlikely(regions_query_info.empty()))
                         break; // no available region in local, break retry loop
@@ -331,10 +332,10 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                         if (likely(iter != dag_regions.end()))
                         {
                             region_retry.emplace_back(iter->second);
-                            ss << iter->first << ",";
+                            buffer.fmtAppend("{},", iter->first);
                         }
                     }
-                    LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
+                    LOG_WARNING(log, "RegionException after read from storage, regions [" << buffer.toString() << "], message: " << e.message());
                     break; // break retry loop
                 }
             }
@@ -509,8 +510,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     auto print_retry_regions = [this] {
         FmtBuffer buffer;
         buffer.fmtAppend("Start to retry {} regions (", region_retry.size());
-        for (const auto & r : region_retry)
-            buffer.fmtAppend("{},", r.get().region_id);
+        joinIterToString(region_retry.cbegin(), region_retry.cend(), buffer, [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); }, ",");
         buffer.append(")");
         return buffer.toString();
     };
