@@ -52,7 +52,6 @@ public:
             total_mem = info_data.max_mem;
         }
 
-        return std::make_tuple(total_mem, virtual_size, resident_size);
 #elif __linux__
 #define PAGE_SIZE (sysconf(_SC_PAGESIZE))
         int fd = open("/proc/self/statm", O_RDONLY);
