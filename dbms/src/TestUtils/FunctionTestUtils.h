@@ -382,21 +382,12 @@ public:
     }
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns);
 
-    ColumnWithTypeAndName executeFunctionWithTimezone(const String & func_name, const ColumnNumbers & arguments, const ColumnsWithTypeAndName & columns, const Int64 offset);
-
     template <typename... Args>
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
     {
         ColumnsWithTypeAndName vec({first_column, columns...});
         return executeFunction(func_name, vec);
     }
-
-    template <typename... Args>
-    ColumnWithTypeAndName executeFunctionWithTimezone(const Int64 offset, const String & func_name, const ColumnNumbers & argument_columns, const ColumnsWithTypeAndName & columns)
-    {
-        return executeFunctionWithTimezone(func_name, argument_columns, columns, offset);
-    }
-
     DAGContext & getDAGContext()
     {
         assert(dag_context_ptr != nullptr);

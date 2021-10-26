@@ -23,6 +23,34 @@ class Sysdate : public DB::tests::FunctionTest
 protected:
     const int SECONDS_IN_ONE_DAY = 60 * 60 * 24;
 
+    ColumnWithTypeAndName executeFunctionWithTimezone(const String & func_name, const ColumnNumbers & arguments, const ColumnsWithTypeAndName & columns, const Int64 offset)
+    {
+        Context contest = TiFlashTestEnv::getContext();
+        auto & timezone_info = context.getTimezoneInfo();
+        timezone_info.is_name_based = false;
+        timezone_info.timezone_offset = offset;
+        timezone_info.timezone = &DateLUT::instance("UTC");
+        timezone_info.timezone_name = "";
+        timezone_info.is_utc_timezone = offset == 0;
+
+        auto & factory = FunctionFactory::instance();
+        Block block(columns);
+        ColumnNumbers cns;
+        ColumnsWithTypeAndName argument_columns;
+        for (size_t i = 0; i < arguments.size(); ++i)
+        {
+            cns.push_back(arguments[i]);
+            argument_columns.push_back(columns.at(i));
+        }
+        auto bp = factory.tryGet(func_name, context);
+        if (!bp)
+            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+        auto func = bp->build(argument_columns);
+        block.insert({nullptr, func->getReturnType(), "res"});
+        func->execute(block, cns, columns.size());
+        return block.getByPosition(columns.size());
+    }
+
     void ASSERT_FSP(UInt32 fsp, const MyDateTime & date_time) const
     {
         UInt32 origin_micro_second = date_time.micro_second;
@@ -62,12 +90,12 @@ TEST_F(Sysdate, sysdate_unit_Test)
     ColumnNumbers with_fsp_arguments = {0};
     ColumnNumbers without_fsp_arguments = {};
 
-    ColumnWithTypeAndName without_fsp_col = executeFunctionWithTimezone(0, "sysDateWithoutFsp", without_fsp_arguments, without_fsp_columns);
+    ColumnWithTypeAndName without_fsp_col = executeFunctionWithTimezone("sysDateWithoutFsp", without_fsp_arguments, without_fsp_columns, 0);
     UInt64 without_fsp_packed = without_fsp_col.column.get()->get64(0);
     MyDateTime without_fsp_date_time(without_fsp_packed);
 
 
-    ColumnWithTypeAndName with_fsp_col = executeFunctionWithTimezone(0, "sysDateWithFsp", with_fsp_arguments, with_fsp_columns);
+    ColumnWithTypeAndName with_fsp_col = executeFunctionWithTimezone("sysDateWithFsp", with_fsp_arguments, with_fsp_columns, 0);
     UInt64 with_fsp_packed = with_fsp_col.column.get()->get64(0);
     MyDateTime with_fsp_date_time(with_fsp_packed);
 
@@ -95,7 +123,7 @@ TEST_F(Sysdate, fsp_unit_Test)
     {
         auto fsp_column = createConstColumn<Int64>(1, fsp);
         auto with_fsp_columns = {fsp_column, data_column};
-        ColumnWithTypeAndName with_fsp_col = executeFunctionWithTimezone(0, "sysDateWithFsp", with_fsp_arguments, with_fsp_columns);
+        ColumnWithTypeAndName with_fsp_col = executeFunctionWithTimezone("sysDateWithFsp", with_fsp_arguments, with_fsp_columns, 0);
         UInt64 with_fsp_packed = with_fsp_col.column.get()->get64(0);
         MyDateTime with_fsp_date_time(with_fsp_packed);
         ASSERT_FSP(fsp, with_fsp_date_time);
@@ -122,8 +150,8 @@ TEST_F(Sysdate, timezone_unit_Test)
 
     for (int i = 1; i < 8; ++i)
     {
-        ASSERT_CHECK_SYSDATE(date_time, executeFunctionWithTimezone(i * 3600, "sysDateWithFsp", with_fsp_arguments, with_fsp_columns), i);
-        ASSERT_CHECK_SYSDATE(date_time, executeFunctionWithTimezone(i * 3600, "sysDateWithoutFsp", without_fsp_arguments, without_fsp_columns), i);
+        ASSERT_CHECK_SYSDATE(date_time, executeFunctionWithTimezone("sysDateWithFsp", with_fsp_arguments, with_fsp_columns, i * 3600), i);
+        ASSERT_CHECK_SYSDATE(date_time, executeFunctionWithTimezone("sysDateWithoutFsp", without_fsp_arguments, without_fsp_columns, i * 3600), i);
     }
 }
 } // namespace DB::tests

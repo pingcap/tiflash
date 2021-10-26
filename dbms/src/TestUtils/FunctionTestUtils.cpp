@@ -100,34 +100,5 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     func->execute(block, cns, columns.size());
     return block.getByPosition(columns.size());
 }
-
-ColumnWithTypeAndName FunctionTest::executeFunctionWithTimezone(const String & func_name, const ColumnNumbers & arguments, const ColumnsWithTypeAndName & columns, const Int64 offset)
-{
-    auto & factory = FunctionFactory::instance();
-
-    auto & timezone_info = context.getTimezoneInfo();
-    timezone_info.is_name_based = false;
-    timezone_info.timezone_offset = offset;
-    timezone_info.timezone = &DateLUT::instance("UTC");
-    timezone_info.timezone_name = "";
-    timezone_info.is_utc_timezone = offset == 0;
-
-    Block block(columns);
-    ColumnNumbers cns;
-    ColumnsWithTypeAndName argument_columns;
-    for (size_t i = 0; i < arguments.size(); ++i)
-    {
-        cns.push_back(arguments[i]);
-        argument_columns.push_back(columns.at(i));
-    }
-    auto bp = factory.tryGet(func_name, context);
-    if (!bp)
-        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(argument_columns);
-    block.insert({nullptr, func->getReturnType(), "res"});
-    func->execute(block, cns, columns.size());
-    return block.getByPosition(columns.size());
-}
-
 } // namespace tests
 } // namespace DB
