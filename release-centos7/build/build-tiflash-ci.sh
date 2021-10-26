@@ -1,6 +1,6 @@
 #!/bin/bash
 
-command -v ccache > /dev/null 2>&1
+command -v ccache >/dev/null 2>&1
 if [[ $? != 0 ]]; then
   echo "try to install ccache"
   wget http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/ccache.x86_64.rpm
@@ -9,7 +9,7 @@ else
   echo "ccache has been installed"
 fi
 
-command -v clang-format > /dev/null 2>&1
+command -v clang-format >/dev/null 2>&1
 if [[ $? != 0 ]]; then
   curl -o "/usr/local/bin/clang-format" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/clang-format-12
   chmod +x "/usr/local/bin/clang-format"
@@ -20,15 +20,21 @@ clang-format --version
 
 set -ueox pipefail
 
-SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
+SCRIPTPATH="$(
+  cd "$(dirname "$0")"
+  pwd -P
+)"
+SRCPATH=${1:-$(
+  cd $SCRIPTPATH/../..
+  pwd -P
+)}
 
 CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
 BUILD_BRANCH=${BUILD_BRANCH:-master}
 ENABLE_FORMAT_CHECK=${ENABLE_FORMAT_CHECK:-false}
 
 if [[ "${ENABLE_FORMAT_CHECK}" == "true" ]]; then
-  python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from `git merge-base origin/${BUILD_BRANCH} HEAD` --dump_diff_files_to "/tmp/tiflash-diff-files.json"
+  python3 ${SRCPATH}/format-diff.py --repo_path "${SRCPATH}" --check_formatted --diff_from $(git merge-base origin/${BUILD_BRANCH} HEAD) --dump_diff_files_to "/tmp/tiflash-diff-files.json"
   export ENABLE_FORMAT_CHECK=false
 fi
 
@@ -44,14 +50,14 @@ if [[ ${CI_CCACHE_USED_SRCPATH} != ${SRCPATH} ]]; then
 fi
 
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
-ENABLE_TEST=${ENABLE_TEST:-1}
+ENABLE_TESTS=${ENABLE_TESTS:-1}
 ENABLE_EMBEDDED_COMPILER="FALSE"
 UPDATE_CCACHE=${UPDATE_CCACHE:-false}
 BUILD_UPDATE_DEBUG_CI_CCACHE=${BUILD_UPDATE_DEBUG_CI_CCACHE:-false}
 CCACHE_REMOTE_TAR="${BUILD_BRANCH}-${CMAKE_BUILD_TYPE}.tar"
 CCACHE_REMOTE_TAR=$(echo "${CCACHE_REMOTE_TAR}" | tr 'A-Z' 'a-z')
 if [[ "${CMAKE_BUILD_TYPE}" != "Debug" ]]; then
-    ENABLE_TEST=0
+  ENABLE_TESTS=0
 fi
 # https://cd.pingcap.net/blue/organizations/jenkins/build_tiflash_multi_branch/activity/
 # Each time after a new commit merged into target branch, a task about nightly build will be triggered.
@@ -70,7 +76,7 @@ rm -rf "${SRCPATH}/.ccache"
 cache_file="${SRCPATH}/ccache.tar"
 rm -rf "${cache_file}"
 curl -o "${cache_file}" http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/${CCACHE_REMOTE_TAR}
-cache_size=`ls -l "${cache_file}" | awk '{print $5}'`
+cache_size=$(ls -l "${cache_file}" | awk '{print $5}')
 min_size=$((1024000))
 if [[ ${cache_size} -gt ${min_size} ]]; then
   echo "try to use ccache to accelerate compile speed"
@@ -97,20 +103,19 @@ rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 
 cd ${SRCPATH}/contrib/tiflash-proxy
-proxy_git_hash=`git log -1 --format="%H"`
+proxy_git_hash=$(git log -1 --format="%H")
 curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
-http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}/libtiflash_proxy.so
-proxy_size=`ls -l "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" | awk '{print $5}'`
+  http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}/libtiflash_proxy.so
+proxy_size=$(ls -l "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" | awk '{print $5}')
 min_size=$((102400))
-if [[ ${proxy_size} -lt ${min_size} ]]
-then
-    echo "try to build libtiflash_proxy.so"
-    export PATH=$PATH:$HOME/.cargo/bin
-    make release
-    echo "try to upload libtiflash_proxy.so"
-    cd target/release
-    curl -F builds/pingcap/tiflash-proxy/${proxy_git_hash}/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
-    curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}/libtiflash_proxy.so
+if [[ ${proxy_size} -lt ${min_size} ]]; then
+  echo "try to build libtiflash_proxy.so"
+  export PATH=$PATH:$HOME/.cargo/bin
+  make release
+  echo "try to upload libtiflash_proxy.so"
+  cd target/release
+  curl -F builds/pingcap/tiflash-proxy/${proxy_git_hash}/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
+  curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/${proxy_git_hash}/libtiflash_proxy.so
 fi
 
 chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
@@ -119,21 +124,21 @@ BUILD_DIR="$SRCPATH/release-centos7/build-release"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 cmake "$SRCPATH" \
-    -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
-    -DENABLE_TESTS=$ENABLE_TEST \
-    -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
-    -DUSE_CCACHE=${USE_CCACHE} \
-    -DDEBUG_WITHOUT_DEBUG_INFO=ON
+  -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
+  -DENABLE_TESTS=${ENABLE_TESTS} \
+  -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
+  -DUSE_CCACHE=${USE_CCACHE} \
+  -DDEBUG_WITHOUT_DEBUG_INFO=ON
 
 make -j ${NPROC} tiflash
 
 # copy gtest binary under Debug mode
-if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
-    make -j ${NPROC} page_ctl
-    make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing gtests_libdaemon
-    cp -f "${BUILD_DIR}/dbms/gtests_dbms" "${INSTALL_DIR}/"
-    cp -f "${BUILD_DIR}/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
-    cp -f "${BUILD_DIR}/libs/libdaemon/src/tests/gtests_libdaemon" "${INSTALL_DIR}/"
+if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
+  make -j ${NPROC} page_ctl
+  make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing gtests_libdaemon
+  cp -f "${BUILD_DIR}/dbms/gtests_dbms" "${INSTALL_DIR}/"
+  cp -f "${BUILD_DIR}/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
+  cp -f "${BUILD_DIR}/libs/libdaemon/src/tests/gtests_libdaemon" "${INSTALL_DIR}/"
 fi
 
 ccache -s
