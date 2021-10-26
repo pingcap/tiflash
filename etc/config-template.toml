@@ -11,7 +11,6 @@
 ## The TiFlash HTTP service port.
 # http_port = 8123
 
-
 ## The path in which the TiFlash temporary files are stored. By default it is the first directory in storage.latest.dir appended with "/tmp".
 # tmp_path = "/tidb-data/tiflash-9000/tmp"
 
@@ -87,6 +86,7 @@
 ## TiFlash supports automatically tuning the traffic limit for different I/O types according to the current I/O load. Sometimes, the tuned bandwidth might exceed the weight ratio set above.
 ## auto_tune_sec indicates the interval of automatic tuning. The unit is seconds. If the value of auto_tune_sec is 0, the automatic tuning is disabled.
 # auto_tune_sec = 5
+
 [flash]
 # tidb_status_addr = "tidb0:10080"
 # service_addr = "0.0.0.0:3930"
@@ -148,6 +148,7 @@
 ## New in v5.0. This item specifies the maximum number of batch requests that TiFlash Coprocessor executes at the same time. If the number of requests exceeds the specified value, the exceeded requests will queue. If the configuration value is set to 0 or not set, the default value is used, which is twice the number of physical cores.
 # batch_cop_pool_size = 0
 ## Security settings take effect starting from v4.0.5.
+
 [security]
 ## Path of the file that contains a list of trusted SSL CAs. If set, the following settings
 ## cert_path and key_path are also needed.
