@@ -340,6 +340,8 @@ endif ()
 add_subdirectory (contrib)
 
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
+option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
+
 option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
 
 # Enable failpoint injection by default if ENABLE_TESTS is turn ON.
@@ -353,7 +355,7 @@ option (ENABLE_FAILPOINTS "Enables failpoints injection" ${ENABLE_FAILPOINTS_DEF
 # Flags for test coverage
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     include(CodeCoverage)
-    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage -DIS_DEBUG")
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
 endif ()
 
 if (ENABLE_TESTS)
