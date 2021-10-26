@@ -1,23 +1,11 @@
-#include <Columns/ColumnConst.h>
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
 #include <vector>
-
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-#include <Poco/Types.h>
-
-#pragma GCC diagnostic pop
 
 namespace DB::tests
 {
@@ -29,8 +17,6 @@ namespace DB::tests
         "95", "96", "97", "98", "99",
 
 static const String int_to_2_width_string[] = {"00", "01", "02", "03", "04", "05", "06", "07", "08", "09", INT_TO_STRING};
-
-static const String int_to_string[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", INT_TO_STRING};
 
 class Sysdate : public DB::tests::FunctionTest
 {
