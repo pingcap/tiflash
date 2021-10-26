@@ -106,9 +106,17 @@ public:
     void process()
     {
         active_threads = max_threads;
-        threads.reserve(max_threads);
-        for (size_t i = 0; i < max_threads; ++i)
-            threads.emplace_back(ThreadFactory(true, handler.getName()).newThread([this, i] { thread(i); }));
+        if (glb_thd_pool) {
+            for (size_t i = 0; i < max_threads; ++i)
+            {
+                glb_thd_pool->schedule([this, i] { this->thread(i); });
+            }
+        } else
+        {
+            threads.reserve(max_threads);
+            for (size_t i = 0; i < max_threads; ++i)
+                threads.emplace_back(ThreadFactory(true, handler.getName()).newThread([this, i] { thread(i); }));
+        }
     }
 
     /// Ask all sources to stop earlier than they run out.
@@ -142,10 +150,14 @@ public:
         if (joined_threads)
             return;
 
-        for (auto & thread : threads)
-            thread.join();
+        {
+            std::unique_lock<std::mutex> lk(thd_mu);
+            end_cv.wait(thd_mu, [&]{return end_threads == max_threads;});
+        }
+//        for (auto & thread : threads)
+//            thread.join();
 
-        threads.clear();
+//        threads.clear();
         joined_threads = true;
     }
 
@@ -248,6 +260,9 @@ private:
 
             handler.onFinish(); /// TODO If in `onFinish` or `onFinishThread` there is an exception, then std::terminate is called.
         }
+        std::unique_lock<std::mutex> lk(thd_mu);
+        end_threads++;
+        end_cv.notify_one();
     }
 
     void loop(size_t thread_num)
@@ -346,6 +361,9 @@ private:
 
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};
+    std::mutex thd_mu;
+    std::condition_variable end_cv;
+    std::atomic<size_t> end_threads{0};
     /// Finish the threads work (before the sources run out).
     std::atomic<bool> finish{false};
     /// Wait for the completion of all threads.

@@ -51,7 +51,7 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
-private:
+//private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
     // must under mu's protection
@@ -61,8 +61,11 @@ private:
     void sendLoop();
 
     std::mutex mu;
+    std::mutex end_mu;
     std::condition_variable cv_for_connected;
     std::condition_variable cv_for_finished;
+    std::condition_variable end_cv;
+    std::atomic<bool> send_end;
 
     bool connected; // if the exchange in has connected this tunnel.
 

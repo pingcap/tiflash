@@ -118,15 +118,22 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    workers.emplace_back(ThreadFactory(true, "CreatingSets").newThread([this, &subquery = elem.second] { createOne(subquery); }));
+                    start_thds++;
+                    glb_thd_pool->schedule([this, &item = elem.second] {this->createOne(item);});
+//                    createOne(elem.second);
+//                    workers.emplace_back(ThreadFactory(true, "CreatingSets").newThread([this, &subquery = elem.second] { createOne(subquery); }));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
-        for (auto & work : workers)
         {
-            work.join();
+            std::unique_lock<std::mutex> lk(thd_mu);
+            end_cv.wait(lk, [&]{return start_thds == end_thds;});
         }
+//        for (auto & work : workers)
+//        {
+//            work.join();
+//        }
 
         if (!exception_from_workers.empty())
             std::rethrow_exception(exception_from_workers.front());
@@ -165,6 +172,9 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             if (isCancelled())
             {
                 LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
+                std::unique_lock<std::mutex> lk(thd_mu);
+                end_thds++;
+                end_cv.notify_one();
                 return;
             }
 
@@ -258,6 +268,9 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         std::unique_lock<std::mutex> lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
     }
+    std::unique_lock<std::mutex> lk(thd_mu);
+    end_thds++;
+    end_cv.notify_one();
 }
 
 } // namespace DB

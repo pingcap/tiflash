@@ -3,6 +3,8 @@
 #include <iostream>
 
 
+ThreadPool  *glb_thd_pool = nullptr;
+
 ThreadPool::ThreadPool(size_t m_size, Job pre_worker) : m_size(m_size)
 {
     threads.reserve(m_size);

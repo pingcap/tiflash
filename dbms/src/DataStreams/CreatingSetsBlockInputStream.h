@@ -60,7 +60,11 @@ private:
 
     std::vector<std::thread> workers;
     std::mutex exception_mutex;
+    std::mutex thd_mu;
+    std::condition_variable end_cv;
     std::vector<std::exception_ptr> exception_from_workers;
+    std::atomic<int> end_thds;
+    std::atomic<int> start_thds;
 
     const LogWithPrefixPtr log;
 
