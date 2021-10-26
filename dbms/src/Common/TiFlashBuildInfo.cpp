@@ -52,9 +52,8 @@ std::string getEnabledFeatures()
 
 // mem-profiling
 #if USE_JEMALLOC_PROF
-        "mem-profiling"
+            "mem-profiling"
 #endif
-
     };
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
 }
