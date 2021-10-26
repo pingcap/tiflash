@@ -68,8 +68,8 @@ uint64_t getMemoryAmount()
 
 #elif defined(_SC_PHYS_PAGES) && defined(_SC_PAGESIZE)
     /* FreeBSD, Linux, OpenBSD, and Solaris. -------------------- */
-    return (uint64_t)sysconf( _SC_PHYS_PAGES )
-           * (uint64_t)sysconf( _SC_PAGESIZE );
+    return static_cast<uint64_t>(sysconf( _SC_PHYS_PAGES ))
+           * static_cast<uint64_t>(sysconf( _SC_PAGESIZE ));
 
 #elif defined(_SC_PHYS_PAGES) && defined(_SC_PAGE_SIZE)
     /* Legacy. -------------------------------------------------- */
