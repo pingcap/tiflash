@@ -20,10 +20,10 @@ namespace Regexps
     using Pool = ObjectPoolMap<Regexp, String>;
 
     template <bool like>
-    inline Regexp createRegexp(const std::string & pattern, int flags) { return {pattern, flags}; }
+    inline Regexp createRegexp(const std::string & pattern, int flags) { return Regexp{pattern, flags}; }
 
     template <>
-    inline Regexp createRegexp<true>(const std::string & pattern, int flags) { return {likePatternToRegexp(pattern), flags}; }
+    inline Regexp createRegexp<true>(const std::string & pattern, int flags) { return Regexp{likePatternToRegexp(pattern), flags}; }
 
     template <bool like, bool no_capture>
     inline Pool::Pointer get(const std::string & pattern)
