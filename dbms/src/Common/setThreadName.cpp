@@ -23,8 +23,8 @@ extern const int PTHREAD_ERROR;
 
 void setThreadName(const char * tname)
 {
-    constexpr auto MAX_LEN = 15; // thread name will be tname[:MAX_LEN]
-    if (std::strlen(tname) > MAX_LEN)
+    constexpr auto max_len = 15; // thread name will be tname[:MAX_LEN]
+    if (std::strlen(tname) > max_len)
         std::cerr << "set thread name " << tname << " is too long and will be truncated by system\n";
 
 #if defined(__FreeBSD__)
@@ -41,8 +41,8 @@ void setThreadName(const char * tname)
 
 std::string getThreadName()
 {
-    constexpr auto MAX_LEN = 15;
-    std::string name(MAX_LEN + 1, '\0'); // '\0' terminated
+    constexpr auto max_len = 15;
+    std::string name(max_len + 1, '\0'); // '\0' terminated
 
 #if defined(__APPLE__)
     if (pthread_getname_np(pthread_self(), name.data(), name.size()))
