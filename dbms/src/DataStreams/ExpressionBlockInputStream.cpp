@@ -1,3 +1,4 @@
+#include <DataStreams/DumpUtils.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ExpressionActions.h>
@@ -42,6 +43,25 @@ Block ExpressionBlockInputStream::readImpl()
         return res;
     expression->execute(res);
     return res;
+}
+
+void ExpressionBlockInputStream::dumpExtra(std::ostream & ostr) const
+{
+    ostr << "expression: [actions: {";
+    const auto & actions = expression->getActions();
+    dumpIter(
+        actions.cbegin(),
+        actions.cend(),
+        ostr,
+        [](const auto & s, std::ostream & os) { os << s.toString(); },
+        "; ");
+    ostr << "} input: {";
+    const auto & input_columns = expression->getRequiredColumnsWithTypes();
+    dumpIter(input_columns.cbegin(), input_columns.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
+    ostr << "} output: {";
+    const auto & output = expression->getSampleBlock();
+    dumpIter(output.cbegin(), output.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
+    ostr << "}]";
 }
 
 } // namespace DB

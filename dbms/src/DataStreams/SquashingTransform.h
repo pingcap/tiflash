@@ -6,8 +6,6 @@
 
 namespace DB
 {
-
-
 /** Merging consecutive passed blocks to specified minimum size.
   *
   * (But if one of input blocks has already at least specified size,
@@ -32,14 +30,23 @@ public:
         bool ready = false;
         Block block;
 
-        Result(bool ready_) : ready(ready_) {}
-        Result(Block && block_) : ready(true), block(std::move(block_)) {}
+        explicit Result(bool ready_)
+            : ready(ready_)
+        {}
+        explicit Result(Block && block_)
+            : ready(true)
+            , block(std::move(block_))
+        {}
     };
 
     /** Add next block and possibly returns squashed block.
       * At end, you need to pass empty block. As the result for last (empty) block, you will get last Result with ready = true.
       */
     Result add(Block && block);
+
+    size_t getMinBlockSizeRows() const { return min_block_size_rows; }
+
+    size_t getMinBlockSizeBytes() const { return min_block_size_bytes; }
 
 private:
     size_t min_block_size_rows;
@@ -54,4 +61,4 @@ private:
     Poco::Logger * log;
 };
 
-}
+} // namespace DB

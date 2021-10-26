@@ -33,4 +33,9 @@ Block SquashingBlockInputStream::readImpl()
     }
 }
 
+void SquashingBlockInputStream::dumpExtra(std::ostream & ostr) const
+{
+    ostr << "min_block_size_rows: [" << transform.getMinBlockSizeRows() << "] min_block_size_bytes: [" << transform.getMinBlockSizeBytes() << ']';
+}
+
 } // namespace DB

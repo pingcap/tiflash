@@ -273,6 +273,13 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
+    if (io.in && log->debug())
+    {
+        std::stringstream ss;
+        ss << "mpp query pipeline:\n";
+        io.in->dumpTree(ss);
+        LOG_DEBUG(log, ss.str());
+    }
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;

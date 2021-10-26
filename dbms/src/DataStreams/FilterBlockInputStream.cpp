@@ -3,6 +3,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
+#include <DataStreams/DumpUtils.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ExpressionActions.h>
@@ -78,7 +79,7 @@ Block FilterBlockInputStream::readImpl()
         return res;
 
     /// Until non-empty block after filtering or end of stream.
-    while (1)
+    while (true)
     {
         IColumn::Filter * child_filter = nullptr;
 
@@ -213,5 +214,23 @@ Block FilterBlockInputStream::readImpl()
     }
 }
 
+void FilterBlockInputStream::dumpExtra(std::ostream & ostr) const
+{
+    ostr << "expression: [actions: {";
+    const auto & actions = expression->getActions();
+    dumpIter(
+        actions.cbegin(),
+        actions.cend(),
+        ostr,
+        [](const auto & s, std::ostream & os) { os << s.toString(); },
+        "; ");
+    ostr << "} input: {";
+    const auto & input_columns = expression->getRequiredColumnsWithTypes();
+    dumpIter(input_columns.cbegin(), input_columns.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
+    ostr << "} output: {";
+    const auto & output = expression->getSampleBlock();
+    dumpIter(output.cbegin(), output.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
+    ostr << "}]";
+}
 
 } // namespace DB

@@ -44,6 +44,8 @@ protected:
 
     Block readImpl() override;
 
+    void dumpExtra(std::ostream & ostr) const override;
+
 private:
     Aggregator::Params params;
     Aggregator aggregator;
