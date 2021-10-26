@@ -1,5 +1,6 @@
 #pragma once
 
+#include <common/StringRef.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
 
@@ -14,9 +15,15 @@ public:
     FmtBuffer() = default;
 
     template <typename... Args>
-    FmtBuffer & append(Args... args)
+    FmtBuffer & fmtAppend(Args... args)
     {
         fmt::format_to(std::back_inserter(buffer), std::forward<Args>(args)...);
+        return *this;
+    }
+
+    FmtBuffer & append(StringRef s)
+    {
+        buffer.append(s.data, s.data + s.size);
         return *this;
     }
 
