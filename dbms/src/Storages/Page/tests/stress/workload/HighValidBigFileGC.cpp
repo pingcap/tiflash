@@ -63,11 +63,11 @@ public:
 
         // Generate normal data in the same Pagefile
         {
-            stop_watch.start();
             DB::PageStorage::Config config;
             config.file_max_size = DB::PAGE_FILE_MAX_SIZE;
             config.file_roll_size = DB::PAGE_FILE_ROLL_SIZE;
             initPageStorage(config, name());
+            stop_watch.start();
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
                 writer->setBatchBufferNums(4);
                 writer->setBatchBufferSize(2ULL * DB::MB);
