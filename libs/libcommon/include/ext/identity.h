@@ -5,7 +5,7 @@
 namespace ext
 {
     /// \brief Identity function for use with other algorithms as a pass-through.
-    class identity
+    class Identity
     {
         /** \brief Function pointer type template for converting identity to a function pointer.
          *    Presumably useless, provided for completeness. */
@@ -19,6 +19,6 @@ namespace ext
         template <typename T> T && operator()(T && t) const { return std::forward<T>(t); }
 
         /** \brief Allows conversion of identity instance to a function pointer. */
-        template <typename T> operator function_ptr_t<T>() const { return &invoke; };
+        template <typename T> explicit operator function_ptr_t<T>() const { return &invoke; };
     };
 }

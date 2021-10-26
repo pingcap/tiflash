@@ -15,7 +15,7 @@
   */
 namespace ext
 {
-    template <typename It> struct enumerate_iterator
+    template <typename It> struct EnumerateIterator
     {
         using traits = typename std::iterator_traits<It>;
         using iterator_category = typename traits::iterator_category;
@@ -26,23 +26,23 @@ namespace ext
         std::size_t idx;
         It it;
 
-        enumerate_iterator(const std::size_t idx, It it) : idx{idx}, it{it} {}
+        EnumerateIterator(const std::size_t idx, It it) : idx{idx}, it{it} {}
 
         auto operator*() const { return reference(idx, *it); }
 
-        bool operator!=(const enumerate_iterator & other) const { return it != other.it; }
+        bool operator!=(const EnumerateIterator & other) const { return it != other.it; }
 
-        enumerate_iterator & operator++() { return ++idx, ++it, *this; }
+        EnumerateIterator & operator++() { return ++idx, ++it, *this; }
     };
 
-    template <typename Collection> struct enumerate_wrapper
+    template <typename Collection> struct EnumerateWrapper
     {
         using underlying_iterator = decltype(std::begin(std::declval<Collection &>()));
-        using iterator = enumerate_iterator<underlying_iterator>;
+        using iterator = EnumerateIterator<underlying_iterator>;
 
         Collection & collection;
 
-        enumerate_wrapper(Collection & collection) : collection(collection) {}
+        explicit EnumerateWrapper(Collection & collection) : collection(collection) {}
 
         auto begin() { return iterator(0, std::begin(collection)); }
         auto end() { return iterator(ext::size(collection), std::end(collection)); }
@@ -50,11 +50,11 @@ namespace ext
 
     template <typename Collection> auto enumerate(Collection & collection)
     {
-        return enumerate_wrapper<Collection>{collection};
+        return EnumerateWrapper<Collection>{collection};
     }
 
     template <typename Collection> auto enumerate(const Collection & collection)
     {
-        return enumerate_wrapper<const Collection>{collection};
+        return EnumerateWrapper<const Collection>{collection};
     }
 }
