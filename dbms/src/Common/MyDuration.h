@@ -5,19 +5,6 @@
 
 namespace DB
 {
-static const Int64 NANO_SECOND = 1;
-static const Int64 NANOS_PER_MICRO = 1000 * NANO_SECOND;
-static const Int64 NANOS_PER_MILLI = 1000 * NANOS_PER_MICRO;
-static const Int64 NANOS_PER_SECOND = 1000 * NANOS_PER_MILLI;
-static const Int64 NANOS_PER_MINUTE = 60 * NANOS_PER_SECOND;
-static const Int64 NANOS_PER_HOUR = 60 * NANOS_PER_MINUTE;
-
-static const Int64 MAX_HOUR_PART = 838;
-static const Int64 MAX_MINUTE_PART = 59;
-static const Int64 MAX_SECOND_PART = 59;
-static const Int64 MAX_MICRO_PART = 999999;
-static const Int64 MAX_NANOS = MAX_HOUR_PART * NANOS_PER_HOUR + MAX_MINUTE_PART * NANOS_PER_MINUTE + MAX_SECOND_PART * NANOS_PER_SECOND + MAX_MICRO_PART * NANOS_PER_MICRO;
-
 struct DurationParts
 {
     Int32 neg, hour, minute, second, microsecond;
@@ -31,6 +18,20 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 
 class MyDuration
 {
+private:
+    static const Int64 NANO_SECOND = 1;
+    static const Int64 NANOS_PER_MICRO = 1000 * NANO_SECOND;
+    static const Int64 NANOS_PER_MILLI = 1000 * NANOS_PER_MICRO;
+    static const Int64 NANOS_PER_SECOND = 1000 * NANOS_PER_MILLI;
+    static const Int64 NANOS_PER_MINUTE = 60 * NANOS_PER_SECOND;
+    static const Int64 NANOS_PER_HOUR = 60 * NANOS_PER_MINUTE;
+
+    static const Int64 MAX_HOUR_PART = 838;
+    static const Int64 MAX_MINUTE_PART = 59;
+    static const Int64 MAX_SECOND_PART = 59;
+    static const Int64 MAX_MICRO_PART = 999999;
+    static const Int64 MAX_NANOS = MAX_HOUR_PART * NANOS_PER_HOUR + MAX_MINUTE_PART * NANOS_PER_MINUTE + MAX_SECOND_PART * NANOS_PER_SECOND + MAX_MICRO_PART * NANOS_PER_MICRO;
+
 public:
     Int64 nanos;
     UInt8 fsp;
