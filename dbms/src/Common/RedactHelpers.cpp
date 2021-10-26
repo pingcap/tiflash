@@ -30,7 +30,7 @@ std::string Redact::keyToHexString(const char * key, size_t size)
     char * pos = buf.data();
     for (size_t i = 0; i < size; ++i)
     {
-        writeHexByteUppercase((UInt8)(key[i]), pos);
+        writeHexByteUppercase(static_cast<UInt8>(key[i]), pos);
         pos += 2;
     }
     return buf;
