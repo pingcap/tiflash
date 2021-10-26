@@ -25,9 +25,9 @@ protected:
     Block readImpl() override;
 
 private:
+    const LogWithPrefixPtr log;
     SquashingTransform transform;
     bool all_read = false;
-    const LogWithPrefixPtr log;
 };
 
 } // namespace DB
