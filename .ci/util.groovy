@@ -160,7 +160,7 @@ def runUTCoverTICS(CURWS, NPROC) {
             stage("Build") {
                 timeout(time: 70, unit: 'MINUTES') {
                     container("builder") {
-                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} UPDATE_CCACHE=true ${CURWS}/tics/release-centos7/build/build-tiflash-ut-coverage.sh"
+                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} UPDATE_CCACHE=false ${CURWS}/tics/release-centos7/build/build-tiflash-ut-coverage.sh"
                     }
                 }
             }
