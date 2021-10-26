@@ -226,10 +226,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
 
 void DAGQueryBlock::fillOutputFieldTypes()
 {
-    if (!output_field_types.empty())
-    {
-        return;
-    }
     /// the top block has exchangeSender, which decides the output fields, keeping the same with exchangeReceiver
     if (exchangeSender != nullptr && exchangeSender->has_exchange_sender() && !exchangeSender->exchange_sender().all_field_types().empty())
     {
@@ -241,6 +237,10 @@ void DAGQueryBlock::fillOutputFieldTypes()
         return;
     }
     /// the non-top block
+    if (!output_field_types.empty())
+    {
+        return;
+    }
     if (source->tp() == tipb::ExecType::TypeJoin)
     {
         for (auto & field_type : children[0]->output_field_types)
