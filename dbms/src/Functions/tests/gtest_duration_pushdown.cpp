@@ -42,5 +42,24 @@ try
             createConstColumn<Int64>(3, 2)));
 }
 CATCH
+
+TEST_F(DurationPushDown, hourPushDownTest)
+try
+{
+    ColumnWithTypeAndName input(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(838 * 3600 + 59 * 60 + 59) * 1000000000L + 123456000L, -(838 * 3600 + 59 * 60 + 59) * 1000000000L - 123456000L}).column,
+        makeNullable(std::make_shared<DataTypeMyDuration>(6)),
+        "result");
+
+    auto hour_output = createColumn<Nullable<Int64>>({838, 838});
+    auto minute_output = createColumn<Nullable<Int64>>({59, 59});
+    auto second_output = createColumn<Nullable<Int64>>({59, 59});
+    auto microsecond_output = createColumn<Nullable<Int64>>({123456, 123456});
+    ASSERT_COLUMN_EQ(hour_output, executeFunction("hour", input));
+    ASSERT_COLUMN_EQ(minute_output, executeFunction("minute", input));
+    ASSERT_COLUMN_EQ(second_output, executeFunction("second", input));
+    ASSERT_COLUMN_EQ(microsecond_output, executeFunction("microSecond", input));
+}
+CATCH
 } // namespace tests
 } // namespace DB
