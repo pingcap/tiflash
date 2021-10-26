@@ -2845,10 +2845,24 @@ public:
         }
     }
 
-    void executeImpl(Block & block, const ColumnNumbers &, size_t result) const override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const int row_count = block.rows();
-        const UInt64 sysdate_packed = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo()).toPackedUInt();
+        UInt8 fsp = 0;
+        if (arguments.size() == 1)
+        {
+            if (auto fsp_column = checkAndGetColumnConst<ColumnInt64>(block.getByPosition(arguments[0]).column.get()))
+            {
+                fsp = fsp_column->getInt(0);
+            }
+            else
+            {
+                throw TiFlashException(
+                    "First argument for function " + getName() + " must be constant UInt8",
+                    Errors::Coprocessor::BadRequest);
+            }
+        }
+        const UInt64 sysdate_packed = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), fsp).toPackedUInt();
         auto col_to = ColumnVector<DataTypeMyDateTime::FieldType>::create(row_count);
         auto & vec_to = col_to->getData();
         vec_to.resize(row_count);

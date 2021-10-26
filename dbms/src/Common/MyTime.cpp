@@ -802,14 +802,31 @@ String MyDateTime::toString(int fsp) const
     return result;
 }
 
-MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezoneInfo)
+MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezoneInfo, UInt8 fsp)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
-    if (timezoneInfo.is_name_based)
-        return convertUTC2TimeZone(ts.tv_sec, ts.tv_nsec / 1000, *timezoneInfo.timezone);
+    UInt32 micro_second = ts.tv_nsec / 1000;
+
+    if (fsp != 0)
+    {
+        String micro_second_str;
+        micro_second_str
+            .append(int_to_2_width_string[micro_second / 10000])
+            .append(int_to_2_width_string[micro_second % 10000 / 100])
+            .append(int_to_2_width_string[micro_second % 100]);
+        micro_second_str.resize(fsp);
+        micro_second = std::stoul(micro_second_str) * std::pow(10, 6 - fsp);
+    }
     else
-        return convertUTC2TimeZoneByOffset(ts.tv_sec, ts.tv_nsec / 1000, timezoneInfo.timezone_offset, *timezoneInfo.timezone);
+    {
+        micro_second = 0;
+    }
+
+    if (timezoneInfo.is_name_based)
+        return convertUTC2TimeZone(ts.tv_sec, micro_second, *timezoneInfo.timezone);
+    else
+        return convertUTC2TimeZoneByOffset(ts.tv_sec, micro_second, timezoneInfo.timezone_offset, *timezoneInfo.timezone);
 }
 
 inline bool isZeroDate(UInt64 time)

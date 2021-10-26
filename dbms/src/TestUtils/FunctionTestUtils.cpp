@@ -101,7 +101,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     return block.getByPosition(columns.size());
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunctionAndSetTimezone(const String & func_name, const ColumnsWithTypeAndName & columns, const Int64 offset)
+ColumnWithTypeAndName FunctionTest::executeFunctionWithTimezone(const String & func_name, const ColumnNumbers & arguments, const ColumnsWithTypeAndName & columns, const Int64 offset)
 {
     auto & factory = FunctionFactory::instance();
 
@@ -114,13 +114,16 @@ ColumnWithTypeAndName FunctionTest::executeFunctionAndSetTimezone(const String &
 
     Block block(columns);
     ColumnNumbers cns;
-    for (size_t i = 0; i < columns.size(); ++i)
-        cns.push_back(i);
-
+    ColumnsWithTypeAndName argument_columns;
+    for (size_t i = 0; i < arguments.size(); ++i)
+    {
+        cns.push_back(arguments[i]);
+        argument_columns.push_back(columns.at(i));
+    }
     auto bp = factory.tryGet(func_name, context);
     if (!bp)
         throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(columns);
+    auto func = bp->build(argument_columns);
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, cns, columns.size());
     return block.getByPosition(columns.size());

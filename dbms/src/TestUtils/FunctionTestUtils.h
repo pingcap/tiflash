@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
@@ -381,7 +382,7 @@ public:
     }
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns);
 
-    ColumnWithTypeAndName executeFunctionAndSetTimezone(const String & func_name, const ColumnsWithTypeAndName & columns, const Int64 offset);
+    ColumnWithTypeAndName executeFunctionWithTimezone(const String & func_name, const ColumnNumbers & arguments, const ColumnsWithTypeAndName & columns, const Int64 offset);
 
     template <typename... Args>
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
@@ -391,10 +392,9 @@ public:
     }
 
     template <typename... Args>
-    ColumnWithTypeAndName executeFunctionAndSetTimezone(const Int64 offset, const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
+    ColumnWithTypeAndName executeFunctionWithTimezone(const Int64 offset, const String & func_name, const ColumnNumbers & argument_columns, const ColumnsWithTypeAndName & columns)
     {
-        ColumnsWithTypeAndName vec({first_column, columns...});
-        return executeFunctionAndSetTimezone(func_name, vec, offset);
+        return executeFunctionWithTimezone(func_name, argument_columns, columns, offset);
     }
 
     DAGContext & getDAGContext()

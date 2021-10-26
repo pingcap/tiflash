@@ -107,7 +107,7 @@ struct MyDateTime : public MyTimeBase
 
     String toString(int fsp) const;
 
-    static MyDateTime getSystemDateTimeByTimezone(const TimezoneInfo &);
+    static MyDateTime getSystemDateTimeByTimezone(const TimezoneInfo &, UInt8 fsp);
 };
 
 struct MyDate : public MyTimeBase
