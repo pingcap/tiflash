@@ -7,9 +7,6 @@ target_link_libraries (number_traits dbms)
 add_executable (strings_trim gtest_strings_trim.cpp)
 target_link_libraries (strings_trim dbms gtest_main clickhouse_functions)
 
-add_executable (strings_lrtrim gtest_string_lrtrim.cpp)
-target_link_libraries (strings_lrtrim dbms gtest_main clickhouse_functions)
-
 add_executable (strings_pad gtest_strings_pad.cpp)
 target_link_libraries (strings_pad dbms gtest_main clickhouse_functions)
 
