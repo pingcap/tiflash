@@ -59,7 +59,22 @@ private:
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
-    std::tuple<PageFileSet, PageFileSet, size_t, size_t> //
+    struct CompactCandidates
+    {
+        // Those files with valid pages, we need to migrate those pages into a new PageFile
+        PageFileSet compact_candidates;
+        // Those files without valid pages, we need to log them down later
+        PageFileSet files_without_valid_pages;
+        // Those files have high vaild rate and big size, use hardlink to reduce write amplification
+        PageFileSet hardlink_candidates;
+        size_t total_valid_bytes;
+        size_t num_migrate_pages;
+    };
+
+    bool
+    isPageFileExistInAllPath(const PageFileIdAndLevel & file_id_and_level) const;
+
+    CompactCandidates
     selectCandidateFiles(const PageFileSet & page_files,
                          const ValidPages & files_valid_pages,
                          const WritingFilesSnapshot & writing_files) const;
@@ -67,8 +82,7 @@ private:
     std::tuple<PageEntriesEdit, size_t> //
     migratePages(const SnapshotPtr & snapshot,
                  const ValidPages & files_valid_pages,
-                 const PageFileSet & candidates,
-                 const PageFileSet & files_without_valid_pages,
+                 const CompactCandidates & candidates,
                  const size_t migrate_page_count) const;
 
     std::tuple<PageEntriesEdit, size_t> //

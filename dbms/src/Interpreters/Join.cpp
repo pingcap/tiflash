@@ -55,7 +55,7 @@ static bool isCrossJoin(ASTTableJoin::Kind kind)
 }
 
 
-Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_)
+Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_, const LogWithPrefixPtr & log_)
     : kind(kind_)
     , strictness(strictness_)
     , key_names_left(key_names_left_)
@@ -71,7 +71,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
     , have_finish_build(true)
-    , log(&Poco::Logger::get("Join"))
+    , log(getLogWithPrefix(log_, "Join"))
     , limits(limits)
 {
     build_set_exceeded.store(false);
