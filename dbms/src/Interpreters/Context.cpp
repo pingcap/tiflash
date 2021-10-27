@@ -639,31 +639,30 @@ void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & co
 
 void Context::calculateUserSettings()
 {
-    // auto lock = getLock();
+    auto lock = getLock();
 
-    // String profile_name = shared->security_manager->getUser(client_info.current_user)->profile;
+    String profile_name = shared->security_manager->getUser(client_info.current_user)->profile;
 
     /// 1) Set default settings (hardcoded values)
     /// NOTE: we ignore global_context settings (from which it is usually copied)
     /// NOTE: global_context settings are immutable and not auto updated
     settings = Settings();
-    settings.max_threads = 1;
 
     /// 2) Apply settings from default profile ("profiles.*" in `users_config`)
     auto default_profile_name = getDefaultProfileName();
-    // if (profile_name != default_profile_name)
-        // settings.setProfile(default_profile_name, *shared->users_config);
+    if (profile_name != default_profile_name)
+        settings.setProfile(default_profile_name, *shared->users_config);
 
     /// 3) Apply settings from current user
-    // settings.setProfile(profile_name, *shared->users_config);
+    settings.setProfile(profile_name, *shared->users_config);
 }
 
 
 void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address, const String & quota_key)
 {
-//    auto lock = getLock();
+    auto lock = getLock();
 
-    // auto user_props = shared->security_manager->authorizeAndGetUser(name, password, address.host());
+    auto user_props = shared->security_manager->authorizeAndGetUser(name, password, address.host());
 
     client_info.current_user = name;
     client_info.current_address = address;
@@ -673,8 +672,8 @@ void Context::setUser(const String & name, const String & password, const Poco::
         client_info.quota_key = quota_key;
 
     calculateUserSettings();
-    quota = std::make_shared<QuotaForIntervals>();
-    //    setQuota(user_props->quota, quota_key, name, address.host());
+
+    setQuota(user_props->quota, quota_key, name, address.host());
 }
 
 
