@@ -153,7 +153,8 @@ NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection
         columns_from_proj.emplace_back(name, type);
     }
     buf.append(executor_id).append(" (exprs: {");
-    appendNamesAndTypes(buf, columns_from_proj).append("})");
+    appendNamesAndTypes(buf, columns_from_proj);
+    buf.append("})");
     return columns_from_proj;
 }
 
@@ -169,7 +170,8 @@ NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation
         columns_from_agg.emplace_back(name, type);
     }
     buf.append(executor_id).append(" (agg_funcs: {");
-    appendNamesAndTypes(buf, columns_from_agg).append("} group_by: {");
+    appendNamesAndTypes(buf, columns_from_agg);
+    buf.append("} group_by: {");
     if (agg.group_by_size() != 0)
     {
         for (const auto & group_by : agg.group_by())
