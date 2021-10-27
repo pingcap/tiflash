@@ -12,7 +12,7 @@ class Context;
 
 /** Implements the system table `tables`, which allows you to get information about all tables.
   */
-class StorageSystemTables : public ext::shared_ptr_helper<StorageSystemTables>, public IStorage
+class StorageSystemTables : public ext::SharedPtrHelper<StorageSystemTables>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemTables"; }

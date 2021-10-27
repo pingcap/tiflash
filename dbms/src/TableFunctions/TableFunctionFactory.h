@@ -18,7 +18,7 @@ class Context;
 
 /** Lets you get a table function by its name.
   */
-class TableFunctionFactory final: public ext::singleton<TableFunctionFactory>
+class TableFunctionFactory final: public ext::Singleton<TableFunctionFactory>
 {
 public:
     using Creator = std::function<TableFunctionPtr()>;

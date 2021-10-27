@@ -10,7 +10,7 @@ namespace DB
 {
 /// A singleton implementing global and permanent DNS cache
 /// It could be updated only manually via drop() method
-class DNSCache : public ext::singleton<DNSCache>
+class DNSCache : public ext::Singleton<DNSCache>
 {
 public:
     DNSCache(const DNSCache &) = delete;
@@ -29,7 +29,7 @@ public:
 protected:
     DNSCache();
 
-    friend class ext::singleton<DNSCache>;
+    friend class ext::Singleton<DNSCache>;
 
     struct Impl;
     std::unique_ptr<Impl> impl;

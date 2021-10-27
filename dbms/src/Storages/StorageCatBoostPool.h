@@ -7,7 +7,7 @@
 namespace DB
 {
 
-class StorageCatBoostPool : public ext::shared_ptr_helper<StorageCatBoostPool>, public IStorage
+class StorageCatBoostPool : public ext::SharedPtrHelper<StorageCatBoostPool>, public IStorage
 {
 public:
     std::string getName() const override { return "CatBoostPool"; }

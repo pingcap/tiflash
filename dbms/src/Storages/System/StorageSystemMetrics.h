@@ -12,7 +12,7 @@ class Context;
 
 /** Implements `metrics` system table, which provides information about the operation of the server.
   */
-class StorageSystemMetrics : public ext::shared_ptr_helper<StorageSystemMetrics>, public IStorage
+class StorageSystemMetrics : public ext::SharedPtrHelper<StorageSystemMetrics>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemMetrics"; }

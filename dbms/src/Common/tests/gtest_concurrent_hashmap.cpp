@@ -10,7 +10,7 @@ namespace DB
 namespace tests
 {
 
-class TestConcurrentHashMap : public ext::singleton<TestConcurrentHashMap>
+class TestConcurrentHashMap : public ext::Singleton<TestConcurrentHashMap>
 {
 public:
     static size_t test_loop;

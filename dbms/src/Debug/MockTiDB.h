@@ -11,9 +11,9 @@
 namespace DB
 {
 
-class MockTiDB : public ext::singleton<MockTiDB>
+class MockTiDB : public ext::Singleton<MockTiDB>
 {
-    friend class ext::singleton<MockTiDB>;
+    friend class ext::Singleton<MockTiDB>;
 
 public:
     MockTiDB();

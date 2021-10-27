@@ -23,7 +23,7 @@
 
 namespace DB
 {
-class TypeMapping : public ext::singleton<TypeMapping>
+class TypeMapping : public ext::Singleton<TypeMapping>
 {
 public:
     using Creator = std::function<DataTypePtr(const ColumnInfo & column_info)>;
@@ -36,7 +36,7 @@ private:
 
     TypeMap type_map;
 
-    friend class ext::singleton<TypeMapping>;
+    friend class ext::Singleton<TypeMapping>;
 };
 
 template <typename T>

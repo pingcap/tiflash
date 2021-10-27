@@ -23,7 +23,7 @@ using DataTypes = std::vector<DataTypePtr>;
 
 /** Creates an aggregate function by name.
   */
-class AggregateFunctionFactory final : public ext::singleton<AggregateFunctionFactory>
+class AggregateFunctionFactory final : public ext::Singleton<AggregateFunctionFactory>
 {
     friend class StorageSystemFunctions;
 

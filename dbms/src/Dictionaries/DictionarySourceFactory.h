@@ -22,7 +22,7 @@ class Context;
 struct DictionaryStructure;
 
 /// creates IDictionarySource instance from config and DictionaryStructure
-class DictionarySourceFactory : public ext::singleton<DictionarySourceFactory>
+class DictionarySourceFactory : public ext::Singleton<DictionarySourceFactory>
 {
 public:
     using Creator = std::function<DictionarySourcePtr(

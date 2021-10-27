@@ -13,7 +13,7 @@ class Context;
   *  that allows to obtain information about available clusters
   *  (which may be specified in Distributed tables).
   */
-class StorageSystemClusters : public ext::shared_ptr_helper<StorageSystemClusters>, public IStorage
+class StorageSystemClusters : public ext::SharedPtrHelper<StorageSystemClusters>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemClusters"; }

@@ -28,7 +28,7 @@ namespace DB
 
 
 /// Simplified version of the StorageDistributed class.
-class StorageDistributedFake : public ext::shared_ptr_helper<StorageDistributedFake>, public DB::IStorage
+class StorageDistributedFake : public ext::SharedPtrHelper<StorageDistributedFake>, public DB::IStorage
 {
 public:
     std::string getName() const override { return "DistributedFake"; }

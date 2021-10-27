@@ -71,4 +71,4 @@ public:
 };
 
 
-class TechDataHierarchySingleton : public ext::singleton<TechDataHierarchySingleton>, public TechDataHierarchy {};
+class TechDataHierarchySingleton : public ext::Singleton<TechDataHierarchySingleton>, public TechDataHierarchy {};

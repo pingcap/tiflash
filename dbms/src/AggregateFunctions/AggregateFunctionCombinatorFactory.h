@@ -13,7 +13,7 @@ namespace DB
 
 /** Create aggregate function combinator by matching suffix in aggregate function name.
   */
-class AggregateFunctionCombinatorFactory final: public ext::singleton<AggregateFunctionCombinatorFactory>
+class AggregateFunctionCombinatorFactory final: public ext::Singleton<AggregateFunctionCombinatorFactory>
 {
 public:
     /// Not thread safe. You must register before using tryGet.

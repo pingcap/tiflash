@@ -349,9 +349,9 @@ std::optional<std::tuple<Int256, PrecType, ScaleType>> parseDecimal(const char *
 // parse str into field. str should not contain "+" or "-".
 bool parseDecimal(const char * str, size_t len, bool negative, Field & field);
 
-class DecimalMaxValue final : public ext::singleton<DecimalMaxValue>
+class DecimalMaxValue final : public ext::Singleton<DecimalMaxValue>
 {
-    friend class ext::singleton<DecimalMaxValue>;
+    friend class ext::Singleton<DecimalMaxValue>;
 
     Int256 number[decimal_max_prec + 1];
 

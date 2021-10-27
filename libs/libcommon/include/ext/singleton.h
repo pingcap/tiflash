@@ -6,7 +6,7 @@ namespace ext
 
 /** Example (1):
   *
-  *    class Derived : public ext::singleton<Derived>
+  *    class Derived : public ext::Singleton<Derived>
   *    {
   *        friend class ext::singleton<Derived>;
   *        ...
@@ -21,9 +21,9 @@ namespace ext
   *        ...
   *    };
   *
-  *    class SomeSingleton : public Some, public ext::singleton<SomeSingleton> {}
+  *    class SomeSingleton : public Some, public ext::Singleton<SomeSingleton> {}
   */
-template <typename T> class singleton
+template <typename T> class Singleton
 {
 public:
     static T & instance()
@@ -34,11 +34,11 @@ public:
     }
 
 protected:
-    singleton() {};
+    Singleton() = default;
 
-private:
-    singleton(const singleton &);
-    singleton & operator=(const singleton &);
+public:
+    Singleton(const Singleton &) = delete;
+    Singleton & operator=(const Singleton &) = delete;
 };
 
 }

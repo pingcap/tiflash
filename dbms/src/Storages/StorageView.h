@@ -11,7 +11,7 @@ class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 
 
-class StorageView : public ext::shared_ptr_helper<StorageView>, public IStorage
+class StorageView : public ext::SharedPtrHelper<StorageView>, public IStorage
 {
 public:
     std::string getName() const override { return "View"; }

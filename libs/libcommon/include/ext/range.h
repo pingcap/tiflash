@@ -18,16 +18,16 @@ namespace ext
       *  By and large should be in conjunction with ext::range and ext::reverse_range.
       */
     template <typename T>
-    struct range_wrapper
+    struct RangeWrapper
     {
         using value_type = typename std::remove_reference<T>::type;
         using iterator = range_iterator<value_type>;
 
-        value_type begin_;
-        value_type end_;
+        value_type begin_t;
+        value_type end_t;
 
-        iterator begin() const { return iterator(begin_); }
-        iterator end() const { return iterator(end_); }
+        iterator begin() const { return iterator(begin_t); }
+        iterator end() const { return iterator(end_t); }
     };
 
     /** \brief Constructs range_wrapper for forward-iteration over [begin, end) in range-based for loop.
@@ -37,7 +37,7 @@ namespace ext
      *      0 1 2 3
      */
     template <typename T1, typename T2>
-    inline range_wrapper<typename std::common_type<T1, T2>::type> range(T1 begin, T2 end)
+    inline RangeWrapper<typename std::common_type<T1, T2>::type> range(T1 begin, T2 end)
     {
         using common_type = typename std::common_type<T1, T2>::type;
         return { static_cast<common_type>(begin), static_cast<common_type>(end) };

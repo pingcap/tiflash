@@ -10,7 +10,7 @@ namespace DB
 class Context;
 
 
-class StorageSystemMerges : public ext::shared_ptr_helper<StorageSystemMerges>, public IStorage
+class StorageSystemMerges : public ext::SharedPtrHelper<StorageSystemMerges>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemMerges"; }

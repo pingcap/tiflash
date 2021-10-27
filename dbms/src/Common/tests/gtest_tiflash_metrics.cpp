@@ -25,7 +25,7 @@ namespace tests
     M(test_histogram_with_2_labels, "Test histogram metric with 2 labels", Histogram,                        \
         F(m1, {{"label1", "value1"}}, ExpBuckets{1.0, 2, 1024}), F(m2, {{"label21", "value21"}, {"label22", "value22"}}, {1, 2, 3, 4}))
 
-class TestMetrics : public ext::singleton<TestMetrics>
+class TestMetrics : public ext::Singleton<TestMetrics>
 {
 public:
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();

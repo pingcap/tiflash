@@ -10,7 +10,7 @@ namespace DB
 class Context;
 
 
-class StorageSystemDTTables : public ext::shared_ptr_helper<StorageSystemDTTables>, public IStorage
+class StorageSystemDTTables : public ext::SharedPtrHelper<StorageSystemDTTables>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemDTTables"; }

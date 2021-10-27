@@ -10,7 +10,7 @@ namespace DB
 
 class Context;
 
-class DictionaryFactory : public ext::singleton<DictionaryFactory>
+class DictionaryFactory : public ext::Singleton<DictionaryFactory>
 {
 public:
     DictionaryPtr create(const std::string & name, const Poco::Util::AbstractConfiguration & config,

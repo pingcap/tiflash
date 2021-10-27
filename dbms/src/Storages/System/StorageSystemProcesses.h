@@ -12,7 +12,7 @@ class Context;
 
 /** Implements `processes` system table, which allows you to get information about the queries that are currently executing.
   */
-class StorageSystemProcesses : public ext::shared_ptr_helper<StorageSystemProcesses>, public IStorage
+class StorageSystemProcesses : public ext::SharedPtrHelper<StorageSystemProcesses>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemProcesses"; }

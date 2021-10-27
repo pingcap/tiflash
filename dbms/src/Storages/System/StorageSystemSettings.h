@@ -12,7 +12,7 @@ class Context;
 
 /** implements system table "settings", which allows to get information about the current settings.
   */
-class StorageSystemSettings : public ext::shared_ptr_helper<StorageSystemSettings>, public IStorage
+class StorageSystemSettings : public ext::SharedPtrHelper<StorageSystemSettings>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemSettings"; }

@@ -12,7 +12,7 @@
 namespace DB
 {
 
-class MutableSupport : public ext::singleton<MutableSupport>
+class MutableSupport : public ext::Singleton<MutableSupport>
 {
 public:
     MutableSupport()

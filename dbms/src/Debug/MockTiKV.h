@@ -5,9 +5,9 @@
 namespace DB
 {
 
-class MockTiKV : public ext::singleton<MockTiKV>
+class MockTiKV : public ext::Singleton<MockTiKV>
 {
-    friend class ext::singleton<MockTiKV>;
+    friend class ext::Singleton<MockTiKV>;
 
 public:
     UInt64 getRaftIndex(RegionID region_id)

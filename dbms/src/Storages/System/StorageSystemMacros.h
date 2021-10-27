@@ -12,7 +12,7 @@ class Context;
 
 /** Information about macros for introspection.
   */
-class StorageSystemMacros : public ext::shared_ptr_helper<StorageSystemMacros>, public IStorage
+class StorageSystemMacros : public ext::SharedPtrHelper<StorageSystemMacros>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemMacros"; }

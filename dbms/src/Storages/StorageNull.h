@@ -14,7 +14,7 @@ namespace DB
 /** When writing, does nothing.
   * When reading, returns nothing.
   */
-class StorageNull : public ext::shared_ptr_helper<StorageNull>, public IStorage
+class StorageNull : public ext::SharedPtrHelper<StorageNull>, public IStorage
 {
 public:
     std::string getName() const override { return "Null"; }

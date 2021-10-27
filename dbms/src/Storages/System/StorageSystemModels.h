@@ -10,7 +10,7 @@ namespace DB
 class Context;
 
 
-class StorageSystemModels : public ext::shared_ptr_helper<StorageSystemModels>, public IStorage
+class StorageSystemModels : public ext::SharedPtrHelper<StorageSystemModels>, public IStorage
 {
 public:
     std::string getName() const override { return "SystemModels"; }

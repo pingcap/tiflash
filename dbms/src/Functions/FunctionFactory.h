@@ -20,7 +20,7 @@ class Context;
   * Function could use for initialization (take ownership of shared_ptr, for example)
   *  some dictionaries from Context.
   */
-class FunctionFactory : public ext::singleton<FunctionFactory>
+class FunctionFactory : public ext::Singleton<FunctionFactory>
 {
     friend class StorageSystemFunctions;
 

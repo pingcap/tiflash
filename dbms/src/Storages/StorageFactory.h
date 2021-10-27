@@ -17,7 +17,7 @@ class ASTStorage;
   * In 'columns' Nested data structures must be flattened.
   * You should subsequently call IStorage::startup method to work with table.
   */
-class StorageFactory : public ext::singleton<StorageFactory>
+class StorageFactory : public ext::Singleton<StorageFactory>
 {
 public:
     struct Arguments

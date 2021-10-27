@@ -12,7 +12,7 @@ namespace DB
 /** A table that represents the union of an arbitrary number of other tables.
   * All tables must have the same structure.
   */
-class StorageMerge : public ext::shared_ptr_helper<StorageMerge>, public IStorage
+class StorageMerge : public ext::SharedPtrHelper<StorageMerge>, public IStorage
 {
 public:
     std::string getName() const override { return "Merge"; }
