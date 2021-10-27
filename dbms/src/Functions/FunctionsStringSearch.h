@@ -7,7 +7,6 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 
-
 namespace DB
 {
 /** Search and replace functions in strings:
@@ -99,9 +98,9 @@ public:
         UInt8 escape_char = CH_ESCAPE_CHAR;
         if (has_3_args)
         {
-            auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
+            const auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
             bool valid_args = true;
-            if (col_needle_const == nullptr || col_escape_const == nullptr)
+            if (col_escape_const == nullptr)
             {
                 valid_args = false;
             }
@@ -115,13 +114,12 @@ public:
                 }
                 else
                 {
-                    escape_char = (UInt8)c;
+                    escape_char = static_cast<UInt8>(c);
                 }
             }
             if (!valid_args)
             {
-                throw Exception("2nd and 3rd arguments of function " + getName() + " must "
-                                                                                   "be constants, and the 3rd argument must between 0 and 255.");
+                throw Exception("3rd arguments of function " + getName() + " must be constants and between 0 and 255.");
             }
         }
 
@@ -129,7 +127,7 @@ public:
         {
             ResultType res{};
             String needle_string = col_needle_const->getValue<String>();
-            Impl::constant_constant(col_haystack_const->getValue<String>(), needle_string, escape_char, collator, res);
+            Impl::constantConstant(col_haystack_const->getValue<String>(), needle_string, escape_char, collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
         }
@@ -143,20 +141,25 @@ public:
         const ColumnString * col_needle_vector = checkAndGetColumn<ColumnString>(&*column_needle);
 
         if (col_haystack_vector && col_needle_vector)
-            Impl::vector_vector(col_haystack_vector->getChars(),
-                                col_haystack_vector->getOffsets(),
-                                col_needle_vector->getChars(),
-                                col_needle_vector->getOffsets(),
-                                escape_char,
-                                collator,
-                                vec_res);
+            Impl::vectorVector(col_haystack_vector->getChars(),
+                               col_haystack_vector->getOffsets(),
+                               col_needle_vector->getChars(),
+                               col_needle_vector->getOffsets(),
+                               escape_char,
+                               collator,
+                               vec_res);
         else if (col_haystack_vector && col_needle_const)
         {
             String needle_string = col_needle_const->getValue<String>();
-            Impl::vector_constant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(), needle_string, escape_char, collator, vec_res);
+            Impl::vectorConstant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(), needle_string, escape_char, collator, vec_res);
         }
         else if (col_haystack_const && col_needle_vector)
-            Impl::constant_vector(col_haystack_const->getValue<String>(), col_needle_vector->getChars(), col_needle_vector->getOffsets(), escape_char, collator, vec_res);
+        {
+            auto haystack = col_haystack_const->getValue<String>();
+            const ColumnString::Chars_t & needle_chars = col_needle_vector->getChars();
+            const IColumn::Offsets & needle_offsets = col_needle_vector->getOffsets();
+            Impl::constantVector(haystack, needle_chars, needle_offsets, escape_char, collator, vec_res);
+        }
         else
             throw Exception("Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
                                 + block.getByPosition(arguments[1]).column->getName()
@@ -235,5 +238,4 @@ public:
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
-
 } // namespace DB
