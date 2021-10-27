@@ -994,7 +994,9 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & cha
         if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
         {
             tipb::Expr fsp_expr;
-            auto fsp = (columns[i].decimal() < 0 || columns[i].decimal() > 6) ? 6 : columns[i].decimal();
+            if (columns[i].decimal() > 6)
+                throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
+            auto fsp = columns[i].decimal() < 0 ? 0 : columns[i].decimal();
             constructInt64LiteralTiExpr(fsp_expr, fsp);
             fsp_col = getActions(fsp_expr, actions);
             String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);

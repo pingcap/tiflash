@@ -2,12 +2,13 @@
 
 #include <common/DateLUTImpl.h>
 #include <common/ErrorHandlers.h>
+#include <fmt/format.h>
 
 namespace DB
 {
 struct DurationParts
 {
-    Int32 neg, hour, minute, second, microsecond;
+    Int64 neg, hour, minute, second, microsecond;
 };
 
 namespace ErrorCodes
@@ -19,28 +20,33 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 class MyDuration
 {
 private:
-    static const Int64 NANO_SECOND = 1;
-    static const Int64 NANOS_PER_MICRO = 1000 * NANO_SECOND;
-    static const Int64 NANOS_PER_MILLI = 1000 * NANOS_PER_MICRO;
-    static const Int64 NANOS_PER_SECOND = 1000 * NANOS_PER_MILLI;
-    static const Int64 NANOS_PER_MINUTE = 60 * NANOS_PER_SECOND;
-    static const Int64 NANOS_PER_HOUR = 60 * NANOS_PER_MINUTE;
+    static constexpr Int64 NANO_SECOND = 1;
+    static constexpr Int64 NANOS_PER_MICRO = 1000 * NANO_SECOND;
+    static constexpr Int64 NANOS_PER_MILLI = 1000 * NANOS_PER_MICRO;
+    static constexpr Int64 NANOS_PER_SECOND = 1000 * NANOS_PER_MILLI;
+    static constexpr Int64 NANOS_PER_MINUTE = 60 * NANOS_PER_SECOND;
+    static constexpr Int64 NANOS_PER_HOUR = 60 * NANOS_PER_MINUTE;
 
-    static const Int64 MAX_HOUR_PART = 838;
-    static const Int64 MAX_MINUTE_PART = 59;
-    static const Int64 MAX_SECOND_PART = 59;
-    static const Int64 MAX_MICRO_PART = 999999;
-    static const Int64 MAX_NANOS = MAX_HOUR_PART * NANOS_PER_HOUR + MAX_MINUTE_PART * NANOS_PER_MINUTE + MAX_SECOND_PART * NANOS_PER_SECOND + MAX_MICRO_PART * NANOS_PER_MICRO;
+    static constexpr Int64 MAX_HOUR_PART = 838;
+    static constexpr Int64 MAX_MINUTE_PART = 59;
+    static constexpr Int64 MAX_SECOND_PART = 59;
+    static constexpr Int64 MAX_MICRO_PART = 999999;
+    static constexpr Int64 MAX_NANOS = MAX_HOUR_PART * NANOS_PER_HOUR + MAX_MINUTE_PART * NANOS_PER_MINUTE + MAX_SECOND_PART * NANOS_PER_SECOND + MAX_MICRO_PART * NANOS_PER_MICRO;
+    static_assert(MAX_NANOS > 0);
 
-public:
     Int64 nanos;
     UInt8 fsp;
 
+public:
     MyDuration() = default;
     MyDuration(Int64 nanos_, UInt8 fsp_)
         : nanos(nanos_)
         , fsp(fsp_)
     {
+        if (nanos_ > MAX_NANOS || nanos_ < -MAX_NANOS)
+        {
+            throw Exception(fmt::format("nanos must >= {} and <= {}", -MAX_NANOS, MAX_NANOS), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        }
         if (fsp > 6)
             throw Exception("fsp must >= 0 and <= 6", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     }

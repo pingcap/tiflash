@@ -474,11 +474,12 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
     Names required_columns_;
     NamesAndTypes source_columns_;
     std::vector<ExtraCastAfterTSMode> need_cast_column;
+    need_cast_column.reserve(table_scan.columns_size());
     String handle_column_name_ = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         handle_column_name_ = pk_handle_col->get().name;
 
-    for (Int32 i = 0; i < table_scan.columns().size(); i++)
+    for (Int32 i = 0; i < table_scan.columns_size(); i++)
     {
         auto const & ci = table_scan.columns(i);
         ColumnID cid = ci.column_id();

@@ -5,20 +5,20 @@ namespace DB
 {
 DurationParts MyDuration::splitDuration() const
 {
-    int sign = 1, hours, minutes, seconds, micro_seconds;
+    Int64 sign = 1;
     Int64 t = nanos;
     if (t < 0)
     {
         t = -t;
         sign = -1;
     }
-    hours = t / NANOS_PER_HOUR;
+    Int64 hours = t / NANOS_PER_HOUR;
     t -= hours * NANOS_PER_HOUR;
-    minutes = t / NANOS_PER_MINUTE;
+    Int64 minutes = t / NANOS_PER_MINUTE;
     t -= minutes * NANOS_PER_MINUTE;
-    seconds = t / NANOS_PER_SECOND;
+    Int64 seconds = t / NANOS_PER_SECOND;
     t -= seconds * NANOS_PER_SECOND;
-    micro_seconds = t / NANOS_PER_MICRO;
+    Int64 micro_seconds = t / NANOS_PER_MICRO;
     return DurationParts{sign, hours, minutes, seconds, micro_seconds};
 }
 
