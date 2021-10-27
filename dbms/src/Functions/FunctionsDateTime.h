@@ -2879,7 +2879,7 @@ public:
         if (arguments.size() == 1)
         {
             auto fsp_column = block.getByPosition(arguments[0]).column.get();
-            if (fsp_column->isNumeric() && fsp_column->isColumnConst())
+            if (fsp_column && fsp_column->isNumeric() && fsp_column->isColumnConst())
             {
                 fsp = fsp_column->getInt(0);
             }
