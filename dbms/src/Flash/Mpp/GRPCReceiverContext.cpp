@@ -80,7 +80,7 @@ GRPCReceiverContext::Reader::~Reader()
 
 void GRPCReceiverContext::Reader::initialize() const
 {
-    reader->WaitForInitialMetadata();
+    // reader->WaitForInitialMetadata();
 }
 
 bool GRPCReceiverContext::Reader::read(mpp::MPPDataPacket * packet) const

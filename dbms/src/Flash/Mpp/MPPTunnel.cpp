@@ -147,6 +147,7 @@ void MPPTunnelBase<Writer>::sendLoop()
             else
             {
                 if (!writer->Write(*res))
+                // if (!writer->Write(*res, grpc::WriteOptions().set_buffer_hint()))
                 {
                     finishWithLock();
                     auto msg = " grpc writes failed.";
