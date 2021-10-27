@@ -119,7 +119,7 @@ NamesAndTypes buildJoinString(const String & executor_id, const tipb::Join & joi
     buf.clear();
 
     buf.append(genPrefixString(level));
-    auto & output_column = buildJoinString(executor_id, join, left_input_column, right_input_column, buf);
+    auto output_column = buildJoinString(executor_id, join, left_input_column, right_input_column, buf);
     buf.append("\n").append(left_child_str).append("\n").append(right_child_str);
 
     return output_column;

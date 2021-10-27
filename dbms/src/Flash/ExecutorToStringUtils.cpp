@@ -1,6 +1,6 @@
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
-#include <Common/joinToString.h>
+#include <Common/joinStr.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/ExecutorToStringUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -22,22 +22,19 @@ extern const int NOT_IMPLEMENTED;
 
 namespace
 {
-inline FmtBuffer & appendNamesAndTypes(FmtBuffer & buf, const NamesAndTypes & names_and_types)
+inline void appendNamesAndTypes(FmtBuffer & buf, const NamesAndTypes & names_and_types)
 {
-    joinIterToString(names_and_types.cbegin(), names_and_types.cend(), buf, [](const auto & nt, FmtBuffer & fb) { fb.append(nt.name).append("[").append(nt.type->getName()).append("]"); });
-    return buf;
+    joinStr(names_and_types.cbegin(), names_and_types.cend(), buf, [](const auto & nt, FmtBuffer & fb) { fb.append(nt.name).append("[").append(nt.type->getName()).append("]"); });
 }
 
-inline FmtBuffer & appendExprs(FmtBuffer & buf, const google::protobuf::RepeatedPtrField<::tipb::Expr> & exprs, const NamesAndTypes & input_column)
+inline void appendExprs(FmtBuffer & buf, const google::protobuf::RepeatedPtrField<::tipb::Expr> & exprs, const NamesAndTypes & input_column)
 {
-    joinIterToString(exprs.cbegin(), exprs.cend(), buf, [&](const auto & expr, FmtBuffer & fb) { fb.append(exprToString(expr, input_column)); });
-    return buf;
+    joinStr(exprs.cbegin(), exprs.cend(), buf, [&](const auto & expr, FmtBuffer & fb) { fb.append(exprToString(expr, input_column)); });
 }
 
-inline FmtBuffer & appendByItems(FmtBuffer & buf, const google::protobuf::RepeatedPtrField<::tipb::ByItem> & byItems, const NamesAndTypes & input_column)
+inline void appendByItems(FmtBuffer & buf, const google::protobuf::RepeatedPtrField<::tipb::ByItem> & byItems, const NamesAndTypes & input_column)
 {
-    joinIterToString(byItems.cbegin(), byItems.cend(), buf, [&](const auto & byItem, FmtBuffer & fb) { fb.append(exprToString(byItem.expr(), input_column)); });
-    return buf;
+    joinStr(byItems.cbegin(), byItems.cend(), buf, [&](const auto & byItem, FmtBuffer & fb) { fb.append(exprToString(byItem.expr(), input_column)); });
 }
 
 const std::unordered_map<tipb::ExchangeType, String> exchange_type_map{
@@ -111,7 +108,8 @@ NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & 
     buf.append(executor_id).append(" (");
     buf.append(storage->getDatabaseName()).append(".").append(storage->getTableName());
     buf.append(" columns: {");
-    appendNamesAndTypes(buf, columns_from_ts).append("})");
+    appendNamesAndTypes(buf, columns_from_ts);
+    buf.append("})");
     return columns_from_ts;
 }
 
@@ -125,25 +123,27 @@ NamesAndTypes buildExchangeReceiverString(const String & executor_id, const tipb
         columns_from_exchange_receiver.emplace_back(name, type);
     }
     buf.append(executor_id).append(" (columns: {");
-    appendNamesAndTypes(buf, columns_from_exchange_receiver).append("} exchange_type: ");
+    appendNamesAndTypes(buf, columns_from_exchange_receiver);
+    buf.append("} exchange_type: ");
     buf.append(getExchangeTypeString(exchange_receiver.tp())).append(")");
     return columns_from_exchange_receiver;
 }
 
-NamesAndTypes & buildSelString(const String & executor_id, const tipb::Selection & sel, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes buildSelString(const String & executor_id, const tipb::Selection & sel, const NamesAndTypes & input_column, FmtBuffer & buf)
 {
     buf.append(executor_id).append(" (conditions: {");
-    appendExprs(buf, sel.conditions(), input_column).append("})");
+    appendExprs(buf, sel.conditions(), input_column);
+    buf.append("})");
     return input_column;
 }
 
-NamesAndTypes & buildLimitString(const String & executor_id, const tipb::Limit & limit, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes buildLimitString(const String & executor_id, const tipb::Limit & limit, const NamesAndTypes & input_column, FmtBuffer & buf)
 {
     buf.append(executor_id).fmtAppend(" (limit: {}", limit.limit()).append(")");
     return input_column;
 }
 
-NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection & proj, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection & proj, const NamesAndTypes & input_column, FmtBuffer & buf)
 {
     NamesAndTypes columns_from_proj;
     for (const auto & expr : proj.exprs())
@@ -157,7 +157,7 @@ NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection
     return columns_from_proj;
 }
 
-NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation & agg, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation & agg, const NamesAndTypes & input_column, FmtBuffer & buf)
 {
     NamesAndTypes columns_from_agg;
     for (const auto & agg_func : agg.agg_func())
@@ -186,32 +186,42 @@ NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation
     return columns_from_agg;
 }
 
-NamesAndTypes & buildTopNString(const String & executor_id, const tipb::TopN & top_n, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes buildTopNString(const String & executor_id, const tipb::TopN & top_n, const NamesAndTypes & input_column, FmtBuffer & buf)
 {
     buf.append(executor_id).fmtAppend(" (limit: {}", top_n.limit()).append(" order_by: {");
-    appendByItems(buf, top_n.order_by(), input_column).append("})");
+    appendByItems(buf, top_n.order_by(), input_column);
+    buf.append("})");
     return input_column;
 }
 
-NamesAndTypes & buildJoinString(const String & executor_id, const tipb::Join & join, NamesAndTypes & left_input_column, NamesAndTypes & right_input_column, FmtBuffer & buf)
+NamesAndTypes buildJoinString(const String & executor_id, const tipb::Join & join, const NamesAndTypes & left_input_column, const NamesAndTypes & right_input_column, FmtBuffer & buf)
 {
     StringRef join_type = join.has_join_type() ? getJoinTypeString(join.join_type()) : "unknown";
     buf.append(executor_id).append(" (join_type: ").append(join_type).append(" left_join_keys: {");
-    appendExprs(buf, join.left_join_keys(), left_input_column).append("} left_conditions: {");
-    appendExprs(buf, join.left_conditions(), left_input_column).append("} right_join_keys: {");
-    appendExprs(buf, join.right_join_keys(), right_input_column).append("} right_conditions: {");
-    appendExprs(buf, join.right_conditions(), right_input_column).append("} other_conditions: {");
-    left_input_column.insert(left_input_column.end(), right_input_column.cbegin(), right_input_column.cend());
-    appendExprs(buf, join.other_conditions(), left_input_column).append("} other_eq_conditions_from_in: {");
-    appendExprs(buf, join.other_eq_conditions_from_in(), left_input_column).append("})");
+    appendExprs(buf, join.left_join_keys(), left_input_column);
+    buf.append("} left_conditions: {");
+    appendExprs(buf, join.left_conditions(), left_input_column);
+    buf.append("} right_join_keys: {");
+    appendExprs(buf, join.right_join_keys(), right_input_column);
+    buf.append("} right_conditions: {");
+    appendExprs(buf, join.right_conditions(), right_input_column);
+    buf.append("} other_conditions: {");
+    NamesAndTypes columns_from_join(left_input_column);
+    columns_from_join.insert(columns_from_join.end(), right_input_column.cbegin(), right_input_column.cend());
+    appendExprs(buf, join.other_conditions(), columns_from_join);
+    buf.append("} other_eq_conditions_from_in: {");
+    appendExprs(buf, join.other_eq_conditions_from_in(), columns_from_join);
+    buf.append("})");
     return left_input_column;
 }
 
-NamesAndTypes & buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, NamesAndTypes & input_column, FmtBuffer & buf)
+NamesAndTypes buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, const NamesAndTypes & input_column, FmtBuffer & buf)
 {
     buf.append(executor_id).append(" (columns: {");
-    appendNamesAndTypes(buf, input_column).append("} partition_keys: {");
-    appendExprs(buf, exchange_sender.partition_keys(), input_column).append("} exchange_type: ");
+    appendNamesAndTypes(buf, input_column);
+    buf.append("} partition_keys: {");
+    appendExprs(buf, exchange_sender.partition_keys(), input_column);
+    buf.append("} exchange_type: ");
     buf.append(getExchangeTypeString(exchange_sender.tp())).append(")");
     return input_column;
 }
