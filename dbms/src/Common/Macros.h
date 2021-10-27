@@ -22,7 +22,7 @@ namespace DB
 class Macros
 {
 public:
-    Macros();
+    Macros() = default;
     Macros(const Poco::Util::AbstractConfiguration & config, const String & key);
 
     /** Replace the substring of the form {macro_name} with the value for macro_name, obtained from the config file.
@@ -35,7 +35,7 @@ public:
     Names expand(const Names & source_names, size_t level = 0) const;
 
     using MacroMap = std::map<String, String>;
-    const MacroMap getMacroMap() const { return macros; }
+    MacroMap getMacroMap() const { return macros; }
 
 private:
     MacroMap macros;
