@@ -806,27 +806,15 @@ MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezone
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
-    UInt32 micro_second = ts.tv_nsec / 1000;
 
-    if (fsp != 0)
-    {
-        String micro_second_str;
-        micro_second_str
-            .append(int_to_2_width_string[micro_second / 10000])
-            .append(int_to_2_width_string[micro_second % 10000 / 100])
-            .append(int_to_2_width_string[micro_second % 100]);
-        micro_second_str.resize(fsp);
-        micro_second = std::stoul(micro_second_str) * std::pow(10, 6 - fsp);
-    }
-    else
-    {
-        micro_second = 0;
-    }
+    time_t second = ts.tv_sec;
+    UInt32 nano_second = ts.tv_nsec;
+    UInt32 micro_second = getMicroSecondByFsp(second, nano_second, fsp);
 
     if (timezoneInfo.is_name_based)
-        return convertUTC2TimeZone(ts.tv_sec, micro_second, *timezoneInfo.timezone);
+        return convertUTC2TimeZone(second, micro_second, *timezoneInfo.timezone);
     else
-        return convertUTC2TimeZoneByOffset(ts.tv_sec, micro_second, timezoneInfo.timezone_offset, *timezoneInfo.timezone);
+        return convertUTC2TimeZoneByOffset(second, micro_second, timezoneInfo.timezone_offset, *timezoneInfo.timezone);
 }
 
 inline bool isZeroDate(UInt64 time)
@@ -876,6 +864,20 @@ MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64
 {
     time_t epoch = utc_ts + offset;
     return MyDateTime(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), micro_second);
+}
+
+UInt32 getMicroSecondByFsp(time_t & second, UInt32 nano_second, UInt8 fsp)
+{
+    UInt64 max_nano_second = std::pow(10, 9);
+    UInt64 scale = std::pow(10, 9 - fsp);
+    nano_second = (nano_second + scale / 2) / scale * scale;
+    if (nano_second >= max_nano_second)
+    {
+        auto extra_second = nano_second / max_nano_second;
+        nano_second = nano_second - extra_second * max_nano_second;
+        second += extra_second;
+    }
+    return nano_second / 1000;
 }
 
 // the implementation is the same as TiDB

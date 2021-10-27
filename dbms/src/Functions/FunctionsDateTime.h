@@ -2792,14 +2792,16 @@ struct SysDateWithFsp
 {
 public:
     static constexpr auto name = "sysDateWithFsp";
-    static constexpr auto arguments_number = 1;
+    static constexpr size_t arguments_number = 1;
+    static constexpr bool use_default_implementation_for_constants = false;
 };
 
 struct SysDateWithoutFsp
 {
 public:
     static constexpr auto name = "sysDateWithoutFsp";
-    static constexpr auto arguments_number = 0;
+    static constexpr size_t arguments_number = 0;
+    static constexpr bool use_default_implementation_for_constants = true;
 };
 
 template <typename Transform>
@@ -2818,13 +2820,38 @@ public:
         return Transform::arguments_number;
     }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes &) const override
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        return std::make_shared<DataTypeMyDateTime>();
+        if (arguments.size() != getNumberOfArguments())
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
+                                + toString(arguments.size()) + ", should be " + std::to_string(getNumberOfArguments()),
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        int fsp = 0;
+        if (1 == arguments.size())
+        {
+            if (auto fsp_column = checkAndGetColumnConst<ColumnInt64>(arguments[0].column.get()))
+            {
+                fsp = fsp_column->getInt(0);
+            }
+            else
+            {
+                throw TiFlashException(
+                    "First argument for function " + getName() + " must be constant Int64",
+                    Errors::Coprocessor::BadRequest);
+            }
+        }
+        return std::make_shared<DataTypeMyDateTime>(fsp);
     }
 
-    bool useDefaultImplementationForConstants() const override { return false; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
+    bool useDefaultImplementationForConstants() const override { return Transform::use_default_implementation_for_constants; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
+    {
+        if (0 == getNumberOfArguments())
+            return {};
+        else
+            return {0};
+    }
 
     static void array(const UInt64 sysdate_packet, const Int32 row_count, UInt64 * dst)
     {
@@ -2858,7 +2885,7 @@ public:
             else
             {
                 throw TiFlashException(
-                    "First argument for function " + getName() + " must be constant UInt8",
+                    "First argument for function " + getName() + " must be constant Int64",
                     Errors::Coprocessor::BadRequest);
             }
         }

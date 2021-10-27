@@ -169,6 +169,8 @@ MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUT
 
 MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64 offset, const DateLUTImpl & time_zone_to);
 
+UInt32 getMicroSecondByFsp(time_t & second, UInt32 nano_second, UInt8 fsp);
+
 int calcDayNum(int year, int month, int day);
 
 size_t maxFormattedDateTimeStringLength(const String & format);

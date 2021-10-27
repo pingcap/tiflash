@@ -100,5 +100,21 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     func->execute(block, cns, columns.size());
     return block.getByPosition(columns.size());
 }
+
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, ColumnNumbers argument_column_numbers, const ColumnsWithTypeAndName & columns)
+{
+    auto & factory = FunctionFactory::instance();
+    Block block(columns);
+    ColumnsWithTypeAndName arguments;
+    for (size_t i = 0; i < argument_column_numbers.size(); ++i)
+        arguments.push_back(columns.at(i));
+    auto bp = factory.tryGet(func_name, context);
+    if (!bp)
+        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+    auto func = bp->build(arguments);
+    block.insert({nullptr, func->getReturnType(), "res"});
+    func->execute(block, argument_column_numbers, columns.size());
+    return block.getByPosition(columns.size());
+}
 } // namespace tests
 } // namespace DB

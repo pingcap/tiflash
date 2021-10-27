@@ -23,32 +23,14 @@ class Sysdate : public DB::tests::FunctionTest
 protected:
     const int SECONDS_IN_ONE_DAY = 60 * 60 * 24;
 
-    ColumnWithTypeAndName executeFunctionWithTimezone(const String & func_name, const ColumnNumbers & arguments, const ColumnsWithTypeAndName & columns, const Int64 offset)
+    void setTimezoneByOffset(Int64 offset)
     {
-        Context contest = TiFlashTestEnv::getContext();
         auto & timezone_info = context.getTimezoneInfo();
         timezone_info.is_name_based = false;
-        timezone_info.timezone_offset = offset;
+        timezone_info.timezone_offset = offset * 3600;
         timezone_info.timezone = &DateLUT::instance("UTC");
         timezone_info.timezone_name = "";
         timezone_info.is_utc_timezone = offset == 0;
-
-        auto & factory = FunctionFactory::instance();
-        Block block(columns);
-        ColumnNumbers cns;
-        ColumnsWithTypeAndName argument_columns;
-        for (size_t i = 0; i < arguments.size(); ++i)
-        {
-            cns.push_back(arguments[i]);
-            argument_columns.push_back(columns.at(i));
-        }
-        auto bp = factory.tryGet(func_name, context);
-        if (!bp)
-            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-        auto func = bp->build(argument_columns);
-        block.insert({nullptr, func->getReturnType(), "res"});
-        func->execute(block, cns, columns.size());
-        return block.getByPosition(columns.size());
     }
 
     void ASSERT_FSP(UInt32 fsp, const MyDateTime & date_time) const
@@ -85,27 +67,20 @@ TEST_F(Sysdate, sysdate_unit_Test)
     UInt32 fsp = 3;
     auto data_column = createColumn<String>(std::vector<String>{"test"});
     auto fsp_column = createConstColumn<Int64>(1, fsp);
-    auto with_fsp_columns = {fsp_column, data_column};
-    auto without_fsp_columns = {data_column};
     ColumnNumbers with_fsp_arguments = {0};
     ColumnNumbers without_fsp_arguments = {};
 
-    ColumnWithTypeAndName without_fsp_col = executeFunctionWithTimezone("sysDateWithoutFsp", without_fsp_arguments, without_fsp_columns, 0);
+    setTimezoneByOffset(0);
+    auto without_fsp_col = executeFunction("sysDateWithoutFsp", without_fsp_arguments, data_column);
     UInt64 without_fsp_packed = without_fsp_col.column.get()->get64(0);
     MyDateTime without_fsp_date_time(without_fsp_packed);
 
 
-    ColumnWithTypeAndName with_fsp_col = executeFunctionWithTimezone("sysDateWithFsp", with_fsp_arguments, with_fsp_columns, 0);
+    auto with_fsp_col = executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column);
     UInt64 with_fsp_packed = with_fsp_col.column.get()->get64(0);
     MyDateTime with_fsp_date_time(with_fsp_packed);
 
-    TimezoneInfo timezone_info;
-    timezone_info.is_name_based = false;
-    timezone_info.timezone_offset = 0;
-    timezone_info.timezone = &DateLUT::instance("UTC");
-    timezone_info.timezone_name = "";
-    timezone_info.is_utc_timezone = true;
-    auto date_time = MyDateTime::getSystemDateTimeByTimezone(timezone_info, fsp);
+    auto date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), fsp);
 
     auto with_fsp_second_diff = (date_time.yearDay() - with_fsp_date_time.yearDay()) * SECONDS_IN_ONE_DAY + (date_time.hour - with_fsp_date_time.hour) * 60 * 60 + (date_time.minute - with_fsp_date_time.minute) * 60 + (date_time.second - with_fsp_date_time.second);
     auto with_out_fsp_second_diff = (date_time.yearDay() - without_fsp_date_time.yearDay()) * SECONDS_IN_ONE_DAY + (date_time.hour - without_fsp_date_time.hour) * 60 * 60 + (date_time.minute - without_fsp_date_time.minute) * 60 + (date_time.second - without_fsp_date_time.second);
@@ -119,11 +94,12 @@ TEST_F(Sysdate, fsp_unit_Test)
     auto data_column = createColumn<String>(std::vector<String>{"test"});
     ColumnNumbers with_fsp_arguments = {0};
 
+    setTimezoneByOffset(0);
+
     for (int fsp = 0; fsp <= 6; ++fsp)
     {
         auto fsp_column = createConstColumn<Int64>(1, fsp);
-        auto with_fsp_columns = {fsp_column, data_column};
-        ColumnWithTypeAndName with_fsp_col = executeFunctionWithTimezone("sysDateWithFsp", with_fsp_arguments, with_fsp_columns, 0);
+        ColumnWithTypeAndName with_fsp_col = executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column);
         UInt64 with_fsp_packed = with_fsp_col.column.get()->get64(0);
         MyDateTime with_fsp_date_time(with_fsp_packed);
         ASSERT_FSP(fsp, with_fsp_date_time);
@@ -132,26 +108,20 @@ TEST_F(Sysdate, fsp_unit_Test)
 
 TEST_F(Sysdate, timezone_unit_Test)
 {
-    UInt32 fsp = 3;
-    TimezoneInfo timezone_info;
-    timezone_info.is_name_based = false;
-    timezone_info.timezone_offset = 0;
-    timezone_info.timezone = &DateLUT::instance("UTC");
-    timezone_info.timezone_name = "";
-    timezone_info.is_utc_timezone = true;
-    auto date_time = MyDateTime::getSystemDateTimeByTimezone(timezone_info, fsp);
+    int fsp = 3;
+    setTimezoneByOffset(0);
+    auto date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), 3);
 
     auto data_column = createColumn<String>(std::vector<String>{"test"});
     auto fsp_column = createConstColumn<Int64>(1, fsp);
-    auto with_fsp_columns = {fsp_column, data_column};
-    auto without_fsp_columns = {data_column};
     ColumnNumbers with_fsp_arguments = {0};
     ColumnNumbers without_fsp_arguments = {};
 
     for (int i = 1; i < 8; ++i)
     {
-        ASSERT_CHECK_SYSDATE(date_time, executeFunctionWithTimezone("sysDateWithFsp", with_fsp_arguments, with_fsp_columns, i * 3600), i);
-        ASSERT_CHECK_SYSDATE(date_time, executeFunctionWithTimezone("sysDateWithoutFsp", without_fsp_arguments, without_fsp_columns, i * 3600), i);
+        setTimezoneByOffset(i);
+        ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column), i);
+        ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithoutFsp", without_fsp_arguments, data_column), i);
     }
 }
 } // namespace DB::tests
