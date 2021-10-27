@@ -75,10 +75,16 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "\t aa \t", "", {}}),
         executeFunction("tidbLTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"xx aa", "xxaa xx ", "\t aa \t", "", {}}),
+        executeFunction("tidbLTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}})));
     // rtrim(column)
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}}),
         executeFunction("tidbRTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}})));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}}),
+        executeFunction("tidbRTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}})));
 }
 CATCH
 
