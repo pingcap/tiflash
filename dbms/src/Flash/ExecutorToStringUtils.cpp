@@ -68,7 +68,7 @@ inline StringRef getJoinTypeString(tipb::JoinType join_type)
 }
 } // namespace
 
-NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & ts, Context & context, FmtBuffer & buf)
+void buildTSString(const String & executor_id, const tipb::TableScan & ts, BuildContext & build_context)
 {
     if (!ts.has_table_id())
     {
@@ -76,7 +76,7 @@ NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & 
         throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
     }
     TableID table_id = ts.table_id();
-    auto & tmt_ctx = context.getTMTContext();
+    auto & tmt_ctx = build_context.context.getTMTContext();
     auto storage = tmt_ctx.getStorages().get(table_id);
     if (storage == nullptr)
     {
@@ -88,7 +88,7 @@ NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & 
         // no column selected, must be something wrong
         throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
-    NamesAndTypes columns_from_ts;
+    NamesAndTypes & columns_from_ts = build_context.newSchema();
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
@@ -105,62 +105,63 @@ NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & 
         auto pair = storage->getColumns().getPhysical(name);
         columns_from_ts.push_back(pair);
     }
+    FmtBuffer & buf = build_context.buf;
     buf.append(executor_id).append(" (");
     buf.append(storage->getDatabaseName()).append(".").append(storage->getTableName());
     buf.append(" columns: {");
     appendNamesAndTypes(buf, columns_from_ts);
     buf.append("})");
-    return columns_from_ts;
 }
 
-NamesAndTypes buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, FmtBuffer & buf)
+void buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, BuildContext & build_context)
 {
-    NamesAndTypes columns_from_exchange_receiver;
+    NamesAndTypes & columns_from_exchange_receiver = build_context.newSchema();
     for (int i = 0; i != exchange_receiver.field_types_size(); ++i)
     {
         String name = executor_id + "_" + std::to_string(i);
         auto type = getDataTypeByFieldType(exchange_receiver.field_types(i));
         columns_from_exchange_receiver.emplace_back(name, type);
     }
+    FmtBuffer & buf = build_context.buf;
     buf.append(executor_id).append(" (columns: {");
     appendNamesAndTypes(buf, columns_from_exchange_receiver);
     buf.append("} exchange_type: ");
     buf.append(getExchangeTypeString(exchange_receiver.tp())).append(")");
-    return columns_from_exchange_receiver;
 }
 
-NamesAndTypes buildSelString(const String & executor_id, const tipb::Selection & sel, const NamesAndTypes & input_column, FmtBuffer & buf)
+void buildSelString(const String & executor_id, const tipb::Selection & sel, BuildContext & build_context)
 {
+    FmtBuffer & buf = build_context.buf;
     buf.append(executor_id).append(" (conditions: {");
-    appendExprs(buf, sel.conditions(), input_column);
+    appendExprs(buf, sel.conditions(), build_context.schema());
     buf.append("})");
-    return input_column;
 }
 
-NamesAndTypes buildLimitString(const String & executor_id, const tipb::Limit & limit, const NamesAndTypes & input_column, FmtBuffer & buf)
+void buildLimitString(const String & executor_id, const tipb::Limit & limit, BuildContext & build_context)
 {
-    buf.append(executor_id).fmtAppend(" (limit: {}", limit.limit()).append(")");
-    return input_column;
+    build_context.buf.append(executor_id).fmtAppend(" (limit: {}", limit.limit()).append(")");
 }
 
-NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection & proj, const NamesAndTypes & input_column, FmtBuffer & buf)
+void buildProjString(const String & executor_id, const tipb::Projection & proj, BuildContext & build_context)
 {
-    NamesAndTypes columns_from_proj;
+    NamesAndTypes input_column = build_context.popBackSchema();
+    NamesAndTypes & columns_from_proj = build_context.newSchema();
     for (const auto & expr : proj.exprs())
     {
         auto name = exprToString(expr, input_column);
         auto type = getDataTypeByFieldType(expr.field_type());
         columns_from_proj.emplace_back(name, type);
     }
+    FmtBuffer & buf = build_context.buf;
     buf.append(executor_id).append(" (exprs: {");
     appendNamesAndTypes(buf, columns_from_proj);
     buf.append("})");
-    return columns_from_proj;
 }
 
-NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation & agg, const NamesAndTypes & input_column, FmtBuffer & buf)
+void buildAggString(const String & executor_id, const tipb::Aggregation & agg, BuildContext & build_context)
 {
-    NamesAndTypes columns_from_agg;
+    NamesAndTypes input_column = build_context.popBackSchema();
+    NamesAndTypes & columns_from_agg = build_context.newSchema();
     for (const auto & agg_func : agg.agg_func())
     {
         if (!agg_func.has_field_type())
@@ -169,6 +170,7 @@ NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation
         auto type = getDataTypeByFieldType(agg_func.field_type());
         columns_from_agg.emplace_back(name, type);
     }
+    FmtBuffer & buf = build_context.buf;
     buf.append(executor_id).append(" (agg_funcs: {");
     appendNamesAndTypes(buf, columns_from_agg);
     buf.append("} group_by: {");
@@ -185,19 +187,24 @@ NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation
         appendExprs(buf, agg.group_by(), input_column);
     }
     buf.append("})");
-    return columns_from_agg;
 }
 
-NamesAndTypes buildTopNString(const String & executor_id, const tipb::TopN & top_n, const NamesAndTypes & input_column, FmtBuffer & buf)
+void buildTopNString(const String & executor_id, const tipb::TopN & top_n, BuildContext & build_context)
 {
+    FmtBuffer & buf = build_context.buf;
     buf.append(executor_id).fmtAppend(" (limit: {}", top_n.limit()).append(" order_by: {");
-    appendByItems(buf, top_n.order_by(), input_column);
+    appendByItems(buf, top_n.order_by(), build_context.schema());
     buf.append("})");
-    return input_column;
 }
 
-NamesAndTypes buildJoinString(const String & executor_id, const tipb::Join & join, const NamesAndTypes & left_input_column, const NamesAndTypes & right_input_column, FmtBuffer & buf)
+void buildJoinString(const String & executor_id, const tipb::Join & join, BuildContext & build_context)
 {
+    auto & buf = build_context.buf;
+    if (build_context.schemas.size() < 2)
+        throw TiFlashException("schemas.size() should >= 2", Errors::Coprocessor::Internal);
+    auto right_input_column = build_context.popBackSchema();
+    auto & left_input_column = build_context.schema();
+
     StringRef join_type = join.has_join_type() ? getJoinTypeString(join.join_type()) : "unknown";
     buf.append(executor_id).append(" (join_type: ").append(join_type).append(" left_join_keys: {");
     appendExprs(buf, join.left_join_keys(), left_input_column);
@@ -208,24 +215,25 @@ NamesAndTypes buildJoinString(const String & executor_id, const tipb::Join & joi
     buf.append("} right_conditions: {");
     appendExprs(buf, join.right_conditions(), right_input_column);
     buf.append("} other_conditions: {");
-    NamesAndTypes columns_from_join(left_input_column);
+
+    NamesAndTypes & columns_from_join = left_input_column;
     columns_from_join.insert(columns_from_join.end(), right_input_column.cbegin(), right_input_column.cend());
+
     appendExprs(buf, join.other_conditions(), columns_from_join);
     buf.append("} other_eq_conditions_from_in: {");
     appendExprs(buf, join.other_eq_conditions_from_in(), columns_from_join);
     buf.append("})");
-    return left_input_column;
 }
 
-NamesAndTypes buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, const NamesAndTypes & input_column, FmtBuffer & buf)
+void buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, BuildContext & build_context)
 {
+    auto & buf = build_context.buf;
     buf.append(executor_id).append(" (columns: {");
-    appendNamesAndTypes(buf, input_column);
+    appendNamesAndTypes(buf, build_context.schema());
     buf.append("} partition_keys: {");
-    appendExprs(buf, exchange_sender.partition_keys(), input_column);
+    appendExprs(buf, exchange_sender.partition_keys(), build_context.schema());
     buf.append("} exchange_type: ");
     buf.append(getExchangeTypeString(exchange_sender.tp())).append(")");
-    return input_column;
 }
 
 } // namespace DB

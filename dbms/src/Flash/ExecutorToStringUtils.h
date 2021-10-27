@@ -12,16 +12,45 @@ namespace DB
 {
 class Context;
 
-NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & ts, Context & context, FmtBuffer & buf);
-NamesAndTypes buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, FmtBuffer & buf);
+struct BuildContext
+{
+    Context & context;
+    FmtBuffer & buf;
 
-NamesAndTypes buildSelString(const String & executor_id, const tipb::Selection & sel, const NamesAndTypes & input_column, FmtBuffer & buf);
-NamesAndTypes buildLimitString(const String & executor_id, const tipb::Limit & limit, const NamesAndTypes & input_column, FmtBuffer & buf);
-NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection & proj, const NamesAndTypes & input_column, FmtBuffer & buf);
-NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation & agg, const NamesAndTypes & input_column, FmtBuffer & buf);
-NamesAndTypes buildTopNString(const String & executor_id, const tipb::TopN & top_n, const NamesAndTypes & input_column, FmtBuffer & buf);
-NamesAndTypes buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, const NamesAndTypes & input_column, FmtBuffer & buf);
+    BuildContext(Context & context_, FmtBuffer & buf_)
+        : context(context_)
+        , buf(buf_)
+    {}
 
-NamesAndTypes buildJoinString(const String & executor_id, const tipb::Join & join, const NamesAndTypes & left_input_column, const NamesAndTypes & right_input_column, FmtBuffer & buf);
+    std::vector<NamesAndTypes> schemas;
+
+    NamesAndTypes & schema()
+    {
+        return schemas.back();
+    }
+
+    NamesAndTypes popBackSchema()
+    {
+        NamesAndTypes pop_back_schema = schema();
+        schemas.pop_back();
+        return pop_back_schema;
+    }
+
+    NamesAndTypes & newSchema()
+    {
+        schemas.emplace_back();
+        return schema();
+    }
+};
+
+void buildTSString(const String & executor_id, const tipb::TableScan & ts, BuildContext & build_context);
+void buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, BuildContext & build_context);
+void buildSelString(const String & executor_id, const tipb::Selection & sel, BuildContext & build_context);
+void buildLimitString(const String & executor_id, const tipb::Limit & limit, BuildContext & build_context);
+void buildProjString(const String & executor_id, const tipb::Projection & proj, BuildContext & build_context);
+void buildAggString(const String & executor_id, const tipb::Aggregation & agg, BuildContext & build_context);
+void buildTopNString(const String & executor_id, const tipb::TopN & top_n, BuildContext & build_context);
+void buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, BuildContext & build_context);
+void buildJoinString(const String & executor_id, const tipb::Join & join, BuildContext & build_context);
 
 } // namespace DB

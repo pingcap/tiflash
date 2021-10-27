@@ -35,113 +35,106 @@ String genPrefixString(size_t level)
     return String(2 * level, ' ');
 }
 
-NamesAndTypes buildString(const tipb::Executor & executor, FmtBuffer & buf, size_t & level, Context & context);
+void buildString(const tipb::Executor & executor, size_t & level, BuildContext & build_context);
 
 template <typename Unary, typename FF>
-NamesAndTypes buildUnaryExecutor(const Unary & unary, FmtBuffer & buf, size_t & level, Context & context, FF && build_self_func)
+void buildUnaryExecutor(const Unary & unary, size_t & level, BuildContext & build_context, FF && build_self_func)
 {
-    auto input_column = buildString(unary.child(), buf, level, context);
+    auto & buf = build_context.buf;
+    buildString(unary.child(), level, build_context);
     String child_str = buf.toString();
     buf.clear();
 
     buf.append(genPrefixString(level));
-    auto output_column = build_self_func(buf, input_column);
+    build_self_func();
     buf.append("\n").append(child_str);
-    return output_column;
 }
 
-NamesAndTypes buildTSString(const String & executor_id, const tipb::TableScan & ts, FmtBuffer & buf, size_t & level, Context & context)
+void buildTSString(const String & executor_id, const tipb::TableScan & ts, size_t & level, BuildContext & build_context)
 {
-    buf.append(genPrefixString(level));
-    return buildTSString(executor_id, ts, context, buf);
+    build_context.buf.append(genPrefixString(level));
+    buildTSString(executor_id, ts, build_context);
 }
 
-NamesAndTypes buildSelString(const String & executor_id, const tipb::Selection & sel, FmtBuffer & buf, size_t & level, Context & context)
+void buildSelString(const String & executor_id, const tipb::Selection & sel, size_t & level, BuildContext & build_context)
 {
-    return buildUnaryExecutor(
+    buildUnaryExecutor(
         sel,
-        buf,
         level,
-        context,
-        [&](FmtBuffer & fb, NamesAndTypes & input_column) { return buildSelString(executor_id, sel, input_column, fb); });
+        build_context,
+        [&]() { buildSelString(executor_id, sel, build_context); });
 }
 
-NamesAndTypes buildLimitString(const String & executor_id, const tipb::Limit & limit, FmtBuffer & buf, size_t & level, Context & context)
+void buildLimitString(const String & executor_id, const tipb::Limit & limit, size_t & level, BuildContext & build_context)
 {
-    return buildUnaryExecutor(
+    buildUnaryExecutor(
         limit,
-        buf,
         level,
-        context,
-        [&](FmtBuffer & fb, NamesAndTypes & input_column) { return buildLimitString(executor_id, limit, input_column, fb); });
+        build_context,
+        [&]() { buildLimitString(executor_id, limit, build_context); });
 }
 
-NamesAndTypes buildProjString(const String & executor_id, const tipb::Projection & proj, FmtBuffer & buf, size_t & level, Context & context)
+void buildProjString(const String & executor_id, const tipb::Projection & proj, size_t & level, BuildContext & build_context)
 {
-    return buildUnaryExecutor(
+    buildUnaryExecutor(
         proj,
-        buf,
         level,
-        context,
-        [&](FmtBuffer & fb, NamesAndTypes & input_column) { return buildProjString(executor_id, proj, input_column, fb); });
+        build_context,
+        [&]() { buildProjString(executor_id, proj, build_context); });
 }
 
-NamesAndTypes buildAggString(const String & executor_id, const tipb::Aggregation & agg, FmtBuffer & buf, size_t & level, Context & context)
+void buildAggString(const String & executor_id, const tipb::Aggregation & agg, size_t & level, BuildContext & build_context)
 {
-    return buildUnaryExecutor(
+    buildUnaryExecutor(
         agg,
-        buf,
         level,
-        context,
-        [&](FmtBuffer & fb, NamesAndTypes & input_column) { return buildAggString(executor_id, agg, input_column, fb); });
+        build_context,
+        [&]() { buildAggString(executor_id, agg, build_context); });
 }
 
-NamesAndTypes buildTopNString(const String & executor_id, const tipb::TopN & top_n, FmtBuffer & buf, size_t & level, Context & context)
+void buildTopNString(const String & executor_id, const tipb::TopN & top_n, size_t & level, BuildContext & build_context)
 {
-    return buildUnaryExecutor(
+    buildUnaryExecutor(
         top_n,
-        buf,
         level,
-        context,
-        [&](FmtBuffer & fb, NamesAndTypes & input_column) { return buildTopNString(executor_id, top_n, input_column, fb); });
+        build_context,
+        [&]() { buildTopNString(executor_id, top_n, build_context); });
 }
 
-NamesAndTypes buildJoinString(const String & executor_id, const tipb::Join & join, FmtBuffer & buf, size_t & level, Context & context)
+void buildJoinString(const String & executor_id, const tipb::Join & join, size_t & level, BuildContext & build_context)
 {
     if (join.children_size() != 2)
         throw TiFlashException("Join executor children size not equal to 2", Errors::Coprocessor::BadRequest);
 
-    auto left_input_column = buildString(join.children(0), buf, level, context);
+    auto & buf = build_context.buf;
+    buildString(join.children(0), level, build_context);
     String left_child_str = buf.toString();
     buf.clear();
-    auto right_input_column = buildString(join.children(1), buf, level, context);
+    buildString(join.children(1), level, build_context);
     String right_child_str = buf.toString();
     buf.clear();
 
     buf.append(genPrefixString(level));
-    auto output_column = buildJoinString(executor_id, join, left_input_column, right_input_column, buf);
+    buildJoinString(executor_id, join, build_context);
     buf.append("\n").append(left_child_str).append("\n").append(right_child_str);
-
-    return output_column;
 }
 
-NamesAndTypes buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, FmtBuffer & buf, size_t & level, Context & context)
+void buildExchangeSenderString(const String & executor_id, const tipb::ExchangeSender & exchange_sender, size_t & level, BuildContext & build_context)
 {
-    return buildUnaryExecutor(
+    buildUnaryExecutor(
         exchange_sender,
-        buf,
         level,
-        context,
-        [&](FmtBuffer & fb, NamesAndTypes & input_column) { return buildExchangeSenderString(executor_id, exchange_sender, input_column, fb); });
+        build_context,
+        [&]() { buildExchangeSenderString(executor_id, exchange_sender, build_context); });
 }
 
-NamesAndTypes buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, FmtBuffer & buf, size_t & level)
+void buildExchangeReceiverString(const String & executor_id, const tipb::ExchangeReceiver & exchange_receiver, size_t & level, BuildContext & build_context)
 {
-    buf.append(genPrefixString(level));
-    return buildExchangeReceiverString(executor_id, exchange_receiver, buf);
+    build_context.buf.append(genPrefixString(level));
+    buildExchangeReceiverString(executor_id, exchange_receiver, build_context);
 }
 
-NamesAndTypes buildString(const tipb::Executor & executor, FmtBuffer & buf, size_t & level, Context & context)
+void buildString(const tipb::Executor & executor, size_t & level, BuildContext & build_context)
 {
     if (!executor.has_executor_id())
         throw TiFlashException("Tree struct based executor must have executor id", Errors::Coprocessor::BadRequest);
@@ -150,28 +143,37 @@ NamesAndTypes buildString(const tipb::Executor & executor, FmtBuffer & buf, size
     switch (executor.tp())
     {
     case tipb::ExecType::TypeTableScan:
-        return buildTSString(executor.executor_id(), executor.tbl_scan(), buf, level, context);
+        buildTSString(executor.executor_id(), executor.tbl_scan(), level, build_context);
+        break;
     case tipb::ExecType::TypeJoin:
-        return buildJoinString(executor.executor_id(), executor.join(), buf, level, context);
+        buildJoinString(executor.executor_id(), executor.join(), level, build_context);
+        break;
     case tipb::ExecType::TypeIndexScan:
         // index scan not supported
         throw TiFlashException("IndexScan is not supported", Errors::Coprocessor::Unimplemented);
     case tipb::ExecType::TypeSelection:
-        return buildSelString(executor.executor_id(), executor.selection(), buf, level, context);
+        buildSelString(executor.executor_id(), executor.selection(), level, build_context);
+        break;
     case tipb::ExecType::TypeAggregation:
     // stream agg is not supported, treated as normal agg
     case tipb::ExecType::TypeStreamAgg:
-        return buildAggString(executor.executor_id(), executor.aggregation(), buf, level, context);
+        buildAggString(executor.executor_id(), executor.aggregation(), level, build_context);
+        break;
     case tipb::ExecType::TypeTopN:
-        return buildTopNString(executor.executor_id(), executor.topn(), buf, level, context);
+        buildTopNString(executor.executor_id(), executor.topn(), level, build_context);
+        break;
     case tipb::ExecType::TypeLimit:
-        return buildLimitString(executor.executor_id(), executor.limit(), buf, level, context);
+        buildLimitString(executor.executor_id(), executor.limit(), level, build_context);
+        break;
     case tipb::ExecType::TypeProjection:
-        return buildProjString(executor.executor_id(), executor.projection(), buf, level, context);
+        buildProjString(executor.executor_id(), executor.projection(), level, build_context);
+        break;
     case tipb::ExecType::TypeExchangeSender:
-        return buildExchangeSenderString(executor.executor_id(), executor.exchange_sender(), buf, level, context);
+        buildExchangeSenderString(executor.executor_id(), executor.exchange_sender(), level, build_context);
+        break;
     case tipb::ExecType::TypeExchangeReceiver:
-        return buildExchangeReceiverString(executor.executor_id(), executor.exchange_receiver(), buf, level);
+        buildExchangeReceiverString(executor.executor_id(), executor.exchange_receiver(), level, build_context);
+        break;
     case tipb::ExecType::TypeKill:
         throw TiFlashException("Kill executor is not supported", Errors::Coprocessor::Unimplemented);
     default:
@@ -187,8 +189,9 @@ String MPPStringConverter::buildMPPString()
 
     const tipb::Executor & executor = dag_request.root_executor();
     FmtBuffer mpp_buf;
+    BuildContext build_context{context, mpp_buf};
     size_t level = 0;
-    buildString(executor, mpp_buf, level, context);
+    buildString(executor, level, build_context);
     return mpp_buf.toString();
 }
 
