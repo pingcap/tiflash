@@ -3,6 +3,7 @@
 #include <Common/ThreadFactory.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -18,7 +19,8 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     const mpp::TaskMeta & sender_meta_,
     const std::chrono::seconds timeout_,
     TaskCancelledCallback callback,
-    int input_steams_num_)
+    int input_steams_num_,
+    const LogWithPrefixPtr & log_)
     : connected(false)
     , finished(false)
     , timeout(timeout_)
@@ -28,7 +30,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
-    , log(&Poco::Logger::get(tunnel_id))
+    , log(getMPPTaskLog(log_, tunnel_id))
 {
 }
 

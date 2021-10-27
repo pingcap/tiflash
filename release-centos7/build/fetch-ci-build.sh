@@ -2,7 +2,10 @@
 
 set -ueox pipefail
 
-SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+SCRIPTPATH="$(
+  cd "$(dirname "$0")"
+  pwd -P
+)"
 source ${SCRIPTPATH}/env.sh
 
 DOWNLOAD_TAR=${DOWNLOAD_TAR:-false}
@@ -14,7 +17,7 @@ TAR_BIN_URL="${TIFLASH_CI_BUILD_PRE_FIX}/${PULL_ID}/tiflash.tar.gz"
 COMMIT_HASH_FILE_URL="${TIFLASH_CI_BUILD_PRE_FIX}/${PULL_ID}/commit-hash"
 while [[ true ]]; do
   curl -o ./commit-hash ${COMMIT_HASH_FILE_URL}
-  if [[ `grep -c "${CI_BUILD_INFO_PRE_FIX}" ./commit-hash` -ne '0' ]];then
+  if [[ $(grep -c "${CI_BUILD_INFO_PRE_FIX}" ./commit-hash) -ne '0' ]]; then
     COMMIT_HASH_VAL=$(tail -n -1 ./commit-hash)
     if [[ ${COMMIT_HASH_VAL} == ${COMMIT_HASH} ]]; then
       if [[ ${DOWNLOAD_TAR} == "true" ]]; then
