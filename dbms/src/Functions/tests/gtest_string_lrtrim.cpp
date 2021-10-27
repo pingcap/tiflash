@@ -4,6 +4,7 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
 #include <string>
 
 namespace DB
