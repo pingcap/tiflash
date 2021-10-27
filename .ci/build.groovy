@@ -1,8 +1,6 @@
 catchError {
     def util = load('util.groovy')
 
-    def label = "build-tics"
-
     def tiflashTag = ({
         def m = ghprbCommentBody =~ /tiflash\s*=\s*([^\s\\]+)(\s|\\|$)/
         if (m) {
@@ -11,63 +9,24 @@ catchError {
         return params.tiflashTag ?: ghprbTargetBranch ?: 'master'
     }).call()
 
-    podTemplate(name: label, label: label, instanceCap: 5,
-            workspaceVolume: emptyDirWorkspaceVolume(memory: true),
-            nodeSelector: 'role_type=slave',
-            containers: [
-                    containerTemplate(name: 'dockerd', image: 'docker:18.09.6-dind', privileged: true),
-                    containerTemplate(name: 'docker', image: 'hub.pingcap.net/jenkins/docker:build-essential',
-                            alwaysPullImage: true, envVars: [
-                            envVar(key: 'DOCKER_HOST', value: 'tcp://localhost:2375'),
-                    ], ttyEnabled: true, command: 'cat'),
-                    containerTemplate(name: 'builder', image: 'hub.pingcap.net/tiflash/tiflash-builder-ci',
-                            alwaysPullImage: true, ttyEnabled: true, command: 'cat',
-                            resourceRequestCpu: '4000m', resourceRequestMemory: '8Gi',
-                            resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
-            ],
-            volumes: [
-                    nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
-                            serverPath: '/mnt/ci.pingcap.net-nfs/git', readOnly: false),
-            ]
-) {
+    def CURWS = pwd()
 
-        node(label) {
+    def NPROC = 5
 
-            dir("tics") {
-                stage("Checkout") {
-                    container("docker") {
-                        def repoDailyCache = "/home/jenkins/agent/ci-cached-code-daily/src-tics.tar.gz"
-                        if (fileExists(repoDailyCache)) {
-                            println "get code from nfs to reduce clone time"
-                            sh """
-                            cp -R ${repoDailyCache}  ./
-                            tar -xzf ${repoDailyCache} --strip-components=1
-                            rm -f src-tics.tar.gz
-                            """
-                            sh "chown -R 1000:1000 ./"
-                        }    
-                    }
-                    util.checkoutTiCSFull("${ghprbActualCommit}", "${ghprbPullId}")
-                }
-                stage("Build") {
-                    timeout(time: 70, unit: 'MINUTES') {
-                        container("builder") {
-                            sh "NPROC=5 BUILD_BRANCH=${ghprbTargetBranch} ENABLE_FORMAT_CHECK=true release-centos7/build/build-tiflash-ci.sh"
-                        }
+    util.runWithTiCSFull("build-tics", CURWS) {
+        dir("${CURWS}/tics") {
+            stage("Build & Upload") {
+                timeout(time: 70, unit: 'MINUTES') {
+                    container("builder") {
+                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} ENABLE_FORMAT_CHECK=true ${CURWS}/tics/release-centos7/build/build-tiflash-ci.sh"
+                        sh "PULL_ID=${ghprbPullId} COMMIT_HASH=${ghprbActualCommit} ${CURWS}/tics/release-centos7/build/upload-ci-build.sh"
                     }
                 }
-                stage("Static Analysis") {
-                    timeout(time: 360, unit: 'MINUTES') {
-                        container("builder") {
-                            echo "NPROC=5 /build/tics/release-centos7/build/static-analysis.sh"
-                        }
-                    }
-                }
-                stage("Upload") {
-                    timeout(time: 10, unit: 'MINUTES') {
-                        container("builder") {
-                            sh "PULL_ID=${ghprbPullId} COMMIT_HASH=${ghprbActualCommit} release-centos7/build/upload-ci-build.sh"
-                        }
+            }
+            stage("Static Analysis") {
+                timeout(time: 360, unit: 'MINUTES') {
+                    container("builder") {
+                        echo "NPROC=${NPROC} /build/tics/release-centos7/build/static-analysis.sh"
                     }
                 }
             }
