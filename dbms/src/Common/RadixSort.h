@@ -28,12 +28,12 @@
   */
 struct RadixSortMallocAllocator
 {
-    void * allocate(size_t size)
+    static void * allocate(size_t size)
     {
         return malloc(size);
     }
 
-    void deallocate(void * ptr, size_t /*size*/)
+    static void deallocate(void * ptr, size_t /*size*/)
     {
         return free(ptr);
     }
