@@ -2878,14 +2878,15 @@ public:
         UInt8 fsp = 0;
         if (arguments.size() == 1)
         {
-            if (auto fsp_column = checkAndGetColumnConst<ColumnInt64>(block.getByPosition(arguments[0]).column.get()))
+            auto fsp_column = block.getByPosition(arguments[0]).column.get();
+            if (fsp_column->isNumeric() && fsp_column->isColumnConst())
             {
                 fsp = fsp_column->getInt(0);
             }
             else
             {
                 throw TiFlashException(
-                    "First argument for function " + getName() + " must be constant Int64",
+                    "First argument for function " + getName() + " must be constant number",
                     Errors::Coprocessor::BadRequest);
             }
         }

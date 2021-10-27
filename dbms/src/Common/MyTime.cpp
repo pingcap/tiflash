@@ -866,7 +866,7 @@ MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64
     return MyDateTime(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), micro_second);
 }
 
-UInt32 getMicroSecondByFsp(time_t & second, UInt32 nano_second, UInt8 fsp)
+UInt32 getMicroSecondByFsp(time_t & second, UInt64 nano_second, UInt8 fsp)
 {
     UInt64 max_nano_second = std::pow(10, 9);
     UInt64 scale = std::pow(10, 9 - fsp);

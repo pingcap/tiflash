@@ -1,4 +1,4 @@
-#include <DataTypes/DataTypeFixedString.h>
+#include <Common/MyTime.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -91,6 +91,18 @@ TEST_F(Sysdate, sysdate_unit_Test)
 
 TEST_F(Sysdate, fsp_unit_Test)
 {
+    std::vector<time_t> expect_seconds{13, 13, 12, 12, 12, 12, 12};
+    std::vector<UInt32> expect_micro_seconds{0, 0, 990000, 988000, 987700, 987650, 987654};
+
+    for (int fsp = 0; fsp <= 6; ++fsp)
+    {
+        time_t second = 12;
+        UInt64 nano_second = 987654321;
+        UInt32 micro_second = getMicroSecondByFsp(second, nano_second, fsp);
+        ASSERT_EQ(expect_seconds.at(fsp), second);
+        ASSERT_EQ(expect_micro_seconds.at(fsp), micro_second);
+    }
+
     auto data_column = createColumn<String>(std::vector<String>{"test"});
     ColumnNumbers with_fsp_arguments = {0};
 
