@@ -21,8 +21,9 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
     const LogWithPrefixPtr & log_)
-    : params(params_)
-    , aggregator(params)
+    : log(getMPPTaskLog(log_, getName()))
+    , params(params_)
+    , aggregator(params, log)
     , file_provider(file_provider_)
     , final(final_)
     , max_threads(std::min(inputs.size(), max_threads_))
@@ -31,7 +32,6 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , aggregates_size(params.aggregates_size)
     , handler(*this)
     , processor(inputs, additional_input_at_end, max_threads, handler)
-    , log(getMPPTaskLog(log_, getName()))
 {
     children = inputs;
     if (additional_input_at_end)
@@ -103,7 +103,8 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 params,
                 final,
                 temporary_data_merge_threads,
-                temporary_data_merge_threads);
+                temporary_data_merge_threads,
+                log);
         }
 
         executed = true;

@@ -11,7 +11,7 @@ namespace tests
 TEST(PageFile_test, Compare)
 {
     // clean up
-    const String path = TiFlashTestEnv::getTemporaryPath() + "/page_file_test";
+    const String path = TiFlashTestEnv::getTemporaryPath("pageFileCompare");
     {
         if (Poco::File p(path); p.exists())
         {
@@ -42,7 +42,7 @@ TEST(PageFile_test, Compare)
     ASSERT_EQ(comp(pf0, pf1), true);
     ASSERT_EQ(comp(pf1, pf0), false);
 
-    // Checkpoin file is less than formal file
+    // Checkpoint file is less than formal file
     ASSERT_EQ(comp(checkpoint_pf, pf0), true);
     ASSERT_EQ(comp(pf0, checkpoint_pf), false);
 
@@ -64,6 +64,7 @@ TEST(PageFile_test, Compare)
     ASSERT_TRUE(PageFile::isPageFileExist(pf0.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
     ASSERT_TRUE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
     ASSERT_FALSE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Legacy, log));
+
     // set pf1 to legacy and check exist
     pf1.setLegacy();
     ASSERT_FALSE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));

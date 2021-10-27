@@ -131,7 +131,7 @@ public:
     {
         if (mask & registed_masks)
         {
-            fmt::print(stderr, "Current mask is {}, you can not register mask {}.\n", registed_masks, mask);
+            fmt::print(stderr, "Current mask is {}, you can not register mask {}. ", registed_masks, mask);
             assert(false);
         }
         registed_masks |= mask;
@@ -142,18 +142,18 @@ public:
     {
         auto it = funcs.find(mask);
         if (it == funcs.end())
-            throw DB::Exception(fmt::format("Not registed workload. mask {} . ", mask));
+            throw DB::Exception(fmt::format("Not registed workload. Mask: {}. ", mask));
         return it->second;
     }
 
     String toWorkloadSelctedString() const
     {
-        String debug_string = "Selected Workloads : \n";
+        String debug_string = "Selected Workloads : ";
         for (const auto & it : funcs)
         {
             if (options.situation_mask & it.first)
             {
-                debug_string += fmt::format("   Name : {} , mask : {}. \n", it.second.first, it.first);
+                debug_string += fmt::format("   Name: {}, Mask: {}. ", it.second.first, it.first);
             }
         }
         return debug_string;
@@ -164,7 +164,7 @@ public:
         String debug_string = "Support Workloads: \n";
         for (const auto & it : funcs)
         {
-            debug_string += fmt::format("   Name: {}, mask :{}. \n", it.second.first, it.first);
+            debug_string += fmt::format("   Name: {}, mask: {}. \n", it.second.first, it.first);
         }
         debug_string += fmt::format("   Need to run all over? try use `-M {}`", registed_masks);
         return debug_string;
