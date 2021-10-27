@@ -74,9 +74,7 @@ using Poco::FileChannel;
 using Poco::FormattingChannel;
 using Poco::Logger;
 using Poco::Message;
-using Poco::Observer;
 using Poco::Path;
-using Poco::SplitterChannel;
 using Poco::Util::AbstractConfiguration;
 
 
@@ -577,7 +575,7 @@ static void terminate_handler()
         char const * name = t->name();
         {
             int status = -1;
-            char * dem = 0;
+            char * dem = nullptr;
 
             dem = abi::__cxa_demangle(name, 0, 0, &status);
 
@@ -1097,7 +1095,7 @@ void BaseDaemon::initialize(Application & self)
 
     logRevision();
 
-    signal_listener.reset(new SignalListener(*this));
+    signal_listener = std::make_unique<SignalListener>(*this);
     signal_listener_thread.start(*signal_listener);
 
     for (const auto & key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
@@ -1108,6 +1106,7 @@ void BaseDaemon::initialize(Application & self)
 
 void BaseDaemon::logRevision() const
 {
+    Logger::root().information("Welcome to TiFlash");
     Logger::root().information("Starting daemon with revision " + Poco::NumberFormatter::format(ClickHouseRevision::get()));
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
@@ -1159,9 +1158,7 @@ void BaseDaemon::defineOptions(Poco::Util::OptionSet & _options)
 
 bool isPidRunning(pid_t pid)
 {
-    if (getpgid(pid) >= 0)
-        return 1;
-    return 0;
+    return getpgid(pid) >= 0;
 }
 
 void BaseDaemon::PID::seed(const std::string & file_)
