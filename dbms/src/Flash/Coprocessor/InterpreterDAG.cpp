@@ -167,6 +167,15 @@ BlockIO InterpreterDAG::execute()
 
     BlockIO res;
     res.in = pipeline.firstStream();
+
+    {
+        auto * stream = assert_cast<IProfilingBlockInputStream *>(res.in.get());
+        Int64 counter = 0;
+        stream->assignId([counter]() mutable {
+            return counter++;
+        });
+    }
+
     return res;
 }
 } // namespace DB

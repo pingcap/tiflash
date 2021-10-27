@@ -38,6 +38,22 @@ class IProfilingBlockInputStream : public IBlockInputStream
 public:
     IProfilingBlockInputStream();
 
+    Int64 getId() const override
+    {
+        return id;
+    }
+
+    template <typename Assigner>
+    void assignId(Assigner && assign)
+    {
+        id = assign();
+
+        forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+            child.assignId(assign);
+            return false;
+        });
+    }
+
     Block read() override final;
 
     Block read(FilterPtr & res_filter, bool return_filter) override final;
@@ -176,6 +192,7 @@ public:
     void enableExtremes() { enabled_extremes = true; }
 
 protected:
+    Int64 id = 0;
     BlockStreamProfileInfo info;
     std::atomic<bool> is_cancelled{false};
     std::atomic<bool> is_killed{false};

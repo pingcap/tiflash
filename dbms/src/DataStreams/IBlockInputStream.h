@@ -85,6 +85,8 @@ public:
       */
     virtual String getName() const = 0;
 
+    virtual Int64 getId() const { return -1; };
+
     /// If this stream generates data in grouped by some keys, return true.
     virtual bool isGroupedOutput() const { return false; }
     /// If this stream generates data in order by some keys, return true.
