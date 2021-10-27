@@ -19,7 +19,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-using TiDB::ColumnInfo;
 using TiDB::DatumFlat;
 using TiDB::TableInfo;
 
@@ -391,11 +390,11 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
 
     ColumnID handle_col_id = TiDBPkColumnID;
 
-    constexpr size_t MustHaveColCnt = 3; // pk, del, version
+    constexpr size_t must_have_col_cnt = 3; // pk, del, version
 
     // column_map contains required columns except del and version.
     /// column_id => NameAndType/MutableColumnPtr
-    ColumnDataInfoMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
+    ColumnDataInfoMap column_map(column_names_to_read.size() - must_have_col_cnt + 1, EmptyColumnID);
 
     // visible_column_to_read_lut contains required columns except pk, del and version.
     std::vector<std::pair<ColumnID, size_t>> visible_column_to_read_lut;
@@ -412,7 +411,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
     std::unordered_map<String, size_t> primary_key_column_pos_map;
     if (table_info.is_common_handle)
     {
-        auto & primary_index_info = table_info.getPrimaryIndexInfo();
+        const auto & primary_index_info = table_info.getPrimaryIndexInfo();
         readed_primary_key_column_ids.resize(primary_index_info.idx_cols.size(), EmptyColumnID);
         for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
         {
@@ -423,7 +422,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
 
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
-        auto & column_info = table_info.columns[i];
+        const auto & column_info = table_info.columns[i];
         ColumnID col_id = column_info.id;
         const String & col_name = column_info.name;
         if (!(table_info.pk_is_handle && column_info.hasPriKeyFlag()))
@@ -453,7 +452,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
             visible_column_to_read_lut.emplace_back(col_id, i);
     }
 
-    if (column_names_to_read.size() - MustHaveColCnt != visible_column_to_read_lut.size())
+    if (column_names_to_read.size() - must_have_col_cnt != visible_column_to_read_lut.size())
         throw Exception("schema doesn't contain needed columns.", ErrorCodes::LOGICAL_ERROR);
 
     std::sort(visible_column_to_read_lut.begin(), visible_column_to_read_lut.end());
@@ -493,9 +492,9 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
         pk_column_ids.emplace_back(handle_col_id);
         if (table_info.is_common_handle)
         {
-            for (size_t i = 0; i < readed_primary_key_column_ids.size(); i++)
+            for (const auto & readed_primary_key_column_id : readed_primary_key_column_ids)
             {
-                pk_column_ids.emplace_back(readed_primary_key_column_ids[i]);
+                pk_column_ids.emplace_back(readed_primary_key_column_id);
             }
         }
         if (!func(
@@ -507,7 +506,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
                 column_map,
                 data_list,
                 start_ts,
-                column_names_to_read.size() > MustHaveColCnt,
+                column_names_to_read.size() > must_have_col_cnt,
                 table_info,
                 force_decode,
                 scan_filter))
@@ -520,12 +519,12 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
         if (name == MutableSupport::delmark_column_name)
         {
             block.insert(
-                {std::move(delmark_col), MutableSupport::delmark_column_type, MutableSupport::delmark_column_name, DelMarkColumnID});
+                {std::move(delmark_col), MutableSupport::delmark_column_type, MutableSupport::delmark_column_name, DelMarkColumnID}); // NOLINT
         }
         else if (name == MutableSupport::version_column_name)
         {
             block.insert(
-                {std::move(version_col), MutableSupport::version_column_type, MutableSupport::version_column_name, VersionColumnID});
+                {std::move(version_col), MutableSupport::version_column_type, MutableSupport::version_column_name, VersionColumnID}); // NOLINT
         }
         else
         {
