@@ -338,30 +338,38 @@ if (EXISTS ${CLICKHOUSE_PRIVATE_DIR})
     add_subdirectory (${CLICKHOUSE_PRIVATE_DIR})
 endif ()
 
-add_subdirectory (contrib)
-
-option (TEST_COVERAGE "Enables flags for test coverage" OFF)
-option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
-
-option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
-
-# Enable failpoint injection by default if ENABLE_TESTS is turn ON.
-if (ENABLE_TESTS)
-    set (ENABLE_FAILPOINTS_DEFAULT "ON")
+# Enable tests by default when build type is debug
+if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    set (ENABLE_TESTS_DEFAULT ON)
 else ()
-    set (ENABLE_FAILPOINTS_DEFAULT "OFF")
+    set (ENABLE_TESTS_DEFAULT OFF)
+endif ()
+option (ENABLE_TESTS "Enables unit tests" ${ENABLE_TESTS_DEFAULT})
+
+add_subdirectory (contrib) # Should be done after option ENABLE_TESTS, cause we will disable tests under contrib/
+
+# Enable failpoints injection by default when ENABLE_TESTS is turn ON.
+if (ENABLE_TESTS)
+    enable_testing()
+    set (ENABLE_FAILPOINTS_DEFAULT ON)
+    message (STATUS "Tests are enabled")
+else ()
+    set (ENABLE_FAILPOINTS_DEFAULT OFF)
+    message (STATUS "Tests are disabled")
 endif()
 option (ENABLE_FAILPOINTS "Enables failpoints injection" ${ENABLE_FAILPOINTS_DEFAULT})
+if (ENABLE_FAILPOINTS)
+    message (STATUS "Failpoints are enabled")
+else (ENABLE_FAILPOINTS)
+    message (STATUS "Failpoints are disabled")
+endif (ENABLE_FAILPOINTS)
 
 # Flags for test coverage
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+option (TEST_COVERAGE "Enables flags for test coverage" OFF)
+option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
+if (TEST_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     include(CodeCoverage)
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
-endif ()
-
-if (ENABLE_TESTS)
-    message (STATUS "Tests are enabled")
-    enable_testing()
 endif ()
 
 if (ARCH_AMD64)
