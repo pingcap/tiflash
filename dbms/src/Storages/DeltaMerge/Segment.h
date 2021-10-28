@@ -11,11 +11,9 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/WriteBatch.h>
 
-namespace DB
-{
-class WriteBatch;
-namespace DM
+namespace DB::DM
 {
 class Segment;
 struct SegmentSnapshot;
@@ -376,5 +374,4 @@ private:
     Poco::Logger * log;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

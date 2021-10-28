@@ -2,8 +2,6 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/Page/ConfigSettings.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/Page/stable/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
@@ -26,15 +24,15 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
     if (page_storage)
     {
-        WriteBatch wb;
-        wb.delPage(region_id);
-        page_storage->write(std::move(wb), global_context.getWriteLimiter());
+        PS::V2::WriteBatch wb_v2;
+        wb_v2.delPage(region_id);
+        page_storage->write(std::move(wb_v2), global_context.getWriteLimiter());
     }
     else
     {
-        DB::stable::WriteBatch wb;
-        wb.delPage(region_id);
-        stable_page_storage->write(std::move(wb));
+        PS::V1::WriteBatch wb_v1;
+        wb_v1.delPage(region_id);
+        stable_page_storage->write(std::move(wb_v1));
     }
 }
 
@@ -102,13 +100,13 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     auto read_buf = buffer.tryGetReadBuffer();
     if (page_storage)
     {
-        WriteBatch wb;
+        PS::V2::WriteBatch wb;
         wb.putPage(region_id, applied_index, read_buf, region_size);
         page_storage->write(std::move(wb), global_context.getWriteLimiter());
     }
     else
     {
-        DB::stable::WriteBatch wb;
+        PS::V1::WriteBatch wb;
         wb.putPage(region_id, applied_index, read_buf, region_size);
         stable_page_storage->write(std::move(wb));
     }
@@ -120,11 +118,9 @@ RegionPersister::RegionPersister(Context & global_context_, const RegionManager 
     , log(&Poco::Logger::get("RegionPersister"))
 {}
 
-namespace
+PS::V1::PageStorage::Config getStablePSConfig(const PS::V2::PageStorage::Config & config)
 {
-DB::stable::PageStorage::Config getStablePSConfig(const PageStorage::Config & config)
-{
-    DB::stable::PageStorage::Config c;
+    PS::V1::PageStorage::Config c;
     c.sync_on_write = config.sync_on_write;
     c.file_roll_size = config.file_roll_size;
     c.file_max_size = config.file_max_size;
@@ -139,9 +135,8 @@ DB::stable::PageStorage::Config getStablePSConfig(const PageStorage::Config & co
     c.version_set_config.compact_hint_delta_entries = config.version_set_config.compact_hint_delta_entries;
     return c;
 }
-} // namespace
 
-RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, PageStorage::Config config)
+RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, PS::V2::PageStorage::Config config)
 {
     {
         auto & path_pool = global_context.getPathPool();
@@ -159,7 +154,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             config.num_write_slots = 4; // extend write slots to 4 at least
 
             LOG_INFO(log, "RegionPersister running in normal mode");
-            page_storage = std::make_unique<DB::PageStorage>( //
+            page_storage = std::make_unique<PS::V2::PageStorage>( //
                 "RegionPersister",
                 std::move(delegator),
                 config,
@@ -170,7 +165,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         {
             LOG_INFO(log, "RegionPersister running in compatible mode");
             auto c = getStablePSConfig(config);
-            stable_page_storage = std::make_unique<DB::stable::PageStorage>( //
+            stable_page_storage = std::make_unique<PS::V1::PageStorage>( //
                 "RegionPersister",
                 delegator->defaultPath(),
                 c,
@@ -181,7 +176,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
     RegionMap regions;
     if (page_storage)
     {
-        auto acceptor = [&](const Page & page) {
+        auto acceptor = [&](const PS::V2::Page & page) {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
             auto region = Region::deserialize(buf, proxy_helper);
             if (page.page_id != region->id())
@@ -192,7 +187,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
     }
     else
     {
-        auto acceptor = [&](const DB::stable::Page & page) {
+        auto acceptor = [&](const PS::V1::Page & page) {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
             auto region = Region::deserialize(buf, proxy_helper);
             if (page.page_id != region->id())
@@ -209,7 +204,7 @@ bool RegionPersister::gc()
 {
     if (page_storage)
     {
-        PageStorage::Config config = getConfigFromSettings(global_context.getSettingsRef());
+        PS::V2::PageStorage::Config config = getConfigFromSettings(global_context.getSettingsRef());
         page_storage->reloadSettings(config);
         return page_storage->gc();
     }

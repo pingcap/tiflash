@@ -1,18 +1,16 @@
 #pragma once
 
 #include <IO/MemoryReadWriteBuffer.h>
-#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V1/PageStorage.h>
+#include <Storages/Page/V1/WriteBatch.h>
+#include <Storages/Page/V2/PageStorage.h>
+#include <Storages/Page/V2/WriteBatch.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
 class Context;
-class PageStorage;
-namespace stable
-{
-class PageStorage;
-}
 
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -31,7 +29,7 @@ public:
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    RegionMap restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr, DB::PageStorage::Config config = DB::PageStorage::Config{});
+    RegionMap restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr, PS::V2::PageStorage::Config config = PS::V2::PageStorage::Config{});
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
@@ -49,8 +47,8 @@ private:
 #endif
 
     Context & global_context;
-    std::shared_ptr<DB::PageStorage> page_storage;
-    std::shared_ptr<DB::stable::PageStorage> stable_page_storage;
+    std::shared_ptr<PS::V2::PageStorage> page_storage;
+    std::shared_ptr<PS::V1::PageStorage> stable_page_storage;
 
     const RegionManager & region_manager;
     std::mutex mutex;

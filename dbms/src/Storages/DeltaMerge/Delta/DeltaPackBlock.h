@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Delta/DeltaPack.h>
-
+#include <Storages/Page/Page.h>
 namespace DB
 {
 namespace DM

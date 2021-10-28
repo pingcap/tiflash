@@ -4,6 +4,7 @@
 
 namespace DB
 {
+using namespace PS::V2;
 struct Settings;
 
 void mergeConfigFromSettings(const DB::Settings & settings, PageStorage::Config & config);
