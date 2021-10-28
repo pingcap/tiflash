@@ -71,9 +71,9 @@ struct BlockStreamProfileInfo
         return std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch()).count();
     }
 
-    UInt64 toSeconds(const TimePoint & tp) const
+    static UInt64 toIndex(const TimePoint & tp)
     {
-        return std::chrono::duration_cast<std::chrono::seconds>(tp - first_ts).count();
+        return std::chrono::duration_cast<std::chrono::seconds>(tp.time_since_epoch()).count();
     }
 
 

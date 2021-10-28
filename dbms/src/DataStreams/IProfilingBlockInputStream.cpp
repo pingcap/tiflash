@@ -72,7 +72,7 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
         if (res)
         {
-            UInt64 index = info.toSeconds(info.now());
+            UInt64 index = info.toIndex(info.now());
             if (index < 256)
             {
                 info.traffic.bytes[index] += res.bytes();

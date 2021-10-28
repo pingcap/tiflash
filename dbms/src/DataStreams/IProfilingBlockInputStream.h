@@ -10,6 +10,7 @@
 #include <fmt/core.h>
 
 #include <atomic>
+#include <chrono>
 
 
 namespace DB
