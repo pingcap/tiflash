@@ -56,7 +56,7 @@ Block DefaultChunkCodec::decode(const String & data, const DAGSchema & schema)
     for (auto & field : schema)
     {
         const auto & name = field.first;
-        auto data_type = getDataTypeByColumnInfo(field.second);
+        auto data_type = getDataTypeByColumnInfoForComputingLayer(field.second);
         ColumnWithTypeAndName col(data_type, name);
         col.column->assumeMutable()->reserve(rows.size());
         columns.emplace_back(std::move(col));
