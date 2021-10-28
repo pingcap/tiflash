@@ -33,6 +33,17 @@ protected:
         timezone_info.is_utc_timezone = offset == 0;
     }
 
+    void setTimezoneByName(String name)
+    {
+        auto & timezone_info = context.getTimezoneInfo();
+        timezone_info.is_name_based = true;
+        timezone_info.timezone_offset = 0;
+        timezone_info.timezone = &DateLUT::instance(name);
+        timezone_info.timezone_name = timezone_info.timezone->getTimeZone();
+        timezone_info.is_utc_timezone = timezone_info.timezone_name == "UTC";
+        ;
+    }
+
     void ASSERT_FSP(UInt32 fsp, const MyDateTime & date_time) const
     {
         UInt32 origin_micro_second = date_time.micro_second;
@@ -122,15 +133,22 @@ TEST_F(Sysdate, timezone_unit_Test)
 {
     int fsp = 3;
     setTimezoneByOffset(0);
+    // base timezone is UTC +0:00
     auto date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), 3);
-
     auto data_column = createColumn<String>(std::vector<String>{"test"});
     auto fsp_column = createConstColumn<Int64>(1, fsp);
     ColumnNumbers with_fsp_arguments = {0};
     ColumnNumbers without_fsp_arguments = {};
+    std::vector<String> timezone_names{"Atlantic/Reykjavik", "Europe/London", "Europe/Paris", "Europe/Moscow", "Asia/Baku", "Asia/Ashgabat", "Asia/Dhaka", "Asia/Bangkok", "Asia/Shanghai"};
 
-    for (int i = 1; i < 8; ++i)
+    for (int i = 0; i < 8; ++i)
     {
+        // test timezone name
+        setTimezoneByName(timezone_names.at(i));
+        ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column), i);
+        ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithoutFsp", without_fsp_arguments, data_column), i);
+
+        // test timezone offset
         setTimezoneByOffset(i);
         ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column), i);
         ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithoutFsp", without_fsp_arguments, data_column), i);
