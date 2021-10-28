@@ -44,7 +44,6 @@ public:
         return res;
     }
 
-    RSOperatorPtr applyNot() override { return createNotIn(attr, values); };
 };
 
 } // namespace DM

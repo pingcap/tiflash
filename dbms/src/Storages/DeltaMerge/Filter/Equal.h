@@ -21,7 +21,6 @@ public:
         return rsindex.minmax->checkEqual(pack_id, value, rsindex.type);
     }
 
-    RSOperatorPtr applyNot() override { return createNotEqual(attr, value); };
 };
 
 } // namespace DM
