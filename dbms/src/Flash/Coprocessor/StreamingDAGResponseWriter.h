@@ -30,7 +30,7 @@ public:
         tipb::ExchangeType exchange_type_,
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
-        bool for_last_response,
+        bool send_exec_summary_at_last,
         tipb::EncodeType encodeType_,
         std::vector<tipb::FieldType> result_field_types,
         DAGContext & dag_context_,
@@ -39,15 +39,15 @@ public:
     void finishWrite() override;
 
 private:
-    template <bool for_last_response>
+    template <bool send_exec_summary_at_last>
     void batchWrite();
-    template <bool for_last_response>
+    template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
-    template <bool for_last_response>
+    template <bool send_exec_summary_at_last>
     void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     Int64 batch_send_min_limit;
-    bool for_last_response; /// only one stream needs to sending execution summaries.
+    bool send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
     tipb::ExchangeType exchange_type;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
