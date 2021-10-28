@@ -1,5 +1,6 @@
 #include <IO/Operators.h>
 #include <Storages/Transaction/RowCodec.h>
+#include <Columns/IColumn.h>
 
 namespace DB
 {
@@ -522,6 +523,75 @@ private:
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss)
 {
     RowEncoderV2(table_info, fields).encode(ss);
+}
+
+bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, const ColumnIDs & column_ids_to_read, Block & block, const ColumnIdToColumnIndexMap & column_index_map)
+{
+    size_t cursor = 2; // Skip the initial codec ver and row flag.
+    size_t num_not_null_columns = decodeUInt<UInt16>(cursor, raw_value);
+    size_t num_null_columns = decodeUInt<UInt16>(cursor, raw_value);;
+    std::vector<ColumnID> not_null_column_ids;
+    std::vector<ColumnID> null_column_ids;
+    std::vector<size_t> value_offsets;
+    decodeUInts<ColumnID, typename RowV2::Types<false>::ColumnIDType>(cursor, raw_value, num_not_null_columns, not_null_column_ids);
+    decodeUInts<ColumnID, typename RowV2::Types<false>::ColumnIDType>(cursor, raw_value, num_null_columns, null_column_ids);
+    decodeUInts<size_t, typename RowV2::Types<false>::ValueOffsetType>(cursor, raw_value, num_not_null_columns, value_offsets);
+    size_t values_start_pos = cursor;
+    size_t id_not_null = 0, id_null = 0;
+    auto column_iter = column_ids_to_read.upper_bound(0);
+    // Merge ordered not null/null columns to keep order.
+    while (id_not_null < not_null_column_ids.size() || id_null < null_column_ids.size())
+    {
+        bool is_null;
+        if (id_not_null < not_null_column_ids.size() && id_null < null_column_ids.size())
+            is_null = not_null_column_ids[id_not_null] > null_column_ids[id_null];
+        else
+            is_null = id_null < null_column_ids.size();
+
+        if (is_null)
+        {
+            if (*column_iter > null_column_ids[id_null])
+            {
+                // extra column
+                return false;
+            }
+            else if (*column_iter < null_column_ids[id_null])
+            {
+                // missing column
+                return false;
+            }
+            else
+            {
+//                ASSERT(column_iter->second->isColumnNullable());
+                auto * raw_column = const_cast<IColumn *>((block.getByPosition(column_index_map.at(*column_iter))).column.get());
+                raw_column->insertDefault();
+            }
+            id_null++;
+        }
+        else
+        {
+            if (*column_iter > not_null_column_ids[id_not_null])
+            {
+                // extra column
+                return false;
+            }
+            else if (*column_iter < not_null_column_ids[id_not_null])
+            {
+                // missing column
+                return false;
+            }
+            else
+            {
+                auto * raw_column = const_cast<IColumn *>((block.getByPosition(column_index_map.at(*column_iter))).column.get());
+                size_t start = id_not_null ? value_offsets[id_not_null - 1] : 0;
+                size_t length = value_offsets[id_not_null] - start;
+                raw_column->insertData(raw_value.c_str() + values_start_pos + start, length);
+            }
+            id_not_null++;
+        }
+        column_iter++;
+    }
+    return true;
 }
 
 } // namespace DB

@@ -2,6 +2,7 @@
 
 #include <Storages/Transaction/DecodedRow.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
+#include <Core/Block.h>
 
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
@@ -31,5 +32,9 @@ Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_inf
 /// The following two encode functions are used for testing.
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
+
+using ColumnIdToColumnIndexMap = std::map<ColumnID, size_t>;
+using ColumnIDs = std::set<ColumnID>;
+bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, const ColumnIDs & column_ids_to_read, Block & block, const ColumnIdToColumnIndexMap & column_index_map);
 
 } // namespace DB

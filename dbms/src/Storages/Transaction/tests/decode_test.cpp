@@ -2,6 +2,7 @@
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Columns/ColumnsNumber.h>
 #include <Core/NamesAndTypes.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
@@ -89,6 +90,46 @@ int runDecodeBench(int column_num, int batch_row_num, int batch_num) {
     }
 
     {
+        Stopwatch stopwatch;
+        RegionBlockReader reader{table_info, column_desc};
+        for (int batch_index = 0; batch_index < batch_num; batch_index++) {
+            auto [block, decoded] = reader.read(data_lists_read[batch_index], true);
+            assert(block.rows() == (UInt64)batch_row_num);
+            assert(decoded == true);
+        }
+        auto decode_time = stopwatch.elapsedMilliseconds();
+        std::cout << "decode using read cost " << decode_time << " milliseconds\n";
+    }
+
+    {
+        Stopwatch stopwatch;
+        Block block;
+        DB::ColumnIDs column_ids;
+        ColumnIdToColumnIndexMap column_index_map;
+        for (auto & column : column_desc.getAllPhysical())
+        {
+            auto column_id = table_info.getColumnID(column.name);
+            column_ids.insert(column_id);
+            block.insert({column.type->createColumn(), column.type, column.name, column_id});
+            column_index_map.emplace(column_id, block.columns() - 1);
+        }
+
+        RegionBlockReaderOptimized reader{table_info, column_desc};
+        for (int batch_index = 0; batch_index < batch_num; batch_index++) {
+            auto decoded = reader.read(column_ids, data_lists_read[batch_index], block, column_index_map, true);
+            assert(block.rows() == (UInt64)batch_row_num);
+            assert(decoded == true);
+            // clear block data
+            for (size_t i = 0; i < block.columns(); i++) {
+                auto * raw_column = const_cast<IColumn *>(block.getByPosition(i).column.get());
+                raw_column->popBack(block.rows());
+            }
+        }
+        auto decode_time = stopwatch.elapsedMilliseconds();
+        std::cout << "decode using optimized read cost " << decode_time << " milliseconds\n";
+    }
+
+    {
         RegionBlockReader reader{table_info, column_desc};
         Stopwatch stopwatch;
         for (int batch_index = 0; batch_index < batch_num; batch_index++) {
@@ -101,39 +142,31 @@ int runDecodeBench(int column_num, int batch_row_num, int batch_num) {
     }
 
     {
-        RegionBlockReader reader{table_info, column_desc};
         Stopwatch stopwatch;
-        for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto [block, decoded] = reader.read2(data_lists_read[batch_index], true);
-            assert(block.rows() == (UInt64)batch_row_num);
-            assert(decoded == true);
+        Block block;
+        DB::ColumnIDs column_ids;
+        ColumnIdToColumnIndexMap column_index_map;
+        for (auto & column : column_desc.getAllPhysical())
+        {
+            auto column_id = table_info.getColumnID(column.name);
+            column_ids.insert(column_id);
+            block.insert({column.type->createColumn(), column.type, column.name, column_id});
+            column_index_map.emplace(column_id, block.columns() - 1);
         }
-        auto decode_time = stopwatch.elapsedMilliseconds();
-        std::cout << "decode using read2 cost " << decode_time << " milliseconds\n";
-    }
 
-    {
-        RegionBlockReader reader{table_info, column_desc};
-        Stopwatch stopwatch;
+        RegionBlockReaderOptimized reader{table_info, column_desc};
         for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto [block, decoded] = reader.read(data_lists_read[batch_index], true);
+            auto decoded = reader.read(column_ids, data_lists_read[batch_index], block, column_index_map, true);
             assert(block.rows() == (UInt64)batch_row_num);
             assert(decoded == true);
+            // clear block data
+            for (size_t i = 0; i < block.columns(); i++) {
+                auto * raw_column = const_cast<IColumn *>(block.getByPosition(i).column.get());
+                raw_column->popBack(block.rows());
+            }
         }
         auto decode_time = stopwatch.elapsedMilliseconds();
-        std::cout << "decode using read cost " << decode_time << " milliseconds\n";
-    }
-
-    {
-        RegionBlockReader reader{table_info, column_desc};
-        Stopwatch stopwatch;
-        for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto [block, decoded] = reader.read2(data_lists_read[batch_index], true);
-            assert(block.rows() == (UInt64)batch_row_num);
-            assert(decoded == true);
-        }
-        auto decode_time = stopwatch.elapsedMilliseconds();
-        std::cout << "decode using read2 cost " << decode_time << " milliseconds\n";
+        std::cout << "decode using optimized read cost " << decode_time << " milliseconds\n";
     }
 
     return 0;
