@@ -54,6 +54,14 @@ class FilterParser_test : public ::testing::Test
 
         void SetUp() override
         {
+            auto ctx = TiFlashTestEnv::getContext();
+            auto & storages = ctx.getTMTContext().getStorages();
+            auto storage_map = storages.getAllStorage();
+            for (auto it = storage_map.begin(); it != storage_map.end(); it++)
+            {
+                storages.get(it->first)->removeFromTMTContext();
+            }
+            ctx.getTMTContext().restore();
             recreateMetadataPath();
         }
 
@@ -75,17 +83,14 @@ class FilterParser_test : public ::testing::Test
 
             auto p = path + "/metadata/";
 
-            if (Poco::File file(p); file.exists())
-                file.remove(true);
             Poco::File{p}.createDirectory();
 
             p = path + "/data/";
-            if (Poco::File file(p); file.exists())
-                file.remove(true);
+
             Poco::File{p}.createDirectory();
         }
 
-        void clearPath() const
+        static void clearPath()
         {
             String path = TiFlashTestEnv::getContext().getPath();
             if (Poco::File file(path); file.exists())
@@ -126,7 +131,7 @@ try
     ctx.getTMTContext().setStatusRunning();
 
     {
-        const String statement = "DBGInvoke __mock_tidb_table(default, t_111, 'col_1 String, col_2 Int64')";
+        const String statement = "DBGInvoke __mock_tidb_table(default, t_111, 'col_1 String, col_2 Int64, col_3 Float64, col_time default \\'asTiDBType|timestamp(5)\\'')";
         ASTPtr ast = parseDbgInvokeStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterDBGInvokeQuery interpreter(ast, ctx);
@@ -150,7 +155,7 @@ try
     }
 
     {
-        const String statement = "DBGInvoke __raft_insert_row(default, t_111, 4, 50, 'test1', 666)";
+        const String statement = "DBGInvoke __raft_insert_row(default, t_111, 4, 50, 'test1', 666, 1234567.890123, '2021-10-26 17:00:02.00000')";
         ASTPtr ast = parseDbgInvokeStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterDBGInvokeQuery interpreter(ast, ctx);
@@ -158,14 +163,14 @@ try
     }
 
     {
-        const String statement = "DBGInvoke __raft_insert_row(default, t_111, 4, 53, 'test3', 666)";
+        const String statement = "DBGInvoke __raft_insert_row(default, t_111, 4, 53, 'test3', 666, 1234568.890123, '2021-10-26 17:00:00.00000')";
         ASTPtr ast = parseDbgInvokeStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterDBGInvokeQuery interpreter(ast, ctx);
         interpreter.execute();
     }
     {
-        const String statement = "DBGInvoke __raft_insert_row(default, t_111, 4, 51, 'test2', 777)";
+        const String statement = "DBGInvoke __raft_insert_row(default, t_111, 4, 51, 'test2', 777, 1234569.890123, '2021-10-26 17:00:00.00000')";
         ASTPtr ast = parseDbgInvokeStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterDBGInvokeQuery interpreter(ast, ctx);
@@ -207,8 +212,72 @@ try
     }
 
     {
+        // FilterParser::RSFilterType::Greater
+        const String statement = "DBGInvoke dag('select * from default.t_111 where col_3 > 1234568.890123')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("t_111.col_1");
+        std::string col_2_name("t_111.col_2");
+        Block res = output.in->read();
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(0)), String("test2"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(0), 777);
+    }
+
+    {
+        // FilterParser::RSFilterType::Greater
+        const String statement = "DBGInvoke dag('select * from default.t_111 where col_2 > 666')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("t_111.col_1");
+        std::string col_2_name("t_111.col_2");
+        Block res = output.in->read();
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(0)), String("test2"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(0), 777);
+    }
+
+    {
+        // FilterParser::RSFilterType::Greater + reverse
+        const String statement = "DBGInvoke dag('select * from default.t_111 where 666 < col_2')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("t_111.col_1");
+        std::string col_2_name("t_111.col_2");
+        Block res = output.in->read();
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(0)), String("test2"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(0), 777);
+    }
+
+    {
         // FilterParser::RSFilterType::GreaterEqual
         const String statement = "DBGInvoke dag('select * from default.t_111 where col_2 >= 667')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("t_111.col_1");
+        std::string col_2_name("t_111.col_2");
+        Block res = output.in->read();
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(0)), String("test2"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(0), 777);
+    }
+
+    {
+        // FilterParser::RSFilterType::GreaterEqual + reverse
+        const String statement = "DBGInvoke dag('select * from default.t_111 where 667 <= col_2')";
         ASTPtr ast = parseDbgInvokeStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterDBGInvokeQuery interpreter(ast, ctx);
@@ -242,8 +311,46 @@ try
     }
 
     {
+        // FilterParser::RSFilterType::Less + reverse
+        const String statement = "DBGInvoke dag('select * from default.t_111 where 777 > col_2')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("t_111.col_1");
+        std::string col_2_name("t_111.col_2");
+        Block res = output.in->read();
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(0)), String("test1"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(0), 666);
+
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(1)), String("test3"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(1), 666);
+    }
+
+    {
         // FilterParser::RSFilterType::LessEuqal
         const String statement = "DBGInvoke dag('select * from default.t_111 where col_2 <= 776')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("t_111.col_1");
+        std::string col_2_name("t_111.col_2");
+        Block res = output.in->read();
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(0)), String("test1"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(0), 666);
+
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(1)), String("test3"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(1), 666);
+    }
+
+    {
+        // FilterParser::RSFilterType::LessEuqal + reverse
+        const String statement = "DBGInvoke dag('select * from default.t_111 where 776 >= col_2')";
         ASTPtr ast = parseDbgInvokeStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterDBGInvokeQuery interpreter(ast, ctx);
@@ -298,6 +405,38 @@ try
     {
         // FilterParser::RSFilterType::And
         const String statement = "DBGInvoke dag('select * from default.t_111 where col_1 = \\'test1\\' and col_2 = 666')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("t_111.col_1");
+        std::string col_2_name("t_111.col_2");
+        Block res = output.in->read();
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(0)), String("test1"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(0), 666);
+    }
+
+    {
+        // FilterParser::RSFilterType::OR
+        const String statement = "DBGInvoke dag('select * from default.t_111 where col_1 = \\'test5\\' or col_2 = 777')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("t_111.col_1");
+        std::string col_2_name("t_111.col_2");
+        Block res = output.in->read();
+        EXPECT_EQ(String(res.getByName(col_1_name).column->getDataAt(0)), String("test2"));
+        EXPECT_EQ(res.getByName(col_2_name).column->get64(0), 777);
+    }
+
+    {
+        // TimeStamp + FilterParser::RSFilterType::Equal
+        const String statement = "DBGInvoke dag('select * from default.t_111 where col_time > cast_string_datetime(\\'2021-10-26 17:00:00.00000\\')', 4, 'encode_type:default,tz_offset:28800')";
         ASTPtr ast = parseDbgInvokeStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterDBGInvokeQuery interpreter(ast, ctx);

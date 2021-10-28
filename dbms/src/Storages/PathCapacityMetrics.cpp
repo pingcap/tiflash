@@ -238,7 +238,10 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     struct statvfs vfs;
     if (int code = statvfs(path.data(), &vfs); code != 0)
     {
-        LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
+        if (log)
+        {
+            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
+        }
         return {};
     }
 
