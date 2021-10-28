@@ -2810,7 +2810,7 @@ class FunctionSysDate : public IFunction
 public:
     static constexpr auto name = Transform::name;
     static FunctionPtr create(const Context & context_) { return std::make_shared<FunctionSysDate>(context_); };
-    FunctionSysDate(const Context & context_)
+    explicit FunctionSysDate(const Context & context_)
         : context(context_){};
 
     String getName() const override { return Transform::name; }

@@ -101,7 +101,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     return block.getByPosition(columns.size());
 }
 
-ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, ColumnNumbers argument_column_numbers, const ColumnsWithTypeAndName & columns)
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
 {
     auto & factory = FunctionFactory::instance();
     Block block(columns);

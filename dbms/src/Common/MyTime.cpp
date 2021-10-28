@@ -802,6 +802,7 @@ String MyDateTime::toString(int fsp) const
     return result;
 }
 
+//TODO: we can use modern c++ api instead.
 MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezoneInfo, UInt8 fsp)
 {
     struct timespec ts;
@@ -868,7 +869,11 @@ MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64
 
 UInt32 getMicroSecondByFsp(time_t & second, UInt64 nano_second, UInt8 fsp)
 {
-    UInt64 max_nano_second = std::pow(10, 9);
+    static const UInt64 max_nano_second = std::pow(10, 9);
+    if (unlikely(fsp > 6 || fsp < 0))
+    {
+        throw Exception("Invalid precision " + std::to_string(fsp) + ". It should between 0 and 6");
+    }
     UInt64 scale = std::pow(10, 9 - fsp);
     nano_second = (nano_second + scale / 2) / scale * scale;
     if (nano_second >= max_nano_second)

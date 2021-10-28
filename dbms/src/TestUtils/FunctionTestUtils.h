@@ -389,10 +389,10 @@ public:
         return executeFunction(func_name, vec);
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, ColumnNumbers argument_column_numbers, const ColumnsWithTypeAndName & columns);
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns);
 
     template <typename... Args>
-    ColumnWithTypeAndName executeFunction(const String & func_name, ColumnNumbers argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
     {
         ColumnsWithTypeAndName vec({first_column, columns...});
         return executeFunction(func_name, argument_column_numbers, vec);
