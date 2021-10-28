@@ -185,8 +185,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         ///    planning stage of a query. The planner may see multiple versions of one region (on one TiFlash node).
         /// 2. Two regions with same region id won't have overlapping key ranges.
         /// 3. TiFlash will pick the right version of region for local read and others for remote read.
-        /// 4. The remote read may fail as "not found" or "epoch not match". It will fetch the newest region info via
-        ///    key ranges and auto retry (won't choose local read even anyway).
+        /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
+        ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_regions.find(region_info.region_id) != local_regions.end();
 
         if (duplicated_region || needRemoteRead(region_info, tmt_context))
