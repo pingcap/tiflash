@@ -2830,14 +2830,16 @@ public:
         int fsp = 0;
         if (1 == arguments.size())
         {
-            if (auto fsp_column = checkAndGetColumnConst<ColumnInt64>(arguments[0].column.get()))
+            const auto fsp_type = arguments[0].type;
+            const auto fsp_column = arguments[0].column.get();
+            if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
             {
                 fsp = fsp_column->getInt(0);
             }
             else
             {
                 throw TiFlashException(
-                    "First argument for function " + getName() + " must be constant Int64",
+                    "First argument for function " + getName() + " must be constant number",
                     Errors::Coprocessor::BadRequest);
             }
         }
@@ -2878,8 +2880,9 @@ public:
         UInt8 fsp = 0;
         if (arguments.size() == 1)
         {
-            auto fsp_column = block.getByPosition(arguments[0]).column.get();
-            if (fsp_column && fsp_column->isNumeric() && fsp_column->isColumnConst())
+            const auto fsp_type = block.getByPosition(arguments[0]).type;
+            const auto fsp_column = block.getByPosition(arguments[0]).column.get();
+            if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
             {
                 fsp = fsp_column->getInt(0);
             }
