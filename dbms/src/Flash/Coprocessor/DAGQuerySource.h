@@ -6,9 +6,8 @@
 #pragma GCC diagnostic pop
 
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
-#include <Flash/Mpp/MPPHandler.h>
+#include <Flash/Coprocessor/RegionInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
@@ -18,45 +17,18 @@
 
 namespace DB
 {
-class Context;
-
-struct StreamWriter
-{
-    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
-    std::mutex write_mutex;
-
-    StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
-        : writer(writer_)
-    {}
-    void write(mpp::MPPDataPacket &)
-    {
-        throw Exception("StreamWriter::write(mpp::MPPDataPacket &) do not support writing MPPDataPacket!");
-    }
-    void write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t)
-    {
-        throw Exception("StreamWriter::write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
-    }
-    void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
-    {
-        ::coprocessor::BatchResponse resp;
-        if (!response.SerializeToString(resp.mutable_data()))
-            throw Exception("Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
-        std::lock_guard<std::mutex> lk(write_mutex);
-        if (!writer->Write(resp))
-            throw Exception("Failed to write resp");
-    }
-    // a helper function
-    uint16_t getPartitionNum() { return 0; }
-};
-
-using StreamWriterPtr = std::shared_ptr<StreamWriter>;
-
 /// Query source of a DAG request via gRPC.
 /// This is also an IR of a DAG.
 class DAGQuerySource : public IQuerySource
 {
 public:
-    DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & regions_needs_remote_read_, const tipb::DAGRequest & dag_request_, const LogWithPrefixPtr & log_, const bool is_batch_cop_ = false);
+    DAGQuerySource(
+        Context & context_,
+        const RegionInfoMap & regions_,
+        const RegionInfoList & regions_needs_remote_read_,
+        const tipb::DAGRequest & dag_request_,
+        const LogWithPrefixPtr & log_,
+        const bool is_batch_cop_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t) override;
     String str(size_t max_query_size) override;
