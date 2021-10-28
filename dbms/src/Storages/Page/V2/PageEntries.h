@@ -22,7 +22,6 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V2
 {
-
 template <typename T>
 class PageEntriesMixin
 {

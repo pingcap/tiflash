@@ -17,7 +17,6 @@
 
 namespace DB::PS::V1
 {
-
 #define DELTA_VERSION_SET
 
 /**

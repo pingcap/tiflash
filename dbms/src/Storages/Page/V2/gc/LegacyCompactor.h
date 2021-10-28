@@ -16,7 +16,6 @@ namespace DB
 class PSDiskDelegator;
 namespace PS::V2
 {
-
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 using WritingFilesSnapshot = PageStorage::WritingFilesSnapshot;
 

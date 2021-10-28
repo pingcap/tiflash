@@ -20,7 +20,6 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V2
 {
-
 using MemHolder = std::shared_ptr<char>;
 inline MemHolder createMemHolder(char * memory, const std::function<void(char *)> & free)
 {

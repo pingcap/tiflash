@@ -14,8 +14,8 @@
 
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
-#include <Storages/Page/V1/PageFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/Page/V1/PageFile.h>
 
 #include <ext/scope_guard.h>
 

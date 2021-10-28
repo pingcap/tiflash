@@ -7,7 +7,6 @@
 
 namespace DB::PS::V1
 {
-
 class WriteBatch
 {
 public:

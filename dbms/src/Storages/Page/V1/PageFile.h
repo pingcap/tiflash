@@ -23,7 +23,6 @@ extern const Metric OpenFileForRead;
 
 namespace DB::PS::V1
 {
-
 /// A light-weight object which can be created and copied cheaply.
 /// Use createWriter()/createReader() to open write/read system file.
 class PageFile : public Allocator<false>

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V1/WriteBatch.h>
 #include <Storages/Page/V1/Page.h>
+#include <Storages/Page/V1/WriteBatch.h>
 
 namespace DB::PS::V1
 {

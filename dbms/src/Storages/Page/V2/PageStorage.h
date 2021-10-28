@@ -29,7 +29,6 @@ class Context;
 
 namespace PS::V2
 {
-
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
  * will covered the old ones. The file used to persist the Pages called PageFile. The meta data of a Page, like the

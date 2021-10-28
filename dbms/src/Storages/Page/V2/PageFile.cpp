@@ -15,8 +15,8 @@
 
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
-#include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/Page/V2/PageFile.h>
 
 #include <ext/scope_guard.h>
 
@@ -27,7 +27,6 @@ extern const Metric OpenFileForRead;
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char exception_before_page_file_write_sync[];

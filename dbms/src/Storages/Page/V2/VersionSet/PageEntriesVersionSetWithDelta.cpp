@@ -25,9 +25,8 @@ namespace FailPoints
 extern const char random_slow_page_storage_list_all_live_files[];
 } // namespace FailPoints
 
-namespace PS::V2 
+namespace PS::V2
 {
-
 //==========================================================================================
 // PageEntriesVersionSetWithDelta
 //==========================================================================================
@@ -348,5 +347,5 @@ void DeltaVersionEditAcceptor::decreasePageRef(const PageId page_id)
     }
 }
 
-} // PS::V2
+} // namespace PS::V2
 } // namespace DB

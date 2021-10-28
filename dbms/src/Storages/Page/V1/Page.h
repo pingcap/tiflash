@@ -9,7 +9,6 @@
 
 namespace DB::PS::V1
 {
-
 using MemHolder = std::shared_ptr<char>;
 inline MemHolder createMemHolder(char * memory, const std::function<void(char *)> & free)
 {

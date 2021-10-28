@@ -14,8 +14,8 @@ namespace FailPoints
 extern const char force_set_page_data_compact_batch[];
 } // namespace FailPoints
 
-namespace PS::V2 {
-
+namespace PS::V2
+{
 template <typename SnapshotPtr>
 DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & write_limiter_, const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name)
@@ -558,5 +558,5 @@ template class DataCompactor<PageStorage::SnapshotPtr>;
 #ifndef NDEBUG
 template class DataCompactor<DB::tests::MockSnapshotPtr>;
 #endif
-} // PS::V2
+} // namespace PS::V2
 } // namespace DB
