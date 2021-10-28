@@ -1,7 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/joinToString.h>
+#include <Common/joinStr.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -516,7 +516,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     auto print_retry_regions = [this] {
         FmtBuffer buffer;
         buffer.fmtAppend("Start to retry {} regions (", region_retry.size());
-        joinIterToString(
+        joinStr(
             region_retry.cbegin(),
             region_retry.cend(),
             buffer,
