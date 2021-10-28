@@ -50,7 +50,10 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
-    batchWrite<true>();
+    if (for_last_response)
+        batchWrite<true>();
+    else
+        batchWrite<false>();
 }
 
 template <class StreamWriterPtr>

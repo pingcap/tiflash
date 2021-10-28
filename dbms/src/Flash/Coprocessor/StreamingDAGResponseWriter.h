@@ -30,6 +30,7 @@ public:
         tipb::ExchangeType exchange_type_,
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
+        bool for_last_response,
         tipb::EncodeType encodeType_,
         std::vector<tipb::FieldType> result_field_types,
         DAGContext & dag_context_,
@@ -46,6 +47,7 @@ private:
     void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     Int64 batch_send_min_limit;
+    bool for_last_response; /// only one stream needs to sending execution summaries.
     tipb::ExchangeType exchange_type;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
