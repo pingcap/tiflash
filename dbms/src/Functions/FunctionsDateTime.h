@@ -2794,6 +2794,31 @@ public:
     static constexpr auto name = "sysDateWithFsp";
     static constexpr size_t arguments_number = 1;
     static constexpr bool use_default_implementation_for_constants = false;
+    static const ColumnNumbers getColumnNumbers()
+    {
+        return ColumnNumbers{0};
+    }
+
+    static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments)
+    {
+        int fsp = 0;
+        if (1 == arguments.size())
+        {
+            const auto fsp_type = arguments[0].type;
+            const auto fsp_column = arguments[0].column.get();
+            if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
+            {
+                fsp = fsp_column->getInt(0);
+            }
+            else
+            {
+                throw TiFlashException(
+                    "First argument for function " + String(name) + " must be constant number",
+                    Errors::Coprocessor::BadRequest);
+            }
+        }
+        return std::make_shared<DataTypeMyDateTime>(fsp);
+    }
 };
 
 struct SysDateWithoutFsp
@@ -2802,6 +2827,15 @@ public:
     static constexpr auto name = "sysDateWithoutFsp";
     static constexpr size_t arguments_number = 0;
     static constexpr bool use_default_implementation_for_constants = true;
+    static const ColumnNumbers getColumnNumbers()
+    {
+        return ColumnNumbers{};
+    }
+
+    static DataTypePtr getReturnType(const ColumnsWithTypeAndName &)
+    {
+        return std::make_shared<DataTypeMyDateTime>(0);
+    }
 };
 
 template <typename Transform>
@@ -2827,32 +2861,13 @@ public:
                                 + toString(arguments.size()) + ", should be " + std::to_string(getNumberOfArguments()),
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        int fsp = 0;
-        if (1 == arguments.size())
-        {
-            const auto fsp_type = arguments[0].type;
-            const auto fsp_column = arguments[0].column.get();
-            if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
-            {
-                fsp = fsp_column->getInt(0);
-            }
-            else
-            {
-                throw TiFlashException(
-                    "First argument for function " + getName() + " must be constant number",
-                    Errors::Coprocessor::BadRequest);
-            }
-        }
-        return std::make_shared<DataTypeMyDateTime>(fsp);
+        return Transform::getReturnType(arguments);
     }
 
     bool useDefaultImplementationForConstants() const override { return Transform::use_default_implementation_for_constants; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
     {
-        if (0 == getNumberOfArguments())
-            return {};
-        else
-            return {0};
+        return Transform::getColumnNumbers();
     }
 
     static void array(const UInt64 sysdate_packet, const Int32 row_count, UInt64 * dst)

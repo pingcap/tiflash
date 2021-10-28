@@ -128,7 +128,8 @@ TEST_F(Sysdate, timezone_unit_Test)
     int fsp = 3;
     setTimezoneByOffset(0);
     // base timezone is UTC +0:00
-    auto date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), 3);
+    auto with_fsp_date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), fsp);
+    auto without_fsp_date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), 0);
     auto data_column = createColumn<String>(std::vector<String>{"test"});
     auto fsp_column = createConstColumn<Int64>(1, fsp);
     ColumnNumbers with_fsp_arguments = {0};
@@ -139,13 +140,13 @@ TEST_F(Sysdate, timezone_unit_Test)
     {
         // test timezone name
         setTimezoneByName(timezone_names.at(i));
-        ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column), i);
-        ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithoutFsp", without_fsp_arguments, data_column), i);
+        ASSERT_CHECK_SYSDATE(with_fsp_date_time, executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column), i);
+        ASSERT_CHECK_SYSDATE(without_fsp_date_time, executeFunction("sysDateWithoutFsp", without_fsp_arguments, data_column), i);
 
         // test timezone offset
         setTimezoneByOffset(i);
-        ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column), i);
-        ASSERT_CHECK_SYSDATE(date_time, executeFunction("sysDateWithoutFsp", without_fsp_arguments, data_column), i);
+        ASSERT_CHECK_SYSDATE(with_fsp_date_time, executeFunction("sysDateWithFsp", with_fsp_arguments, fsp_column, data_column), i);
+        ASSERT_CHECK_SYSDATE(without_fsp_date_time, executeFunction("sysDateWithoutFsp", without_fsp_arguments, data_column), i);
     }
 }
 } // namespace DB::tests
