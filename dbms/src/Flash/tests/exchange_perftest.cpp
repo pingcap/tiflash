@@ -522,6 +522,8 @@ struct SenderHelper
                     TiDB::TiDBCollators(3),
                     tipb::Hash,
                     -1,
+                    -1,
+                    true,
                     tipb::TypeCHBlock,
                     fields,
                     *dag_context,
