@@ -20,5 +20,15 @@ TEST(FmtUtilsTest, TestJoinStr)
     std::vector<std::string> v{"a", "b", "c"};
     DB::joinStr(v.cbegin(), v.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s); });
     ASSERT_EQ(buffer.toString(), "a, b, c");
+
+    buffer.clear();
+    v.clear();
+    DB::joinStr(v.cbegin(), v.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s); });
+    ASSERT_EQ(buffer.toString(), "");
+
+    buffer.clear();
+    v.push_back("a");
+    DB::joinStr(v.cbegin(), v.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s); });
+    ASSERT_EQ(buffer.toString(), "a");
 }
 } // namespace DB::tests
