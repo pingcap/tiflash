@@ -86,7 +86,7 @@ template <typename BucketIndex, UInt8 content_width, size_t bucket_count>
 class CompactArray<BucketIndex, content_width, bucket_count>::Reader final
 {
 public:
-    Reader(ReadBuffer & in_)
+    explicit Reader(ReadBuffer & in_)
         : in(in_)
     {
     }
@@ -177,7 +177,7 @@ class CompactArray<BucketIndex, content_width, bucket_count>::Locus final
     friend class CompactArray::Reader;
 
 public:
-    ALWAYS_INLINE operator UInt8() const
+    ALWAYS_INLINE explicit operator UInt8() const
     {
         if (content_l == content_r)
             return read(*content_l);
@@ -211,7 +211,7 @@ public:
 private:
     Locus() = default;
 
-    Locus(BucketIndex bucket_index)
+    explicit Locus(BucketIndex bucket_index)
     {
         init(bucket_index);
     }

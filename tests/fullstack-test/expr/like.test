@@ -1,0 +1,27 @@
+mysql> drop table if exists test.t
+mysql> create table test.t (a varchar(30), b varchar(30)); insert into test.t values ('aaaa', 'bbbb'), ('aaaa', '%a%');
+mysql> alter table test.t set tiflash replica 1
+
+func> wait_table test t
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a like '%a%';
++------+------+
+| a    | b    |
++------+------+
+| aaaa | bbbb |
+| aaaa | %a%  |
++------+------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a like b;
++------+------+
+| a    | b    |
++------+------+
+| aaaa | %a%  |
++------+------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where 'a' like b;
++------+------+
+| a    | b    |
++------+------+
+| aaaa | %a%  |
++------+------+

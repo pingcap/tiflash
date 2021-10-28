@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Common/LogWithPrefix.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -49,6 +50,11 @@ void throwFromErrno(const std::string & s, int code, int e)
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message)
 {
     tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
+}
+
+void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message)
+{
+    tryLogCurrentException(logger->getLog(), start_of_message);
 }
 
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message)
@@ -149,35 +155,11 @@ int getCurrentExceptionCode()
 
 void rethrowFirstException(const Exceptions & exceptions)
 {
-    for (size_t i = 0, size = exceptions.size(); i < size; ++i)
-        if (exceptions[i])
-            std::rethrow_exception(exceptions[i]);
+    for (const auto & exception : exceptions)
+        if (exception)
+            std::rethrow_exception(exception);
 }
 
-
-void tryLogException(std::exception_ptr e, const char * log_name, const std::string & start_of_message)
-{
-    try
-    {
-        std::rethrow_exception(std::move(e));
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log_name, start_of_message);
-    }
-}
-
-void tryLogException(std::exception_ptr e, Poco::Logger * logger, const std::string & start_of_message)
-{
-    try
-    {
-        std::rethrow_exception(std::move(e));
-    }
-    catch (...)
-    {
-        tryLogCurrentException(logger, start_of_message);
-    }
-}
 
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace)
 {
