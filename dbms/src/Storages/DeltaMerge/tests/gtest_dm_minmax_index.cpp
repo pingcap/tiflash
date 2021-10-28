@@ -38,6 +38,11 @@ protected:
         }
     }
 
+    void TearDown() override
+    {
+        context->dropMinMaxIndexCache();
+    }
+
 private:
 protected:
     // a ptr to context, we can reload context with different settings if need.
