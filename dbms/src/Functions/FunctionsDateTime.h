@@ -2651,7 +2651,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
             throw TiFlashException(
                 "First argument for function " + getName() + " must be constant String",
@@ -2659,32 +2659,32 @@ public:
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
-        auto from_column = block.getByPosition(arguments[1]).column;
+        auto col_from = block.getByPosition(arguments[1]).column;
 
         size_t rows = block.rows();
         auto col_to = ColumnInt64::create(rows);
         auto & vec_to = col_to->getData();
 
         if (unit == "year")
-            dispatch<ExtractMyDateTimeImpl::extract_year>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_year>(col_from, vec_to);
         else if (unit == "quarter")
-            dispatch<ExtractMyDateTimeImpl::extract_quater>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_quater>(col_from, vec_to);
         else if (unit == "month")
-            dispatch<ExtractMyDateTimeImpl::extract_month>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_month>(col_from, vec_to);
         else if (unit == "week")
-            dispatch<ExtractMyDateTimeImpl::extract_week>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_week>(col_from, vec_to);
         else if (unit == "day")
-            dispatch<ExtractMyDateTimeImpl::extract_day>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day>(col_from, vec_to);
         else if (unit == "day_microsecond")
-            dispatch<ExtractMyDateTimeImpl::extract_day_microsecond>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_microsecond>(col_from, vec_to);
         else if (unit == "day_second")
-            dispatch<ExtractMyDateTimeImpl::extract_day_second>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_second>(col_from, vec_to);
         else if (unit == "day_minute")
-            dispatch<ExtractMyDateTimeImpl::extract_day_minute>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_minute>(col_from, vec_to);
         else if (unit == "day_hour")
-            dispatch<ExtractMyDateTimeImpl::extract_day_hour>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_hour>(col_from, vec_to);
         else if (unit == "year_month")
-            dispatch<ExtractMyDateTimeImpl::extract_year_month>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_year_month>(col_from, vec_to);
         /// TODO: support ExtractDuration
         // else if (unit == "hour");
         // else if (unit == "minute");

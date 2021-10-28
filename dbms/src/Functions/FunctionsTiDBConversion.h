@@ -408,7 +408,7 @@ struct TiDBConvertToInteger
     {
         // trim space
         String trim_string = trim(value);
-        if (trim_string.size() == 0)
+        if (trim_string.empty())
         {
             if (value.size != 0)
                 context.getDAGContext()->handleTruncateError("cast str as int");
@@ -627,35 +627,35 @@ struct TiDBConvertToFloat
         StringRef ret;
         ret.data = value.data;
         ret.size = 0;
-        bool sawDot = false;
-        bool sawDigit = false;
-        int eIdx = -1;
+        bool saw_dot = false;
+        bool saw_digit = false;
+        int e_idx = -1;
         int i = 0;
         for (; i < static_cast<int>(value.size); i++)
         {
             char c = ret.data[i];
             if (c == '+' || c == '-')
             {
-                if (i != 0 && i != eIdx + 1)
+                if (i != 0 && i != e_idx + 1)
                     // "1e+1" is valid.
                     break;
             }
             else if (c == '.')
             {
-                if (sawDot || eIdx > 0)
+                if (saw_dot || e_idx > 0)
                     // "1.1." or "1e1.1"
                     break;
-                sawDot = true;
+                saw_dot = true;
             }
             else if (c == 'e' || c == 'E')
             {
-                if (!sawDigit)
+                if (!saw_digit)
                     // "+.e"
                     break;
-                if (eIdx != -1)
+                if (e_idx != -1)
                     // "1e5e"
                     break;
-                eIdx = i;
+                e_idx = i;
             }
             else if (c < '0' || c > '9')
             {
@@ -663,7 +663,7 @@ struct TiDBConvertToFloat
             }
             else
             {
-                sawDigit = true;
+                saw_digit = true;
             }
         }
         ret.size = i;
@@ -674,7 +674,7 @@ struct TiDBConvertToFloat
     {
         String trim_string = trim(value);
         StringRef float_string = getValidFloatPrefix(StringRef(trim_string));
-        if (trim_string.size() == 0 && value.size != 0)
+        if (trim_string.empty() && value.size != 0)
         {
             context.getDAGContext()->handleTruncateError("Truncated incorrect DOUBLE value");
             return 0.0;
@@ -746,11 +746,11 @@ struct TiDBConvertToFloat
                 {
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
-                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
+                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
-                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
+                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
@@ -767,8 +767,8 @@ struct TiDBConvertToFloat
             Float64 max_f = 0;
             if (need_truncate)
             {
-                shift = std::pow((Float64)10, tp.flen());
-                max_f = std::pow((Float64)10, tp.flen() - tp.decimal()) - 1.0 / shift;
+                shift = std::pow(static_cast<Float64>(10), tp.flen());
+                max_f = std::pow(static_cast<Float64>(10), tp.flen() - tp.decimal()) - 1.0 / shift;
             }
             for (size_t i = 0; i < size; i++)
             {
@@ -791,7 +791,7 @@ struct TiDBConvertToFloat
         else
         {
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " for first argument of function tidb_cast",
                 ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -813,14 +813,14 @@ struct TiDBConvertToDecimal
     static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
-        auto maxValue = DecimalMaxValue::get(prec);
-        if (value > maxValue || value < -maxValue)
+        auto max_value = DecimalMaxValue::get(prec);
+        if (value > max_value || value < -max_value)
         {
             context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
             if (value > 0)
-                return static_cast<UType>(maxValue);
+                return static_cast<UType>(max_value);
             else
-                return static_cast<UType>(-maxValue);
+                return static_cast<UType>(-max_value);
         }
         UType scale_mul = getScaleMultiplier<U>(scale);
         U result = static_cast<UType>(value) * scale_mul;
@@ -884,9 +884,9 @@ struct TiDBConvertToDecimal
                 return static_cast<UType>(-max_value);
         }
         // rounding
-        T tenTimesValue = value * 10;
+        T ten_times_value = value * 10;
         UType v(value);
-        Int32 remain = static_cast<Int32>(Int256(tenTimesValue) % 10);
+        Int32 remain = static_cast<Int32>(Int256(ten_times_value) % 10);
         if (remain != 0)
             context.getDAGContext()->handleTruncateError("cast real as decimal");
         if (remain % 10 >= 5)
@@ -919,13 +919,13 @@ struct TiDBConvertToDecimal
         else
         {
             context.getDAGContext()->handleTruncateError("cast decimal as decimal");
-            bool need2Round = false;
+            bool need_to_round = false;
             for (ScaleType i = scale; i < v_scale; i++)
             {
-                need2Round = (value < 0 ? -value : value) % 10 >= 5;
+                need_to_round = (value < 0 ? -value : value) % 10 >= 5;
                 value /= 10;
             }
-            if (need2Round)
+            if (need_to_round)
             {
                 if (value < 0)
                     value--;
@@ -1300,7 +1300,7 @@ struct TiDBConvertToTime
                     int from_fsp = 0;
                     if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
                     {
-                        auto & from_type = static_cast<const DataTypeMyDateTime &>(type);
+                        const auto & from_type = static_cast<const DataTypeMyDateTime &>(type);
                         from_fsp = from_type.getFraction();
                     }
                     UInt32 micro_second = datetime.micro_second;
@@ -1600,6 +1600,8 @@ private:
     const Context & context;
 };
 
+/// FunctionTiDBCast implements SQL cast function in TiDB
+/// The basic idea is to dispatch according to combinations of <From, To> parameter types
 class FunctionTiDBCast final : public IFunctionBase
 {
 public:
@@ -1653,6 +1655,7 @@ private:
     bool in_union;
     const tipb::FieldType & tidb_tp;
 
+    /// createWrapper creates lambda functions that do the real type conversion job
     template <typename FromDataType, bool return_nullable>
     WrapperType createWrapper(const DataTypePtr & to_type) const
     {
@@ -1678,7 +1681,7 @@ private:
                     context_);
             };
         /// cast as decimal
-        if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
+        if (const auto * const decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable>::execute(
                     block,
@@ -1690,7 +1693,7 @@ private:
                     tidb_tp_,
                     context_);
             };
-        if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
+        if (const auto * const decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable>::execute(
                     block,
@@ -1702,7 +1705,7 @@ private:
                     tidb_tp_,
                     context_);
             };
-        if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
+        if (const auto * const decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable>::execute(
                     block,
@@ -1714,7 +1717,7 @@ private:
                     tidb_tp_,
                     context_);
             };
-        if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
+        if (const auto * const decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable>::execute(
                     block,
@@ -1781,7 +1784,7 @@ private:
         throw Exception{"tidb_cast to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
-    WrapperType createIdentityWrapper(const DataTypePtr &) const
+    static WrapperType createIdentityWrapper(const DataTypePtr &)
     {
         return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool, const tipb::FieldType &, const Context &) {
             block.getByPosition(result).column = block.getByPosition(arguments.front()).column;
@@ -1793,43 +1796,43 @@ private:
     {
         if (isIdentityCast(from_type, to_type))
             return createIdentityWrapper(from_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeUInt8>(from_type.get()))
+        if (checkAndGetDataType<DataTypeUInt8>(from_type.get()))
             return createWrapper<DataTypeUInt8, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeUInt16>(from_type.get()))
+        if (checkAndGetDataType<DataTypeUInt16>(from_type.get()))
             return createWrapper<DataTypeUInt16, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeUInt32>(from_type.get()))
+        if (checkAndGetDataType<DataTypeUInt32>(from_type.get()))
             return createWrapper<DataTypeUInt32, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeUInt64>(from_type.get()))
+        if (checkAndGetDataType<DataTypeUInt64>(from_type.get()))
             return createWrapper<DataTypeUInt64, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeInt8>(from_type.get()))
+        if (checkAndGetDataType<DataTypeInt8>(from_type.get()))
             return createWrapper<DataTypeInt8, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeInt16>(from_type.get()))
+        if (checkAndGetDataType<DataTypeInt16>(from_type.get()))
             return createWrapper<DataTypeInt16, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeInt32>(from_type.get()))
+        if (checkAndGetDataType<DataTypeInt32>(from_type.get()))
             return createWrapper<DataTypeInt32, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeInt64>(from_type.get()))
+        if (checkAndGetDataType<DataTypeInt64>(from_type.get()))
             return createWrapper<DataTypeInt64, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeFloat32>(from_type.get()))
+        if (checkAndGetDataType<DataTypeFloat32>(from_type.get()))
             return createWrapper<DataTypeFloat32, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeFloat64>(from_type.get()))
+        if (checkAndGetDataType<DataTypeFloat64>(from_type.get()))
             return createWrapper<DataTypeFloat64, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeDecimal32>(from_type.get()))
+        if (checkAndGetDataType<DataTypeDecimal32>(from_type.get()))
             return createWrapper<DataTypeDecimal32, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeDecimal64>(from_type.get()))
+        if (checkAndGetDataType<DataTypeDecimal64>(from_type.get()))
             return createWrapper<DataTypeDecimal64, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeDecimal128>(from_type.get()))
+        if (checkAndGetDataType<DataTypeDecimal128>(from_type.get()))
             return createWrapper<DataTypeDecimal128, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeDecimal256>(from_type.get()))
+        if (checkAndGetDataType<DataTypeDecimal256>(from_type.get()))
             return createWrapper<DataTypeDecimal256, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDate>(from_type.get()))
+        if (checkAndGetDataType<DataTypeMyDate>(from_type.get()))
             return createWrapper<DataTypeMyDate, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
+        if (checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
             return createWrapper<DataTypeMyDateTime, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeString>(from_type.get()))
+        if (checkAndGetDataType<DataTypeString>(from_type.get()))
             return createWrapper<DataTypeString, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum8>(from_type.get()))
+        if (checkAndGetDataType<DataTypeEnum8>(from_type.get()))
             return createWrapper<DataTypeEnum8, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum16>(from_type.get()))
+        if (checkAndGetDataType<DataTypeEnum16>(from_type.get()))
             return createWrapper<DataTypeEnum16, return_nullable>(to_type);
 
         // todo support convert to duration/json type
@@ -1838,7 +1841,7 @@ private:
             ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
-    bool isIdentityCast(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    static bool isIdentityCast(const DataTypePtr & from_type, const DataTypePtr & to_type)
     {
         // todo should remove !from_type->isParametric(), because when a type equals to
         //  other type, its parameter should be the same
@@ -1862,10 +1865,10 @@ private:
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
 
-        auto wrapper = prepareImpl(from_inner_type, to_inner_type, to_type->isNullable());
+        auto fn_convert = createWrapper(from_inner_type, to_inner_type, to_type->isNullable());
         if (from_type->isNullable())
         {
-            return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+            return [fn_convert, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 const auto & from_col = block.getByPosition(arguments[0]).column;
                 const auto & from_nullable_col = static_cast<const ColumnNullable &>(*from_col);
                 const auto & from_null_map = from_nullable_col.getNullMapData();
@@ -1878,7 +1881,7 @@ private:
                             ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
                 }
                 Block tmp_block = createBlockWithNestedColumns(block, arguments, result);
-                wrapper(tmp_block, arguments, result, in_union_, tidb_tp_, context_);
+                fn_convert(tmp_block, arguments, result, in_union_, tidb_tp_, context_);
                 if (!to_type->isNullable())
                 {
                     block.getByPosition(result).column = tmp_block.getByPosition(result).column;
@@ -1915,7 +1918,7 @@ private:
             if (isIdentityCast(from_inner_type, to_inner_type) && to_type->isNullable())
             {
                 /// convert not_null type to nullable type
-                return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                return [fn_convert, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                     auto & res = block.getByPosition(result);
                     const auto & ret_type = res.type;
                     const auto & nullable_type = static_cast<const DataTypeNullable &>(*ret_type);
@@ -1925,7 +1928,7 @@ private:
                     size_t tmp_res_index = tmp_block.columns();
                     tmp_block.insert({nullptr, nested_type, ""});
 
-                    wrapper(tmp_block, arguments, tmp_res_index, in_union_, tidb_tp_, context_);
+                    fn_convert(tmp_block, arguments, tmp_res_index, in_union_, tidb_tp_, context_);
                     /// This is a conversion from an ordinary type to a nullable type.
                     /// So we create a trivial null map.
                     ColumnPtr null_map = ColumnUInt8::create(block.rows(), 0);
@@ -1936,12 +1939,12 @@ private:
             }
             else
             {
-                return wrapper;
+                return fn_convert;
             }
         }
     }
 
-    WrapperType prepareImpl(const DataTypePtr & from_type, const DataTypePtr & to_type, bool return_nullable) const
+    WrapperType createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type, bool return_nullable) const
     {
         if (return_nullable)
             return createWrapper<true>(from_type, to_type);
@@ -1965,7 +1968,7 @@ public:
         return std::make_shared<FunctionBuilderTiDBCast>(context);
     }
 
-    FunctionBuilderTiDBCast(const Context & context)
+    explicit FunctionBuilderTiDBCast(const Context & context)
         : context(context)
     {}
 
@@ -1994,7 +1997,7 @@ protected:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        const auto type_col = checkAndGetColumnConst<ColumnString>(arguments.back().column.get());
+        const auto * const type_col = checkAndGetColumnConst<ColumnString>(arguments.back().column.get());
         if (!type_col)
             throw Exception(
                 "Second argument to " + getName() + " must be a constant string describing type",
@@ -2011,7 +2014,7 @@ private:
     //    return FunctionTo<DataType>::Type::Monotonic::get;
     //}
 
-    MonotonicityForRange getMonotonicityInformation(const DataTypePtr &, const IDataType *) const
+    static MonotonicityForRange getMonotonicityInformation(const DataTypePtr &, const IDataType *)
     {
         /*
         if (const auto type = checkAndGetDataType<DataTypeUInt8>(to_type))

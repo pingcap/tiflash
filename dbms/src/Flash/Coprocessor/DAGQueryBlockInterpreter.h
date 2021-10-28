@@ -38,7 +38,7 @@ public:
         const DAGQueryBlock & query_block_,
         bool keep_session_timezone_info_,
         const DAGQuerySource & dag_,
-        std::vector<SubqueriesForSets> & subqueriesForSets_,
+        std::vector<SubqueriesForSets> & subqueries_for_sets_,
         const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map,
         const LogWithPrefixPtr & log_);
 
@@ -73,8 +73,8 @@ private:
     void executeLimit(DAGPipeline & pipeline);
     void executeAggregation(
         DAGPipeline & pipeline,
-        const ExpressionActionsPtr & expressionActionsPtr,
-        Names & aggregation_keys,
+        const ExpressionActionsPtr & expression_actions_ptr,
+        Names & key_names,
         TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
@@ -107,7 +107,7 @@ private:
 
     std::vector<const tipb::Expr *> conditions;
     const DAGQuerySource & dag;
-    std::vector<SubqueriesForSets> & subqueriesForSets;
+    std::vector<SubqueriesForSets> & subqueries_for_sets;
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
     BoolVec timestamp_column_flag_for_tablescan;
 

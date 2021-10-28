@@ -70,7 +70,7 @@ public:
 
     tipb::EncodeType getEncodeType() const { return encode_type; }
 
-    std::shared_ptr<DAGQueryBlock> getQueryBlock() const { return root_query_block; }
+    std::shared_ptr<DAGQueryBlock> getRootQueryBlock() const { return root_query_block; }
     const RegionInfoMap & getRegions() const { return regions; }
     const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
 

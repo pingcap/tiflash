@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Decimal.h>
+#include <DataTypes/NumberTraits.h>
 
 namespace DB
 {

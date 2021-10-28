@@ -78,7 +78,7 @@ Block FilterBlockInputStream::readImpl()
         return res;
 
     /// Until non-empty block after filtering or end of stream.
-    while (1)
+    while (true)
     {
         IColumn::Filter * child_filter = nullptr;
 

@@ -134,7 +134,7 @@ void loadMiConfig(Logger * log)
 #endif
 namespace
 {
-[[maybe_unused]] void loadBooleanConfig(Poco::Logger * log, bool & target, const char * name)
+[[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
 {
     auto * config = getenv(name);
     if (config)
@@ -841,19 +841,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     UpdateMallocConfig(log);
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
 #endif
 
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
 #endif
 
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 
     registerFunctions();

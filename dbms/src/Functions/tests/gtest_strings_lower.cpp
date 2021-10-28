@@ -24,14 +24,15 @@ namespace DB::tests
 class StringUpper : public DB::tests::FunctionTest
 {
 protected:
-    ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
+    static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
     {
         return createColumn<Nullable<String>>(v);
     }
 
-    ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
+    static ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
     {
         std::vector<String> strings;
+        strings.reserve(v.size());
         for (std::optional<String> s : v)
         {
             strings.push_back(s.value());
@@ -40,41 +41,41 @@ protected:
         return createColumn<String>(strings);
     }
 
-    ColumnWithTypeAndName toConst(const String & s)
+    static ColumnWithTypeAndName toConst(const String & s)
     {
         return createConstColumn<String>(1, s);
     }
 };
 
-TEST_F(StringUpper, string_lower_all_unit_Test)
+TEST_F(StringUpper, lowerAll)
 {
-    std::vector<std::optional<String>> candidateStrings = {"one WEEK’S time TEST", "abc测试def", "ABCテストabc", "ЀЁЂѓЄЅІїЈЉЊЋЌѝЎЏ", "+Ѐ-ё*Ђ/ѓ!Є@Ѕ#І$@Ї%Ј……љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "ΑΒΓΔΕΖΗΘικΛΜΝΞΟΠΡΣτΥΦΧΨωΣ", "▲Α▼Βγ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕", "թՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆմՇ"};
-    std::vector<std::optional<String>> lowerCaseStrings = {"one week’s time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
+    std::vector<std::optional<String>> candidate_strings = {"one WEEK’S time TEST", "abc测试def", "ABCテストabc", "ЀЁЂѓЄЅІїЈЉЊЋЌѝЎЏ", "+Ѐ-ё*Ђ/ѓ!Є@Ѕ#І$@Ї%Ј……љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "ΑΒΓΔΕΖΗΘικΛΜΝΞΟΠΡΣτΥΦΧΨωΣ", "▲Α▼Βγ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕", "թՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆմՇ"};
+    std::vector<std::optional<String>> lower_case_strings = {"one week’s time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
 
 
     ASSERT_COLUMN_EQ(
-        toNullableVec(lowerCaseStrings),
+        toNullableVec(lower_case_strings),
         executeFunction(
             "lowerUTF8",
-            toNullableVec(candidateStrings)));
+            toNullableVec(candidate_strings)));
 
     ASSERT_COLUMN_EQ(
-        toVec(lowerCaseStrings),
+        toVec(lower_case_strings),
         executeFunction(
             "lowerUTF8",
-            toVec(candidateStrings)));
+            toVec(candidate_strings)));
 
     ASSERT_COLUMN_EQ(
-        toNullableVec(candidateStrings),
+        toNullableVec(candidate_strings),
         executeFunction(
             "lowerBinary",
-            toNullableVec(candidateStrings)));
+            toNullableVec(candidate_strings)));
 
     ASSERT_COLUMN_EQ(
-        toVec(candidateStrings),
+        toVec(candidate_strings),
         executeFunction(
             "lowerBinary",
-            toVec(candidateStrings)));
+            toVec(candidate_strings)));
 
     ASSERT_COLUMN_EQ(
         toConst("one week’s time test"),
