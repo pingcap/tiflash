@@ -8,7 +8,7 @@ namespace DB
 class RecycledAllocator : public boost::noncopyable
 {
 public:
-    RecycledAllocator(const size_t initial_size = 65536, const size_t growth_factor = 2)
+    explicit RecycledAllocator(const size_t initial_size = 65536, const size_t growth_factor = 2)
         : arena(initial_size, growth_factor)
     {}
 

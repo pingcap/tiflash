@@ -3,6 +3,7 @@
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Columns/ColumnSet.h>
 #include <Common/TiFlashException.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -950,7 +951,8 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
     return cast_expr_name;
 }
 
-// add timezone cast after table scan, this is used for session level timezone support
+// appendExtraCastsAfterTS will append extra casts after tablescan if needed.
+// 1) add timezone cast after table scan, this is used for session level timezone support
 // the basic idea of supporting session level timezone is that:
 // 1. for every timestamp column used in the dag request, after reading it from table scan,
 //    we add cast function to convert its timezone to the timezone specified in DAG request
@@ -959,27 +961,47 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 //    convert the session level timezone to UTC timezone.
 // Note in the worst case(e.g select ts_col from table with Default encode), this will introduce two
 // useless casts to all the timestamp columns, however, since TiDB now use chunk encode as the default
-// encoding scheme, the worst case should happen rarely
-bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, const BoolVec & is_ts_column)
+// encoding scheme, the worst case should happen rarely.
+// 2) add duration cast after table scan, this is ued for calculation of duration in TiFlash.
+// TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
+// Int64 to duration.
+bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTSMode> & need_cast_column, const DAGQueryBlock & query_block)
 {
-    if (context.getTimezoneInfo().is_utc_timezone)
-        return false;
-
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
+    // For TimeZone
     tipb::Expr tz_expr;
     constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
-    String tz_col;
-    String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
-    for (size_t i = 0; i < is_ts_column.size(); i++)
+    String tz_col = getActions(tz_expr, actions);
+    static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
+    static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffset";
+    const String & timezone_func_name = context.getTimezoneInfo().is_name_based ? convert_time_zone_form_utc : convert_time_zone_by_offset;
+
+    // For Duration
+    String fsp_col;
+    static const String dur_func_name = "FunctionConvertDurationFromNanos";
+    const auto & columns = query_block.source->tbl_scan().columns();
+    for (size_t i = 0; i < need_cast_column.size(); ++i)
     {
-        if (is_ts_column[i])
+        if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
         {
-            if (tz_col.length() == 0)
-                tz_col = getActions(tz_expr, actions);
-            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, func_name, actions);
+            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             source_columns[i].name = casted_name;
+            ret = true;
+        }
+
+        if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
+        {
+            tipb::Expr fsp_expr;
+            if (columns[i].decimal() > 6)
+                throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
+            auto fsp = columns[i].decimal() < 0 ? 0 : columns[i].decimal();
+            constructInt64LiteralTiExpr(fsp_expr, fsp);
+            fsp_col = getActions(fsp_expr, actions);
+            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
+            source_columns[i].name = casted_name;
+            source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
             ret = true;
         }
     }
@@ -988,6 +1010,15 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & 
         project_cols.emplace_back(col.name, col.name);
     actions->add(ExpressionAction::project(project_cols));
     return ret;
+}
+
+String DAGExpressionAnalyzer::appendDurationCast(
+    const String & fsp_expr,
+    const String & dur_expr,
+    const String & func_name,
+    ExpressionActionsPtr & actions)
+{
+    return applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
 }
 
 void DAGExpressionAnalyzer::appendJoin(
@@ -1184,7 +1215,7 @@ void DAGExpressionAnalyzer::generateFinalProject(
         for (UInt32 i : output_offsets)
         {
             const auto & actual_type = current_columns[i].type;
-            auto expected_type = getDataTypeByFieldType(schema[i]);
+            auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
             if (actual_type->getName() != expected_type->getName())
             {
                 need_append_type_cast = true;
@@ -1338,7 +1369,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     }
     if (exprHasValidFieldType(expr))
     {
-        DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
+        DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
         if (expected_type->getName() != actual_type->getName())
         {
