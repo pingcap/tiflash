@@ -872,7 +872,7 @@ MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64
 std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp)
 {
     static const UInt64 max_nano_second = std::pow(10, 9);
-    if (unlikely(fsp > 6 || fsp < 0))
+    if (unlikely(fsp > 6))
     {
         throw Exception("Invalid precision " + std::to_string(fsp) + ". It should between 0 and 6");
     }
