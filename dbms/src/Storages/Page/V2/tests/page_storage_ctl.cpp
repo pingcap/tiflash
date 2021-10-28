@@ -11,9 +11,9 @@
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 
-
+using namespace DB::PS::V2;
 /* some exported global vars */
-DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
+WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
 namespace DB
 {
 #if __APPLE__ && __clang__
@@ -43,7 +43,7 @@ Usage: %s <path> <mode>
             prog);
 }
 
-void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
+void printPageEntry(const DB::PageId pid, const PageEntry & entry)
 {
     printf("\tpid:%9lld\t\t"
            "%9llu\t%9u\t%9u\t%9llu\t%9llu\t%016llx\n",
@@ -67,12 +67,12 @@ enum DebugMode
     RUN_GC = 1000,
 };
 
-void dump_all_entries(DB::PageFileSet & page_files, int32_t mode = DebugMode::DUMP_ALL_ENTRIES);
-void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage, const DB::PageStorage::Config & config);
+void dump_all_entries(PageFileSet & page_files, int32_t mode = DebugMode::DUMP_ALL_ENTRIES);
+void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config);
 
-DB::PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
+PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
 {
-    DB::PageStorage::Config config;
+    PageStorage::Config config;
     if (argc > 4)
     {
         size_t num = strtoull(argv[4], nullptr, 10);
@@ -150,11 +150,11 @@ try
     DB::PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
 
     // Do not remove any files.
-    DB::PageStorage::ListPageFilesOption options;
+    PageStorage::ListPageFilesOption options;
     options.remove_tmp_files = false;
     options.ignore_legacy = false;
     options.ignore_checkpoint = false;
-    auto page_files = DB::PageStorage::listAllPageFiles(file_provider, delegator, logger, options);
+    auto page_files = PageStorage::listAllPageFiles(file_provider, delegator, logger, options);
     switch (mode)
     {
     case DUMP_ALL_ENTRIES:
@@ -169,8 +169,8 @@ try
         return 0;
     }
 
-    DB::PageStorage::Config config = parse_storage_config(argc, argv, logger);
-    DB::PageStorage storage("PageCtl", delegator, config, file_provider);
+    PageStorage::Config config = parse_storage_config(argc, argv, logger);
+    PageStorage storage("PageCtl", delegator, config, file_provider);
     storage.restore();
     switch (mode)
     {
@@ -223,14 +223,14 @@ catch (const DB::Exception & e)
     return -1;
 }
 
-void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
+void dump_all_entries(PageFileSet & page_files, int32_t mode)
 {
     for (auto & page_file : page_files)
     {
-        DB::PageEntriesEdit edit;
-        DB::PageIdAndEntries id_and_caches;
+        PageEntriesEdit edit;
+        PageIdAndEntries id_and_caches;
 
-        auto reader = DB::PageFile::MetaMergingReader::createFrom(const_cast<DB::PageFile &>(page_file));
+        auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
 
         while (reader->hasNext())
         {
@@ -242,23 +242,23 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
                 printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
-                case DB::WriteBatch::WriteType::PUT:
+                case WriteBatch::WriteType::PUT:
                     printf("PUT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case DB::WriteBatch::WriteType::UPSERT:
+                case WriteBatch::WriteType::UPSERT:
                     printf("UPSERT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case DB::WriteBatch::WriteType::DEL:
+                case WriteBatch::WriteType::DEL:
                     printf("DEL\t%lld\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
-                case DB::WriteBatch::WriteType::REF:
+                case WriteBatch::WriteType::REF:
                     printf("REF\t%lld\t%lld\t\n", //
                            record.page_id,
                            record.ori_page_id,
@@ -273,7 +273,7 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
         if (mode == CHECK_DATA_CHECKSUM)
         {
             // Read correspond page and check checksum
-            auto reader = const_cast<DB::PageFile &>(page_file).createReader();
+            auto reader = const_cast<PageFile &>(page_file).createReader();
             try
             {
                 fprintf(stderr, "Scanning over data.\n");
@@ -287,15 +287,15 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
     }
 }
 
-void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage, const DB::PageStorage::Config & config)
+void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config)
 {
     constexpr double MB = 1.0 * 1024 * 1024;
 
     auto snapshot = storage.getSnapshot();
 
-    DB::DataCompactor<DB::PageStorage::SnapshotPtr>::ValidPages file_valid_pages;
+    DataCompactor<PageStorage::SnapshotPtr>::ValidPages file_valid_pages;
     {
-        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage, config, nullptr, nullptr);
+        DataCompactor<PageStorage::SnapshotPtr> compactor(storage, config, nullptr, nullptr);
         file_valid_pages = compactor.collectValidPagesInPageFile(snapshot);
     }
 
@@ -305,7 +305,7 @@ void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & sto
     printf("PageFileId\tPageFileLevel\tPageFileSize\tValidSize\tValidPercent\tNumValidPages\n");
     for (auto & page_file : page_files)
     {
-        if (page_file.getType() != DB::PageFile::Type::Formal)
+        if (page_file.getType() != PageFile::Type::Formal)
         {
             printf("%s\n", page_file.toString().c_str());
             continue;

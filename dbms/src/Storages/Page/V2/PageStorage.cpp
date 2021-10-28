@@ -27,7 +27,7 @@
 #endif
 
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
-extern DB::WriteBatch::SequenceID debugging_recover_stop_sequence;
+extern DB::PS::V2::WriteBatch::SequenceID debugging_recover_stop_sequence;
 #endif
 
 namespace DB
