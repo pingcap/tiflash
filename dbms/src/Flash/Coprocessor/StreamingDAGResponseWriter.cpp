@@ -30,14 +30,14 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     tipb::ExchangeType exchange_type_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
-    bool send_exec_summary_at_last_,
+    bool should_send_exec_summary_at_last_,
     tipb::EncodeType encode_type_,
     std::vector<tipb::FieldType> result_field_types_,
     DAGContext & dag_context_,
     const LogWithPrefixPtr & log_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
-    , send_exec_summary_at_last(send_exec_summary_at_last_)
+    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , exchange_type(exchange_type_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
@@ -52,7 +52,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
-    if (send_exec_summary_at_last)
+    if (should_send_exec_summary_at_last)
         batchWrite<true>();
     else
         batchWrite<false>();
