@@ -109,7 +109,7 @@ private:
     const DAGQuerySource & dag;
     std::vector<SubqueriesForSets> & subqueriesForSets;
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
-    BoolVec timestamp_column_flag_for_tablescan;
+    std::vector<ExtraCastAfterTSMode> need_add_cast_column_flag_for_tablescan;
 
     const LogWithPrefixPtr log;
 };
