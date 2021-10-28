@@ -41,12 +41,14 @@ extern const char force_no_local_region_for_mpp_task[];
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
+    , task_stats(std::make_shared<MPPTaskStats>())
     , log(std::make_shared<LogWithPrefix>(
           &Poco::Logger::get("MPPTask"),
           fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
+    task_stats->init(id);
 }
 
 MPPTask::~MPPTask()
@@ -205,6 +207,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
     dag_context->mpp_task_log = log;
+    dag_context->task_stats = task_stats;
     context.setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())
@@ -269,6 +272,7 @@ void MPPTask::preprocess()
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
+    task_stats->compile_duration = compile_time_ns;
 }
 
 void MPPTask::runImpl()
@@ -279,6 +283,7 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
+    task_stats->start();
 
     current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
@@ -357,7 +362,10 @@ void MPPTask::runImpl()
     unregisterTask();
 
     if (switchStatus(RUNNING, FINISHED))
+    {
+        task_stats->end(FINISHED);
         LOG_INFO(log, "finish task");
+    }
     else
         LOG_WARNING(log, "finish task which was cancelled before");
 }
@@ -395,6 +403,7 @@ void MPPTask::cancel(const String & reason)
         {
             closeAllTunnels(reason);
             unregisterTask();
+            task_stats->end(CANCELLED, reason);
             LOG_WARNING(log, "Finish cancel task from uninitialized");
             return;
         }
@@ -402,6 +411,7 @@ void MPPTask::cancel(const String & reason)
         {
             context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
             closeAllTunnels(reason);
+            task_stats->end(CANCELLED, reason);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish cancel task from running");
             return;

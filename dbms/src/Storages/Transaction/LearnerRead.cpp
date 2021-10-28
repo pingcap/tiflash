@@ -1,5 +1,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MPPTaskStats.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
@@ -403,7 +405,15 @@ LearnerReadSnapshot doLearnerRead(
               "[Learner Read] batch read index | wait index cost "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
                   << " ms totally, regions_num=" << num_regions << ", concurrency=" << concurrent_num);
-
+    if (tmt.getContext().getDAGContext() != nullptr)
+    {
+        auto * dag_context = tmt.getContext().getDAGContext();
+        if (dag_context->task_stats != nullptr)
+        {
+            auto batch_wait_index_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+            dag_context->task_stats->wait_index_duration += batch_wait_index_elapsed_ns;
+        }
+    }
     return regions_snapshot;
 }
 

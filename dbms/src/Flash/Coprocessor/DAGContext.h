@@ -16,6 +16,7 @@ namespace DB
 {
 class Context;
 class MPPTunnelSet;
+class MPPTaskStats;
 
 struct ProfileStreamsInfo
 {
@@ -23,6 +24,8 @@ struct ProfileStreamsInfo
     BlockInputStreams input_streams;
 };
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
+
+using MPPTaskStatsPtr = std::shared_ptr<MPPTaskStats>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -38,6 +41,7 @@ public:
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , tunnel_set(nullptr)
+        , task_stats(nullptr)
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
         , max_recorded_error_count(getMaxErrorCount(dag_request))
@@ -53,6 +57,7 @@ public:
         , return_executor_id(true)
         , is_mpp_task(true)
         , tunnel_set(nullptr)
+        , task_stats(nullptr)
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
         , mpp_task_meta(meta_)
@@ -81,6 +86,7 @@ public:
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , tunnel_set(nullptr)
+        , task_stats(nullptr)
         , flags(0)
         , sql_mode(0)
         , max_recorded_error_count(max_error_count_)
@@ -148,6 +154,7 @@ public:
     bool is_root_mpp_task;
     MPPTunnelSetPtr tunnel_set;
     RegionInfoList retry_regions;
+    MPPTaskStatsPtr task_stats;
 
     LogWithPrefixPtr mpp_task_log;
 

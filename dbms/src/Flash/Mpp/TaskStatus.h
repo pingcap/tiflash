@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <common/StringRef.h>
+#include <unordered_map>
 
 namespace DB
 {
@@ -12,23 +14,21 @@ enum TaskStatus
     CANCELLED,
 };
 
-void stateToRunning(TaskStatus & status)
+inline StringRef taskStatusToString(const TaskStatus & status)
 {
-    if (status != INITIALIZING)
+    static std::unordered_map<TaskStatus, String> task_status_map{
+        {INITIALIZING, "INITIALIZING"},
+        {RUNNING, "RUNNING"},
+        {FINISHED, "FINISHED"},
+        {CANCELLED, "CANCELLED"}};
+
+    auto it = task_status_map.find(status);
+    if (it == task_status_map.end())
     {
-        throw new TiFlashException();
+        throw Exception("Unknown TaskStatus");
     }
-    status = RUNNING;
-}
 
-void stateToFinished(TaskStatus & status)
-{
-    status = FINISHED;
-}
-
-void stateToCancelled(TaskStatus & status)
-{
-    status = CANCELLED;
+    return it->second;
 }
 } // namespace DB
 
