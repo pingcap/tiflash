@@ -62,14 +62,13 @@ protected:
         ASSERT_EQ(origin_micro_second, new_micro_second);
     }
 
-    void ASSERT_CHECK_SYSDATE(const MyDateTime dateTime, ColumnWithTypeAndName actual_col, int offset)
+    void ASSERT_CHECK_SYSDATE(const MyDateTime base_date_time, ColumnWithTypeAndName actual_col, int offset)
     {
-        UInt64 base_packed = dateTime.toPackedUInt();
-        MyDateTime base_mdt = MyDateTime(base_packed);
+        UInt64 base_packed = base_date_time.toPackedUInt();
         UInt64 packed = actual_col.column.get()->get64(0);
-        MyDateTime mdt = MyDateTime(packed);
+        MyDateTime date_time = MyDateTime(packed);
         ASSERT_LE(base_packed, packed);
-        ASSERT_EQ(((mdt.yearDay() - base_mdt.yearDay()) * 24 + (mdt.hour - base_mdt.hour)), offset);
+        ASSERT_EQ(((date_time.yearDay() - base_date_time.yearDay()) * 24 + (date_time.hour - base_date_time.hour)), offset);
     }
 };
 
