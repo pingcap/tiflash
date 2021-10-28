@@ -1,3 +1,4 @@
+/*
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -47,3 +48,4 @@ CATCH
 
 } // namespace tests
 } // namespace DB
+*/
