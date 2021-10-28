@@ -810,7 +810,9 @@ MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezone
 
     time_t second = ts.tv_sec;
     UInt32 nano_second = ts.tv_nsec;
-    UInt32 micro_second = getMicroSecondByFsp(second, nano_second, fsp);
+    auto second_and_micro_second = roundTimeByFsp(second, nano_second, fsp);
+    second = second_and_micro_second.first;
+    UInt32 micro_second = second_and_micro_second.second;
 
     if (timezoneInfo.is_name_based)
         return convertUTC2TimeZone(second, micro_second, *timezoneInfo.timezone);
@@ -867,7 +869,7 @@ MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64
     return MyDateTime(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), micro_second);
 }
 
-UInt32 getMicroSecondByFsp(time_t & second, UInt64 nano_second, UInt8 fsp)
+std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp)
 {
     static const UInt64 max_nano_second = std::pow(10, 9);
     if (unlikely(fsp > 6 || fsp < 0))
@@ -882,7 +884,7 @@ UInt32 getMicroSecondByFsp(time_t & second, UInt64 nano_second, UInt8 fsp)
         nano_second = nano_second - extra_second * max_nano_second;
         second += extra_second;
     }
-    return nano_second / 1000;
+    return std::pair<time_t, UInt32>{second, nano_second / 1000};
 }
 
 // the implementation is the same as TiDB

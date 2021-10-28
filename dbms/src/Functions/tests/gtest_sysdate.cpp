@@ -85,8 +85,8 @@ TEST_F(Sysdate, sysdate_unit_Test)
 
     auto date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), fsp);
 
-    auto with_fsp_second_diff = (date_time.yearDay() - with_fsp_date_time.yearDay()) * SECONDS_IN_ONE_DAY + (date_time.hour - with_fsp_date_time.hour) * 60 * 60 + (date_time.minute - with_fsp_date_time.minute) * 60 + (date_time.second - with_fsp_date_time.second);
-    auto with_out_fsp_second_diff = (date_time.yearDay() - without_fsp_date_time.yearDay()) * SECONDS_IN_ONE_DAY + (date_time.hour - without_fsp_date_time.hour) * 60 * 60 + (date_time.minute - without_fsp_date_time.minute) * 60 + (date_time.second - without_fsp_date_time.second);
+    auto with_fsp_second_diff = (date_time.yearDay() - with_fsp_date_time.yearDay()) * seconds_in_one_day + (date_time.hour - with_fsp_date_time.hour) * 60 * 60 + (date_time.minute - with_fsp_date_time.minute) * 60 + (date_time.second - with_fsp_date_time.second);
+    auto with_out_fsp_second_diff = (date_time.yearDay() - without_fsp_date_time.yearDay()) * seconds_in_one_day + (date_time.hour - without_fsp_date_time.hour) * 60 * 60 + (date_time.minute - without_fsp_date_time.minute) * 60 + (date_time.second - without_fsp_date_time.second);
 
     ASSERT_LE(with_fsp_second_diff, 10);
     ASSERT_LE(with_out_fsp_second_diff, 10);
@@ -101,7 +101,9 @@ TEST_F(Sysdate, fsp_unit_Test)
     {
         time_t second = 12;
         UInt64 nano_second = 987654321;
-        UInt32 micro_second = getMicroSecondByFsp(second, nano_second, fsp);
+        auto second_and_micro_second = roundTimeByFsp(second, nano_second, fsp);
+        second = second_and_micro_second.first;
+        UInt32 micro_second = second_and_micro_second.second;
         ASSERT_EQ(expect_seconds.at(fsp), second);
         ASSERT_EQ(expect_micro_seconds.at(fsp), micro_second);
     }
