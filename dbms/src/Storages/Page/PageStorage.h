@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Storages/Page/V2/PageStorage.h>
 
 namespace DB
