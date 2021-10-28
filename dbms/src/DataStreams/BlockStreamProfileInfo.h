@@ -20,6 +20,14 @@ class IProfilingBlockInputStream;
 /// Information for profiling. See IProfilingBlockInputStream.h
 struct BlockStreamProfileInfo
 {
+    using TimePoint = std::chrono::system_clock::time_point;
+
+    struct Timeline
+    {
+        UInt64 rows[256]{0};
+        UInt64 bytes[256]{0};
+    };
+
     /// Info about stream object this profile info refers to.
     IProfilingBlockInputStream * parent = nullptr;
 
@@ -34,6 +42,40 @@ struct BlockStreamProfileInfo
     // time spent on current stream and all its children streams, but also the time of its
     // parent streams
     UInt64 execution_time = 0;
+
+    bool read_prefixed = false;
+    Stopwatch timer;
+    Int64 signautre = -1;
+    UInt64 prefix_duration = 0;
+    UInt64 suffix_duration = 0;
+    UInt64 running_duration = 0;
+    UInt64 waiting_duration = 0;
+    UInt64 last_timestamp = 0;
+    TimePoint start_timestamp;
+    TimePoint finish_timestamp;
+    UInt64 self_timestamp;
+    UInt64 self_duration = 0;
+
+    bool is_first = true;
+    TimePoint first_ts;
+    TimePoint last_ts;
+    Timeline traffic;
+
+    static TimePoint now()
+    {
+        return std::chrono::system_clock::now();
+    }
+
+    static UInt64 toNanoseconds(const TimePoint & tp)
+    {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch()).count();
+    }
+
+    UInt64 toSeconds(const TimePoint & tp) const
+    {
+        return std::chrono::duration_cast<std::chrono::seconds>(tp - first_ts).count();
+    }
+
 
     using BlockStreamProfileInfos = std::vector<const BlockStreamProfileInfo *>;
 

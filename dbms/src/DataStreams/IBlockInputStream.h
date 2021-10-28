@@ -85,8 +85,6 @@ public:
       */
     virtual String getName() const = 0;
 
-    virtual Int64 getId() const { return -1; };
-
     /// If this stream generates data in grouped by some keys, return true.
     virtual bool isGroupedOutput() const { return false; }
     /// If this stream generates data in order by some keys, return true.
@@ -97,6 +95,8 @@ public:
     /** Must be called before read, readPrefix.
       */
     void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1);
+
+    virtual void dumpProfileInfo(std::ostream & ostr [[maybe_unused]]) {}
 
     /** Check the depth of the pipeline.
       * If max_depth is specified and the `depth` is greater - throw an exception.

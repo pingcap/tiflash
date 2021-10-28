@@ -40,7 +40,11 @@ Block ExpressionBlockInputStream::readImpl()
     Block res = children.back()->read();
     if (!res)
         return res;
+
+    // beginSelfTimer();
     expression->execute(res);
+    // endSelfTimer();
+
     return res;
 }
 

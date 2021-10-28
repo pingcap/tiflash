@@ -48,6 +48,10 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     if (isCancelledOrThrowIfKilled())
         return res;
 
+    if (info.read_prefixed)
+    {
+        info.waiting_duration += info.timer.elapsed() - info.last_timestamp;
+    }
     auto start_time = info.total_stopwatch.elapsed();
 
     if (!checkTimeLimit())
@@ -59,6 +63,26 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
             res = readImpl(res_filter, return_filter);
         else
             res = readImpl();
+
+        if (info.is_first)
+        {
+            info.is_first = false;
+            info.first_ts = info.now();
+        }
+
+        if (res)
+        {
+            UInt64 index = info.toSeconds(info.now());
+            if (index < 256)
+            {
+                info.traffic.bytes[index] += res.bytes();
+                info.traffic.rows[index] += res.rows();
+            }
+        }
+        else
+        {
+            info.last_ts = info.now();
+        }
     }
 
     if (res)
@@ -96,13 +120,61 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     }
 #endif
 
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    auto duration = info.total_stopwatch.elapsed() - start_time;
+    info.running_duration += duration;
+    info.updateExecutionTime(duration);
+
+    info.last_timestamp = info.timer.elapsed();
     return res;
 }
 
 
+void IProfilingBlockInputStream::dumpProfileInfo(std::ostream & ostr)
+{
+    ostr << "{";
+
+    ostr << "\"sig\":" << info.signautre << ",";
+    ostr << "\"first\":" << info.toNanoseconds(info.first_ts) << ",";
+    ostr << "\"last\":" << info.toNanoseconds(info.last_ts) << ",";
+
+    ostr << "\"rows\":[";
+    for (size_t i = 0; i < 256; i++)
+    {
+        ostr << info.traffic.rows[i];
+        if (i + 1 < 256)
+            ostr << ',';
+    }
+    ostr << "],";
+
+    ostr << "\"bytes\":[";
+    for (size_t i = 0; i < 256; i++)
+    {
+        ostr << info.traffic.bytes[i];
+        if (i + 1 < 256)
+            ostr << ',';
+    }
+    ostr << "]";
+
+    ostr << "}";
+}
+
+void IProfilingBlockInputStream::beginSelfTimer()
+{
+    info.self_timestamp = info.total_stopwatch.elapsed();
+}
+
+void IProfilingBlockInputStream::endSelfTimer()
+{
+    UInt64 duration = info.total_stopwatch.elapsed() - info.self_timestamp;
+    info.self_duration += duration;
+}
+
 void IProfilingBlockInputStream::readPrefix()
 {
+    info.start_timestamp = std::chrono::system_clock::now();
+
+    info.timer.start();
+
     auto start_time = info.total_stopwatch.elapsed();
     readPrefixImpl();
 
@@ -111,12 +183,18 @@ void IProfilingBlockInputStream::readPrefix()
         child.readPrefix();
         return false;
     });
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    info.prefix_duration = info.total_stopwatch.elapsed() - start_time;
+    info.updateExecutionTime(info.prefix_duration);
+
+    info.last_timestamp = info.timer.elapsed();
+    info.read_prefixed = true;
 }
 
 
 void IProfilingBlockInputStream::readSuffix()
 {
+    info.waiting_duration += info.timer.elapsed() - info.last_timestamp;
+
     auto start_time = info.total_stopwatch.elapsed();
     forEachChild([&] (IBlockInputStream & child)
     {
@@ -125,7 +203,10 @@ void IProfilingBlockInputStream::readSuffix()
     });
 
     readSuffixImpl();
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    info.suffix_duration = info.total_stopwatch.elapsed() - start_time;
+    info.updateExecutionTime(info.suffix_duration);
+
+    info.finish_timestamp = std::chrono::system_clock::now();
 }
 
 

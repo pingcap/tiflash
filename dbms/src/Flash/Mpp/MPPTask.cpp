@@ -333,6 +333,10 @@ void MPPTask::runImpl()
         from->readSuffix();
         finishWrite();
         LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
+
+        std::stringstream ss;
+        from->dumpTree(ss);
+        LOG_DEBUG(log, "runtime info: \n" + ss.str());
     }
     catch (Exception & e)
     {

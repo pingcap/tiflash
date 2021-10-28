@@ -38,18 +38,14 @@ class IProfilingBlockInputStream : public IBlockInputStream
 public:
     IProfilingBlockInputStream();
 
-    Int64 getId() const override
-    {
-        return id;
-    }
-
     template <typename Assigner>
-    void assignId(Assigner && assign)
+    void assignSignature(Assigner && assign)
     {
-        id = assign();
+        if (info.signautre < 0)
+            info.signautre = assign();
 
         forEachProfilingChild([&](IProfilingBlockInputStream & child) {
-            child.assignId(assign);
+            child.assignSignature(assign);
             return false;
         });
     }
@@ -191,13 +187,18 @@ public:
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
 
+    void dumpProfileInfo(std::ostream & ostr) override;
+
 protected:
-    Int64 id = 0;
+    Int64 id = -1;
     BlockStreamProfileInfo info;
     std::atomic<bool> is_cancelled{false};
     std::atomic<bool> is_killed{false};
     ProgressCallback progress_callback;
     ProcessListElement * process_list_elem = nullptr;
+
+    void beginSelfTimer();
+    void endSelfTimer();
 
     /// Additional information that can be generated during the work process.
 
