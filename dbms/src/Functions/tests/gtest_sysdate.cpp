@@ -21,7 +21,7 @@ static const String int_to_2_width_string[] = {"00", "01", "02", "03", "04", "05
 class Sysdate : public DB::tests::FunctionTest
 {
 protected:
-    const int SECONDS_IN_ONE_DAY = 60 * 60 * 24;
+    static constexpr int seconds_in_one_day = 60 * 60 * 24;
 
     void setTimezoneByOffset(Int64 offset)
     {
