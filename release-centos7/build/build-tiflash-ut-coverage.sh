@@ -14,9 +14,11 @@ fi
 command -v gcovr >/dev/null 2>&1
 if [[ $? != 0 ]]; then
   echo "try to install gcovr"
+  pushd /tmp
   curl -o /tmp/gcovr.tar http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/gcovr.tar
-  cd /tmp && rm -rf gcovr && tar xf gcovr.tar && rm -rf gcovr.tar
+  rm -rf gcovr && tar xf gcovr.tar && rm -rf gcovr.tar
   rm -rf /usr/bin/gcovr && ln -s /tmp/gcovr/gcovr /usr/bin/gcovr
+  popd
 else
   echo "gcovr has been installed"
 fi
