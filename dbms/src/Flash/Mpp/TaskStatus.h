@@ -2,6 +2,7 @@
 
 #include <Common/Exception.h>
 #include <common/StringRef.h>
+
 #include <unordered_map>
 
 namespace DB
@@ -31,4 +32,3 @@ inline StringRef taskStatusToString(const TaskStatus & status)
     return it->second;
 }
 } // namespace DB
-

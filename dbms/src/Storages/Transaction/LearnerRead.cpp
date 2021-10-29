@@ -412,10 +412,6 @@ LearnerReadSnapshot doLearnerRead(
         auto batch_wait_index_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
         dag_context->wait_index_time_ns += batch_wait_index_elapsed_ns;
     }
-    else
-    {
-        LOG_DEBUG(log, "context.getDAGContext() is nullptr");
-    }
     return regions_snapshot;
 }
 

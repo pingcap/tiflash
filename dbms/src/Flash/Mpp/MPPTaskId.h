@@ -14,4 +14,4 @@ struct MPPTaskId
 
     String toString() const;
 };
-}
+} // namespace DB
