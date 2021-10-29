@@ -10,7 +10,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -21,6 +20,7 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -86,13 +86,13 @@ namespace
 {
 struct AnalysisResult
 {
-    bool need_timezone_cast_after_tablescan = false;
+    bool need_extra_cast_after_tablescan = false;
     bool has_where = false;
     bool need_aggregate = false;
     bool has_having = false;
     bool has_order_by = false;
 
-    ExpressionActionsPtr timezone_cast;
+    ExpressionActionsPtr extra_cast;
     NamesWithAliases project_after_ts_and_filter_for_remote_read;
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr project_after_where;
@@ -113,18 +113,20 @@ struct AnalysisResult
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool addTimeZoneCastAfterTS(
+bool addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
-    const BoolVec & is_ts_column,
-    ExpressionActionsChain & chain)
+    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    ExpressionActionsChain & chain,
+    const DAGQueryBlock & query_block)
 {
-    bool hasTSColumn = false;
-    for (auto b : is_ts_column)
-        hasTSColumn |= b;
-    if (!hasTSColumn)
+    bool has_need_cast_column = false;
+    for (auto b : need_cast_column)
+    {
+        has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
+    }
+    if (!has_need_cast_column)
         return false;
-
-    return analyzer.appendTimeZoneCastsAfterTS(chain, is_ts_column);
+    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, query_block);
 }
 
 AnalysisResult analyzeExpressions(
@@ -132,7 +134,7 @@ AnalysisResult analyzeExpressions(
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
-    const BoolVec & is_ts_column,
+    const std::vector<ExtraCastAfterTSMode> & is_need_cast_column,
     bool keep_session_timezone_info,
     NamesWithAliases & final_project)
 {
@@ -141,16 +143,16 @@ AnalysisResult analyzeExpressions(
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
         auto original_source_columns = analyzer.getCurrentInputColumns();
-        if (addTimeZoneCastAfterTS(analyzer, is_ts_column, chain))
+        if (addExtraCastsAfterTs(analyzer, is_need_cast_column, chain, query_block))
         {
-            res.need_timezone_cast_after_tablescan = true;
-            res.timezone_cast = chain.getLastActions();
+            res.need_extra_cast_after_tablescan = true;
+            res.extra_cast = chain.getLastActions();
             chain.addStep();
             size_t index = 0;
             for (const auto & col : analyzer.getCurrentInputColumns())
             {
                 res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
-                index++;
+                ++index;
             }
         }
     }
@@ -299,7 +301,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
-    timestamp_column_flag_for_tablescan = std::move(storage_interpreter.is_timestamp_column);
+    need_add_cast_column_flag_for_tablescan = std::move(storage_interpreter.is_need_add_cast_column);
 
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
@@ -405,8 +407,8 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
         if (!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i)))
             throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
         DataTypes types;
-        types.emplace_back(getDataTypeByFieldType(join.left_join_keys(i).field_type()));
-        types.emplace_back(getDataTypeByFieldType(join.right_join_keys(i).field_type()));
+        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.left_join_keys(i).field_type()));
+        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.right_join_keys(i).field_type()));
         DataTypePtr common_type = getLeastSupertype(types);
         key_types.emplace_back(common_type);
     }
@@ -1050,11 +1052,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         *analyzer,
         query_block,
         conditions,
-        timestamp_column_flag_for_tablescan,
+        need_add_cast_column_flag_for_tablescan,
         keep_session_timezone_info,
         final_project);
 
-    if (res.need_timezone_cast_after_tablescan || res.has_where)
+    if (res.need_extra_cast_after_tablescan || res.has_where)
     {
         /// execute timezone cast and the selection
         ExpressionActionsPtr project_for_cop_read;
@@ -1074,9 +1076,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             }
             else
             {
-                /// execute timezone cast if needed
-                if (res.need_timezone_cast_after_tablescan)
-                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast, log);
+                /// execute timezone cast or duration cast if needed
+                if (res.need_extra_cast_after_tablescan)
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, res.extra_cast, log);
                 /// execute selection if needed
                 if (res.has_where)
                 {
@@ -1106,7 +1108,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     LOG_INFO(log,
              "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
 
-    dag.getDAGContext().final_concurrency = pipeline.streams.size();
+    dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
     if (res.need_aggregate)
     {
         // execute aggregation
@@ -1180,22 +1182,13 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     {
         size_t concurrency = pipeline.streams.size();
         executeUnion(pipeline, max_streams, log);
-        if (!query_block.isRootQueryBlock() && concurrency > 1)
-        {
-            BlockInputStreamPtr shared_query_block_input_stream
-                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
-            pipeline.streams.assign(concurrency, shared_query_block_input_stream);
-        }
+        if (!query_block.isRootQueryBlock())
+            restoreConcurrency(pipeline, concurrency, log);
     }
 
     /// expand concurrency after agg
-    if (!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size() == 1)
-    {
-        size_t concurrency = before_agg_streams;
-        BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
-        pipeline.streams.assign(concurrency, shared_query_block_input_stream);
-    }
+    if (!query_block.isRootQueryBlock())
+        restoreConcurrency(pipeline, before_agg_streams, log);
 
     return pipeline.streams;
 }

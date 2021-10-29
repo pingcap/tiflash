@@ -369,7 +369,7 @@ public:
         }
         catch (DB::Exception &)
         {
-            // Maybe another test has already registed, ignore exception here.
+            // Maybe another test has already registered, ignore exception here.
         }
     }
     FunctionTest()

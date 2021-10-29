@@ -28,11 +28,11 @@ public:
         const FileProviderPtr & file_provider_,
         bool final_,
         const LogWithPrefixPtr & log_)
-        : params(params_)
-        , aggregator(params)
+        : log(getMPPTaskLog(log_, getName()))
+        , params(params_)
+        , aggregator(params, log)
         , file_provider{file_provider_}
         , final(final_)
-        , log(getMPPTaskLog(log_, getName()))
     {
         children.push_back(input);
     }
@@ -43,6 +43,8 @@ public:
 
 protected:
     Block readImpl() override;
+
+    LogWithPrefixPtr log;
 
     Aggregator::Params params;
     Aggregator aggregator;
@@ -66,8 +68,6 @@ protected:
 
     /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;
-
-    LogWithPrefixPtr log;
 };
 
 } // namespace DB

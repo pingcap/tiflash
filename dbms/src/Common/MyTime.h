@@ -70,7 +70,7 @@ struct MyTimeBase
     UInt32 micro_second; // ms second <= 999999
 
     MyTimeBase() = default;
-    MyTimeBase(UInt64 packed);
+    explicit MyTimeBase(UInt64 packed);
     MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_);
 
     UInt64 toPackedUInt() const;
@@ -97,7 +97,7 @@ struct MyTimeBase
 
 struct MyDateTime : public MyTimeBase
 {
-    MyDateTime(UInt64 packed)
+    explicit MyDateTime(UInt64 packed)
         : MyTimeBase(packed)
     {}
 
@@ -112,7 +112,7 @@ struct MyDateTime : public MyTimeBase
 
 struct MyDate : public MyTimeBase
 {
-    MyDate(UInt64 packed)
+    explicit MyDate(UInt64 packed)
         : MyTimeBase(packed)
     {}
 
