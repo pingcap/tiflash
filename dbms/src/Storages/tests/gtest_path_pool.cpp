@@ -339,7 +339,16 @@ public:
 
     void setDiskStats(std::map<FSID, DiskCapacity> & disk_stats_map_) { disk_stats_map = disk_stats_map_; }
 
+    template <typename T>
+    DisksCapacity getDiskStatsForPaths(const std::vector<T> & /*paths*/)
+    {
+        return disks_cap;
+    }
+
+    void setDiskStatsForPaths(DisksCapacity & disks_cap_) { disks_cap = disks_cap_; }
+
 private:
+    DisksCapacity disks_cap;
     std::map<FSID, DiskCapacity> disk_stats_map;
 };
 
@@ -487,21 +496,6 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
 }
 
-class FakePathCapacityMetrics
-{
-public:
-    template <typename T>
-    DisksCapacity getDiskStatsForPaths(const std::vector<T> & /*paths*/)
-    {
-        return disks_cap;
-    }
-
-    void setDiskStats(DisksCapacity & disks_cap_) { disks_cap = disks_cap_; }
-
-private:
-    DisksCapacity disks_cap;
-};
-
 struct TestPathInfo
 {
     String path;
@@ -511,8 +505,8 @@ using TestPathInfos = std::vector<TestPathInfo>;
 
 String callChoosePath(const Strings & main_paths_, DisksCapacity & disks_cap)
 {
-    auto capacity_ptr = std::make_shared<FakePathCapacityMetrics>();
-    capacity_ptr->setDiskStats(disks_cap);
+    auto capacity_ptr = std::make_shared<MockPathCapacityMetrics>(0, std::vector<String>({}), std::vector<size_t>({}), std::vector<String>({}), std::vector<size_t>({}));
+    capacity_ptr->setDiskStatsForPaths(disks_cap);
 
     TestPathInfos infos;
     for (auto & path : main_paths_)
