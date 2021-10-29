@@ -36,14 +36,6 @@ void FunctionConvertDurationFromNanos::executeImpl(Block & block, const ColumnNu
 template <typename Impl>
 DataTypePtr FunctionDurationSplit<Impl>::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
 {
-    if (arguments.size() != 1)
-    {
-        throw Exception(
-            fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1",
-                        getName(),
-                        arguments.size()),
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    }
     if (!arguments[0].type->isMyTime())
     {
         throw Exception(
