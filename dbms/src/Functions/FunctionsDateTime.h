@@ -2874,11 +2874,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        if (arguments.size() != getNumberOfArguments())
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(arguments.size()) + ", should be " + std::to_string(getNumberOfArguments()),
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
         return Transform::getReturnType(arguments);
     }
 
