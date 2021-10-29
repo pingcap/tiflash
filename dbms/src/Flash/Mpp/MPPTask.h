@@ -98,9 +98,9 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    MPPTaskStatsPtr task_stats;
-
     const LogWithPrefixPtr log;
+
+    MPPTaskStatsPtr task_stats;
 
     Exception err;
 

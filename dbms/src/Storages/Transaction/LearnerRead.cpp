@@ -145,6 +145,7 @@ LearnerReadSnapshot doLearnerRead(
     MvccQueryInfo & mvcc_query_info_,
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,
+    Context & context,
     TMTContext & tmt,
     Poco::Logger * log)
 {
@@ -405,14 +406,15 @@ LearnerReadSnapshot doLearnerRead(
               "[Learner Read] batch read index | wait index cost "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
                   << " ms totally, regions_num=" << num_regions << ", concurrency=" << concurrent_num);
-    if (tmt.getContext().getDAGContext() != nullptr)
+    if (context.getDAGContext() != nullptr)
     {
-        auto * dag_context = tmt.getContext().getDAGContext();
-        if (dag_context->task_stats != nullptr)
-        {
-            auto batch_wait_index_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-            dag_context->task_stats->wait_index_duration += batch_wait_index_elapsed_ns;
-        }
+        auto * dag_context = context.getDAGContext();
+        auto batch_wait_index_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+        dag_context->wait_index_time_ns += batch_wait_index_elapsed_ns;
+    }
+    else
+    {
+        LOG_DEBUG(log, "context.getDAGContext() is nullptr");
     }
     return regions_snapshot;
 }

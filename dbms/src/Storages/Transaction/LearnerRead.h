@@ -30,6 +30,7 @@ doLearnerRead(
     MvccQueryInfo & mvcc_query_info,
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,
+    Context & context,
     TMTContext & tmt,
     Poco::Logger * log);
 

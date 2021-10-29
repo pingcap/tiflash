@@ -41,10 +41,10 @@ extern const char force_no_local_region_for_mpp_task[];
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
-    , task_stats(std::make_shared<MPPTaskStats>())
     , log(std::make_shared<LogWithPrefix>(
           &Poco::Logger::get("MPPTask"),
           fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
+    , task_stats(std::make_shared<MPPTaskStats>(log))
 {
     id.start_ts = meta.start_ts();
     id.task_id = meta.task_id();
@@ -229,6 +229,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         return sp && sp->getStatus() == CANCELLED;
     };
 
+    auto start_time = Clock::now();
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
@@ -244,6 +245,10 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         }
     }
     dag_context->tunnel_set = tunnel_set;
+    auto end_time = Clock::now();
+    auto register_mpp_tunnel_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+    task_stats->register_mpp_tunnel_duration = register_mpp_tunnel_elapsed_ns;
+
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task " << id.toString());
@@ -272,7 +277,10 @@ void MPPTask::preprocess()
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
-    task_stats->compile_duration = compile_time_ns;
+
+    task_stats->compile_duration = dag_context->compile_time_ns;
+    task_stats->wait_index_duration = dag_context->wait_index_time_ns;
+    task_stats->init_exchange_receiver_duration = dag_context->init_exchange_receiver_time_ns;
 }
 
 void MPPTask::runImpl()
@@ -353,6 +361,7 @@ void MPPTask::runImpl()
         auto process_info = context.getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
+        task_stats->memory_peak = peak_memory;
     }
     else
     {
@@ -363,7 +372,7 @@ void MPPTask::runImpl()
 
     if (switchStatus(RUNNING, FINISHED))
     {
-        task_stats->end(FINISHED);
+        task_stats->end(FINISHED, err_msg);
         LOG_INFO(log, "finish task");
     }
     else

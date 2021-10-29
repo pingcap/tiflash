@@ -1,5 +1,7 @@
 #pragma once
 
+#include <common/types.h>
+
 namespace DB
 {
 // Identify a mpp task.
@@ -10,9 +12,6 @@ struct MPPTaskId
 
     bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
 
-    String toString() const
-    {
-        return fmt::format("[{},{}]", start_ts, task_id);
-    }
+    String toString() const;
 };
 }

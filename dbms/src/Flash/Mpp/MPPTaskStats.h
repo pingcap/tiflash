@@ -1,12 +1,12 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <common/StringRef.h>
 #include <common/types.h>
 
 #include <chrono>
-#include <ctime>
 #include <mutex>
 
 namespace DB
@@ -18,44 +18,20 @@ public:
     using Timestamp = Clock::time_point;
     using Duration = Int64; /// ns
 
-    void init(const MPPTaskId & id_)
-    {
-        std::lock_guard<std::mutex> lk(mtx);
-        id = id_;
-        init_timestamp = Clock::now();
-        status = INITIALIZING;
-    }
+    explicit MPPTaskStats(const LogWithPrefixPtr & log_)
+        : log(log_)
+    {}
 
-    void start()
-    {
-        std::lock_guard<std::mutex> lk(mtx);
-        start_timestamp = Clock::now();
-        status = RUNNING;
-    }
+    void init(const MPPTaskId & id_);
 
-    void end(const TaskStatus & status_, StringRef error_message_ = "")
-    {
-        std::lock_guard<std::mutex> lk(mtx);
-        end_timestamp = Clock::now();
-        status = status_;
-        error_message.assign(error_message_.data, error_message_.size);
-    }
+    void start();
 
-    String toString() const
-    {
-        return fmt::format(
-            "id: {}, init_timestamp: {}, start_timestamp: {}, end_timestamp: {}, compile_duration: {}, wait_index_duration: {}, status: {}, error_message: {}",
-            id.toString(),
-            init_timestamp.time_since_epoch().count(),
-            start_timestamp.time_since_epoch().count(),
-            end_timestamp.time_since_epoch().count(),
-            compile_duration,
-            wait_index_duration,
-            taskStatusToString(status),
-            error_message);
-    }
+    void end(const TaskStatus & status_, StringRef error_message_ = "");
+
+    String toString() const;
 
     std::mutex mtx;
+    const LogWithPrefixPtr log;
 
     /// common
     MPPTaskId id;
@@ -65,9 +41,15 @@ public:
     Timestamp init_timestamp;
     Timestamp start_timestamp;
     Timestamp end_timestamp;
-    Duration compile_duration = -1;
+    Duration register_mpp_tunnel_duration = 0;
+    Duration compile_duration = 0;
     Duration wait_index_duration = 0;
+    Duration init_exchange_receiver_duration = 0;
     TaskStatus status;
     String error_message;
+
+    /// resource
+    Int64 cpu_usage = 0;
+    Int64 memory_peak = 0;
 };
 } // namespace DB
