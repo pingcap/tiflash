@@ -49,7 +49,7 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
         throw Exception("Query pipeline is too deep. Maximum: " + toString(max_depth), ErrorCodes::TOO_DEEP_PIPELINE);
 
     size_t res = 0;
-    for (const auto & it : children)
+    for (const auto & child : children)
     {
         size_t child_depth = it->checkDepth(level + 1);
         if (child_depth > res)
@@ -73,10 +73,10 @@ void IBlockInputStream::dumpTree(std::ostream & ostr, size_t indent, size_t mult
     using Multipliers = std::map<String, size_t>;
     Multipliers multipliers;
 
-    for (const auto & it : children)
+    for (const auto & child : children)
         ++multipliers[it->getTreeID()];
 
-    for (auto & it : children)
+    for (auto & child : children)
     {
         String id = it->getTreeID();
         size_t & subtree_multiplier = multipliers[id];
