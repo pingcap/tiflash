@@ -1,5 +1,4 @@
 #include <Common/ProfileEvents.h>
-
 #include <Encryption/WriteBufferFromFileProvider.h>
 
 
@@ -20,9 +19,13 @@ extern const int CANNOT_SEEK_THROUGH_FILE;
 extern const int CANNOT_TRUNCATE_FILE;
 } // namespace ErrorCodes
 
-void WriteBufferFromFileProvider::close() { file->close(); }
+void WriteBufferFromFileProvider::close()
+{
+    file->close();
+}
 
-WriteBufferFromFileProvider::WriteBufferFromFileProvider(const FileProviderPtr & file_provider_,
+WriteBufferFromFileProvider::WriteBufferFromFileProvider(
+    const FileProviderPtr & file_provider_,
     const std::string & file_name_,
     const EncryptionPath & encryption_path_,
     bool create_new_encryption_info_,
@@ -32,8 +35,8 @@ WriteBufferFromFileProvider::WriteBufferFromFileProvider(const FileProviderPtr &
     mode_t mode,
     char * existing_memory,
     size_t alignment)
-    : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment),
-      file(file_provider_->newWritableFile(file_name_, encryption_path_, true, create_new_encryption_info_, write_limiter_, flags, mode))
+    : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment)
+    , file(file_provider_->newWritableFile(file_name_, encryption_path_, true, create_new_encryption_info_, write_limiter_, flags, mode))
 {
     fd = file->getFd();
 }

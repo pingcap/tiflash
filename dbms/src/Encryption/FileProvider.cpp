@@ -10,8 +10,11 @@
 
 namespace DB
 {
-
-RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, const ReadLimiterPtr & read_limiter, int flags) const
+RandomAccessFilePtr FileProvider::newRandomAccessFile(
+    const String & file_path_,
+    const EncryptionPath & encryption_path_,
+    const ReadLimiterPtr & read_limiter,
+    int flags) const
 {
     RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
@@ -22,8 +25,14 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_,
     return file;
 }
 
-WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool truncate_if_exists_,
-    bool create_new_encryption_info_, const WriteLimiterPtr & write_limiter_, int flags, mode_t mode) const
+WritableFilePtr FileProvider::newWritableFile(
+    const String & file_path_,
+    const EncryptionPath & encryption_path_,
+    bool truncate_if_exists_,
+    bool create_new_encryption_info_,
+    const WriteLimiterPtr & write_limiter_,
+    int flags,
+    mode_t mode) const
 {
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
     if (encryption_enabled && create_new_encryption_info_)
@@ -108,12 +117,12 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
     key_manager->deleteFile(encryption_path_.full_path, throw_on_error);
 }
 
-void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const
+void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & link_encryption_name_) const
 {
     // delete the encryption info for dst_path if any
-    if (isFileEncrypted(dst_encryption_path_))
-        key_manager->deleteFile(dst_encryption_path_.full_path, true);
-    key_manager->linkFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);
+    if (isFileEncrypted(link_encryption_name_))
+        key_manager->deleteFile(link_encryption_name_.full_path, true);
+    key_manager->linkFile(src_encryption_path_.full_path, link_encryption_name_.full_path);
 }
 
 bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) const
@@ -123,10 +132,17 @@ bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) cons
     return (encryption_info.res != FileEncryptionRes::Disabled) && (encryption_info.method != EncryptionMethod::Plaintext);
 }
 
-bool FileProvider::isEncryptionEnabled() const { return encryption_enabled; }
+bool FileProvider::isEncryptionEnabled() const
+{
+    return encryption_enabled;
+}
 
-void FileProvider::renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_, const String & dst_file_path_,
-    const EncryptionPath & dst_encryption_path_, bool rename_encryption_info_) const
+void FileProvider::renameFile(
+    const String & src_file_path_,
+    const EncryptionPath & src_encryption_path_,
+    const String & dst_file_path_,
+    const EncryptionPath & dst_encryption_path_,
+    bool rename_encryption_info_) const
 {
     Poco::File data_file(src_file_path_);
     if (unlikely(!data_file.exists()))
@@ -136,8 +152,8 @@ void FileProvider::renameFile(const String & src_file_path_, const EncryptionPat
     if (unlikely(src_encryption_path_.file_name != dst_encryption_path_.file_name))
     {
         throw DB::TiFlashException("The src file name: " + src_encryption_path_.file_name
-                + " should be identical to dst file name: " + dst_encryption_path_.file_name,
-            Errors::Encryption::Internal);
+                                       + " should be identical to dst file name: " + dst_encryption_path_.file_name,
+                                   Errors::Encryption::Internal);
     }
 
     if (!rename_encryption_info_)
@@ -145,8 +161,8 @@ void FileProvider::renameFile(const String & src_file_path_, const EncryptionPat
         if (unlikely(src_encryption_path_.full_path != dst_encryption_path_.full_path))
         {
             throw DB::TiFlashException("Src file encryption full path: " + src_encryption_path_.full_path
-                    + " must be same with dst file encryption full path" + dst_encryption_path_.full_path,
-                Errors::Encryption::Internal);
+                                           + " must be same with dst file encryption full path" + dst_encryption_path_.full_path,
+                                       Errors::Encryption::Internal);
         }
         data_file.renameTo(dst_file_path_);
         return;

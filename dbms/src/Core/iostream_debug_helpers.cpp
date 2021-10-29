@@ -1,23 +1,23 @@
 #include "iostream_debug_helpers.h"
 
-#include <iostream>
+#include <Common/COWPtr.h>
+#include <Common/FieldVisitors.h>
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
-#include <Common/FieldVisitors.h>
-#include <Common/COWPtr.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/IDataType.h>
 #include <Functions/IFunction.h>
-#include <Storages/IStorage.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Parsers/IAST.h>
+#include <Storages/IStorage.h>
+
+#include <iostream>
 
 
 namespace DB
 {
-
 std::ostream & operator<<(std::ostream & stream, const IBlockInputStream & what)
 {
     stream << "IBlockInputStream(name = " << what.getName() << ")";
@@ -86,8 +86,8 @@ std::ostream & operator<<(std::ostream & stream, const IColumn & what)
 std::ostream & operator<<(std::ostream & stream, const Connection::Packet & what)
 {
     stream << "Connection::Packet("
-        << "type = " << what.type;
-        // types description: Core/Protocol.h
+           << "type = " << what.type;
+    // types description: Core/Protocol.h
     if (what.exception)
         stream << "exception = " << what.exception.get();
     // TODO: profile_info
@@ -103,4 +103,4 @@ std::ostream & operator<<(std::ostream & stream, const IAST & what)
     return stream;
 }
 
-}
+} // namespace DB

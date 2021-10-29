@@ -1,3 +1,4 @@
+#include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageFile.h>
@@ -10,7 +11,7 @@ namespace tests
 TEST(PageFile_test, Compare)
 {
     // clean up
-    const String path = TiFlashTestEnv::getTemporaryPath() + "/page_file_test";
+    const String path = TiFlashTestEnv::getTemporaryPath("pageFileCompare");
     {
         if (Poco::File p(path); p.exists())
         {
@@ -41,7 +42,7 @@ TEST(PageFile_test, Compare)
     ASSERT_EQ(comp(pf0, pf1), true);
     ASSERT_EQ(comp(pf1, pf0), false);
 
-    // Checkpoin file is less than formal file
+    // Checkpoint file is less than formal file
     ASSERT_EQ(comp(checkpoint_pf, pf0), true);
     ASSERT_EQ(comp(pf0, checkpoint_pf), false);
 
@@ -63,6 +64,7 @@ TEST(PageFile_test, Compare)
     ASSERT_TRUE(PageFile::isPageFileExist(pf0.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
     ASSERT_TRUE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
     ASSERT_FALSE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Legacy, log));
+
     // set pf1 to legacy and check exist
     pf1.setLegacy();
     ASSERT_FALSE(PageFile::isPageFileExist(pf1.fileIdLevel(), path, file_provider, PageFile::Type::Formal, log));
@@ -164,6 +166,119 @@ TEST(PageEntry_test, GetFieldInfo)
 
     ASSERT_THROW({ entry.getFieldOffsets(5); }, DB::Exception);
     ASSERT_THROW({ entry.getFieldSize(5); }, DB::Exception);
+}
+
+TEST(PageFile_test, PageFileLink)
+{
+    Poco::Logger * log = &Poco::Logger::get("PageFileLink");
+    PageId page_id = 55;
+    UInt64 tag = 0;
+    const String path = TiFlashTestEnv::getTemporaryPath("PageFileLink/");
+    {
+        if (Poco::File p(path); p.exists())
+        {
+            Poco::File file(Poco::Path(path).parent());
+            file.remove(true);
+        }
+    }
+
+    const auto file_provider = TiFlashTestEnv::getGlobalContext().getFileProvider();
+    PageFile pf0 = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
+    auto writer = pf0.createWriter(true, true);
+
+    WriteBatch batch;
+    {
+        const size_t buf_sz = 1024;
+        char c_buff1[buf_sz], c_buff2[buf_sz];
+
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            c_buff1[i] = i & 0xff;
+            c_buff2[i] = i & 0xff;
+        }
+
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(c_buff1, sizeof(c_buff1));
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
+        batch.putPage(page_id, tag, buff1, buf_sz);
+        batch.putPage(page_id + 1, tag, buff2, buf_sz);
+    }
+
+    PageEntriesEdit edit;
+
+    ASSERT_GT(writer->write(batch, edit), 0);
+    PageFile pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
+    WriteBatch::SequenceID sid = 100;
+    ASSERT_TRUE(pf1.linkFrom(pf0, sid, edit));
+
+    pf0.destroy();
+
+    auto reader = PageFile::MetaMergingReader::createFrom(pf1);
+    while (reader->hasNext())
+    {
+        reader->moveNext();
+    }
+
+    auto sequence = reader->writeBatchSequence();
+    ASSERT_EQ(sequence, sid);
+    ASSERT_EQ(reader->fileIdLevel().first, page_id);
+    ASSERT_EQ(reader->fileIdLevel().second, 1);
+}
+
+TEST(PageFile_test, EncryptedPageFileLink)
+{
+    Poco::Logger * log = &Poco::Logger::get("EncryptedPageFileLink");
+    PageId page_id = 55;
+    UInt64 tag = 0;
+    const String path = TiFlashTestEnv::getTemporaryPath("EncryptedPageFileLink/");
+    {
+        if (Poco::File p(path); p.exists())
+        {
+            Poco::File file(Poco::Path(path).parent());
+            file.remove(true);
+        }
+    }
+
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
+    const auto file_provider = std::make_shared<FileProvider>(key_manager, true);
+    PageFile pf0 = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
+    auto writer = pf0.createWriter(true, true);
+
+    WriteBatch batch;
+    {
+        const size_t buf_sz = 1024;
+        char c_buff1[buf_sz], c_buff2[buf_sz];
+
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            c_buff1[i] = i & 0xff;
+            c_buff2[i] = i & 0xff;
+        }
+
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(c_buff1, sizeof(c_buff1));
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
+        batch.putPage(page_id, tag, buff1, buf_sz);
+        batch.putPage(page_id + 1, tag, buff2, buf_sz);
+    }
+
+    PageEntriesEdit edit;
+
+    ASSERT_GT(writer->write(batch, edit), 0);
+    PageFile pf1 = PageFile::newPageFile(page_id, 1, path, file_provider, PageFile::Type::Formal, log);
+    WriteBatch::SequenceID sid = 100;
+    ASSERT_TRUE(pf1.linkFrom(pf0, sid, edit));
+
+    pf0.destroy();
+
+    auto reader = PageFile::MetaMergingReader::createFrom(pf1);
+    while (reader->hasNext())
+    {
+        reader->moveNext();
+    }
+
+    auto sequence = reader->writeBatchSequence();
+    ASSERT_EQ(sequence, sid);
+    ASSERT_EQ(reader->fileIdLevel().first, page_id);
+    ASSERT_EQ(reader->fileIdLevel().second, 1);
 }
 
 } // namespace tests

@@ -1,4 +1,5 @@
 #include <DataStreams/SquashingBlockInputStream.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 
 
 namespace DB
@@ -7,9 +8,9 @@ SquashingBlockInputStream::SquashingBlockInputStream(
     const BlockInputStreamPtr & src,
     size_t min_block_size_rows,
     size_t min_block_size_bytes,
-    const std::shared_ptr<LogWithPrefix> & log_)
-    : transform(min_block_size_rows, min_block_size_bytes)
-    , log(getLogWithPrefix(log_, getName()))
+    const LogWithPrefixPtr & log_)
+    : log(getMPPTaskLog(log_, getName()))
+    , transform(min_block_size_rows, min_block_size_bytes, log)
 {
     children.emplace_back(src);
 }

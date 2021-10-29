@@ -6,6 +6,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsStringSearch.h>
 #include <Functions/Regexps.h>
+#include <Functions/StringUtil.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/UTF8String.h>
 #include <re2/re2.h>
@@ -27,20 +28,6 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 }
-
-namespace
-{
-/// Same as ColumnString's private offsetAt and sizeAt.
-size_t offsetAt(const ColumnString::Offsets & offsets, size_t i)
-{
-    return i == 0 ? 0 : offsets[i - 1];
-}
-
-size_t sizeAt(const ColumnString::Offsets & offsets, size_t i)
-{
-    return i == 0 ? offsets[0] : (offsets[i] - offsets[i - 1]);
-}
-} // namespace
 
 /** Implementation details for functions of 'position' family depending on ASCII/UTF8 and case sensitiveness.
   */
@@ -120,7 +107,7 @@ struct PositionCaseSensitiveUTF8
     static size_t countChars(const char * begin, const char * end)
     {
         size_t res = 0;
-        for (auto it = begin; it != end; ++it)
+        for (const char * it = begin; it != end; ++it)
             if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
                 ++res;
         return res;
@@ -149,7 +136,7 @@ struct PositionCaseInsensitiveUTF8
     static size_t countChars(const char * begin, const char * end)
     {
         size_t res = 0;
-        for (auto it = begin; it != end; ++it)
+        for (const char * it = begin; it != end; ++it)
             if (!UTF8::isContinuationOctet(static_cast<UInt8>(*it)))
                 ++res;
         return res;
@@ -167,12 +154,12 @@ struct PositionImpl
     using ResultType = UInt64;
 
     /// Find one substring in many strings.
-    static void vector_constant(const ColumnString::Chars_t & data,
-                                const ColumnString::Offsets & offsets,
-                                const std::string & needle,
-                                const UInt8 escape_char,
-                                const TiDB::TiDBCollatorPtr & collator,
-                                PaddedPODArray<UInt64> & res)
+    static void vectorConstant(const ColumnString::Chars_t & data,
+                               const ColumnString::Offsets & offsets,
+                               const std::string & needle,
+                               const UInt8 escape_char,
+                               const TiDB::TiDBCollatorPtr & collator,
+                               PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -212,7 +199,7 @@ struct PositionImpl
     }
 
     /// Search for substring in string.
-    static void constant_constant(std::string data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, UInt64 & res)
+    static void constantConstant(std::string data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, UInt64 & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -227,13 +214,13 @@ struct PositionImpl
     }
 
     /// Search each time for a different single substring inside each time different string.
-    static void vector_vector(const ColumnString::Chars_t & haystack_data,
-                              const ColumnString::Offsets & haystack_offsets,
-                              const ColumnString::Chars_t & needle_data,
-                              const ColumnString::Offsets & needle_offsets,
-                              const UInt8 escape_char,
-                              const TiDB::TiDBCollatorPtr & collator,
-                              PaddedPODArray<UInt64> & res)
+    static void vectorVector(const ColumnString::Chars_t & haystack_data,
+                             const ColumnString::Offsets & haystack_offsets,
+                             const ColumnString::Chars_t & needle_data,
+                             const ColumnString::Offsets & needle_offsets,
+                             const UInt8 escape_char,
+                             const TiDB::TiDBCollatorPtr & collator,
+                             PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -277,12 +264,12 @@ struct PositionImpl
     }
 
     /// Find many substrings in one line.
-    static void constant_vector(const String & haystack,
-                                const ColumnString::Chars_t & needle_data,
-                                const ColumnString::Offsets & needle_offsets,
-                                const UInt8 escape_char,
-                                const TiDB::TiDBCollatorPtr & collator,
-                                PaddedPODArray<UInt64> & res)
+    static void constantVector(const String & haystack,
+                               const ColumnString::Chars_t & needle_data,
+                               const ColumnString::Offsets & needle_offsets,
+                               const UInt8 escape_char,
+                               const TiDB::TiDBCollatorPtr & collator,
+                               PaddedPODArray<UInt64> & res)
     {
         if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -420,12 +407,13 @@ struct MatchImpl
 {
     using ResultType = UInt8;
 
-    static void vector_constant(const ColumnString::Chars_t & data,
-                                const ColumnString::Offsets & offsets,
-                                const std::string & orig_pattern,
-                                const UInt8 escape_char,
-                                const TiDB::TiDBCollatorPtr & collator,
-                                PaddedPODArray<UInt8> & res)
+    static void vectorConstant(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const std::string & orig_pattern,
+        UInt8 escape_char,
+        const TiDB::TiDBCollatorPtr & collator,
+        PaddedPODArray<UInt8> & res)
     {
         if (collator != nullptr)
         {
@@ -587,7 +575,12 @@ struct MatchImpl
         }
     }
 
-    static void constant_constant(const std::string & data, const std::string & orig_pattern, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, UInt8 & res)
+    static void constantConstant(
+        const std::string & data,
+        const std::string & orig_pattern,
+        UInt8 escape_char,
+        const TiDB::TiDBCollatorPtr & collator,
+        UInt8 & res)
     {
         if (collator != nullptr)
         {
@@ -605,17 +598,55 @@ struct MatchImpl
         }
     }
 
-    template <typename... Args>
-    static void vector_vector(Args &&...)
+    static void vectorVector(
+        const ColumnString::Chars_t & haystack_data,
+        const ColumnString::Offsets & haystack_offsets,
+        const ColumnString::Chars_t & needle_data,
+        const ColumnString::Offsets & needle_offsets,
+        UInt8 escape_char,
+        const TiDB::TiDBCollatorPtr & collator,
+        PaddedPODArray<UInt8> & res)
     {
-        throw Exception("Functions 'like' and 'match' don't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
+        size_t size = haystack_offsets.size();
+
+        ColumnString::Offset prev_haystack_offset = 0;
+        ColumnString::Offset prev_needle_offset = 0;
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
+            size_t haystack_size = haystack_offsets[i] - prev_haystack_offset - 1;
+            // TODO: remove the copy, use raw char array directly
+            std::string haystack_str(reinterpret_cast<const char *>(&haystack_data[prev_haystack_offset]), haystack_size);
+            std::string needle_str(reinterpret_cast<const char *>(&needle_data[prev_needle_offset]), needle_size);
+            constantConstant(haystack_str, needle_str, escape_char, collator, res[i]);
+            prev_haystack_offset = haystack_offsets[i];
+            prev_needle_offset = needle_offsets[i];
+        }
     }
 
     /// Search different needles in single haystack.
-    template <typename... Args>
-    static void constant_vector(Args &&...)
+    static void constantVector(
+        const std::string & haystack_data,
+        const ColumnString::Chars_t & needle_data,
+        const ColumnString::Offsets & needle_offsets,
+        UInt8 escape_char,
+        const TiDB::TiDBCollatorPtr & collator,
+        PaddedPODArray<UInt8> & res)
     {
-        throw Exception("Functions 'like' and 'match' don't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
+        size_t size = needle_offsets.size();
+        res.resize(size);
+
+        ColumnString::Offset prev_needle_offset = 0;
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t needle_size = needle_offsets[i] - prev_needle_offset - 1;
+            // TODO: remove the copy, use raw char array directly
+            std::string needle_str(reinterpret_cast<const char *>(&needle_data[prev_needle_offset]), needle_size);
+            constantConstant(haystack_data, needle_str, escape_char, collator, res[i]);
+            prev_needle_offset = needle_offsets[i];
+        }
     }
 };
 
@@ -967,11 +998,11 @@ struct ReplaceStringImpl
 
         for (size_t i = 0; i < offsets.size(); ++i)
         {
-            auto data_offset = offsetAt(offsets, i);
-            auto data_size = sizeAt(offsets, i);
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i);
 
-            auto needle_offset = offsetAt(needle_offsets, i);
-            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
             const UInt8 * begin = &data[data_offset];
             const UInt8 * pos = begin;
@@ -1077,8 +1108,8 @@ struct ReplaceStringImpl
             /// Is it true that this line no longer needs to perform transformations.
             bool can_finish_current_string = false;
 
-            auto replacement_offset = offsetAt(replacement_offsets, i);
-            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
             /// We check that the entry does not go through the boundaries of strings.
             if (match + needle.size() < begin + offsets[i])
@@ -1124,14 +1155,14 @@ struct ReplaceStringImpl
 
         for (size_t i = 0; i < offsets.size(); ++i)
         {
-            auto data_offset = offsetAt(offsets, i);
-            auto data_size = sizeAt(offsets, i);
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i);
 
-            auto needle_offset = offsetAt(needle_offsets, i);
-            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
-            auto replacement_offset = offsetAt(replacement_offsets, i);
-            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
             const UInt8 * begin = &data[data_offset];
             const UInt8 * pos = begin;
@@ -1306,8 +1337,8 @@ struct ReplaceStringImpl
         pos = end;                                  \
     } while (false)
 
-            auto needle_offset = offsetAt(needle_offsets, i);
-            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
             if (needle_size == 0)
             {
                 COPY_REST_OF_CURRENT_STRING();
@@ -1418,8 +1449,8 @@ struct ReplaceStringImpl
             /// We check that the entry does not pass through the boundaries of strings.
             if (match + needle.size() <= begin + n * (i + 1))
             {
-                auto replacement_offset = offsetAt(replacement_offsets, i);
-                auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+                auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+                auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
                 res_data.resize(res_data.size() + replacement_size);
                 memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
@@ -1475,11 +1506,11 @@ struct ReplaceStringImpl
         pos = end;                                  \
     } while (false)
 
-            auto needle_offset = offsetAt(needle_offsets, i);
-            auto needle_size = sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
 
-            auto replacement_offset = offsetAt(replacement_offsets, i);
-            auto replacement_size = sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
 
             if (needle_size == 0)
             {
@@ -1588,7 +1619,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column_src = block.getByPosition(arguments[0]).column;
         const ColumnPtr & column_needle = block.getByPosition(arguments[1]).column;
@@ -1621,7 +1652,7 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        ColumnWithTypeAndName & column_result)
+        ColumnWithTypeAndName & column_result) const
     {
         const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
         const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
@@ -1650,7 +1681,7 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        ColumnWithTypeAndName & column_result)
+        ColumnWithTypeAndName & column_result) const
     {
         if constexpr (Impl::support_non_const_needle)
         {
@@ -1685,7 +1716,7 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        ColumnWithTypeAndName & column_result)
+        ColumnWithTypeAndName & column_result) const
     {
         if constexpr (Impl::support_non_const_replacement)
         {
@@ -1720,7 +1751,7 @@ private:
         const ColumnPtr & column_src,
         const ColumnPtr & column_needle,
         const ColumnPtr & column_replacement,
-        ColumnWithTypeAndName & column_result)
+        ColumnWithTypeAndName & column_result) const
     {
         if constexpr (Impl::support_non_const_needle && Impl::support_non_const_replacement)
         {
@@ -1750,7 +1781,6 @@ private:
         }
     }
 };
-
 
 struct NamePosition
 {

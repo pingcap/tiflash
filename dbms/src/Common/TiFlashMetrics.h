@@ -8,6 +8,9 @@
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
 
+// to make GCC 11 happy
+#include <cassert>
+
 namespace DB
 {
 /// Central place to define metrics across all subsystems.
@@ -131,6 +134,8 @@ namespace DB
         F(type_bg_read_alloc_bytes, {"type", "bg_read_alloc_bytes"}), F(type_fg_write_req_bytes, {"type", "fg_write_req_bytes"}),         \
         F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}), F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),       \
         F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                                   \
+    M(tiflash_storage_rough_set_filter_rate, "Bucketed histogram of rough set filter rate", Histogram,                                    \
+        F(type_dtfile_pack, {{"type", "dtfile_pack"}}, EqualWidthBuckets{0, 6, 20}))                                                      \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \

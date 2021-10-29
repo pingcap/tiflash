@@ -10,7 +10,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -21,6 +20,7 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -41,16 +41,15 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_,
     bool keep_session_timezone_info_,
-    const tipb::DAGRequest & rqst_,
     const DAGQuerySource & dag_,
     std::vector<SubqueriesForSets> & subqueriesForSets_,
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_,
-    const std::shared_ptr<LogWithPrefix> & log_)
+    const LogWithPrefixPtr & log_)
     : context(context_)
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
     , keep_session_timezone_info(keep_session_timezone_info_)
-    , rqst(rqst_)
+    , rqst(dag_.getDAGRequest())
     , dag(dag_)
     , subqueriesForSets(subqueriesForSets_)
     , exchange_receiver_map(exchange_receiver_map_)
@@ -764,7 +763,7 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<
     Int64 limit = query_block.limitOrTopN->topn().limit();
 
     pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, limit, log);
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log, limit);
 
         /// Limits on sorting
         IProfilingBlockInputStream::LocalLimits limits;
@@ -1080,7 +1079,19 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast, log);
                 /// execute selection if needed
                 if (res.has_where)
+                {
                     stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name, log);
+                    if (res.project_after_where)
+                        stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_where, log);
+                }
+            }
+        }
+        for (auto & stream : pipeline.streams_with_non_joined_data)
+        {
+            /// execute selection if needed
+            if (res.has_where)
+            {
+                stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name, log);
                 if (res.project_after_where)
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, res.project_after_where, log);
             }
@@ -1095,7 +1106,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     LOG_INFO(log,
              "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
 
-    dag.getDAGContext().final_concurrency = pipeline.streams.size();
+    dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
     if (res.need_aggregate)
     {
         // execute aggregation
@@ -1153,11 +1164,11 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
         limit = query_block.limitOrTopN->limit().limit();
     else
         limit = query_block.limitOrTopN->topn().limit();
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, false, log); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log, false); });
     if (pipeline.hasMoreThanOneStream())
     {
         executeUnion(pipeline, max_streams, log);
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, false, log); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log, false); });
     }
 }
 
@@ -1169,22 +1180,13 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     {
         size_t concurrency = pipeline.streams.size();
         executeUnion(pipeline, max_streams, log);
-        if (!query_block.isRootQueryBlock() && concurrency > 1)
-        {
-            BlockInputStreamPtr shared_query_block_input_stream
-                = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
-            pipeline.streams.assign(concurrency, shared_query_block_input_stream);
-        }
+        if (!query_block.isRootQueryBlock())
+            restoreConcurrency(pipeline, concurrency, log);
     }
 
     /// expand concurrency after agg
-    if (!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size() == 1)
-    {
-        size_t concurrency = before_agg_streams;
-        BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log);
-        pipeline.streams.assign(concurrency, shared_query_block_input_stream);
-    }
+    if (!query_block.isRootQueryBlock())
+        restoreConcurrency(pipeline, before_agg_streams, log);
 
     return pipeline.streams;
 }

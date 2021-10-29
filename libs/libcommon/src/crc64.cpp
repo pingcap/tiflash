@@ -4,7 +4,6 @@
 #include <common/simd.h>
 namespace crc64
 {
-
 Digest::Digest(Mode mode)
 {
     // clang-format off

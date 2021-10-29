@@ -524,7 +524,7 @@ struct TiDBConvertToInteger
         }
         else if constexpr (std::is_integral_v<FromFieldType>)
         {
-            /// cast int as int
+            /// cast enum/int as int
             const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
@@ -781,7 +781,7 @@ struct TiDBConvertToFloat
         }
         else if constexpr (std::is_integral_v<FromFieldType> || std::is_floating_point_v<FromFieldType>)
         {
-            /// cast int/real as real
+            /// cast enum/int/real as real
             const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
@@ -813,7 +813,7 @@ struct TiDBConvertToDecimal
     static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
-        auto maxValue = DecimalMaxValue::Get(prec);
+        auto maxValue = DecimalMaxValue::get(prec);
         if (value > maxValue || value < -maxValue)
         {
             context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
@@ -874,7 +874,7 @@ struct TiDBConvertToDecimal
         {
             value *= 10;
         }
-        auto max_value = DecimalMaxValue::Get(prec);
+        auto max_value = DecimalMaxValue::get(prec);
         if (value > static_cast<Float64>(max_value))
         {
             context.getDAGContext()->handleOverflowError("cast real to decimal", Errors::Types::Truncated);
@@ -934,7 +934,7 @@ struct TiDBConvertToDecimal
             }
         }
 
-        auto max_value = DecimalMaxValue::Get(prec);
+        auto max_value = DecimalMaxValue::get(prec);
         if (value > max_value || value < -max_value)
         {
             context.getDAGContext()->handleOverflowError("cast decimal as decimal", Errors::Types::Truncated);
@@ -1021,7 +1021,7 @@ struct TiDBConvertToDecimal
                 if (decimal_parts.exp_part.data[0] == '-')
                     return static_cast<UType>(0);
                 else
-                    return static_cast<UType>(DecimalMaxValue::Get(prec));
+                    return static_cast<UType>(DecimalMaxValue::get(prec));
             }
         }
         Int256 v = 0;
@@ -1033,7 +1033,7 @@ struct TiDBConvertToDecimal
             if (decimal_parts.int_part.data[pos] == '-')
                 is_negative = true;
         }
-        Int256 max_value = DecimalMaxValue::Get(prec);
+        Int256 max_value = DecimalMaxValue::get(prec);
 
         Int64 current_scale = frac_offset_by_exponent >= 0
             ? -(decimal_parts.int_part.size - pos + frac_offset_by_exponent)
@@ -1182,7 +1182,7 @@ struct TiDBConvertToDecimal
         else if (const ColumnVector<FromFieldType> * col_from
                  = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
-            /// cast int/real as decimal
+            /// cast enum/int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
             for (size_t i = 0; i < size; ++i)
@@ -1561,12 +1561,12 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     return getDatetime(number, result, ctx);
 }
 
-class PreparedFunctionTiDBCast : public PreparedFunctionImpl
+class ExecutableFunctionTiDBCast : public IExecutableFunction
 {
 public:
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
 
-    PreparedFunctionTiDBCast(
+    ExecutableFunctionTiDBCast(
         WrapperType && wrapper_function,
         const char * name_,
         bool in_union_,
@@ -1582,7 +1582,7 @@ public:
     String getName() const override { return name; }
 
 protected:
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         ColumnNumbers new_arguments{arguments.front()};
         wrapper_function(block, new_arguments, result, in_union, tidb_tp, context);
@@ -1619,9 +1619,9 @@ public:
     const DataTypes & getArgumentTypes() const override { return argument_types; }
     const DataTypePtr & getReturnType() const override { return return_type; }
 
-    PreparedFunctionPtr prepare(const Block & /*sample_block*/) const override
+    ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override
     {
-        return std::make_shared<PreparedFunctionTiDBCast>(
+        return std::make_shared<ExecutableFunctionTiDBCast>(
             prepare(getArgumentTypes()[0], getReturnType()),
             name,
             in_union,
@@ -1827,6 +1827,10 @@ private:
             return createWrapper<DataTypeMyDateTime, return_nullable>(to_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeString>(from_type.get()))
             return createWrapper<DataTypeString, return_nullable>(to_type);
+        if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum8>(from_type.get()))
+            return createWrapper<DataTypeEnum8, return_nullable>(to_type);
+        if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum16>(from_type.get()))
+            return createWrapper<DataTypeEnum16, return_nullable>(to_type);
 
         // todo support convert to duration/json type
         throw Exception{
@@ -1946,7 +1950,7 @@ private:
     }
 };
 
-class FunctionBuilderTiDBCast : public FunctionBuilderImpl
+class FunctionBuilderTiDBCast : public IFunctionBuilder
 {
 public:
     using MonotonicityForRange = FunctionTiDBCast::MonotonicityForRange;

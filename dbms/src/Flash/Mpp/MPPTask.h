@@ -48,19 +48,9 @@ public:
 
     bool isRootMPPTask() const { return dag_context->isRootMPPTask(); }
 
-    TaskStatus getStatus() const { return static_cast<TaskStatus>(status.load()); }
-
-    void unregisterTask();
+    TaskStatus getStatus() const { return status.load(); }
 
     void cancel(const String & reason);
-
-    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnel(const String & reason);
-
-    void finishWrite();
-
-    void writeErrToAllTunnel(const String & e);
 
     std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
 
@@ -73,14 +63,24 @@ public:
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
-    std::shared_ptr<LogWithPrefix> getMPPTaskLog() const { return log; }
-
     ~MPPTask();
 
 private:
     MPPTask(const mpp::TaskMeta & meta_, const Context & context_);
 
     void runImpl();
+
+    void unregisterTask();
+
+    void writeErrToAllTunnels(const String & e);
+
+    /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
+    /// without waiting the tunnel to be connected
+    void closeAllTunnels(const String & reason);
+
+    void finishWrite();
+
+    bool switchStatus(TaskStatus from, TaskStatus to);
 
     Context context;
 
@@ -97,7 +97,7 @@ private:
 
     MPPTaskId id;
 
-    std::atomic<Int32> status{INITIALIZING};
+    std::atomic<TaskStatus> status{INITIALIZING};
 
     mpp::TaskMeta meta;
     MPPTunnelSetPtr tunnel_set;
@@ -107,7 +107,7 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    const std::shared_ptr<LogWithPrefix> log;
+    const LogWithPrefixPtr log;
 
     Exception err;
 

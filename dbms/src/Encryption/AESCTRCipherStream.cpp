@@ -19,14 +19,14 @@ size_t KeySize(EncryptionMethod method)
 {
     switch (method)
     {
-        case EncryptionMethod::Aes128Ctr:
-            return 16;
-        case EncryptionMethod::Aes192Ctr:
-            return 24;
-        case EncryptionMethod::Aes256Ctr:
-            return 32;
-        default:
-            return 0;
+    case EncryptionMethod::Aes128Ctr:
+        return 16;
+    case EncryptionMethod::Aes192Ctr:
+        return 24;
+    case EncryptionMethod::Aes256Ctr:
+        return 32;
+    default:
+        return 0;
     }
 }
 
@@ -96,13 +96,14 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
         if (ret != 1)
         {
             throw DB::TiFlashException(
-                "Crypter failed for first block, offset " + std::to_string(file_offset), Errors::Encryption::Internal);
+                "Crypter failed for first block, offset " + std::to_string(file_offset),
+                Errors::Encryption::Internal);
         }
         if (output_size != AES_BLOCK_SIZE)
         {
             throw DB::TiFlashException("Unexpected crypter output size for first block, expected " + std::to_string(AES_BLOCK_SIZE)
-                    + " vs actual " + std::to_string(output_size),
-                Errors::Encryption::Internal);
+                                           + " vs actual " + std::to_string(output_size),
+                                       Errors::Encryption::Internal);
         }
         memcpy(data, partial_block + block_offset, partial_block_size);
         data_offset += partial_block_size;
@@ -118,13 +119,14 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
         if (ret != 1)
         {
             throw DB::TiFlashException(
-                "Crypter failed at offset " + std::to_string(file_offset + data_offset), Errors::Encryption::Internal);
+                "Crypter failed at offset " + std::to_string(file_offset + data_offset),
+                Errors::Encryption::Internal);
         }
         if (output_size != static_cast<int>(actual_data_size))
         {
             throw DB::TiFlashException("Unexpected crypter output size, expected " + std::to_string(actual_data_size) + " vs actual "
-                    + std::to_string(output_size),
-                Errors::Encryption::Internal);
+                                           + std::to_string(output_size),
+                                       Errors::Encryption::Internal);
         }
         data_offset += actual_data_size;
         remaining_data_size -= actual_data_size;
@@ -140,13 +142,14 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
         if (ret != 1)
         {
             throw DB::TiFlashException(
-                "Crypter failed for last block, offset " + std::to_string(file_offset + data_offset), Errors::Encryption::Internal);
+                "Crypter failed for last block, offset " + std::to_string(file_offset + data_offset),
+                Errors::Encryption::Internal);
         }
         if (output_size != AES_BLOCK_SIZE)
         {
             throw DB::TiFlashException("Unexpected crypter output size for last block, expected " + std::to_string(AES_BLOCK_SIZE)
-                    + " vs actual " + std::to_string(output_size),
-                Errors::Encryption::Internal);
+                                           + " vs actual " + std::to_string(output_size),
+                                       Errors::Encryption::Internal);
         }
         memcpy(data + data_offset, partial_block, remaining_data_size);
     }
@@ -155,37 +158,38 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
 }
 
 BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
-    const FileEncryptionInfo & encryption_info_, const EncryptionPath & encryption_path_)
+    const FileEncryptionInfo & encryption_info_,
+    const EncryptionPath & encryption_path_)
 {
     const auto & key = *(encryption_info_.key);
 
     const EVP_CIPHER * cipher = nullptr;
     switch (encryption_info_.method)
     {
-        case EncryptionMethod::Aes128Ctr:
-            cipher = EVP_aes_128_ctr();
-            break;
-        case EncryptionMethod::Aes192Ctr:
-            cipher = EVP_aes_192_ctr();
-            break;
-        case EncryptionMethod::Aes256Ctr:
-            cipher = EVP_aes_256_ctr();
-            break;
-        default:
-            throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
-                Errors::Encryption::Internal);
+    case EncryptionMethod::Aes128Ctr:
+        cipher = EVP_aes_128_ctr();
+        break;
+    case EncryptionMethod::Aes192Ctr:
+        cipher = EVP_aes_192_ctr();
+        break;
+    case EncryptionMethod::Aes256Ctr:
+        cipher = EVP_aes_256_ctr();
+        break;
+    default:
+        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
+                                   Errors::Encryption::Internal);
     }
     if (key.size() != KeySize(encryption_info_.method))
     {
         throw DB::TiFlashException("Encryption key size mismatch. " + std::to_string(key.size()) + "(actual) vs. "
-                + std::to_string(KeySize(encryption_info_.method)) + "(expected).",
-            Errors::Encryption::Internal);
+                                       + std::to_string(KeySize(encryption_info_.method)) + "(expected).",
+                                   Errors::Encryption::Internal);
     }
     if (encryption_info_.iv->size() != AES_BLOCK_SIZE)
     {
         throw DB::TiFlashException("iv size not equal to block cipher block size: " + std::to_string(encryption_info_.iv->size())
-                + "(actual) vs. " + std::to_string(AES_BLOCK_SIZE) + "(expected).",
-            Errors::Encryption::Internal);
+                                       + "(actual) vs. " + std::to_string(AES_BLOCK_SIZE) + "(expected).",
+                                   Errors::Encryption::Internal);
     }
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(encryption_info_.iv->data()));
     auto iv_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(encryption_info_.iv->data() + sizeof(uint64_t)));

@@ -1,18 +1,15 @@
 #pragma once
 
-#include <Interpreters/Aggregator.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <IO/CompressedReadBuffer.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
-#include <Common/LogWithPrefix.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
+#include <IO/CompressedReadBuffer.h>
 
 
 namespace DB
 {
-
-
 /** Aggregates several sources in parallel.
   * Makes aggregation of blocks from different sources independently in different threads, then combines the results.
   * If final == false, aggregate functions are not finalized, that is, they are not replaced by their value, but contain an intermediate state of calculations.
@@ -24,9 +21,14 @@ public:
     /** Columns from key_names and arguments of aggregate functions must already be computed.
       */
     ParallelAggregatingBlockInputStream(
-        const BlockInputStreams & inputs, const BlockInputStreamPtr & additional_input_at_end,
-        const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, size_t max_threads_, size_t temporary_data_merge_threads_,
-        const LogWithPrefixPtr & log_ = nullptr);
+        const BlockInputStreams & inputs,
+        const BlockInputStreamPtr & additional_input_at_end,
+        const Aggregator::Params & params_,
+        const FileProviderPtr & file_provider_,
+        bool final_,
+        size_t max_threads_,
+        size_t temporary_data_merge_threads_,
+        const LogWithPrefixPtr & log_);
 
     String getName() const override { return "ParallelAggregating"; }
 
@@ -43,6 +45,8 @@ protected:
     Block readImpl() override;
 
 private:
+    const LogWithPrefixPtr log;
+
     Aggregator::Params params;
     Aggregator aggregator;
     FileProviderPtr file_provider;
@@ -60,7 +64,7 @@ private:
       */
     bool no_more_keys = false;
 
-    std::atomic<bool> executed {false};
+    std::atomic<bool> executed{false};
 
     /// To read the data stored into the temporary data file.
     struct TemporaryFileStream
@@ -98,13 +102,18 @@ private:
 
     struct Handler
     {
-        Handler(ParallelAggregatingBlockInputStream & parent_)
-            : parent(parent_) {}
+        explicit Handler(ParallelAggregatingBlockInputStream & parent_)
+            : parent(parent_)
+        {}
 
         void onBlock(Block & block, size_t thread_num);
         void onFinishThread(size_t thread_num);
         void onFinish();
         void onException(std::exception_ptr & exception, size_t thread_num);
+        static String getName()
+        {
+            return "ParallelAgg";
+        }
 
         ParallelAggregatingBlockInputStream & parent;
     };
@@ -119,8 +128,6 @@ private:
     /** From here we get the finished blocks after the aggregation.
       */
     std::unique_ptr<IBlockInputStream> impl;
-
-    LogWithPrefixPtr log;
 };
 
-}
+} // namespace DB

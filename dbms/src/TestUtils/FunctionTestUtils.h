@@ -10,13 +10,14 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Functions/registerFunctions.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
 namespace tests
 {
-
 template <typename T>
 struct Nullable
 {
@@ -236,8 +237,8 @@ ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_ar
 // parse a string into decimal field.
 template <typename T>
 typename TypeTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> & literal_,
-    PrecType max_prec = std::numeric_limits<PrecType>::max(),
-    ScaleType expected_scale = std::numeric_limits<ScaleType>::max())
+                                               PrecType max_prec = std::numeric_limits<PrecType>::max(),
+                                               ScaleType expected_scale = std::numeric_limits<ScaleType>::max())
 {
     using Traits = TypeTraits<T>;
     using DecimalType = typename Traits::DecimalType;
@@ -281,8 +282,7 @@ typename TypeTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> & li
 
 // e.g. `createColumn<Decimal32>(std::make_tuple(9, 4), {"99999.9999"})`
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredLiteralVector<T> & literals,
-    const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredLiteralVector<T> & literals, const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     PrecType prec = getDecimalPrecision(*removeNullable(data_type), 0);
@@ -297,8 +297,7 @@ ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, c
 }
 
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredLiteralInitializerList<T> literals,
-    const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredLiteralInitializerList<T> literals, const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
 {
     auto vec = InferredLiteralVector<T>(literals);
     return createColumn<T, Args...>(data_type_args, vec, name);
@@ -306,8 +305,7 @@ ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, I
 
 // e.g. `createConstColumn<Decimal32>(std::make_tuple(9, 4), 1, "99999.9999")`
 template <typename T, typename... Args>
-ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredLiteralType<T> & literal,
-    const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredLiteralType<T> & literal, const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     PrecType prec = getDecimalPrecision(*removeNullable(data_type), 0);
@@ -318,8 +316,7 @@ ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_ar
 
 // resolve ambiguous overloads for `createColumn<Nullable<Decimal>>(..., {std::nullopt})`.
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, std::initializer_list<std::nullopt_t> init,
-    const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, std::initializer_list<std::nullopt_t> init, const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
 {
     InferredDataVector<T> vec(init.size(), std::nullopt);
     return createColumn<T>(data_type_args, vec, name);
@@ -327,8 +324,7 @@ ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, s
 
 // resolve ambiguous overloads for `createConstColumn<Nullable<Decimal>>(..., std::nullopt)`.
 template <typename T, typename... Args>
-ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, std::nullopt_t, const String & name = "",
-    std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, std::nullopt_t, const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
 {
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
@@ -346,16 +342,63 @@ ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_ar
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual);
 
-ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns);
+ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnsWithTypeAndName & columns);
 
 template <typename... Args>
-ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args & ... columns)
+ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
 {
     ColumnsWithTypeAndName vec({first_column, columns...});
-    return executeFunction(func_name, vec);
+    return executeFunction(context, func_name, vec);
 }
+
+class FunctionTest : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        initializeDAGContext();
+    }
+
+public:
+    static void SetUpTestCase()
+    {
+        try
+        {
+            DB::registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registered, ignore exception here.
+        }
+    }
+    FunctionTest()
+        : context(TiFlashTestEnv::getContext())
+    {}
+    virtual void initializeDAGContext()
+    {
+        dag_context_ptr = std::make_unique<DAGContext>(1024);
+        context.setDAGContext(dag_context_ptr.get());
+    }
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns);
+
+    template <typename... Args>
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
+    {
+        ColumnsWithTypeAndName vec({first_column, columns...});
+        return executeFunction(func_name, vec);
+    }
+    DAGContext & getDAGContext()
+    {
+        assert(dag_context_ptr != nullptr);
+        return *dag_context_ptr;
+    }
+
+protected:
+    Context context;
+    std::unique_ptr<DAGContext> dag_context_ptr;
+};
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
 
 } // namespace tests
-} // DB
+} // namespace DB

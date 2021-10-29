@@ -35,7 +35,9 @@
 #include <Poco/ErrorHandler.h>
 #include <Poco/Exception.h>
 #include <Poco/Ext/LevelFilterChannel.h>
+#include <Poco/Ext/ReloadableSplitterChannel.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <Poco/Ext/TiFlashLogFileChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -54,6 +56,7 @@
 #include <common/ErrorHandlers.h>
 #include <common/logger_useful.h>
 #include <daemon/OwnPatternFormatter.h>
+#include <fmt/format.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <ucontext.h>
@@ -71,9 +74,7 @@ using Poco::FileChannel;
 using Poco::FormattingChannel;
 using Poco::Logger;
 using Poco::Message;
-using Poco::Observer;
 using Poco::Path;
-using Poco::SplitterChannel;
 using Poco::Util::AbstractConfiguration;
 
 
@@ -574,7 +575,7 @@ static void terminate_handler()
         char const * name = t->name();
         {
             int status = -1;
-            char * dem = 0;
+            char * dem = nullptr;
 
             dem = abi::__cxa_demangle(name, 0, 0, &status);
 
@@ -725,7 +726,6 @@ void BaseDaemon::wakeup()
     wakeup_event.set();
 }
 
-
 void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
 {
     auto current_logger = config.getString("logger");
@@ -736,7 +736,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     bool is_daemon = config.getBool("application.runAsDaemon", false);
 
     // Split log and error log.
-    Poco::AutoPtr<SplitterChannel> split = new SplitterChannel;
+    Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
 
     auto log_level = normalize(config.getString("logger.level", "debug"));
     const auto log_path = config.getString("logger.log", "");
@@ -749,11 +749,12 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> log = new FormattingChannel(pf);
-        log_file = new FileChannel;
+        log_file = new Poco::TiFlashLogFileChannel;
         log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(log_path).absolute().toString());
         log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
-        log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "number");
-        log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, config.getRawString("logger.compress", "true"));
+        log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
+        log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
+        log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
         log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
         log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
@@ -772,11 +773,12 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> errorlog = new FormattingChannel(pf);
-        error_log_file = new FileChannel;
+        error_log_file = new Poco::TiFlashLogFileChannel;
         error_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(errorlog_path).absolute().toString());
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
-        error_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "number");
-        error_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, config.getRawString("logger.compress", "true"));
+        error_log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
+        error_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
+        error_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
         error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
         error_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
@@ -822,7 +824,21 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     std::vector<std::string> names;
     Logger::root().names(names);
     for (const auto & name : names)
-        Logger::root().get(name).setLevel(log_level);
+    {
+        Logger & cur_logger = Logger::root().get(name);
+        cur_logger.setLevel(log_level);
+        Poco::Channel * cur_logger_channel = cur_logger.getChannel();
+        if (!cur_logger_channel)
+        {
+            continue;
+        }
+        // only loggers created after buildLoggers() need to change properties, types of channel in them must be ReloadableSplitterChannel
+        if (typeid(*cur_logger_channel) == typeid(Poco::ReloadableSplitterChannel))
+        {
+            Poco::ReloadableSplitterChannel * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
+            splitter_channel->changeProperties(config);
+        }
+    }
 
     // Attach to the root logger.
     Logger::root().setLevel(log_level);
@@ -1079,7 +1095,7 @@ void BaseDaemon::initialize(Application & self)
 
     logRevision();
 
-    signal_listener.reset(new SignalListener(*this));
+    signal_listener = std::make_unique<SignalListener>(*this);
     signal_listener_thread.start(*signal_listener);
 
     for (const auto & key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
@@ -1090,6 +1106,7 @@ void BaseDaemon::initialize(Application & self)
 
 void BaseDaemon::logRevision() const
 {
+    Logger::root().information("Welcome to TiFlash");
     Logger::root().information("Starting daemon with revision " + Poco::NumberFormatter::format(ClickHouseRevision::get()));
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
@@ -1141,9 +1158,7 @@ void BaseDaemon::defineOptions(Poco::Util::OptionSet & _options)
 
 bool isPidRunning(pid_t pid)
 {
-    if (getpgid(pid) >= 0)
-        return 1;
-    return 0;
+    return getpgid(pid) >= 0;
 }
 
 void BaseDaemon::PID::seed(const std::string & file_)

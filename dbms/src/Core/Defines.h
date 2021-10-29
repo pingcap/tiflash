@@ -29,12 +29,13 @@
 #define DEFAULT_MAX_COMPRESS_BLOCK_SIZE 1048576
 
 #define DEFAULT_MAX_READ_TSO 0xFFFFFFFFFFFFFFFF
-#define DEFAULT_UNSPECIFIED_SCHEMA_VERSION -1
+#define DEFAULT_UNSPECIFIED_SCHEMA_VERSION (-1)
 #define DEFAULT_MPP_TASK_TIMEOUT 10
 #define DEFAULT_MPP_TASK_RUNNING_TIMEOUT (DEFAULT_MPP_TASK_TIMEOUT + 30)
 #define DEFAULT_MPP_TASK_WAITING_TIMEOUT 36000
 
 #define DEFAULT_DAG_RECORDS_PER_CHUNK 1024L
+#define DEFAULT_BATCH_SEND_MIN_LIMIT (-1)
 
 /** Which blocks by default read the data (by number of rows).
   * Smaller values give better cache locality, less consumption of RAM, but more overhead to process the query.
@@ -90,4 +91,3 @@
 #if !defined(__x86_64__) && !defined(__aarch64__)
 //    #error PLATFORM_NOT_SUPPORTED
 #endif
-

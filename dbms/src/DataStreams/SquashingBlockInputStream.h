@@ -11,7 +11,11 @@ namespace DB
 class SquashingBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    SquashingBlockInputStream(const BlockInputStreamPtr & src, size_t min_block_size_rows, size_t min_block_size_bytes, const std::shared_ptr<LogWithPrefix> & log_ = nullptr);
+    SquashingBlockInputStream(
+        const BlockInputStreamPtr & src,
+        size_t min_block_size_rows,
+        size_t min_block_size_bytes,
+        const LogWithPrefixPtr & log_);
 
     String getName() const override { return "Squashing"; }
 
@@ -21,9 +25,9 @@ protected:
     Block readImpl() override;
 
 private:
+    const LogWithPrefixPtr log;
     SquashingTransform transform;
     bool all_read = false;
-    const std::shared_ptr<LogWithPrefix> log;
 };
 
 } // namespace DB

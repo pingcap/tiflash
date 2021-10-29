@@ -40,12 +40,12 @@ public:
     PathPool() = default;
 
     // Constructor to be used during initialization
-    PathPool(
+    PathPool( //
         const Strings & main_data_paths,
-        const Strings & latest_data_paths,
-        const Strings & kvstore_paths,
+        const Strings & latest_data_paths, //
+        const Strings & kvstore_paths, //
         PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider_,
+        FileProviderPtr file_provider_, //
         bool enable_raft_compatible_mode_ = false);
 
     // Constructor to create PathPool for one Storage
@@ -133,7 +133,7 @@ public:
 
     virtual String getPageFilePath(const PageFileIdAndLevel & id_lvl) const = 0;
 
-    virtual void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left) = 0;
+    virtual void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) = 0;
 };
 
 class PSDiskDelegatorMulti : public PSDiskDelegator
@@ -160,13 +160,14 @@ public:
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
-    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left) override;
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
 
 private:
     StoragePathPool & pool;
     const String path_prefix;
     // PageFileID -> path index
     PathPool::PageFilePathMap page_path_map;
+    const UInt32 default_path_index = 0;
 };
 
 class PSDiskDelegatorSingle : public PSDiskDelegator
@@ -193,7 +194,7 @@ public:
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
-    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left) override;
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
 
 private:
     StoragePathPool & pool;
@@ -221,7 +222,7 @@ public:
 
     String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
 
-    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left) override;
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
 
 private:
     struct RaftPathInfo
@@ -235,6 +236,7 @@ private:
     RaftPathInfos raft_path_infos;
     // PageFileID -> path index
     PathPool::PageFilePathMap page_path_map;
+    const UInt32 default_path_index = 0;
 };
 
 /// A class to manage paths for the specified storage.
@@ -243,14 +245,12 @@ class StoragePathPool
 public:
     static constexpr const char * STABLE_FOLDER_NAME = "stable";
 
-    StoragePathPool(
-        const Strings & main_data_paths,
-        const Strings & latest_data_paths,
-        String database_,
-        String table_,
-        bool path_need_database_name_,
-        PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider_);
+    StoragePathPool(const Strings & main_data_paths, const Strings & latest_data_paths, //
+                    String database_,
+                    String table_,
+                    bool path_need_database_name_, //
+                    PathCapacityMetricsPtr global_capacity_,
+                    FileProviderPtr file_provider_);
 
     StoragePathPool(const StoragePathPool & rhs);
     StoragePathPool & operator=(const StoragePathPool & rhs);

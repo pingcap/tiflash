@@ -28,7 +28,14 @@ struct StreamWriter
     StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
         : writer(writer_)
     {}
-
+    void write(mpp::MPPDataPacket &)
+    {
+        throw Exception("StreamWriter::write(mpp::MPPDataPacket &) do not support writing MPPDataPacket!");
+    }
+    void write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t)
+    {
+        throw Exception("StreamWriter::write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
+    }
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
         ::coprocessor::BatchResponse resp;
@@ -49,7 +56,7 @@ using StreamWriterPtr = std::shared_ptr<StreamWriter>;
 class DAGQuerySource : public IQuerySource
 {
 public:
-    DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & regions_needs_remote_read_, const tipb::DAGRequest & dag_request_, const std::shared_ptr<LogWithPrefix> & log_, const bool is_batch_cop_ = false);
+    DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & regions_needs_remote_read_, const tipb::DAGRequest & dag_request_, const LogWithPrefixPtr & log_, const bool is_batch_cop_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t) override;
     String str(size_t max_query_size) override;
@@ -91,7 +98,7 @@ protected:
 
     const bool is_batch_cop;
 
-    std::shared_ptr<LogWithPrefix> log;
+    LogWithPrefixPtr log;
 };
 
 } // namespace DB

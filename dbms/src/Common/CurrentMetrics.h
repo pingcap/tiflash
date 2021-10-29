@@ -40,6 +40,12 @@ inline void set(Metric metric, Value value)
     values[metric].store(value, std::memory_order_relaxed);
 }
 
+/// Get value of specified metric.
+inline Value get(Metric metric)
+{
+    return values[metric];
+}
+
 /// Add value for specified metric. You must subtract value later; or see class Increment below.
 inline void add(Metric metric, Value value = 1)
 {
@@ -66,7 +72,7 @@ private:
     }
 
 public:
-    Increment(Metric metric, Value amount = 1)
+    explicit Increment(Metric metric, Value amount = 1)
         : Increment(&values[metric], amount)
     {}
 
@@ -76,10 +82,7 @@ public:
             what->fetch_sub(amount, std::memory_order_relaxed);
     }
 
-    Increment(Increment && old)
-    {
-        *this = std::move(old);
-    }
+    Increment(Increment && old) { *this = std::move(old); }
 
     Increment & operator=(Increment && old)
     {

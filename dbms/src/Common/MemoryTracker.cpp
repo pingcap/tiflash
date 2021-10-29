@@ -97,7 +97,7 @@ void MemoryTracker::alloc(Int64 size)
     if (will_be > peak.load(std::memory_order_relaxed)) /// Races doesn't matter. Could rewrite with CAS, but not worth.
         peak.store(will_be, std::memory_order_relaxed);
 
-    if (auto loaded_next = next.load(std::memory_order_relaxed))
+    if (auto * loaded_next = next.load(std::memory_order_relaxed))
         loaded_next->alloc(size);
 }
 
@@ -118,7 +118,7 @@ void MemoryTracker::free(Int64 size)
         size += new_amount;
     }
 
-    if (auto loaded_next = next.load(std::memory_order_relaxed))
+    if (auto * loaded_next = next.load(std::memory_order_relaxed))
         loaded_next->free(size);
     else
         CurrentMetrics::sub(metric, size);
@@ -152,44 +152,51 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 namespace CurrentMemoryTracker
 {
+static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 8 * 1024 * 1024; // 8 MiB
 #if __APPLE__ && __clang__
 static __thread Int64 local_delta{};
 #else
 static thread_local Int64 local_delta{};
 #endif
 
-__attribute__((always_inline)) inline void checkSubmit()
+__attribute__((always_inline)) inline void checkSubmitAndUpdateLocalDelta(Int64 updated_local_delta)
 {
-    if (unlikely(local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
+    if (unlikely(updated_local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)
-            current_memory_tracker->alloc(local_delta);
+            current_memory_tracker->alloc(updated_local_delta);
         local_delta = 0;
     }
-    else if (unlikely(local_delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
+    else if (unlikely(updated_local_delta < -MEMORY_TRACER_SUBMIT_THRESHOLD))
     {
         if (current_memory_tracker)
-            current_memory_tracker->free(-local_delta);
+            current_memory_tracker->free(-updated_local_delta);
         local_delta = 0;
     }
+    else
+    {
+        local_delta = updated_local_delta;
+    }
+}
+
+void disableThreshold()
+{
+    MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
 }
 
 void alloc(Int64 size)
 {
-    local_delta += size;
-    checkSubmit();
+    checkSubmitAndUpdateLocalDelta(local_delta + size);
 }
 
 void realloc(Int64 old_size, Int64 new_size)
 {
-    local_delta += new_size - old_size;
-    checkSubmit();
+    checkSubmitAndUpdateLocalDelta(local_delta + (new_size - old_size));
 }
 
 void free(Int64 size)
 {
-    local_delta -= size;
-    checkSubmit();
+    checkSubmitAndUpdateLocalDelta(local_delta - size);
 }
 
 } // namespace CurrentMemoryTracker

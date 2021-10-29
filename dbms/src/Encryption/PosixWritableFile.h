@@ -25,7 +25,11 @@ protected:
 
 public:
     PosixWritableFile(
-        const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const WriteLimiterPtr & write_limiter_ = nullptr);
+        const std::string & file_name_,
+        bool truncate_when_exists_,
+        int flags,
+        mode_t mode,
+        const WriteLimiterPtr & write_limiter_ = nullptr);
 
     ~PosixWritableFile() override;
 
@@ -44,6 +48,8 @@ public:
     bool isClosed() override { return fd == -1; }
 
     int fsync() override;
+
+    void hardLink(const std::string & existing_file) override;
 
 private:
     void doOpenFile(bool truncate_when_exists_, int flags, mode_t mode);

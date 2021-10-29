@@ -9,25 +9,47 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
+HttpRequestRes HandleHttpRequestTestShow(
+    EngineStoreServerWrap *,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view query,
+    std::string_view body)
+{
+    auto * res = RawCppString::New(fmt::format(
+        "api_name: {}\npath: {}\nquery: {}\nbody: {}",
+        api_name,
+        path,
+        query,
+        body));
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(res, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{res->data(), res->size()}}};
+}
 
-HttpRequestRes HandleHttpRequestSyncStatus(EngineStoreServerWrap * server, BaseBuffView path_, const std::string & method_name)
+HttpRequestRes HandleHttpRequestSyncStatus(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
 {
     HttpRequestStatus status = HttpRequestStatus::Ok;
     TableID table_id = 0;
     {
-        std::string_view path(path_.data, path_.len);
-
-        std::string table_id_str(path.substr(method_name.size()));
+        std::string table_id_str(path.substr(api_name.size()));
         try
         {
             table_id = std::stoll(table_id_str);
@@ -62,26 +84,38 @@ HttpRequestRes HandleHttpRequestSyncStatus(EngineStoreServerWrap * server, BaseB
         ss << region_id << ' ';
     ss << std::endl;
 
-    auto s = RawCppString::New(ss.str());
-    return HttpRequestRes{.status = status,
+    auto * s = RawCppString::New(ss.str());
+    return HttpRequestRes{
+        .status = status,
         .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};
 }
 
-HttpRequestRes HandleHttpRequestStoreStatus(EngineStoreServerWrap * server, BaseBuffView, const std::string &)
+HttpRequestRes HandleHttpRequestStoreStatus(
+    EngineStoreServerWrap * server,
+    std::string_view,
+    const std::string &,
+    std::string_view,
+    std::string_view)
 {
-    auto name = RawCppString::New(IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
-    return HttpRequestRes{.status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{.inner = GenRawCppPtr(name, RawCppPtrTypeImpl::String), .view = BaseBuffView{name->data(), name->size()}}};
+    auto * name = RawCppString::New(IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(name, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{name->data(), name->size()}}};
 }
 
-typedef HttpRequestRes (*HANDLE_HTTP_URI_METHOD)(EngineStoreServerWrap *, BaseBuffView, const std::string &);
-static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI
-    = {{"/tiflash/sync-status/", HandleHttpRequestSyncStatus}, {"/tiflash/store-status", HandleHttpRequestStoreStatus}};
+using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(EngineStoreServerWrap *, std::string_view, const std::string &, std::string_view, std::string_view);
+
+static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
+    {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
+    {"/tiflash/store-status", HandleHttpRequestStoreStatus},
+    {"/tiflash/test-show", HandleHttpRequestTestShow}};
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 {
     std::string_view path(path_.data, path_.len);
-    for (auto & [str, method] : AVAILABLE_HTTP_URI)
+    for (const auto & [str, method] : AVAILABLE_HTTP_URI)
     {
         std::ignore = method;
         if (path.size() >= str.size() && path.substr(0, str.size()) == str)
@@ -90,14 +124,14 @@ uint8_t CheckHttpUriAvailable(BaseBuffView path_)
     return false;
 }
 
-HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView path_)
+HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView path_, BaseBuffView query, BaseBuffView body)
 {
     std::string_view path(path_.data, path_.len);
-    for (auto & [str, method] : AVAILABLE_HTTP_URI)
+    for (const auto & [str, method] : AVAILABLE_HTTP_URI)
     {
         if (path.size() >= str.size() && path.substr(0, str.size()) == str)
         {
-            return method(server, path_, str);
+            return method(server, path, str, std::string_view(query.data, query.len), std::string_view(body.data, body.len));
         }
     }
     return HttpRequestRes{.status = HttpRequestStatus::ErrorParam, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
@@ -124,7 +158,10 @@ inline std::string ToPdKey(const char * key, const size_t len)
     return res;
 }
 
-inline std::string ToPdKey(const std::string & key) { return ToPdKey(key.data(), key.size()); }
+inline std::string ToPdKey(const std::string & key)
+{
+    return ToPdKey(key.data(), key.size());
+}
 
 inline std::string FromPdKey(const char * key, const size_t len)
 {
@@ -171,7 +208,7 @@ void ClusterManage::findRegionByRange(Context & context, const ASTs & args, Prin
     auto end = FromPdKey(end_key.data(), end_key.size());
     RegionMap regions;
     kvstore->handleRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end)),
-        [&regions](RegionMap regions_, const KVStoreTaskLock &) { regions = std::move(regions_); });
+                                         [&regions](RegionMap regions_, const KVStoreTaskLock &) { regions = std::move(regions_); });
 
     output(toString(regions.size()));
     if (mode == ID_LIST)
@@ -191,7 +228,7 @@ void ClusterManage::checkTableOptimize(DB::Context & context, const DB::ASTs & a
         throw Exception("Args not matched, should be: table-id, threshold", ErrorCodes::BAD_ARGUMENTS);
 
     auto & tmt = context.getTMTContext();
-    TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    TableID table_id = static_cast<TableID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
     auto a = typeid_cast<const ASTLiteral &>(*args[1]).value.safeGet<DecimalField<Decimal32>>();
     tmt.getRegionTable().checkTableOptimize(table_id, a.getValue().toFloat<Float32>(a.getScale()));
 }

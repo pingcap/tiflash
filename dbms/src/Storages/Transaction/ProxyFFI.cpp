@@ -138,10 +138,6 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
     }
 }
 
-uint8_t HandleCheckTerminated(EngineStoreServerWrap * server)
-{
-    return server->tmt->checkTerminated(std::memory_order_relaxed) ? 1 : 0;
-}
 
 StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
 {
@@ -174,11 +170,6 @@ BaseBuffView strIntoView(const std::string * str_ptr)
 {
     assert(str_ptr);
     return BaseBuffView{str_ptr->data(), str_ptr->size()};
-}
-
-BaseBuffView strIntoView(const std::string & view)
-{
-    return BaseBuffView{view.data(), view.size()};
 }
 
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const
@@ -233,7 +224,7 @@ void CppStrVec::updateView()
 kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
 {
     auto res = batchReadIndex({req}, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
-    return std::move(res->at(0).first);
+    return std::move(res.at(0).first);
 }
 
 BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const
@@ -245,9 +236,10 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpc
         req_strs.emplace_back(r.SerializeAsString());
     }
     CppStrVec data(std::move(req_strs));
-    assert(req_strs.empty());
     auto outer_view = data.intoOuterView();
-    BatchReadIndexRes res(reinterpret_cast<BatchReadIndexRes::pointer>(fn_handle_batch_read_index(proxy_ptr, outer_view, timeout_ms)));
+    BatchReadIndexRes res;
+    res.reserve(req.size());
+    fn_handle_batch_read_index(proxy_ptr, outer_view, &res, timeout_ms);
     return res;
 }
 
@@ -368,7 +360,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
     }
 }
 
-void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
+void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)
     {
@@ -402,18 +394,11 @@ const char * IntoEncryptionMethodName(EncryptionMethod method)
     return encryption_method_name[static_cast<uint8_t>(method)];
 }
 
-RawVoidPtr GenBatchReadIndexRes(uint64_t cap)
-{
-    auto * res = new BatchReadIndexRes::element_type();
-    res->reserve(cap);
-    return res;
-}
-
 void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t region_id)
 {
     kvrpcpb::ReadIndexResponse res;
     res.ParseFromArray(view.data, view.len);
-    reinterpret_cast<BatchReadIndexRes::pointer>(resp)->emplace_back(std::move(res), region_id);
+    reinterpret_cast<BatchReadIndexRes *>(resp)->emplace_back(std::move(res), region_id);
 }
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)
@@ -425,6 +410,32 @@ void SetServerInfoResp(BaseBuffView view, RawVoidPtr ptr)
 {
     using diagnosticspb::ServerInfoResponse;
     reinterpret_cast<ServerInfoResponse *>(ptr)->ParseFromArray(view.data, view.len);
+}
+
+CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_t full)
+{
+    std::string config_file_path;
+    try
+    {
+        config_file_path = server->tmt->getContext().getConfigRef().getString("config-file");
+        std::ifstream stream(config_file_path);
+        if (!stream)
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+        auto * s = RawCppString::New((std::istreambuf_iterator<char>(stream)),
+                                     std::istreambuf_iterator<char>());
+        stream.close();
+        /** the returned str must be formated as TOML, proxy will parse and show in form of JASON.
+         *  curl `http://{status-addr}/config`, got:
+         *  {"raftstore-proxy":xxxx,"engine-store":xxx}
+         *
+         *  if proxy can NOT parse it, return 500 Internal Server Error.
+         * */
+        return CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}};
+    }
+    catch (...)
+    {
+        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+    }
 }
 
 } // namespace DB

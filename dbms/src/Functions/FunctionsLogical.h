@@ -7,7 +7,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsUnaryArithmetic.h>
+#include <Functions/FunctionUnaryArithmetic.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
 
@@ -227,7 +227,7 @@ public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionAnyArityLogical>(); };
 
 private:
-    bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, UInt8 & res_not_null, UInt8 & input_has_null)
+    bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, UInt8 & res_not_null, UInt8 & input_has_null) const
     {
         bool has_res = false;
         for (int i = static_cast<int>(in.size()) - 1; i >= 0; --i)
@@ -259,7 +259,7 @@ private:
     }
 
     template <typename T>
-    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null)
+    bool convertTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null) const
     {
         auto col = checkAndGetColumn<ColumnVector<T>>(column);
         if (!col)
@@ -277,7 +277,7 @@ private:
     }
 
     template <typename T>
-    bool convertNullableTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null)
+    bool convertNullableTypeToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null) const
     {
         auto col_nullable = checkAndGetColumn<ColumnNullable>(column);
 
@@ -302,7 +302,7 @@ private:
         return true;
     }
 
-    void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null)
+    void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null) const
     {
         if (!convertTypeToUInt8<Int8>(column, res, res_not_null)
             && !convertTypeToUInt8<Int16>(column, res, res_not_null)
@@ -366,7 +366,7 @@ public:
             return std::make_shared<DataTypeUInt8>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         bool has_nullable_input_column = false;
         size_t num_arguments = arguments.size();
@@ -513,7 +513,7 @@ public:
 
 private:
     template <typename T>
-    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result)
+    bool executeType(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         if (auto col = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get()))
         {
@@ -551,7 +551,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (!(executeType<UInt8>(block, arguments, result)
               || executeType<UInt16>(block, arguments, result)

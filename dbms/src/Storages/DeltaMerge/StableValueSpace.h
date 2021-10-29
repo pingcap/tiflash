@@ -131,7 +131,7 @@ public:
 
         SkippableBlockInputStreamPtr getInputStream(const DMContext & context, //
                                                     const ColumnDefines & read_columns,
-                                                    const RowKeyRange & rowkey_range,
+                                                    const RowKeyRanges & rowkey_ranges,
                                                     const RSOperatorPtr & filter,
                                                     UInt64 max_data_version,
                                                     size_t expected_block_size,

@@ -1,5 +1,7 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/joinToString.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -121,7 +123,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     const tipb::TableScan & ts,
     const std::vector<const tipb::Expr *> & conditions_,
     size_t max_streams_,
-    const std::shared_ptr<LogWithPrefix> & log_)
+    const LogWithPrefixPtr & log_)
     : context(context_)
     , dag(dag_)
     , query_block(query_block_)
@@ -288,7 +290,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                 // clean all streams from local because we are not sure the correctness of those streams
                 pipeline.streams.clear();
                 const auto & dag_regions = dag.getRegions();
-                std::stringstream ss;
+                FmtBuffer buffer;
                 // Normally there is only few regions need to retry when super batch is enabled. Retry to read
                 // from local first. However, too many retry in different places may make the whole process
                 // time out of control. We limit the number of retries to 1 now.
@@ -304,7 +306,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
                             {
                                 region_retry.emplace_back(region_iter->second);
-                                ss << region_iter->first << ",";
+                                buffer.fmtAppend("{},", region_iter->first);
                             }
                             iter = regions_query_info.erase(iter);
                         }
@@ -315,7 +317,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     }
                     LOG_WARNING(log,
                                 "RegionException after read from storage, regions ["
-                                    << ss.str() << "], message: " << e.message()
+                                    << buffer.toString() << "], message: " << e.message()
                                     << (regions_query_info.empty() ? "" : ", retry to read from local"));
                     if (unlikely(regions_query_info.empty()))
                         break; // no available region in local, break retry loop
@@ -330,10 +332,10 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                         if (likely(iter != dag_regions.end()))
                         {
                             region_retry.emplace_back(iter->second);
-                            ss << iter->first << ",";
+                            buffer.fmtAppend("{},", iter->first);
                         }
                     }
-                    LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
+                    LOG_WARNING(log, "RegionException after read from storage, regions [" << buffer.toString() << "], message: " << e.message());
                     break; // break retry loop
                 }
             }
@@ -421,9 +423,10 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     };
 
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
-        LOG_DEBUG(log,
-                  __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
-                                      << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+        LOG_INFO(
+            log,
+            __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
+                                << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
     };
 
     auto sync_schema = [&] {
@@ -432,7 +435,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
+        LOG_INFO(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
     };
 
     /// Try get storage and lock once.
@@ -503,14 +506,15 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     {
         context.getQueryContext().getDAGContext()->retry_regions.push_back(r.get());
     }
-    LOG_DEBUG(log, ({
-                  std::stringstream ss;
-                  ss << "Start to retry " << region_retry.size() << " regions (";
-                  for (auto & r : region_retry)
-                      ss << r.get().region_id << ",";
-                  ss << ")";
-                  ss.str();
-              }));
+
+    auto print_retry_regions = [this] {
+        FmtBuffer buffer;
+        buffer.fmtAppend("Start to retry {} regions (", region_retry.size());
+        joinIterToString(region_retry.cbegin(), region_retry.cend(), buffer, [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); }, ",");
+        buffer.append(")");
+        return buffer.toString();
+    };
+    LOG_INFO(log, print_retry_regions());
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;

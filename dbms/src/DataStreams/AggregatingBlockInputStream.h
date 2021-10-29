@@ -1,9 +1,9 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
 #include <Interpreters/Aggregator.h>
 
@@ -22,12 +22,17 @@ public:
       * Aggregate functions are searched everywhere in the expression.
       * Columns corresponding to keys and arguments of aggregate functions must already be computed.
       */
-    AggregatingBlockInputStream(const BlockInputStreamPtr & input, const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, const LogWithPrefixPtr & log_ = nullptr)
-        : params(params_)
-        , aggregator(params)
+    AggregatingBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const Aggregator::Params & params_,
+        const FileProviderPtr & file_provider_,
+        bool final_,
+        const LogWithPrefixPtr & log_)
+        : log(getMPPTaskLog(log_, getName()))
+        , params(params_)
+        , aggregator(params, log)
         , file_provider{file_provider_}
         , final(final_)
-        , log(getLogWithPrefix(log_))
     {
         children.push_back(input);
     }
@@ -38,6 +43,8 @@ public:
 
 protected:
     Block readImpl() override;
+
+    LogWithPrefixPtr log;
 
     Aggregator::Params params;
     Aggregator aggregator;
@@ -61,8 +68,6 @@ protected:
 
     /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;
-
-    LogWithPrefixPtr log;
 };
 
 } // namespace DB

@@ -83,28 +83,41 @@ namespace DM
 //   MergeDeltaTaskPool
 // ================================================
 
-bool DeltaMergeStore::MergeDeltaTaskPool::addTask(const BackgroundTask & task, const ThreadType & whom, Poco::Logger * log_)
+std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, Poco::Logger * log_)
 {
-    LOG_DEBUG(log_,
-              "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
-                          << toString(whom) << "]");
-
     std::scoped_lock lock(mutex);
+    if (light_tasks.size() + heavy_tasks.size() >= max_task_num)
+        return std::make_pair(false, false);
+
+    bool is_heavy = false;
     switch (task.type)
     {
     case TaskType::Split:
     case TaskType::Merge:
     case TaskType::MergeDelta:
+        is_heavy = true;
+        // reserve some task space for light tasks
+        if (max_task_num > 1 && heavy_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
+            return std::make_pair(false, is_heavy);
         heavy_tasks.push(task);
-        return true;
+        break;
     case TaskType::Compact:
     case TaskType::Flush:
     case TaskType::PlaceIndex:
+        is_heavy = false;
+        // reserve some task space for heavy tasks
+        if (max_task_num > 1 && light_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
+            return std::make_pair(false, is_heavy);
         light_tasks.push(task);
-        return false;
+        break;
     default:
         throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
     }
+
+    LOG_DEBUG(log_,
+              "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
+                          << toString(whom) << "]");
+    return std::make_pair(true, is_heavy);
 }
 
 DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bool is_heavy, Poco::Logger * log_)
@@ -416,7 +429,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
                              EXTRA_HANDLE_COLUMN_INT_TYPE,
                              EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
             // Fill the new handle column with data in column[handle_pos] by applying cast.
-            FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
+            DefaultExecutable(FunctionToInt64::create(db_context)).execute(block, {handle_pos}, block.columns() - 1);
         }
         else
         {
@@ -954,7 +967,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
             dm_context,
             read_task_pool,
             after_segment_read,
@@ -963,7 +976,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             MAX_UINT64,
             DEFAULT_BLOCK_SIZE,
             true,
-            db_settings.dt_raw_filter_range);
+            db_settings.dt_raw_filter_range,
+            nullptr);
         res.push_back(stream);
     }
     return res;
@@ -996,7 +1010,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
             dm_context,
             read_task_pool,
             after_segment_read,
@@ -1005,7 +1019,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             max_version,
             expected_block_size,
             false,
-            db_settings.dt_raw_filter_range);
+            db_settings.dt_raw_filter_range,
+            nullptr);
         res.push_back(stream);
     }
 
@@ -1146,18 +1161,17 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     fiu_do_on(FailPoints::force_triggle_foreground_flush, { should_foreground_flush = true; });
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
-        // Prevent too many tasks.
-        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
-        {
-            if (shutdown_called.load(std::memory_order_relaxed))
-                return;
+        if (shutdown_called.load(std::memory_order_relaxed))
+            return;
 
-            auto heavy = background_tasks.addTask(task, thread_type, log);
-            if (heavy)
-                blockable_background_pool_handle->wake();
-            else
-                background_task_handle->wake();
-        }
+        auto [added, heavy] = background_tasks.tryAddTask(task, thread_type, std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3), log);
+        // Prevent too many tasks.
+        if (!added)
+            return;
+        if (heavy)
+            blockable_background_pool_handle->wake();
+        else
+            background_task_handle->wake();
     };
 
     /// Flush is always try first.
