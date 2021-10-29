@@ -71,7 +71,7 @@ void FunctionDurationSplit<Impl>::executeImpl(Block & block, const ColumnNumbers
     {
         const auto & vec_duration = duration_col->getData();
         auto col_result = ColumnVector<Int64>::create();
-        typename ColumnVector<Int64>::Container & vec_result = col_result->getData();
+        auto & vec_result = col_result->getData();
         size_t size = duration_col->size();
         vec_result.resize(size);
 
