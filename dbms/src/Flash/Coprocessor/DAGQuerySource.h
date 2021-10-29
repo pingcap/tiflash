@@ -1,7 +1,5 @@
 #pragma once
 
-#include <tipb/select.pb.h>
-
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/RegionInfo.h>
@@ -10,6 +8,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
+#include <tipb/select.pb.h>
 
 
 namespace DB

@@ -6,7 +6,6 @@
 #include <Storages/Transaction/Types.h>
 #include <grpcpp/impl/codegen/sync_stream.h>
 #include <kvproto/coprocessor.pb.h>
-
 #include <tipb/select.pb.h>
 
 #include <vector>
