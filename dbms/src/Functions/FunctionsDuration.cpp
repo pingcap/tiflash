@@ -41,7 +41,7 @@ DataTypePtr FunctionDurationSplit<Impl>::getReturnTypeImpl(const ColumnsWithType
         throw Exception(
             fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1",
                         getName(),
-                        toString(arguments.size())),
+                        arguments.size()),
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
     if (!arguments[0].type->isMyTime())
@@ -59,14 +59,17 @@ void FunctionDurationSplit<Impl>::executeImpl(Block & block, const ColumnNumbers
     const auto * dur_type = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
     if (dur_type == nullptr)
     {
-        throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                            + " of first argument of function " + name,
-                        ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(
+            fmt::format(
+                "Illegal column {} of first argument of function {}",
+                block.getByPosition(arguments[0]).column->getName(),
+                name),
+            ErrorCodes::ILLEGAL_COLUMN);
     }
     const auto * duration_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(block.getByPosition(arguments[0]).column.get());
     if (duration_col != nullptr)
     {
-        const typename ColumnVector<DataTypeMyDuration::FieldType>::Container & vec_duration = duration_col->getData();
+        const auto & vec_duration = duration_col->getData();
         auto col_result = ColumnVector<Int64>::create();
         typename ColumnVector<Int64>::Container & vec_result = col_result->getData();
         size_t size = duration_col->size();
@@ -75,14 +78,53 @@ void FunctionDurationSplit<Impl>::executeImpl(Block & block, const ColumnNumbers
         for (size_t i = 0; i < size; ++i)
         {
             MyDuration dur(vec_duration[i], dur_type->getFsp());
-            vec_result[i] = Impl::getResult(dur);
+            vec_result[i] = Impl::apply(dur);
         }
         block.getByPosition(result).column = std::move(col_result);
     }
     else
-        throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                            + " of first argument of function " + name,
-                        ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(
+            fmt::format(
+                "Illegal column {} of first argument of function {}",
+                block.getByPosition(arguments[0]).column->getName(),
+                name),
+            ErrorCodes::ILLEGAL_COLUMN);
+};
+
+struct DurationSplitHourImpl
+{
+    static constexpr auto name = "hour";
+    static Int64 apply(const MyDuration & dur)
+    {
+        return dur.hours();
+    }
+};
+
+struct DurationSplitMinuteImpl
+{
+    static constexpr auto name = "minute";
+    static Int64 apply(const MyDuration & dur)
+    {
+        return dur.minutes();
+    }
+};
+
+struct DurationSplitSecondImpl
+{
+    static constexpr auto name = "second";
+    static Int64 apply(const MyDuration & dur)
+    {
+        return dur.seconds();
+    }
+};
+
+struct DurationSplitMicroSecondImpl
+{
+    static constexpr auto name = "microSecond";
+    static Int64 apply(const MyDuration & dur)
+    {
+        return dur.microSecond();
+    }
 };
 
 using FunctionDurationHour = FunctionDurationSplit<DurationSplitHourImpl>;

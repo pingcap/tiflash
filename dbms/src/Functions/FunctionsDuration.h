@@ -55,40 +55,4 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 };
 
-struct DurationSplitHourImpl
-{
-    static constexpr auto name = "hour";
-    static Int64 getResult(MyDuration & dur)
-    {
-        return dur.hours();
-    }
-};
-
-struct DurationSplitMinuteImpl
-{
-    static constexpr auto name = "minute";
-    static Int64 getResult(MyDuration & dur)
-    {
-        return dur.minutes();
-    }
-};
-
-struct DurationSplitSecondImpl
-{
-    static constexpr auto name = "second";
-    static Int64 getResult(MyDuration & dur)
-    {
-        return dur.seconds();
-    }
-};
-
-struct DurationSplitMicroSecondImpl
-{
-    static constexpr auto name = "microSecond";
-    static Int64 getResult(MyDuration & dur)
-    {
-        return dur.microSecond();
-    }
-};
-
 } // namespace DB
