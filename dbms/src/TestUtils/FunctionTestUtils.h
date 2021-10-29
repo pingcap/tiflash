@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
@@ -387,6 +388,16 @@ public:
         ColumnsWithTypeAndName vec({first_column, columns...});
         return executeFunction(func_name, vec);
     }
+
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns);
+
+    template <typename... Args>
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
+    {
+        ColumnsWithTypeAndName vec({first_column, columns...});
+        return executeFunction(func_name, argument_column_numbers, vec);
+    }
+
     DAGContext & getDAGContext()
     {
         assert(dag_context_ptr != nullptr);
