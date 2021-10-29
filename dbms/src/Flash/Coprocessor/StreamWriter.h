@@ -1,13 +1,16 @@
 #pragma once
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
-
 #include <Common/Exception.h>
+#include <grpcpp/impl/codegen/sync_stream.h>
+#include <kvproto/coprocessor.pb.h>
+#include <tipb/select.pb.h>
 
 #include <mutex>
+
+namespace mpp
+{
+class MPPDataPacket;
+} // namespace mpp
 
 namespace DB
 {

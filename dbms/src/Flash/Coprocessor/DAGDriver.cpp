@@ -15,9 +15,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <pingcap/Exception.h>
-#include <pingcap/kv/LockResolver.h>
 
 namespace DB
 {

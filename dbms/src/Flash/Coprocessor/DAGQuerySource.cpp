@@ -1,10 +1,6 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
-#include <Interpreters/Context.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ParserQuery.h>
 #include <Parsers/makeDummyQuery.h>
-#include <Parsers/parseQuery.h>
 
 namespace DB
 {

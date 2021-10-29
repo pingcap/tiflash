@@ -4,14 +4,10 @@
 #include <Flash/Coprocessor/RegionInfo.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
-#include <grpcpp/server_context.h>
+#include <grpcpp/impl/codegen/sync_stream.h>
 #include <kvproto/coprocessor.pb.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <kvproto/tikvpb.grpc.pb.h>
 #include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
 
 #include <vector>
 
