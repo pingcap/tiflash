@@ -2802,22 +2802,35 @@ public:
     static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments)
     {
         int fsp = 0;
-        if (1 == arguments.size())
+        const auto fsp_type = arguments[0].type;
+        const auto fsp_column = arguments[0].column.get();
+        if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
         {
-            const auto fsp_type = arguments[0].type;
-            const auto fsp_column = arguments[0].column.get();
-            if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
-            {
-                fsp = fsp_column->getInt(0);
-            }
-            else
-            {
-                throw TiFlashException(
-                    "First argument for function " + String(name) + " must be constant number",
-                    Errors::Coprocessor::BadRequest);
-            }
+            fsp = fsp_column->getInt(0);
+        }
+        else
+        {
+            throw TiFlashException(
+                "First argument for function " + String(name) + " must be constant number",
+                Errors::Coprocessor::BadRequest);
         }
         return std::make_shared<DataTypeMyDateTime>(fsp);
+    }
+
+    static UInt8 getFsp(Block & block, const ColumnNumbers & arguments)
+    {
+        const auto fsp_type = block.getByPosition(arguments[0]).type;
+        const auto fsp_column = block.getByPosition(arguments[0]).column.get();
+        if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
+        {
+            return fsp_column->getInt(0);
+        }
+        else
+        {
+            throw TiFlashException(
+                "First argument for function " + String(name) + " must be constant number",
+                Errors::Coprocessor::BadRequest);
+        }
     }
 };
 
@@ -2835,6 +2848,11 @@ public:
     static DataTypePtr getReturnType(const ColumnsWithTypeAndName &)
     {
         return std::make_shared<DataTypeMyDateTime>(0);
+    }
+
+    static UInt8 getFsp(Block &, const ColumnNumbers &)
+    {
+        return 0;
     }
 };
 
@@ -2892,22 +2910,7 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const int row_count = block.rows();
-        UInt8 fsp = 0;
-        if (arguments.size() == 1)
-        {
-            const auto fsp_type = block.getByPosition(arguments[0]).type;
-            const auto fsp_column = block.getByPosition(arguments[0]).column.get();
-            if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
-            {
-                fsp = fsp_column->getInt(0);
-            }
-            else
-            {
-                throw TiFlashException(
-                    "First argument for function " + getName() + " must be constant number",
-                    Errors::Coprocessor::BadRequest);
-            }
-        }
+        UInt8 fsp = Transform::getFsp(block, arguments);
         const UInt64 sysdate_packed = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), fsp).toPackedUInt();
         auto col_to = ColumnVector<DataTypeMyDateTime::FieldType>::create(row_count);
         auto & vec_to = col_to->getData();

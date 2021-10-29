@@ -34,7 +34,6 @@ protected:
         timezone_info.timezone = &DateLUT::instance(name);
         timezone_info.timezone_name = timezone_info.timezone->getTimeZone();
         timezone_info.is_utc_timezone = timezone_info.timezone_name == "UTC";
-        ;
     }
 
     void ASSERT_FSP(UInt32 fsp, const MyDateTime & date_time) const
