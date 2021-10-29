@@ -24,4 +24,4 @@ source /tests/docker/util.sh
 
 show_env
 
-ENV_VARS_PATH=/tests/docker/_env.sh OUTPUT_XML=${OUTPUT_XML} NPROC=${NPROC} RUN_TESTS_PARALLEL=true SERIALIZE_TEST_CASES=false /tests/run-gtest.sh
+ENV_VARS_PATH=/tests/docker/_env.sh OUTPUT_XML=${OUTPUT_XML} NPROC=${NPROC} RUN_TESTS_PARALLEL=false SERIALIZE_TEST_CASES=false /tests/run-gtest.sh
