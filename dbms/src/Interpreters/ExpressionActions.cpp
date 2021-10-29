@@ -49,14 +49,14 @@ Names ExpressionAction::getNeededColumns() const
 }
 
 
-ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & function_builder_,
+ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & function_,
                                                  const std::vector<std::string> & argument_names_,
                                                  std::string result_name_,
                                                  const TiDB::TiDBCollatorPtr & collator_)
 {
     if (result_name_.empty())
     {
-        result_name_ = function_builder_->getName() + "(";
+        result_name_ = function_->getName() + "(";
         for (size_t i = 0; i < argument_names_.size(); ++i)
         {
             if (i)
@@ -69,7 +69,7 @@ ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & func
     ExpressionAction a;
     a.type = APPLY_FUNCTION;
     a.result_name = result_name_;
-    a.function_builder = function_builder_;
+    a.function_builder = function_;
     a.argument_names = argument_names_;
     a.collator = collator_;
     return a;
@@ -147,7 +147,6 @@ ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join
 
 void ExpressionAction::prepare(Block & sample_block)
 {
-
     /** Constant expressions should be evaluated, and put the result in sample_block.
       */
 
@@ -303,7 +302,6 @@ void ExpressionAction::prepare(Block & sample_block)
 
 void ExpressionAction::execute(Block & block) const
 {
-
     if (type == REMOVE_COLUMN || type == COPY_COLUMN)
         if (!block.has(source_name))
             throw Exception("Not found column '" + source_name + "'. There are columns: " + block.dumpNames(), ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
