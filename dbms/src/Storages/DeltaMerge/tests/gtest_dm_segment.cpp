@@ -6,6 +6,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
@@ -1115,8 +1116,8 @@ try
     {
         {
             // Write to segment
-            Block block = DMTestEnv::prepareSimpleWriteBlock( //
-                num_batches_written * num_rows_per_write, //
+            Block block = DMTestEnv::prepareSimpleWriteBlock(
+                num_batches_written * num_rows_per_write,
                 num_batches_written * num_rows_per_write + num_rows_per_write,
                 false);
             segment->write(dmContext(), std::move(block));
@@ -1416,19 +1417,10 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         // add int8_col and later read it as int32
         // (mock ddl change int8 -> int32)
-        const size_t num_rows = block.rows();
-        ColumnWithTypeAndName int8_col(nullptr, column_i8_before_ddl.type, column_i8_before_ddl.name, column_id_i8_to_i32);
-        {
-            IColumn::MutablePtr m_col = int8_col.type->createColumn();
-            auto & column_data = typeid_cast<ColumnVector<Int8> &>(*m_col).getData();
-            column_data.resize(num_rows);
-            for (size_t i = 0; i < num_rows; ++i)
-            {
-                column_data[i] = static_cast<int8_t>(-1 * (i % 2 ? 1 : -1) * i);
-            }
-            int8_col.column = std::move(m_col);
-        }
-        block.insert(int8_col);
+        block.insert(DB::tests::createColumn<Int8>(
+            createSignedNumbers(0, num_rows_write),
+            column_i8_before_ddl.name,
+            column_id_i8_to_i32));
         switch (write_type)
         {
         case SegmentWriteType::ToDisk:
@@ -1469,7 +1461,7 @@ try
             for (size_t i = 0; i < block.rows(); ++i)
             {
                 auto value = col.column->getInt(i);
-                const auto expected = static_cast<int64_t>(-1 * (i % 2 ? 1 : -1) * i);
+                const auto expected = static_cast<int64_t>((i % 2 == 0 ? -1 : 1) * i);
                 ASSERT_EQ(value, expected) << "at row: " << i;
             }
         }
@@ -1482,27 +1474,17 @@ try
     {
         /// write to segment, replacing some origin rows
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write * 2, false, /* tso= */ 3);
-
-        const size_t num_rows = block.rows();
-        ColumnWithTypeAndName int32_col(nullptr, column_i32_after_ddl.type, column_i32_after_ddl.name, column_id_i8_to_i32);
-        {
-            IColumn::MutablePtr m_col = int32_col.type->createColumn();
-            auto & column_data = typeid_cast<ColumnVector<Int32> &>(*m_col).getData();
-            column_data.resize(num_rows);
-            for (size_t i = 0; i < num_rows; ++i)
-            {
-                column_data[i] = static_cast<int32_t>(-1 * (i % 2 ? 1 : -1) * i);
-            }
-            int32_col.column = std::move(m_col);
-        }
-        block.insert(int32_col);
+        block.insert(DB::tests::createColumn<Int32>(
+            createSignedNumbers(0, block.rows()),
+            column_i32_after_ddl.name,
+            column_id_i8_to_i32));
         switch (write_type)
         {
         case SegmentWriteType::ToDisk:
             segment->write(dmContext(), std::move(block));
             break;
         case SegmentWriteType::ToCache:
-            segment->writeToCache(dmContext(), block, 0, num_rows);
+            segment->writeToCache(dmContext(), block, 0, block.rows());
             break;
         }
     }
@@ -1527,11 +1509,11 @@ try
                 auto value = col.column->getInt(i);
                 auto expected = 0;
                 if (i < num_rows_write / 2)
-                    expected = static_cast<int64_t>(-1 * (i % 2 ? 1 : -1) * i);
+                    expected = static_cast<int64_t>((i % 2 == 0 ? -1 : 1) * i);
                 else
                 {
                     auto r = i - num_rows_write / 2;
-                    expected = static_cast<int64_t>(-1 * (r % 2 ? 1 : -1) * r);
+                    expected = static_cast<int64_t>((r % 2 == 0 ? -1 : 1) * r);
                 }
                 // std::cerr << " row: " << i << "  "<< value << std::endl;
                 ASSERT_EQ(value, expected) << "at row: " << i;
@@ -1568,11 +1550,11 @@ try
                 auto value = col.column->getInt(i);
                 auto expected = 0;
                 if (i < num_rows_write / 2)
-                    expected = static_cast<int64_t>(-1 * (i % 2 ? 1 : -1) * i);
+                    expected = static_cast<int64_t>((i % 2 == 0 ? -1 : 1) * i);
                 else
                 {
                     auto r = i - num_rows_write / 2;
-                    expected = static_cast<int64_t>(-1 * (r % 2 ? 1 : -1) * r);
+                    expected = static_cast<int64_t>((r % 2 == 0 ? -1 : 1) * r);
                 }
                 // std::cerr << " row: " << i << "  "<< value << std::endl;
                 ASSERT_EQ(value, expected) << "at row: " << i;
@@ -1589,7 +1571,7 @@ try
 {
     const String new_column_name = "i8";
     const ColumnID new_column_id = 4;
-    ColumnDefine new_column_define(new_column_id, new_column_name, DataTypeFactory::instance().get("Int8"));
+    ColumnDefine new_column_define(new_column_id, new_column_name, typeFromString("Int8"));
     const Int8 new_column_default_value_int = 16;
     new_column_define.default_value = toField(new_column_default_value_int);
 
@@ -1658,32 +1640,19 @@ try
     {
         /// write to segment, replacing some origin rows
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write * 2, false, /* tso= */ 3);
-
-        const size_t num_rows = block.rows();
-        ColumnWithTypeAndName int8_col(
-            nullptr,
-            new_column_define.type,
+        auto col = DB::tests::createColumn<Int8>(
+            createSignedNumbers(0, block.rows()),
             new_column_define.name,
-            new_column_id,
-            new_column_define.default_value);
-        {
-            IColumn::MutablePtr m_col = int8_col.type->createColumn();
-            auto & column_data = typeid_cast<ColumnVector<Int8> &>(*m_col).getData();
-            column_data.resize(num_rows);
-            for (size_t i = 0; i < num_rows; ++i)
-            {
-                column_data[i] = static_cast<int8_t>(-1 * (i % 2 ? 1 : -1) * i);
-            }
-            int8_col.column = std::move(m_col);
-        }
-        block.insert(int8_col);
+            new_column_id);
+        col.default_value = new_column_define.default_value;
+        block.insert(std::move(col));
         switch (write_type)
         {
         case SegmentWriteType::ToDisk:
             segment->write(dmContext(), std::move(block));
             break;
         case SegmentWriteType::ToCache:
-            segment->writeToCache(dmContext(), block, 0, num_rows);
+            segment->writeToCache(dmContext(), block, 0, block.rows());
             break;
         }
     }
@@ -1712,7 +1681,7 @@ try
                 else
                 {
                     auto r = i - num_rows_write / 2;
-                    expected = static_cast<int8_t>(-1 * (r % 2 ? 1 : -1) * r);
+                    expected = static_cast<int8_t>((r % 2 == 0 ? -1 : 1) * r);
                 }
                 // std::cerr << " row: " << i << "  "<< value << std::endl;
                 ASSERT_EQ(value, expected) << "at row: " << i;
@@ -1753,7 +1722,7 @@ try
                 else
                 {
                     auto r = i - num_rows_write / 2;
-                    expected = static_cast<int8_t>(-1 * (r % 2 ? 1 : -1) * r);
+                    expected = static_cast<int8_t>((r % 2 == 0 ? -1 : 1) * r);
                 }
                 // std::cerr << " row: " << i << "  "<< value << std::endl;
                 ASSERT_EQ(value, expected) << "at row: " << i;
