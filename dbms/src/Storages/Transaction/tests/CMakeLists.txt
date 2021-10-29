@@ -8,6 +8,11 @@ target_include_directories (decode_test BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR}
 target_link_libraries (decode_test dbms clickhouse_functions clickhouse_common_io clickhouse-server-lib)
 install (FILES ${CMAKE_CURRENT_BINARY_DIR}/decode_test DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
 
+add_executable (decode_test2 decode_test2.cpp)
+target_include_directories (decode_test2 BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+target_link_libraries (decode_test2 dbms clickhouse_functions clickhouse_common_io clickhouse-server-lib)
+install (FILES ${CMAKE_CURRENT_BINARY_DIR}/decode_test2 DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)
+
 # glob all unit tests of tmt into gtests_tmt
 macro (grep_gtest_sources BASE_DIR DST_VAR)
     # Cold match files that are not in tests/ directories
