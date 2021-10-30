@@ -59,5 +59,38 @@ mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflas
 +----------------------+
 
 => DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
+
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select hour(a) from t;
++---------+
+| hour(a) |
++---------+
+|     700 |
+|     700 |
++---------+
+
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select minute(a) from t;
++-----------+
+| minute(a) |
++-----------+
+|        10 |
+|        10 |
++-----------+
+
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select second(a) from t;
++-----------+
+| second(a) |
++-----------+
+|        10 |
+|        10 |
++-----------+
+
+# mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select microsecond(a) from test.t;
+# +----------------+
+# | microsecond(a) |
+# +----------------+
+# |         123500 |
+# |         123500 |
+# +----------------+
+
 # Clean up.
 mysql> drop table if exists test.t
