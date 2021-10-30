@@ -1,0 +1,96 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t(c1 tinyint, c2 varchar(100), c3 varchar(100));
+mysql> insert into test.t values(1, 'abc', 'def');
+mysql> insert into test.t values(1, 'abc', '');
+mysql> insert into test.t values(100, 'abc', '');
+mysql> insert into test.t values(-1, 'abc', '');
+mysql> insert into test.t values(Null, 'abc', 'def');
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+mysql> set tidb_isolation_read_engines='tiflash'; select lpad(c2, c1, c3) from test.t;
++------------------+
+| lpad(c2, c1, c3) |
++------------------+
+| a                |
+| a                |
+| NULL             |
+| NULL             |
+| NULL             |
++------------------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; select rpad(c2, c1, c3) from test.t;
++------------------+
+| rpad(c2, c1, c3) |
++------------------+
+| a                |
+| a                |
+| NULL             |
+| NULL             |
+| NULL             |
++------------------+
+
+mysql> drop table if exists test.t;
+mysql> create table test.t(c1 tinyint, c2 varchar(100), c3 varchar(100));
+mysql> insert into test.t values(1, '杭州', '');
+mysql> insert into test.t values(5, '杭州', '');
+mysql> insert into test.t values(5, '杭州', '西湖');
+mysql> insert into test.t values(5, '杭州', 'test');
+mysql> insert into test.t values(5, '', '西湖');
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+mysql> select lpad(c2, c1, c3) from test.t;
++------------------+
+| lpad(c2, c1, c3) |
++------------------+
+| 杭               |
+| NULL             |
+| 西湖西杭州       |
+| tes杭州          |
+| 西湖西湖西       |
++------------------+
+
+mysql> select rpad(c2, c1, c3) from test.t;
++------------------+
+| rpad(c2, c1, c3) |
++------------------+
+| 杭               |
+| NULL             |
+| 杭州西湖西       |
+| 杭州tes          |
+| 西湖西湖西       |
++------------------+
+
+mysql> select rpad(c1, c1, c3) from test.t;
++------------------+
+| rpad(c1, c1, c3) |
++------------------+
+| 1                |
+| NULL             |
+| 5西湖西湖        |
+| 5test            |
+| 5西湖西湖        |
++------------------+
+
+mysql> select rpad(c1, c1, c1) from test.t;
++------------------+
+| rpad(c1, c1, c1) |
++------------------+
+| 1                |
+| 55555            |
+| 55555            |
+| 55555            |
+| 55555            |
++------------------+
+
+mysql> select rpad(c2, c2, c2) from test.t;
++------------------+
+| rpad(c2, c2, c2) |
++------------------+
+|                  |
+|                  |
+|                  |
+|                  |
+|                  |
++------------------+

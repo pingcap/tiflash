@@ -1107,7 +1107,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::Lower, "lowerBinary"},
     {tipb::ScalarFuncSig::LowerUTF8, "lowerUTF8"},
-    //{tipb::ScalarFuncSig::LpadUTF8, "cast"},
+    {tipb::ScalarFuncSig::LpadUTF8, "lpadUTF8"},
     //{tipb::ScalarFuncSig::Lpad, "cast"},
     //{tipb::ScalarFuncSig::MakeSet, "cast"},
     //{tipb::ScalarFuncSig::OctInt, "cast"},
@@ -1121,7 +1121,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Reverse, "cast"},
     {tipb::ScalarFuncSig::RightUTF8, "rightUTF8"},
     //{tipb::ScalarFuncSig::Right, "cast"},
-    //{tipb::ScalarFuncSig::RpadUTF8, "cast"},
+    {tipb::ScalarFuncSig::RpadUTF8, "rpadUTF8"},
     //{tipb::ScalarFuncSig::Rpad, "cast"},
     //{tipb::ScalarFuncSig::Space, "cast"},
     //{tipb::ScalarFuncSig::Strcmp, "cast"},
