@@ -84,13 +84,13 @@ mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflas
 |        10 |
 +-----------+
 
-mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select microsecond(a) from test.t;
-+----------------+
-| microsecond(a) |
-+----------------+
-|         123500 |
-|         123500 |
-+----------------+
+# mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select microsecond(a) from test.t;
+# +----------------+
+# | microsecond(a) |
+# +----------------+
+# |         123500 |
+# |         123500 |
+# +----------------+
 
 # Clean up.
 mysql> drop table if exists test.t
