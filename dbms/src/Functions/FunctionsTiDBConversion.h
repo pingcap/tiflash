@@ -1471,6 +1471,16 @@ struct TiDBConvertToDuration
         const tipb::FieldType &,
         [[maybe_unused]] const Context & context)
     {
+        size_t size = block.getByPosition(arguments[0]).column->size();
+        ColumnUInt8::MutablePtr col_null_map_to;
+        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+
+        if constexpr (return_nullable)
+        {
+            col_null_map_to = ColumnUInt8::create(size, 0);
+            vec_null_map_to = &col_null_map_to->getData();
+        }
+
         if constexpr (std::is_same_v<FromDataType, DataTypeMyDuration>)
         {
             const auto & from_type = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
@@ -1486,7 +1496,6 @@ struct TiDBConvertToDuration
                 const auto & from_vec = from_col->getData();
                 auto to_col = ColumnVector<Int64>::create();
                 auto & to_vec = to_col->getData();
-                size_t size = from_vec.size();
                 to_vec.resize(size);
 
                 for (size_t i = 0; i < size; i++)
@@ -1502,6 +1511,9 @@ struct TiDBConvertToDuration
                 fmt::format("Illegal column {} of first argument of function tidb_cast", block.getByPosition(arguments[0]).column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
+
+        if constexpr (return_nullable)
+            block.getByPosition(result).column = ColumnNullable::create(std::move(block.getByPosition(result).column), std::move(col_null_map_to));
     }
 
     constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
