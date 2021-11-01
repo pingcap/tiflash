@@ -1473,7 +1473,28 @@ struct TiDBConvertToDuration
     {
         if constexpr (std::is_same_v<FromDataType, DataTypeMyDuration>)
         {
-            block.getByPosition(result).column = block.getByPosition(arguments[0]).column;
+            const auto & from_type = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
+            int from_fsp = from_type->getFsp();
+            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            int to_fsp = to_type->getFsp();
+            if (to_fsp > from_fsp)
+                block.getByPosition(result).column = block.getByPosition(arguments[0]).column;
+            else
+            {
+                // round half up
+                const auto & from_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(block.getByPosition(arguments[0]).column.get());
+                const auto & from_vec = from_col->getData();
+                auto to_col = ColumnVector<Int64>::create();
+                auto & to_vec = to_col->getData();
+                size_t size = from_vec.size();
+                to_vec.resize(size);
+
+                for (size_t i = 0; i < size; i++)
+                {
+                    to_vec[i] = round(from_vec[i], (6 - to_fsp) + 3);
+                }
+                block.getByPosition(result).column = std::move(to_col);
+            }
         }
         else
         {
@@ -1481,6 +1502,19 @@ struct TiDBConvertToDuration
                 fmt::format("Illegal column {} of first argument of function tidb_cast", block.getByPosition(arguments[0]).column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
+    }
+
+    constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+    static Int64 round(Int64 x, int fsp)
+    {
+        Int64 scale = pow10[fsp];
+        bool negative = x < 0;
+        if (negative)
+            x = -x;
+        x = (x + scale / 2) / scale * scale;
+        if (negative)
+            x = -x;
+        return x;
     }
 };
 
@@ -1875,6 +1909,8 @@ private:
             return createWrapper<DataTypeEnum8, return_nullable>(to_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeEnum16>(from_type.get()))
             return createWrapper<DataTypeEnum16, return_nullable>(to_type);
+        if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
+            return createWrapper<DataTypeMyDuration, return_nullable>(to_type);
 
         // todo support convert to duration/json type
         throw Exception{
