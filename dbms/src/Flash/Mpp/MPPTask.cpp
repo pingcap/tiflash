@@ -146,8 +146,7 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    dag_req = std::make_unique<tipb::DAGRequest>();
-    if (!dag_req->ParseFromString(task_request.encoded_plan()))
+    if (!dag_req.ParseFromString(task_request.encoded_plan()))
     {
         /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
         /// it may exceed this limit, so just try again by double the recursion limit
@@ -155,7 +154,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
             reinterpret_cast<const UInt8 *>(task_request.encoded_plan().data()),
             task_request.encoded_plan().size());
         coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
-        if (!dag_req->ParseFromCodedStream(&coded_input_stream))
+        if (!dag_req.ParseFromCodedStream(&coded_input_stream))
         {
             /// just return error if decode failed this time, because it's really a corner case, and even if we can decode the plan
             /// successfully by using a very large value of the recursion limit, it is kinds of meaningless because the runtime
@@ -166,6 +165,10 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         }
     }
     TMTContext & tmt_context = context.getTMTContext();
+    /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
+    /// will never be used and can be removed later.
+    /// Each MPP task will contain at most one TableScan operator belonging to one table. For those tasks without
+    /// TableScan, their DispatchTaskRequests won't contain any region.
     for (const auto & r : task_request.regions())
     {
         RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
@@ -177,6 +180,13 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
         /// region id, only the first region will be treated as local region
+        ///
+        /// 1. Currently TiDB can't provide a consistent snapshot of the region cache and it may be updated during the
+        ///    planning stage of a query. The planner may see multiple versions of one region (on one TiFlash node).
+        /// 2. Two regions with same region id won't have overlapping key ranges.
+        /// 3. TiFlash will pick the right version of region for local read and others for remote read.
+        /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
+        ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_regions.find(region_info.region_id) != local_regions.end();
 
         if (duplicated_region || needRemoteRead(region_info, tmt_context))
@@ -206,9 +216,9 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
             context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
         }
     }
-    context.getTimezoneInfo().resetByDAGRequest(*dag_req);
+    context.getTimezoneInfo().resetByDAGRequest(dag_req);
 
-    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
+    dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta());
     dag_context->mpp_task_log = log;
     context.setDAGContext(dag_context.get());
 
@@ -223,7 +233,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 
     // register tunnels
     tunnel_set = std::make_shared<MPPTunnelSet>();
-    const auto & exchange_sender = dag_req->root_executor().exchange_sender();
+    const auto & exchange_sender = dag_req.root_executor().exchange_sender();
     std::chrono::seconds timeout(task_request.timeout());
 
     auto task_cancelled_callback = [task = std::weak_ptr<MPPTask>(shared_from_this())] {
@@ -269,7 +279,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
-    DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
+    DAGQuerySource dag(context, local_regions, remote_regions, dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();

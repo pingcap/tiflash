@@ -7,6 +7,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
+#include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <Interpreters/Context.h>
@@ -14,9 +15,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <pingcap/Exception.h>
-#include <pingcap/kv/LockResolver.h>
 
 namespace DB
 {

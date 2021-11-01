@@ -33,8 +33,8 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         Stopwatch stopwatch;
         task = MPPTask::newTask(task_request.meta(), context);
 
-        auto retry_regions = task->prepare(task_request);
-        for (auto region : retry_regions)
+        auto remote_regions = task->prepare(task_request);
+        for (auto region : remote_regions)
         {
             auto * retry_region = response->add_retry_regions();
             retry_region->set_id(region.region_id);
