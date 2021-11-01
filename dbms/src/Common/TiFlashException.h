@@ -221,7 +221,7 @@ public:
     {
         std::vector<TiFlashError> res;
         res.reserve(all_errors.size());
-        for (const auto &error : all_errors)
+        for (const auto & error : all_errors)
         {
             res.push_back(error.second);
         }
