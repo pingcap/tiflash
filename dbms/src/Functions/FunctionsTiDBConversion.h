@@ -1466,7 +1466,7 @@ struct TiDBConvertToDuration
     static void execute(
         Block & block,
         const ColumnNumbers & arguments,
-        size_t result,
+        [[maybe_unused]] size_t result,
         bool,
         const tipb::FieldType &,
         [[maybe_unused]] const Context & context)
