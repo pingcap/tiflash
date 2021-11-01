@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/UnifiedLogPatternFormatter.h>
+#include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
@@ -193,10 +194,10 @@ ColumnPtr makeConstColumn(const DataTypePtr & data_type, size_t size, const Infe
 }
 
 template <typename T>
-ColumnWithTypeAndName createColumn(const InferredDataVector<T> & vec, String name = "")
+ColumnWithTypeAndName createColumn(const InferredDataVector<T> & vec, const String & name = "", Int64 column_id = 0)
 {
     DataTypePtr data_type = makeDataType<T>();
-    return {makeColumn<T>(data_type, vec), data_type, name};
+    return {makeColumn<T>(data_type, vec), data_type, name, column_id};
 }
 
 template <typename T>
@@ -214,21 +215,31 @@ ColumnWithTypeAndName createConstColumn(size_t size, const InferredFieldType<T> 
 }
 
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredDataVector<T> & vec, const String & name = "")
+ColumnWithTypeAndName createColumn(
+    const std::tuple<Args...> & data_type_args,
+    const InferredDataVector<T> & vec,
+    const String & name = "")
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeColumn<T>(data_type, vec), data_type, name};
 }
 
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredDataInitializerList<T> init, const String & name = "")
+ColumnWithTypeAndName createColumn(
+    const std::tuple<Args...> & data_type_args,
+    InferredDataInitializerList<T> init,
+    const String & name = "")
 {
     auto vec = InferredDataVector<T>(init);
     return createColumn<T>(data_type_args, vec, name);
 }
 
 template <typename T, typename... Args>
-ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredFieldType<T> & value, const String & name = "")
+ColumnWithTypeAndName createConstColumn(
+    const std::tuple<Args...> & data_type_args,
+    size_t size,
+    const InferredFieldType<T> & value,
+    const String & name = "")
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
@@ -236,9 +247,10 @@ ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_ar
 
 // parse a string into decimal field.
 template <typename T>
-typename TypeTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> & literal_,
-                                               PrecType max_prec = std::numeric_limits<PrecType>::max(),
-                                               ScaleType expected_scale = std::numeric_limits<ScaleType>::max())
+typename TypeTraits<T>::FieldType parseDecimal(
+    const InferredLiteralType<T> & literal_,
+    PrecType max_prec = std::numeric_limits<PrecType>::max(),
+    ScaleType expected_scale = std::numeric_limits<ScaleType>::max())
 {
     using Traits = TypeTraits<T>;
     using DecimalType = typename Traits::DecimalType;
@@ -282,7 +294,11 @@ typename TypeTraits<T>::FieldType parseDecimal(const InferredLiteralType<T> & li
 
 // e.g. `createColumn<Decimal32>(std::make_tuple(9, 4), {"99999.9999"})`
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, const InferredLiteralVector<T> & literals, const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+ColumnWithTypeAndName createColumn(
+    const std::tuple<Args...> & data_type_args,
+    const InferredLiteralVector<T> & literals,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     PrecType prec = getDecimalPrecision(*removeNullable(data_type), 0);
@@ -297,7 +313,11 @@ ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, c
 }
 
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, InferredLiteralInitializerList<T> literals, const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+ColumnWithTypeAndName createColumn(
+    const std::tuple<Args...> & data_type_args,
+    InferredLiteralInitializerList<T> literals,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
 {
     auto vec = InferredLiteralVector<T>(literals);
     return createColumn<T, Args...>(data_type_args, vec, name);
@@ -305,7 +325,12 @@ ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, I
 
 // e.g. `createConstColumn<Decimal32>(std::make_tuple(9, 4), 1, "99999.9999")`
 template <typename T, typename... Args>
-ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, const InferredLiteralType<T> & literal, const String & name = "", std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+ColumnWithTypeAndName createConstColumn(
+    const std::tuple<Args...> & data_type_args,
+    size_t size,
+    const InferredLiteralType<T> & literal,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
 {
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     PrecType prec = getDecimalPrecision(*removeNullable(data_type), 0);
@@ -316,7 +341,11 @@ ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_ar
 
 // resolve ambiguous overloads for `createColumn<Nullable<Decimal>>(..., {std::nullopt})`.
 template <typename T, typename... Args>
-ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, std::initializer_list<std::nullopt_t> init, const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+ColumnWithTypeAndName createColumn(
+    const std::tuple<Args...> & data_type_args,
+    std::initializer_list<std::nullopt_t> init,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
 {
     InferredDataVector<T> vec(init.size(), std::nullopt);
     return createColumn<T>(data_type_args, vec, name);
@@ -324,7 +353,12 @@ ColumnWithTypeAndName createColumn(const std::tuple<Args...> & data_type_args, s
 
 // resolve ambiguous overloads for `createConstColumn<Nullable<Decimal>>(..., std::nullopt)`.
 template <typename T, typename... Args>
-ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_args, size_t size, std::nullopt_t, const String & name = "", std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
+ColumnWithTypeAndName createConstColumn(
+    const std::tuple<Args...> & data_type_args,
+    size_t size,
+    std::nullopt_t,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
 {
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
@@ -342,10 +376,17 @@ ColumnWithTypeAndName createConstColumn(const std::tuple<Args...> & data_type_ar
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual);
 
-ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnsWithTypeAndName & columns);
+ColumnWithTypeAndName executeFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns);
 
 template <typename... Args>
-ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
+ColumnWithTypeAndName executeFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnWithTypeAndName & first_column,
+    const Args &... columns)
 {
     ColumnsWithTypeAndName vec({first_column, columns...});
     return executeFunction(context, func_name, vec);
@@ -387,6 +428,16 @@ public:
         ColumnsWithTypeAndName vec({first_column, columns...});
         return executeFunction(func_name, vec);
     }
+
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns);
+
+    template <typename... Args>
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
+    {
+        ColumnsWithTypeAndName vec({first_column, columns...});
+        return executeFunction(func_name, argument_column_numbers, vec);
+    }
+
     DAGContext & getDAGContext()
     {
         assert(dag_context_ptr != nullptr);

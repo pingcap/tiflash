@@ -746,11 +746,11 @@ struct TiDBConvertToFloat
                 {
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
-                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
+                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
-                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
+                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }

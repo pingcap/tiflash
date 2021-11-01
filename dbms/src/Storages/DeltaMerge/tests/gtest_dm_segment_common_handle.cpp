@@ -941,8 +941,8 @@ try
     {
         {
             // Write to segment
-            Block block = DMTestEnv::prepareSimpleWriteBlock( //
-                num_batches_written * num_rows_per_write, //
+            Block block = DMTestEnv::prepareSimpleWriteBlock(
+                num_batches_written * num_rows_per_write,
                 num_batches_written * num_rows_per_write + num_rows_per_write,
                 false,
                 2,

@@ -31,12 +31,14 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     tipb::ExchangeType exchange_type_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
+    bool should_send_exec_summary_at_last_,
     tipb::EncodeType encode_type_,
     std::vector<tipb::FieldType> result_field_types_,
     DAGContext & dag_context_,
     const LogWithPrefixPtr & log_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
+    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , exchange_type(exchange_type_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
@@ -51,7 +53,10 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
-    batchWrite<true>();
+    if (should_send_exec_summary_at_last)
+        batchWrite<true>();
+    else
+        batchWrite<false>();
 }
 
 template <class StreamWriterPtr>
@@ -72,7 +77,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 }
 
 template <class StreamWriterPtr>
-template <bool for_last_response>
+template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     const std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
@@ -96,13 +101,13 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         if (dag_context.isMPPTask()) /// broadcast data among TiFlash nodes in MPP
         {
             mpp::MPPDataPacket packet;
-            if constexpr (for_last_response)
+            if constexpr (send_exec_summary_at_last)
             {
                 serializeToPacket(packet, response);
             }
             if (input_blocks.empty())
             {
-                if constexpr (for_last_response)
+                if constexpr (send_exec_summary_at_last)
                 {
                     writer->write(packet);
                 }
@@ -121,7 +126,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             response.set_encode_type(encode_type);
             if (input_blocks.empty())
             {
-                if constexpr (for_last_response)
+                if constexpr (send_exec_summary_at_last)
                 {
                     writer->write(response);
                 }
@@ -142,7 +147,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         response.set_encode_type(encode_type);
         if (input_blocks.empty())
         {
-            if constexpr (for_last_response)
+            if constexpr (send_exec_summary_at_last)
             {
                 writer->write(response);
             }
@@ -181,7 +186,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
 
 /// hash exchanging data among only TiFlash nodes.
 template <class StreamWriterPtr>
-template <bool for_last_response>
+template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
@@ -204,7 +209,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         {
             chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(result_field_types);
         }
-        if constexpr (for_last_response)
+        if constexpr (send_exec_summary_at_last)
         {
             /// Sending the response to only one node, default the first one.
             if (i == 0)
@@ -213,7 +218,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     }
     if (input_blocks.empty())
     {
-        if constexpr (for_last_response)
+        if constexpr (send_exec_summary_at_last)
         {
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
@@ -290,7 +295,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
 
     for (auto part_id = 0; part_id < partition_num; ++part_id)
     {
-        if constexpr (for_last_response)
+        if constexpr (send_exec_summary_at_last)
         {
             writer->write(packet[part_id], part_id);
         }
@@ -303,19 +308,19 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
 }
 
 template <class StreamWriterPtr>
-template <bool for_last_response>
+template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
 {
     tipb::SelectResponse response;
-    if constexpr (for_last_response)
+    if constexpr (send_exec_summary_at_last)
         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
-        partitionAndEncodeThenWriteBlocks<for_last_response>(blocks, response);
+        partitionAndEncodeThenWriteBlocks<send_exec_summary_at_last>(blocks, response);
     }
     else
     {
-        encodeThenWriteBlocks<for_last_response>(blocks, response);
+        encodeThenWriteBlocks<send_exec_summary_at_last>(blocks, response);
     }
     blocks.clear();
     rows_in_blocks = 0;
