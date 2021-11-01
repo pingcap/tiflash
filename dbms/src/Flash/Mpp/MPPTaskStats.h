@@ -19,7 +19,10 @@ public:
     using Duration = Int64; /// ns
 
     MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_)
-        : log(log_), id(id_), task_init_timestamp(Clock::now()), status(INITIALIZING)
+        : log(log_)
+        , id(id_)
+        , task_init_timestamp(Clock::now())
+        , status(INITIALIZING)
     {}
 
     void start();
