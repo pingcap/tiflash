@@ -746,11 +746,11 @@ struct TiDBConvertToFloat
                 {
                     MyDateTime date_time(vec_from[i]);
                     if (type.getFraction() > 0)
-                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
+                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second + date_time.micro_second / 1000000.0);
                     else
-                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-                                            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second);
+                        vec_to[i] = toFloat(date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000
+                                            + date_time.hour * 10000 + date_time.minute * 100 + date_time.second);
                 }
             }
         }
@@ -813,7 +813,7 @@ struct TiDBConvertToDecimal
     static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
-        auto maxValue = DecimalMaxValue::Get(prec);
+        auto maxValue = DecimalMaxValue::get(prec);
         if (value > maxValue || value < -maxValue)
         {
             context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
@@ -874,7 +874,7 @@ struct TiDBConvertToDecimal
         {
             value *= 10;
         }
-        auto max_value = DecimalMaxValue::Get(prec);
+        auto max_value = DecimalMaxValue::get(prec);
         if (value > static_cast<Float64>(max_value))
         {
             context.getDAGContext()->handleOverflowError("cast real to decimal", Errors::Types::Truncated);
@@ -934,7 +934,7 @@ struct TiDBConvertToDecimal
             }
         }
 
-        auto max_value = DecimalMaxValue::Get(prec);
+        auto max_value = DecimalMaxValue::get(prec);
         if (value > max_value || value < -max_value)
         {
             context.getDAGContext()->handleOverflowError("cast decimal as decimal", Errors::Types::Truncated);
@@ -1021,7 +1021,7 @@ struct TiDBConvertToDecimal
                 if (decimal_parts.exp_part.data[0] == '-')
                     return static_cast<UType>(0);
                 else
-                    return static_cast<UType>(DecimalMaxValue::Get(prec));
+                    return static_cast<UType>(DecimalMaxValue::get(prec));
             }
         }
         Int256 v = 0;
@@ -1033,7 +1033,7 @@ struct TiDBConvertToDecimal
             if (decimal_parts.int_part.data[pos] == '-')
                 is_negative = true;
         }
-        Int256 max_value = DecimalMaxValue::Get(prec);
+        Int256 max_value = DecimalMaxValue::get(prec);
 
         Int64 current_scale = frac_offset_by_exponent >= 0
             ? -(decimal_parts.int_part.size - pos + frac_offset_by_exponent)

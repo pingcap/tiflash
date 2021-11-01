@@ -1,5 +1,7 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/joinStr.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -146,7 +148,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
     std::tie(storage, table_structure_lock) = getAndLockStorage(settings.schema_version);
 
-    std::tie(required_columns, source_columns, is_timestamp_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
+    std::tie(required_columns, source_columns, is_need_add_cast_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
@@ -288,7 +290,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                 // clean all streams from local because we are not sure the correctness of those streams
                 pipeline.streams.clear();
                 const auto & dag_regions = dag.getRegions();
-                std::stringstream ss;
+                FmtBuffer buffer;
                 // Normally there is only few regions need to retry when super batch is enabled. Retry to read
                 // from local first. However, too many retry in different places may make the whole process
                 // time out of control. We limit the number of retries to 1 now.
@@ -304,7 +306,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
                             {
                                 region_retry.emplace_back(region_iter->second);
-                                ss << region_iter->first << ",";
+                                buffer.fmtAppend("{},", region_iter->first);
                             }
                             iter = regions_query_info.erase(iter);
                         }
@@ -315,7 +317,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     }
                     LOG_WARNING(log,
                                 "RegionException after read from storage, regions ["
-                                    << ss.str() << "], message: " << e.message()
+                                    << buffer.toString() << "], message: " << e.message()
                                     << (regions_query_info.empty() ? "" : ", retry to read from local"));
                     if (unlikely(regions_query_info.empty()))
                         break; // no available region in local, break retry loop
@@ -330,10 +332,10 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                         if (likely(iter != dag_regions.end()))
                         {
                             region_retry.emplace_back(iter->second);
-                            ss << iter->first << ",";
+                            buffer.fmtAppend("{},", iter->first);
                         }
                     }
-                    LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
+                    LOG_WARNING(log, "RegionException after read from storage, regions [" << buffer.toString() << "], message: " << e.message());
                     break; // break retry loop
                 }
             }
@@ -421,9 +423,10 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     };
 
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
-        LOG_DEBUG(log,
-                  __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
-                                      << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+        LOG_INFO(
+            log,
+            __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
+                                << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
     };
 
     auto sync_schema = [&] {
@@ -432,7 +435,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
+        LOG_INFO(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
     };
 
     /// Try get storage and lock once.
@@ -460,7 +463,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     }
 }
 
-std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColumnsForTableScan(Int64 max_columns_to_read)
+std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGStorageInterpreter::getColumnsForTableScan(Int64 max_columns_to_read)
 {
     // todo handle alias column
     if (max_columns_to_read && table_scan.columns().size() > max_columns_to_read)
@@ -473,12 +476,13 @@ std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColu
 
     Names required_columns_;
     NamesAndTypes source_columns_;
-    BoolVec timestamp_column_flag;
+    std::vector<ExtraCastAfterTSMode> need_cast_column;
+    need_cast_column.reserve(table_scan.columns_size());
     String handle_column_name_ = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         handle_column_name_ = pk_handle_col->get().name;
 
-    for (Int32 i = 0; i < table_scan.columns().size(); i++)
+    for (Int32 i = 0; i < table_scan.columns_size(); i++)
     {
         auto const & ci = table_scan.columns(i);
         ColumnID cid = ci.column_id();
@@ -488,10 +492,15 @@ std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColu
         auto pair = storage->getColumns().getPhysical(name);
         required_columns_.emplace_back(std::move(name));
         source_columns_.emplace_back(std::move(pair));
-        timestamp_column_flag.push_back(cid != -1 && ci.tp() == TiDB::TypeTimestamp);
+        if (cid != -1 && ci.tp() == TiDB::TypeTimestamp)
+            need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+        else if (cid != -1 && ci.tp() == TiDB::TypeTime)
+            need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
+        else
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
     }
 
-    return {required_columns_, source_columns_, timestamp_column_flag, handle_column_name_};
+    return {required_columns_, source_columns_, need_cast_column, handle_column_name_};
 }
 
 std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorageInterpreter::buildRemoteTS()
@@ -503,14 +512,20 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     {
         context.getQueryContext().getDAGContext()->retry_regions.push_back(r.get());
     }
-    LOG_DEBUG(log, ({
-                  std::stringstream ss;
-                  ss << "Start to retry " << region_retry.size() << " regions (";
-                  for (auto & r : region_retry)
-                      ss << r.get().region_id << ",";
-                  ss << ")";
-                  ss.str();
-              }));
+
+    auto print_retry_regions = [this] {
+        FmtBuffer buffer;
+        buffer.fmtAppend("Start to retry {} regions (", region_retry.size());
+        joinStr(
+            region_retry.cbegin(),
+            region_retry.cend(),
+            buffer,
+            [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
+            ",");
+        buffer.append(")");
+        return buffer.toString();
+    };
+    LOG_INFO(log, print_retry_regions());
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;

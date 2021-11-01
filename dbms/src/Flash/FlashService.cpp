@@ -224,9 +224,9 @@ grpc::Status FlashService::Coprocessor(
     }
     Stopwatch stopwatch;
     tunnel->connect(writer);
-    LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
+    LOG_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
     tunnel->waitForFinish();
-    LOG_INFO(log, "connection for " << tunnel->id() << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    LOG_INFO(tunnel->getLogger(), "connection for " << tunnel->id() << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;

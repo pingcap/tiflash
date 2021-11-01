@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/LogWithPrefix.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -28,7 +29,8 @@ public:
         const std::chrono::seconds timeout_,
         TaskCancelledCallback callback,
         int input_steams_num_,
-        bool is_local_);
+        bool is_local_,
+        const LogWithPrefixPtr & log_ = nullptr);
 
     ~MPPTunnelBase();
 
@@ -55,6 +57,8 @@ public:
     void waitForFinish();
 
     bool isLocal() { return is_local; }
+
+    const LogWithPrefixPtr & getLogger() const { return log; }
 
 private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
@@ -96,7 +100,7 @@ private:
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
 
-    Poco::Logger * log;
+    const LogWithPrefixPtr log;
 };
 
 class MPPTunnel : public MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>

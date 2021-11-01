@@ -762,9 +762,8 @@ try
         using NativeType = Decimal::NativeType;                                                                       \
         using FieldType = DecimalField<Decimal>;                                                                      \
         auto prec = (precision);                                                                                      \
-        auto & builder = DecimalMaxValue::instance();                                                                 \
         auto max_scale = std::min(decimal_max_scale, static_cast<ScaleType>(prec) - 1);                               \
-        auto exp10_x = static_cast<NativeType>(builder.Get(max_scale)) + 1; /* exp10_x: 10^x */                       \
+        auto exp10_x = static_cast<NativeType>(DecimalMaxValue::get(max_scale)) + 1; /* exp10_x: 10^x */              \
         auto decimal_max = exp10_x * 10 - 1;                                                                          \
         auto zero = static_cast<NativeType>(0); /* for Int256 */                                                      \
         ASSERT_COLUMN_EQ(                                                                                             \
