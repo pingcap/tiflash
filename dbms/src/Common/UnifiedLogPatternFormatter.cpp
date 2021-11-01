@@ -28,9 +28,9 @@ void UnifiedLogPatternFormatter::format(const Poco::Message & msg, std::string &
         source_str = "<" + std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine()) + ">";
 
     std::string message;
-    const std::string &source = msg.getSource();
+    const std::string & source = msg.getSource();
     if (!source.empty())
-        message = source + ": " + msg.getText();
+        message = fmt::format("{0}:{1}", source, msg.getText());
     else
         message = msg.getText();
 
