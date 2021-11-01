@@ -13,7 +13,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const ::tipb::ExchangeReceiver & exc,
     const ::mpp::TaskMeta & meta,
     size_t max_streams_,
-    const std::shared_ptr<LogWithPrefix> & log_)
+    const std::shared_ptr<LogWithPrefix> & log_,
+    bool enable_local_tunnel_)
     : rpc_context(std::move(rpc_context_))
     , pb_exchange_receiver(exc)
     , source_num(pb_exchange_receiver.encoded_task_meta_size())
@@ -24,6 +25,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
+    , enable_local_tunnel(enable_local_tunnel_)
 {
     for (int i = 0; i < exc.field_types_size(); i++)
     {
@@ -101,10 +103,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
-        bool is_local = req.req->sender_meta().address() == task_meta.address();
+        bool is_local = enable_local_tunnel && req.req->sender_meta().address() == task_meta.address();
         for (int i = 0; i < 10; i++)
         {
-            std::shared_ptr<GRPCReceiverContext::Reader> reader = rpc_context->makeReader(req, is_local);
+            auto reader = rpc_context->makeReader(req, is_local);
             reader->initialize();
             std::shared_ptr<ReceivedMessage> recv_msg;
             bool has_data = false;

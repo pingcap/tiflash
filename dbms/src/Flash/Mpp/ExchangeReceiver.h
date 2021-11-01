@@ -80,7 +80,8 @@ public:
         const ::tipb::ExchangeReceiver & exc,
         const ::mpp::TaskMeta & meta,
         size_t max_streams_,
-        const LogWithPrefixPtr & log_);
+        const LogWithPrefixPtr & log_,
+        bool enable_local_tunnel_ = false);
 
     ~ExchangeReceiverBase();
 
@@ -122,6 +123,7 @@ private:
     String err_msg;
 
     LogWithPrefixPtr log;
+    bool enable_local_tunnel;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

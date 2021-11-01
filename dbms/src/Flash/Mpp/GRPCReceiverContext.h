@@ -29,8 +29,8 @@ public:
         LocalEnv()
             : tunnel(nullptr)
         {}
-        LocalEnv(MPPTunnelPtr tunnel_)
-            : tunnel(tunnel_)
+        explicit LocalEnv(MPPTunnelPtr tunnel_)
+            : tunnel(std::move(tunnel_))
         {}
         MPPTunnelPtr tunnel;
     };

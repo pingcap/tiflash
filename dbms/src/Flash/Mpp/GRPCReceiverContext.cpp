@@ -37,7 +37,7 @@ namespace DB
 {
 GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_)
     : cluster(cluster_)
-    , task_manager(task_manager_)
+    , task_manager(std::move(task_manager_))
 {}
 
 
@@ -88,9 +88,7 @@ std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(con
 {
     if (is_local)
     {
-        std::tuple<MPPTunnelPtr, grpc::Status> localConnRetPair = EstablishMPPConnectionLocal(request.req.get(), task_manager);
-        MPPTunnelPtr tunnel = std::get<0>(localConnRetPair);
-        grpc::Status status = std::get<1>(localConnRetPair);
+        auto [tunnel, status] = EstablishMPPConnectionLocal(request.req.get(), task_manager);
         if (!status.ok())
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
@@ -116,8 +114,8 @@ String GRPCReceiverContext::Request::debugString() const
 
 
 GRPCReceiverContext::Reader::Reader(const GRPCReceiverContext::Request & req)
+    : is_local(false)
 {
-    is_local = false;
     call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
 }
 

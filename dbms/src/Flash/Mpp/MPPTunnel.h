@@ -56,7 +56,7 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
-    bool isLocal() { return is_local; }
+    bool isLocal() const { return is_local; }
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 

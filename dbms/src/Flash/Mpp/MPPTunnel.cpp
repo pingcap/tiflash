@@ -201,19 +201,17 @@ void MPPTunnelBase<Writer>::writeDone()
 template <typename Writer>
 std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 {
-    if (is_local)
+    assert(is_local);
+    if (!finished)
     {
         MPPDataPacketPtr res;
-        if (!finished)
+        send_queue.pop(res);
+        if (nullptr == res)
         {
-            send_queue.pop(res);
-            if (nullptr == res)
-            {
-                finishWithLock();
-            }
-
-            return res;
+            finishWithLock();
         }
+
+        return res;
     }
     return nullptr;
 }
@@ -228,7 +226,10 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
-    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+    if (!is_local)
+    {
+        send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+    }
     connected = true;
     cv_for_connected.notify_all();
 }
