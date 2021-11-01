@@ -68,7 +68,7 @@ grpc::Status CoprocessorHandler::execute()
             SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_dag).Decrement(); });
 
             tipb::DAGRequest dag_request;
-            dag_request.ParseFromString(cop_request->data());
+            getDAGRequestFromStringWithRetry(dag_request, cop_request->data());
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
             if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
                 throw TiFlashException(
