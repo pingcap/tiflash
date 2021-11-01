@@ -921,7 +921,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
         String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
         schema.push_back(std::make_pair(col_name, info));
         is_ts_column.push_back(query_block.output_field_types[i].tp() == TiDB::TypeTimestamp);
-        source_columns.emplace_back(col_name, getDataTypeByFieldType(query_block.output_field_types[i]));
+        source_columns.emplace_back(col_name, getDataTypeByFieldTypeForComputingLayer(query_block.output_field_types[i]));
         final_project.emplace_back(col_name, "");
     }
 
