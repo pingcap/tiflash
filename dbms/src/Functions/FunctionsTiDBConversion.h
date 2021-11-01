@@ -18,6 +18,7 @@
 #include <DataTypes/DataTypeInterval.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -1452,6 +1453,37 @@ struct TiDBConvertToTime
     }
 };
 
+/// cast duration as duration
+/// TODO: support more types convert to duration
+template <typename FromDataType, typename ToDataType, bool return_nullable>
+struct TiDBConvertToDuration
+{
+    static_assert(std::is_same_v<ToDataType, DataTypeMyDuration>);
+
+    using FromFieldType = typename FromDataType::FieldType;
+    using ToFieldType = typename ToDataType::FieldType;
+
+    static void execute(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        bool,
+        const tipb::FieldType &,
+        [[maybe_unused]] const Context & context)
+    {
+        if constexpr (std::is_same_v<FromDataType, DataTypeMyDuration>)
+        {
+            block.getByPosition(result).column = block.getByPosition(arguments[0]).column;
+        }
+        else
+        {
+            throw Exception(
+                fmt::format("Illegal column {} of first argument of function tidb_cast", block.getByPosition(arguments[0]).column->getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+};
+
 inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx)
 {
     UInt64 ymd = num / 1000000;
@@ -1769,6 +1801,18 @@ private:
         if (checkDataType<DataTypeMyDateTime>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToTime<FromDataType, DataTypeMyDateTime, return_nullable>::execute(
+                    block,
+                    arguments,
+                    result,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
+            };
+
+        /// cast as duration
+        if (checkDataType<DataTypeMyDuration>(to_type.get()))
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                TiDBConvertToDuration<FromDataType, DataTypeMyDuration, return_nullable>::execute(
                     block,
                     arguments,
                     result,
