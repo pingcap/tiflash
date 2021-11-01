@@ -78,8 +78,7 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
             dag.getDAGContext().getMPPTaskMeta(),
             max_streams,
             log,
-            context.getSettings().enable_local_tunnel
-            );
+            context.getSettings().enable_local_tunnel);
     }
 }
 
