@@ -20,6 +20,7 @@ namespace DB
 {
 namespace tests
 {
+// TODO: rewrite using executeFunction()
 class TestDateTimeExtract : public DB::tests::FunctionTest
 {
 };
