@@ -146,10 +146,11 @@ LearnerReadSnapshot doLearnerRead(
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,
     Context & context,
-    TMTContext & tmt,
     Poco::Logger * log)
 {
     assert(log != nullptr);
+
+    auto & tmt = context.getTMTContext();
 
     MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id);
     const auto & regions_info = mvcc_query_info.getRegionsInfo();

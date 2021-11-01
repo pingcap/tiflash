@@ -18,11 +18,9 @@ public:
     using Timestamp = Clock::time_point;
     using Duration = Int64; /// ns
 
-    explicit MPPTaskStats(const LogWithPrefixPtr & log_)
-        : log(log_)
+    MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_)
+        : log(log_), id(id_), task_init_timestamp(Clock::now()), status(INITIALIZING)
     {}
-
-    void init(const MPPTaskId & id_);
 
     void start();
 
@@ -30,7 +28,6 @@ public:
 
     String toString() const;
 
-    std::mutex mtx;
     const LogWithPrefixPtr log;
 
     /// common
@@ -38,13 +35,13 @@ public:
     String signature;
     String executor_structure;
     String inputstream_structure;
-    Timestamp init_timestamp;
-    Timestamp start_timestamp;
-    Timestamp end_timestamp;
-    Duration register_mpp_tunnel_duration = 0;
+    Timestamp task_init_timestamp;
+    Timestamp tunnels_init_start_timestamp;
+    Timestamp tunnels_init_end_timestamp;
+    Timestamp task_start_timestamp;
+    Timestamp task_end_timestamp;
     Duration compile_duration = 0;
     Duration wait_index_duration = 0;
-    Duration init_exchange_receiver_duration = 0;
     TaskStatus status;
     String error_message;
 

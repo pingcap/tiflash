@@ -17,18 +17,18 @@ enum TaskStatus
 
 inline StringRef taskStatusToString(const TaskStatus & status)
 {
-    static std::unordered_map<TaskStatus, String> task_status_map{
-        {INITIALIZING, "INITIALIZING"},
-        {RUNNING, "RUNNING"},
-        {FINISHED, "FINISHED"},
-        {CANCELLED, "CANCELLED"}};
-
-    auto it = task_status_map.find(status);
-    if (it == task_status_map.end())
+    switch (status)
     {
+    case INITIALIZING:
+        return "INITIALIZING";
+    case RUNNING:
+        return "RUNNING";
+    case FINISHED:
+        return "FINISHED";
+    case CANCELLED:
+        return "CANCELLED";
+    default:
         throw Exception("Unknown TaskStatus");
     }
-
-    return it->second;
 }
 } // namespace DB

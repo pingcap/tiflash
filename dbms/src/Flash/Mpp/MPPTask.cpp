@@ -40,16 +40,13 @@ extern const char force_no_local_region_for_mpp_task[];
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
+    , id(meta_.start_ts(), meta_.task_id())
     , meta(meta_)
     , log(std::make_shared<LogWithPrefix>(
           &Poco::Logger::get("MPPTask"),
           fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
-    , task_stats(std::make_shared<MPPTaskStats>(log))
-{
-    id.start_ts = meta.start_ts();
-    id.task_id = meta.task_id();
-    task_stats->init(id);
-}
+    , task_stats(std::make_shared<MPPTaskStats>(log, id))
+{}
 
 MPPTask::~MPPTask()
 {
@@ -105,8 +102,8 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
         return {nullptr, err_msg};
     }
 
-    MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
-    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(id);
+    MPPTaskId receiver_id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
+    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(receiver_id);
     if (it == tunnel_map.end())
     {
         auto err_msg = fmt::format(
@@ -229,7 +226,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         return sp && sp->getStatus() == CANCELLED;
     };
 
-    auto start_time = Clock::now();
+    task_stats->tunnels_init_start_timestamp = Clock::now();
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
@@ -245,9 +242,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         }
     }
     dag_context->tunnel_set = tunnel_set;
-    auto end_time = Clock::now();
-    auto register_mpp_tunnel_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-    task_stats->register_mpp_tunnel_duration = register_mpp_tunnel_elapsed_ns;
+    task_stats->tunnels_init_end_timestamp = Clock::now();
 
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
@@ -280,7 +275,6 @@ void MPPTask::preprocess()
 
     task_stats->compile_duration = dag_context->compile_time_ns;
     task_stats->wait_index_duration = dag_context->wait_index_time_ns;
-    task_stats->init_exchange_receiver_duration = dag_context->init_exchange_receiver_time_ns;
 }
 
 void MPPTask::runImpl()
@@ -412,6 +406,7 @@ void MPPTask::cancel(const String & reason)
         {
             closeAllTunnels(reason);
             unregisterTask();
+            task_stats->start();
             task_stats->end(CANCELLED, reason);
             LOG_WARNING(log, "Finish cancel task from uninitialized");
             return;

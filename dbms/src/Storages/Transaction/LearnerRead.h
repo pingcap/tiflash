@@ -31,7 +31,6 @@ doLearnerRead(
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,
     Context & context,
-    TMTContext & tmt,
     Poco::Logger * log);
 
 // After getting stream from storage, we must make sure regions' version haven't changed after learner read.
