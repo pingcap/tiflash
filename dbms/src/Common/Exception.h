@@ -15,11 +15,14 @@ class Logger;
 
 namespace DB
 {
+class LogWithPrefix;
+using LogWithPrefixPtr = std::shared_ptr<LogWithPrefix>;
+
 class Exception : public Poco::Exception
 {
 public:
-    Exception() {} /// For deferred initialization.
-    Exception(const std::string & msg, int code = 0)
+    Exception() = default; /// For deferred initialization.
+    explicit Exception(const std::string & msg, int code = 0)
         : Poco::Exception(msg, code)
     {}
     Exception(const std::string & msg, const std::string & arg, int code = 0)
@@ -52,7 +55,7 @@ private:
 class ErrnoException : public Exception
 {
 public:
-    ErrnoException(const std::string & msg, int code = 0, int saved_errno_ = 0)
+    explicit ErrnoException(const std::string & msg, int code = 0, int saved_errno_ = 0)
         : Exception(msg, code)
         , saved_errno(saved_errno_)
     {}
@@ -75,13 +78,14 @@ private:
 using Exceptions = std::vector<std::exception_ptr>;
 
 
-[[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int the_errno = errno);
+[[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int e = errno);
 
 
 /** Try to write an exception to the log (and forget about it).
   * Can be used in destructors in the catch-all block.
   */
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
+void tryLogCurrentException(const LogWithPrefixPtr & logger, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
 
@@ -118,9 +122,6 @@ struct ExecutionStatus
     bool tryDeserializeText(const std::string & data);
 };
 
-
-void tryLogException(std::exception_ptr e, const char * log_name, const std::string & start_of_message = "");
-void tryLogException(std::exception_ptr e, Poco::Logger * logger, const std::string & start_of_message = "");
 
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace = false);
 std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace);

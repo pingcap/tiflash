@@ -1,6 +1,7 @@
 #include <Core/ColumnNumbers.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/core.h>
 
@@ -8,7 +9,6 @@ namespace DB
 {
 namespace tests
 {
-
 template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typename ActualDisplayT>
 ::testing::AssertionResult assertEqual(
     const char * expected_expr,
@@ -29,18 +29,22 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 }
 
 
-#define ASSERT_EQUAL_WITH_TEXT(expected_value, actual_value, title, expected_display, actual_display) \
-    do {\
-        auto result = assertEqual(#expected_value, #actual_value, (expected_value), (actual_value), (expected_display), (actual_display), title);\
-        if (!result) return result;\
+#define ASSERT_EQUAL_WITH_TEXT(expected_value, actual_value, title, expected_display, actual_display)                                             \
+    do                                                                                                                                            \
+    {                                                                                                                                             \
+        auto result = assertEqual(#expected_value, #actual_value, (expected_value), (actual_value), (expected_display), (actual_display), title); \
+        if (!result)                                                                                                                              \
+            return result;                                                                                                                        \
     } while (false)
 
-#define ASSERT_EQUAL(expected_value, actual_value, title) \
-    do {\
-        auto expected_v = (expected_value);\
-        auto actual_v = (actual_value);\
-        auto result = assertEqual(#expected_value, #actual_value, expected_v, actual_v, expected_v, actual_v, title);\
-        if (!result) return result;\
+#define ASSERT_EQUAL(expected_value, actual_value, title)                                                             \
+    do                                                                                                                \
+    {                                                                                                                 \
+        auto expected_v = (expected_value);                                                                           \
+        auto actual_v = (actual_value);                                                                               \
+        auto result = assertEqual(#expected_value, #actual_value, expected_v, actual_v, expected_v, actual_v, title); \
+        if (!result)                                                                                                  \
+            return result;                                                                                            \
     } while (false)
 
 ::testing::AssertionResult dataTypeEqual(
@@ -79,9 +83,8 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return columnEqual(expected.column, actual.column);
 }
 
-ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns)
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns)
 {
-    const auto context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
 
     Block block(columns);
@@ -98,6 +101,20 @@ ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWit
     return block.getByPosition(columns.size());
 }
 
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+{
+    auto & factory = FunctionFactory::instance();
+    Block block(columns);
+    ColumnsWithTypeAndName arguments;
+    for (size_t i = 0; i < argument_column_numbers.size(); ++i)
+        arguments.push_back(columns.at(i));
+    auto bp = factory.tryGet(func_name, context);
+    if (!bp)
+        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+    auto func = bp->build(arguments);
+    block.insert({nullptr, func->getReturnType(), "res"});
+    func->execute(block, argument_column_numbers, columns.size());
+    return block.getByPosition(columns.size());
+}
 } // namespace tests
 } // namespace DB
-

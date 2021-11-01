@@ -16,7 +16,9 @@
 
 namespace DB
 {
-/// Serializes the stream of blocks in TiDB DAG response format.
+/// Serializes the stream of blocks and sends them to TiDB or TiFlash with different serialization paths.
+/// When sending data to TiDB, blocks with extra info are written into tipb::SelectResponse, then the whole tipb::SelectResponse is further serialized into mpp::MPPDataPacket.data.
+/// Differently when sending data to TiFlash, blocks with only tuples are directly serialized into mpp::MPPDataPacket.chunks, but for the last block, its extra info (like execution summaries) is written into tipb::SelectResponse, then further serialized into mpp::MPPDataPacket.data.
 template <class StreamWriterPtr>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
@@ -28,6 +30,7 @@ public:
         tipb::ExchangeType exchange_type_,
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
+        bool should_send_exec_summary_at_last,
         tipb::EncodeType encodeType_,
         std::vector<tipb::FieldType> result_field_types,
         DAGContext & dag_context_,
@@ -36,13 +39,15 @@ public:
     void finishWrite() override;
 
 private:
-    template <bool for_last_response>
+    template <bool send_exec_summary_at_last>
     void batchWrite();
+    template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
-    template <bool for_last_response>
+    template <bool send_exec_summary_at_last>
     void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     Int64 batch_send_min_limit;
+    bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
     tipb::ExchangeType exchange_type;
     StreamWriterPtr writer;
     std::vector<Block> blocks;

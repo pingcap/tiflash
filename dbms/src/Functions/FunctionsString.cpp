@@ -1,9 +1,11 @@
 #include <Columns/ColumnArray.h>
+#include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/Volnitsky.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Functions/CharUtil.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsRound.h>
@@ -20,11 +22,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
 #include <thread>
-
-#if __SSE2__
-#include <emmintrin.h>
-#endif
-
 
 namespace DB
 {
@@ -155,6 +152,50 @@ struct LengthUTF8Impl
     }
 };
 
+namespace
+{
+template <class T>
+using Ptr = T *;
+
+template <class T>
+using ConstPtr = T const *;
+
+// there is a bug in tree-optimizer for GCC < 7.3.1,
+// which will result in wrong code generation for avx512.
+#if defined(__GNUC_PREREQ) && defined(__GNUC_PATCHLEVEL__)
+#define TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT \
+    (__GNUC_PREREQ(7, 4) || (__GNUC_PREREQ(7, 3) && __GNUC_PATCHLEVEL__ >= 1))
+#else
+#define TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT 1
+#endif
+
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (char not_case_lower_bound, char not_case_upper_bound, char flip_case_mask),
+    (not_case_lower_bound, not_case_upper_bound, flip_case_mask),
+    void,
+    lowerUpperAsciiArrayImpl,
+    (src, src_end, dst),
+    (ConstPtr<UInt8> src,
+     const ConstPtr<UInt8> src_end,
+     Ptr<UInt8> dst),
+    {
+#if TIFLASH_UPPER_LOWER_ASCII_NO_GCC_WORK_AROUND_WITH_SHIFT
+        for (; src < src_end; ++src, ++dst)
+            if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
+                *dst = *src ^ flip_case_mask;
+            else
+                *dst = *src;
+#else
+        static constexpr UInt8 mask_shift = __builtin_ctz(flip_case_mask);
+        for (; src < src_end; ++src, ++dst)
+        {
+            auto data = static_cast<UInt8>(*src <= not_case_upper_bound)
+                & static_cast<UInt8>(*src >= not_case_lower_bound);
+            *dst = *src ^ (data << mask_shift);
+        }
+#endif
+    })
+} // namespace
 
 template <char not_case_lower_bound, char not_case_upper_bound>
 struct LowerUpperImpl
@@ -178,41 +219,8 @@ struct LowerUpperImpl
 private:
     static void array(const UInt8 * src, const UInt8 * src_end, UInt8 * dst)
     {
-        const auto flip_case_mask = 'A' ^ 'a';
-
-#if __SSE2__
-        const auto bytes_sse = sizeof(__m128i);
-        const auto src_end_sse = src_end - (src_end - src) % bytes_sse;
-
-        const auto v_not_case_lower_bound = _mm_set1_epi8(not_case_lower_bound - 1);
-        const auto v_not_case_upper_bound = _mm_set1_epi8(not_case_upper_bound + 1);
-        const auto v_flip_case_mask = _mm_set1_epi8(flip_case_mask);
-
-        for (; src < src_end_sse; src += bytes_sse, dst += bytes_sse)
-        {
-            /// load 16 sequential 8-bit characters
-            const auto chars = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src));
-
-            /// find which 8-bit sequences belong to range [case_lower_bound, case_upper_bound]
-            const auto is_not_case
-                = _mm_and_si128(_mm_cmpgt_epi8(chars, v_not_case_lower_bound), _mm_cmplt_epi8(chars, v_not_case_upper_bound));
-
-            /// keep `flip_case_mask` only where necessary, zero out elsewhere
-            const auto xor_mask = _mm_and_si128(v_flip_case_mask, is_not_case);
-
-            /// flip case by applying calculated mask
-            const auto cased_chars = _mm_xor_si128(chars, xor_mask);
-
-            /// store result back to destination
-            _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), cased_chars);
-        }
-#endif
-
-        for (; src < src_end; ++src, ++dst)
-            if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
-                *dst = *src ^ flip_case_mask;
-            else
-                *dst = *src;
+        static constexpr auto flip_case_mask = 'A' ^ 'a';
+        lowerUpperAsciiArrayImpl<not_case_lower_bound, not_case_upper_bound, flip_case_mask>(src, src_end, dst);
     }
 };
 
@@ -348,14 +356,18 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
           reinterpret_cast<UInt8 *>(&res_data[0]));
 }
 
+namespace
+{
 template <char not_case_lower_bound,
           char not_case_upper_bound,
+          char ascii_upper_bound,
+          char flip_case_mask,
           int to_case(int),
-          void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::toCase(
-    const UInt8 *& src,
-    const UInt8 * src_end,
-    UInt8 *& dst)
+          void cyrillic_to_case(ConstPtr<UInt8> &, Ptr<UInt8> &)>
+__attribute__((always_inline)) inline void toCaseImpl(
+    ConstPtr<UInt8> & src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> & dst)
 {
     if (src[0] <= ascii_upper_bound)
     {
@@ -395,79 +407,262 @@ void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyr
 
 template <char not_case_lower_bound,
           char not_case_upper_bound,
+          char ascii_upper_bound,
+          char flip_case_mask,
+          int to_case(int)>
+__attribute__((always_inline)) inline void toCaseImplTiDB(
+    ConstPtr<UInt8> & src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> & dst)
+{
+    if (src[0] <= ascii_upper_bound)
+    {
+        if (*src >= not_case_lower_bound && *src <= not_case_upper_bound)
+            *dst++ = *src++ ^ flip_case_mask;
+        else
+            *dst++ = *src++;
+    }
+    else
+    {
+        static const Poco::UTF8Encoding utf8;
+
+        if (const auto chars = utf8.convert(to_case(utf8.convert(src)), dst, src_end - src))
+            src += chars, dst += chars;
+        else
+            ++src, ++dst;
+    }
+}
+
+} // namespace
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int),
+          void cyrillic_to_case(ConstPtr<UInt8> &, Ptr<UInt8> &)>
+void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::toCase(
+    ConstPtr<UInt8> & src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> & dst)
+{
+    toCaseImpl<
+        not_case_lower_bound,
+        not_case_upper_bound,
+        ascii_upper_bound,
+        flip_case_mask,
+        to_case,
+        cyrillic_to_case>(src, src_end, dst);
+}
+
+namespace
+{
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (char not_case_lower_bound,
+     char not_case_upper_bound,
+     char ascii_upper_bound,
+     char flip_case_mask,
+     int to_case(int),
+     void cyrillic_to_case(const UInt8 *&, UInt8 *&)),
+    (not_case_lower_bound,
+     not_case_upper_bound,
+     ascii_upper_bound,
+     flip_case_mask,
+     to_case,
+     cyrillic_to_case),
+    void,
+    lowerUpperUTF8ArrayImpl,
+    (src, src_end, dst),
+    (ConstPtr<UInt8> & src,
+     const ConstPtr<UInt8> src_end,
+     Ptr<UInt8> & dst),
+    {
+        static const auto flip_mask = SimdWord::template fromSingle<int8_t>(flip_case_mask);
+        while (src + WORD_SIZE < src_end)
+        {
+            auto word = SimdWord::fromUnaligned(src);
+            auto ascii_check = SimdWord{};
+            ascii_check.as_int8 = word.as_int8 >= 0;
+            if (ascii_check.isByteAllMarked())
+            {
+                auto range_check = SimdWord{};
+                auto selected = SimdWord{};
+                range_check.as_int8 = (word.as_int8 >= not_case_lower_bound) & (word.as_int8 <= not_case_upper_bound);
+                selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
+                word.as_int8 ^= selected.as_int8;
+                word.toUnaligned(dst);
+                src += WORD_SIZE;
+                dst += WORD_SIZE;
+            }
+            else
+            {
+                auto expected_end = src + WORD_SIZE;
+                while (src < expected_end)
+                {
+                    toCaseImpl<
+                        not_case_lower_bound,
+                        not_case_upper_bound,
+                        ascii_upper_bound,
+                        flip_case_mask,
+                        to_case,
+                        cyrillic_to_case>(src, src_end, dst);
+                }
+            }
+        }
+        while (src < src_end)
+            toCaseImpl<
+                not_case_lower_bound,
+                not_case_upper_bound,
+                ascii_upper_bound,
+                flip_case_mask,
+                to_case,
+                cyrillic_to_case>(src, src_end, dst);
+    })
+
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (char not_case_lower_bound,
+     char not_case_upper_bound,
+     char ascii_upper_bound,
+     char flip_case_mask,
+     int to_case(int)),
+    (not_case_lower_bound,
+     not_case_upper_bound,
+     ascii_upper_bound,
+     flip_case_mask,
+     to_case),
+    void,
+    lowerUpperUTF8ArrayImplTiDB,
+    (src, src_end, dst),
+    (ConstPtr<UInt8> & src,
+     const ConstPtr<UInt8> src_end,
+     Ptr<UInt8> & dst),
+    {
+        static const auto flip_mask = SimdWord::template fromSingle<int8_t>(flip_case_mask);
+        while (src + WORD_SIZE < src_end)
+        {
+            auto word = SimdWord::fromUnaligned(src);
+            auto ascii_check = SimdWord{};
+            ascii_check.as_int8 = word.as_int8 >= 0;
+            if (ascii_check.isByteAllMarked())
+            {
+                auto range_check = SimdWord{};
+                auto selected = SimdWord{};
+                range_check.as_int8 = (word.as_int8 >= not_case_lower_bound) & (word.as_int8 <= not_case_upper_bound);
+                selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
+                word.as_int8 ^= selected.as_int8;
+                word.toUnaligned(dst);
+                src += WORD_SIZE;
+                dst += WORD_SIZE;
+            }
+            else
+            {
+                auto expected_end = src + WORD_SIZE;
+                while (src < expected_end)
+                {
+                    toCaseImplTiDB<
+                        not_case_lower_bound,
+                        not_case_upper_bound,
+                        ascii_upper_bound,
+                        flip_case_mask,
+                        to_case>(src, src_end, dst);
+                }
+            }
+        }
+        while (src < src_end)
+            toCaseImplTiDB<
+                not_case_lower_bound,
+                not_case_upper_bound,
+                ascii_upper_bound,
+                flip_case_mask,
+                to_case>(src, src_end, dst);
+    })
+} // namespace
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
           int to_case(int),
           void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
 void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::array(
+    ConstPtr<UInt8> src,
+    const ConstPtr<UInt8> src_end,
+    Ptr<UInt8> dst)
+{
+    lowerUpperUTF8ArrayImpl<
+        not_case_lower_bound,
+        not_case_upper_bound,
+        ascii_upper_bound,
+        flip_case_mask,
+        to_case,
+        cyrillic_to_case>(src, src_end, dst);
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vector(
+    const ColumnString::Chars_t & data,
+    const IColumn::Offsets & offsets,
+    ColumnString::Chars_t & res_data,
+    IColumn::Offsets & res_offsets)
+{
+    res_data.resize(data.size());
+    res_offsets.assign(offsets);
+    array(data.data(), data.data() + data.size(), res_data.data());
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vector_fixed(
+    const ColumnString::Chars_t & data,
+    size_t /*n*/,
+    ColumnString::Chars_t & res_data)
+{
+    res_data.resize(data.size());
+    array(data.data(), data.data() + data.size(), res_data.data());
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::constant(
+    const std::string & data,
+    std::string & res_data)
+{
+    res_data.resize(data.size());
+    array(reinterpret_cast<const UInt8 *>(data.data()),
+          reinterpret_cast<const UInt8 *>(data.data() + data.size()),
+          reinterpret_cast<UInt8 *>(&res_data[0]));
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::toCase(
+    const UInt8 *& src,
+    const UInt8 * src_end,
+    UInt8 *& dst)
+{
+    toCaseImplTiDB<
+        not_case_lower_bound,
+        not_case_upper_bound,
+        ascii_upper_bound,
+        flip_case_mask,
+        to_case>(src, src_end, dst);
+}
+
+template <char not_case_lower_bound,
+          char not_case_upper_bound,
+          int to_case(int)>
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::array(
     const UInt8 * src,
     const UInt8 * src_end,
     UInt8 * dst)
 {
-#if __SSE2__
-    const auto bytes_sse = sizeof(__m128i);
-    auto src_end_sse = src + (src_end - src) / bytes_sse * bytes_sse;
-
-    /// SSE2 packed comparison operate on signed types, hence compare (c < 0) instead of (c > 0x7f)
-    const auto v_zero = _mm_setzero_si128();
-    const auto v_not_case_lower_bound = _mm_set1_epi8(not_case_lower_bound - 1);
-    const auto v_not_case_upper_bound = _mm_set1_epi8(not_case_upper_bound + 1);
-    const auto v_flip_case_mask = _mm_set1_epi8(flip_case_mask);
-
-    while (src < src_end_sse)
-    {
-        const auto chars = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src));
-
-        /// check for ASCII
-        const auto is_not_ascii = _mm_cmplt_epi8(chars, v_zero);
-        const auto mask_is_not_ascii = _mm_movemask_epi8(is_not_ascii);
-
-        /// ASCII
-        if (mask_is_not_ascii == 0)
-        {
-            const auto is_not_case
-                = _mm_and_si128(_mm_cmpgt_epi8(chars, v_not_case_lower_bound), _mm_cmplt_epi8(chars, v_not_case_upper_bound));
-            const auto mask_is_not_case = _mm_movemask_epi8(is_not_case);
-
-            /// everything in correct case ASCII
-            if (mask_is_not_case == 0)
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), chars);
-            else
-            {
-                /// ASCII in mixed case
-                /// keep `flip_case_mask` only where necessary, zero out elsewhere
-                const auto xor_mask = _mm_and_si128(v_flip_case_mask, is_not_case);
-
-                /// flip case by applying calculated mask
-                const auto cased_chars = _mm_xor_si128(chars, xor_mask);
-
-                /// store result back to destination
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst), cased_chars);
-            }
-
-            src += bytes_sse, dst += bytes_sse;
-        }
-        else
-        {
-            /// UTF-8
-            const auto expected_end = src + bytes_sse;
-
-            while (src < expected_end)
-                toCase(src, src_end, dst);
-
-            /// adjust src_end_sse by pushing it forward or backward
-            const auto diff = src - expected_end;
-            if (diff != 0)
-            {
-                if (src_end_sse + diff < src_end)
-                    src_end_sse += diff;
-                else
-                    src_end_sse -= bytes_sse - diff;
-            }
-        }
-    }
-#endif
-    /// handle remaining symbols
-    while (src < src_end)
-        toCase(src, src_end, dst);
+    lowerUpperUTF8ArrayImplTiDB<
+        not_case_lower_bound,
+        not_case_upper_bound,
+        ascii_upper_bound,
+        flip_case_mask,
+        to_case>(src, src_end, dst);
 }
 
 /** If the string is encoded in UTF-8, then it selects a substring of code points in it.
@@ -1271,7 +1466,7 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -2158,6 +2353,283 @@ private:
     }
 };
 
+template <typename Name, bool ltrim, bool rtrim>
+class FunctionTiDBTrim : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    FunctionTiDBTrim() = default;
+    static FunctionPtr create(const Context &)
+    {
+        return std::make_shared<FunctionTiDBTrim>();
+    }
+
+    String getName() const override { return name; }
+
+    bool isVariadic() const override { return true; }
+
+    size_t getNumberOfArguments() const override
+    {
+        return 0;
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {2}; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.empty() || arguments.size() > 3)
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                    + ", should be 1, 2 or 3.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            const auto arg = arguments[arg_idx].get();
+            if (arg_idx < 2 && !arg->isString())
+                throw Exception{
+                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function "
+                        + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            else if (arg_idx == 2 && !arg->isInteger())
+                throw Exception{
+                    "Illegal type " + arg->getName() + " of argument 3 of function "
+                        + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+        }
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
+    {
+        switch (arguments.size())
+        {
+        case 1:
+            executeTrim(block, arguments, result);
+            break;
+        case 2:
+            executeTrim2Args(ltrim, rtrim, block, arguments, result);
+            break;
+        case 3:
+            executeTrim3Args(block, arguments, result);
+            break;
+        default:
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                    + ", should beat least 1.",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
+    }
+
+private:
+    void executeTrim(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        ColumnPtr & column_data = block.getByPosition(arguments[0]).column;
+        auto res_col = ColumnString::create();
+
+        const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
+
+        static const std::string default_rem = " ";
+        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)default_rem.c_str(), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
+
+        block.getByPosition(result).column = std::move(res_col);
+    }
+
+    void executeTrim2Args(bool is_ltrim, bool is_rtrim, Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        ColumnPtr & column_data = block.getByPosition(arguments[0]).column;
+        ColumnPtr & column_remstr = block.getByPosition(arguments[1]).column;
+
+        bool data_const = column_data->isColumnConst();
+        bool remstr_const = column_remstr->isColumnConst();
+
+        auto res_col = ColumnString::create();
+
+        if (data_const && !remstr_const)
+        {
+            const ColumnConst * data_col = checkAndGetColumnConst<ColumnString>(column_data.get());
+            const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
+
+            std::string data = data_col->getValue<String>();
+            constVector(is_ltrim, is_rtrim, (UInt8 *)data.c_str(), data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
+        }
+        else if (remstr_const && !data_const)
+        {
+            const ColumnConst * remstr_col = checkAndGetColumnConst<ColumnString>(column_remstr.get());
+            const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
+
+            std::string remstr = remstr_col->getValue<String>();
+            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)remstr.c_str(), remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
+        }
+        else
+        {
+            const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
+            const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
+
+            vectorVector(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
+        }
+
+        block.getByPosition(result).column = std::move(res_col);
+    }
+
+    void executeTrim3Args(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        ColumnPtr & column_direction = block.getByPosition(arguments[2]).column;
+        if (!column_direction->isColumnConst())
+            throw Exception("3nd argument of function " + getName() + " must be constant.");
+        const ColumnConst * direction_col = checkAndGetColumn<ColumnConst>(column_direction.get());
+
+        static constexpr Int64 trim_both_default = 0; // trims from both direction by default
+        static constexpr Int64 trim_both = 1; // trims from both direction with explicit notation
+        static constexpr Int64 trim_leading = 2; // trims from left
+        static constexpr Int64 trim_trailing = 3; // trims from right
+        Int64 direction = direction_col->getInt(0);
+        switch (direction)
+        {
+        case trim_both_default:
+        case trim_both:
+            executeTrim2Args(true, true, block, ColumnNumbers(arguments.begin(), arguments.end() - 1), result);
+            break;
+        case trim_leading:
+            executeTrim2Args(true, false, block, ColumnNumbers(arguments.begin(), arguments.end() - 1), result);
+            break;
+        case trim_trailing:
+            executeTrim2Args(false, true, block, ColumnNumbers(arguments.begin(), arguments.end() - 1), result);
+            break;
+        }
+    }
+
+    static void trim(
+        const UInt8 * data_begin,
+        const size_t data_size,
+        const UInt8 * remstr,
+        const size_t remstr_size,
+        const bool is_ltrim,
+        const bool is_rtrim,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset)
+    {
+        const UInt8 * left = data_begin;
+        const UInt8 * right = data_begin + data_size - 1;
+        const long remstr_real_size = remstr_size - 1;
+
+        if (remstr_real_size > 0 && is_ltrim)
+        {
+            for (; right - left >= remstr_real_size; left += remstr_real_size)
+            {
+                if (memcmp(left, remstr, remstr_real_size) != 0)
+                {
+                    break;
+                }
+            }
+        }
+        if (remstr_real_size > 0 && is_rtrim)
+        {
+            for (; right - left >= remstr_real_size; right -= remstr_real_size)
+            {
+                if (memcmp(right - remstr_real_size, remstr, remstr_real_size) != 0)
+                {
+                    break;
+                }
+            }
+        }
+        if (right - left >= 0)
+        {
+            copyDataToResult(res_data, res_offset, left, right);
+        }
+    }
+
+    // trim(column), trim(const from column)
+    static void vectorConst(
+        bool is_ltrim,
+        bool is_rtrim,
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        UInt8 * remstr,
+        size_t remstr_size,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i);
+            trim(&data[data_offset], data_size, remstr, remstr_size, is_ltrim, is_rtrim, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    // trim(column from const)
+    static void constVector(
+        bool is_ltrim,
+        bool is_rtrim,
+        UInt8 * data,
+        size_t data_size,
+        const ColumnString::Chars_t & remstr,
+        const ColumnString::Offsets & remstr_offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(remstr.size());
+        size_t size = remstr_offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto rem_offset = StringUtil::offsetAt(remstr_offsets, i);
+            auto remstr_size = StringUtil::sizeAt(remstr_offsets, i);
+            trim(data, data_size, &remstr[rem_offset], remstr_size, is_ltrim, is_rtrim, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    // trim(column from column)
+    static void vectorVector(
+        bool is_ltrim,
+        bool is_rtrim,
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const ColumnString::Chars_t & remstr,
+        const ColumnString::Offsets & remstr_offsets,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i);
+            auto rem_offset = StringUtil::offsetAt(remstr_offsets, i);
+            auto remstr_size = StringUtil::sizeAt(remstr_offsets, i);
+            trim(&data[data_offset], data_size, &remstr[rem_offset], remstr_size, is_ltrim, is_rtrim, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    static void copyDataToResult(
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset,
+        const UInt8 * begin,
+        const UInt8 * end)
+    {
+        res_data.resize(res_data.size() + (end - begin + 1));
+        memcpy(&res_data[res_offset], begin, end - begin);
+        res_data[res_offset + (end - begin)] = '\0';
+        res_offset += end - begin + 1;
+    }
+};
 
 template <typename Name, bool is_left>
 class PadImpl : public IFunction
@@ -3461,12 +3933,12 @@ private:
     }
 
     template <typename T>
-    static T round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
+    static auto round(T number, size_t max_num_decimals [[maybe_unused]], const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
         if constexpr (IsDecimal<T>)
             return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
         else if constexpr (std::is_floating_point_v<T>)
-            return TiDBFloatingRound<T, T>::eval(number, max_num_decimals);
+            return TiDBFloatingRound<T, Float64>::eval(number, max_num_decimals);
         else
         {
             static_assert(std::is_integral_v<T>);
@@ -3505,7 +3977,7 @@ private:
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
-        T round_number = round(number, max_num_decimals, info);
+        auto round_number = round(number, max_num_decimals, info);
         std::string round_number_str = number2Str(round_number, info);
         std::string buffer = Format::apply(round_number_str, max_num_decimals);
         copyFromBuffer(buffer, res_data, res_offsets);
@@ -3693,15 +4165,17 @@ struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
 struct NameLength                { static constexpr auto name = "length"; };
 struct NameLengthUTF8            { static constexpr auto name = "lengthUTF8"; };
-struct NameLower                 { static constexpr auto name = "lower"; };
-struct NameUpper                 { static constexpr auto name = "upper"; };
+struct NameLowerBinary           { static constexpr auto name = "lowerBinary"; };
+struct NameLowerUTF8             { static constexpr auto name = "lowerUTF8"; };
+struct NameUpperBinary           { static constexpr auto name = "upperBinary"; };
+struct NameUpperUTF8             { static constexpr auto name = "upperUTF8"; };
 struct NameReverseUTF8           { static constexpr auto name = "reverseUTF8"; };
 struct NameTrim                  { static constexpr auto name = "trim"; };
 struct NameLTrim                 { static constexpr auto name = "ltrim"; };
 struct NameRTrim                 { static constexpr auto name = "rtrim"; };
-struct NameTrimUTF8              { static constexpr auto name = "trimUTF8"; };
-struct NameLTrimUTF8             { static constexpr auto name = "ltrimUTF8"; };
-struct NameRTrimUTF8             { static constexpr auto name = "rtrimUTF8"; };
+struct NameTiDBTrim              { static constexpr auto name = "tidbTrim"; };
+struct NameTiDBLTrim             { static constexpr auto name = "tidbLTrim"; };
+struct NameTiDBRTrim             { static constexpr auto name = "tidbRTrim"; };
 struct NameLPad                  { static constexpr auto name = "lpad"; };
 struct NameLPadUTF8              { static constexpr auto name = "lpadUTF8"; };
 struct NameRPad                  { static constexpr auto name = "rpad"; };
@@ -3715,18 +4189,25 @@ using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, UInt
 using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty, UInt8>;
 // using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
 using FunctionLengthUTF8 = FunctionStringOrArrayToT<LengthUTF8Impl, NameLengthUTF8, UInt64>;
-using FunctionLower = FunctionStringToString<LowerUpperImpl<'A', 'Z'>, NameLower>;
-using FunctionUpper = FunctionStringToString<LowerUpperImpl<'a', 'z'>, NameUpper>;
+using FunctionLowerBinary = FunctionStringToString<TiDBLowerUpperBinaryImpl, NameLowerBinary>;
+using FunctionLowerUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'A', 'Z', CharUtil::unicodeToLower>, NameLowerUTF8>;
+using FunctionUpperBinary = FunctionStringToString<TiDBLowerUpperBinaryImpl, NameUpperBinary>;
+using FunctionUpperUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'a', 'z', CharUtil::unicodeToUpper>, NameUpperUTF8>;
 using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseUTF8, true>;
-using FunctionTrimUTF8 = TrimUTF8Impl<NameTrim, true, true>;
-using FunctionLTrimUTF8 = TrimUTF8Impl<NameLTrim, true, false>;
-using FunctionRTrimUTF8 = TrimUTF8Impl<NameRTrim, false, true>;
+using FunctionTrim = FunctionTiDBTrim<NameTiDBTrim, true, true>;
+using FunctionLTrim = FunctionTiDBTrim<NameTiDBLTrim, true, false>;
+using FunctionRTrim = FunctionTiDBTrim<NameTiDBRTrim, false, true>;
 using FunctionLPadUTF8 = PadUTF8Impl<NameLPad, true>;
 using FunctionRPadUTF8 = PadUTF8Impl<NameRPad, false>;
 using FunctionConcat = ConcatImpl<NameConcat, false>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
 using FunctionFormat = FormatImpl<NameFormat, FormatWithEnUS>;
 
+// export for tests
+template struct LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>;
+template struct LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>;
+template struct LowerUpperImpl<'A', 'Z'>;
+template struct LowerUpperImpl<'a', 'z'>;
 
 void registerFunctionsString(FunctionFactory & factory)
 {
@@ -3734,15 +4215,15 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionNotEmpty>();
     factory.registerFunction<FunctionLength>();
     factory.registerFunction<FunctionLengthUTF8>();
-    factory.registerFunction<FunctionLower>();
-    factory.registerFunction<FunctionUpper>();
+    factory.registerFunction<FunctionLowerBinary>();
+    factory.registerFunction<FunctionUpperBinary>();
     factory.registerFunction<FunctionLowerUTF8>();
     factory.registerFunction<FunctionUpperUTF8>();
     factory.registerFunction<FunctionReverse>();
     factory.registerFunction<FunctionReverseUTF8>();
-    factory.registerFunction<FunctionTrimUTF8>();
-    factory.registerFunction<FunctionLTrimUTF8>();
-    factory.registerFunction<FunctionRTrimUTF8>();
+    factory.registerFunction<FunctionTrim>("tidbTrim", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionLTrim>("tidbLTrim", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionRTrim>("tidbRTrim", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionLPadUTF8>();
     factory.registerFunction<FunctionRPadUTF8>();
     factory.registerFunction<FunctionConcat>();

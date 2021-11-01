@@ -1,7 +1,8 @@
 #pragma once
+#include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
-#include <Common/config_version.h>
 #include <IO/ChecksumBuffer.h>
+#include <Interpreters/Context.h>
 
 #include <map>
 #include <string>
@@ -16,11 +17,11 @@ public:
     explicit DMChecksumConfig(std::map<std::string, std::string> embedded_checksum_ = {},
                               size_t checksum_frame_length_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE,
                               DB::ChecksumAlgo checksum_algorithm_ = DB::ChecksumAlgo::XXH3,
-                              std::map<std::string, std::string> debug_info_ = {{"creation_commit_hash", TIFLASH_GIT_HASH},
-                                                                                {"creation_edition", TIFLASH_EDITION},
-                                                                                {"creation_version", TIFLASH_VERSION},
-                                                                                {"creation_release_version", TIFLASH_RELEASE_VERSION},
-                                                                                {"creation_build_time", TIFLASH_UTC_BUILD_TIME}})
+                              std::map<std::string, std::string> debug_info_ = {{"creation_commit_hash", TiFlashBuildInfo::getGitHash()},
+                                                                                {"creation_edition", TiFlashBuildInfo::getEdition()},
+                                                                                {"creation_version", TiFlashBuildInfo::getVersion()},
+                                                                                {"creation_release_version", TiFlashBuildInfo::getReleaseVersion()},
+                                                                                {"creation_build_time", TiFlashBuildInfo::getUTCBuildTime()}})
         : checksum_frame_length(checksum_frame_length_)
         , checksum_algorithm(checksum_algorithm_)
         , embedded_checksum(std::move(embedded_checksum_))
@@ -73,11 +74,18 @@ public:
         }
     }
 
+    [[maybe_unused]] static std::optional<DMChecksumConfig> fromDBContext(const DB::Context & context, bool is_single_file);
+
 private:
-    size_t checksum_frame_length; // the length of checksum frame
-    DB::ChecksumAlgo checksum_algorithm; // the algorithm of checksum
-    std::map<std::string, std::string> embedded_checksum; // special checksums for meta files
-    std::map<std::string, std::string> debug_info; // debugging information
+    size_t checksum_frame_length; ///< the length of checksum frame
+    DB::ChecksumAlgo checksum_algorithm; ///< the algorithm of checksum
+    std::map<std::string, std::string> embedded_checksum; ///< special checksums for meta files
+    std::map<std::string, std::string> debug_info; ///< debugging information
+
+    explicit DMChecksumConfig(const DB::Context & context)
+        : DMChecksumConfig({}, context.getSettingsRef().dt_checksum_frame_size.get(), context.getSettingsRef().dt_checksum_algorithm.get())
+    {
+    }
 };
 
 

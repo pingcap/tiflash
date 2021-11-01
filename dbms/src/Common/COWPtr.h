@@ -91,7 +91,7 @@ private:
 
 protected:
     template <typename T>
-    class mutable_ptr : public IntrusivePtr<T>
+    class mutable_ptr : public IntrusivePtr<T> // NOLINT(readability-identifier-naming)
     {
     private:
         using Base = IntrusivePtr<T>;
@@ -114,14 +114,15 @@ protected:
         mutable_ptr & operator=(mutable_ptr &&) = default;
 
         /// Initializing from temporary of compatible type.
+        // The single-argument constructors are kept non-explicit for life saving, because POWPtr is basically ubiquitous
         template <typename U>
-        mutable_ptr(mutable_ptr<U> && other)
+        mutable_ptr(mutable_ptr<U> && other) // NOLINT(google-explicit-constructor)
             : Base(std::move(other))
         {}
 
         mutable_ptr() = default;
 
-        mutable_ptr(const std::nullptr_t *) {}
+        mutable_ptr(const std::nullptr_t *) {} // NOLINT(google-explicit-constructor)
     };
 
 public:
@@ -129,7 +130,7 @@ public:
 
 protected:
     template <typename T>
-    class immutable_ptr : public IntrusivePtr<const T>
+    class immutable_ptr : public IntrusivePtr<const T> // NOLINT(readability-identifier-naming)
     {
     private:
         using Base = IntrusivePtr<const T>;
@@ -149,7 +150,7 @@ protected:
         immutable_ptr & operator=(const immutable_ptr &) = default;
 
         template <typename U>
-        immutable_ptr(const immutable_ptr<U> & other)
+        immutable_ptr(const immutable_ptr<U> & other) // NOLINT(google-explicit-constructor)
             : Base(other)
         {}
 
@@ -159,13 +160,13 @@ protected:
 
         /// Initializing from temporary of compatible type.
         template <typename U>
-        immutable_ptr(immutable_ptr<U> && other)
+        immutable_ptr(immutable_ptr<U> && other) // NOLINT(google-explicit-constructor)
             : Base(std::move(other))
         {}
 
         /// Move from mutable ptr: ok.
         template <typename U>
-        immutable_ptr(mutable_ptr<U> && other)
+        immutable_ptr(mutable_ptr<U> && other) // NOLINT(google-explicit-constructor)
             : Base(std::move(other))
         {}
 
@@ -175,7 +176,7 @@ protected:
 
         immutable_ptr() = default;
 
-        immutable_ptr(const std::nullptr_t *) {}
+        immutable_ptr(const std::nullptr_t *) {} // NOLINT(google-explicit-constructor)
     };
 
 public:

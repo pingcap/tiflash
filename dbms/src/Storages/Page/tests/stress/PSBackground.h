@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <PSStressEnv.h>
 #include <Poco/Timer.h>
@@ -9,6 +10,12 @@ public:
     explicit PSMetricsDumper(size_t status_interval_)
         : status_interval(status_interval_)
     {
+#define REGISTER_METRICS(metric, desc) \
+    metrics.insert(metrics.end(), std::pair<CurrentMetrics::Metric, MetricInfo>(metric, {desc}));
+        REGISTER_METRICS(CurrentMetrics::MemoryTracking, "Memory");
+        REGISTER_METRICS(CurrentMetrics::PSMVCCSnapshotsList, "SnapshotsList");
+
+#undef REGISTER_METRICS
         timer_status.setStartInterval(1000);
         timer_status.setPeriodicInterval(status_interval * 1000);
     }
@@ -17,26 +24,50 @@ public:
 
     String toString() const
     {
-        return fmt::format(
-            "Memory lastest used : {} , avg used : {} , top used {}.",
-            lastest_memory,
-            loop_times == 0 ? 0 : (memory_summary / loop_times),
-            memory_biggest);
+        String str;
+        for (const auto & metric : metrics)
+        {
+            if (likely(metric.second.loop_times != 0))
+            {
+                str += (metric.second.toString() + "\n");
+            }
+        }
+        return str;
     }
 
     void start();
 
     UInt32 getMemoryPeak() const
     {
-        return memory_biggest;
+        auto info = metrics.find(CurrentMetrics::MemoryTracking);
+        if (info != metrics.end())
+        {
+            return info->second.biggest;
+        }
+        throw DB::Exception("No register MemoryTracking", DB::ErrorCodes::LOGICAL_ERROR);
     }
 
 private:
+    struct MetricInfo
+    {
+        String name;
+        UInt32 loop_times = 0;
+        UInt32 lastest = 0;
+        UInt32 biggest = 0;
+        UInt32 summary = 0;
+
+        String toString() const
+        {
+            return fmt::format(
+                "{} lastest used: {}, avg used: {}, top used: {}.",
+                name,
+                lastest,
+                loop_times == 0 ? 0 : (summary / loop_times),
+                biggest);
+        }
+    };
     size_t status_interval = 0;
-    UInt32 loop_times = 0;
-    UInt32 memory_summary = 0;
-    UInt32 memory_biggest = 0;
-    UInt32 lastest_memory = 0;
+    std::map<CurrentMetrics::Metric, MetricInfo> metrics;
 
     Poco::Timer timer_status;
 };

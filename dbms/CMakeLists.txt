@@ -270,32 +270,35 @@ if (ENABLE_TESTS)
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
+    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions tiflash-dttool-lib)
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 endif ()
 
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(COVERAGE_LCOV_EXCLUDES
-            '/Library/Developer/CommandLineTools/usr/include/*'
-            '/usr/include/*'
-            '/usr/local/*'
-            '/usr/lib/*'
-            '${CMAKE_SOURCE_DIR}/cmake-build-*/*'
-            '${CMAKE_SOURCE_DIR}/contrib/*'
-            )
-    SETUP_TARGET_FOR_COVERAGE_LCOV(
-            NAME tiflash_lcov_coverage
-            DEPENDENCIES gtests_dbms
-            EXECUTABLE gtests_dbms
-    )
-    set(COVERAGE_GCOVR_EXCLUDES
-            'contrib'
-            'cmake-build-debugwithcov'
-    )
-    SETUP_TARGET_FOR_COVERAGE_GCOVR_HTML(
+    set (COVERAGE_LCOV_EXCLUDES
+        "/Library/Developer/CommandLineTools/usr/include/*"
+        "/usr/include/*"
+        "/usr/local/*"
+        "/usr/lib/*"
+        "${CMAKE_SOURCE_DIR}/cmake-build-*/*"
+        "${CMAKE_SOURCE_DIR}/contrib/*"
+        )
+    set (COVERAGE_GCOVR_EXCLUDES ${COVERAGE_LCOV_EXCLUDES})
+
+    if (TEST_COVERAGE_XML)
+        setup_target_for_coverage_gcovr_xml (
             NAME tiflash_gcovr_coverage
-            DEPENDENCIES gtests_dbms
-            EXECUTABLE gtests_dbms
-    )
-endif()
+            BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
+            DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
+            EXECUTABLE echo "please run gtests manually"
+        )
+    else ()
+        setup_target_for_coverage_lcov (
+            NAME tiflash_coverage_lcov
+            BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
+            DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
+            EXECUTABLE echo "please run gtests manually"
+        )
+    endif ()
+endif ()
