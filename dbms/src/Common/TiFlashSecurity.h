@@ -93,7 +93,7 @@ public:
             verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
         }
         Poco::StringTokenizer string_tokens(verify_cns, ",");
-        for (const auto & string_token: string_tokens)
+        for (const auto & string_token : string_tokens)
         {
             std::string cn = Poco::trim(string_token);
             if (cn.size() > 2 && cn[0] == '\"' && cn[cn.size() - 1] == '\"')
