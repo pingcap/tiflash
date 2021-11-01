@@ -1681,7 +1681,7 @@ private:
                     context_);
             };
         /// cast as decimal
-        if (const auto * const decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
+        if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable>::execute(
                     block,
@@ -1693,7 +1693,7 @@ private:
                     tidb_tp_,
                     context_);
             };
-        if (const auto * const decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
+        if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable>::execute(
                     block,
@@ -1705,7 +1705,7 @@ private:
                     tidb_tp_,
                     context_);
             };
-        if (const auto * const decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
+        if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable>::execute(
                     block,
@@ -1717,7 +1717,7 @@ private:
                     tidb_tp_,
                     context_);
             };
-        if (const auto * const decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
+        if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
                 TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable>::execute(
                     block,
@@ -1997,7 +1997,7 @@ protected:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        const auto * const type_col = checkAndGetColumnConst<ColumnString>(arguments.back().column.get());
+        const auto * type_col = checkAndGetColumnConst<ColumnString>(arguments.back().column.get());
         if (!type_col)
             throw Exception(
                 "Second argument to " + getName() + " must be a constant string describing type",
