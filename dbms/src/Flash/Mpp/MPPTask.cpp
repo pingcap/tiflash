@@ -147,24 +147,7 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     dag_req = std::make_unique<tipb::DAGRequest>();
-    if (!dag_req->ParseFromString(task_request.encoded_plan()))
-    {
-        /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
-        /// it may exceed this limit, so just try again by double the recursion limit
-        ::google::protobuf::io::CodedInputStream coded_input_stream(
-            reinterpret_cast<const UInt8 *>(task_request.encoded_plan().data()),
-            task_request.encoded_plan().size());
-        coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
-        if (!dag_req->ParseFromCodedStream(&coded_input_stream))
-        {
-            /// just return error if decode failed this time, because it's really a corner case, and even if we can decode the plan
-            /// successfully by using a very large value of the recursion limit, it is kinds of meaningless because the runtime
-            /// performance of this task may be very bad if the plan tree is too deep
-            throw TiFlashException(
-                std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan, the most likely is that the plan tree is too deep",
-                Errors::Coprocessor::BadRequest);
-        }
-    }
+    getDAGRequestFromStringWithRetry(*dag_req, task_request.encoded_plan());
     TMTContext & tmt_context = context.getTMTContext();
     for (const auto & r : task_request.regions())
     {

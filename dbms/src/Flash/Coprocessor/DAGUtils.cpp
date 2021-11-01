@@ -527,6 +527,26 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
     }
 }
 
+void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String & s)
+{
+    if (!dag_req.ParseFromString(s))
+    {
+        /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
+        /// it may exceed this limit, so just try again by double the recursion limit
+        ::google::protobuf::io::CodedInputStream coded_input_stream(reinterpret_cast<const UInt8 *>(s.data()), s.size());
+        coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
+        if (!dag_req.ParseFromCodedStream(&coded_input_stream))
+        {
+            /// just return error if decode failed this time, because it's really a corner case, and even if we can decode the plan
+            /// successfully by using a very large value of the recursion limit, it is kinds of meaningless because the runtime
+            /// performance of this task may be very bad if the plan tree is too deep
+            throw TiFlashException(
+                std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan, the most likely is that the plan/expression tree is too deep",
+                Errors::Coprocessor::BadRequest);
+        }
+    }
+}
+
 extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
