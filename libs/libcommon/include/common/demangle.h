@@ -21,7 +21,7 @@ inline std::string demangle(const char * name)
 struct FreeingDeleter
 {
     template <typename PointerType>
-    void operator() (PointerType ptr)
+    void operator()(PointerType ptr)
     {
         std::free(ptr);
     }

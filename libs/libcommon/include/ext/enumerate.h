@@ -1,9 +1,9 @@
 #pragma once
 
 #include <ext/size.h>
+#include <iterator>
 #include <type_traits>
 #include <utility>
-#include <iterator>
 
 
 /** \brief Provides a wrapper view around a container, allowing to iterate over it's elements and indices.
@@ -15,46 +15,55 @@
   */
 namespace ext
 {
-    template <typename It> struct EnumerateIterator
-    {
-        using traits = typename std::iterator_traits<It>;
-        using iterator_category = typename traits::iterator_category;
-        using value_type = std::pair<const std::size_t, typename traits::value_type>;
-        using difference_type = typename traits::difference_type;
-        using reference = std::pair<const std::size_t, typename traits::reference>;
+template <typename It>
+struct EnumerateIterator
+{
+    using traits = typename std::iterator_traits<It>;
+    using iterator_category = typename traits::iterator_category;
+    using value_type = std::pair<const std::size_t, typename traits::value_type>;
+    using difference_type = typename traits::difference_type;
+    using reference = std::pair<const std::size_t, typename traits::reference>;
 
-        std::size_t idx;
-        It it;
+    std::size_t idx;
+    It it;
 
-        EnumerateIterator(const std::size_t idx, It it) : idx{idx}, it{it} {}
+    EnumerateIterator(const std::size_t idx, It it)
+        : idx{idx}
+        , it{it}
+    {}
 
-        auto operator*() const { return reference(idx, *it); }
+    auto operator*() const { return reference(idx, *it); }
 
-        bool operator!=(const EnumerateIterator & other) const { return it != other.it; }
+    bool operator!=(const EnumerateIterator & other) const { return it != other.it; }
 
-        EnumerateIterator & operator++() { return ++idx, ++it, *this; }
-    };
+    EnumerateIterator & operator++() { return ++idx, ++it, *this; }
+};
 
-    template <typename Collection> struct EnumerateWrapper
-    {
-        using underlying_iterator = decltype(std::begin(std::declval<Collection &>()));
-        using iterator = EnumerateIterator<underlying_iterator>;
+template <typename Collection>
+struct EnumerateWrapper
+{
+    using underlying_iterator = decltype(std::begin(std::declval<Collection &>()));
+    using iterator = EnumerateIterator<underlying_iterator>;
 
-        Collection & collection;
+    Collection & collection;
 
-        explicit EnumerateWrapper(Collection & collection) : collection(collection) {}
+    explicit EnumerateWrapper(Collection & collection)
+        : collection(collection)
+    {}
 
-        auto begin() { return iterator(0, std::begin(collection)); }
-        auto end() { return iterator(ext::size(collection), std::end(collection)); }
-    };
+    auto begin() { return iterator(0, std::begin(collection)); }
+    auto end() { return iterator(ext::size(collection), std::end(collection)); }
+};
 
-    template <typename Collection> auto enumerate(Collection & collection)
-    {
-        return EnumerateWrapper<Collection>{collection};
-    }
-
-    template <typename Collection> auto enumerate(const Collection & collection)
-    {
-        return EnumerateWrapper<const Collection>{collection};
-    }
+template <typename Collection>
+auto enumerate(Collection & collection)
+{
+    return EnumerateWrapper<Collection>{collection};
 }
+
+template <typename Collection>
+auto enumerate(const Collection & collection)
+{
+    return EnumerateWrapper<const Collection>{collection};
+}
+} // namespace ext
