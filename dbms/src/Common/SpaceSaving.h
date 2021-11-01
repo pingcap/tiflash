@@ -44,7 +44,7 @@ struct SpaceSavingArena<StringRef>
 {
     StringRef emplace(const StringRef & key)
     {
-        auto *ptr = arena.alloc(key.size);
+        auto * ptr = arena.alloc(key.size);
         std::copy(key.data, key.data + key.size, ptr);
         return StringRef{ptr, key.size};
     }

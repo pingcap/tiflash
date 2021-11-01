@@ -40,7 +40,7 @@ public:
             return;
 
         const auto num_objects = pool.size() / object_size;
-        auto *head = free_list = ext::bit_cast<Block *>(pool.alloc(num_objects * object_size));
+        auto * head = free_list = ext::bit_cast<Block *>(pool.alloc(num_objects * object_size));
 
         for (const auto i : ext::range(0, num_objects - 1))
         {
@@ -56,7 +56,7 @@ public:
     {
         if (free_list)
         {
-            auto *const res = reinterpret_cast<char *>(free_list);
+            auto * res = reinterpret_cast<char *>(free_list);
             free_list = free_list->next;
             return res;
         }
