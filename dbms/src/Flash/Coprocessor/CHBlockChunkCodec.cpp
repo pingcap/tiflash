@@ -16,7 +16,7 @@ public:
         output = std::make_unique<WriteBufferFromOwnString>();
         for (size_t i = 0; i < field_types.size(); i++)
         {
-            expected_types.emplace_back(getDataTypeByFieldType(field_types[i]));
+            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_types[i]));
         }
     }
 

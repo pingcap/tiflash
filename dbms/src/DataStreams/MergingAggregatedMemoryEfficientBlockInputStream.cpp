@@ -70,8 +70,8 @@ namespace DB
 
 
 MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficientBlockInputStream(
-    BlockInputStreams inputs_, const Aggregator::Params & params, bool final_, size_t reading_threads_, size_t merging_threads_)
-    : aggregator(params), final(final_),
+    BlockInputStreams inputs_, const Aggregator::Params & params, bool final_, size_t reading_threads_, size_t merging_threads_, const LogWithPrefixPtr & log_)
+    : log(getLogWithPrefix(log_, getName())), aggregator(params), final(final_),
     reading_threads(std::min(reading_threads_, inputs_.size())), merging_threads(merging_threads_),
     inputs(inputs_.begin(), inputs_.end())
 {
@@ -109,8 +109,8 @@ void MergingAggregatedMemoryEfficientBlockInputStream::readSuffix()
 
     finalize();
 
-    for (size_t i = 0; i < children.size(); ++i)
-        children[i]->readSuffix();
+    for (auto & child : children)
+        child->readSuffix();
 }
 
 
@@ -529,7 +529,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
                 /// Not yet partitioned (splitted to buckets) block. Will partition it and place result to 'splitted_blocks'.
                 if (input.block.info.bucket_num == -1 && input.block && input.splitted_blocks.empty())
                 {
-                    LOG_TRACE(&Poco::Logger::get("MergingAggregatedMemoryEfficient"), "Having block without bucket: will split.");
+                    LOG_TRACE(log, "Having block without bucket: will split.");
 
                     input.splitted_blocks = aggregator.convertBlockToTwoLevel(input.block);
                     input.block = Block();

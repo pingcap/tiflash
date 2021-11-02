@@ -36,9 +36,9 @@ def main():
     assert tics_repo_path[-1] != '/'
 
     os.chdir(tics_repo_path)
-    files_to_check = run_cmd('git diff HEAD --stat') if args.diff_from == 'HEAD' else run_cmd(
-        'git diff {} --stat'.format(args.diff_from))
-    files_to_check = [os.path.join(tics_repo_path, s.split()[0]) for s in files_to_check[:-1]]
+    files_to_check = run_cmd('git diff HEAD --name-only') if args.diff_from == 'HEAD' else run_cmd(
+        'git diff {} --name-only'.format(args.diff_from))
+    files_to_check = [os.path.join(tics_repo_path, s.strip()) for s in files_to_check]
     files_to_format = []
     for f in files_to_check:
         if not any([f.endswith(e) for e in default_suffix]):
@@ -65,10 +65,10 @@ def main():
             cmd = 'clang-format -i {}'.format(' '.join(files_to_format))
             if subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait():
                 exit(-1)
-            diff_res = run_cmd('git diff --stat')
+            diff_res = run_cmd('git diff --name-only')
             if diff_res:
                 print('Error: found files NOT formatted')
-                print('\n'.join(diff_res[:-1]))
+                print(''.join(diff_res))
                 exit(-1)
             else:
                 print("Format check passed")
