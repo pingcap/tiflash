@@ -5,18 +5,14 @@
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Functions/registerFunctions.h>
-#include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDBGInvokeQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTDropQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDBGInvokeQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/File.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/IStorage.h>
-#include <Storages/MutableSupport.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
@@ -33,77 +29,78 @@ namespace DB
 namespace tests
 {
 class FilterParser_test : public ::testing::Test
+{
+public:
+    static void SetUpTestCase()
     {
-    public:
-        static void SetUpTestCase()
+        try
         {
-            try
-            {
-                registerFunctions();
-                registerAggregateFunctions();
-                registerTableFunctions();
-                registerStorages();
-            }
-            catch (DB::Exception &)
-            {
-                // Maybe another test has already registed, ignore exception here.
-            }
+            registerFunctions();
+            registerAggregateFunctions();
+            registerTableFunctions();
+            registerStorages();
         }
-
-        FilterParser_test() : log(&Poco::Logger::get("DatabaseTiFlash_test")) {}
-
-        void SetUp() override
+        catch (DB::Exception &)
         {
-            auto ctx = TiFlashTestEnv::getContext();
-            auto & storages = ctx.getTMTContext().getStorages();
-            auto storage_map = storages.getAllStorage();
-            for (auto it = storage_map.begin(); it != storage_map.end(); it++)
-            {
-                storages.get(it->first)->removeFromTMTContext();
-            }
-            ctx.getTMTContext().restore();
-            recreateMetadataPath();
+            // Maybe another test has already registed, ignore exception here.
         }
+    }
 
-        void TearDown() override
+    static void TearDownTestCase()
+    {
+        // Clean all database from context.
+        auto ctx = TiFlashTestEnv::getContext();
+        for (const auto & [name, db] : ctx.getDatabases())
         {
-            // Clean all database from context.
-            auto ctx = TiFlashTestEnv::getContext();
-            for (const auto & [name, db] : ctx.getDatabases())
-            {
-                ctx.detachDatabase(name);
-                db->shutdown();
-            }
-            clearPath();
+            ctx.detachDatabase(name);
+            db->shutdown();
         }
+        clearPath();
+    }
 
-        void recreateMetadataPath() const
+    FilterParser_test()
+        : log(&Poco::Logger::get("DatabaseTiFlash_test"))
+    {}
+
+    void SetUp() override
+    {
+        auto ctx = TiFlashTestEnv::getContext();
+        auto & storages = ctx.getTMTContext().getStorages();
+        auto storage_map = storages.getAllStorage();
+        for (auto it = storage_map.begin(); it != storage_map.end(); it++)
         {
-            String path = TiFlashTestEnv::getContext().getPath();
-
-            auto p = path + "/metadata/";
-
-            Poco::File{p}.createDirectory();
-
-            p = path + "/data/";
-
-            Poco::File{p}.createDirectory();
+            storages.get(it->first)->removeFromTMTContext();
         }
+        ctx.getTMTContext().restore();
+        recreateMetadataPath();
+    }
 
-        static void clearPath()
-        {
-            String path = TiFlashTestEnv::getContext().getPath();
-            if (Poco::File file(path); file.exists())
-                file.remove(true);
-        }
+    void recreateMetadataPath() const
+    {
+        String path = TiFlashTestEnv::getContext().getPath();
 
-    protected:
-        Poco::Logger * log;
-    };
+        auto p = path + "/metadata/";
+
+        Poco::File{p}.createDirectory();
+
+        p = path + "/data/";
+
+        Poco::File{p}.createDirectory();
+    }
+
+    static void clearPath()
+    {
+        String path = TiFlashTestEnv::getContext().getPath();
+        if (Poco::File file(path); file.exists())
+            file.remove(true);
+    }
+
+protected:
+    Poco::Logger * log;
+};
 
 namespace
 {
-
 ASTPtr parseDbgInvokeStatement(const String & statement)
 {
     ParserDBGInvokeQuery parser;
@@ -123,6 +120,85 @@ ASTPtr parseDbgInvokeStatement(const String & statement)
 }
 } // namespace
 
+TEST_F(FilterParser_test, SnapshotApply)
+{
+    auto ctx = TiFlashTestEnv::getContext();
+    ctx.getTMTContext().setStatusRunning();
+
+    {
+        const String statement = "DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+        interpreter.execute();
+    }
+
+    {
+        const String statement = "DBGInvoke __refresh_schemas()";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+        interpreter.execute();
+    }
+
+    {
+        const String statement = "DBGInvoke __region_snapshot(4, 0, 10000, default, test)";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+        interpreter.execute();
+    }
+
+    {
+        const String statement = "DBGInvoke __region_snapshot_pre_handle_file(default, test, 4, 3, 12, 'col_1 Int64', '', 1, 'write,default')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+        interpreter.execute();
+    }
+
+    {
+        const String statement = "DBGInvoke __region_snapshot_apply_file(4)";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+        interpreter.execute();
+    }
+
+    {
+        const String statement = "DBGInvoke dag('select * from default.test')";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+        interpreter.execute();
+
+        auto output = interpreter.execute();
+
+        std::string col_1_name("test.col_1");
+        Block res = output.in->read();
+        for (size_t i = 0; i < 9; i++)
+        {
+            EXPECT_EQ(res.getByName(col_1_name).column->getInt(i), -3 - i);
+        }
+    }
+
+    {
+        const String statement = "DBGInvoke __drop_tidb_table(default, test)";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+        interpreter.execute();
+    }
+
+    {
+        const String statement = "DBGInvoke __clean_up_region()";
+        ASTPtr ast = parseDbgInvokeStatement(statement);
+        ASSERT_NE(ast, nullptr);
+        InterpreterDBGInvokeQuery interpreter(ast, ctx);
+        interpreter.execute();
+    }
+}
+
 TEST_F(FilterParser_test, BasicExpression)
 try
 {
@@ -131,7 +207,7 @@ try
     ctx.getTMTContext().setStatusRunning();
 
     {
-        const String statement = "DBGInvoke __mock_tidb_table(default, t_111, 'col_1 String, col_2 Int64, col_3 Float64, col_time default \\'asTiDBType|timestamp(5)\\'')";
+        const String statement = "DBGInvoke __mock_tidb_table(default, t_111, 'col_1 String, col_2 Int64, col_3 Float64, col_time default \\'asTiDBType|timestamp(5)\\'', '', 'dt')";
         ASTPtr ast = parseDbgInvokeStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterDBGInvokeQuery interpreter(ast, ctx);
@@ -452,5 +528,5 @@ try
 }
 CATCH
 
-}
-}
+} // namespace tests
+} // namespace DB

@@ -16,8 +16,8 @@ public:
     String name() override { return "like"; }
 
     RSResult roughCheck(size_t /*pack_id*/, const RSCheckParam & /*param*/) override { return Some; }
-
 };
+
 
 } // namespace DM
 

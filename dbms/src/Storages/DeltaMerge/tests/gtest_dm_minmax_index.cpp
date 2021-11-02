@@ -213,6 +213,7 @@ try
 
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Int64", "100", createNotEqual(attr("Int64"), Field((Int64)101))));
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "String", "test_like_filter", createLike(attr("String"), Field(Field((String) "*filter")))));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "String", "test_not_like_filter", createNotLike(attr("String"), Field(Field((String) "*test_like_filter")))));
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Int64", "100", createNotIn(attr("Int64"), {Field((Int64)101), Field((Int64)102), Field((Int64)103)})));
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Int64", "100", createIn(attr("Int64"), {Field((Int64)100), Field((Int64)101), Field((Int64)102)})));
     // clang-format on
