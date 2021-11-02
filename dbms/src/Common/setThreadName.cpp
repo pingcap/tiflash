@@ -24,6 +24,7 @@ extern const int PTHREAD_ERROR;
 void setThreadName(const char * tname)
 {
     constexpr auto max_len = 15; // thread name will be tname[:MAX_LEN]
+    // TODO: Replace strlen for safety
     if (std::strlen(tname) > max_len)
         std::cerr << "set thread name " << tname << " is too long and will be truncated by system\n";
 
