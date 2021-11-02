@@ -18,6 +18,7 @@
 #include <DataTypes/DataTypeInterval.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -1452,6 +1453,83 @@ struct TiDBConvertToTime
     }
 };
 
+/// cast duration as duration
+/// TODO: support more types convert to duration
+template <typename FromDataType, typename ToDataType, bool return_nullable>
+struct TiDBConvertToDuration
+{
+    static_assert(std::is_same_v<ToDataType, DataTypeMyDuration>);
+
+    using FromFieldType = typename FromDataType::FieldType;
+    using ToFieldType = typename ToDataType::FieldType;
+
+    static void execute(
+        Block & block,
+        const ColumnNumbers & arguments,
+        [[maybe_unused]] size_t result,
+        bool,
+        const tipb::FieldType &,
+        [[maybe_unused]] const Context & context)
+    {
+        size_t size = block.getByPosition(arguments[0]).column->size();
+        ColumnUInt8::MutablePtr col_null_map_to;
+        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+
+        if constexpr (return_nullable)
+        {
+            col_null_map_to = ColumnUInt8::create(size, 0);
+            vec_null_map_to = &col_null_map_to->getData();
+        }
+
+        if constexpr (std::is_same_v<FromDataType, DataTypeMyDuration>)
+        {
+            const auto & from_type = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
+            int from_fsp = from_type->getFsp();
+            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            int to_fsp = to_type->getFsp();
+            if (to_fsp > from_fsp)
+                block.getByPosition(result).column = block.getByPosition(arguments[0]).column;
+            else
+            {
+                // round half up
+                const auto & from_col = checkAndGetColumn<ColumnVector<DataTypeMyDuration::FieldType>>(block.getByPosition(arguments[0]).column.get());
+                const auto & from_vec = from_col->getData();
+                auto to_col = ColumnVector<Int64>::create();
+                auto & to_vec = to_col->getData();
+                to_vec.resize(size);
+
+                for (size_t i = 0; i < size; ++i)
+                {
+                    to_vec[i] = round(from_vec[i], (6 - to_fsp) + 3);
+                }
+                block.getByPosition(result).column = std::move(to_col);
+            }
+        }
+        else
+        {
+            throw Exception(
+                fmt::format("Illegal column {} of first argument of function tidb_cast", block.getByPosition(arguments[0]).column->getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        if constexpr (return_nullable)
+            block.getByPosition(result).column = ColumnNullable::create(std::move(block.getByPosition(result).column), std::move(col_null_map_to));
+    }
+
+    constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+    static Int64 round(Int64 x, int fsp)
+    {
+        Int64 scale = pow10[fsp];
+        bool negative = x < 0;
+        if (negative)
+            x = -x;
+        x = (x + scale / 2) / scale * scale;
+        if (negative)
+            x = -x;
+        return x;
+    }
+};
+
 inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx)
 {
     UInt64 ymd = num / 1000000;
@@ -1780,6 +1858,18 @@ private:
                     context_);
             };
 
+        /// cast as duration
+        if (checkDataType<DataTypeMyDuration>(to_type.get()))
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                TiDBConvertToDuration<FromDataType, DataTypeMyDuration, return_nullable>::execute(
+                    block,
+                    arguments,
+                    result,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
+            };
+
         // todo support convert to duration/json type
         throw Exception{"tidb_cast to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
@@ -1834,6 +1924,8 @@ private:
             return createWrapper<DataTypeEnum8, return_nullable>(to_type);
         if (checkAndGetDataType<DataTypeEnum16>(from_type.get()))
             return createWrapper<DataTypeEnum16, return_nullable>(to_type);
+        if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
+            return createWrapper<DataTypeMyDuration, return_nullable>(to_type);
 
         // todo support convert to duration/json type
         throw Exception{

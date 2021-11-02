@@ -147,24 +147,7 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     dag_req = std::make_unique<tipb::DAGRequest>();
-    if (!dag_req->ParseFromString(task_request.encoded_plan()))
-    {
-        /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
-        /// it may exceed this limit, so just try again by double the recursion limit
-        ::google::protobuf::io::CodedInputStream coded_input_stream(
-            reinterpret_cast<const UInt8 *>(task_request.encoded_plan().data()),
-            task_request.encoded_plan().size());
-        coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
-        if (!dag_req->ParseFromCodedStream(&coded_input_stream))
-        {
-            /// just return error if decode failed this time, because it's really a corner case, and even if we can decode the plan
-            /// successfully by using a very large value of the recursion limit, it is kinds of meaningless because the runtime
-            /// performance of this task may be very bad if the plan tree is too deep
-            throw TiFlashException(
-                std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan, the most likely is that the plan tree is too deep",
-                Errors::Coprocessor::BadRequest);
-        }
-    }
+    getDAGRequestFromStringWithRetry(*dag_req, task_request.encoded_plan());
     TMTContext & tmt_context = context.getTMTContext();
     for (const auto & r : task_request.regions())
     {
@@ -208,7 +191,20 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
 
-    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
+    bool is_root_mpp_task = false;
+    const auto & exchange_sender = dag_req->root_executor().exchange_sender();
+    if (exchange_sender.encoded_task_meta_size() == 1)
+    {
+        /// root mpp task always has 1 task_meta because there is only one TiDB
+        /// node for each mpp query
+        mpp::TaskMeta task_meta;
+        if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(0)))
+        {
+            throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
+        }
+        is_root_mpp_task = task_meta.task_id() == -1;
+    }
+    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->mpp_task_log = log;
     context.setDAGContext(dag_context.get());
 
@@ -223,7 +219,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 
     // register tunnels
     tunnel_set = std::make_shared<MPPTunnelSet>();
-    const auto & exchange_sender = dag_req->root_executor().exchange_sender();
     std::chrono::seconds timeout(task_request.timeout());
 
     auto task_cancelled_callback = [task = std::weak_ptr<MPPTask>(shared_from_this())] {
@@ -235,7 +230,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
-        task_meta.ParseFromString(exchange_sender.encoded_task_meta(i));
+        if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
+            throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, log);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
