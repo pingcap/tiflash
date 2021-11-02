@@ -133,7 +133,7 @@ TEST_F(Sysdate, timezone_unit_Test)
     auto fsp_column = createConstColumn<Int64>(1, fsp);
     ColumnNumbers with_fsp_arguments = {0};
     ColumnNumbers without_fsp_arguments = {};
-    std::vector<String> timezone_names{"Atlantic/Reykjavik", "Europe/London", "Europe/Paris", "Europe/Moscow", "Asia/Baku", "Asia/Ashgabat", "Asia/Dhaka", "Asia/Bangkok", "Asia/Shanghai"};
+    std::vector<String> timezone_names{"Atlantic/Reykjavik", "Africa/Bangui", "Africa/Maputo", "Europe/Moscow", "Asia/Baku", "Indian/Maldives", "Asia/Dhaka", "Asia/Bangkok", "Asia/Shanghai"};
 
     for (int i = 0; i < 8; ++i)
     {
