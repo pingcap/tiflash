@@ -3,6 +3,7 @@
 #include <Interpreters/Aggregator.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/LogWithPrefix.h>
 #include <common/ThreadPool.h>
 #include <condition_variable>
 
@@ -59,7 +60,7 @@ class MergingAggregatedMemoryEfficientBlockInputStream final : public IProfiling
 public:
     MergingAggregatedMemoryEfficientBlockInputStream(
         BlockInputStreams inputs_, const Aggregator::Params & params, bool final_,
-        size_t reading_threads_, size_t merging_threads_);
+        size_t reading_threads_, size_t merging_threads_, const LogWithPrefixPtr & log_ = nullptr);
 
     ~MergingAggregatedMemoryEfficientBlockInputStream() override;
 
@@ -84,6 +85,8 @@ protected:
 private:
     static constexpr int NUM_BUCKETS = 256;
 
+    const LogWithPrefixPtr log;
+
     Aggregator aggregator;
     bool final;
     size_t reading_threads;
@@ -95,9 +98,6 @@ private:
     std::atomic<bool> has_overflows {false};
     int current_bucket_num = -1;
 
-    Poco::Logger * log = &Poco::Logger::get("MergingAggregatedMemoryEfficientBlockInputStream");
-
-
     struct Input
     {
         BlockInputStreamPtr stream;
@@ -106,7 +106,7 @@ private:
         std::vector<Block> splitted_blocks;
         bool is_exhausted = false;
 
-        Input(BlockInputStreamPtr & stream_) : stream(stream_) {}
+        explicit Input(BlockInputStreamPtr & stream_) : stream(stream_) {}
     };
 
     std::vector<Input> inputs;
