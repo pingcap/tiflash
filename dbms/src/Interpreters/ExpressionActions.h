@@ -85,7 +85,7 @@ public:
     NamesAndTypesList columns_added_by_join;
 
     /// For PROJECT.
-    NamesWithAliases projection;
+    NamesWithAliases projections;
 
     /// If result_name_ == "", as name "function_name(arguments separated by commas) is used".
     static ExpressionAction applyFunction(
@@ -178,8 +178,8 @@ public:
     Names getRequiredColumns() const
     {
         Names names;
-        for (NamesAndTypesList::const_iterator it = input_columns.begin(); it != input_columns.end(); ++it)
-            names.push_back(it->name);
+        for (const auto & input_column : input_columns)
+            names.push_back(input_column.name);
         return names;
     }
 

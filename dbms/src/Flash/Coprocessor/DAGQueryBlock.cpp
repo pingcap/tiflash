@@ -44,7 +44,7 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
 
 void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, const tipb::Aggregation & agg)
 {
-    for (auto & expr : agg.agg_func())
+    for (const auto & expr : agg.agg_func())
     {
         if (!exprHasValidFieldType(expr))
         {
@@ -52,7 +52,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
         }
         field_type.push_back(expr.field_type());
     }
-    for (auto & expr : agg.group_by())
+    for (const auto & expr : agg.group_by())
     {
         if (!exprHasValidFieldType(expr))
         {
@@ -165,7 +165,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
     , qb_join_subquery_alias(qb_column_prefix + "join")
 {
-    for (int i = (int)executors.size() - 1; i >= 0; i--)
+    for (int i = executors.size() - 1; i >= 0; i--)
     {
         switch (executors[i].tp())
         {
@@ -249,7 +249,7 @@ void DAGQueryBlock::fillOutputFieldTypes()
             {
                 /// the type of left column for right join is always nullable
                 auto updated_field_type = field_type;
-                updated_field_type.set_flag((UInt32)updated_field_type.flag() & (~(UInt32)TiDB::ColumnFlagNotNull));
+                updated_field_type.set_flag(static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
                 output_field_types.push_back(updated_field_type);
             }
             else
@@ -266,7 +266,7 @@ void DAGQueryBlock::fillOutputFieldTypes()
                 {
                     /// the type of right column for left join is always nullable
                     auto updated_field_type = field_type;
-                    updated_field_type.set_flag(updated_field_type.flag() & (~(UInt32)TiDB::ColumnFlagNotNull));
+                    updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
                     output_field_types.push_back(updated_field_type);
                 }
                 else
@@ -278,21 +278,21 @@ void DAGQueryBlock::fillOutputFieldTypes()
     }
     else if (source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        for (auto & field_type : source->exchange_receiver().field_types())
+        for (const auto & field_type : source->exchange_receiver().field_types())
         {
             output_field_types.push_back(field_type);
         }
     }
     else if (source->tp() == tipb::ExecType::TypeProjection)
     {
-        for (auto & expr : source->projection().exprs())
+        for (const auto & expr : source->projection().exprs())
         {
             output_field_types.push_back(expr.field_type());
         }
     }
     else
     {
-        for (auto & ci : source->tbl_scan().columns())
+        for (const auto & ci : source->tbl_scan().columns())
         {
             tipb::FieldType field_type;
             field_type.set_tp(ci.tp());
