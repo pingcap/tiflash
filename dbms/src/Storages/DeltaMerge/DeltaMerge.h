@@ -177,7 +177,7 @@ private:
             ++num_read;
 
             auto rowkey_column = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
-            auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
+            const auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
             for (size_t i = 0; i < rowkey_column.column->size(); ++i)
             {
                 auto rowkey_value = rowkey_column.getRowKeyValue(i);
@@ -205,8 +205,6 @@ private:
 
     Block doRead()
     {
-        if (finished())
-            return {};
         while (!finished())
         {
             MutableColumns columns;
@@ -362,7 +360,7 @@ private:
 
         if (stable_ignore < 0)
         {
-            size_t stable_ignore_abs = (size_t)(std::abs(stable_ignore));
+            size_t stable_ignore_abs = static_cast<size_t>(std::abs(stable_ignore));
             if (use_stable_rows > stable_ignore_abs)
             {
                 use_stable_rows += stable_ignore;
