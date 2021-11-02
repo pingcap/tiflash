@@ -14,13 +14,11 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
 
-using TiDB::ColumnInfo;
 using TiDB::DatumFlat;
 using TiDB::TableInfo;
 
@@ -28,41 +26,41 @@ Field GenDefaultField(const ColumnInfo & col_info)
 {
     switch (col_info.getCodecFlag())
     {
-        case TiDB::CodecFlagNil:
-            return Field();
-        case TiDB::CodecFlagBytes:
-            return Field(String());
-        case TiDB::CodecFlagDecimal:
-        {
-            auto type = createDecimal(col_info.flen, col_info.decimal);
-            if (checkDecimal<Decimal32>(*type))
-                return Field(DecimalField<Decimal32>(Decimal32(), col_info.decimal));
-            else if (checkDecimal<Decimal64>(*type))
-                return Field(DecimalField<Decimal64>(Decimal64(), col_info.decimal));
-            else if (checkDecimal<Decimal128>(*type))
-                return Field(DecimalField<Decimal128>(Decimal128(), col_info.decimal));
-            else
-                return Field(DecimalField<Decimal256>(Decimal256(), col_info.decimal));
-        }
-        break;
-        case TiDB::CodecFlagCompactBytes:
-            return Field(String());
-        case TiDB::CodecFlagFloat:
-            return Field(Float64(0));
-        case TiDB::CodecFlagUInt:
-            return Field(UInt64(0));
-        case TiDB::CodecFlagInt:
-            return Field(Int64(0));
-        case TiDB::CodecFlagVarInt:
-            return Field(Int64(0));
-        case TiDB::CodecFlagVarUInt:
-            return Field(UInt64(0));
-        case TiDB::CodecFlagJson:
-            return TiDB::genJsonNull();
-        case TiDB::CodecFlagDuration:
-            return Field(Int64(0));
-        default:
-            throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
+    case TiDB::CodecFlagNil:
+        return Field();
+    case TiDB::CodecFlagBytes:
+        return Field(String());
+    case TiDB::CodecFlagDecimal:
+    {
+        auto type = createDecimal(col_info.flen, col_info.decimal);
+        if (checkDecimal<Decimal32>(*type))
+            return Field(DecimalField<Decimal32>(Decimal32(), col_info.decimal));
+        else if (checkDecimal<Decimal64>(*type))
+            return Field(DecimalField<Decimal64>(Decimal64(), col_info.decimal));
+        else if (checkDecimal<Decimal128>(*type))
+            return Field(DecimalField<Decimal128>(Decimal128(), col_info.decimal));
+        else
+            return Field(DecimalField<Decimal256>(Decimal256(), col_info.decimal));
+    }
+    break;
+    case TiDB::CodecFlagCompactBytes:
+        return Field(String());
+    case TiDB::CodecFlagFloat:
+        return Field(Float64(0));
+    case TiDB::CodecFlagUInt:
+        return Field(UInt64(0));
+    case TiDB::CodecFlagInt:
+        return Field(Int64(0));
+    case TiDB::CodecFlagVarInt:
+        return Field(Int64(0));
+    case TiDB::CodecFlagVarUInt:
+        return Field(UInt64(0));
+    case TiDB::CodecFlagJson:
+        return TiDB::genJsonNull();
+    case TiDB::CodecFlagDuration:
+        return Field(Int64(0));
+    default:
+        throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -102,12 +100,12 @@ void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
 
 template <TMTPKType pk_type>
 void setPKVersionDel(ColumnUInt8 & delmark_col,
-    ColumnUInt64 & version_col,
-    std::vector<ColumnID> & pk_column_ids,
-    ColumnDataInfoMap & column_map,
-    const RegionDataReadInfoList & data_list,
-    const Timestamp tso,
-    RegionScanFilterPtr scan_filter)
+                     ColumnUInt64 & version_col,
+                     std::vector<ColumnID> & pk_column_ids,
+                     ColumnDataInfoMap & column_map,
+                     const RegionDataReadInfoList & data_list,
+                     const Timestamp tso,
+                     RegionScanFilterPtr scan_filter)
 {
     ColumnUInt8::Container & delmark_data = delmark_col.getData();
     ColumnUInt64::Container & version_data = version_col.getData();
@@ -165,17 +163,17 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
 
 template <TMTPKType pk_type>
 bool setColumnValues(ColumnUInt8 & delmark_col,
-    ColumnUInt64 & version_col,
-    std::vector<ColumnID> & pk_column_ids,
-    const std::vector<std::pair<ColumnID, size_t>> & visible_column_to_read_lut,
-    ColumnIdToIndex & column_lut,
-    ColumnDataInfoMap & column_map,
-    const RegionDataReadInfoList & data_list,
-    const Timestamp tso,
-    bool need_decode_value,
-    const TableInfo & table_info,
-    bool force_decode,
-    RegionScanFilterPtr scan_filter)
+                     ColumnUInt64 & version_col,
+                     std::vector<ColumnID> & pk_column_ids,
+                     const std::vector<std::pair<ColumnID, size_t>> & visible_column_to_read_lut,
+                     ColumnIdToIndex & column_lut,
+                     ColumnDataInfoMap & column_map,
+                     const RegionDataReadInfoList & data_list,
+                     const Timestamp tso,
+                     bool need_decode_value,
+                     const TableInfo & table_info,
+                     bool force_decode,
+                     RegionScanFilterPtr scan_filter)
 {
     ColumnUInt8::Container & delmark_data = delmark_col.getData();
     ColumnUInt64::Container & version_data = version_col.getData();
@@ -251,8 +249,8 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
                 for (const auto & id_to_idx : visible_column_to_read_lut)
                 {
                     if (fields_search_it = std::find_if(fields_search_it,
-                            decoded_fields.end(),
-                            [&id_to_idx](const DecodedField & e) { return e.col_id >= id_to_idx.first; });
+                                                        decoded_fields.end(),
+                                                        [&id_to_idx](const DecodedField & e) { return e.col_id >= id_to_idx.first; });
                         fields_search_it != decoded_fields.end() && fields_search_it->col_id == id_to_idx.first)
                     {
                         decoded_data.push_back(fields_search_it++);
@@ -307,8 +305,8 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
                     {
                         const auto & data_type = ColumnDataInfoMap::getNameAndTypePair(col_info).type;
                         throw Exception("Detected overflow when decoding data " + std::to_string(unflattened.get<UInt64>()) + " of column "
-                                + column_info.name + " with type " + data_type->getName(),
-                            ErrorCodes::LOGICAL_ERROR);
+                                            + column_info.name + " with type " + data_type->getName(),
+                                        ErrorCodes::LOGICAL_ERROR);
                     }
 
                     return false;
@@ -322,8 +320,8 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
                     {
                         const auto & data_type = ColumnDataInfoMap::getNameAndTypePair(col_info).type;
                         throw Exception("Detected invalid null when decoding data " + std::to_string(unflattened.get<UInt64>())
-                                + " of column " + column_info.name + " with type " + data_type->getName(),
-                            ErrorCodes::LOGICAL_ERROR);
+                                            + " of column " + column_info.name + " with type " + data_type->getName(),
+                                        ErrorCodes::LOGICAL_ERROR);
                     }
 
                     return false;
@@ -367,7 +365,9 @@ RegionBlockReader::RegionBlockReader(const ManageableStoragePtr & storage)
 }
 
 RegionBlockReader::RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_)
-    : table_info(table_info_), columns(columns_), scan_filter(nullptr)
+    : table_info(table_info_)
+    , columns(columns_)
+    , scan_filter(nullptr)
 {}
 
 std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode)
@@ -390,11 +390,11 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
 
     ColumnID handle_col_id = TiDBPkColumnID;
 
-    constexpr size_t MustHaveColCnt = 3; // pk, del, version
+    constexpr size_t must_have_col_cnt = 3; // pk, del, version
 
     // column_map contains required columns except del and version.
     /// column_id => NameAndType/MutableColumnPtr
-    ColumnDataInfoMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
+    ColumnDataInfoMap column_map(column_names_to_read.size() - must_have_col_cnt + 1, EmptyColumnID);
 
     // visible_column_to_read_lut contains required columns except pk, del and version.
     std::vector<std::pair<ColumnID, size_t>> visible_column_to_read_lut;
@@ -411,7 +411,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
     std::unordered_map<String, size_t> primary_key_column_pos_map;
     if (table_info.is_common_handle)
     {
-        auto & primary_index_info = table_info.getPrimaryIndexInfo();
+        const auto & primary_index_info = table_info.getPrimaryIndexInfo();
         readed_primary_key_column_ids.resize(primary_index_info.idx_cols.size(), EmptyColumnID);
         for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
         {
@@ -422,7 +422,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
 
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
-        auto & column_info = table_info.columns[i];
+        const auto & column_info = table_info.columns[i];
         ColumnID col_id = column_info.id;
         const String & col_name = column_info.name;
         if (!(table_info.pk_is_handle && column_info.hasPriKeyFlag()))
@@ -452,7 +452,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
             visible_column_to_read_lut.emplace_back(col_id, i);
     }
 
-    if (column_names_to_read.size() - MustHaveColCnt != visible_column_to_read_lut.size())
+    if (column_names_to_read.size() - must_have_col_cnt != visible_column_to_read_lut.size())
         throw Exception("schema doesn't contain needed columns.", ErrorCodes::LOGICAL_ERROR);
 
     std::sort(visible_column_to_read_lut.begin(), visible_column_to_read_lut.end());
@@ -460,7 +460,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
     if (!table_info.pk_is_handle)
     {
         auto ch_col = NameAndTypePair(MutableSupport::tidb_pk_column_name,
-            table_info.is_common_handle ? MutableSupport::tidb_pk_column_string_type : MutableSupport::tidb_pk_column_int_type);
+                                      table_info.is_common_handle ? MutableSupport::tidb_pk_column_string_type : MutableSupport::tidb_pk_column_int_type);
         auto mut_col = ch_col.type->createColumn();
         column_map.insert(handle_col_id, std::move(mut_col), std::move(ch_col), -1, data_list.size());
     }
@@ -475,30 +475,41 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
 
         switch (pk_type)
         {
-            case TMTPKType::INT64:
-                func = setColumnValues<TMTPKType::INT64>;
-                break;
-            case TMTPKType::UINT64:
-                func = setColumnValues<TMTPKType::UINT64>;
-                break;
-            case TMTPKType::STRING:
-                func = setColumnValues<TMTPKType::STRING>;
-                break;
-            default:
-                break;
+        case TMTPKType::INT64:
+            func = setColumnValues<TMTPKType::INT64>;
+            break;
+        case TMTPKType::UINT64:
+            func = setColumnValues<TMTPKType::UINT64>;
+            break;
+        case TMTPKType::STRING:
+            func = setColumnValues<TMTPKType::STRING>;
+            break;
+        default:
+            break;
         }
 
         std::vector<ColumnID> pk_column_ids;
         pk_column_ids.emplace_back(handle_col_id);
         if (table_info.is_common_handle)
         {
-            for (size_t i = 0; i < readed_primary_key_column_ids.size(); i++)
+            for (const auto & readed_primary_key_column_id : readed_primary_key_column_ids)
             {
-                pk_column_ids.emplace_back(readed_primary_key_column_ids[i]);
+                pk_column_ids.emplace_back(readed_primary_key_column_id);
             }
         }
-        if (!func(*delmark_col, *version_col, pk_column_ids, visible_column_to_read_lut, column_lut, column_map, data_list, start_ts,
-                column_names_to_read.size() > MustHaveColCnt, table_info, force_decode, scan_filter))
+        if (!func(
+                *delmark_col,
+                *version_col,
+                pk_column_ids,
+                visible_column_to_read_lut,
+                column_lut,
+                column_map,
+                data_list,
+                start_ts,
+                column_names_to_read.size() > must_have_col_cnt,
+                table_info,
+                force_decode,
+                scan_filter))
             return std::make_tuple<Block, bool>({}, false);
     }
 
@@ -508,12 +519,12 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
         if (name == MutableSupport::delmark_column_name)
         {
             block.insert(
-                {std::move(delmark_col), MutableSupport::delmark_column_type, MutableSupport::delmark_column_name, DelMarkColumnID});
+                {std::move(delmark_col), MutableSupport::delmark_column_type, MutableSupport::delmark_column_name, DelMarkColumnID}); // NOLINT
         }
         else if (name == MutableSupport::version_column_name)
         {
             block.insert(
-                {std::move(version_col), MutableSupport::version_column_type, MutableSupport::version_column_name, VersionColumnID});
+                {std::move(version_col), MutableSupport::version_column_type, MutableSupport::version_column_name, VersionColumnID}); // NOLINT
         }
         else
         {

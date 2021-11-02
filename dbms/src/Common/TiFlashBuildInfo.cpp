@@ -52,7 +52,26 @@ std::string getEnabledFeatures()
 
 // mem-profiling
 #if USE_JEMALLOC_PROF
-            "mem-profiling"
+            "mem-profiling",
+#endif
+
+// failpoints
+#if ENABLE_FAILPOINTS
+            "failpoints",
+#endif
+
+// SIMD related
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+            "avx",
+#endif
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
+            "avx512",
+#endif
+#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
+            "asimd",
+#endif
+#ifdef TIFLASH_ENABLE_SVE_SUPPORT
+            "sve",
 #endif
     };
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
