@@ -268,8 +268,7 @@ void MPPTask::preprocess()
     DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
-    Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-    dag_context->compile_time_ns = compile_time_ns;
+    dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 }
 
 void MPPTask::runImpl()
@@ -296,10 +295,10 @@ void MPPTask::runImpl()
         preprocess();
         if (status.load() != RUNNING)
         {
-            /// when task is in running state, cancel the task will call sendCancelToQuery to do the cancellation, however
+            /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
             /// if the task is cancelled during preprocess, sendCancelToQuery may just be ignored because the processlist of
             /// current task is not registered yet, so need to check the task status explicitly
-            throw Exception("task not in running state, maybe is cancelled");
+            throw Exception("task not in running state, may be cancelled");
         }
         auto from = io.in;
         from->readPrefix();
