@@ -14,7 +14,7 @@ void Redact::setRedactLog(bool v)
     Redact::REDACT_LOG.store(v, std::memory_order_relaxed);
 }
 
-std::string Redact::handleToDebugString(const DB::HandleID handle)
+std::string Redact::handleToDebugString(DB::HandleID handle)
 {
     if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
         return "?";
@@ -30,7 +30,7 @@ std::string Redact::keyToHexString(const char * key, size_t size)
     char * pos = buf.data();
     for (size_t i = 0; i < size; ++i)
     {
-        writeHexByteUppercase((UInt8)(key[i]), pos);
+        writeHexByteUppercase(static_cast<UInt8>(key[i]), pos);
         pos += 2;
     }
     return buf;

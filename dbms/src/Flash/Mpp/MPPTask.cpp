@@ -73,7 +73,7 @@ void MPPTask::closeAllTunnels(const String & reason)
 
 void MPPTask::finishWrite()
 {
-    for (auto it : tunnel_map)
+    for (const auto & it : tunnel_map)
     {
         it.second->writeDone();
     }
@@ -141,34 +141,15 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
         return true;
     auto meta_snap = current_region->dumpRegionMetaSnapshot();
-    if (meta_snap.ver != region_info.region_version)
-        return true;
-    return false;
+    return meta_snap.ver != region_info.region_version;
 }
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     dag_req = std::make_unique<tipb::DAGRequest>();
-    if (!dag_req->ParseFromString(task_request.encoded_plan()))
-    {
-        /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
-        /// it may exceed this limit, so just try again by double the recursion limit
-        ::google::protobuf::io::CodedInputStream coded_input_stream(
-            reinterpret_cast<const UInt8 *>(task_request.encoded_plan().data()),
-            task_request.encoded_plan().size());
-        coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
-        if (!dag_req->ParseFromCodedStream(&coded_input_stream))
-        {
-            /// just return error if decode failed this time, because it's really a corner case, and even if we can decode the plan
-            /// successfully by using a very large value of the recursion limit, it is kinds of meaningless because the runtime
-            /// performance of this task may be very bad if the plan tree is too deep
-            throw TiFlashException(
-                std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan, the most likely is that the plan tree is too deep",
-                Errors::Coprocessor::BadRequest);
-        }
-    }
+    getDAGRequestFromStringWithRetry(*dag_req, task_request.encoded_plan());
     TMTContext & tmt_context = context.getTMTContext();
-    for (auto & r : task_request.regions())
+    for (const auto & r : task_request.regions())
     {
         RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
         if (region_info.key_ranges.empty())
@@ -195,8 +176,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     if (unlikely(task_request.timeout() < 0))
     {
         /// this is only for test
-        context.setSetting("mpp_task_timeout", (Int64)5);
-        context.setSetting("mpp_task_running_timeout", (Int64)10);
+        context.setSetting("mpp_task_timeout", static_cast<Int64>(5));
+        context.setSetting("mpp_task_running_timeout", static_cast<Int64>(10));
     }
     else
     {
@@ -210,7 +191,20 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
 
-    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
+    bool is_root_mpp_task = false;
+    const auto & exchange_sender = dag_req->root_executor().exchange_sender();
+    if (exchange_sender.encoded_task_meta_size() == 1)
+    {
+        /// root mpp task always has 1 task_meta because there is only one TiDB
+        /// node for each mpp query
+        mpp::TaskMeta task_meta;
+        if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(0)))
+        {
+            throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
+        }
+        is_root_mpp_task = task_meta.task_id() == -1;
+    }
+    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->mpp_task_log = log;
     context.setDAGContext(dag_context.get());
 
@@ -225,7 +219,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 
     // register tunnels
     tunnel_set = std::make_shared<MPPTunnelSet>();
-    const auto & exchangeSender = dag_req->root_executor().exchange_sender();
     std::chrono::seconds timeout(task_request.timeout());
 
     auto task_cancelled_callback = [task = std::weak_ptr<MPPTask>(shared_from_this())] {
@@ -233,12 +226,13 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         return sp && sp->getStatus() == CANCELLED;
     };
 
-    for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
+    for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
-        task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads);
+        if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
+            throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, log);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
@@ -274,8 +268,7 @@ void MPPTask::preprocess()
     DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
-    Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-    dag_context->compile_time_ns = compile_time_ns;
+    dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 }
 
 void MPPTask::runImpl()
@@ -302,10 +295,10 @@ void MPPTask::runImpl()
         preprocess();
         if (status.load() != RUNNING)
         {
-            /// when task is in running state, cancel the task will call sendCancelToQuery to do the cancellation, however
+            /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
             /// if the task is cancelled during preprocess, sendCancelToQuery may just be ignored because the processlist of
             /// current task is not registered yet, so need to check the task status explicitly
-            throw Exception("task not in running state, maybe is cancelled");
+            throw Exception("task not in running state, may be cancelled");
         }
         auto from = io.in;
         from->readPrefix();

@@ -12,7 +12,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_TABLE;
@@ -88,7 +87,10 @@ void DAGStringConverter::buildSelString(const tipb::Selection & sel, std::string
     }
 }
 
-void DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) { ss << "LIMIT " << limit.limit() << " "; }
+void DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss)
+{
+    ss << "LIMIT " << limit.limit() << " ";
+}
 
 void DAGStringConverter::buildProjString(const tipb::Projection & proj, std::stringstream & ss)
 {
@@ -111,7 +113,7 @@ void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stri
     {
         if (!agg_func.has_field_type())
             throw TiFlashException("Agg func without field type", Errors::Coprocessor::BadRequest);
-        columns_from_agg.emplace_back(exprToString(agg_func, getCurrentColumns()), getDataTypeByFieldType(agg_func.field_type()));
+        columns_from_agg.emplace_back(exprToString(agg_func, getCurrentColumns()), getDataTypeByFieldTypeForComputingLayer(agg_func.field_type()));
     }
     if (agg.group_by_size() != 0)
     {
@@ -127,7 +129,7 @@ void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stri
             ss << name;
             if (!group_by.has_field_type())
                 throw TiFlashException("group by expr without field type", Errors::Coprocessor::BadRequest);
-            columns_from_agg.emplace_back(name, getDataTypeByFieldType(group_by.field_type()));
+            columns_from_agg.emplace_back(name, getDataTypeByFieldTypeForComputingLayer(group_by.field_type()));
         }
     }
     afterAgg = true;
@@ -153,29 +155,29 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
 {
     switch (executor.tp())
     {
-        case tipb::ExecType::TypeTableScan:
-            return buildTSString(executor.tbl_scan(), ss);
-        case tipb::ExecType::TypeJoin:
-        case tipb::ExecType::TypeIndexScan:
-            // index scan not supported
-            throw TiFlashException("IndexScan is not supported", Errors::Coprocessor::Unimplemented);
-        case tipb::ExecType::TypeSelection:
-            return buildSelString(executor.selection(), ss);
-        case tipb::ExecType::TypeAggregation:
-            // stream agg is not supported, treated as normal agg
-        case tipb::ExecType::TypeStreamAgg:
-            return buildAggString(executor.aggregation(), ss);
-        case tipb::ExecType::TypeTopN:
-            return buildTopNString(executor.topn(), ss);
-        case tipb::ExecType::TypeLimit:
-            return buildLimitString(executor.limit(), ss);
-        case tipb::ExecType::TypeProjection:
-            return buildProjString(executor.projection(), ss);
-        case tipb::ExecType::TypeExchangeSender:
-        case tipb::ExecType::TypeExchangeReceiver:
-            throw TiFlashException("Mpp executor is not supported", Errors::Coprocessor::Unimplemented);
-        case tipb::ExecType::TypeKill:
-            throw TiFlashException("Kill executor is not supported", Errors::Coprocessor::Unimplemented);
+    case tipb::ExecType::TypeTableScan:
+        return buildTSString(executor.tbl_scan(), ss);
+    case tipb::ExecType::TypeJoin:
+    case tipb::ExecType::TypeIndexScan:
+        // index scan not supported
+        throw TiFlashException("IndexScan is not supported", Errors::Coprocessor::Unimplemented);
+    case tipb::ExecType::TypeSelection:
+        return buildSelString(executor.selection(), ss);
+    case tipb::ExecType::TypeAggregation:
+        // stream agg is not supported, treated as normal agg
+    case tipb::ExecType::TypeStreamAgg:
+        return buildAggString(executor.aggregation(), ss);
+    case tipb::ExecType::TypeTopN:
+        return buildTopNString(executor.topn(), ss);
+    case tipb::ExecType::TypeLimit:
+        return buildLimitString(executor.limit(), ss);
+    case tipb::ExecType::TypeProjection:
+        return buildProjString(executor.projection(), ss);
+    case tipb::ExecType::TypeExchangeSender:
+    case tipb::ExecType::TypeExchangeReceiver:
+        throw TiFlashException("Mpp executor is not supported", Errors::Coprocessor::Unimplemented);
+    case tipb::ExecType::TypeKill:
+        throw TiFlashException("Kill executor is not supported", Errors::Coprocessor::Unimplemented);
     }
 }
 
@@ -185,7 +187,8 @@ bool isProject(const tipb::Executor &)
     return false;
 }
 DAGStringConverter::DAGStringConverter(Context & context_, const tipb::DAGRequest & dag_request_)
-    : context(context_), dag_request(dag_request_)
+    : context(context_)
+    , dag_request(dag_request_)
 {
     afterAgg = false;
 }

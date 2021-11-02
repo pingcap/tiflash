@@ -15,7 +15,7 @@ class Redact
 public:
     static void setRedactLog(bool v);
 
-    static std::string handleToDebugString(const DB::HandleID handle);
+    static std::string handleToDebugString(DB::HandleID handle);
     static std::string keyToDebugString(const char * key, size_t size);
 
     static std::string keyToHexString(const char * key, size_t size);
@@ -25,7 +25,7 @@ public:
     friend class DB::FieldVisitorToDebugString;
 
 protected:
-    Redact() {}
+    Redact() = default;
 
 private:
     // Log user data to log only when this flag is set to false.
