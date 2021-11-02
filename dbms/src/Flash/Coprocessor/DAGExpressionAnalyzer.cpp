@@ -292,7 +292,7 @@ static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Ex
         throw TiFlashException("CAST function without valid field type", Errors::Coprocessor::BadRequest);
 
     String name = analyzer->getActions(expr.children(0), actions);
-    DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
+    DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
 
     tipb::Expr type_expr;
     constructStringLiteralTiExpr(type_expr, expected_type->getName());
@@ -660,7 +660,7 @@ void DAGExpressionAnalyzer::appendAggregation(
             agg_func_name = settings.count_distinct_implementation;
         }
         if (agg.group_by_size() == 0 && agg_func_name == "sum" && expr.has_field_type()
-            && !getDataTypeByFieldType(expr.field_type())->isNullable())
+            && !getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isNullable())
         {
             /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
             /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
@@ -828,7 +828,7 @@ void DAGExpressionAnalyzer::appendWhere(
         if (isColumnExpr(*conditions[0]))
         {
             bool need_warp_column_expr = true;
-            if (exprHasValidFieldType(*conditions[0]) && !isUInt8Type(getDataTypeByFieldType(conditions[0]->field_type())))
+            if (exprHasValidFieldType(*conditions[0]) && !isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type())))
             {
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
                 need_warp_column_expr = false;
@@ -1279,7 +1279,7 @@ void DAGExpressionAnalyzer::generateFinalProject(
                     /// then add type cast
                     if (need_append_type_cast_vec[index])
                     {
-                        updated_name = appendCast(getDataTypeByFieldType(schema[i]), step.actions, updated_name);
+                        updated_name = appendCast(getDataTypeByFieldTypeForComputingLayer(schema[i]), step.actions, updated_name);
                     }
                     final_project.emplace_back(updated_name, unique_name_generator.toUniqueName(column_prefix + updated_name));
                     casted_name_map[current_columns[i].name] = updated_name;
