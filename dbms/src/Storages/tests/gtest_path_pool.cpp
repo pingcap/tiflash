@@ -484,5 +484,17 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
 }
 
+TEST_F(PathCapcatity, FsStats)
+try
+{
+    size_t global_capacity_quota = 10;
+    size_t capactity = 100;
+    PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {capactity}, {lastest_data_path}, {capactity});
+
+    FsStats fs_stats = path_capacity.getFsStats();
+    EXPECT_NE(fs_stats.capacity_size, global_capacity_quota);
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
