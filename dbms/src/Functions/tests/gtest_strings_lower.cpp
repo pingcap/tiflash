@@ -21,7 +21,7 @@
 
 namespace DB::tests
 {
-class StringUpper : public DB::tests::FunctionTest
+class StringLower : public DB::tests::FunctionTest
 {
 protected:
     static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
@@ -47,7 +47,7 @@ protected:
     }
 };
 
-TEST_F(StringUpper, lowerAll)
+TEST_F(StringLower, lowerAll)
 {
     std::vector<std::optional<String>> candidate_strings = {"one WEEK’S time TEST", "abc测试def", "ABCテストabc", "ЀЁЂѓЄЅІїЈЉЊЋЌѝЎЏ", "+Ѐ-ё*Ђ/ѓ!Є@Ѕ#І$@Ї%Ј……љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "ΑΒΓΔΕΖΗΘικΛΜΝΞΟΠΡΣτΥΦΧΨωΣ", "▲Α▼Βγ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕", "թՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆմՇ"};
     std::vector<std::optional<String>> lower_case_strings = {"one week’s time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
