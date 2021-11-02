@@ -1,0 +1,92 @@
+# Preparation.
+=> DBGInvoke __enable_schema_sync_service('true')
+
+=> DBGInvoke __drop_tidb_table(default, test1)
+=> drop table if exists default.test1
+=> DBGInvoke __drop_tidb_table(default, test2)
+=> drop table if exists default.test2
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+# Data.
+=> DBGInvoke __mock_tidb_table(default, test1, 'col_1 MyDuration(6)')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(4, 0, 100, default, test1)
+=> DBGInvoke __put_region(5, 100, 200, default, test1)
+
+=> DBGInvoke __mock_tidb_table(default, test2, 'col_1 MyDuration(6)')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(6, 0, 100, default, test2)
+=> DBGInvoke __put_region(7, 100, 200, default, test2)
+
+=> DBGInvoke __raft_insert_row(default, test1, 4, 50, -1000)
+=> DBGInvoke __raft_insert_row(default, test1, 4, 51, 0)
+=> DBGInvoke __raft_insert_row(default, test1, 4, 52, 1000)
+=> DBGInvoke __raft_insert_row(default, test1, 5, 153, 3020399000000000)
+=> DBGInvoke __raft_insert_row(default, test1, 5, 154, -3020399000000000)
+=> DBGInvoke __raft_insert_row(default, test1, 5, 155, -2880610123460000)
+=> DBGInvoke __raft_insert_row(default, test1, 5, 156, 2880610123460000)
+
+=> DBGInvoke __raft_insert_row(default, test2, 6, 50, -1000)
+=> DBGInvoke __raft_insert_row(default, test2, 6, 51, 0)
+=> DBGInvoke __raft_insert_row(default, test2, 6, 52, 1000)
+=> DBGInvoke __raft_insert_row(default, test2, 7, 153, 3020399000000000)
+=> DBGInvoke __raft_insert_row(default, test2, 7, 154, -3020399000000000)
+=> DBGInvoke __raft_insert_row(default, test2, 7, 155, -2880610123460000)
+=> DBGInvoke __raft_insert_row(default, test2, 7, 156, 2880610123460000)
+
+
+
+# shuffle aggregation
+=> DBGInvoke tidb_query('select max(col_1) from default.test1 group by col_1', 4,'mpp_query:true,mpp_partition_num:2')
+┌─exchange_receiver_0─┐
+│     00:00:00.000000 │
+│   -838:59:59.000000 │
+│    800:10:10.123460 │
+│    838:59:59.000000 │
+└─────────────────────┘
+┌─exchange_receiver_0─┐
+│   -800:10:10.123460 │
+│     00:00:00.000001 │
+│    -00:00:00.000001 │
+└─────────────────────┘
+
+
+# shuffle join
+=> DBGInvoke tidb_query('select * from default.test1 all inner join default.test2 using col_1', 4,'mpp_query:true,mpp_partition_num:2')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│    838:59:59.000000 │    838:59:59.000000 │
+│   -838:59:59.000000 │   -838:59:59.000000 │
+│    800:10:10.123460 │    800:10:10.123460 │
+└─────────────────────┴─────────────────────┘
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│     00:00:00.000000 │     00:00:00.000000 │
+└─────────────────────┴─────────────────────┘
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│   -800:10:10.123460 │   -800:10:10.123460 │
+└─────────────────────┴─────────────────────┘
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│    -00:00:00.000001 │    -00:00:00.000001 │
+│     00:00:00.000001 │     00:00:00.000001 │
+└─────────────────────┴─────────────────────┘
+
+
+# broadcast join
+=> DBGInvoke tidb_query('select * from default.test1 all inner join default.test2 using col_1', 4,'mpp_query:true,mpp_partition_num:2,use_broadcast_join:true')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│    -00:00:00.000001 │    -00:00:00.000001 │
+│     00:00:00.000000 │     00:00:00.000000 │
+│     00:00:00.000001 │     00:00:00.000001 │
+└─────────────────────┴─────────────────────┘
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│    838:59:59.000000 │    838:59:59.000000 │
+│   -838:59:59.000000 │   -838:59:59.000000 │
+│   -800:10:10.123460 │   -800:10:10.123460 │
+│    800:10:10.123460 │    800:10:10.123460 │
+└─────────────────────┴─────────────────────┘
+
+# Clean up.
+=> DBGInvoke __drop_tidb_table(default, test1)
+=> drop table if exists default.test1
+=> DBGInvoke __drop_tidb_table(default, test2)
+=> drop table if exists default.test2
