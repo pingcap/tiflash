@@ -1,3 +1,4 @@
+#include <Core/Block.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>

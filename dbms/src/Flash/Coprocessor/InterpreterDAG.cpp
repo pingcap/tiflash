@@ -119,7 +119,7 @@ BlockIO InterpreterDAG::execute()
             assert(isColumnExpr(expr));
             auto column_index = decodeDAGInt64(expr.val());
             partition_col_id.emplace_back(column_index);
-            if (has_collator_info && getDataTypeByFieldType(expr.field_type())->isString())
+            if (has_collator_info && getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isString())
             {
                 collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
             }
@@ -129,6 +129,7 @@ BlockIO InterpreterDAG::execute()
             }
         }
         restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
+        int streamID = 0;
         pipeline.transform([&](auto & stream) {
             // construct writer
             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
@@ -138,6 +139,7 @@ BlockIO InterpreterDAG::execute()
                 exchange_sender.tp(),
                 context.getSettings().dag_records_per_chunk,
                 context.getSettings().batch_send_min_limit,
+                streamID++ == 0, /// only one stream needs to sending execution summaries for the last response
                 dag.getEncodeType(),
                 dag.getResultFieldTypes(),
                 dag.getDAGContext(),

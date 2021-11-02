@@ -1,31 +1,28 @@
-#include <Interpreters/convertFieldToType.h>
-
-#include <IO/ReadBufferFromString.h>
-#include <IO/ReadHelpers.h>
-
+#include <Common/FieldVisitors.h>
+#include <Common/MyTime.h>
+#include <Common/NaNUtils.h>
+#include <Common/typeid_cast.h>
+#include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeMyDate.h>
-#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypesNumber.h>
-
-#include <Common/FieldVisitors.h>
-#include <Common/NaNUtils.h>
-#include <Common/MyTime.h>
-#include <Common/typeid_cast.h>
-#include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <Interpreters/convertFieldToType.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -44,7 +41,6 @@ extern const int TYPE_MISMATCH;
 
 namespace
 {
-
 template <typename From, typename To>
 static Field convertNumericTypeImpl(const Field & from)
 {
@@ -228,17 +224,18 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
 
         const bool is_date = typeid_cast<const DataTypeDate *>(&type);
         const bool is_my_date = typeid_cast<const DataTypeMyDate *>(&type);
+        const bool is_duration = typeid_cast<const DataTypeMyDuration *>(&type);
         bool is_datetime = false;
         bool is_my_datetime = false;
         bool is_enum = false;
         bool is_uuid = false;
 
-        if (!is_date && !is_my_date)
+        if (!is_date && !is_my_date && !is_duration)
             if (!(is_datetime = typeid_cast<const DataTypeDateTime *>(&type)))
-            if (!(is_my_datetime = typeid_cast<const DataTypeMyDateTime *>(&type)))
-                if (!(is_uuid = typeid_cast<const DataTypeUUID *>(&type)))
-                    if (!(is_enum = dynamic_cast<const IDataTypeEnum *>(&type)))
-                        throw Exception{"Logical error: unknown numeric type " + type.getName(), ErrorCodes::LOGICAL_ERROR};
+                if (!(is_my_datetime = typeid_cast<const DataTypeMyDateTime *>(&type)))
+                    if (!(is_uuid = typeid_cast<const DataTypeUUID *>(&type)))
+                        if (!(is_enum = dynamic_cast<const IDataTypeEnum *>(&type)))
+                            throw Exception{"Logical error: unknown numeric type " + type.getName(), ErrorCodes::LOGICAL_ERROR};
 
         /// Numeric values for Enums should not be used directly in IN section
         if (src.getType() == Field::Types::Int64 && !is_enum)
@@ -305,8 +302,8 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
 
             if (dst_tuple_size != src_tuple_size)
                 throw Exception("Bad size of tuple in IN or VALUES section. Expected size: " + toString(dst_tuple_size)
-                        + ", actual size: " + toString(src_tuple_size),
-                    ErrorCodes::TYPE_MISMATCH);
+                                    + ", actual size: " + toString(src_tuple_size),
+                                ErrorCodes::TYPE_MISMATCH);
 
             TupleBackend res(dst_tuple_size);
             for (size_t i = 0; i < dst_tuple_size; ++i)

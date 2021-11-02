@@ -14,7 +14,7 @@ void Redact::setRedactLog(bool v)
     Redact::REDACT_LOG.store(v, std::memory_order_relaxed);
 }
 
-std::string Redact::handleToDebugString(const DB::HandleID handle)
+std::string Redact::handleToDebugString(DB::HandleID handle)
 {
     if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
         return "?";
