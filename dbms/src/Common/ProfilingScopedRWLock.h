@@ -13,8 +13,7 @@ class ProfilingScopedWriteRWLock
 {
 public:
     ProfilingScopedWriteRWLock(std::shared_mutex & rwl, ProfileEvents::Event event)
-        : watch()
-        , scoped_write_lock(rwl)
+        : scoped_write_lock(rwl)
     {
         ProfileEvents::increment(event, watch.elapsed());
     }
@@ -28,8 +27,7 @@ class ProfilingScopedReadRWLock
 {
 public:
     ProfilingScopedReadRWLock(std::shared_mutex & rwl, ProfileEvents::Event event)
-        : watch()
-        , scoped_read_lock(rwl)
+        : scoped_read_lock(rwl)
     {
         ProfileEvents::increment(event, watch.elapsed());
     }
