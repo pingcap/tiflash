@@ -31,15 +31,7 @@ struct BlockStreamProfileInfo
         UInt64 rows[max_size]{0};
         UInt64 bytes[max_size]{0};
 
-        void record(UInt64 ns, UInt64 rows_, UInt64 bytes_)
-        {
-            size_t i = ns / time_span;
-            if (i < max_size)
-            {
-                rows[i] += rows_;
-                bytes[i] += bytes_;
-            }
-        }
+        void record(UInt64 ns, UInt64 rows_, UInt64 bytes_);
     };
 
     /// Info about stream object this profile info refers to.
@@ -57,7 +49,6 @@ struct BlockStreamProfileInfo
     // parent streams
     UInt64 execution_time = 0;
 
-    bool has_read_prefix = false;
     Int64 signautre = -1;
     UInt64 prefix_duration = 0;
     UInt64 suffix_duration = 0;

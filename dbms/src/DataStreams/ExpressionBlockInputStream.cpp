@@ -41,9 +41,9 @@ Block ExpressionBlockInputStream::readImpl()
     if (!res)
         return res;
 
-    // beginSelfTimer();
+    beginSelfTimer();
     expression->execute(res);
-    // endSelfTimer();
+    endSelfTimer();
 
     return res;
 }

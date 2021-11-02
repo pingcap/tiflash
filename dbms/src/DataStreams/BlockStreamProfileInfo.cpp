@@ -8,6 +8,16 @@
 
 namespace DB
 {
+void BlockStreamProfileInfo::Timeline::record(UInt64 ns, UInt64 rows_, UInt64 bytes_)
+{
+    size_t i = ns / time_span;
+    if (i < max_size)
+    {
+        rows[i] += rows_;
+        bytes[i] += bytes_;
+    }
+}
+
 
 void BlockStreamProfileInfo::read(ReadBuffer & in)
 {
