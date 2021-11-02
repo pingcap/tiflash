@@ -273,7 +273,7 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     {
         res.source_at_left = true;
     }
-    else if (region_state.start_key().empty())
+    else if (region_state.getRegion().start_key().empty())
     {
         res.source_at_left = false;
     }
