@@ -21,11 +21,25 @@ class IProfilingBlockInputStream;
 struct BlockStreamProfileInfo
 {
     using TimePoint = std::chrono::system_clock::time_point;
+    using AccurateClock = std::chrono::high_resolution_clock;
 
     struct Timeline
     {
-        UInt64 rows[256]{0};
-        UInt64 bytes[256]{0};
+        static constexpr UInt64 time_span = 100'000'000; // 100 ms
+        static constexpr UInt64 max_size = 1024;
+
+        UInt64 rows[max_size]{0};
+        UInt64 bytes[max_size]{0};
+
+        void record(UInt64 ns, UInt64 rows_, UInt64 bytes_)
+        {
+            size_t i = ns / time_span;
+            if (i < max_size)
+            {
+                rows[i] += rows_;
+                bytes[i] += bytes_;
+            }
+        }
     };
 
     /// Info about stream object this profile info refers to.
@@ -43,17 +57,18 @@ struct BlockStreamProfileInfo
     // parent streams
     UInt64 execution_time = 0;
 
-    bool read_prefixed = false;
-    Stopwatch timer;
+    bool has_read_prefix = false;
     Int64 signautre = -1;
     UInt64 prefix_duration = 0;
     UInt64 suffix_duration = 0;
     UInt64 running_duration = 0;
+
+    TimePoint prefix_ts;
+    TimePoint suffix_ts;
+
+    UInt64 last_wait_ts = 0;
     UInt64 waiting_duration = 0;
-    UInt64 last_timestamp = 0;
-    TimePoint start_timestamp;
-    TimePoint finish_timestamp;
-    UInt64 self_timestamp;
+    TimePoint last_self_ts;
     UInt64 self_duration = 0;
 
     bool is_first = true;
@@ -69,11 +84,6 @@ struct BlockStreamProfileInfo
     static UInt64 toNanoseconds(const TimePoint & tp)
     {
         return std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch()).count();
-    }
-
-    static UInt64 toIndex(const TimePoint & tp)
-    {
-        return std::chrono::duration_cast<std::chrono::seconds>(tp.time_since_epoch()).count();
     }
 
 
