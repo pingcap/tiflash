@@ -14,7 +14,7 @@ extern const int ILLFORMAT_RAFT_ROW;
 
 HandleID RawTiDBPK::getHandleID() const
 {
-    auto & pk = *this;
+    const auto & pk = *this;
     return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
 }
 
@@ -136,7 +136,7 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
         const auto & [tikv_key, tikv_val, lock_info_ptr] = value;
         std::ignore = tikv_key;
         std::ignore = tikv_val;
-        auto & lock_info = *lock_info_ptr;
+        const auto & lock_info = *lock_info_ptr;
 
         if (lock_info.lock_version > query.read_tso || lock_info.lock_type == kvrpcpb::Op::Lock
             || lock_info.lock_type == kvrpcpb::Op::PessimisticLock)
@@ -256,8 +256,8 @@ UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it)
 
 const RegionDefaultCFDataTrait::Map & RegionData::getDefaultCFMap(RegionWriteCFData * write)
 {
-    auto offset = (size_t) & (((RegionData *)0)->write_cf);
-    RegionData * data_ptr = reinterpret_cast<RegionData *>((char *)write - offset);
+    auto offset = reinterpret_cast<size_t>(&(reinterpret_cast<RegionData *>(0)->write_cf));
+    RegionData * data_ptr = reinterpret_cast<RegionData *>(reinterpret_cast<char *>(write) - offset);
     return data_ptr->defaultCF().getData();
 }
 } // namespace DB

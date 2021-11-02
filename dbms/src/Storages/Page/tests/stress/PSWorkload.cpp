@@ -131,7 +131,7 @@ void StressWorkloadManger::runWorkload()
             auto workload = creator(options);
             LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
             workload->run();
-            if (!workload->verify())
+            if (options.verify && !workload->verify())
             {
                 LOG_WARNING(StressEnv::logger, fmt::format("work load : {} failed.", name));
                 workload->onFailed();

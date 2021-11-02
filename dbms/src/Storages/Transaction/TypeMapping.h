@@ -15,9 +15,13 @@ using ColumnInfo = TiDB::ColumnInfo;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 
+// Because for compatible issues, we need to deal with the duration type separately for computing layer.
+// TODO: Need a better implement.
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info);
+DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_info);
 
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type);
+DataTypePtr getDataTypeByFieldTypeForComputingLayer(const tipb::FieldType & field_type);
 
 TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 

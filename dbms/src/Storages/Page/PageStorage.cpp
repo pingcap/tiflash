@@ -76,6 +76,7 @@ void PageStorage::Config::reload(const PageStorage::Config & rhs)
     // Reload is not atomic, but should be good enough
 
     // Reload gc threshold
+    gc_force_hardlink_rate = rhs.gc_force_hardlink_rate;
     gc_max_valid_rate = rhs.gc_max_valid_rate;
     gc_min_bytes = rhs.gc_min_bytes;
     gc_min_files = rhs.gc_min_files;
@@ -89,7 +90,9 @@ String PageStorage::Config::toDebugString() const
 {
     std::stringstream ss;
     ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
-       << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate.get(), 3) << ", gc_min_legacy_num:" << gc_min_legacy_num
+       << ", gc_force_hardlink_rate:" << DB::toString(gc_force_hardlink_rate.get(), 3)
+       << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate.get(), 3)
+       << ", gc_min_legacy_num:" << gc_min_legacy_num
        << ", gc_max_expect_legacy: " << DB::toString(gc_max_expect_legacy_files.get())
        << ", gc_max_valid_rate_bound: " << DB::toString(gc_max_valid_rate_bound.get(), 3)
        << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low

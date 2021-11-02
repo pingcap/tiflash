@@ -4,6 +4,7 @@ cmake_minimum_required (VERSION 2.8)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ClickHouse_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
+message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Require at least gcc 7
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7 AND NOT CMAKE_VERSION VERSION_LESS 2.8.9)
@@ -27,11 +28,11 @@ option (USE_CCACHE "Set to OFF to disable ccache" ON)
 include (cmake/find_ccache.cmake)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
-    message (STATUS "CMAKE_BUILD_TYPE is not set, set to default = RELWITHDEBINFO")
-    set (CMAKE_BUILD_TYPE "RELWITHDEBINFO")
+    set (CMAKE_BUILD_TYPE "RelWithDebInfo")
+    message (STATUS "CMAKE_BUILD_TYPE is not set, set to default = ${CMAKE_BUILD_TYPE}")
 endif ()
 string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UC)
-message (STATUS "CMAKE_BUILD_TYPE: " ${CMAKE_BUILD_TYPE} )
+message (STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 # ASan - build type with address sanitizer
 # UBSan - build type with undefined behaviour sanitizer
@@ -316,6 +317,10 @@ find_contrib_lib(metrohash)
 find_contrib_lib(btrie)
 find_contrib_lib(double-conversion)
 
+# Find libunwind, must be before jemalloc
+option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
+include (libs/libdaemon/cmake/find_unwind.cmake)
+
 # Need to process before "contrib" dir:
 include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
@@ -325,10 +330,6 @@ if (ENABLE_MYSQL_STORAGE)
     include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
 endif()
 
-option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
-
-include (libs/libdaemon/cmake/find_unwind.cmake)
-
 include (cmake/print_flags.cmake)
 
 # Directory for Yandex specific files
@@ -337,28 +338,38 @@ if (EXISTS ${CLICKHOUSE_PRIVATE_DIR})
     add_subdirectory (${CLICKHOUSE_PRIVATE_DIR})
 endif ()
 
-add_subdirectory (contrib)
-
-option (TEST_COVERAGE "Enables flags for test coverage" OFF)
-option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
-
-# Enable failpoint injection by default if ENABLE_TESTS is turn ON.
-if (ENABLE_TESTS)
-    set (ENABLE_FAILPOINTS_DEFAULT "ON")
+# Enable tests by default when build type is debug
+if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    set (ENABLE_TESTS_DEFAULT ON)
 else ()
-    set (ENABLE_FAILPOINTS_DEFAULT "OFF")
+    set (ENABLE_TESTS_DEFAULT OFF)
+endif ()
+option (ENABLE_TESTS "Enables unit tests" ${ENABLE_TESTS_DEFAULT})
+
+add_subdirectory (contrib) # Should be done after option ENABLE_TESTS, cause we will disable tests under contrib/
+
+# Enable failpoints injection by default when ENABLE_TESTS is turn ON.
+if (ENABLE_TESTS)
+    enable_testing()
+    set (ENABLE_FAILPOINTS_DEFAULT ON)
+    message (STATUS "Tests are enabled")
+else ()
+    set (ENABLE_FAILPOINTS_DEFAULT OFF)
+    message (STATUS "Tests are disabled")
 endif()
 option (ENABLE_FAILPOINTS "Enables failpoints injection" ${ENABLE_FAILPOINTS_DEFAULT})
+if (ENABLE_FAILPOINTS)
+    message (STATUS "Failpoints are enabled")
+else (ENABLE_FAILPOINTS)
+    message (STATUS "Failpoints are disabled")
+endif (ENABLE_FAILPOINTS)
 
 # Flags for test coverage
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+option (TEST_COVERAGE "Enables flags for test coverage" OFF)
+option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
+if (TEST_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     include(CodeCoverage)
-    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage -DIS_DEBUG")
-endif ()
-
-if (ENABLE_TESTS)
-    message (STATUS "Tests are enabled")
-    enable_testing()
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
 endif ()
 
 if (ARCH_AMD64)
