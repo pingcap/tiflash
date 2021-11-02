@@ -35,7 +35,25 @@ grpc::Status BatchCoprocessorHandler::execute()
     {
         switch (cop_request->tp())
         {
+<<<<<<< HEAD
             case COP_REQ_TYPE_DAG:
+=======
+        case COP_REQ_TYPE_DAG:
+        {
+            GET_METRIC(tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
+            SCOPE_EXIT(
+                { GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
+
+            const auto dag_request = ({
+                tipb::DAGRequest dag_req;
+                getDAGRequestFromStringWithRetry(dag_req, cop_request->data());
+                std::move(dag_req);
+            });
+            RegionInfoMap regions;
+            RegionInfoList retry_regions;
+            for (auto & r : cop_request->regions())
+>>>>>>> 5a37c13ec6 (Add retry when decode dag request failed (#3334))
             {
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
