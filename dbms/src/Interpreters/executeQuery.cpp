@@ -21,6 +21,7 @@
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
+#include <fmt/core.h>
 #include <tipb/expression.pb.h>
 #include <tipb/select.pb.h>
 
@@ -65,11 +66,12 @@ static void logQuery(const String & query, const Context & context)
     const auto & current_user = context.getClientInfo().current_user;
 
     LOG_DEBUG(&Poco::Logger::get("executeQuery"),
-              "(from " << context.getClientInfo().current_address.toString()
-                       << (current_user != "default" ? ", user: " + context.getClientInfo().current_user : "")
-                       << ", query_id: " << current_query_id
-                       << (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : std::string())
-                       << ") " << joinLines(query));
+              fmt::format("(from {}{}, query_id: {}{}) {}",
+                          context.getClientInfo().current_address.toString(),
+                          (current_user != "default" ? ", user: " + context.getClientInfo().current_user : ""),
+                          current_query_id,
+                          (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
+                          joinLines(query)));
 }
 
 
@@ -94,9 +96,11 @@ static void setExceptionStackTrace(QueryLogElement & elem)
 static void logException(Context & context, QueryLogElement & elem)
 {
     LOG_ERROR(&Poco::Logger::get("executeQuery"),
-              elem.exception << " (from " << context.getClientInfo().current_address.toString() << ")"
-                             << " (in query: " << joinLines(elem.query)
-                             << ")" << (!elem.stack_trace.empty() ? ", Stack trace:\n\n" + elem.stack_trace : ""));
+              fmt::format("{} (from {}) (in query: {}){}",
+                          elem.exception,
+                          context.getClientInfo().current_address.toString(),
+                          joinLines(elem.query),
+                          (!elem.stack_trace.empty() ? ", Stack trace:\n\n" + elem.stack_trace : "")));
 }
 
 
@@ -307,11 +311,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 {
                     LOG_INFO(&Poco::Logger::get("executeQuery"),
                              std::fixed << std::setprecision(3)
-                                        << "Read " << elem.read_rows
-                                        << " rows, " << formatReadableSizeWithBinarySuffix(elem.read_bytes)
-                                        << " in " << elapsed_seconds << " sec., "
-                                        << static_cast<size_t>(elem.read_rows / elapsed_seconds) << " rows/sec., "
-                                        << formatReadableSizeWithBinarySuffix(elem.read_bytes / elapsed_seconds) << "/sec.");
+                                        << fmt::format("Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
+                                                       elem.read_rows,
+                                                       formatReadableSizeWithBinarySuffix(elem.read_bytes),
+                                                       elapsed_seconds,
+                                                       static_cast<size_t>(elem.read_rows / elapsed_seconds),
+                                                       formatReadableSizeWithBinarySuffix(elem.read_bytes / elapsed_seconds)));
                 }
 
                 if (log_queries)
