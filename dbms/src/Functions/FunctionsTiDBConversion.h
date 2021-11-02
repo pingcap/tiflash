@@ -1498,7 +1498,7 @@ struct TiDBConvertToDuration
                 auto & to_vec = to_col->getData();
                 to_vec.resize(size);
 
-                for (size_t i = 0; i < size; i++)
+                for (size_t i = 0; i < size; ++i)
                 {
                     to_vec[i] = round(from_vec[i], (6 - to_fsp) + 3);
                 }
