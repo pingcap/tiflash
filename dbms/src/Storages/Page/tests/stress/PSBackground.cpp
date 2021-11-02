@@ -6,13 +6,18 @@
 
 void PSMetricsDumper::onTime(Poco::Timer & /*timer*/)
 {
-    lastest_memory = CurrentMetrics::get(CurrentMetrics::MemoryTracking);
-    if (likely(lastest_memory != 0))
+    for (auto & metric : metrics)
     {
-        loop_times++;
-        memory_summary += lastest_memory;
-        memory_biggest = memory_biggest > lastest_memory ? memory_biggest : lastest_memory;
-        LOG_INFO(StressEnv::logger, toString());
+        auto lastest = CurrentMetrics::get(metric.first);
+        if (likely(lastest != 0))
+        {
+            auto & info = metric.second;
+            info.loop_times++;
+            info.lastest = lastest;
+            info.summary += lastest;
+            info.biggest = std::max(info.biggest, lastest);
+            LOG_INFO(StressEnv::logger, info.toString());
+        }
     }
 }
 

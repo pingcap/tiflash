@@ -44,7 +44,7 @@ grpc::Status BatchCoprocessorHandler::execute()
 
             const auto dag_request = ({
                 tipb::DAGRequest dag_req;
-                dag_req.ParseFromString(cop_request->data());
+                getDAGRequestFromStringWithRetry(dag_req, cop_request->data());
                 std::move(dag_req);
             });
             RegionInfoMap regions;

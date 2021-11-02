@@ -171,7 +171,7 @@ struct ExtractParamImpl
     using ResultType = typename ParamExtractor::ResultType;
 
     /// It is assumed that `res` is the correct size and initialized with zeros.
-    static void vector_constant(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<ResultType> & res)
+    static void vectorConstant(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, PaddedPODArray<ResultType> & res)
     {
         if (escape_char != '\\' || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -210,7 +210,7 @@ struct ExtractParamImpl
         memset(&res[i], 0, (res.size() - i) * sizeof(res[0]));
     }
 
-    static void constant_constant(const std::string & data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, ResultType & res)
+    static void constantConstant(const std::string & data, std::string needle, const UInt8 escape_char, const TiDB::TiDBCollatorPtr & collator, ResultType & res)
     {
         if (escape_char != '\\' || collator != nullptr)
             throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
@@ -225,13 +225,13 @@ struct ExtractParamImpl
     }
 
     template <typename... Args>
-    static void vector_vector(Args &&...)
+    static void vectorVector(Args &&...)
     {
         throw Exception("Functions 'visitParamHas' and 'visitParamExtract*' doesn't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
     }
 
     template <typename... Args>
-    static void constant_vector(Args &&...)
+    static void constantVector(Args &&...)
     {
         throw Exception("Functions 'visitParamHas' and 'visitParamExtract*' doesn't support non-constant needle argument", ErrorCodes::ILLEGAL_COLUMN);
     }

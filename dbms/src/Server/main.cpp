@@ -85,7 +85,7 @@ int mainExportError(int argc, char ** argv)
     {
         // RAII
         DB::ErrorExporter exporter(wb);
-        for (auto error : all_errors)
+        for (const auto & error : all_errors)
         {
             exporter.writeError(error);
         }
