@@ -1,9 +1,10 @@
 #pragma once
 
-#include <vector>
 #include <Common/Stopwatch.h>
-
 #include <Core/Types.h>
+
+#include <chrono>
+#include <vector>
 
 #if __APPLE__
 #include <common/apple_rt.h>
