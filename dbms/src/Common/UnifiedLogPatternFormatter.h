@@ -12,20 +12,20 @@ class WriteBuffer;
 class UnifiedLogPatternFormatter : public Poco::PatternFormatter
 {
 public:
-    UnifiedLogPatternFormatter() {}
+    UnifiedLogPatternFormatter() = default;
 
     void format(const Poco::Message & msg, std::string & text) override;
 
 private:
-    std::string getPriorityString(const Poco::Message::Priority & priority) const;
+    static std::string getPriorityString(const Poco::Message::Priority & priority);
 
-    std::string getTimestamp() const;
+    static std::string getTimestamp();
 
-    bool needJsonEncode(const std::string & src);
+    static bool needJsonEncode(const std::string & src);
 
-    void writeJSONString(DB::WriteBuffer & wb, const std::string & str);
+    static void writeJSONString(DB::WriteBuffer & buf, const std::string & str);
 
-    void writeEscapedString(DB::WriteBuffer & wb, const std::string & str);
+    static void writeEscapedString(DB::WriteBuffer & wb, const std::string & str);
 };
 
 } // namespace DB
