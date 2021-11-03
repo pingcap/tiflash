@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 class Context;
 
 /// DAGQueryBlock is a dag query from single source,
