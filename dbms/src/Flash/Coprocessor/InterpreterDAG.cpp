@@ -87,11 +87,7 @@ BlockIO InterpreterDAG::execute()
     {
         /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
         /// the query plan, so we init mpp exchange receiver before executeQueryBlock
-        auto start_time = Clock::now();
         initMPPExchangeReceiver(*dag.getQueryBlock());
-        auto end_time = Clock::now();
-        auto init_exchange_receiver_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        dag.getDAGContext().init_exchange_receiver_time_ns = init_exchange_receiver_elapsed_ns;
     }
     /// region_info should base on the source executor, however
     /// tidb does not support multi-table dag request yet, so

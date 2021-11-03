@@ -204,7 +204,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 
     dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
     dag_context->mpp_task_log = log;
-    dag_context->task_stats = task_stats;
     context.setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())
@@ -366,11 +365,14 @@ void MPPTask::runImpl()
 
     if (switchStatus(RUNNING, FINISHED))
     {
-        task_stats->end(FINISHED, err_msg);
         LOG_INFO(log, "finish task");
     }
     else
+    {
         LOG_WARNING(log, "finish task which was cancelled before");
+    }
+
+    task_stats->end(status.load(), err_msg);
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)
@@ -406,8 +408,6 @@ void MPPTask::cancel(const String & reason)
         {
             closeAllTunnels(reason);
             unregisterTask();
-            task_stats->start();
-            task_stats->end(CANCELLED, reason);
             LOG_WARNING(log, "Finish cancel task from uninitialized");
             return;
         }
@@ -415,7 +415,6 @@ void MPPTask::cancel(const String & reason)
         {
             context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
             closeAllTunnels(reason);
-            task_stats->end(CANCELLED, reason);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish cancel task from running");
             return;
