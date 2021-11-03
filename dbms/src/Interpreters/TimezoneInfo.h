@@ -10,15 +10,14 @@ class DAGRequest;
 
 namespace DB
 {
-
 /// A class used to store timezone info, currently only used when handling coprocessor request
 struct TimezoneInfo
 {
     String timezone_name;
-    Int64 timezone_offset;
-    bool is_utc_timezone;
-    bool is_name_based;
-    const DateLUTImpl * timezone;
+    Int64 timezone_offset = 0;
+    bool is_utc_timezone = false;
+    bool is_name_based = false;
+    const DateLUTImpl * timezone = nullptr;
 
     void init()
     {

@@ -21,12 +21,12 @@ inline std::string demangle(const char * name)
 struct FreeingDeleter
 {
     template <typename PointerType>
-    void operator() (PointerType ptr)
+    void operator()(PointerType ptr)
     {
         std::free(ptr);
     }
 };
 
-typedef std::unique_ptr<char, FreeingDeleter> DemangleResult;
+using DemangleResult = std::unique_ptr<char, FreeingDeleter>;
 
 DemangleResult tryDemangle(const char * name);
