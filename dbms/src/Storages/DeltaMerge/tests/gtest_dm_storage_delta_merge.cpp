@@ -131,15 +131,17 @@ try
     Block status = store_status->read();
     String name_str = "Name";
     String value_str = "Value";
+    ColumnPtr col_name = status.getByName(name_str).column;
+    ColumnPtr col_value = status.getByName(value_str).column;
     for (size_t i = 0; i < status.getByName(name_str).column->size(); i++)
     {
-        if (status.getByName(name_str).column->getDataAt(i) == String("segment_count"))
+        if (col_name->getDataAt(i) == String("segment_count"))
         {
-            EXPECT_EQ(status.getByName(value_str).column->getDataAt(i), String(DB::toString(1)));
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(1)));
         }
-        if (status.getByName(name_str).column->getDataAt(i) == String("total_rows"))
+        else if (col_name->getDataAt(i) == String("total_rows"))
         {
-            EXPECT_EQ(status.getByName(value_str).column->getDataAt(i), String(DB::toString(100)));
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(100)));
         }
     }
     storage->drop();
