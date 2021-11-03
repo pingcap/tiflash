@@ -500,7 +500,7 @@ try
         PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {}, {latest_data_path}, {});
 
         FsStats fs_stats = path_capacity.getFsStats();
-        EXPECT_EQ(fs_stats.capacity_size, global_capacity_quota); // summing the capacity of main and latest path
+        EXPECT_EQ(fs_stats.capacity_size, global_capacity_quota); // Use `global_capacity_quota` when `main_capacity_quota_` is empty
     }
 }
 CATCH
