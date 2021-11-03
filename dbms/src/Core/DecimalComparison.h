@@ -287,51 +287,6 @@ private:
     }
 
     template <bool scale_left, bool scale_right>
-    static NO_INLINE UInt8 apply(A a, B b, CompareInt scale [[maybe_unused]])
-    {
-        CompareInt x = static_cast<CompareInt>(a);
-        CompareInt y = static_cast<CompareInt>(b);
-
-        if constexpr (_check_overflow)
-        {
-            bool overflow = false;
-
-            if constexpr (sizeof(A) > sizeof(CompareInt))
-                overflow |= (A(x) != a);
-            if constexpr (sizeof(B) > sizeof(CompareInt))
-                overflow |= (B(y) != b);
-            if constexpr (std::is_unsigned_v<A>)
-                overflow |= (x < 0);
-            if constexpr (std::is_unsigned_v<B>)
-                overflow |= (y < 0);
-
-            if constexpr (scale_left) {
-                if constexpr (std::is_same_v<CompareInt, Int256>)
-                    x = x * scale;
-                else
-                    overflow |= common::mulOverflow(x, scale, x);
-            }
-            if constexpr (scale_right) {
-                if constexpr (std::is_same_v<CompareInt, Int256>)
-                    y = y * scale;
-                else
-                    overflow |= common::mulOverflow(y, scale, y);
-            }
-            if (overflow)
-                throw Exception("Can't compare", ErrorCodes::DECIMAL_OVERFLOW);
-        }
-        else
-        {
-            if constexpr (scale_left)
-                x *= scale;
-            if constexpr (scale_right)
-                y *= scale;
-        }
-
-        return Op::apply(x, y);
-    }
-
-    template <bool scale_left, bool scale_right>
     static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, PaddedPODArray<UInt8> & c,
                                         CompareInt scale [[maybe_unused]])
     {
