@@ -7,6 +7,7 @@
 #include <Core/Field.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -361,6 +362,12 @@ ColumnWithTypeAndName createConstColumn(
     std::enable_if_t<TypeTraits<T>::is_nullable, int> = 0)
 {
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
+}
+
+ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name = "")
+{
+    DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
+    return {data_type->createColumnConst(size, Null()), data_type, name};
 }
 
 ::testing::AssertionResult dataTypeEqual(
