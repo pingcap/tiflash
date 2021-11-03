@@ -8,7 +8,7 @@ namespace DB
 class NetException : public DB::Exception
 {
 public:
-    NetException(const std::string & msg, int code = 0)
+    explicit NetException(const std::string & msg, int code = 0)
         : DB::Exception(msg, code)
     {}
     NetException(const std::string & msg, const std::string & arg, int code = 0)

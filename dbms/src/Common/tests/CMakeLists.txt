@@ -63,9 +63,6 @@ add_executable (integer_hash_tables_and_hashes integer_hash_tables_and_hashes.cp
 target_include_directories (integer_hash_tables_and_hashes BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
 target_link_libraries (integer_hash_tables_and_hashes clickhouse_common_io)
 
-add_executable (allocator allocator.cpp)
-target_link_libraries (allocator clickhouse_common_io)
-
 add_executable (cow_columns cow_columns.cpp)
 target_link_libraries (cow_columns clickhouse_common_io)
 
@@ -84,8 +81,13 @@ target_link_libraries(mytime_test clickhouse_common_io clickhouse_functions gtes
 add_executable(rw_lock_test gtest_rw_lock.cpp)
 target_link_libraries(rw_lock_test clickhouse_common_io clickhouse_functions gtest_main)
 
+# performance tests
+
 add_executable (uint128_perf uint128_perf.cpp)
 target_link_libraries (uint128_perf clickhouse_common_io)
 
 add_executable (mpmc_queue_perftest mpmc_queue_perftest.cpp)
 target_link_libraries (mpmc_queue_perftest clickhouse_common_io)
+
+add_executable (allocator_perf allocator_perf.cpp)
+target_link_libraries (allocator_perf clickhouse_common_io)

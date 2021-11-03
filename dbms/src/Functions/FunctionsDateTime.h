@@ -18,6 +18,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Poco/String.h>
 #include <common/DateLUT.h>
 
@@ -2858,7 +2859,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
         if (!unit_column)
             throw TiFlashException(
                 "First argument for function " + getName() + " must be constant String",
@@ -2866,32 +2867,32 @@ public:
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
-        auto from_column = block.getByPosition(arguments[1]).column;
+        auto col_from = block.getByPosition(arguments[1]).column;
 
         size_t rows = block.rows();
         auto col_to = ColumnInt64::create(rows);
         auto & vec_to = col_to->getData();
 
         if (unit == "year")
-            dispatch<ExtractMyDateTimeImpl::extract_year>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_year>(col_from, vec_to);
         else if (unit == "quarter")
-            dispatch<ExtractMyDateTimeImpl::extract_quater>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_quater>(col_from, vec_to);
         else if (unit == "month")
-            dispatch<ExtractMyDateTimeImpl::extract_month>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_month>(col_from, vec_to);
         else if (unit == "week")
-            dispatch<ExtractMyDateTimeImpl::extract_week>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_week>(col_from, vec_to);
         else if (unit == "day")
-            dispatch<ExtractMyDateTimeImpl::extract_day>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day>(col_from, vec_to);
         else if (unit == "day_microsecond")
-            dispatch<ExtractMyDateTimeImpl::extract_day_microsecond>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_microsecond>(col_from, vec_to);
         else if (unit == "day_second")
-            dispatch<ExtractMyDateTimeImpl::extract_day_second>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_second>(col_from, vec_to);
         else if (unit == "day_minute")
-            dispatch<ExtractMyDateTimeImpl::extract_day_minute>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_minute>(col_from, vec_to);
         else if (unit == "day_hour")
-            dispatch<ExtractMyDateTimeImpl::extract_day_hour>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_hour>(col_from, vec_to);
         else if (unit == "year_month")
-            dispatch<ExtractMyDateTimeImpl::extract_year_month>(from_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_year_month>(col_from, vec_to);
         /// TODO: support ExtractDuration
         // else if (unit == "hour");
         // else if (unit == "minute");
@@ -2994,6 +2995,138 @@ private:
     }
 };
 
+struct SysDateWithFsp
+{
+public:
+    static constexpr auto name = "sysDateWithFsp";
+    static constexpr size_t arguments_number = 1;
+    static constexpr bool use_default_implementation_for_constants = false;
+    static const ColumnNumbers getColumnNumbers()
+    {
+        return ColumnNumbers{0};
+    }
+
+    static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments)
+    {
+        int fsp = 0;
+        const auto fsp_type = arguments[0].type;
+        const auto fsp_column = arguments[0].column.get();
+        if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
+        {
+            fsp = fsp_column->getInt(0);
+        }
+        else
+        {
+            throw TiFlashException(
+                "First argument for function " + String(name) + " must be constant number",
+                Errors::Coprocessor::BadRequest);
+        }
+        return std::make_shared<DataTypeMyDateTime>(fsp);
+    }
+
+    static UInt8 getFsp(Block & block, const ColumnNumbers & arguments)
+    {
+        const auto fsp_type = block.getByPosition(arguments[0]).type;
+        const auto fsp_column = block.getByPosition(arguments[0]).column.get();
+        if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
+        {
+            return fsp_column->getInt(0);
+        }
+        else
+        {
+            throw TiFlashException(
+                "First argument for function " + String(name) + " must be constant number",
+                Errors::Coprocessor::BadRequest);
+        }
+    }
+};
+
+struct SysDateWithoutFsp
+{
+public:
+    static constexpr auto name = "sysDateWithoutFsp";
+    static constexpr size_t arguments_number = 0;
+    static constexpr bool use_default_implementation_for_constants = true;
+    static const ColumnNumbers getColumnNumbers()
+    {
+        return ColumnNumbers{};
+    }
+
+    static DataTypePtr getReturnType(const ColumnsWithTypeAndName &)
+    {
+        return std::make_shared<DataTypeMyDateTime>(0);
+    }
+
+    static UInt8 getFsp(Block &, const ColumnNumbers &)
+    {
+        return 0;
+    }
+};
+
+template <typename Transform>
+class FunctionSysDate : public IFunction
+{
+public:
+    static constexpr auto name = Transform::name;
+    static FunctionPtr create(const Context & context_) { return std::make_shared<FunctionSysDate>(context_); };
+    explicit FunctionSysDate(const Context & context_)
+        : context(context_){};
+
+    String getName() const override { return Transform::name; }
+
+    size_t getNumberOfArguments() const override
+    {
+        return Transform::arguments_number;
+    }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        return Transform::getReturnType(arguments);
+    }
+
+    bool useDefaultImplementationForConstants() const override { return Transform::use_default_implementation_for_constants; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
+    {
+        return Transform::getColumnNumbers();
+    }
+
+    static void array(const UInt64 sysdate_packet, const Int32 row_count, UInt64 * dst)
+    {
+        UInt64 * dst_end = dst + row_count;
+#if __SSE2__
+        const auto uint64_sse = sizeof(__m128i) / sizeof(UInt64);
+        auto * uint64_end_sse = dst + (dst_end - dst) / uint64_sse * uint64_sse;
+        while (dst < uint64_end_sse)
+        {
+            _mm_store_si128(reinterpret_cast<__m128i *>(dst), _mm_set_epi64x(sysdate_packet, sysdate_packet));
+            dst += uint64_sse;
+        }
+#endif
+        while (dst < dst_end)
+        {
+            *dst = sysdate_packet;
+            ++dst;
+        }
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const int row_count = block.rows();
+        UInt8 fsp = Transform::getFsp(block, arguments);
+        const UInt64 sysdate_packed = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), fsp).toPackedUInt();
+        auto col_to = ColumnVector<DataTypeMyDateTime::FieldType>::create(row_count);
+        auto & vec_to = col_to->getData();
+        vec_to.resize(row_count);
+        if (row_count > 0)
+            array(sysdate_packed, row_count, &vec_to[0]);
+
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    const Context & context;
+};
+
 
 using FunctionToYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToYearImpl>;
 using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQuarterImpl>;
@@ -3042,5 +3175,8 @@ using FunctionSubtractDays = FunctionDateOrDateTimeAddInterval<SubtractDaysImpl>
 using FunctionSubtractWeeks = FunctionDateOrDateTimeAddInterval<SubtractWeeksImpl>;
 using FunctionSubtractMonths = FunctionDateOrDateTimeAddInterval<SubtractMonthsImpl>;
 using FunctionSubtractYears = FunctionDateOrDateTimeAddInterval<SubtractYearsImpl>;
+
+using FunctionSysDateWithFsp = FunctionSysDate<SysDateWithFsp>;
+using FunctionSysDateWithoutFsp = FunctionSysDate<SysDateWithoutFsp>;
 
 } // namespace DB
