@@ -28,9 +28,9 @@ void UnifiedLogPatternFormatter::format(const Poco::Message & msg, std::string &
         source_str = "<" + std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine()) + ">";
 
     std::string message;
-    std::string source = msg.getSource();
+    const std::string & source = msg.getSource();
     if (!source.empty())
-        message = source + ": " + msg.getText();
+        message = fmt::format("{0}:{1}", source, msg.getText());
     else
         message = msg.getText();
 
@@ -59,7 +59,7 @@ void UnifiedLogPatternFormatter::format(const Poco::Message & msg, std::string &
     DB::writeString("]", wb);
 }
 
-std::string UnifiedLogPatternFormatter::getPriorityString(const Poco::Message::Priority & priority) const
+std::string UnifiedLogPatternFormatter::getPriorityString(const Poco::Message::Priority & priority)
 {
     switch (priority)
     {
@@ -85,7 +85,7 @@ std::string UnifiedLogPatternFormatter::getPriorityString(const Poco::Message::P
     }
 }
 
-std::string UnifiedLogPatternFormatter::getTimestamp() const
+std::string UnifiedLogPatternFormatter::getTimestamp()
 {
     auto time_point = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(time_point);
