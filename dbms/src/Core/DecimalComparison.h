@@ -287,7 +287,6 @@ private:
     }
 
     template <bool scale_left, bool scale_right>
-<<<<<<< HEAD
     static NO_INLINE UInt8 apply(A a, B b, CompareInt scale [[maybe_unused]])
     {
         CompareInt x = static_cast<CompareInt>(a);
@@ -335,9 +334,6 @@ private:
     template <bool scale_left, bool scale_right>
     static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, PaddedPODArray<UInt8> & c,
                                         CompareInt scale [[maybe_unused]])
-=======
-    static void NO_INLINE vectorVector(const ArrayA & a, const ArrayB & b, PaddedPODArray<UInt8> & c, CompareInt scale [[maybe_unused]])
->>>>>>> 08443b9637 (expression: fix the issue that comparison between Decimal may cause overflow and report `Can't compare`.  (#3097))
     {
         size_t size = a.size();
         const A * a_pos = a.data();
