@@ -242,6 +242,25 @@ void MetaRaftCommandDelegate::execChangePeer(
     doSetApplied(index, term);
 }
 
+RegionMergeResult MetaRaftCommandDelegate::computeRegionMergeResult(
+    const metapb::Region & source_region,
+    const metapb::Region & target_region)
+{
+    RegionMergeResult res;
+
+    res.version = std::max(source_region.region_epoch().version(), target_region.region_epoch().version()) + 1;
+
+    if (source_region.end_key().empty())
+    {
+        res.source_at_left = false;
+    }
+    else
+    {
+        res.source_at_left = source_region.end_key() == target_region.start_key();
+    }
+    return res;
+}
+
 RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     const raft_cmdpb::AdminRequest & request,
     const MetaRaftCommandDelegate & source_meta) const
@@ -265,19 +284,7 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     if (!(source_region == source_meta.region_state.getRegion()))
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": source_region not match exist region", ErrorCodes::LOGICAL_ERROR);
 
-    RegionMergeResult res;
-
-    res.version = std::max(source_region.region_epoch().version(), region_state.getVersion()) + 1;
-
-    if (source_region.end_key().empty())
-    {
-        res.source_at_left = false;
-    }
-    else
-    {
-        res.source_at_left = source_region.end_key() == region_state.getRegion().start_key();
-    }
-    return res;
+    return computeRegionMergeResult(source_region, region_state.getRegion());
 }
 
 #pragma GCC diagnostic push

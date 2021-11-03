@@ -168,6 +168,9 @@ class MetaRaftCommandDelegate
         const raft_cmdpb::AdminResponse & response,
         const UInt64 index,
         const UInt64 term);
+    static RegionMergeResult MetaRaftCommandDelegate::computeRegionMergeResult(
+        const metapb::Region & source_region,
+        const metapb::Region & target_region);
 };
 
 } // namespace DB
