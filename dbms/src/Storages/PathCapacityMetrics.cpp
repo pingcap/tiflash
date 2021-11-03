@@ -27,7 +27,7 @@ inline size_t safeGetQuota(const std::vector<size_t> & quotas, size_t idx)
     return idx < quotas.size() ? quotas[idx] : 0;
 }
 
-PathCapacityMetrics::PathCapacityMetrics( //
+PathCapacityMetrics::PathCapacityMetrics(
     const size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
     const Strings & main_paths_,
     const std::vector<size_t> main_capacity_quota_,
