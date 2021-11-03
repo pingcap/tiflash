@@ -46,7 +46,6 @@ public:
     String qb_join_subquery_alias;
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
     // kinds of project
-    void fillOutputFieldTypes();
     void collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result);
     bool isRootQueryBlock() const { return id == 1; };
     bool isRemoteQuery() const
