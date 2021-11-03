@@ -105,7 +105,7 @@ inline bool mulOverflow(__int128 x, __int128 y, __int128 & res)
 }
 
 template <>
-inline bool mulOverflow(Int256 x, Int256 y, Int256 & res)
+inline bool mulOverflow(DB::Int256 x, DB::Int256 y, DB::Int256 & res)
 {
     try
     {
