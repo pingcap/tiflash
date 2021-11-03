@@ -1,6 +1,7 @@
 #include "Columns/ColumnsNumber.h"
 #include "Core/ColumnWithTypeAndName.h"
 #include "DataTypes/DataTypeMyDateTime.h"
+#include "DataTypes/DataTypeMyDuration.h"
 #include "DataTypes/DataTypeNullable.h"
 #include "DataTypes/DataTypesNumber.h"
 #include "Functions/FunctionFactory.h"
@@ -87,6 +88,87 @@ try
         executeFunction(func_name,
                         {ctn_datetime5_nullable_const,
                          createConstColumn<String>(1, "Nullable(Float64)")}));
+}
+CATCH
+
+TEST_F(TestTidbConversion, castDurationAsDuration)
+try
+{
+    static const std::string func_name = "tidb_cast";
+    static const auto from_type = std::make_shared<DataTypeMyDuration>(3);
+    static const auto to_type_1 = std::make_shared<DataTypeMyDuration>(5); // from_fsp <  to_fsp
+    static const auto to_type_2 = std::make_shared<DataTypeMyDuration>(3); // from_fsp == to_fsp
+    static const auto to_type_3 = std::make_shared<DataTypeMyDuration>(2); // from_fsp <  to_fsp
+
+    ColumnWithTypeAndName input(
+        createColumn<DataTypeMyDuration::FieldType>({(20 * 3600 + 20 * 60 + 20) * 1000000000L + 555000000L,
+                                                     -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 555000000L,
+                                                     (20 * 3600 + 20 * 60 + 20) * 1000000000L + 554000000L,
+                                                     -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 554000000L,
+                                                     (20 * 3600 + 20 * 60 + 20) * 1000000000L + 999000000L,
+                                                     -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 999000000L})
+            .column,
+        from_type,
+        "input");
+
+    ColumnWithTypeAndName output1(input.column, to_type_1, "output1");
+    ColumnWithTypeAndName output2(input.column, to_type_2, "output2");
+    ColumnWithTypeAndName output3(
+        createColumn<DataTypeMyDuration::FieldType>({(20 * 3600 + 20 * 60 + 20) * 1000000000L + 560000000L,
+                                                     -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 560000000L,
+                                                     (20 * 3600 + 20 * 60 + 20) * 1000000000L + 550000000L,
+                                                     -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 550000000L,
+                                                     (20 * 3600 + 20 * 60 + 21) * 1000000000L + 000000000L,
+                                                     -(20 * 3600 + 20 * 60 + 21) * 1000000000L - 000000000L})
+            .column,
+        to_type_3,
+        "output3");
+
+    ASSERT_COLUMN_EQ(output1, executeFunction(func_name, {input, createConstColumn<String>(1, to_type_1->getName())}));
+    ASSERT_COLUMN_EQ(output2, executeFunction(func_name, {input, createConstColumn<String>(1, to_type_2->getName())}));
+    ASSERT_COLUMN_EQ(output3, executeFunction(func_name, {input, createConstColumn<String>(1, to_type_3->getName())}));
+
+    // Test Nullable
+    ColumnWithTypeAndName input_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(20 * 3600 + 20 * 60 + 20) * 1000000000L + 555000000L,
+                                                               -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 555000000L,
+                                                               {},
+                                                               (20 * 3600 + 20 * 60 + 20) * 1000000000L + 554000000L,
+                                                               -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 554000000L,
+                                                               {},
+                                                               (20 * 3600 + 20 * 60 + 20) * 1000000000L + 999000000L,
+                                                               -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 999000000L})
+            .column,
+        makeNullable(input.type),
+        "input_nullable");
+    ColumnWithTypeAndName output1_nullable(input_nullable.column, makeNullable(to_type_1), "output1_nullable");
+    ColumnWithTypeAndName output2_nullable(input_nullable.column, makeNullable(to_type_2), "output2_nullable");
+    ColumnWithTypeAndName output3_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(20 * 3600 + 20 * 60 + 20) * 1000000000L + 560000000L,
+                                                               -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 560000000L,
+                                                               {},
+                                                               (20 * 3600 + 20 * 60 + 20) * 1000000000L + 550000000L,
+                                                               -(20 * 3600 + 20 * 60 + 20) * 1000000000L - 550000000L,
+                                                               {},
+                                                               (20 * 3600 + 20 * 60 + 21) * 1000000000L + 000000000L,
+                                                               -(20 * 3600 + 20 * 60 + 21) * 1000000000L - 000000000L})
+            .column,
+        makeNullable(to_type_3),
+        "output3_output");
+
+    ASSERT_COLUMN_EQ(output1_nullable, executeFunction(func_name, {input_nullable, createConstColumn<String>(1, makeNullable(to_type_1)->getName())}));
+    ASSERT_COLUMN_EQ(output2_nullable, executeFunction(func_name, {input_nullable, createConstColumn<String>(1, makeNullable(to_type_2)->getName())}));
+    ASSERT_COLUMN_EQ(output3_nullable, executeFunction(func_name, {input_nullable, createConstColumn<String>(1, makeNullable(to_type_3)->getName())}));
+
+    // Test Const
+    ColumnWithTypeAndName input_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (20 * 3600 + 20 * 60 + 20) * 1000000000L + 999000000L).column, from_type, "input_const");
+    ColumnWithTypeAndName output1_const(input_const.column, to_type_1, "output1_const");
+    ColumnWithTypeAndName output2_const(input_const.column, to_type_2, "output2_const");
+    ColumnWithTypeAndName output3_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (20 * 3600 + 20 * 60 + 21) * 1000000000L + 000000000L).column, to_type_3, "output3_const");
+
+    ASSERT_COLUMN_EQ(output1_const, executeFunction(func_name, {input_const, createConstColumn<String>(1, to_type_1->getName())}));
+    ASSERT_COLUMN_EQ(output2_const, executeFunction(func_name, {input_const, createConstColumn<String>(1, to_type_2->getName())}));
+    ASSERT_COLUMN_EQ(output3_const, executeFunction(func_name, {input_const, createConstColumn<String>(1, to_type_3->getName())}));
 }
 CATCH
 

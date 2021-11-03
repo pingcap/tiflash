@@ -81,7 +81,7 @@ private:
 
 public:
     /// Arguments - seed.
-    SipHash(UInt64 k0 = 0, UInt64 k1 = 0)
+    explicit SipHash(UInt64 k0 = 0, UInt64 k1 = 0)
     {
         /// Initialize the state with some random bytes and seed.
         v0 = 0x736f6d6570736575ULL ^ k0;
