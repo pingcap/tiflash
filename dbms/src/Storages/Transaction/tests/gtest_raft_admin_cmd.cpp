@@ -1,4 +1,6 @@
 #include <Storages/Transaction/RegionMeta.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include "region_helper.h"
 
