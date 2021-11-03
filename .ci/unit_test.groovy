@@ -7,10 +7,6 @@ catchError {
 
     util.runUTCoverTICS(CURWS, NPROC)
 
-    cobertura autoUpdateHealth: false, autoUpdateStability: false, 
-        coberturaReportFile: "/tmp/tiflash_gcovr_coverage.xml", 
-        lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 
-        maxNumberOfBuilds: 10, onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
 }
 
 stage('Summary') {
