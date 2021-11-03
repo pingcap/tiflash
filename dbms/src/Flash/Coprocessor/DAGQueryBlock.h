@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 class Context;
 
 /// DAGQueryBlock is a dag query from single source,
@@ -48,10 +47,6 @@ public:
     // kinds of project
     void collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result);
     bool isRootQueryBlock() const { return id == 1; };
-    bool isRemoteQuery() const
-    {
-        return source->tp() == tipb::ExecType::TypeTableScan && source->tbl_scan().next_read_engine() != tipb::EngineType::Local;
-    }
 };
 
 } // namespace DB
