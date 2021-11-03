@@ -133,7 +133,7 @@ try
     String value_str = "Value";
     ColumnPtr col_name = status.getByName(name_str).column;
     ColumnPtr col_value = status.getByName(value_str).column;
-    for (size_t i = 0; i < status.getByName(name_str).column->size(); i++)
+    for (size_t i = 0; i < col_name->size(); i++)
     {
         if (col_name->getDataAt(i) == String("segment_count"))
         {
@@ -141,7 +141,7 @@ try
         }
         else if (col_name->getDataAt(i) == String("total_rows"))
         {
-            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(100)));
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(num_rows_read)));
         }
     }
     storage->drop();
