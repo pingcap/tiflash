@@ -26,21 +26,23 @@ DAGQuerySource::DAGQuerySource(
     if (dag_request.has_root_executor())
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor());
+        output_field_types = extractOutputFields(dag_request.root_executor());
     }
     else
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
+        output_field_types = extractOutputFields(dag_request.executors());
     }
     root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(context.getDAGContext()->getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())
-        root_query_block->output_offsets.push_back(i);
+        output_offsets.push_back(i);
     for (UInt32 i : dag_request.output_offsets())
     {
-        if (unlikely(i >= root_query_block->output_field_types.size()))
+        if (unlikely(i >= output_field_types.size()))
             throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "
-                                       + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
+                                       + std::to_string(output_field_types.size()) + " columns, access index " + std::to_string(i),
                                    Errors::Coprocessor::BadRequest);
-        result_field_types.push_back(root_query_block->output_field_types[i]);
+        result_field_types.push_back(output_field_types[i]);
     }
     analyzeDAGEncodeType();
 }

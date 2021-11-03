@@ -132,6 +132,7 @@ bool addExtraCastsAfterTs(
 AnalysisResult analyzeExpressions(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
+    const DAGQuerySource & dag,
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
     const std::vector<ExtraCastAfterTSMode> & is_need_cast_column,
@@ -219,8 +220,8 @@ AnalysisResult analyzeExpressions(
 
     analyzer.generateFinalProject(
         chain,
-        query_block.output_field_types,
-        query_block.output_offsets,
+        dag.getOutputFieldTypes(),
+        dag.getOutputOffsets(),
         query_block.qb_column_prefix,
         keep_session_timezone_info || !query_block.isRootQueryBlock(),
         final_project);
@@ -914,14 +915,14 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     ColumnsWithTypeAndName columns;
     BoolVec is_ts_column;
     std::vector<NameAndTypePair> source_columns;
-    for (int i = 0; i < static_cast<int>(query_block.output_field_types.size()); i++)
+    for (int i = 0; i < static_cast<int>(dag.getOutputFieldTypes().size()); i++)
     {
         dag_req.add_output_offsets(i);
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(query_block.output_field_types[i]);
+        ColumnInfo info = TiDB::fieldTypeToColumnInfo(dag.getOutputFieldTypes()[i]);
         String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
         schema.push_back(std::make_pair(col_name, info));
-        is_ts_column.push_back(query_block.output_field_types[i].tp() == TiDB::TypeTimestamp);
-        source_columns.emplace_back(col_name, getDataTypeByFieldTypeForComputingLayer(query_block.output_field_types[i]));
+        is_ts_column.push_back(dag.getOutputFieldTypes()[i].tp() == TiDB::TypeTimestamp);
+        source_columns.emplace_back(col_name, getDataTypeByFieldTypeForComputingLayer(dag.getOutputFieldTypes()[i]));
         final_project.emplace_back(col_name, "");
     }
 
@@ -1054,6 +1055,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     auto res = analyzeExpressions(
         context,
         *analyzer,
+        dag,
         query_block,
         conditions,
         need_add_cast_column_flag_for_tablescan,

@@ -547,6 +547,123 @@ void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String &
     }
 }
 
+std::vector<tipb::FieldType> extractOutputFields(const tipb::Executor & root)
+{
+    std::vector<tipb::FieldType> output_field_types;
+    switch (root.tp())
+    {
+    case tipb::ExecType::TypeTableScan:
+        for (const auto & ci : root.tbl_scan().columns())
+        {
+            tipb::FieldType field_type;
+            field_type.set_tp(ci.tp());
+            field_type.set_flag(ci.flag());
+            field_type.set_flen(ci.columnlen());
+            field_type.set_decimal(ci.decimal());
+            for (const auto & elem : ci.elems())
+            {
+                field_type.add_elems(elem);
+            }
+            output_field_types.push_back(field_type);
+        }
+        return output_field_types;
+    case tipb::ExecType::TypeAggregation:
+    case tipb::ExecType::TypeStreamAgg:
+        for (auto & expr : root.aggregation().agg_func())
+        {
+            if (!exprHasValidFieldType(expr))
+            {
+                throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
+            }
+            output_field_types.push_back(expr.field_type());
+        }
+        for (auto & expr : root.aggregation().group_by())
+        {
+            if (!exprHasValidFieldType(expr))
+            {
+                throw TiFlashException("Group by expression without valid field type", Errors::Coprocessor::BadRequest);
+            }
+            output_field_types.push_back(expr.field_type());
+        }
+        return output_field_types;
+    case tipb::ExecType::TypeJoin:
+        {
+            std::vector<tipb::FieldType> left_field_types = extractOutputFields(root.join().children(0));
+            std::vector<tipb::FieldType> right_field_types = extractOutputFields(root.join().children(1));
+            for (const auto & field_type : left_field_types)
+            {
+                if (root.join().join_type() == tipb::JoinType::TypeRightOuterJoin)
+                {
+                    /// the type of left column for right join is always nullable
+                    auto updated_field_type = field_type;
+                    updated_field_type.set_flag(static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+                    output_field_types.push_back(updated_field_type);
+                }
+                else
+                {
+                    output_field_types.push_back(field_type);
+                }
+            }
+            if (root.join().join_type() != tipb::JoinType::TypeSemiJoin && root.join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
+            {
+                /// for semi/anti semi join, the right table column is ignored
+                for (const auto & field_type : right_field_types)
+                {
+                    if (root.join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
+                    {
+                        /// the type of right column for left join is always nullable
+                        auto updated_field_type = field_type;
+                        updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+                        output_field_types.push_back(updated_field_type);
+                    }
+                    else
+                    {
+                        output_field_types.push_back(field_type);
+                    }
+                }
+            }
+        }
+        return output_field_types;
+    case tipb::ExecType::TypeExchangeSender:
+        if (!root.exchange_sender().all_field_types().empty())
+        {
+            output_field_types.clear();
+            for (auto & field_type : root.exchange_sender().all_field_types())
+                output_field_types.push_back(field_type);
+            return output_field_types;
+        }
+        return extractOutputFields(root.exchange_sender().child());
+    case tipb::ExecType::TypeExchangeReceiver:
+        for (auto & field_type : root.exchange_receiver().field_types())
+            output_field_types.push_back(field_type);
+        return output_field_types;
+    case tipb::ExecType::TypeProjection:
+        for (auto & expr : root.projection().exprs())
+            output_field_types.push_back(expr.field_type());
+        return output_field_types;
+    case tipb::ExecType::TypeSelection:
+        return extractOutputFields(root.selection().child());
+    case tipb::ExecType::TypeTopN:
+        return extractOutputFields(root.topn().child());
+    case tipb::ExecType::TypeLimit:
+        return extractOutputFields(root.limit().child());
+    default:
+        throw TiFlashException("Unsupported executor in DAG request: " + root.DebugString(), Errors::Coprocessor::Internal);
+    }
+    __builtin_unreachable();
+}
+
+std::vector<tipb::FieldType> extractOutputFields(const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors)
+{
+    std::vector<tipb::FieldType> output_field_types;
+    for (int i = (int)executors.size() - 1; i >= 0; i--)
+    {
+        auto v = extractOutputFields(executors[i]);
+        output_field_types.insert(output_field_types.end(), v.begin(), v.end());
+    }
+    return output_field_types;
+}
+
 extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
