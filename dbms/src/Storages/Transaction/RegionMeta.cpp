@@ -269,11 +269,7 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
 
     res.version = std::max(source_region.region_epoch().version(), region_state.getVersion()) + 1;
 
-    if (source_region.start_key().empty())
-    {
-        res.source_at_left = true;
-    }
-    else if (region_state.getRegion().start_key().empty())
+    if (source_region.end_key().empty())
     {
         res.source_at_left = false;
     }
@@ -281,7 +277,6 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     {
         res.source_at_left = source_region.end_key() == region_state.getRegion().start_key();
     }
-
     return res;
 }
 
