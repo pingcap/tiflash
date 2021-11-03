@@ -296,6 +296,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     {
         throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
     }
+    if (ts.next_read_engine() != tipb::EngineType::Local)
+        throw TiFlashException("Unsupported remote query.", Errors::Coprocessor::BadRequest);
 
     DAGStorageInterpreter storage_interpreter(context, dag, query_block, ts, conditions, max_streams, log);
     storage_interpreter.execute(pipeline);
@@ -882,46 +884,6 @@ void copyExecutorTreeWithLocalTableScan(
         dag_req.set_time_zone_offset(org_req.time_zone_offset());
 }
 
-void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
-{
-    // remote query containing agg/limit/topN can not running
-    // in parellel, but current remote query is running in
-    // parellel, so just disable this corner case.
-    if (query_block.aggregation || query_block.limitOrTopN)
-        throw TiFlashException("Remote query containing agg or limit or topN is not supported", Errors::Coprocessor::BadRequest);
-    const auto & ts = query_block.source->tbl_scan();
-    std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
-    cop_key_ranges.reserve(ts.ranges_size());
-    for (const auto & range : ts.ranges())
-    {
-        cop_key_ranges.emplace_back(range.low(), range.high());
-    }
-    sort(cop_key_ranges.begin(), cop_key_ranges.end());
-
-    ::tipb::DAGRequest dag_req;
-
-    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, rqst);
-    DAGSchema schema;
-    ColumnsWithTypeAndName columns;
-    BoolVec is_ts_column;
-    std::vector<NameAndTypePair> source_columns;
-    for (int i = 0; i < static_cast<int>(query_block.output_field_types.size()); i++)
-    {
-        dag_req.add_output_offsets(i);
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(query_block.output_field_types[i]);
-        String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
-        schema.push_back(std::make_pair(col_name, info));
-        is_ts_column.push_back(query_block.output_field_types[i].tp() == TiDB::TypeTimestamp);
-        source_columns.emplace_back(col_name, getDataTypeByFieldTypeForComputingLayer(query_block.output_field_types[i]));
-        final_project.emplace_back(col_name, "");
-    }
-
-    dag_req.set_collect_execution_summaries(dag.getDAGContext().collect_execution_summaries);
-    executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
-
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-}
-
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
     DAGPipeline & pipeline,
     const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
@@ -971,11 +933,6 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 {
-    if (query_block.isRemoteQuery())
-    {
-        executeRemoteQuery(pipeline);
-        return;
-    }
     SubqueryForSet right_query;
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
