@@ -32,35 +32,35 @@ mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select
 +----------------+------+
 | null and a > 0 | a    |
 +----------------+------+
-|           NULL |    1 |
 |              0 |    0 |
+|           NULL |    1 |
 +----------------+------+
 
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select null or a > 0, a from test.t3;
 +---------------+------+
 | null or a > 0 | a    |
 +---------------+------+
-|             1 |    1 |
 |          NULL |    0 |
+|             1 |    1 |
 +---------------+------+
 
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select null xor a > 0, a from test.t3;
 +----------------+------+
 | null xor a > 0 | a    |
 +----------------+------+
-|           NULL |    1 |
 |           NULL |    0 |
+|           NULL |    1 |
 +----------------+------+
 
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select !null, a from test.t3;
 +-------+------+
 | !null | a    |
 +-------+------+
-|  NULL |    1 |
 |  NULL |    0 |
+|  NULL |    1 |
 +-------+------+
 
-mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select count(*) from t group by a having min(null) and a > 0;
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select count(*) from test.t3 group by a having min(null) and a > 0;
 # empty
 
 #mysql> drop table if exists test.t1;

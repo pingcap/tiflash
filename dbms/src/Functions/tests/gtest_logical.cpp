@@ -1,4 +1,3 @@
-#include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -6,9 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 class Logical : public DB::tests::FunctionTest
 {
@@ -148,5 +145,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests
