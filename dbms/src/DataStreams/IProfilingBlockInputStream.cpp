@@ -127,7 +127,7 @@ void IProfilingBlockInputStream::dumpProfileInfo(std::ostream & ostr)
 {
     ostr << "{";
 
-    ostr << "\"sig\":" << info.signautre << ",";
+    ostr << "\"sig\":" << info.signature << ",";
     ostr << "\"prefix\":" << info.prefix_duration << ",";
     ostr << "\"suffix\":" << info.suffix_duration << ",";
     ostr << "\"running\":" << info.running_duration << ",";
@@ -159,15 +159,22 @@ void IProfilingBlockInputStream::dumpProfileInfo(std::ostream & ostr)
     ostr << "}";
 }
 
-void IProfilingBlockInputStream::beginSelfTimer()
+IProfilingBlockInputStream::SelfTimer IProfilingBlockInputStream::getSelfTimer()
 {
-    info.last_self_ts = info.now();
+    return SelfTimer(this);
 }
 
-void IProfilingBlockInputStream::endSelfTimer()
+void IProfilingBlockInputStream::SelfTimer::start()
 {
-    UInt64 duration = std::chrono::duration_cast<std::chrono::nanoseconds>(info.now() - info.last_self_ts).count();
-    info.self_duration += duration;
+    last_ts = Clock::now();
+}
+
+void IProfilingBlockInputStream::SelfTimer::stop()
+{
+    auto ts = Clock::now();
+    UInt64 duration = std::chrono::duration_cast<std::chrono::nanoseconds>(ts - last_ts).count();
+    parent->info.self_duration += duration;
+    last_ts = ts;
 }
 
 void IProfilingBlockInputStream::readPrefix()

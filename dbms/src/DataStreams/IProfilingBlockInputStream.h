@@ -42,8 +42,8 @@ public:
     template <typename Assigner>
     void assignSignature(Assigner && assign)
     {
-        if (info.signautre < 0)
-            info.signautre = assign();
+        if (info.signature < 0)
+            info.signature = assign();
 
         forEachProfilingChild([&](IProfilingBlockInputStream & child) {
             child.assignSignature(assign);
@@ -198,8 +198,27 @@ protected:
     ProgressCallback progress_callback;
     ProcessListElement * process_list_elem = nullptr;
 
-    void beginSelfTimer();
-    void endSelfTimer();
+    struct SelfTimer
+    {
+        using Clock = std::chrono::high_resolution_clock;
+        using TimePoint = Clock::time_point;
+
+        TimePoint last_ts;
+        IProfilingBlockInputStream * parent;
+
+        explicit SelfTimer(IProfilingBlockInputStream * parent_)
+            : parent(parent_)
+        {
+            start();
+        }
+
+        ~SelfTimer() { stop(); }
+
+        void start();
+        void stop();
+    };
+
+    SelfTimer getSelfTimer();
 
     /// Additional information that can be generated during the work process.
 

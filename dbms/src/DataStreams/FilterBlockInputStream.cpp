@@ -83,6 +83,7 @@ Block FilterBlockInputStream::readImpl()
         IColumn::Filter * child_filter = nullptr;
 
         res = children.back()->read(child_filter, true);
+        auto timer = getSelfTimer();
 
         if (!res)
             return res;

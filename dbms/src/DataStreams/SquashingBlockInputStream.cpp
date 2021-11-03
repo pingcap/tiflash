@@ -24,6 +24,8 @@ Block SquashingBlockInputStream::readImpl()
     while (true)
     {
         Block block = children[0]->read();
+        auto timer = getSelfTimer();
+
         if (!block)
             all_read = true;
 

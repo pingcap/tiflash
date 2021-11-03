@@ -22,7 +22,6 @@ class IProfilingBlockInputStream;
 struct BlockStreamProfileInfo
 {
     using TimePoint = std::chrono::system_clock::time_point;
-    using AccurateClock = std::chrono::high_resolution_clock;
 
     struct Timeline
     {
@@ -50,7 +49,7 @@ struct BlockStreamProfileInfo
     // parent streams
     UInt64 execution_time = 0;
 
-    Int64 signautre = -1;
+    Int64 signature = -1;
     UInt64 prefix_duration = 0;
     UInt64 suffix_duration = 0;
     UInt64 running_duration = 0;
@@ -60,7 +59,6 @@ struct BlockStreamProfileInfo
 
     UInt64 last_wait_ts = 0;
     UInt64 waiting_duration = 0;
-    TimePoint last_self_ts;
     UInt64 self_duration = 0;
 
     bool is_first = true;

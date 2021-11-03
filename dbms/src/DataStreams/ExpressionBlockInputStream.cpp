@@ -38,12 +38,12 @@ Block ExpressionBlockInputStream::getHeader() const
 Block ExpressionBlockInputStream::readImpl()
 {
     Block res = children.back()->read();
+    auto timer = getSelfTimer();
+
     if (!res)
         return res;
 
-    beginSelfTimer();
     expression->execute(res);
-    endSelfTimer();
 
     return res;
 }
