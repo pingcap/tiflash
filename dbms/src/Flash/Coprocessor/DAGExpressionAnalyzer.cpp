@@ -826,45 +826,39 @@ String DAGExpressionAnalyzer::applyFunction(
     return result_name;
 }
 
-void DAGExpressionAnalyzer::appendWhere(
+String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
-    const std::vector<const tipb::Expr *> & conditions,
-    String & filter_column_name)
+    const std::vector<const tipb::Expr *> & conditions)
 {
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & last_step = chain.steps.back();
-    Names arg_names;
-    for (const auto * condition : conditions)
+
+    String filter_column_name;
+    if (conditions.size() == 1)
     {
-        arg_names.push_back(getActions(*condition, last_step.actions, true));
-    }
-    if (arg_names.size() == 1)
-    {
-        filter_column_name = arg_names[0];
-        if (isColumnExpr(*conditions[0]))
-        {
-            bool need_warp_column_expr = true;
-            if (exprHasValidFieldType(*conditions[0]) && !isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type())))
-            {
+        filter_column_name = getActions(*conditions[0], last_step.actions, true);
+        if (isColumnExpr(*conditions[0])
+            && (!exprHasValidFieldType(*conditions[0])
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
-                need_warp_column_expr = false;
-            }
-            if (need_warp_column_expr)
-            {
-                /// FilterBlockInputStream will CHANGE the filter column inplace, so
-                /// filter column should never be a columnRef in DAG request, otherwise
-                /// for queries like select c1 from t where c1 will got wrong result
-                /// as after FilterBlockInputStream, c1 will become a const column of 1
-                filter_column_name = convertToUInt8(last_step.actions, filter_column_name);
-            }
+                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type()))))
+        {
+            /// FilterBlockInputStream will CHANGE the filter column inplace, so
+            /// filter column should never be a columnRef in DAG request, otherwise
+            /// for queries like select c1 from t where c1 will got wrong result
+            /// as after FilterBlockInputStream, c1 will become a const column of 1
+            filter_column_name = convertToUInt8(last_step.actions, filter_column_name);
         }
     }
     else
     {
+        Names arg_names;
+        for (const auto * condition : conditions)
+            arg_names.push_back(getActions(*condition, last_step.actions, true));
         // connect all the conditions by logical and
         filter_column_name = applyFunction("and", arg_names, last_step.actions, nullptr);
     }
     chain.steps.back().required_output.push_back(filter_column_name);
+    return filter_column_name;
 }
 
 String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, const String & column_name)
@@ -1123,7 +1117,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         {
             filter_vector.push_back(&c);
         }
-        appendWhere(chain, filter_vector, filter_column_name);
+        filter_column_name = appendWhere(chain, filter_vector);
     }
     /// remove useless columns to avoid duplicate columns
     /// as when compiling the key/filter expression, the origin
@@ -1461,12 +1455,8 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         ret = getColumnNameForColumnExpr(expr, getCurrentInputColumns());
     }
-    else if (isFunctionExpr(expr))
+    else if (isScalarFunctionExpr(expr))
     {
-        if (isAggFunctionExpr(expr))
-        {
-            throw TiFlashException("agg function is not supported yet", Errors::Coprocessor::Unimplemented);
-        }
         const String & func_name = getFunctionName(expr);
         if (function_builder_map.find(func_name) != function_builder_map.end())
         {
