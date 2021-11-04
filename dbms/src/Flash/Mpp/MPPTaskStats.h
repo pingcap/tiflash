@@ -11,9 +11,8 @@
 
 namespace DB
 {
-class MPPTaskStats
+struct MPPTaskStats
 {
-public:
     using Clock = std::chrono::system_clock;
     using Timestamp = Clock::time_point;
     using Duration = Int64; /// ns
@@ -52,4 +51,6 @@ public:
     Int64 cpu_usage = 0;
     Int64 memory_peak = 0;
 };
+
+using MPPTaskStatsPtr = std::shared_ptr<MPPTaskStats>;
 } // namespace DB

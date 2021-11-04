@@ -16,7 +16,6 @@ namespace DB
 {
 class Context;
 class MPPTunnelSet;
-class MPPTaskStats;
 
 struct ProfileStreamsInfo
 {
@@ -24,8 +23,6 @@ struct ProfileStreamsInfo
     BlockInputStreams input_streams;
 };
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
-
-using MPPTaskStatsPtr = std::shared_ptr<MPPTaskStats>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
