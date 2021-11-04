@@ -87,7 +87,7 @@ private:
     RegionInfoMap local_regions;
     RegionInfoList remote_regions;
 
-    std::unique_ptr<tipb::DAGRequest> dag_req;
+    tipb::DAGRequest dag_req;
     std::unique_ptr<DAGContext> dag_context;
 
     /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
