@@ -4,7 +4,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/CoprocessorHandler.h>
@@ -78,15 +77,15 @@ void MPPTask::run()
     worker.detach();
 }
 
-void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
+void MPPTask::registerTunnel(const MPPTaskId & mpp_task_id, MPPTunnelPtr tunnel)
 {
     if (status == CANCELLED)
         throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is cancelled");
 
-    if (tunnel_map.find(id) != tunnel_map.end())
+    if (tunnel_map.find(mpp_task_id) != tunnel_map.end())
         throw Exception("the tunnel " + tunnel->id() + " has been registered");
 
-    tunnel_map[id] = tunnel;
+    tunnel_map[mpp_task_id] = tunnel;
 }
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)
@@ -100,8 +99,8 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
         return {nullptr, err_msg};
     }
 
-    MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
-    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(id);
+    MPPTaskId receiver_id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
+    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(receiver_id);
     if (it == tunnel_map.end())
     {
         auto err_msg = fmt::format(
