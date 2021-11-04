@@ -506,35 +506,15 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
     {
         return false;
     }
-    switch (month)
+    static int days_of_month_table[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (month != 2)
+        return day <= days_of_month_table[month];
+    bool is_leap_year = false;
+    if ((year & 0b0011) == 0)
     {
-    case 4:
-    case 6:
-    case 9:
-    case 11:
-        if (day > 30)
-            return false;
-        break;
-    case 2:
-    {
-        bool is_leap_year = false;
-        if ((year & 0b0011) == 0)
-        {
-            if (year % 100 != 0)
-                is_leap_year = true;
-            else
-                is_leap_year = (year % 400 == 0);
-        }
-        if ((!is_leap_year && day > 28) || (is_leap_year && day > 29))
-        {
-            return false;
-        }
-        break;
+        is_leap_year = year % 100 != 0 || year % 400 == 0;
     }
-    default:
-        break;
-    }
-    return true;
+    return day <= (is_leap_year ? 29 : 28);
 }
 
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
@@ -664,7 +644,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             {
             case 0:
                 ret = 1;
-                is_date = true;
+                is_date = false;
                 break;
             case 1:
             case 2:

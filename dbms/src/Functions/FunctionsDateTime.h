@@ -1353,51 +1353,41 @@ struct DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, use_utc_tim
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
             size_t current_offset = 0;
 
-            // string date add const int interval
-            if (const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column))
+            const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column);
+            std::function<int(size_t)> get_value_func;
+            if (col_from_string)
             {
-                for (size_t i = 0; i < size; ++i)
-                {
-                    size_t next_offset = (*offsets_from)[i];
-                    size_t org_length = next_offset - current_offset - 1;
-                    size_t byte_length = org_length;
-                    String date_str(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
-                    try
-                    {
-                        String result_str = Transform::execute(date_str, delta_const_column->getInt(0), time_zone);
-                        write_buffer.write(reinterpret_cast<const char *>(&(result_str)[0]), result_str.size());
-                    }
-                    catch (const Exception &)
-                    {
-                        (*vec_null_map_to)[i] = 1;
-                    }
-                    writeChar(0, write_buffer);
-                    offsets_to[i] = write_buffer.count();
-                    current_offset = next_offset;
-                }
+                // string date add const int interval
+                get_value_func = [&](size_t) -> int {
+                    return delta_const_column->getInt(0);
+                };
             }
-            // string date add vector int interval
             else
             {
-                for (size_t i = 0; i < size; ++i)
+                // string date add vector int interval
+                get_value_func = [&](size_t index) -> int {
+                    return delta_column.getInt(index);
+                };
+            }
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                size_t next_offset = (*offsets_from)[i];
+                size_t org_length = next_offset - current_offset - 1;
+                size_t byte_length = org_length;
+                String date_str(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
+                try
                 {
-                    size_t next_offset = (*offsets_from)[i];
-                    size_t org_length = next_offset - current_offset - 1;
-                    size_t byte_length = org_length;
-                    String date_str(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
-                    try
-                    {
-                        String result_str = Transform::execute(date_str, delta_column.getInt(i), time_zone);
-                        write_buffer.write(reinterpret_cast<const char *>(&(result_str)[0]), result_str.size());
-                    }
-                    catch (const Exception &)
-                    {
-                        (*vec_null_map_to)[i] = 1;
-                    }
-                    writeChar(0, write_buffer);
-                    offsets_to[i] = write_buffer.count();
-                    current_offset = next_offset;
+                    String result_str = Transform::execute(date_str, get_value_func(i), time_zone);
+                    write_buffer.write(reinterpret_cast<const char *>(&(result_str)[0]), result_str.size());
                 }
+                catch (const Exception &)
+                {
+                    (*vec_null_map_to)[i] = 1;
+                }
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+                current_offset = next_offset;
             }
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
         }
@@ -1500,7 +1490,7 @@ public:
         }
         else if (checkDataType<DataTypeString>(arguments[0].type.get()))
         {
-            return std::make_shared<DataTypeString>();
+            return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>());
         }
         else
         {
