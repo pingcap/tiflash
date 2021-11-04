@@ -352,7 +352,6 @@ static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const 
             std::string() + Impl::name + " function does not support unit " + unit + " yet.",
             Errors::Coprocessor::Unimplemented);
     String func_name = Impl::unit_to_func_name_map.find(unit)->second;
-    const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
     const auto & delta_column_type = removeNullable(actions->getSampleBlock().getByName(delta_column).type);
     if (!delta_column_type->isNumber())
     {

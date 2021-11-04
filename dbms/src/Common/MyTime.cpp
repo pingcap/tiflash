@@ -537,13 +537,15 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
     return true;
 }
 
-Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t fsp, bool needCheckTimeValid)
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
 {
     // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
     // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
     static const DateLUTImpl & lut = DateLUT::instance("UTC");
 
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
+
+    bool is_date = false;
 
     bool hhmmss = false;
 
@@ -824,14 +826,13 @@ Field parseMyDateTimeAndJudgeIsDate(const String & str, bool & is_date, int8_t f
         result = MyDateTime(tmp);
     }
 
-    return result.toPackedUInt();
+    return std::tuple<Field, bool>{result.toPackedUInt(), is_date};
 }
 
 // TODO: support parse time from float string
 Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckTimeValid)
 {
-    bool is_date;
-    return parseMyDateTimeAndJudgeIsDate(str, is_date, fsp, needCheckTimeValid);
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, needCheckTimeValid).first;
 }
 
 String MyDateTime::toString(int fsp) const

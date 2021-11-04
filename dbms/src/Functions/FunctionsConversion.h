@@ -840,6 +840,17 @@ struct ConvertThroughParsing
     }
 };
 
+template <typename Name>
+struct ConvertImpl<DataTypeString, DataTypeMyDateTime, Name>
+    : ConvertThroughParsing<DataTypeString, DataTypeMyDateTime, Name, ConvertFromStringExceptionMode::Null, ConvertFromStringParsingMode::Normal>
+{
+};
+
+template <typename Name>
+struct ConvertImpl<DataTypeFixedString, DataTypeMyDateTime, Name>
+    : ConvertThroughParsing<DataTypeFixedString, DataTypeMyDateTime, Name, ConvertFromStringExceptionMode::Null, ConvertFromStringParsingMode::Normal>
+{
+};
 
 template <typename ToDataType, typename Name>
 struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeString>, DataTypeString>, ToDataType, Name>
@@ -2710,7 +2721,14 @@ private:
                 }
 
                 const auto & tmp_res = tmp_block.getByPosition(tmp_res_index);
-                res.column = ColumnNullable::create(tmp_res.column, null_map);
+                if (tmp_res.column->isColumnNullable())
+                {
+                    res.column = tmp_res.column;
+                }
+                else
+                {
+                    res.column = ColumnNullable::create(tmp_res.column, null_map);
+                }
             };
         }
         else if (nullable_conversion.source_is_nullable)
