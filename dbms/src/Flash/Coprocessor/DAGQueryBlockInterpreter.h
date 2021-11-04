@@ -68,7 +68,7 @@ private:
         String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
-    void executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
+    void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeAggregation(
         DAGPipeline & pipeline,

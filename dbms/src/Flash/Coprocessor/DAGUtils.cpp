@@ -470,7 +470,7 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr
     return nullptr;
 }
 
-SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns, const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items)
+SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_columns, const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items)
 {
     SortDescription order_descr;
     order_descr.reserve(by_items.size());
