@@ -158,7 +158,7 @@ AnalysisResult analyzeExpressions(
     }
     if (!conditions.empty())
     {
-        analyzer.appendWhere(chain, conditions, res.filter_column_name);
+        res.filter_column_name = analyzer.appendWhere(chain, conditions);
         res.has_where = true;
         res.before_where = chain.getLastActions();
         chain.addStep();
@@ -204,7 +204,7 @@ AnalysisResult analyzeExpressions(
             std::vector<const tipb::Expr *> having_conditions;
             for (const auto & c : query_block.having->selection().conditions())
                 having_conditions.push_back(&c);
-            analyzer.appendWhere(chain, having_conditions, res.having_column_name);
+            res.having_column_name = analyzer.appendWhere(chain, having_conditions);
             res.has_having = true;
             res.before_having = chain.getLastActions();
             chain.addStep();
@@ -382,7 +382,7 @@ ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
         {
             condition_vector.push_back(&c);
         }
-        dag_analyzer.appendWhere(chain, condition_vector, filter_column_for_other_condition);
+        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
     }
     if (join.other_eq_conditions_from_in_size() > 0)
     {
@@ -391,7 +391,7 @@ ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
         {
             condition_vector.push_back(&c);
         }
-        dag_analyzer.appendWhere(chain, condition_vector, filter_column_for_other_eq_condition);
+        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
     }
     return chain.getLastActions();
 }
