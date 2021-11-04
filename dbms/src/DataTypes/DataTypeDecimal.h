@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <IO/WriteHelpers.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -52,7 +53,20 @@ public:
     {
         if (precision > decimal_max_prec || scale > precision || scale > decimal_max_scale)
         {
-            throw Exception(getName() + "is out of bound", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            std::string msg = getName() + "is out of bound";
+            if (precision > decimal_max_prec)
+            {
+                msg = fmt::format("{}, precision {} is greater than maximum value {}", msg, precision, decimal_max_prec);
+            }
+            else if (scale > precision)
+            {
+                msg = fmt::format("{}, scale {} is greater than precision {}", msg, scale, precision);
+            }
+            else if (scale > decimal_max_scale)
+            {
+                msg = fmt::format("{}, scale {} is greater than maximum value {}", msg, scale, decimal_max_scale);
+            }
+            throw Exception(msg, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
     }
 
