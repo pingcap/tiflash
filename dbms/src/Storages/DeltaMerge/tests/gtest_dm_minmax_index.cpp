@@ -70,15 +70,8 @@ bool checkMatch(
     bool check_pk = false)
 {
     String name = "DMMinMaxIndexTest_" + test_case;
-    String path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
 
     auto clean_up = [&]() {
-        const String p = DB::tests::TiFlashTestEnv::getTemporaryPath();
-        if (Poco::File f{p}; f.exists())
-        {
-            f.remove(true);
-            f.createDirectories();
-        }
         context.dropMinMaxIndexCache();
     };
 
@@ -117,6 +110,7 @@ bool checkMatch(
     streams[0]->readPrefix();
     auto rows = streams[0]->read().rows();
     streams[0]->readSuffix();
+    store->drop();
 
     return rows != 0;
 }

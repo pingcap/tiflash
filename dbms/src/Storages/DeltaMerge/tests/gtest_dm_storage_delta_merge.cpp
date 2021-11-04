@@ -63,7 +63,7 @@ try
             column_names.push_back(name_type.name);
         }
 
-        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
+        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_ReadWriteCase1");
         Poco::File path(path_name);
         if (path.exists())
             path.remove(true);
@@ -155,7 +155,7 @@ try
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
-    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
+    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_Rename");
     const String table_name = "tmp_table";
     const String db_name = "default";
     // create table
@@ -238,7 +238,7 @@ try
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
-    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
+    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_HandleCol");
     const String table_name = "tmp_table";
     const String db_name = "default";
     // create table

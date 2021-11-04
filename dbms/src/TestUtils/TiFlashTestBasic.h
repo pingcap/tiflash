@@ -16,6 +16,8 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 
+#include <string>
+
 #if !__clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -93,13 +95,28 @@ inline DataTypes typesFromString(const String & str)
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath(const char * test_case = nullptr)
+    static String getTemporaryPath(const std::string_view test_case = "")
     {
         String path = "./tmp/";
-        if (test_case)
+        if (!test_case.empty())
             path += std::string(test_case);
 
         return Poco::Path(path).absolute().toString();
+    }
+
+    static void tryRemovePath(const std::string & path)
+    {
+        try
+        {
+            if (Poco::File p(path); p.exists())
+            {
+                p.remove(true);
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+        }
     }
 
     static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})
