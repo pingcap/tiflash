@@ -169,7 +169,9 @@ class MetaRaftCommandDelegate
         const UInt64 index,
         const UInt64 term);
 
-public:
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
     static RegionMergeResult computeRegionMergeResult(
         const metapb::Region & source_region,
         const metapb::Region & target_region);
