@@ -47,7 +47,7 @@ public:
 
     static void setApproxPageSize(size_t size_mb);
 
-    static DB::ReadBufferPtr genRandomData(DB::PageId pageId, MemHolder & holder);
+    static DB::ReadBufferPtr genRandomData(DB::PageId pageId, DB::MemHolder & holder);
 
     virtual void updatedRandomData();
 

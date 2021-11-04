@@ -12,7 +12,7 @@ namespace Poco
 class Logger;
 }
 
-using PSPtr = std::shared_ptr<PageStorage>;
+using PSPtr = std::shared_ptr<DB::PS::V2::PageStorage>;
 
 enum StressEnvStat
 {

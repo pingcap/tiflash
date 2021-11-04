@@ -14,7 +14,6 @@ list(APPEND page_storage_v2_headers
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/PageUtil.h
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/WriteBatch.h
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.h
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/mvcc/utils.h
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/mvcc/VersionSet.h
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/mvcc/VersionSetWithDelta.h
 )
@@ -24,7 +23,6 @@ list(APPEND page_storage_v2_sources
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/PageUtil.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Interpreters/SettingsCommon.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/mvcc/utils.cpp
 )
 add_library(page_storage_v2 EXCLUDE_FROM_ALL
         ${page_storage_v2_headers} ${page_storage_v2_sources}

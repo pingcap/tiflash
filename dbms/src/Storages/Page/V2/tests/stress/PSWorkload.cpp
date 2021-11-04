@@ -67,11 +67,11 @@ void StressWorkload::initPageStorage(PageStorage::Config & config, String path_p
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0] + "/" + path_prefix);
     }
 
-    ps = std::make_shared<PageStorage>("stress_test", delegator, config, file_provider);
+    ps = std::make_shared<DB::PS::V2::PageStorage>("stress_test", delegator, config, file_provider);
     ps->restore();
     {
         size_t num_of_pages = 0;
-        ps->traverse([&num_of_pages](const Page & page) {
+        ps->traverse([&num_of_pages](const DB::Page & page) {
             (void)page;
             num_of_pages++;
         });

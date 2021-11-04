@@ -47,7 +47,7 @@ void PSWriter::setApproxPageSize(size_t size_mb)
     approx_page_mb = size_mb;
 }
 
-DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, MemHolder & holder)
+DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder & holder)
 {
     // fill page with random bytes
     std::mt19937 size_gen;
@@ -64,7 +64,7 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, MemHolder & h
     const char buff_ch = pageId % 0xFF;
     memset(buff, buff_ch, buff_sz);
 
-    holder = createMemHolder(buff, [&](char * p) { free(p); });
+    holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
 
     return std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz);
 }
@@ -94,10 +94,10 @@ void PSWriter::fillAllPages(const PSPtr & ps)
 {
     for (DB::PageId page_id = 0; page_id <= MAX_PAGE_ID_DEFAULT; ++page_id)
     {
-        MemHolder holder;
+        DB::MemHolder holder;
         DB::ReadBufferPtr buff = genRandomData(page_id, holder);
 
-        WriteBatch wb;
+        DB::WriteBatch wb;
         wb.putPage(page_id, 0, buff, buff->buffer().size());
         ps->write(std::move(wb));
         if (page_id % 100 == 0)
@@ -110,7 +110,7 @@ bool PSWriter::runImpl()
     const DB::PageId page_id = genRandomPageId();
     updatedRandomData();
 
-    WriteBatch wb;
+    DB::WriteBatch wb;
     wb.putPage(page_id, 0, buff_ptr, buff_ptr->buffer().size());
     ps->write(std::move(wb));
     ++pages_used;
@@ -160,7 +160,7 @@ bool PSCommonWriter::runImpl()
 {
     const DB::PageId page_id = genRandomPageId();
 
-    WriteBatch wb;
+    DB::WriteBatch wb;
     updatedRandomData();
 
     for (auto & buffptr : buff_ptrs)
@@ -242,7 +242,7 @@ bool PSReader::runImpl()
 {
     DB::PageIds page_ids = genRandomPageIds();
 
-    PageHandler handler = [&](DB::PageId page_id, const Page & page) {
+    DB::PageHandler handler = [&](DB::PageId page_id, const DB::Page & page) {
         (void)page_id;
         // use `sleep` to mock heavy read
         if (heavy_read_delay_ms > 0)
