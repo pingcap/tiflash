@@ -556,7 +556,7 @@ void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos,
 
 template class DataCompactor<PageStorage::SnapshotPtr>;
 #ifndef NDEBUG
-template class DataCompactor<DB::tests::MockSnapshotPtr>;
+template class DataCompactor<DB::PS::V2::tests::MockSnapshotPtr>;
 #endif
 } // namespace PS::V2
 } // namespace DB

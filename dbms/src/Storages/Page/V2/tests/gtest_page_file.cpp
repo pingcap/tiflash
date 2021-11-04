@@ -1,11 +1,11 @@
 #include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
-#include <Storages/Page/V2/Page.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-using namespace DB::PS::V2;
-namespace DB
+using DB::tests::TiFlashTestEnv;
+namespace DB::PS::V2
 {
 namespace tests
 {
@@ -283,4 +283,4 @@ TEST(PageFile_test, EncryptedPageFileLink)
 }
 
 } // namespace tests
-} // namespace DB
+} // namespace DB::PS::V2

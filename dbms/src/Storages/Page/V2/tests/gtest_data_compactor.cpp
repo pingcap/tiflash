@@ -4,6 +4,7 @@
 #include <Common/FailPoint.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
 #include <Storages/Page/V2/mock/MockUtils.h>
@@ -11,7 +12,11 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-using namespace DB::PS::V2;
+using DB::tests::MockDiskDelegatorMulti;
+using DB::tests::TiFlashTestEnv;
+// using DB::tests::MockSnapshotPtr;
+// using DB::tests::MockSnapshot;
+
 namespace DB
 {
 namespace FailPoints
@@ -19,7 +24,7 @@ namespace FailPoints
 extern const char force_formal_page_file_not_exists[];
 extern const char force_legacy_or_checkpoint_page_file_exists[];
 } // namespace FailPoints
-namespace tests
+namespace PS::V2::tests
 {
 // #define GENERATE_TEST_DATA
 
@@ -174,7 +179,7 @@ try
 }
 CATCH
 
-} // namespace tests
+} // namespace PS::V2::tests
 } // namespace DB
 
 #endif // NDEBUG

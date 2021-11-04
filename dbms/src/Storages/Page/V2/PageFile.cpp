@@ -71,7 +71,7 @@ static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageFileId) + sizeo
 
 /// Return <data to write into meta file, data to write into data file>.
 std::pair<ByteBuffer, ByteBuffer> genWriteData( //
-    WriteBatch & wb,
+    DB::WriteBatch & wb,
     PageFile & page_file,
     PageEntriesEdit & edit)
 {
@@ -720,7 +720,7 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
+size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 

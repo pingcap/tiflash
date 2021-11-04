@@ -1,20 +1,8 @@
 #pragma once
 
-#include <IO/BufferBase.h>
-#include <IO/MemoryReadWriteBuffer.h>
-#include <Storages/Page/PageDefines.h>
-
-#include <map>
-#include <unordered_map>
-
+#include <Storages/Page/Page.h>
 namespace DB::PS::V1
 {
-using MemHolder = std::shared_ptr<char>;
-inline MemHolder createMemHolder(char * memory, const std::function<void(char *)> & free)
-{
-    return std::shared_ptr<char>(memory, free);
-}
-
 struct Page
 {
     PageId page_id;

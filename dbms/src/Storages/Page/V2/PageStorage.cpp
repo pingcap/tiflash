@@ -6,11 +6,11 @@
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
 #include <Storages/Page/V2/gc/LegacyCompactor.h>
 #include <Storages/Page/V2/gc/restoreFromCheckpoints.h>
-#include <Storages/Page/V2/mvcc/utils.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
@@ -27,7 +27,7 @@
 #endif
 
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
-extern DB::PS::V2::WriteBatch::SequenceID debugging_recover_stop_sequence;
+extern DB::WriteBatch::SequenceID debugging_recover_stop_sequence;
 #endif
 
 namespace DB
@@ -73,70 +73,6 @@ bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
     return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
 }
 
-void PageStorage::Config::reload(const PageStorage::Config & rhs)
-{
-    // Reload is not atomic, but should be good enough
-
-    // Reload gc threshold
-    gc_force_hardlink_rate = rhs.gc_force_hardlink_rate;
-    gc_max_valid_rate = rhs.gc_max_valid_rate;
-    gc_min_bytes = rhs.gc_min_bytes;
-    gc_min_files = rhs.gc_min_files;
-    gc_min_legacy_num = rhs.gc_min_legacy_num;
-    prob_do_gc_when_write_is_low = rhs.prob_do_gc_when_write_is_low;
-    // Reload fd idle time
-    open_file_max_idle_time = rhs.open_file_max_idle_time;
-}
-
-String PageStorage::Config::toDebugString() const
-{
-    std::stringstream ss;
-    ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
-       << ", gc_force_hardlink_rate:" << DB::toString(gc_force_hardlink_rate.get(), 3)
-       << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate.get(), 3)
-       << ", gc_min_legacy_num:" << gc_min_legacy_num
-       << ", gc_max_expect_legacy: " << DB::toString(gc_max_expect_legacy_files.get())
-       << ", gc_max_valid_rate_bound: " << DB::toString(gc_max_valid_rate_bound.get(), 3)
-       << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
-       << ", open_file_max_idle_time:" << open_file_max_idle_time << "}";
-    return ss.str();
-}
-
-PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
-{
-    Poco::Logger * log = &Poco::Logger::get("PageStorage::getMaxDataVersion");
-    ListPageFilesOption option;
-    option.ignore_checkpoint = true;
-    option.ignore_legacy = true;
-    option.remove_tmp_files = false;
-    auto page_files = listAllPageFiles(file_provider, delegator, log, option);
-    if (page_files.empty())
-        return STORAGE_FORMAT_CURRENT.page;
-
-    bool all_empty = true;
-    PageFormat::Version max_binary_version = PageFormat::V1;
-    PageFormat::Version temp_version = STORAGE_FORMAT_CURRENT.page;
-    for (auto iter = page_files.rbegin(); iter != page_files.rend(); ++iter)
-    {
-        // Skip those files without valid meta
-        if (iter->getMetaFileSize() == 0)
-            continue;
-
-        // Simply check the last non-empty PageFile is good enough
-        all_empty = false;
-        auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(*iter));
-        while (reader->hasNext())
-        {
-            // Continue to read the binary version of next WriteBatch.
-            reader->moveNext(&temp_version);
-            max_binary_version = std::max(max_binary_version, temp_version);
-        }
-        LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
-        break;
-    }
-    max_binary_version = (all_empty ? STORAGE_FORMAT_CURRENT.page : max_binary_version);
-    return max_binary_version;
-}
 
 PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
                                           PSDiskDelegatorPtr & delegator,
@@ -211,11 +147,8 @@ PageStorage::PageStorage(String name,
                          PSDiskDelegatorPtr delegator_, //
                          const Config & config_,
                          const FileProviderPtr & file_provider_)
-    : storage_name(std::move(name))
-    , delegator(std::move(delegator_))
-    , config(config_)
-    , file_provider(file_provider_)
-    , write_files(std::max(1UL, config.num_write_slots.get()))
+    : DB::PageStorage(name, delegator_, config_, file_provider_)
+    , write_files(std::max(1UL, config_.num_write_slots.get()))
     , page_file_log(&Poco::Logger::get("PageFile"))
     , log(&Poco::Logger::get("PageStorage"))
     , versioned_page_entries(storage_name, config.version_set_config, log)
@@ -236,6 +169,7 @@ PageStorage::PageStorage(String name,
     }
     write_files.resize(config.num_write_slots);
 }
+
 
 static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageStorage::Config & config)
 {
@@ -425,7 +359,7 @@ PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
     return is_ref_id ? normal_page_id : page_id;
 }
 
-PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -539,7 +473,7 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     return pages_reader;
 }
 
-void PageStorage::write(WriteBatch && wb, const WriteLimiterPtr & write_limiter)
+void PageStorage::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
 {
     if (unlikely(wb.empty()))
         return;
@@ -629,7 +563,7 @@ void PageStorage::write(WriteBatch && wb, const WriteLimiterPtr & write_limiter)
     }
 }
 
-PageStorage::SnapshotPtr PageStorage::getSnapshot()
+DB::PageStorage::SnapshotPtr PageStorage::getSnapshot()
 {
     return versioned_page_entries.getSnapshot();
 }
@@ -639,7 +573,7 @@ std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
     return versioned_page_entries.getSnapshotsStat();
 }
 
-Page PageStorage::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+DB::Page PageStorage::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -780,7 +714,7 @@ PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, const
     return page_map;
 }
 
-void PageStorage::traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot)
+void PageStorage::traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -810,7 +744,7 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 }
 
 void PageStorage::traversePageEntries( //
-    const std::function<void(PageId page_id, const PageEntry & page)> & acceptor,
+    const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor,
     SnapshotPtr snapshot)
 {
     if (!snapshot)
@@ -1084,7 +1018,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
         {
             // No write since last gc. Give it a chance for running GC, ensure that we are able to
             // reclaim disk usage when PageStorage is read-only in extreme cases.
-            if (MVCC::utils::randInt(0, 1000) < config.prob_do_gc_when_write_is_low)
+            if (PageUtil::randInt(0, 1000) < config.prob_do_gc_when_write_is_low)
                 gc_type = GCType::LowWrite;
             else
                 gc_type = GCType::Skip;

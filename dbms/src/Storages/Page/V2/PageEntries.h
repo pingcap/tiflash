@@ -1,10 +1,10 @@
 #pragma once
 
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/Page.h>
-#include <Storages/Page/V2/mvcc/VersionSet.h>
-#include <Storages/Page/V2/mvcc/VersionSetWithDelta.h>
+#include <Storages/Page/mvcc/VersionSet.h>
+#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
@@ -341,12 +341,12 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
 
 /// For PageEntriesVersionSet
 class PageEntries : public PageEntriesMixin<PageEntries>
-    , public MVCC::MultiVersionCountable<PageEntries>
+    , public DB::MVCC::MultiVersionCountable<PageEntries>
 {
 public:
     explicit PageEntries(bool is_base_ = true)
         : PageEntriesMixin(true)
-        , MVCC::MultiVersionCountable<PageEntries>(this)
+        , DB::MVCC::MultiVersionCountable<PageEntries>(this)
     {
         (void)is_base_;
     }
@@ -453,16 +453,16 @@ public:
 class PageEntriesForDelta;
 using PageEntriesForDeltaPtr = std::shared_ptr<PageEntriesForDelta>;
 class PageEntriesForDelta : public PageEntriesMixin<PageEntriesForDelta>
-    , public MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
+    , public DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
 {
 public:
     explicit PageEntriesForDelta(bool is_base_)
         : PageEntriesMixin(is_base_)
-        , MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>()
+        , DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>()
     {
     }
 
-    bool shouldCompactToBase(const MVCC::VersionSetConfig & config)
+    bool shouldCompactToBase(const VersionSetConfig & config)
     {
         assert(!this->isBase());
         return numDeletions() >= config.compact_hint_delta_deletions //

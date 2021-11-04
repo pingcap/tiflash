@@ -4,9 +4,8 @@
 #include <Storages/Page/Page.h>
 
 #include <vector>
-using namespace DB::PS::V2;
 
-namespace DB::tests
+namespace DB::PS::V2::tests
 {
 class MockEntries
 {
@@ -57,6 +56,6 @@ public:
     }
 };
 
-} // namespace DB::tests
+} // namespace DB::PS::V2::tests
 
 #endif // NDEBUG

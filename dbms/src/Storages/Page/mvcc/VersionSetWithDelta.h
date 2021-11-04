@@ -5,7 +5,9 @@
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Ext/ThreadNumber.h>
-#include <Storages/Page/V2/mvcc/VersionSet.h>
+#include <Storages/Page/mvcc/VersionSet.h>
+#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/Config.h>
 #include <stdint.h>
 
 #include <boost/core/noncopyable.hpp>
@@ -40,15 +42,14 @@ namespace CurrentMetrics
 extern const Metric PSMVCCNumSnapshots;
 extern const Metric PSMVCCSnapshotsList;
 } // namespace CurrentMetrics
-
+using DB::MVCC::VersionSetConfig;
 namespace DB
 {
 namespace FailPoints
 {
 extern const char random_slow_page_storage_remove_expired_snapshots[];
 } // namespace FailPoints
-
-namespace PS::V2::MVCC
+namespace MVCC
 {
 /// Base type for VersionType of VersionSetWithDelta
 template <typename T>
@@ -443,5 +444,5 @@ protected:
     Poco::Logger * log;
 };
 
-} // namespace PS::V2::MVCC
+} // namespace MVCC
 } // namespace DB

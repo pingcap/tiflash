@@ -6,18 +6,18 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/Page.h>
 #include <Storages/Page/V2/PageFile.h>
-#include <Storages/Page/V2/WriteBatch.h>
 #include <Storages/Page/V2/gc/LegacyCompactor.h>
 #include <Storages/Page/V2/gc/restoreFromCheckpoints.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
-using namespace DB::PS::V2;
-namespace DB
+using DB::tests::TiFlashTestEnv;
+namespace DB::PS::V2
 {
 namespace tests
 {
@@ -229,4 +229,4 @@ try
 CATCH
 
 } // namespace tests
-} // namespace DB
+} // namespace DB::PS::V2

@@ -6,7 +6,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/V2/WriteBatch.h>
+#include <Storages/Page/WriteBatch.h>
 
 #include <boost/core/noncopyable.hpp>
 #include <tuple>

@@ -4,8 +4,8 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesView.h>
-#include <Storages/Page/V2/mvcc/VersionSet.h>
-#include <Storages/Page/V2/mvcc/VersionSetWithDelta.h>
+#include <Storages/Page/mvcc/VersionSet.h>
+#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 
 #include <utility>
 
@@ -13,20 +13,20 @@ namespace DB::PS::V2
 {
 class DeltaVersionEditAcceptor;
 
-class PageEntriesVersionSetWithDelta : public MVCC::VersionSetWithDelta< //
+class PageEntriesVersionSetWithDelta : public DB::MVCC::VersionSetWithDelta< //
                                            PageEntriesForDelta,
                                            PageEntriesView,
                                            PageEntriesEdit,
                                            DeltaVersionEditAcceptor>
 {
 public:
-    using BaseType = MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
+    using BaseType = DB::MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
     using EditAcceptor = BaseType::EditAcceptor;
     using VersionType = BaseType::VersionType;
     using VersionPtr = BaseType::VersionPtr;
 
 public:
-    explicit PageEntriesVersionSetWithDelta(String name_, const MVCC::VersionSetConfig & config_, Poco::Logger * log_)
+    explicit PageEntriesVersionSetWithDelta(String name_, const VersionSetConfig & config_, Poco::Logger * log_)
         : BaseType(std::move(name_), config_, log_)
     {
     }

@@ -12,8 +12,8 @@
 #include <TestUtils/MockDiskDelegator.h>
 
 using namespace DB::PS::V2;
+DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
 /* some exported global vars */
-WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
 namespace DB
 {
 #if __APPLE__ && __clang__
@@ -43,7 +43,7 @@ Usage: %s <path> <mode>
             prog);
 }
 
-void printPageEntry(const DB::PageId pid, const PageEntry & entry)
+void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
     printf("\tpid:%9lld\t\t"
            "%9llu\t%9u\t%9u\t%9llu\t%9llu\t%016llx\n",
@@ -228,7 +228,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
     for (auto & page_file : page_files)
     {
         PageEntriesEdit edit;
-        PageIdAndEntries id_and_caches;
+        DB::PageIdAndEntries id_and_caches;
 
         auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
 
@@ -242,23 +242,23 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                 printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
-                case WriteBatch::WriteType::PUT:
+                case DB::WriteBatch::WriteType::PUT:
                     printf("PUT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case WriteBatch::WriteType::UPSERT:
+                case DB::WriteBatch::WriteType::UPSERT:
                     printf("UPSERT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case WriteBatch::WriteType::DEL:
+                case DB::WriteBatch::WriteType::DEL:
                     printf("DEL\t%lld\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
-                case WriteBatch::WriteType::REF:
+                case DB::WriteBatch::WriteType::REF:
                     printf("REF\t%lld\t%lld\t\n", //
                            record.page_id,
                            record.ori_page_id,

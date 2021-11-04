@@ -3,10 +3,10 @@
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/Page.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
-#include <Storages/Page/V2/WriteBatch.h>
+#include <Storages/Page/WriteBatch.h>
 
 #include <unordered_map>
 #include <vector>
@@ -32,7 +32,7 @@ public:
         Writer(PageFile &, bool sync_on_write, bool truncate_if_exists = true);
         ~Writer();
 
-        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
+        [[nodiscard]] size_t write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
         void tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String & parentPath() const;

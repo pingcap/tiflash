@@ -1,12 +1,14 @@
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/Page.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
-#include <Storages/Page/V2/WriteBatch.h>
+#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 
 #include <condition_variable>
 #include <functional>
@@ -19,14 +21,6 @@
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
-class PathCapacityMetrics;
-using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
-class PSDiskDelegator;
-using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
-class Context;
-
 namespace PS::V2
 {
 /**
@@ -37,53 +31,9 @@ namespace PS::V2
  *
  * This class is multi-threads safe. Support single thread write, and multi threads read.
  */
-class PageStorage : private boost::noncopyable
+class PageStorage : public DB::PageStorage
 {
 public:
-    struct Config
-    {
-        Config() = default;
-
-        SettingBool sync_on_write = true;
-
-        SettingUInt64 file_roll_size = PAGE_FILE_ROLL_SIZE;
-        SettingUInt64 file_max_size = PAGE_FILE_MAX_SIZE;
-        SettingUInt64 file_small_size = PAGE_FILE_SMALL_SIZE;
-
-        SettingUInt64 file_meta_roll_size = PAGE_META_ROLL_SIZE;
-
-        // When the value of gc_force_hardlink_rate is less than or equal to 1,
-        // It means that candidates whose valid rate is greater than this value will be forced to hardlink(This will reduce the gc duration).
-        // Otherwise, if gc_force_hardlink_rate is greater than 1, hardlink won't happen
-        SettingDouble gc_force_hardlink_rate = 0.8;
-
-        SettingDouble gc_max_valid_rate = 0.35;
-        SettingUInt64 gc_min_bytes = PAGE_FILE_ROLL_SIZE;
-        SettingUInt64 gc_min_files = 10;
-        // Minimum number of legacy files to be selected for compaction
-        SettingUInt64 gc_min_legacy_num = 3;
-
-        SettingUInt64 gc_max_expect_legacy_files = 100;
-        SettingDouble gc_max_valid_rate_bound = 1.0;
-
-        // Maximum write concurrency. Must not be changed once the PageStorage object is created.
-        SettingUInt64 num_write_slots = 1;
-
-        // Maximum seconds of reader / writer idle time.
-        // 0 for never reclaim idle file descriptor.
-        SettingUInt64 open_file_max_idle_time = 15;
-
-        // Probability to do gc when write is low.
-        // The probability is `prob_do_gc_when_write_is_low` out of 1000.
-        SettingUInt64 prob_do_gc_when_write_is_low = 10;
-
-        MVCC::VersionSetConfig version_set_config;
-
-        void reload(const Config & rhs);
-
-        String toDebugString() const;
-    };
-
     struct ListPageFilesOption
     {
         ListPageFilesOption() {}
@@ -95,7 +45,6 @@ public:
     };
 
     using VersionedPageEntries = PageEntriesVersionSetWithDelta;
-
     using SnapshotPtr = VersionedPageEntries::SnapshotPtr;
     using WriterPtr = std::unique_ptr<PageFile::Writer>;
     using ReaderPtr = std::shared_ptr<PageFile::Reader>;
@@ -104,10 +53,6 @@ public:
     using MetaMergingQueue
         = std::priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator>;
 
-    using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
-    using ExternalPagesScanner = std::function<PathAndIdsVec()>;
-    using ExternalPagesRemover
-        = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
     // Statistics for write
     struct StatisticsInfo
@@ -128,45 +73,39 @@ public:
                 PSDiskDelegatorPtr delegator, //
                 const Config & config_,
                 const FileProviderPtr & file_provider_);
+    ~PageStorage(){};
 
-    void restore();
+    void restore() override;
 
-    PageId getMaxId();
+    void drop() override;
 
-    void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr);
+    PageId getMaxId() override;
 
-    SnapshotPtr getSnapshot();
-    // Get some statistics of all living snapshots and the oldest living snapshot.
-    // Return < num of snapshots,
-    //          living time(seconds) of the oldest snapshot,
-    //          created thread id of the oldest snapshot      >
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
+    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) override;
 
-    PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
-    Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
-    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    DB::PageStorage::SnapshotPtr getSnapshot() override;
 
-    using FieldIndices = std::vector<size_t>;
-    using PageReadFields = std::pair<PageId, FieldIndices>;
-    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {});
+    std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
 
-    void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
-    void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
+    void write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) override;
 
-    void drop();
+    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {}) override;
 
-    void reloadSettings(const Config & new_config) { config.reload(new_config); }
+    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
-    // We may skip the GC to reduce useless reading by default.
-    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);
+    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
-    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
-    // Register two callback:
-    // `scanner` for scanning avaliable external page ids.
-    // `remover` will be called with living normal page ids after gc run a round.
-    void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
+    virtual PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) override;
+
+    void traversePageEntries(const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor, SnapshotPtr snapshot) override;
+
+    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) override;
+
+    void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
@@ -175,7 +114,7 @@ public:
                                         Poco::Logger * page_file_log,
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
-    static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+    // static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
     struct PersistState
     {
@@ -228,13 +167,6 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-
-    String storage_name; // Identify between different Storage
-    PSDiskDelegatorPtr delegator; // Get paths for storing data
-    Config config;
-
-    FileProviderPtr file_provider;
-
     struct WritingPageFile
     {
         PageFile file;
@@ -271,47 +203,6 @@ private:
                                   const String & parent_path_hint,
                                   WriterPtr && old_writer = nullptr,
                                   const String & logging_msg = "");
-};
-
-class PageReader : private boost::noncopyable
-{
-public:
-    /// Not snapshot read.
-    explicit PageReader(PageStorage & storage_, ReadLimiterPtr read_limiter_)
-        : storage(storage_)
-        , snap()
-        , read_limiter(read_limiter_)
-    {}
-    /// Snapshot read.
-    PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
-        : storage(storage_)
-        , snap(snap_)
-        , read_limiter(read_limiter_)
-    {}
-    PageReader(PageStorage & storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
-        : storage(storage_)
-        , snap(std::move(snap_))
-        , read_limiter(read_limiter_)
-    {}
-
-    Page read(PageId page_id) const { return storage.read(page_id, read_limiter, snap); }
-    PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, read_limiter, snap); }
-    void read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, read_limiter, snap); }
-
-    using PageReadFields = PageStorage::PageReadFields;
-    PageMap read(const std::vector<PageReadFields> & page_fields) const { return storage.read(page_fields, read_limiter, snap); }
-
-    PageId getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
-    UInt64 getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
-    PageEntry getPageEntry(PageId page_id) const { return storage.getEntry(page_id, snap); }
-
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
-
-    PageStorage & storage;
-    PageStorage::SnapshotPtr snap;
-    ReadLimiterPtr read_limiter;
 };
 
 } // namespace PS::V2

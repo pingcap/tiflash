@@ -2,9 +2,8 @@
 
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Page/V1/PageStorage.h>
-#include <Storages/Page/V1/WriteBatch.h>
 #include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/V2/WriteBatch.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 

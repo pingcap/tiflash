@@ -2,8 +2,7 @@
 
 #include "gtest/gtest.h"
 
-using namespace DB::PS::V2;
-namespace DB
+namespace DB::PS::V2
 {
 namespace tests
 {
@@ -30,7 +29,7 @@ protected:
     PageEntries * map;
 
 private:
-    MVCC::VersionSetConfig config_;
+    DB::MVCC::VersionSetConfig config_;
     Poco::Logger * log;
     PageEntriesVersionSet versions;
 };
@@ -401,4 +400,4 @@ TEST_F(PageEntryMap_test, Scan)
 }
 
 } // namespace tests
-} // namespace DB
+} // namespace DB::PS::V2

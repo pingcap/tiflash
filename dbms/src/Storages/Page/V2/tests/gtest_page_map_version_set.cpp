@@ -1,7 +1,7 @@
 #include <type_traits>
 
 #define protected public
-#include <Storages/Page/V2/mvcc/VersionSetWithDelta.h>
+#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 #undef protected
 
 #include <Poco/AutoPtr.h>
@@ -9,8 +9,8 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-using namespace DB::PS::V2;
-namespace DB
+using DB::tests::TiFlashTestEnv;
+namespace DB::PS::V2
 {
 namespace tests
 {
@@ -31,7 +31,7 @@ public:
     }
 
 protected:
-    MVCC::VersionSetConfig config_;
+    DB::MVCC::VersionSetConfig config_;
     Poco::Logger * log;
 };
 
@@ -856,7 +856,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
     {
         const PageId page_id = 2;
 
-        MVCC::VersionSetConfig config;
+        DB::MVCC::VersionSetConfig config;
         TypeParam versions("vset_test", config, this->log);
         {
             // First we put a page and add read lock by acquiring a snapshot(s1)
@@ -924,4 +924,4 @@ INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, Versi
 
 
 } // namespace tests
-} // namespace DB
+} // namespace DB::PS::V2

@@ -7,11 +7,11 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/Page.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/V2/WriteBatch.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -23,8 +23,8 @@
 #include <memory>
 #include <random>
 
-using namespace DB::PS::V2;
-namespace DB
+using DB::tests::TiFlashTestEnv;
+namespace DB::PS::V2
 {
 namespace tests
 {
@@ -410,4 +410,4 @@ CATCH
 
 
 } // namespace tests
-} // namespace DB
+} // namespace DB::PS::V2

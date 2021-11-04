@@ -8,11 +8,11 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/Page.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/V2/WriteBatch.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
@@ -25,8 +25,8 @@
 #include <memory>
 #include <random>
 
-using namespace DB::PS::V2;
-namespace DB
+using DB::tests::TiFlashTestEnv;
+namespace DB::PS::V2
 {
 namespace tests
 {
@@ -104,14 +104,14 @@ try
 
     // Read
     {
-        Page page0 = storage->read(0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        Page page1 = storage->read(1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -126,14 +126,14 @@ try
 
     // Read again
     {
-        Page page0 = storage->read(0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        Page page1 = storage->read(1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -152,21 +152,21 @@ try
         }
         // Read to check
         {
-            Page page0 = storage->read(0);
+            DB::Page page0 = storage->read(0);
             ASSERT_EQ(page0.data.size(), buf_sz);
             ASSERT_EQ(page0.page_id, 0UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
             }
-            Page page1 = storage->read(1);
+            DB::Page page1 = storage->read(1);
             ASSERT_EQ(page1.data.size(), buf_sz);
             ASSERT_EQ(page1.page_id, 1UL);
             for (size_t i = 0; i < buf_sz; ++i)
             {
                 EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
             }
-            Page page2 = storage->read(2);
+            DB::Page page2 = storage->read(2);
             ASSERT_EQ(page2.data.size(), buf_sz);
             ASSERT_EQ(page2.page_id, 2UL);
             for (size_t i = 0; i < buf_sz; ++i)
@@ -182,21 +182,21 @@ try
 
     // Read again to check all data.
     {
-        Page page0 = storage->read(0);
+        DB::Page page0 = storage->read(0);
         ASSERT_EQ(page0.data.size(), buf_sz);
         ASSERT_EQ(page0.page_id, 0UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        Page page1 = storage->read(1);
+        DB::Page page1 = storage->read(1);
         ASSERT_EQ(page1.data.size(), buf_sz);
         ASSERT_EQ(page1.page_id, 1UL);
         for (size_t i = 0; i < buf_sz; ++i)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
         }
-        Page page2 = storage->read(2);
+        DB::Page page2 = storage->read(2);
         ASSERT_EQ(page2.data.size(), buf_sz);
         ASSERT_EQ(page2.page_id, 2UL);
         for (size_t i = 0; i < buf_sz; ++i)
@@ -211,4 +211,4 @@ INSTANTIATE_TEST_CASE_P(DifferentNumberOfDeltaPaths, PageStorageMultiPaths_test,
 
 
 } // namespace tests
-} // namespace DB
+} // namespace DB::PS::V2
