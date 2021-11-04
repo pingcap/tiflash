@@ -517,6 +517,18 @@ TEST_F(TestFunctionsRoundWithFrac, DecimalRound)
     }
 }
 
+TEST_F(TestFunctionsRoundWithFrac, FracType)
+{
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.22}), execute(createColumn<Float32>({1.22}), createColumn<Int64>({2})));
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.22}), execute(createColumn<Float32>({1.22}), createColumn<UInt64>({2})));
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.22}), execute(createColumn<Float32>({1.22}), createColumn<Int32>({2})));
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.22}), execute(createColumn<Float32>({1.22}), createColumn<UInt32>({2})));
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.22}), execute(createColumn<Float32>({1.22}), createColumn<Int16>({2})));
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.22}), execute(createColumn<Float32>({1.22}), createColumn<UInt16>({2})));
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.22}), execute(createColumn<Float32>({1.22}), createColumn<Int8>({2})));
+    ASSERT_COLUMN_EQ(createColumn<Float64>({1.22}), execute(createColumn<Float32>({1.22}), createColumn<UInt8>({2})));
+}
+
 } // namespace tests
 
 } // namespace DB

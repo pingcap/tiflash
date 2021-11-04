@@ -1470,11 +1470,21 @@ private:
     template <typename InputType>
     void checkFracTypeAndApply(const TiDBRoundArguments & args) const
     {
-        if (!castTypeToEither<DataTypeInt64, DataTypeUInt64>(args.frac_type.get(), [&](const auto & frac_type, bool) {
-                using FracDataType = std::decay_t<decltype(frac_type)>;
-                checkOutputTypeAndApply<InputType, typename FracDataType::FieldType>(args);
-                return true;
-            }))
+        if (!castTypeToEither<
+                DataTypeInt64,
+                DataTypeUInt64,
+                DataTypeInt32,
+                DataTypeUInt32,
+                DataTypeInt16,
+                DataTypeUInt16,
+                DataTypeInt8,
+                DataTypeUInt8>(
+                args.frac_type.get(),
+                [&](const auto & frac_type, bool) {
+                    using FracDataType = std::decay_t<decltype(frac_type)>;
+                    checkOutputTypeAndApply<InputType, typename FracDataType::FieldType>(args);
+                    return true;
+                }))
         {
             throw Exception(
                 fmt::format("Illegal column type {} for the second argument of function {}", args.frac_type->getName(), getName()),

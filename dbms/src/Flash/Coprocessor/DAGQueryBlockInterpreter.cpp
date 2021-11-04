@@ -890,20 +890,11 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     if (query_block.aggregation || query_block.limitOrTopN)
         throw TiFlashException("Remote query containing agg or limit or topN is not supported", Errors::Coprocessor::BadRequest);
     const auto & ts = query_block.source->tbl_scan();
-    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+    std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
+    cop_key_ranges.reserve(ts.ranges_size());
     for (const auto & range : ts.ranges())
     {
-        std::string start_key(range.low());
-        DecodedTiKVKey start(std::move(start_key));
-        std::string end_key(range.high());
-        DecodedTiKVKey end(std::move(end_key));
-        key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
-    }
-    std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
-    cop_key_ranges.reserve(key_ranges.size());
-    for (const auto & key_range : key_ranges)
-    {
-        cop_key_ranges.emplace_back(static_cast<String>(key_range.first), static_cast<String>(key_range.second));
+        cop_key_ranges.emplace_back(range.low(), range.high());
     }
     sort(cop_key_ranges.begin(), cop_key_ranges.end());
 
