@@ -5,9 +5,9 @@
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Ext/ThreadNumber.h>
-#include <Storages/Page/mvcc/VersionSet.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Config.h>
+#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/mvcc/VersionSet.h>
 #include <stdint.h>
 
 #include <boost/core/noncopyable.hpp>

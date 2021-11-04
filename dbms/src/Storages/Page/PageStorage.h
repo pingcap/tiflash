@@ -34,7 +34,7 @@ class PageStorage : private boost::noncopyable
 {
 public:
     using SnapshotPtr = DB::PS::V2::PageEntriesVersionSetWithDelta::SnapshotPtr;
-    // TBD : move to Config.h
+
     struct Config
     {
         SettingBool sync_on_write = true;
