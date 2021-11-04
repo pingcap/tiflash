@@ -12,7 +12,7 @@ OUTPUT_XML=${OUTPUT_XML:-false}
 ENV_VARS_PATH=${ENV_VARS_PATH:-./_env.sh}
 # Parallel between test cases is not supported
 SERIALIZE_TEST_CASES=${SERIALIZE_TEST_CASES:-true}
-RUN_TESTS_PARALLEL=${RUN_TESTS_PARALLEL:-false}
+RUN_TESTS_PARALLEL=${RUN_TESTS_PARALLEL:-true}
 CONTINUE_ON_ERROR="${1:-1}" # default 1
 
 function run_test() {
