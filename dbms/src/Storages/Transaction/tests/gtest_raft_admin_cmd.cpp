@@ -1,3 +1,4 @@
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -9,7 +10,7 @@ namespace DB
 {
 namespace tests
 {
-TEST_F(RaftAdminCmd_test, mergeresult)
+TEST(RaftAdminCmd_test, mergeresult)
 try
 {
     ASSERT_EQ(MetaRaftCommandDelegate::computeRegionMergeResult(createRegionInfo(1, "x", ""), createRegionInfo(1000, "", "x")).source_at_left, false);
