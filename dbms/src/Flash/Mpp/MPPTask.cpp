@@ -12,6 +12,7 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -38,21 +39,12 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
-String MPPTaskId::toString() const
-{
-    return fmt::format("[{},{}]", start_ts, task_id);
-}
-
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
-    , log(std::make_shared<LogWithPrefix>(
-          &Poco::Logger::get("MPPTask"),
-          fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
-{
-    id.start_ts = meta.start_ts();
-    id.task_id = meta.task_id();
-}
+    , id(meta.start_ts(), meta.task_id())
+    , log(newMPPTaskLog("MPPTask", id))
+{}
 
 MPPTask::~MPPTask()
 {

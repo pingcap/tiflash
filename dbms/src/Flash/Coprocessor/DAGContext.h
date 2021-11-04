@@ -10,6 +10,7 @@
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -29,6 +30,7 @@ UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
     /// todo max_error_count is a system variable in mysql, TiDB should put it into dag request, now use the default value instead
     return 1024;
 }
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -116,11 +118,12 @@ public:
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
-    Int64 getMPPTaskId() const
+
+    MPPTaskId getMPPTaskId() const
     {
         if (is_mpp_task)
-            return mpp_task_meta.task_id();
-        return 0;
+            return MPPTaskId{mpp_task_meta.start_ts(), mpp_task_meta.task_id()};
+        return MPPTaskId::empty_mpp_task_id;
     }
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
