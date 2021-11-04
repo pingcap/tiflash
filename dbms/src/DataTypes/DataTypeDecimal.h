@@ -62,7 +62,7 @@ public:
             {
                 msg = fmt::format("{}, scale {} is greater than precision {}", msg, scale, precision);
             }
-            else if (scale > decimal_max_scale)
+            else
             {
                 msg = fmt::format("{}, scale {} is greater than maximum value {}", msg, scale, decimal_max_scale);
             }
