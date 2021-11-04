@@ -92,5 +92,19 @@ mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflas
 # |         123500 |
 # +----------------+
 
+
+mysql> drop table if exists test.time_test;
+mysql> create table test.time_test(id int(11),v1 time(3) not null, v2 time(3));
+
+mysql> insert into test.time_test values(1,'20:20:20','20:20:20');
+mysql> alter table test.time_test set tiflash replica 1;
+func> wait_table test time_test
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select distinct v1 from(select v1 from time_test union all select v2 from time_test);
++--------------+
+| v1           |
++--------------+
+| 20:20:20.000 |
++--------------+
+
 # Clean up.
 mysql> drop table if exists test.t
