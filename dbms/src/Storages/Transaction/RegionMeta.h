@@ -169,6 +169,7 @@ class MetaRaftCommandDelegate
         const UInt64 index,
         const UInt64 term);
 
+public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
