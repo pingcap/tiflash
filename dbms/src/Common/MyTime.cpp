@@ -806,7 +806,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         result = MyDateTime(tmp);
     }
 
-    return std::tuple<Field, bool>{result.toPackedUInt(), is_date};
+    return std::pair<Field, bool>{result.toPackedUInt(), is_date};
 }
 
 // TODO: support parse time from float string
