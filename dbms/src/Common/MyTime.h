@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Field.h>
+#include <Interpreters/TimezoneInfo.h>
 #include <common/DateLUTImpl.h>
 
 struct StringRef;
@@ -105,6 +106,8 @@ struct MyDateTime : public MyTimeBase
     {}
 
     String toString(int fsp) const;
+
+    static MyDateTime getSystemDateTimeByTimezone(const TimezoneInfo &, UInt8 fsp);
 };
 
 struct MyDate : public MyTimeBase
@@ -161,6 +164,12 @@ Field parseMyDateTime(const String & str, int8_t fsp = 6);
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
 
 void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone);
+
+MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to);
+
+MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64 offset, const DateLUTImpl & time_zone_to);
+
+std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp);
 
 int calcDayNum(int year, int month, int day);
 

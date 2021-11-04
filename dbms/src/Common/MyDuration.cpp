@@ -24,22 +24,22 @@ DurationParts MyDuration::splitDuration() const
 
 Int32 MyDuration::hours() const
 {
-    return splitDuration().hour;
+    return std::abs(nanos) / NANOS_PER_HOUR;
 }
 
 Int32 MyDuration::minutes() const
 {
-    return splitDuration().minute;
+    return std::abs(nanos) / NANOS_PER_MINUTE % 60;
 }
 
 Int32 MyDuration::seconds() const
 {
-    return splitDuration().second;
+    return std::abs(nanos) / NANOS_PER_SECOND % 60;
 }
 
 Int32 MyDuration::microSecond() const
 {
-    return splitDuration().microsecond;
+    return std::abs(nanos) / NANOS_PER_MICRO % 1000000;
 }
 
 String MyDuration::toString() const

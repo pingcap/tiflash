@@ -302,16 +302,16 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     return input_col[column_index].name;
 }
 
-// for some historical or unknown reasons, TiDB might set a invalid
-// field type. This function checks if the expr has a valid field type
-// so far the known invalid field types are:
+// For some historical or unknown reasons, TiDB might set an invalid
+// field type. This function checks if the expr has a valid field type.
+// So far the known invalid field types are:
 // 1. decimal type with scale == -1
 // 2. decimal type with precision == 0
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type()
-        && !((expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1)
-             || (expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().flen() == 0));
+        && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal
+             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
@@ -527,6 +527,26 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
     }
 }
 
+void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String & s)
+{
+    if (!dag_req.ParseFromString(s))
+    {
+        /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
+        /// it may exceed this limit, so just try again by double the recursion limit
+        ::google::protobuf::io::CodedInputStream coded_input_stream(reinterpret_cast<const UInt8 *>(s.data()), s.size());
+        coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
+        if (!dag_req.ParseFromCodedStream(&coded_input_stream))
+        {
+            /// just return error if decode failed this time, because it's really a corner case, and even if we can decode the plan
+            /// successfully by using a very large value of the recursion limit, it is kinds of meaningless because the runtime
+            /// performance of this task may be very bad if the plan tree is too deep
+            throw TiFlashException(
+                std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan, the most likely is that the plan/expression tree is too deep",
+                Errors::Coprocessor::BadRequest);
+        }
+    }
+}
+
 extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -591,7 +611,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastStringAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastTimeAsInt, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
@@ -603,7 +623,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastDurationAsString, "cast"},
     //{tipb::ScalarFuncSig::CastDurationAsDecimal, "cast"},
     //{tipb::ScalarFuncSig::CastDurationAsTime, "cast"},
-    //{tipb::ScalarFuncSig::CastDurationAsDuration, "cast"},
+    {tipb::ScalarFuncSig::CastDurationAsDuration, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastDurationAsJson, "cast"},
 
     //{tipb::ScalarFuncSig::CastJsonAsInt, "cast"},
@@ -972,10 +992,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::AddDateDurationDecimal, "cast"},
 
     {tipb::ScalarFuncSig::Date, "toMyDate"},
-    //{tipb::ScalarFuncSig::Hour, "cast"},
-    //{tipb::ScalarFuncSig::Minute, "cast"},
-    //{tipb::ScalarFuncSig::Second, "cast"},
-    //{tipb::ScalarFuncSig::MicroSecond, "cast"},
+    {tipb::ScalarFuncSig::Hour, "hour"},
+    {tipb::ScalarFuncSig::Minute, "minute"},
+    {tipb::ScalarFuncSig::Second, "second"},
+    {tipb::ScalarFuncSig::MicroSecond, "microSecond"},
     {tipb::ScalarFuncSig::Month, "toMonth"},
     //{tipb::ScalarFuncSig::MonthName, "cast"},
 
@@ -997,8 +1017,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::YearWeekWithoutMode, "cast"},
 
     //{tipb::ScalarFuncSig::GetFormat, "cast"},
-    //{tipb::ScalarFuncSig::SysDateWithFsp, "cast"},
-    //{tipb::ScalarFuncSig::SysDateWithoutFsp, "cast"},
+    {tipb::ScalarFuncSig::SysDateWithFsp, "sysDateWithFsp"},
+    {tipb::ScalarFuncSig::SysDateWithoutFsp, "sysDateWithoutFsp"},
     //{tipb::ScalarFuncSig::CurrentDate, "cast"},
     //{tipb::ScalarFuncSig::CurrentTime0Arg, "cast"},
     //{tipb::ScalarFuncSig::CurrentTime1Arg, "cast"},
