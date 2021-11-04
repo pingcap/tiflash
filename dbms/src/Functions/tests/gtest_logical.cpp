@@ -111,7 +111,7 @@ try
             createConstColumn<Nullable<UInt8>>(1, 1)));
     // only null
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt8>>({{}, {}}),
+        createOnlyNullColumn(2),
         executeFunction(
             func_name,
             createOnlyNullColumn(2),
@@ -138,7 +138,7 @@ try
             createConstColumn<Nullable<UInt8>>(1, 1)));
     // only null
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<UInt8>>(1, {}),
+        createOnlyNullColumn(1),
         executeFunction(
             func_name,
             createOnlyNullColumn(1)));
