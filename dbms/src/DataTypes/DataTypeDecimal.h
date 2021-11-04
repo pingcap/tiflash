@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <IO/WriteHelpers.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -22,7 +23,7 @@ extern const int ARGUMENT_OUT_OF_BOUND;
 // Int256 65
 
 template <typename T>
-class DataTypeDecimal : public IDataType
+class DataTypeDecimal final : public IDataType
 {
     static_assert(IsDecimal<T>);
 
@@ -52,7 +53,20 @@ public:
     {
         if (precision > decimal_max_prec || scale > precision || scale > decimal_max_scale)
         {
-            throw Exception(getName() + "is out of bound", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            std::string msg = getName() + "is out of bound";
+            if (precision > decimal_max_prec)
+            {
+                msg = fmt::format("{}, precision {} is greater than maximum value {}", msg, precision, decimal_max_prec);
+            }
+            else if (scale > precision)
+            {
+                msg = fmt::format("{}, scale {} is greater than precision {}", msg, scale, precision);
+            }
+            else
+            {
+                msg = fmt::format("{}, scale {} is greater than maximum value {}", msg, scale, decimal_max_scale);
+            }
+            throw Exception(msg, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
     }
 
@@ -119,7 +133,7 @@ public:
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const override;
 
     void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
-    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
+    void deserializeTextCSV(IColumn & column, ReadBuffer & istr, char delimiter) const override;
 
     void readText(T & x, ReadBuffer & istr) const;
 
@@ -216,26 +230,26 @@ typename std::enable_if_t<(sizeof(T) < sizeof(U)), const DataTypeDecimal<U>> dec
 
 inline PrecType getDecimalPrecision(const IDataType & data_type, PrecType default_value)
 {
-    if (auto * decimal_type = checkDecimal<Decimal32>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal32>(data_type))
         return decimal_type->getPrec();
-    if (auto * decimal_type = checkDecimal<Decimal64>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal64>(data_type))
         return decimal_type->getPrec();
-    if (auto * decimal_type = checkDecimal<Decimal128>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal128>(data_type))
         return decimal_type->getPrec();
-    if (auto * decimal_type = checkDecimal<Decimal256>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal256>(data_type))
         return decimal_type->getPrec();
     return default_value;
 }
 
 inline ScaleType getDecimalScale(const IDataType & data_type, ScaleType default_value)
 {
-    if (auto * decimal_type = checkDecimal<Decimal32>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal32>(data_type))
         return decimal_type->getScale();
-    if (auto * decimal_type = checkDecimal<Decimal64>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal64>(data_type))
         return decimal_type->getScale();
-    if (auto * decimal_type = checkDecimal<Decimal128>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal128>(data_type))
         return decimal_type->getScale();
-    if (auto * decimal_type = checkDecimal<Decimal256>(data_type))
+    if (const auto * decimal_type = checkDecimal<Decimal256>(data_type))
         return decimal_type->getScale();
     return default_value;
 }
