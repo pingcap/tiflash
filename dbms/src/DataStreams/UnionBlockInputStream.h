@@ -186,7 +186,7 @@ protected:
     }
 
     /// Do nothing, to make the preparation for the query execution in parallel, in ParallelInputsProcessor.
-    void readPrefix() override
+    void readPrefixImpl() override
     {
     }
 
@@ -228,7 +228,7 @@ protected:
     }
 
     /// Called either after everything is read, or after cancel.
-    void readSuffix() override
+    void readSuffixImpl() override
     {
         //std::cerr << "readSuffix\n";
         if (!all_read && !isCancelled())

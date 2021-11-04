@@ -19,7 +19,7 @@ public:
     }
     String getName() const override { return "ExchangeSender"; }
     Block getHeader() const override { return children.back()->getHeader(); }
-    void readSuffix() override
+    void readSuffixImpl() override
     {
         writer->finishWrite();
     }

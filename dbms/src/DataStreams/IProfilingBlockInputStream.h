@@ -42,19 +42,19 @@ public:
 
     Block read(FilterPtr & res_filter, bool return_filter) override final;
 
-    /** The default implementation calls readPrefixImpl() on itself, and then readPrefix() recursively for all children.
+    /** readPrefix() calls readPrefixImpl(), which calls readPrefix() recursively for all children by default.
       * There are cases when you do not want `readPrefix` of children to be called synchronously, in this function,
       *  but you want them to be called, for example, in separate threads (for parallel initialization of children).
-      * Then overload `readPrefix` function.
+      * Then overload `readPrefixImpl` function.
       */
-    void readPrefix() override;
+    void readPrefix() override final;
 
-    /** The default implementation calls recursively readSuffix() on all children, and then readSuffixImpl() on itself.
+    /** readSuffix() calls readSuffixImpl(), which recursively calls readSuffix() on all children by default.
       * If this stream calls read() in children in a separate thread, this behavior is usually incorrect:
       * readSuffix() of the child can not be called at the moment when the same child's read() is executed in another thread.
-      * In this case, you need to override this method so that readSuffix() in children is called, for example, after connecting streams.
+      * In this case, you need to override `readSuffixImpl` so that readSuffix() in children is called, for example, after connecting streams.
       */
-    void readSuffix() override;
+    void readSuffix() override final;
 
     /// Get information about execution speed.
     const BlockStreamProfileInfo & getProfileInfo() const { return info; }
@@ -190,6 +190,14 @@ protected:
     Block extremes;
 
 
+    /// Here you can do a preliminary initialization.
+    /// default implementation is calling children's readPrefix().
+    virtual void readPrefixImpl();
+
+    /// Here you need to do a finalization, which can lead to an exception.
+    /// default implementation is calling children's readSuffix().
+    virtual void readSuffixImpl();
+
     void addChild(BlockInputStreamPtr & child)
     {
         std::unique_lock lock(children_mutex);
@@ -216,12 +224,6 @@ private:
     virtual Block readImpl() = 0;
 
     virtual Block readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/) { return readImpl(); };
-
-    /// Here you can do a preliminary initialization.
-    virtual void readPrefixImpl() {}
-
-    /// Here you need to do a finalization, which can lead to an exception.
-    virtual void readSuffixImpl() {}
 
     void updateExtremes(Block & block);
 

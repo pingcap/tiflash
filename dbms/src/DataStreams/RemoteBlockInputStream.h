@@ -65,7 +65,7 @@ public:
     void appendExtraInfo();
 
     /// Sends query (initiates calculation) before read()
-    void readPrefix() override;
+    void readPrefixImpl() override;
 
     /** Prevent default progress notification because progress' callback is
         called by its own

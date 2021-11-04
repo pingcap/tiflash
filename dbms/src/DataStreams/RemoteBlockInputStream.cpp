@@ -91,7 +91,7 @@ void RemoteBlockInputStream::appendExtraInfo()
     append_extra_info = true;
 }
 
-void RemoteBlockInputStream::readPrefix()
+void RemoteBlockInputStream::readPrefixImpl()
 {
     if (!sent_query)
         sendQuery();
@@ -241,6 +241,8 @@ Block RemoteBlockInputStream::readImpl()
 
 void RemoteBlockInputStream::readSuffixImpl()
 {
+    IProfilingBlockInputStream::readSuffixImpl();
+
     /** If one of:
       * - nothing started to do;
       * - received all packets before EndOfStream;

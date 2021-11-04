@@ -36,7 +36,7 @@ public:
 
     String getName() const override { return "Asynchronous"; }
 
-    void readPrefix() override
+    void readPrefixImpl() override
     {
         /// Do not call `readPrefix` on the child, so that the corresponding actions are performed in a separate thread.
         if (!started)
@@ -46,7 +46,7 @@ public:
         }
     }
 
-    void readSuffix() override
+    void readSuffixImpl() override
     {
         if (started)
         {
@@ -151,4 +151,3 @@ protected:
 };
 
 }
-

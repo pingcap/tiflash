@@ -84,6 +84,8 @@ Block CreatingSetsBlockInputStream::readImpl()
 void CreatingSetsBlockInputStream::readPrefixImpl()
 {
     createAll();
+
+    IProfilingBlockInputStream::readPrefixImpl();
 }
 
 

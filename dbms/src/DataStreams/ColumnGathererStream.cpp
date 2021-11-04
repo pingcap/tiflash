@@ -112,6 +112,8 @@ void ColumnGathererStream::fetchNewBlock(Source & source, size_t source_num)
 
 void ColumnGathererStream::readSuffixImpl()
 {
+    IProfilingBlockInputStream::readSuffixImpl();
+
     const BlockStreamProfileInfo & profile_info = getProfileInfo();
 
     /// Don't print info for small parts (< 10M rows)

@@ -307,8 +307,10 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
 
 void MergingSortedBlockInputStream::readSuffixImpl()
 {
-     if (quiet)
-         return;
+    IProfilingBlockInputStream::readSuffixImpl();
+
+    if (quiet)
+        return;
 
     const BlockStreamProfileInfo & profile_info = getProfileInfo();
     double seconds = profile_info.total_stopwatch.elapsedSeconds();

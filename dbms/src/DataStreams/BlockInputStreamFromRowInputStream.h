@@ -24,8 +24,8 @@ public:
         UInt64 allow_errors_num_,
         Float64 allow_errors_ratio_);
 
-    void readPrefix() override { row_input->readPrefix(); }
-    void readSuffix() override { row_input->readSuffix(); }
+    void readPrefixImpl() override { row_input->readPrefix(); }
+    void readSuffixImpl() override { row_input->readSuffix(); }
 
     String getName() const override { return "BlockInputStreamFromRowInputStream"; }
 

@@ -41,7 +41,7 @@ public:
 
     Block getHeader() const override { return children.back()->getHeader(); }
 
-    void readPrefix() override
+    void readPrefixImpl() override
     {
         std::lock_guard<std::mutex> lock(mutex);
 
@@ -53,7 +53,7 @@ public:
         thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
     }
 
-    void readSuffix() override
+    void readSuffixImpl() override
     {
         std::lock_guard<std::mutex> lock(mutex);
 

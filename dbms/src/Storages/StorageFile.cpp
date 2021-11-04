@@ -171,10 +171,14 @@ public:
     void readPrefixImpl() override
     {
         reader->readPrefix();
+
+        IProfilingBlockInputStream::readPrefixImpl();
     }
 
     void readSuffixImpl() override
     {
+        IProfilingBlockInputStream::readSuffixImpl();
+
         reader->readSuffix();
     }
 

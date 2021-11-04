@@ -96,13 +96,13 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::getHeader() const
 }
 
 
-void MergingAggregatedMemoryEfficientBlockInputStream::readPrefix()
+void MergingAggregatedMemoryEfficientBlockInputStream::readPrefixImpl()
 {
     start();
 }
 
 
-void MergingAggregatedMemoryEfficientBlockInputStream::readSuffix()
+void MergingAggregatedMemoryEfficientBlockInputStream::readSuffixImpl()
 {
     if (!all_read && !isCancelled())
         throw Exception("readSuffix called before all data is read", ErrorCodes::LOGICAL_ERROR);

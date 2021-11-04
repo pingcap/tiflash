@@ -105,12 +105,6 @@ void IProfilingBlockInputStream::readPrefix()
 {
     auto start_time = info.total_stopwatch.elapsed();
     readPrefixImpl();
-
-    forEachChild([&] (IBlockInputStream & child)
-    {
-        child.readPrefix();
-        return false;
-    });
     info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
 }
 
@@ -118,14 +112,22 @@ void IProfilingBlockInputStream::readPrefix()
 void IProfilingBlockInputStream::readSuffix()
 {
     auto start_time = info.total_stopwatch.elapsed();
-    forEachChild([&] (IBlockInputStream & child)
-    {
-        child.readSuffix();
-        return false;
-    });
-
     readSuffixImpl();
     info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+}
+
+
+void IProfilingBlockInputStream::readPrefixImpl()
+{
+    for (auto & child : children)
+        child->readPrefix();
+}
+
+
+void IProfilingBlockInputStream::readSuffixImpl()
+{
+    for (auto & child : children)
+        child->readSuffix();
 }
 
 

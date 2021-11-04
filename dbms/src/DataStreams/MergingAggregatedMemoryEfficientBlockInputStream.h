@@ -67,10 +67,10 @@ public:
     String getName() const override { return "MergingAggregatedMemoryEfficient"; }
 
     /// Sends the request (initiates calculations) earlier than `read`.
-    void readPrefix() override;
+    void readPrefixImpl() override;
 
     /// Called either after everything is read, or after cancel.
-    void readSuffix() override;
+    void readSuffixImpl() override;
 
     /** Different from the default implementation by trying to stop all sources,
       *  skipping failed by execution.

@@ -27,9 +27,9 @@ public:
     {
     }
 
-    void readSuffix() override
+    void readSuffixImpl() override
     {
-        OwningBlockInputStream<ShellCommand>::readSuffix();
+        OwningBlockInputStream<ShellCommand>::readSuffixImpl();
         own->wait();
     }
 };
@@ -143,9 +143,9 @@ public:
 private:
     Block readImpl() override { return stream->read(); }
 
-    void readSuffix() override
+    void readSuffixImpl() override
     {
-        IProfilingBlockInputStream::readSuffix();
+        IProfilingBlockInputStream::readSuffixImpl();
         if (!wait_called)
         {
             wait_called = true;
