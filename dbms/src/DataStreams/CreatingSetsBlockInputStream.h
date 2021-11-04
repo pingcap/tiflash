@@ -37,7 +37,9 @@ public:
         }
     }
 
-    String getName() const override { return "CreatingSets"; }
+    static constexpr auto name = "CreatingSets";
+
+    String getName() const override { return name; }
 
     Block getHeader() const override { return children.back()->getHeader(); }
 
