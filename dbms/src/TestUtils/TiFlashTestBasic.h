@@ -125,9 +125,9 @@ public:
         return std::make_pair(result, result);
     }
 
-    static void setupLogger(const String & level = "trace")
+    static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr)
     {
-        Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
+        Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(os);
         Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
         formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
