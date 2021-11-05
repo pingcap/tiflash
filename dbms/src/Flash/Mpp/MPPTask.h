@@ -112,7 +112,6 @@ private:
     Exception err;
 
     friend class MPPTaskManager;
-    friend class MPPHandler;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
