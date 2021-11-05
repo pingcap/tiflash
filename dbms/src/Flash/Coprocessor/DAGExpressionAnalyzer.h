@@ -83,22 +83,37 @@ public:
     void appendJoin(
         ExpressionActionsChain & chain,
         SubqueryForSet & join_query,
-        const NamesAndTypesList & columns_added_by_join);
+        const NamesAndTypesList & columns_added_by_join) const;
 
     void appendFinalProject(
         ExpressionActionsChain & chain,
-        const NamesWithAliases & final_project);
+        const NamesWithAliases & final_project) const;
 
     String getActions(
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions,
         bool output_as_uint8_type = false);
 
+    // appendExtraCastsAfterTS will append extra casts after tablescan if needed.
+    // 1) add timezone cast after table scan, this is used for session level timezone support
+    // the basic idea of supporting session level timezone is that:
+    // 1. for every timestamp column used in the dag request, after reading it from table scan,
+    //    we add cast function to convert its timezone to the timezone specified in DAG request
+    // 2. based on the dag encode type, the return column will be with session level timezone(Arrow encode)
+    //    or UTC timezone(Default encode), if UTC timezone is needed, another cast function is used to
+    //    convert the session level timezone to UTC timezone.
+    // Note in the worst case(e.g select ts_col from table with Default encode), this will introduce two
+    // useless casts to all the timestamp columns, however, since TiDB now use chunk encode as the default
+    // encoding scheme, the worst case should happen rarely.
+    // 2) add duration cast after table scan, this is ued for calculation of duration in TiFlash.
+    // TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
+    // Int64 to duration.
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const DAGQueryBlock & query_block);
 
+    /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
         ExpressionActionsChain & chain,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -141,6 +156,15 @@ private:
         const String & expr_name,
         bool explicit_cast);
 
+    /**
+     * when force_uint8 is false, alignReturnType align the data type in tiflash with the data type in dag request, otherwise
+     * always convert the return type to uint8 or nullable(uint8)
+     * @param expr
+     * @param actions
+     * @param expr_name
+     * @param force_uint8
+     * @return
+     */
     String alignReturnType(
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions,
