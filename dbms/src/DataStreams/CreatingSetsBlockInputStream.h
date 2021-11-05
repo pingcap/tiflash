@@ -60,7 +60,7 @@ private:
 
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
-    const MPPTaskId & mpp_task_id;
+    const MPPTaskId & mpp_task_id = MPPTaskId::unknown_mpp_task_id;
 
     std::vector<std::thread> workers;
     std::mutex exception_mutex;

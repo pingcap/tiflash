@@ -59,6 +59,7 @@ public:
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
         , mpp_task_meta(meta_)
+        , mpp_task_id(mpp_task_meta.start_ts(), mpp_task_meta.task_id())
         , max_recorded_error_count(getMaxErrorCount(dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
@@ -119,11 +120,9 @@ public:
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
 
-    MPPTaskId getMPPTaskId() const
+    const MPPTaskId & getMPPTaskId() const
     {
-        if (is_mpp_task)
-            return MPPTaskId{mpp_task_meta.start_ts(), mpp_task_meta.task_id()};
-        return MPPTaskId::empty_mpp_task_id;
+        return mpp_task_id;
     }
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
@@ -159,6 +158,7 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
+    const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;

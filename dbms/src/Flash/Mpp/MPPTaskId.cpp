@@ -13,5 +13,5 @@ String MPPTaskId::toString() const
     return task_id == unknown_task_id ? "<query:N/A,task:N/A>" : fmt::format("<query:{},task:{}>", start_ts, task_id);
 }
 
-const MPPTaskId MPPTaskId::empty_mpp_task_id = MPPTaskId{};
+const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
 } // namespace DB

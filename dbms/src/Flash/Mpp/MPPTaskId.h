@@ -15,14 +15,14 @@ struct MPPTaskId
         : start_ts(start_ts_)
         , task_id(task_id_){};
 
-    UInt64 start_ts;
-    Int64 task_id;
+    const UInt64 start_ts;
+    const Int64 task_id;
 
     bool operator<(const MPPTaskId & rhs) const;
 
     String toString() const;
 
-    static const MPPTaskId empty_mpp_task_id;
+    static const MPPTaskId unknown_mpp_task_id;
 
 private:
     static constexpr Int64 unknown_task_id = -1;

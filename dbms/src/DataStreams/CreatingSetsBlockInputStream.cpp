@@ -42,7 +42,6 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const SizeLimits & network_transfer_limits,
     const LogWithPrefixPtr & log_)
     : network_transfer_limits(network_transfer_limits)
-    , mpp_task_id(MPPTaskId::empty_mpp_task_id)
     , log(getMPPTaskLog(log_, name, mpp_task_id))
 {
     subqueries_for_sets_list.push_back(subqueries_for_sets);
