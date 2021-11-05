@@ -2,6 +2,7 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExchangeSender.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -122,7 +123,7 @@ BlockIO InterpreterDAG::execute()
             assert(isColumnExpr(expr));
             auto column_index = decodeDAGInt64(expr.val());
             partition_col_id.emplace_back(column_index);
-            if (has_collator_info && getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isString())
+            if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
             {
                 collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
             }
