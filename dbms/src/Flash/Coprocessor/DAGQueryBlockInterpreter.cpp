@@ -177,12 +177,9 @@ AnalysisResult analyzeExpressions(
             /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
             context.getDAGContext()->isMPPTask();
 
-        analyzer.appendAggregation(
+        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions) = analyzer.appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
-            res.aggregation_keys,
-            res.aggregation_collators,
-            res.aggregate_descriptions,
             group_by_collation_sensitive);
         res.before_aggregation = chain.getLastActions();
 
@@ -204,7 +201,7 @@ AnalysisResult analyzeExpressions(
     // Or TopN, not both.
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
     {
-        analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
+        res.order_columns = analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn());
     }
 
     analyzer.generateFinalProject(

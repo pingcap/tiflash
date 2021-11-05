@@ -656,12 +656,9 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 
 extern const String CountSecondStage;
 
-void DAGExpressionAnalyzer::appendAggregation(
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnalyzer::appendAggregation(
     ExpressionActionsChain & chain,
     const tipb::Aggregation & agg,
-    Names & aggregation_keys,
-    TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
     bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
@@ -669,6 +666,11 @@ void DAGExpressionAnalyzer::appendAggregation(
         //should not reach here
         throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
     }
+
+    Names aggregation_keys;
+    TiDB::TiDBCollators collators;
+    AggregateDescriptions aggregate_descriptions;
+
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
     std::unordered_set<String> agg_key_set;
@@ -809,6 +811,7 @@ void DAGExpressionAnalyzer::appendAggregation(
         }
     }
     after_agg = true;
+    return {aggregation_keys, collators, aggregate_descriptions};
 }
 
 bool isUInt8Type(const DataTypePtr & type)
@@ -920,15 +923,17 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
 }
 
-void DAGExpressionAnalyzer::appendOrderBy(
+std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     ExpressionActionsChain & chain,
-    const tipb::TopN & topN,
-    std::vector<NameAndTypePair> & order_columns)
+    const tipb::TopN & topN)
 {
     if (topN.order_by_size() == 0)
     {
         throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
+    std::vector<NameAndTypePair> order_columns;
+    order_columns.reserve(topN.order_by_size());
+
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
     for (const tipb::ByItem & by_item : topN.order_by())
@@ -938,6 +943,7 @@ void DAGExpressionAnalyzer::appendOrderBy(
         order_columns.emplace_back(name, type);
         step.required_output.push_back(name);
     }
+    return order_columns;
 }
 
 const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const
