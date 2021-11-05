@@ -40,12 +40,20 @@ catchError {
                     }
                     util.checkoutTiCSFull("${ghprbActualCommit}", "${ghprbPullId}")
                 }
+<<<<<<< HEAD
                 stage("Build & Upload") {
                     timeout(time: 70, unit: 'MINUTES') {
                         container("builder") {
                             sh "NPROC=5 BUILD_BRANCH=${ghprbTargetBranch} release-centos7/build/build-tiflash-ci.sh"
                             sh "PULL_ID=${ghprbPullId} COMMIT_HASH=${ghprbActualCommit} release-centos7/build/upload-ci-build.sh"
                         }
+=======
+            }
+            stage("Static Analysis") {
+                timeout(time: 360, unit: 'MINUTES') {
+                    container("builder") {
+                        echo "NPROC=${NPROC} /build/tics/release-centos7/build/static-analysis.sh"
+>>>>>>> 0e0ef28444 (fix bug that collation does not work for nullable type (#3392))
                     }
                 }
             }
