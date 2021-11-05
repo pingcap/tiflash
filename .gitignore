@@ -263,5 +263,6 @@ tests/mutable-test/mutable_dedup/small_parts.visual.test/*
 libs/libtiflash-proxy
 
 tmp/
+deps/
 
 CoverageReport
