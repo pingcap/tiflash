@@ -263,7 +263,10 @@ String DAGExpressionAnalyzerHelper::buildLogicalFunction(
 }
 
 // left(str,len) = substrUTF8(str,1,len)
-String DAGExpressionAnalyzerHelper::buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildLeftUTF8Function(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     const String & func_name = "substringUTF8";
     Names argument_names;
@@ -448,7 +451,10 @@ String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
-String DAGExpressionAnalyzerHelper::buildRoundFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildRoundFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     // ROUND(x) -> ROUND(x, 0)
 
@@ -939,7 +945,9 @@ const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColum
     return after_agg ? aggregated_columns : source_columns;
 }
 
-void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project)
+void DAGExpressionAnalyzer::appendFinalProject(
+    ExpressionActionsChain & chain,
+    const NamesWithAliases & final_project) const
 {
     initChain(chain, getCurrentInputColumns());
     for (const auto & name : final_project)
@@ -948,7 +956,10 @@ void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, c
     }
 }
 
-void constructTZExpr(tipb::Expr & tz_expr, const TimezoneInfo & dag_timezone_info, bool from_utc)
+void constructTZExpr(
+    tipb::Expr & tz_expr,
+    const TimezoneInfo & dag_timezone_info,
+    bool from_utc)
 {
     if (dag_timezone_info.is_name_based)
         constructStringLiteralTiExpr(tz_expr, dag_timezone_info.timezone_name);
@@ -966,21 +977,10 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
     return cast_expr_name;
 }
 
-// appendExtraCastsAfterTS will append extra casts after tablescan if needed.
-// 1) add timezone cast after table scan, this is used for session level timezone support
-// the basic idea of supporting session level timezone is that:
-// 1. for every timestamp column used in the dag request, after reading it from table scan,
-//    we add cast function to convert its timezone to the timezone specified in DAG request
-// 2. based on the dag encode type, the return column will be with session level timezone(Arrow encode)
-//    or UTC timezone(Default encode), if UTC timezone is needed, another cast function is used to
-//    convert the session level timezone to UTC timezone.
-// Note in the worst case(e.g select ts_col from table with Default encode), this will introduce two
-// useless casts to all the timestamp columns, however, since TiDB now use chunk encode as the default
-// encoding scheme, the worst case should happen rarely.
-// 2) add duration cast after table scan, this is ued for calculation of duration in TiFlash.
-// TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
-// Int64 to duration.
-bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTSMode> & need_cast_column, const DAGQueryBlock & query_block)
+bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
+    ExpressionActionsChain & chain,
+    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const DAGQueryBlock & query_block)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
@@ -1039,13 +1039,13 @@ String DAGExpressionAnalyzer::appendDurationCast(
 void DAGExpressionAnalyzer::appendJoin(
     ExpressionActionsChain & chain,
     SubqueryForSet & join_query,
-    const NamesAndTypesList & columns_added_by_join)
+    const NamesAndTypesList & columns_added_by_join) const
 {
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
-/// return true if some actions is needed
+
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -1314,15 +1314,6 @@ void DAGExpressionAnalyzer::generateFinalProject(
     }
 }
 
-/**
- * when force_uint8 is false, alignReturnType align the data type in tiflash with the data type in dag request, otherwise
- * always convert the return type to uint8 or nullable(uint8)
- * @param expr
- * @param actions
- * @param expr_name
- * @param force_uint8
- * @return
- */
 String DAGExpressionAnalyzer::alignReturnType(
     const tipb::Expr & expr,
     ExpressionActionsPtr & actions,
