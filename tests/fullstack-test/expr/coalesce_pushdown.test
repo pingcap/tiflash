@@ -5,9 +5,11 @@ mysql> INSERT INTO test.test_tb(id,char_,enum_,longtext_,mediumtext_,set_,text_,
 
 mysql> analyze table test.test_tb
 mysql> alter table test.test_tb set tiflash replica 1
-func> wait_table test test_tb
-
-
+mysql> drop table if exists test.fix_3388
+mysql> create table if not exists test.fix_3388(a varchar(10))
+mysql> alter table test.fix_3388 set tiflash replica 1
+mysql> insert into test.fix_3388 values ('a')
+func> wait_table test test_tb fix_3388
 
 # start checking
 mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_tb where char_ = coalesce(null, char_);
@@ -334,4 +336,12 @@ mysql> select /*+ read_from_storage(tiflash[test.test_tb]) */ id from test.test_
 +----+
 |  2 |
 +----+
+
+# fix 3388
+mysql> set tidb_enforce_mpp=1; select count(*) from test.fix_3388 where coalesce(a, null) = "a"
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
 
