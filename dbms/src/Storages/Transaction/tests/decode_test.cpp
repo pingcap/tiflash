@@ -103,19 +103,26 @@ int runDecodeBench(int column_num, int batch_row_num, int batch_num) {
     {
         Stopwatch stopwatch;
         Block block;
-        DB::ColumnIDs column_ids;
-        ColumnIdToColumnIndexMap column_index_map;
+        SortedColumnIDs column_ids;
+        std::map<ColumnID, NameAndTypePair> column_id_map;
         for (auto & column : column_desc.getAllPhysical())
         {
             auto column_id = table_info.getColumnID(column.name);
             column_ids.insert(column_id);
-            block.insert({column.type->createColumn(), column.type, column.name, column_id});
-            column_index_map.emplace(column_id, block.columns() - 1);
+            column_id_map.emplace(column_id, column);
         }
 
+        for (const auto & column_id : column_ids)
+        {
+            auto & column = column_id_map.at(column_id);
+            block.insert({column.type->createColumn(), column.type, column.name, column_id});
+        }
+
+        std::vector<ColumnID> pk_column_ids;
+        std::map<ColumnID, size_t> pk_pos_map;
         RegionBlockReaderOptimized reader{table_info, column_desc};
         for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto decoded = reader.read(column_ids, data_lists_read[batch_index], block, column_index_map, true);
+            auto decoded = reader.template read<TMTPKType::INT64>(column_ids, block, pk_column_ids, pk_pos_map, data_lists_read[batch_index], true);
             assert(block.rows() == (UInt64)batch_row_num);
             assert(decoded == true);
             // clear block data
@@ -143,19 +150,26 @@ int runDecodeBench(int column_num, int batch_row_num, int batch_num) {
     {
         Stopwatch stopwatch;
         Block block;
-        DB::ColumnIDs column_ids;
-        ColumnIdToColumnIndexMap column_index_map;
+        SortedColumnIDs column_ids;
+        std::map<ColumnID, NameAndTypePair> column_id_map;
         for (auto & column : column_desc.getAllPhysical())
         {
             auto column_id = table_info.getColumnID(column.name);
             column_ids.insert(column_id);
-            block.insert({column.type->createColumn(), column.type, column.name, column_id});
-            column_index_map.emplace(column_id, block.columns() - 1);
+            column_id_map.emplace(column_id, column);
         }
 
+        for (const auto & column_id : column_ids)
+        {
+            auto & column = column_id_map.at(column_id);
+            block.insert({column.type->createColumn(), column.type, column.name, column_id});
+        }
+
+        std::vector<ColumnID> pk_column_ids;
+        std::map<ColumnID, size_t> pk_pos_map;
         RegionBlockReaderOptimized reader{table_info, column_desc};
         for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto decoded = reader.read(column_ids, data_lists_read[batch_index], block, column_index_map, true);
+            auto decoded = reader.template read<TMTPKType::INT64>(column_ids, block, pk_column_ids, pk_pos_map, data_lists_read[batch_index], true);
             assert(block.rows() == (UInt64)batch_row_num);
             assert(decoded == true);
             // clear block data

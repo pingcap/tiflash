@@ -374,6 +374,7 @@ public:
         std::shared_lock lock(read_write_mutex);
         return store_columns;
     }
+
     const ColumnDefines & getTableColumns() const { return original_table_columns; }
     const ColumnDefine & getHandle() const { return original_table_handle_define; }
     BlockPtr getHeader() const;

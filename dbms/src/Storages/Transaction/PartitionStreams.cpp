@@ -36,7 +36,6 @@ extern const int ILLFORMAT_RAFT_ROW;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
-
 static void writeRegionDataToStorage(
     Context & context,
     const RegionPtrWithBlock & region,
@@ -542,9 +541,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         // Get a structure read lock. It will throw exception if the table has been dropped,
         // the caller should handle this situation.
         auto table_lock = storage->lockStructureForShare(getThreadName());
-        schema_snapshot.is_common_handle = storage->isCommonHandle();
-        schema_snapshot.table_info = storage->getTableInfo();
-        schema_snapshot.columns = storage->getColumns();
+        const auto & table_info = storage->getTableInfo();
         if (unlikely(storage->engineType() != ::TiDB::StorageEngine::DT))
         {
             throw Exception("Try to get storage schema with unknown storage engine [table_id=" + DB::toString(table_id)
@@ -554,8 +551,29 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         if (dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage); dm_storage != nullptr)
         {
             auto store = dm_storage->getStore();
+            auto & original_handle = store->getHandle();
             schema_snapshot.column_defines = store->getStoreColumns();
-            schema_snapshot.original_table_handle_define = store->getHandle();
+            std::map<ColumnID, size_t> column_pos;
+            for (auto & column_define : *schema_snapshot.column_defines)
+            {
+                schema_snapshot.sorted_column_ids.insert(column_define.id);
+                if (table_info.pk_is_handle)
+                {
+                    if (original_handle.id == column_define.id)
+                    {
+                        schema_snapshot.pk_column_ids.emplace_back(original_handle.id);
+                        schema_snapshot.pk_pos_map.emplace();
+                    }
+                }
+            }
+            if (table_info.is_common_handle)
+            {
+                auto & primary_index_info = table_info.getPrimaryIndexInfo();
+                for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
+                {
+                    schema_snapshot.pk_column_ids.emplace_back(table_info.columns[primary_index_info.idx_cols[i].offset].id);
+                }
+            }
         }
         std::tie(std::ignore, drop_lock) = std::move(table_lock).release();
         return true;

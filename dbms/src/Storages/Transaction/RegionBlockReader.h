@@ -1,8 +1,15 @@
 #pragma once
 
 #include <Core/Names.h>
+#include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/RowCodec.h>
+
+#include <Columns/ColumnsNumber.h>
+#include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/Region.h>
+#include <Common/typeid_cast.h>
 
 namespace TiDB
 {
@@ -124,8 +131,7 @@ public:
         return read(columns.getNamesOfPhysical(), data_list, force_decode);
     }
 };
-using ColumnIdToColumnIndexMap = std::map<ColumnID, size_t>;
-using ColumnIDs = std::set<ColumnID>;
+using SortedColumnIDs = std::set<ColumnID>;
 /// The Reader to read the region data in `data_list` and decode based on the given table_info and columns, as a block.
 class RegionBlockReaderOptimized : private boost::noncopyable
 {
@@ -181,7 +187,8 @@ public:
     ///
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
     /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
-    bool read(const ColumnIDs & column_ids_to_read, RegionDataReadInfoList & data_list, Block & block, const ColumnIdToColumnIndexMap & column_index_map, bool force_decode);
+    template <TMTPKType pk_type>
+    bool read(const SortedColumnIDs & read_column_ids, Block & block, const std::vector<ColumnID> & pk_column_ids, const std::map<ColumnID, size_t> & pk_pos_map, RegionDataReadInfoList & data_list, bool force_decode);
 };
 
 } // namespace DB

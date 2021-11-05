@@ -33,8 +33,7 @@ Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_inf
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 
-using ColumnIdToColumnIndexMap = std::map<ColumnID, size_t>;
-using ColumnIDs = std::set<ColumnID>;
-bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, const ColumnIDs & column_ids_to_read, Block & block, const ColumnIdToColumnIndexMap & column_index_map);
+using SortedColumnIDs = std::set<ColumnID>;
+bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos);
 
 } // namespace DB

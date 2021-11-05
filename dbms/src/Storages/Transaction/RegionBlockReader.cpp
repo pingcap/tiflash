@@ -537,19 +537,53 @@ RegionBlockReaderOptimized::RegionBlockReaderOptimized(const TiDB::TableInfo & t
     : table_info(table_info_), columns(columns_), scan_filter(nullptr)
 {}
 
-bool RegionBlockReaderOptimized::read(const ColumnIDs & column_ids_to_read, RegionDataReadInfoList & data_list, Block & block, const ColumnIdToColumnIndexMap & column_index_map, bool force_decode)
+template <TMTPKType pk_type>
+bool RegionBlockReaderOptimized::read(const SortedColumnIDs & read_column_ids, Block & block, const std::vector<ColumnID> & pk_column_ids, const std::map<ColumnID, size_t> & pk_pos_map, RegionDataReadInfoList & data_list, bool force_decode)
 {
     std::ignore = force_decode;
 
-    // decode row
-    auto * raw_delmark_col = static_cast<ColumnUInt8 *>(const_cast<IColumn *>(block.getByPosition(column_index_map.at(DelMarkColumnID)).column.get()));
-    auto * raw_version_col = static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(column_index_map.at(VersionColumnID)).column.get()));
-    auto * raw_handle_col = static_cast<ColumnInt64 *>(const_cast<IColumn *>(block.getByPosition(column_index_map.at(TiDBPkColumnID)).column.get()));
+    auto column_ids_iter = read_column_ids.begin();
+    size_t next_column_pos = 0;
+
+    /// every table in tiflash must have an extra handle column, it either
+    ///   1. sync from tidb (when the table doesn't have a primary key of int kind type and cluster index is not enabled)
+    ///   2. copy (and cast if need) from the pk column (when the table have a primary key of int kind type)
+    ///   3. encoded from the pk columns (when the table doesn't have a primary key of int kind type when cluster index is enabled)
+    ///
+    /// extra handle, del, version column is with column id smaller than other visible column id,
+    /// so they must exists before all other columns, and we can get them before decoding other columns
+    ColumnUInt8 *raw_delmark_col = nullptr;
+    ColumnUInt64 *raw_version_col = nullptr;
+    const size_t invalid_column_pos = reinterpret_cast<size_t>(std::numeric_limits<size_t>::max);
+    size_t extra_handle_column_pos = invalid_column_pos;
+    while (raw_delmark_col == nullptr || raw_version_col == nullptr || extra_handle_column_pos == invalid_column_pos)
+    {
+        if (*column_ids_iter == DelMarkColumnID)
+        {
+            raw_delmark_col = static_cast<ColumnUInt8 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
+        }
+        else if (*column_ids_iter == VersionColumnID)
+        {
+            raw_version_col = static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
+        }
+        else if (*column_ids_iter == TiDBPkColumnID)
+        {
+            extra_handle_column_pos = next_column_pos;
+        }
+        next_column_pos++;
+        column_ids_iter++;
+    }
+    constexpr size_t MustHaveColCnt = 3; // extra handle, del, version
+    if (unlikely(next_column_pos != MustHaveColCnt))
+        throw Exception("del, version column must exist before all other visible columns.", ErrorCodes::LOGICAL_ERROR);
+
+    SortedColumnIDs sorted_pk_column_ids(pk_column_ids.begin(), pk_column_ids.end());
     ColumnUInt8::Container & delmark_data = raw_delmark_col->getData();
     ColumnUInt64::Container & version_data = raw_version_col->getData();
     delmark_data.reserve(data_list.size());
     version_data.reserve(data_list.size());
-    bool need_decode_value = true;
+    bool need_decode_value = block.columns() > MustHaveColCnt;
+    size_t index = 0;
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
         // Ignore data after the start_ts.
@@ -564,16 +598,58 @@ bool RegionBlockReaderOptimized::read(const ColumnIDs & column_ids_to_read, Regi
         /// set delmark and version column
         delmark_data.emplace_back(write_type == Region::DelFlag);
         version_data.emplace_back(commit_ts);
-        raw_handle_col->insert(static_cast<Int64>(pk));
 
         if (need_decode_value)
         {
-            if (!decodeRowV2ToBlock(*value_ptr, column_ids_to_read, block, column_index_map))
+            if (!decodeRowV2ToBlock(*value_ptr, column_ids_iter, sorted_pk_column_ids, block, next_column_pos))
                 return false;
         }
-    }
 
+        /// set extra handle column and pk columns if need
+        if constexpr (pk_type != TMTPKType::STRING)
+        {
+            // extra handle column's type is always Int64
+            auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
+            raw_extra_column->insert(Field(static_cast<Int64>(pk)));
+            if (table_info.pk_is_handle)
+            {
+                auto * raw_pk_column = const_cast<IColumn *>((block.getByPosition(pk_pos_map.at(pk_column_ids[0]))).column.get());
+                if constexpr (pk_type == TMTPKType::INT64)
+                    raw_pk_column->insert(static_cast<Int64>(pk));
+                else if constexpr (pk_type == TMTPKType::UINT64)
+                    raw_pk_column->insert(static_cast<UInt64>(pk));
+                else
+                    raw_pk_column->insert(static_cast<Int64>(pk));
+            }
+        }
+        else
+        {
+            auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
+            raw_extra_column->insertData(pk->data(), pk->size());
+            /// decode key and insert pk columns if needed
+            size_t cursor = 0, pos = 0;
+            while (cursor < pk->size() && pos < pk_column_ids.size())
+            {
+                Field value = DecodeDatum(cursor, *pk);
+                if (pk_pos_map.find(pk_column_ids[pos]) != pk_pos_map.end())
+                {
+                    /// for a pk col, if it does not exist in the value, then decode it from the key
+                    auto * raw_pk_column = const_cast<IColumn *>(block.getByPosition(pk_pos_map.at(pk_column_ids[pos])).column.get());
+                    if (raw_pk_column->size() == index)
+                        raw_pk_column->insert(value);
+                }
+                pos++;
+            }
+        }
+        index++;
+    }
     return true;
 }
+
+template bool RegionBlockReaderOptimized::read<TMTPKType::INT64>(const SortedColumnIDs & read_column_ids, Block & block, const std::vector<ColumnID> & pk_column_ids, const std::map<ColumnID, size_t> & pk_pos_map, RegionDataReadInfoList & data_list, bool force_decode);
+template bool RegionBlockReaderOptimized::read<TMTPKType::UINT64>(const SortedColumnIDs & read_column_ids, Block & block, const std::vector<ColumnID> & pk_column_ids, const std::map<ColumnID, size_t> & pk_pos_map, RegionDataReadInfoList & data_list, bool force_decode);
+template bool RegionBlockReaderOptimized::read<TMTPKType::STRING>(const SortedColumnIDs & read_column_ids, Block & block, const std::vector<ColumnID> & pk_column_ids, const std::map<ColumnID, size_t> & pk_pos_map, RegionDataReadInfoList & data_list, bool force_decode);
+template bool RegionBlockReaderOptimized::read<TMTPKType::UNSPECIFIED>(const SortedColumnIDs & read_column_ids, Block & block, const std::vector<ColumnID> & pk_column_ids, const std::map<ColumnID, size_t> & pk_pos_map, RegionDataReadInfoList & data_list, bool force_decode);
+
 
 } // namespace DB
