@@ -118,7 +118,7 @@ RegionPersister::RegionPersister(Context & global_context_, const RegionManager 
     , log(&Poco::Logger::get("RegionPersister"))
 {}
 
-PS::V1::PageStorage::Config getStablePSConfig(const PS::V2::PageStorage::Config & config)
+PS::V1::PageStorage::Config getV1PSConfig(const PS::V2::PageStorage::Config & config)
 {
     PS::V1::PageStorage::Config c;
     c.sync_on_write = config.sync_on_write;
@@ -142,7 +142,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         auto & path_pool = global_context.getPathPool();
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
-        auto detect_binary_version = PageStorage::getMaxDataVersion(global_context.getFileProvider(), delegator);
+        auto detect_binary_version = DB::PS::V2::PageStorage::getMaxDataVersion(global_context.getFileProvider(), delegator);
         bool run_in_compatible_mode = path_pool.isRaftCompatibleModeEnabled() && (detect_binary_version == PageFormat::V1);
 
         fiu_do_on(FailPoints::force_enable_region_persister_compatible_mode, { run_in_compatible_mode = true; });
@@ -164,7 +164,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         else
         {
             LOG_INFO(log, "RegionPersister running in compatible mode");
-            auto c = getStablePSConfig(config);
+            auto c = getV1PSConfig(config);
             stable_page_storage = std::make_unique<PS::V1::PageStorage>( //
                 "RegionPersister",
                 delegator->defaultPath(),

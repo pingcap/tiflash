@@ -23,10 +23,7 @@
 #include <memory>
 #include <random>
 
-using DB::tests::TiFlashTestEnv;
-namespace DB::PS::V2
-{
-namespace tests
+namespace DB::PS::V2::tests
 {
 using PSPtr = std::shared_ptr<PageStorage>;
 
@@ -408,6 +405,4 @@ try
 }
 CATCH
 
-
-} // namespace tests
-} // namespace DB::PS::V2
+} // namespace DB::PS::V2::tests

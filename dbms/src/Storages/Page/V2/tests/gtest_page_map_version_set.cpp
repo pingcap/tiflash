@@ -9,10 +9,7 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-using DB::tests::TiFlashTestEnv;
-namespace DB::PS::V2
-{
-namespace tests
+namespace DB::PS::V2::tests
 {
 template <typename T>
 class PageMapVersionSet_test : public ::testing::Test
@@ -922,6 +919,4 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
 using VersionSetTypes = ::testing::Types<PageEntriesVersionSet, PageEntriesVersionSetWithDelta>;
 INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);
 
-
-} // namespace tests
-} // namespace DB::PS::V2
+} // namespace DB::PS::V2::tests

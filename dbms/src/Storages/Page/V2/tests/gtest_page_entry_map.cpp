@@ -2,9 +2,7 @@
 
 #include "gtest/gtest.h"
 
-namespace DB::PS::V2
-{
-namespace tests
+namespace DB::PS::V2::tests
 {
 class PageEntryMap_test : public ::testing::Test
 {
@@ -399,5 +397,4 @@ TEST_F(PageEntryMap_test, Scan)
     ASSERT_TRUE(page_ids.empty());
 }
 
-} // namespace tests
-} // namespace DB::PS::V2
+} // namespace DB::PS::V2::tests

@@ -16,10 +16,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
-using DB::tests::TiFlashTestEnv;
-namespace DB::PS::V2
-{
-namespace tests
+namespace DB::PS::V2::tests
 {
 TEST(LegacyCompactor_test, WriteMultipleBatchRead)
 try
@@ -158,7 +155,7 @@ CATCH
 TEST(LegacyCompactor_test, DISABLED_CompactAndRestore)
 try
 {
-    auto ctx = TiFlashTestEnv::getContext();
+    auto ctx = DB::tests::TiFlashTestEnv::getContext();
     const FileProviderPtr file_provider = ctx.getFileProvider();
     StoragePathPool spool = ctx.getPathPool().withTable("test", "t", false);
     auto delegator = spool.getPSDiskDelegatorSingle("meta");
@@ -228,5 +225,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DB::PS::V2
+} // namespace DB::PS::V2::tests

@@ -12,7 +12,6 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-using DB::tests::MockDiskDelegatorMulti;
 using DB::tests::TiFlashTestEnv;
 // using DB::tests::MockSnapshotPtr;
 // using DB::tests::MockSnapshot;
@@ -50,7 +49,7 @@ try
 
     auto ctx = TiFlashTestEnv::getContext(DB::Settings());
     const auto file_provider = ctx.getFileProvider();
-    PSDiskDelegatorPtr delegate = std::make_shared<MockDiskDelegatorMulti>(test_paths);
+    PSDiskDelegatorPtr delegate = std::make_shared<DB::tests::MockDiskDelegatorMulti>(test_paths);
 
     PageStorage storage("data_compact_test", delegate, config, file_provider);
 

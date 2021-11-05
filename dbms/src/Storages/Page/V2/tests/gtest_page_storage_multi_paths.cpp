@@ -25,10 +25,7 @@
 #include <memory>
 #include <random>
 
-using DB::tests::TiFlashTestEnv;
-namespace DB::PS::V2
-{
-namespace tests
+namespace DB::PS::V2::tests
 {
 using PSPtr = std::shared_ptr<PageStorage>;
 
@@ -209,6 +206,4 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DifferentNumberOfDeltaPaths, PageStorageMultiPaths_test, testing::Range(1UL, 7UL));
 
-
-} // namespace tests
-} // namespace DB::PS::V2
+} // namespace DB::PS::V2::tests

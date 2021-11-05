@@ -163,42 +163,6 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     virtual void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) = 0;
 
-    static PageFormat::Version getMaxDataVersion([[maybe_unused]] const FileProviderPtr & file_provider, [[maybe_unused]] PSDiskDelegatorPtr & delegator)
-    {
-        // TBD
-        // Poco::Logger * log = &Poco::Logger::get("PageStorage::getMaxDataVersion");
-        // ListPageFilesOption option;
-        // option.ignore_checkpoint = true;
-        // option.ignore_legacy = true;
-        // option.remove_tmp_files = false;
-        // auto page_files = listAllPageFiles(file_provider, delegator, log, option);
-        // if (page_files.empty())
-        //     return STORAGE_FORMAT_CURRENT.page;
-
-        // bool all_empty = true;
-        // PageFormat::Version max_binary_version = PageFormat::V1;
-        // PageFormat::Version temp_version = STORAGE_FORMAT_CURRENT.page;
-        // for (auto iter = page_files.rbegin(); iter != page_files.rend(); ++iter)
-        // {
-        //     // Skip those files without valid meta
-        //     if (iter->getMetaFileSize() == 0)
-        //         continue;
-
-        //     // Simply check the last non-empty PageFile is good enough
-        //     all_empty = false;
-        //     auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(*iter));
-        //     while (reader->hasNext())
-        //     {
-        //         // Continue to read the binary version of next WriteBatch.
-        //         reader->moveNext(&temp_version);
-        //         max_binary_version = std::max(max_binary_version, temp_version);
-        //     }
-        //     LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
-        //     break;
-        // }
-        // max_binary_version = (all_empty ? STORAGE_FORMAT_CURRENT.page : max_binary_version);
-        return PageFormat::V2;
-    }
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif

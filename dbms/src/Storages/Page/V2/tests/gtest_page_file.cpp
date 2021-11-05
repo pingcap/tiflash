@@ -4,15 +4,13 @@
 #include <Storages/Page/V2/PageFile.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-using DB::tests::TiFlashTestEnv;
-namespace DB::PS::V2
-{
-namespace tests
+
+namespace DB::PS::V2::tests
 {
 TEST(PageFile_test, Compare)
 {
     // clean up
-    const String path = TiFlashTestEnv::getTemporaryPath("pageFileCompare");
+    const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("pageFileCompare");
     {
         if (Poco::File p(path); p.exists())
         {
@@ -21,7 +19,7 @@ TEST(PageFile_test, Compare)
         }
     }
 
-    const auto file_provider = TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
     Poco::Logger * log = &Poco::Logger::get("PageFile");
 
     {
@@ -174,7 +172,7 @@ TEST(PageFile_test, PageFileLink)
     Poco::Logger * log = &Poco::Logger::get("PageFileLink");
     PageId page_id = 55;
     UInt64 tag = 0;
-    const String path = TiFlashTestEnv::getTemporaryPath("PageFileLink/");
+    const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("PageFileLink/");
     {
         if (Poco::File p(path); p.exists())
         {
@@ -183,7 +181,7 @@ TEST(PageFile_test, PageFileLink)
         }
     }
 
-    const auto file_provider = TiFlashTestEnv::getGlobalContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
     PageFile pf0 = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
     auto writer = pf0.createWriter(true, true);
 
@@ -230,7 +228,7 @@ TEST(PageFile_test, EncryptedPageFileLink)
     Poco::Logger * log = &Poco::Logger::get("EncryptedPageFileLink");
     PageId page_id = 55;
     UInt64 tag = 0;
-    const String path = TiFlashTestEnv::getTemporaryPath("EncryptedPageFileLink/");
+    const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("EncryptedPageFileLink/");
     {
         if (Poco::File p(path); p.exists())
         {
@@ -282,5 +280,4 @@ TEST(PageFile_test, EncryptedPageFileLink)
     ASSERT_EQ(reader->fileIdLevel().second, 1);
 }
 
-} // namespace tests
-} // namespace DB::PS::V2
+} // namespace DB::PS::V2::tests
