@@ -1,10 +1,5 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
-<<<<<<< HEAD
-=======
-#include <DataStreams/ExchangeSender.h>
-#include <DataTypes/DataTypeNullable.h>
->>>>>>> 0e0ef28444 (fix bug that collation does not work for nullable type (#3392))
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
@@ -87,67 +82,8 @@ BlockIO InterpreterDAG::execute()
     DAGPipeline pipeline;
     pipeline.streams = streams;
 
-<<<<<<< HEAD
     DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams);
     if (!subqueriesForSets.empty())
-=======
-    /// only run in MPP
-    if (context.getDAGContext()->tunnel_set != nullptr)
-    {
-        /// add exchange sender on the top of operators
-        const auto & exchange_sender = dag.getDAGRequest().root_executor().exchange_sender();
-        /// get partition column ids
-        const auto & part_keys = exchange_sender.partition_keys();
-        std::vector<Int64> partition_col_id;
-        TiDB::TiDBCollators collators;
-        /// in case TiDB is an old version, it has no collation info
-        bool has_collator_info = exchange_sender.types_size() != 0;
-        if (has_collator_info && part_keys.size() != exchange_sender.types_size())
-        {
-            throw TiFlashException(std::string(__PRETTY_FUNCTION__)
-                                       + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
-                                         "enabled",
-                                   Errors::Coprocessor::BadRequest);
-        }
-        for (int i = 0; i < part_keys.size(); i++)
-        {
-            const auto & expr = part_keys[i];
-            assert(isColumnExpr(expr));
-            auto column_index = decodeDAGInt64(expr.val());
-            partition_col_id.emplace_back(column_index);
-            if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
-            {
-                collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
-            }
-            else
-            {
-                collators.emplace_back(nullptr);
-            }
-        }
-        restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
-        int stream_id = 0;
-        pipeline.transform([&](auto & stream) {
-            // construct writer
-            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
-                context.getDAGContext()->tunnel_set,
-                partition_col_id,
-                collators,
-                exchange_sender.tp(),
-                context.getSettings().dag_records_per_chunk,
-                context.getSettings().batch_send_min_limit,
-                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-                dag.getEncodeType(),
-                dag.getResultFieldTypes(),
-                dag.getDAGContext(),
-                log);
-            stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
-        });
-    }
-
-    /// add union to run in parallel if needed
-    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
-    if (!subqueries_for_sets.empty())
->>>>>>> 0e0ef28444 (fix bug that collation does not work for nullable type (#3392))
     {
         const Settings & settings = context.getSettingsRef();
         pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), std::move(subqueriesForSets),
