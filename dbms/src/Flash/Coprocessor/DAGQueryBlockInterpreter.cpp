@@ -104,6 +104,8 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
+
+    NamesWithAliases final_project;
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -130,8 +132,7 @@ AnalysisResult analyzeExpressions(
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
     const std::vector<ExtraCastAfterTSMode> & is_need_cast_column,
-    bool keep_session_timezone_info,
-    NamesWithAliases & final_project)
+    bool keep_session_timezone_info)
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
@@ -204,16 +205,13 @@ AnalysisResult analyzeExpressions(
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn());
     }
 
-    analyzer.generateFinalProject(
+    // Append final project results if needed.
+    res.final_project = analyzer.appendFinalProject(
         chain,
         dag.getOutputFieldTypes(),
         dag.getOutputOffsets(),
         query_block.qb_column_prefix,
-        keep_session_timezone_info || !query_block.isRootQueryBlock(),
-        final_project);
-
-    // Append final project results if needed.
-    analyzer.appendFinalProject(chain, final_project);
+        keep_session_timezone_info || !query_block.isRootQueryBlock());
 
     res.before_order_and_select = chain.getLastActions();
     chain.finalize();
@@ -912,8 +910,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block,
         conditions,
         need_add_cast_column_flag_for_tablescan,
-        keep_session_timezone_info,
-        final_project);
+        keep_session_timezone_info);
 
     if (res.extra_cast || res.before_where)
     {
@@ -993,7 +990,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // execute projection
-    executeProject(pipeline, final_project);
+    executeProject(pipeline, res.final_project);
 
     // execute limit
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::TypeLimit)

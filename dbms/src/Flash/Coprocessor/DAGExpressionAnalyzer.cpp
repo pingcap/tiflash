@@ -951,17 +951,6 @@ const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColum
     return after_agg ? aggregated_columns : source_columns;
 }
 
-void DAGExpressionAnalyzer::appendFinalProject(
-    ExpressionActionsChain & chain,
-    const NamesWithAliases & final_project) const
-{
-    initChain(chain, getCurrentInputColumns());
-    for (const auto & name : final_project)
-    {
-        chain.steps.back().required_output.push_back(name.first);
-    }
-}
-
 void constructTZExpr(
     tipb::Expr & tz_expr,
     const TimezoneInfo & dag_timezone_info,
@@ -1212,17 +1201,18 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     }
 }
 
-void DAGExpressionAnalyzer::generateFinalProject(
+NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
     ExpressionActionsChain & chain,
     const std::vector<tipb::FieldType> & schema,
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
-    bool keep_session_timezone_info,
-    NamesWithAliases & final_project)
+    bool keep_session_timezone_info)
 {
     if (unlikely(!keep_session_timezone_info && output_offsets.empty()))
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
+    initChain(chain, getCurrentInputColumns());
+    NamesWithAliases final_project;
     const auto & current_columns = getCurrentInputColumns();
     UniqueNameGenerator unique_name_generator;
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
@@ -1271,7 +1261,6 @@ void DAGExpressionAnalyzer::generateFinalProject(
     {
         /// for all the columns that need to be returned, if the type is timestamp, then convert
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
-        initChain(chain, getCurrentInputColumns());
         ExpressionActionsChain::Step step = chain.steps.back();
 
         tipb::Expr tz_expr;
@@ -1318,6 +1307,12 @@ void DAGExpressionAnalyzer::generateFinalProject(
             }
         }
     }
+
+    for (const auto & name : final_project)
+    {
+        chain.steps.back().required_output.push_back(name.first);
+    }
+    return final_project;
 }
 
 String DAGExpressionAnalyzer::alignReturnType(
