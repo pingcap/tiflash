@@ -204,6 +204,7 @@ AnalysisResult analyzeExpressions(
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn());
     }
+    res.before_order_and_select = chain.getLastActions();
 
     // Append final project results if needed.
     res.final_project = analyzer.appendFinalProject(
@@ -213,7 +214,6 @@ AnalysisResult analyzeExpressions(
         query_block.qb_column_prefix,
         keep_session_timezone_info || !query_block.isRootQueryBlock());
 
-    res.before_order_and_select = chain.getLastActions();
     chain.finalize();
     chain.clear();
     //todo need call prependProjectInput??
