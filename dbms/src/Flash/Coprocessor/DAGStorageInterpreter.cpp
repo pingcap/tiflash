@@ -1,7 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/joinToString.h>
+#include <Common/joinStr.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -148,7 +148,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
     std::tie(storage, table_structure_lock) = getAndLockStorage(settings.schema_version);
 
-    std::tie(required_columns, source_columns, is_timestamp_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
+    std::tie(required_columns, source_columns, is_need_add_cast_column, handle_column_name) = getColumnsForTableScan(settings.max_columns_to_read);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
@@ -463,7 +463,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     }
 }
 
-std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColumnsForTableScan(Int64 max_columns_to_read)
+std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGStorageInterpreter::getColumnsForTableScan(Int64 max_columns_to_read)
 {
     // todo handle alias column
     if (max_columns_to_read && table_scan.columns().size() > max_columns_to_read)
@@ -476,12 +476,13 @@ std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColu
 
     Names required_columns_;
     NamesAndTypes source_columns_;
-    BoolVec timestamp_column_flag;
+    std::vector<ExtraCastAfterTSMode> need_cast_column;
+    need_cast_column.reserve(table_scan.columns_size());
     String handle_column_name_ = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         handle_column_name_ = pk_handle_col->get().name;
 
-    for (Int32 i = 0; i < table_scan.columns().size(); i++)
+    for (Int32 i = 0; i < table_scan.columns_size(); i++)
     {
         auto const & ci = table_scan.columns(i);
         ColumnID cid = ci.column_id();
@@ -491,10 +492,15 @@ std::tuple<Names, NamesAndTypes, BoolVec, String> DAGStorageInterpreter::getColu
         auto pair = storage->getColumns().getPhysical(name);
         required_columns_.emplace_back(std::move(name));
         source_columns_.emplace_back(std::move(pair));
-        timestamp_column_flag.push_back(cid != -1 && ci.tp() == TiDB::TypeTimestamp);
+        if (cid != -1 && ci.tp() == TiDB::TypeTimestamp)
+            need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+        else if (cid != -1 && ci.tp() == TiDB::TypeTime)
+            need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
+        else
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
     }
 
-    return {required_columns_, source_columns_, timestamp_column_flag, handle_column_name_};
+    return {required_columns_, source_columns_, need_cast_column, handle_column_name_};
 }
 
 std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorageInterpreter::buildRemoteTS()
@@ -510,7 +516,12 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     auto print_retry_regions = [this] {
         FmtBuffer buffer;
         buffer.fmtAppend("Start to retry {} regions (", region_retry.size());
-        joinIterToString(region_retry.cbegin(), region_retry.cend(), buffer, [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); }, ",");
+        joinStr(
+            region_retry.cbegin(),
+            region_retry.cend(),
+            buffer,
+            [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
+            ",");
         buffer.append(")");
         return buffer.toString();
     };
