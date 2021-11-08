@@ -31,6 +31,63 @@ extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
 } // namespace ErrorCodes
 
+class DAGExpressionAnalyzerHelper
+{
+public:
+    static String buildInFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    static String buildBitwiseFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    static String buildMultiIfFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    static String buildIfNullFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    static String buildLogicalFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    static String buildLeftUTF8Function(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    static String buildCastFunctionInternal(
+        DAGExpressionAnalyzer * analyzer,
+        const Names & argument_names,
+        bool in_union,
+        const tipb::FieldType & field_type,
+        ExpressionActionsPtr & actions);
+
+    static String buildCastFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    template <typename Impl>
+    static String buildDateAddOrSubFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+
+    static String buildRoundFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        ExpressionActionsPtr & actions);
+};
+
 static String genFuncString(const String & func_name, const Names & argument_names, const TiDB::TiDBCollators & collators)
 {
     assert(!collators.empty());
@@ -69,7 +126,10 @@ static String getUniqueName(const Block & block, const String & prefix)
     return prefix + toString(i);
 }
 
-static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildMultiIfFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     // multiIf is special because
     // 1. the type of odd argument(except the last one) must be UInt8
@@ -91,7 +151,10 @@ static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildIfNullFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildIfNullFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     // rewrite IFNULL function with multiIf
     // ifNull(arg1, arg2) -> if(isNull(arg1), arg2, arg1)
@@ -113,7 +176,10 @@ static String buildIfNullFunction(DAGExpressionAnalyzer * analyzer, const tipb::
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildInFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
@@ -127,7 +193,7 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     argument_types.push_back(sample_block.getByName(key_name).type);
     for (int i = 1; i < expr.children_size(); ++i)
     {
-        auto & child = expr.children(i);
+        const auto & child = expr.children(i);
         if (!isLiteralExpr(child))
         {
             // Non-literal expression will be rewritten with `OR`, for example:
@@ -181,11 +247,14 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions, nullptr);
 }
 
-static String buildLogicalFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildLogicalFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
-    for (auto & child : expr.children())
+    for (const auto & child : expr.children())
     {
         String name = analyzer->getActions(child, actions, true);
         argument_names.push_back(name);
@@ -194,7 +263,10 @@ static String buildLogicalFunction(DAGExpressionAnalyzer * analyzer, const tipb:
 }
 
 // left(str,len) = substrUTF8(str,1,len)
-static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildLeftUTF8Function(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     const String & func_name = "substringUTF8";
     Names argument_names;
@@ -216,59 +288,15 @@ static String buildLeftUTF8Function(DAGExpressionAnalyzer * analyzer, const tipb
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildTupleFunctionForGroupConcat(
-    DAGExpressionAnalyzer * analyzer,
-    const tipb::Expr & expr,
-    SortDescription & sort_desc,
-    NamesAndTypes & names_and_types,
-    TiDB::TiDBCollators & collators,
-    ExpressionActionsPtr & actions)
-{
-    const String & func_name = "tuple";
-    Names argument_names;
-
-    /// add the first N-1 expr into the tuple
-    int child_size = expr.children_size() - 1;
-    for (auto i = 0; i < child_size; ++i)
-    {
-        auto & child = expr.children(i);
-        String name = analyzer->getActions(child, actions, false);
-        argument_names.push_back(name);
-        auto type = actions->getSampleBlock().getByName(name).type;
-        names_and_types.emplace_back(name, type);
-        if (removeNullable(type)->isString())
-            collators.push_back(getCollatorFromExpr(expr.children(i)));
-        else
-            collators.push_back(nullptr);
-    }
-
-    std::vector<NameAndTypePair> order_columns;
-    for (auto i = 0; i < expr.order_by_size(); ++i)
-    {
-        String name = analyzer->getActions(expr.order_by(i).expr(), actions);
-        argument_names.push_back(name);
-        auto type = actions->getSampleBlock().getByName(name).type;
-        order_columns.emplace_back(name, type);
-        names_and_types.emplace_back(name, type);
-        if (removeNullable(type)->isString())
-            collators.push_back(getCollatorFromExpr(expr.order_by(i).expr()));
-        else
-            collators.push_back(nullptr);
-    }
-    sort_desc = getSortDescription(order_columns, expr.order_by());
-
-    return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
-}
-
-static const String tidb_cast_name = "tidb_cast";
-
-static String buildCastFunctionInternal(
+String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
     DAGExpressionAnalyzer * analyzer,
     const Names & argument_names,
     bool in_union,
     const tipb::FieldType & field_type,
     ExpressionActionsPtr & actions)
 {
+    static const String tidb_cast_name = "tidb_cast";
+
     String result_name = genFuncString(tidb_cast_name, argument_names, {nullptr});
     if (actions->getSampleBlock().has(result_name))
         return result_name;
@@ -284,7 +312,10 @@ static String buildCastFunctionInternal(
 }
 
 /// buildCastFunction build tidb_cast function
-static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildCastFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 1)
         throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
@@ -307,6 +338,7 @@ struct DateAdd
     static constexpr auto name = "date_add";
     static const std::unordered_map<String, String> unit_to_func_name_map;
 };
+
 const std::unordered_map<String, String> DateAdd::unit_to_func_name_map
     = {
         {"DAY", "addDays"},
@@ -316,11 +348,13 @@ const std::unordered_map<String, String> DateAdd::unit_to_func_name_map
         {"HOUR", "addHours"},
         {"MINUTE", "addMinutes"},
         {"SECOND", "addSeconds"}};
+
 struct DateSub
 {
     static constexpr auto name = "date_sub";
     static const std::unordered_map<String, String> unit_to_func_name_map;
 };
+
 const std::unordered_map<String, String> DateSub::unit_to_func_name_map
     = {
         {"DAY", "subtractDays"},
@@ -332,7 +366,10 @@ const std::unordered_map<String, String> DateSub::unit_to_func_name_map
         {"SECOND", "subtractSeconds"}};
 
 template <typename Impl>
-static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 3)
     {
@@ -381,7 +418,10 @@ static String buildDateAddOrSubFunction(DAGExpressionAnalyzer * analyzer, const 
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
-static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildBitwiseFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
@@ -389,7 +429,7 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     // See https://github.com/pingcap/tics/issues/1756
     DataTypePtr uint64_type = std::make_shared<DataTypeUInt64>();
     const Block & sample_block = actions->getSampleBlock();
-    for (auto & child : expr.children())
+    for (const auto & child : expr.children())
     {
         String name = analyzer->getActions(child, actions);
         DataTypePtr orig_type = sample_block.getByName(name).type;
@@ -411,7 +451,10 @@ static String buildBitwiseFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, nullptr);
 }
 
-static String buildRoundFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzerHelper::buildRoundFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
 {
     // ROUND(x) -> ROUND(x, 0)
 
@@ -432,53 +475,32 @@ static String buildRoundFunction(DAGExpressionAnalyzer * analyzer, const tipb::E
     return analyzer->applyFunction("tidbRoundWithFrac", argument_names, actions, getCollatorFromExpr(expr));
 }
 
-static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
-{
-    const String & func_name = getFunctionName(expr);
-    Names argument_names;
-    for (auto & child : expr.children())
-    {
-        String name = analyzer->getActions(child, actions);
-        argument_names.push_back(name);
-    }
-    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
-}
-
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
     function_builder_map(
-        {{"in", buildInFunction},
-         {"notIn", buildInFunction},
-         {"globalIn", buildInFunction},
-         {"globalNotIn", buildInFunction},
-         {"tidbIn", buildInFunction},
-         {"tidbNotIn", buildInFunction},
-         {"ifNull", buildIfNullFunction},
-         {"multiIf", buildMultiIfFunction},
-         {"tidb_cast", buildCastFunction},
-         {"and", buildLogicalFunction},
-         {"or", buildLogicalFunction},
-         {"xor", buildLogicalFunction},
-         {"not", buildLogicalFunction},
-         {"bitAnd", buildBitwiseFunction},
-         {"bitOr", buildBitwiseFunction},
-         {"bitXor", buildBitwiseFunction},
-         {"bitNot", buildBitwiseFunction},
-         {"leftUTF8", buildLeftUTF8Function},
-         {"date_add", buildDateAddOrSubFunction<DateAdd>},
-         {"date_sub", buildDateAddOrSubFunction<DateSub>},
-         {"tidbRound", buildRoundFunction}});
+        {{"in", DAGExpressionAnalyzerHelper::buildInFunction},
+         {"notIn", DAGExpressionAnalyzerHelper::buildInFunction},
+         {"globalIn", DAGExpressionAnalyzerHelper::buildInFunction},
+         {"globalNotIn", DAGExpressionAnalyzerHelper::buildInFunction},
+         {"tidbIn", DAGExpressionAnalyzerHelper::buildInFunction},
+         {"tidbNotIn", DAGExpressionAnalyzerHelper::buildInFunction},
+         {"ifNull", DAGExpressionAnalyzerHelper::buildIfNullFunction},
+         {"multiIf", DAGExpressionAnalyzerHelper::buildMultiIfFunction},
+         {"tidb_cast", DAGExpressionAnalyzerHelper::buildCastFunction},
+         {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+         {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+         {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+         {"not", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+         {"bitAnd", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+         {"bitOr", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+         {"bitXor", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+         {"bitNot", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+         {"leftUTF8", DAGExpressionAnalyzerHelper::buildLeftUTF8Function},
+         {"date_add", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateAdd>},
+         {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},
+         {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction}});
 
-DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
+DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_))
-    , context(context_)
-    , after_agg(false)
-    , implicit_cast_count(0)
-{
-    settings = context.getSettings();
-}
-
-DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> & source_columns_, const Context & context_)
-    : source_columns(source_columns_)
     , context(context_)
     , after_agg(false)
     , implicit_cast_count(0)
@@ -497,7 +519,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     /// the last parametric is the separator
     auto child_size = expr.children_size() - 1;
     NamesAndTypes all_columns_names_and_types;
-    String delimiter = "";
+    String delimiter;
     SortDescription sort_description;
     bool only_one_column = true;
     TiDB::TiDBCollators arg_collators;
@@ -520,7 +542,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     else
     {
         /// args... -> tuple(args...)
-        arg_name = buildTupleFunctionForGroupConcat(this, expr, sort_description, all_columns_names_and_types, arg_collators, step.actions);
+        arg_name = buildTupleFunctionForGroupConcat(expr, sort_description, all_columns_names_and_types, arg_collators, step.actions);
         only_one_column = false;
         types[0] = step.actions->getSampleBlock().getByName(arg_name).type;
     }
@@ -805,8 +827,8 @@ String DAGExpressionAnalyzer::applyFunction(
     if (actions->getSampleBlock().has(result_name))
         return result_name;
     const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
-    const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, arg_names, result_name, collator);
-    actions->add(apply_function);
+    const ExpressionAction & action = ExpressionAction::applyFunction(function_builder, arg_names, result_name, collator);
+    actions->add(action);
     return result_name;
 }
 
@@ -853,14 +875,14 @@ void DAGExpressionAnalyzer::appendWhere(
 
 String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, const String & column_name)
 {
-    // Some of the TiFlash operators(e.g. FilterBlockInputStream) only support uint8 as its input, so need to convert the
+    // Some of the TiFlash operators(e.g. FilterBlockInputStream) only support UInt8 as its input, so need to convert the
     // column type to UInt8
     // the basic rule is:
-    // 1. if the column is only null, just return it is fine
+    // 1. if the column is only null, just return it
     // 2. if the column is numeric, compare it with 0
     // 3. if the column is string, convert it to numeric column, and compare with 0
     // 4. if the column is date/datetime, compare it with zeroDate
-    // 5. if the column is other type, throw exception
+    // 5. otherwise throw exception
     if (actions->getSampleBlock().getByName(column_name).type->onlyNull())
     {
         return column_name;
@@ -882,7 +904,12 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         tipb::Expr type_expr;
         constructStringLiteralTiExpr(type_expr, "Nullable(Int64)");
         auto type_expr_name = getActions(type_expr, actions);
-        String num_col_name = buildCastFunctionInternal(this, {column_name, type_expr_name}, false, field_type, actions);
+        String num_col_name = DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
+            this,
+            {column_name, type_expr_name},
+            false,
+            field_type,
+            actions);
 
         tipb::Expr const_expr;
         constructInt64LiteralTiExpr(const_expr, 0);
@@ -910,21 +937,23 @@ void DAGExpressionAnalyzer::appendOrderBy(
     }
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
-    for (const tipb::ByItem & byItem : topN.order_by())
+    for (const tipb::ByItem & by_item : topN.order_by())
     {
-        String name = getActions(byItem.expr(), step.actions);
+        String name = getActions(by_item.expr(), step.actions);
         auto type = step.actions->getSampleBlock().getByName(name).type;
         order_columns.emplace_back(name, type);
         step.required_output.push_back(name);
     }
 }
 
-const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns()
+const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const
 {
     return after_agg ? aggregated_columns : source_columns;
 }
 
-void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project)
+void DAGExpressionAnalyzer::appendFinalProject(
+    ExpressionActionsChain & chain,
+    const NamesWithAliases & final_project) const
 {
     initChain(chain, getCurrentInputColumns());
     for (const auto & name : final_project)
@@ -933,7 +962,10 @@ void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, c
     }
 }
 
-void constructTZExpr(tipb::Expr & tz_expr, const TimezoneInfo & dag_timezone_info, bool from_utc)
+void constructTZExpr(
+    tipb::Expr & tz_expr,
+    const TimezoneInfo & dag_timezone_info,
+    bool from_utc)
 {
     if (dag_timezone_info.is_name_based)
         constructStringLiteralTiExpr(tz_expr, dag_timezone_info.timezone_name);
@@ -951,21 +983,10 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
     return cast_expr_name;
 }
 
-// appendExtraCastsAfterTS will append extra casts after tablescan if needed.
-// 1) add timezone cast after table scan, this is used for session level timezone support
-// the basic idea of supporting session level timezone is that:
-// 1. for every timestamp column used in the dag request, after reading it from table scan,
-//    we add cast function to convert its timezone to the timezone specified in DAG request
-// 2. based on the dag encode type, the return column will be with session level timezone(Arrow encode)
-//    or UTC timezone(Default encode), if UTC timezone is needed, another cast function is used to
-//    convert the session level timezone to UTC timezone.
-// Note in the worst case(e.g select ts_col from table with Default encode), this will introduce two
-// useless casts to all the timestamp columns, however, since TiDB now use chunk encode as the default
-// encoding scheme, the worst case should happen rarely.
-// 2) add duration cast after table scan, this is ued for calculation of duration in TiFlash.
-// TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
-// Int64 to duration.
-bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(ExpressionActionsChain & chain, const std::vector<ExtraCastAfterTSMode> & need_cast_column, const DAGQueryBlock & query_block)
+bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
+    ExpressionActionsChain & chain,
+    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const DAGQueryBlock & query_block)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
@@ -1024,13 +1045,13 @@ String DAGExpressionAnalyzer::appendDurationCast(
 void DAGExpressionAnalyzer::appendJoin(
     ExpressionActionsChain & chain,
     SubqueryForSet & join_query,
-    const NamesAndTypesList & columns_added_by_join)
+    const NamesAndTypesList & columns_added_by_join) const
 {
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
-/// return true if some actions is needed
+
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -1184,9 +1205,9 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     if (need_update_aggregated_columns)
     {
         aggregated_columns.clear();
-        for (size_t i = 0; i < updated_aggregated_columns.size(); i++)
+        for (auto & col : updated_aggregated_columns)
         {
-            aggregated_columns.emplace_back(updated_aggregated_columns[i].name, updated_aggregated_columns[i].type);
+            aggregated_columns.emplace_back(col.name, col.type);
         }
     }
 }
@@ -1202,7 +1223,7 @@ void DAGExpressionAnalyzer::generateFinalProject(
     if (unlikely(!keep_session_timezone_info && output_offsets.empty()))
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
-    auto & current_columns = getCurrentInputColumns();
+    const auto & current_columns = getCurrentInputColumns();
     UniqueNameGenerator unique_name_generator;
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
@@ -1214,7 +1235,7 @@ void DAGExpressionAnalyzer::generateFinalProject(
         /// !output_offsets.empty() means root block, we need to append type cast for root block if necessary
         for (UInt32 i : output_offsets)
         {
-            auto & actual_type = current_columns[i].type;
+            const auto & actual_type = current_columns[i].type;
             auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
             if (actual_type->getName() != expected_type->getName())
             {
@@ -1299,15 +1320,6 @@ void DAGExpressionAnalyzer::generateFinalProject(
     }
 }
 
-/**
- * when force_uint8 is false, alignReturnType align the data type in tiflash with the data type in dag request, otherwise
- * always convert the return type to uint8 or nullable(uint8)
- * @param expr
- * @param actions
- * @param expr_name
- * @param force_uint8
- * @return
- */
 String DAGExpressionAnalyzer::alignReturnType(
     const tipb::Expr & expr,
     ExpressionActionsPtr & actions,
@@ -1322,6 +1334,25 @@ String DAGExpressionAnalyzer::alignReturnType(
     if (force_uint8 && !isUInt8Type(updated_type))
         updated_name = convertToUInt8(actions, updated_name);
     return updated_name;
+}
+
+void DAGExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const std::vector<NameAndTypePair> & columns) const
+{
+    if (chain.steps.empty())
+    {
+        chain.settings = settings;
+        NamesAndTypesList column_list;
+        std::unordered_set<String> column_name_set;
+        for (const auto & col : columns)
+        {
+            if (column_name_set.find(col.name) == column_name_set.end())
+            {
+                column_list.emplace_back(col.name, col.type);
+                column_name_set.emplace(col.name);
+            }
+        }
+        chain.steps.emplace_back(std::make_shared<ExpressionActions>(column_list, settings));
+    }
 }
 
 String DAGExpressionAnalyzer::appendCast(const DataTypePtr & target_type, ExpressionActionsPtr & actions, const String & expr_name)
@@ -1434,7 +1465,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         }
         else
         {
-            ret = buildFunction(this, expr, actions);
+            ret = buildFunction(expr, actions);
         }
     }
     else
@@ -1445,4 +1476,62 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     ret = alignReturnType(expr, actions, ret, output_as_uint8_type);
     return ret;
 }
+
+String DAGExpressionAnalyzer::buildTupleFunctionForGroupConcat(
+    const tipb::Expr & expr,
+    SortDescription & sort_desc,
+    NamesAndTypes & names_and_types,
+    TiDB::TiDBCollators & collators,
+    ExpressionActionsPtr & actions)
+{
+    const String & func_name = "tuple";
+    Names argument_names;
+
+    /// add the first N-1 expr into the tuple
+    int child_size = expr.children_size() - 1;
+    for (auto i = 0; i < child_size; ++i)
+    {
+        const auto & child = expr.children(i);
+        String name = getActions(child, actions, false);
+        argument_names.push_back(name);
+        auto type = actions->getSampleBlock().getByName(name).type;
+        names_and_types.emplace_back(name, type);
+        if (removeNullable(type)->isString())
+            collators.push_back(getCollatorFromExpr(expr.children(i)));
+        else
+            collators.push_back(nullptr);
+    }
+
+    std::vector<NameAndTypePair> order_columns;
+    for (auto i = 0; i < expr.order_by_size(); ++i)
+    {
+        String name = getActions(expr.order_by(i).expr(), actions);
+        argument_names.push_back(name);
+        auto type = actions->getSampleBlock().getByName(name).type;
+        order_columns.emplace_back(name, type);
+        names_and_types.emplace_back(name, type);
+        if (removeNullable(type)->isString())
+            collators.push_back(getCollatorFromExpr(expr.order_by(i).expr()));
+        else
+            collators.push_back(nullptr);
+    }
+    sort_desc = getSortDescription(order_columns, expr.order_by());
+
+    return applyFunction(func_name, argument_names, actions, nullptr);
+}
+
+String DAGExpressionAnalyzer::buildFunction(
+    const tipb::Expr & expr,
+    ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (const auto & child : expr.children())
+    {
+        String name = getActions(child, actions);
+        argument_names.push_back(name);
+    }
+    return applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 } // namespace DB

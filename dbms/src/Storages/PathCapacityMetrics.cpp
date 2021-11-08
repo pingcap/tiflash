@@ -36,7 +36,7 @@ PathCapacityMetrics::PathCapacityMetrics(
     : capacity_quota(capacity_quota_)
     , log(&Poco::Logger::get("PathCapacityMetrics"))
 {
-    if (main_capacity_quota_.empty())
+    if (!main_capacity_quota_.empty())
     {
         // The `capacity_quota_` is left for backward compatibility.
         // If `main_capacity_quota_` is not empty, use the capacity for each path instead of global capacity.
