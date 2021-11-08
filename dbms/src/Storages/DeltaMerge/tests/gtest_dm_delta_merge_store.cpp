@@ -1795,6 +1795,156 @@ try
 }
 CATCH
 
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloat64)
+try
+{
+    const String col_name_to_add = "f64";
+    const ColId col_id_to_add = 2;
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+    }
+
+    // DDL add column f64 with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type = AlterCommand::ADD_COLUMN;
+            com.data_type = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `f64` Float64 DEFAULT 1.123456
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name = "CAST";
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field((Float64)1.123456));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*db_context,
+                              db_context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                Field tmp;
+                col.column->get(i, tmp);
+                // There is some loss of precision during the convertion, so we just do a rough comparison
+                EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.123456);
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloatDecimal64)
+try
+{
+    const String col_name_to_add = "f64";
+    const ColId col_id_to_add = 2;
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float64");
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+    }
+
+    // DDL add column f64 with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type = AlterCommand::ADD_COLUMN;
+            com.data_type = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `f64` Float64 DEFAULT 1.123456
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name = "CAST";
+                ASTPtr arg = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal64(1123456), 6)));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*db_context,
+                              db_context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                Field tmp;
+                col.column->get(i, tmp);
+                // There is some loss of precision during the convertion, so we just do a rough comparison
+                EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.123456);
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
 TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloat32)
 try
 {
@@ -1938,6 +2088,80 @@ try
             }
         }
         in->readSuffix();
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumnString)
+try
+{
+    const String col_name_to_add = "string";
+    const ColId col_id_to_add = 2;
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("String");
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+    }
+
+    // DDL add column string with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type = AlterCommand::ADD_COLUMN;
+            com.data_type = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `string` String DEFAULT 'test_add_string_col'
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name = "CAST";
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field((String) "test_add_string_col"));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*db_context,
+                              db_context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                Field tmp;
+                col.column->get(i, tmp);
+                EXPECT_EQ(tmp.get<String>(), String("test_add_string_col"));
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
     }
 }
 CATCH
