@@ -592,33 +592,60 @@ void DAGExpressionAnalyzer::buildGroupConcat(
             result_is_nullable = true;
         }
     }
-
-#define NEW_GROUP_CONCAT_FUNC(result_is_nullable, only_one_column)                       \
-    std::make_shared<AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>( \
-        aggregate.function,                                                              \
-        types,                                                                           \
-        delimiter,                                                                       \
-        max_len,                                                                         \
-        sort_description,                                                                \
-        all_columns_names_and_types,                                                     \
-        arg_collators,                                                                   \
-        expr.has_distinct())
-
     if (result_is_nullable)
     {
         if (only_one_column)
-            aggregate.function = NEW_GROUP_CONCAT_FUNC(true, true);
+        {
+            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, true>>(
+                aggregate.function,
+                types,
+                delimiter,
+                max_len,
+                sort_description,
+                all_columns_names_and_types,
+                arg_collators,
+                expr.has_distinct());
+        }
         else
-            aggregate.function = NEW_GROUP_CONCAT_FUNC(true, false);
+        {
+            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, false>>(
+                aggregate.function,
+                types,
+                delimiter,
+                max_len,
+                sort_description,
+                all_columns_names_and_types,
+                arg_collators,
+                expr.has_distinct());
+        }
     }
     else
     {
         if (only_one_column)
-            aggregate.function = NEW_GROUP_CONCAT_FUNC(false, true);
+        {
+            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, true>>(
+                aggregate.function,
+                types,
+                delimiter,
+                max_len,
+                sort_description,
+                all_columns_names_and_types,
+                arg_collators,
+                expr.has_distinct());
+        }
         else
-            aggregate.function = NEW_GROUP_CONCAT_FUNC(false, false);
+        {
+            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, false>>(
+                aggregate.function,
+                types,
+                delimiter,
+                max_len,
+                sort_description,
+                all_columns_names_and_types,
+                arg_collators,
+                expr.has_distinct());
+        }
     }
-#undef NEW_GROUP_CONCAT_FUNC
 
     aggregate_descriptions.push_back(aggregate);
     DataTypePtr result_type = aggregate.function->getReturnType();
@@ -626,25 +653,8 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     aggregated_columns.emplace_back(func_string, result_type);
 }
 
-extern const String count_second_stage;
 
-static String getAggFuncName(
-    const tipb::Expr & expr,
-    const tipb::Aggregation & agg,
-    const Settings & settings)
-{
-    String agg_func_name = getAggFunctionName(expr);
-    if (expr.has_distinct() && Poco::toLower(agg_func_name) == "countdistinct")
-        return settings.count_distinct_implementation;
-    if (agg.group_by_size() == 0 && agg_func_name == "sum" && expr.has_field_type()
-        && !getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isNullable())
-    {
-        /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
-        /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
-        return count_second_stage;
-    }
-    return agg_func_name;
-}
+extern const String count_second_stage;
 
 std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnalyzer::appendAggregation(
     ExpressionActionsChain & chain,
@@ -667,10 +677,22 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnaly
 
     for (const tipb::Expr & expr : agg.agg_func())
     {
-        String agg_func_name = getAggFuncName(expr, agg, settings);
+        String agg_func_name = getAggFunctionName(expr);
+        if (expr.has_distinct() && Poco::toLower(agg_func_name) == "countdistinct")
+        {
+            agg_func_name = settings.count_distinct_implementation;
+        }
+        if (agg.group_by_size() == 0 && agg_func_name == "sum" && expr.has_field_type()
+            && !getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isNullable())
+        {
+            /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
+            /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
+            agg_func_name = count_second_stage;
+        }
+
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-            buildGroupConcat(expr, step, agg_func_name, aggregate_descriptions, agg.group_by().empty());
+            buildGroupConcat(expr, step, agg_func_name, aggregate_descriptions, agg.group_by_size() == 0);
             continue;
         }
 
