@@ -122,7 +122,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             return true;
         }
 
-        log_storage_snap = context.storage_pool.log().getSnapshot();
+        log_storage_snap = context.storage_pool.log()->getSnapshot();
         snapshot_metrics.changeTo(1); // add metrics for snapshot
     }
 

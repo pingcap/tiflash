@@ -37,9 +37,9 @@ public:
 
     PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
 
-    PageStorage & log() { return log_storage; }
-    PageStorage & data() { return data_storage; }
-    PageStorage & meta() { return meta_storage; }
+    PageStoragePtr log() { return log_storage; }
+    PageStoragePtr data() { return data_storage; }
+    PageStoragePtr meta() { return meta_storage; }
 
     // Caller must cancel gc tasks before drop
     void drop();
@@ -47,9 +47,9 @@ public:
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
-    PageStorage log_storage;
-    PageStorage data_storage;
-    PageStorage meta_storage;
+    PageStoragePtr log_storage;
+    PageStoragePtr data_storage;
+    PageStoragePtr meta_storage;
 
     std::atomic<PageId> max_log_page_id;
     std::atomic<PageId> max_data_page_id;
@@ -65,9 +65,9 @@ private:
 struct StorageSnapshot : private boost::noncopyable
 {
     StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, bool snapshot_read = true)
-        : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : nullptr, read_limiter)
-        , data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : nullptr, read_limiter)
-        , meta_reader(storage.meta(), snapshot_read ? storage.meta().getSnapshot() : nullptr, read_limiter)
+        : log_reader(storage.log(), snapshot_read ? storage.log()->getSnapshot() : nullptr, read_limiter)
+        , data_reader(storage.data(), snapshot_read ? storage.data()->getSnapshot() : nullptr, read_limiter)
+        , meta_reader(storage.meta(), snapshot_read ? storage.meta()->getSnapshot() : nullptr, read_limiter)
     {}
 
     PageReader log_reader;
@@ -75,6 +75,7 @@ struct StorageSnapshot : private boost::noncopyable
     PageReader meta_reader;
 };
 using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
+
 
 } // namespace DM
 } // namespace DB
