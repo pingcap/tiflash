@@ -112,20 +112,24 @@ public:
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
 public:
-    static PageStoragePtr create(
+    static PageStoragePtr
+    create(
         String name,
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
         const FileProviderPtr & file_provider);
 
-    PageStorage(String name,
-                PSDiskDelegatorPtr delegator_,
-                const Config & config_,
-                const FileProviderPtr & file_provider_)
+    PageStorage(
+        String name,
+        PSDiskDelegatorPtr delegator_,
+        const Config & config_,
+        const FileProviderPtr & file_provider_)
         : storage_name(std::move(name))
         , delegator(std::move(delegator_))
         , config(config_)
-        , file_provider(file_provider_){};
+        , file_provider(file_provider_)
+    {
+    }
 
     virtual ~PageStorage() = default;
 
