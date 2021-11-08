@@ -7,21 +7,21 @@ NPROC=${NPROC:-4}
 echo "DEPS_DIR=$DEPS_DIR"
 echo "NPROC=$NPROC"
 
-function common::install_sys_deps() {
+function common_install_sys_deps() {
     if [[ $OSTYPE == 'darwin'* ]]; then
-        darwin::install_sys_deps
+        darwin_install_sys_deps
     else
-        ubuntu::install_sys_deps
+        ubuntu_install_sys_deps
     fi
 }
-function darwin::install_sys_deps() {
+function darwin_install_sys_deps() {
     if [[ ! $OSTYPE == 'darwin'* ]]; then
         return
     fi
     echo "This is a macOS"
     HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl@1.1 autoconf automake
 }
-function ubuntu::install_sys_deps() {
+function ubuntu_install_sys_deps() {
     grep -i ubuntu /etc/issue
     if [ $? -ne 0 ]; then
         return
@@ -30,18 +30,18 @@ function ubuntu::install_sys_deps() {
         git build-essential autoconf libtool pkg-config cmake python3-pip\
         libssl-dev zlib1g-dev libc-ares-dev libreadline-dev ccache
 }
-function python::install_deps() {
+function python_install_deps() {
     pip3 install pybind11 pyinstaller dnspython uri requests urllib3 toml setuptools etcd3
 }
-function common::ensure_dir() {
+function common_ensure_dir() {
     if [ ! -d $1 ]; then
         mkdir -p $1
     fi
 }
-function common::install_rust() {
+function common_install_rust() {
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 }
-function common::install_curl() {
+function common_install_curl() {
     if [[ $OSTYPE == 'darwin'* ]]; then
         return
     fi
@@ -56,27 +56,27 @@ function common::install_curl() {
     popd
     popd
 }
-function common::install_grpc() {
+function common_install_grpc() {
     pushd $DEPS_DIR
     git clone -b v1.26.0 --depth=1 https://github.com/grpc/grpc
     pushd grpc
     git submodule update --init --recursive --depth=1
 
-    common::ensure_dir third_party/cares/cares/build
+    common_ensure_dir third_party/cares/cares/build
     pushd third_party/cares/cares/build
     cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=$(pwd)/install
     make -j $NPROC
     make install
     popd
 
-    common::ensure_dir third_party/protobuf/dist
+    common_ensure_dir third_party/protobuf/dist
     pushd third_party/protobuf/dist
     cmake ../cmake -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=$(pwd)/install
     make -j $NPROC
     make install
     popd
 
-    common::ensure_dir dist
+    common_ensure_dir dist
     pushd dist
     local CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=Release -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF \
         -DCMAKE_INSTALL_PREFIX:PATH=$(pwd)/install \
@@ -101,17 +101,17 @@ function common::install_grpc() {
 }
 function configure_tiflash() {
     git submodule update --init --recursive --depth=1
-    common::ensure_dir build
+    common_ensure_dir build
 
     pushd contrib/tiflash-proxy
     make release
     popd
-    common::ensure_dir libs/libtiflash-proxy
+    common_ensure_dir libs/libtiflash-proxy
     cp contrib/tiflash-proxy/target/release/libtiflash_proxy.* libs/libtiflash-proxy/
 
     pushd cluster_manage
     bash ./release.sh
-    common::ensure_dir ../build/dbms/src/Server
+    common_ensure_dir ../build/dbms/src/Server
     cp -r dist/flash_cluster_manager $(pwd)/../build/dbms/src/Server
     popd
 
@@ -130,10 +130,10 @@ function configure_tiflash() {
     cmake .. $CMAKE_FLAGS
 }
 
-common::ensure_dir $DEPS_DIR
-common::install_sys_deps
-python::install_deps
-common::install_curl
-common::install_rust
-common::install_grpc
+common_ensure_dir $DEPS_DIR
+common_install_sys_deps
+python_install_deps
+common_install_curl
+common_install_rust
+common_install_grpc
 configure_tiflash
