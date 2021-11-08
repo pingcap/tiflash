@@ -30,8 +30,11 @@ DAGQuerySource::DAGQuerySource(
     }
     else
     {
+        throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": root_executor missing", Errors::Coprocessor::BadRequest);
+        /*
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
         output_field_types = extractOutputFields(dag_request.executors());
+        */
     }
     root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(context.getDAGContext()->getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())

@@ -22,7 +22,7 @@ class DAGQueryBlock
 {
 public:
     DAGQueryBlock(UInt32 id, const tipb::Executor & root);
-    DAGQueryBlock(UInt32 id, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors);
+    //DAGQueryBlock(UInt32 id, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors);
     /// the xxx_name is added for compatibility issues: before join is supported, executor does not
     /// has executor name, after join is supported in dag request, every executor has an unique
     /// name(executor->executor_id()). Since We can not always get the executor name from executor

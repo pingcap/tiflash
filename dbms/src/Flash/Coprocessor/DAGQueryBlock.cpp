@@ -135,6 +135,8 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
     }
 }
 
+/*
+ * TODO: traverse the array as a tree in such order: limit > orderby -> agg -> selection -> table_scan
 /// construct DAGQueryBlock from a list struct based executors, which is the
 /// format before supporting join in dag request
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors)
@@ -199,6 +201,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
         }
     }
 }
+*/
 
 void DAGQueryBlock::collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result)
 {
