@@ -592,33 +592,16 @@ std::vector<tipb::FieldType> extractOutputFields(const tipb::Executor & root)
         }
         return output_field_types;
     case tipb::ExecType::TypeJoin:
-    {
-        std::vector<tipb::FieldType> left_field_types = extractOutputFields(root.join().children(0));
-        std::vector<tipb::FieldType> right_field_types = extractOutputFields(root.join().children(1));
-        for (const auto & field_type : left_field_types)
         {
-            if (root.join().join_type() == tipb::JoinType::TypeRightOuterJoin)
+            std::vector<tipb::FieldType> left_field_types = extractOutputFields(root.join().children(0));
+            std::vector<tipb::FieldType> right_field_types = extractOutputFields(root.join().children(1));
+            for (const auto & field_type : left_field_types)
             {
-                /// the type of left column for right join is always nullable
-                auto updated_field_type = field_type;
-                updated_field_type.set_flag(static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
-                output_field_types.push_back(updated_field_type);
-            }
-            else
-            {
-                output_field_types.push_back(field_type);
-            }
-        }
-        if (root.join().join_type() != tipb::JoinType::TypeSemiJoin && root.join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
-        {
-            /// for semi/anti semi join, the right table column is ignored
-            for (const auto & field_type : right_field_types)
-            {
-                if (root.join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
+                if (root.join().join_type() == tipb::JoinType::TypeRightOuterJoin)
                 {
-                    /// the type of right column for left join is always nullable
+                    /// the type of left column for right join is always nullable
                     auto updated_field_type = field_type;
-                    updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+                    updated_field_type.set_flag(static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
                     output_field_types.push_back(updated_field_type);
                 }
                 else
@@ -626,8 +609,25 @@ std::vector<tipb::FieldType> extractOutputFields(const tipb::Executor & root)
                     output_field_types.push_back(field_type);
                 }
             }
+            if (root.join().join_type() != tipb::JoinType::TypeSemiJoin && root.join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
+            {
+                /// for semi/anti semi join, the right table column is ignored
+                for (const auto & field_type : right_field_types)
+                {
+                    if (root.join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
+                    {
+                        /// the type of right column for left join is always nullable
+                        auto updated_field_type = field_type;
+                        updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+                        output_field_types.push_back(updated_field_type);
+                    }
+                    else
+                    {
+                        output_field_types.push_back(field_type);
+                    }
+                }
+            }
         }
-    }
         return output_field_types;
     case tipb::ExecType::TypeExchangeSender:
         if (!root.exchange_sender().all_field_types().empty())
@@ -669,7 +669,7 @@ std::vector<tipb::FieldType> extractOutputFields(const ::google::protobuf::Repea
     return output_field_types;
 }
 
-extern const String uniq_raw_res_name;
+extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
@@ -677,7 +677,7 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Min, "min"},
     {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "first_row"},
-    {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
+    {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
     {tipb::ExprType::GroupConcat, "groupArray"},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},

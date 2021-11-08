@@ -1,17 +1,20 @@
 #pragma once
 
-#include <AggregateFunctions/IAggregateFunction.h>
+#include <type_traits>
+
+#include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+
+#include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnVector.h>
 #include <Common/assert_cast.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 
-#include <type_traits>
+#include <AggregateFunctions/IAggregateFunction.h>
 
 
 namespace DB
 {
+
 template <typename T>
 struct AggregateFunctionSumAddImpl
 {
@@ -37,7 +40,7 @@ struct AggregateFunctionSumData
     using Impl = AggregateFunctionSumAddImpl<T>;
     T sum{};
 
-    AggregateFunctionSumData() {}
+    AggregateFunctionSumData(){}
 
     template <typename U>
     void NO_SANITIZE_UNDEFINED ALWAYS_INLINE add(U value)
@@ -148,7 +151,7 @@ template <typename T>
 struct AggregateFunctionSumKahanData
 {
     static_assert(std::is_floating_point_v<T>,
-                  "It doesn't make sense to use Kahan Summation algorithm for non floating point types");
+        "It doesn't make sense to use Kahan Summation algorithm for non floating point types");
 
     T sum{};
     T compensation{};
@@ -263,22 +266,15 @@ struct AggregateFunctionSumKahanData
 };
 
 
-struct NameSum
-{
-    static constexpr auto name = "sum";
-};
-
-struct NameCountSecondStage
-{
-    static constexpr auto name = "countSecondStage";
-};
+struct NameSum                { static constexpr auto name = "sum"; };
+struct NameCountSecondStage                { static constexpr auto name = "countSecondStage"; };
+extern const String CountSecondStage;
 
 /// Counts the sum of the numbers.
 template <typename T, typename TResult, typename Data, typename Name = NameSum>
 class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Name>>
 {
     static_assert(IsDecimal<T> == IsDecimal<TResult>);
-
 public:
     using ResultDataType = std::conditional_t<IsDecimal<T>, DataTypeDecimal<TResult>, DataTypeNumber<TResult>>;
     using ColVecType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
@@ -289,27 +285,21 @@ public:
     ScaleType result_scale;
     PrecType result_prec;
 
-    AggregateFunctionSum() {}
+    AggregateFunctionSum(){}
 
-    AggregateFunctionSum(PrecType prec, ScaleType scale)
-    {
+    AggregateFunctionSum(PrecType prec, ScaleType scale) {
         SumDecimalInferer::infer(prec, scale, result_prec, result_scale);
     };
 
-    DataTypePtr getReturnType() const override
-    {
-        if constexpr (IsDecimal<TResult>)
-        {
+    DataTypePtr getReturnType() const override {
+        if constexpr (IsDecimal<TResult>) {
             return std::make_shared<ResultDataType>(result_prec, result_scale);
-        }
-        else
-        {
+        } else {
             return std::make_shared<ResultDataType>();
         }
     }
 
-    void create(AggregateDataPtr __restrict place) const override
-    {
+    void create(AggregateDataPtr __restrict place) const override {
         new (place) Data;
     }
 
@@ -321,11 +311,7 @@ public:
 
     /// Vectorized version when there is no GROUP BY keys.
     void addBatchSinglePlace(
-        size_t batch_size,
-        AggregateDataPtr place,
-        const IColumn ** columns,
-        Arena * arena,
-        ssize_t if_argument_pos) const override
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos) const override
     {
         if (if_argument_pos >= 0)
         {
@@ -344,12 +330,7 @@ public:
     }
 
     void addBatchSinglePlaceNotNull(
-        size_t batch_size,
-        AggregateDataPtr place,
-        const IColumn ** columns,
-        const UInt8 * null_map,
-        Arena * arena,
-        ssize_t if_argument_pos)
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, const UInt8 * null_map, Arena * arena, ssize_t if_argument_pos)
         const override
     {
         if (if_argument_pos >= 0)
@@ -383,15 +364,13 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        if constexpr (IsDecimal<TResult>)
-        {
+        if constexpr (IsDecimal<TResult>) {
             static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get(), result_scale);
-        }
-        else
+        } else
             static_cast<ColumnVector<TResult> &>(to).getData().push_back(this->data(place).get());
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-} // namespace DB
+}

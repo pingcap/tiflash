@@ -231,7 +231,7 @@ protected:
             {
                 ColumnWithTypeAndName & ori_column = block.getByPosition(i);
 
-                if (std::string::npos != ori_column.name.find_first_of(uniq_raw_res_name))
+                if (std::string::npos != ori_column.name.find_first_of(UniqRawResName))
                 {
                     MutableColumnPtr mutable_holder = ori_column.column->cloneEmpty();
 
@@ -1272,7 +1272,7 @@ struct Aggregation : public Executor
                 ft->set_flag(agg_func->children(0).field_type().flag());
                 ft->set_collate(collator_id);
             }
-            else if (func->name == uniq_raw_res_name)
+            else if (func->name == UniqRawResName)
             {
                 agg_func->set_tp(tipb::ApproxCountDistinct);
                 auto ft = agg_func->mutable_field_type();
@@ -1932,7 +1932,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
             {
                 ci = children_ci[0];
             }
-            else if (func->name == uniq_raw_res_name)
+            else if (func->name == UniqRawResName)
             {
                 has_uniq_raw_res = true;
                 ci.tp = TiDB::TypeString;

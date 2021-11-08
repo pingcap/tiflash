@@ -1,31 +1,38 @@
 #pragma once
 
+#include <city.h>
+#include <type_traits>
+
+#include <AggregateFunctions/UniquesHashSet.h>
+
+#include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+
+#include <Columns/ColumnString.h>
+
+#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+
+#include <Interpreters/AggregationCommon.h>
+#include <Common/HashTable/HashSet.h>
+#include <Common/HyperLogLogWithSmallSetOptimization.h>
+#include <Common/CombinedCardinalityEstimator.h>
+#include <Common/MemoryTracker.h>
+
+#include <Common/typeid_cast.h>
+
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/UniqCombinedBiasData.h>
 #include <AggregateFunctions/UniqVariadicHash.h>
-#include <AggregateFunctions/UniquesHashSet.h>
-#include <Columns/ColumnString.h>
-#include <Common/CombinedCardinalityEstimator.h>
-#include <Common/HashTable/HashSet.h>
-#include <Common/HyperLogLogWithSmallSetOptimization.h>
-#include <Common/MemoryTracker.h>
-#include <Common/typeid_cast.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Interpreters/AggregationCommon.h>
-#include <city.h>
-
-#include <type_traits>
 
 
 namespace DB
 {
+
 /// uniq
 
-extern const String uniq_raw_res_name;
+extern const String UniqRawResName;
 
 struct AggregateFunctionUniqUniquesHashSetData : AggregationCollatorsWrapper<false>
 {
@@ -79,7 +86,7 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes : AggregationCol
     using Set = UniquesHashSet<TrivialHash, false>;
     Set set;
 
-    static String getName() { return uniq_raw_res_name; }
+    static String getName() { return UniqRawResName; }
 };
 
 /// uniqHLL12
@@ -280,16 +287,15 @@ struct AggregateFunctionUniqCombinedData<String> : AggregationCollatorsWrapper<t
 
 namespace detail
 {
+
 /** Hash function for uniq.
   */
-template <typename T>
-struct AggregateFunctionUniqTraits
+template <typename T> struct AggregateFunctionUniqTraits
 {
     static UInt64 hash(T x) { return x; }
 };
 
-template <>
-struct AggregateFunctionUniqTraits<UInt128>
+template <> struct AggregateFunctionUniqTraits<UInt128>
 {
     static UInt64 hash(UInt128 x)
     {
@@ -297,8 +303,7 @@ struct AggregateFunctionUniqTraits<UInt128>
     }
 };
 
-template <>
-struct AggregateFunctionUniqTraits<Float32>
+template <> struct AggregateFunctionUniqTraits<Float32>
 {
     static UInt64 hash(Float32 x)
     {
@@ -308,8 +313,7 @@ struct AggregateFunctionUniqTraits<Float32>
     }
 };
 
-template <>
-struct AggregateFunctionUniqTraits<Float64>
+template <> struct AggregateFunctionUniqTraits<Float64>
 {
     static UInt64 hash(Float64 x)
     {
@@ -321,14 +325,12 @@ struct AggregateFunctionUniqTraits<Float64>
 
 /** Hash function for uniqCombined.
   */
-template <typename T>
-struct AggregateFunctionUniqCombinedTraits
+template <typename T> struct AggregateFunctionUniqCombinedTraits
 {
     static UInt32 hash(T x) { return static_cast<UInt32>(intHash64(x)); }
 };
 
-template <>
-struct AggregateFunctionUniqCombinedTraits<UInt128>
+template <> struct AggregateFunctionUniqCombinedTraits<UInt128>
 {
     static UInt32 hash(UInt128 x)
     {
@@ -336,8 +338,7 @@ struct AggregateFunctionUniqCombinedTraits<UInt128>
     }
 };
 
-template <>
-struct AggregateFunctionUniqCombinedTraits<Float32>
+template <> struct AggregateFunctionUniqCombinedTraits<Float32>
 {
     static UInt32 hash(Float32 x)
     {
@@ -347,8 +348,7 @@ struct AggregateFunctionUniqCombinedTraits<Float32>
     }
 };
 
-template <>
-struct AggregateFunctionUniqCombinedTraits<Float64>
+template <> struct AggregateFunctionUniqCombinedTraits<Float64>
 {
     static UInt32 hash(Float64 x)
     {
@@ -367,7 +367,8 @@ struct OneAdder
 {
     static void ALWAYS_INLINE add(Data & data, const IColumn & column, size_t row_num)
     {
-        if constexpr (std::is_same_v<Data, AggregateFunctionUniqUniquesHashSetData> || std::is_same_v<Data, AggregateFunctionUniqHLL12Data<T>>)
+        if constexpr (std::is_same_v<Data, AggregateFunctionUniqUniquesHashSetData>
+            || std::is_same_v<Data, AggregateFunctionUniqHLL12Data<T>>)
         {
             if constexpr (!std::is_same_v<T, String>)
             {
@@ -417,7 +418,7 @@ struct OneAdder
     }
 };
 
-} // namespace detail
+}
 
 
 /// Calculates the number of different values approximately or exactly.
@@ -529,4 +530,4 @@ public:
 };
 
 
-} // namespace DB
+}

@@ -1,13 +1,15 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionSum.h>
-#include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
+#include <AggregateFunctions/FactoryHelpers.h>
 
 
 namespace DB
 {
+
 namespace
 {
+
 template <typename T>
 using AggregateFunctionSumSimple = AggregateFunctionSum<T, typename NearestFieldType<T>::Type, AggregateFunctionSumData<typename NearestFieldType<T>::Type>>;
 
@@ -24,10 +26,8 @@ template <typename T>
 using AggregateFunctionSumKahan = AggregateFunctionSum<T, Float64, AggregateFunctionSumKahanData<Float64>>;
 
 template <typename T>
-AggregateFunctionPtr createDecimalFunction(const IDataType * p)
-{
-    if (auto dec_type = typeid_cast<const DataTypeDecimal<T> *>(p))
-    {
+AggregateFunctionPtr createDecimalFunction(const IDataType * p) {
+    if (auto dec_type = typeid_cast<const DataTypeDecimal<T> *>(p)) {
         PrecType prec = dec_type->getPrec();
         ScaleType scale = dec_type->getScale();
         PrecType result_prec;
@@ -58,15 +58,9 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
     AggregateFunctionPtr res;
     const IDataType * p = argument_types[0].get();
     if ((res = createDecimalFunction<Decimal32>(p)) != nullptr) {}
-    else if ((res = createDecimalFunction<Decimal64>(p)) != nullptr)
-    {
-    }
-    else if ((res = createDecimalFunction<Decimal128>(p)) != nullptr)
-    {
-    }
-    else if ((res = createDecimalFunction<Decimal256>(p)) != nullptr)
-    {
-    }
+    else if ((res = createDecimalFunction<Decimal64>(p)) != nullptr) {}
+    else if ((res = createDecimalFunction<Decimal128>(p)) != nullptr) {}
+    else if ((res = createDecimalFunction<Decimal256>(p)) != nullptr) {}
     else
         res = AggregateFunctionPtr(createWithNumericType<Function>(*p));
 
@@ -76,16 +70,16 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
     return res;
 }
 
-} // namespace
+}
 
-extern const String count_second_stage = NameCountSecondStage::name;
+const String CountSecondStage = NameCountSecondStage::name;
 
 void registerAggregateFunctionSum(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("sum", createAggregateFunctionSum<AggregateFunctionSumSimple>, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("sumWithOverflow", createAggregateFunctionSum<AggregateFunctionSumWithOverflow>);
     factory.registerFunction("sumKahan", createAggregateFunctionSum<AggregateFunctionSumKahan>);
-    factory.registerFunction(count_second_stage, createAggregateFunctionSum<AggregateFunctionCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(CountSecondStage, createAggregateFunctionSum<AggregateFunctionCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
 }
 
-} // namespace DB
+}
