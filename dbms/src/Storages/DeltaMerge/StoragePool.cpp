@@ -3,7 +3,6 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
-#include <Storages/Page/PageCreator.h>
 #include <Storages/PathPool.h>
 #include <fmt/format.h>
 
@@ -54,22 +53,22 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
 
 StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
     : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-    log_storage(PageCreator::createPageStorage(name + ".log",
-                                               path_pool.getPSDiskDelegatorMulti("log"),
-                                               extractConfig(settings, StorageType::Log),
-                                               global_ctx.getFileProvider()))
+    log_storage(PageStorage::create(name + ".log",
+                                    path_pool.getPSDiskDelegatorMulti("log"),
+                                    extractConfig(settings, StorageType::Log),
+                                    global_ctx.getFileProvider()))
     ,
     // The iops in data_storage is low, only use the first disk for storing data
-    data_storage(PageCreator::createPageStorage(name + ".data",
-                                                path_pool.getPSDiskDelegatorSingle("data"),
-                                                extractConfig(settings, StorageType::Data),
-                                                global_ctx.getFileProvider()))
+    data_storage(PageStorage::create(name + ".data",
+                                     path_pool.getPSDiskDelegatorSingle("data"),
+                                     extractConfig(settings, StorageType::Data),
+                                     global_ctx.getFileProvider()))
     ,
     // The iops in meta_storage is relatively high, use multi-disks if possible
-    meta_storage(PageCreator::createPageStorage(name + ".meta",
-                                                path_pool.getPSDiskDelegatorMulti("meta"),
-                                                extractConfig(settings, StorageType::Meta),
-                                                global_ctx.getFileProvider()))
+    meta_storage(PageStorage::create(name + ".meta",
+                                     path_pool.getPSDiskDelegatorMulti("meta"),
+                                     extractConfig(settings, StorageType::Meta),
+                                     global_ctx.getFileProvider()))
     , max_log_page_id(0)
     , max_data_page_id(0)
     , max_meta_page_id(0)

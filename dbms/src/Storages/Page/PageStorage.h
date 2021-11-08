@@ -29,6 +29,8 @@ using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 class Context;
+class PageStorage;
+using PageStoragePtr = std::shared_ptr<PageStorage>;
 
 class PageStorage : private boost::noncopyable
 {
@@ -110,8 +112,14 @@ public:
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
 public:
+    static PageStoragePtr create(
+        String name,
+        PSDiskDelegatorPtr delegator,
+        const PageStorage::Config & config,
+        const FileProviderPtr & file_provider);
+
     PageStorage(String name,
-                PSDiskDelegatorPtr delegator_, //
+                PSDiskDelegatorPtr delegator_,
                 const Config & config_,
                 const FileProviderPtr & file_provider_)
         : storage_name(std::move(name))
@@ -119,7 +127,7 @@ public:
         , config(config_)
         , file_provider(file_provider_){};
 
-    virtual ~PageStorage(){};
+    virtual ~PageStorage() = default;
 
     virtual void restore() = 0;
 
@@ -172,7 +180,6 @@ protected:
     FileProviderPtr file_provider;
 };
 
-using PageStoragePtr = std::shared_ptr<PageStorage>;
 
 class PageReader : private boost::noncopyable
 {
