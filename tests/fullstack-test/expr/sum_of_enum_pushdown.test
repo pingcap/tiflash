@@ -1,0 +1,68 @@
+#tidb version : https://github.com/pingcap/tidb/compare/master...bestwoody:support_enum_pushdown?expand=1
+mysql> DROP TABLE if EXISTS test.shirts
+
+mysql> CREATE TABLE test.shirts (name VARCHAR(40),     size ENUM('x-small', 'small', 'medium', 'large', 'x-large') )
+
+mysql> INSERT INTO test.shirts (name, size) VALUES ('dress shirt','large'), ('t-shirt','medium'),   ('polo shirt','small')
+
+mysql> analyze table test.shirts
+
+mysql> ALTER TABLE test.shirts SET TIFLASH REPLICA 1
+
+func> wait_table test shirts
+
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as decimal)) from test.shirts
++----------------------------+
+| sum(cast(size as decimal)) |
++----------------------------+
+|                          9 |
++----------------------------+
+
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as signed)) from test.shirts
++---------------------------+
+| sum(cast(size as signed)) |
++---------------------------+
+|                         9 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as unsigned)) from test.shirts
++-----------------------------+
+| sum(cast(size as unsigned)) |
++-----------------------------+
+|                           9 |
++-----------------------------+
+
+mysql> set tidb_enforce_mpp=1; select sum(size) from test.shirts
++-----------+
+| sum(size) |
++-----------+
+|         9 |
++-----------+
+
+mysql> set tidb_enforce_mpp=1; select sum(size + 0) from test.shirts
++---------------+
+| sum(size + 0) |
++---------------+
+|             9 |
++---------------+
+
+mysql> set tidb_enforce_mpp=1; select sum(size + 0.0) from test.shirts;
++-----------------+
+| sum(size + 0.0) |
++-----------------+
+|               9 |
++-----------------+
+
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as double)) from test.shirts;
++---------------------------+
+| sum(cast(size as double)) |
++---------------------------+
+|                         9 |
++---------------------------+
+
+mysql> set tidb_enforce_mpp=1; select sum(cast(size as real)) from test.shirts;
++-------------------------+
+| sum(cast(size as real)) |
++-------------------------+
+|                       9 |
++-------------------------+

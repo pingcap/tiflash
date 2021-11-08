@@ -1,13 +1,11 @@
 #pragma once
 
 #include <Common/RedactHelpers.h>
-#include <Storages/Transaction/AtomicDecodedRow.h>
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
 {
-
 template <bool is_key>
 struct StringObject : std::string
 {
@@ -20,10 +18,18 @@ public:
     };
 
     StringObject() = default;
-    StringObject(Base && str_) : Base(std::move(str_)) {}
-    StringObject(StringObject && obj) : Base((Base &&) obj) {}
-    StringObject(const char * str, const size_t len) : Base(str, len) {}
-    StringObject(const char * str) : Base(str) {}
+    StringObject(Base && str_)
+        : Base(std::move(str_))
+    {}
+    StringObject(StringObject && obj)
+        : Base((Base &&) obj)
+    {}
+    StringObject(const char * str, const size_t len)
+        : Base(str, len)
+    {}
+    StringObject(const char * str)
+        : Base(str)
+    {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
 
     StringObject & operator=(const StringObject & a) = delete;
@@ -50,7 +56,9 @@ public:
     static StringObject deserialize(ReadBuffer & buf) { return StringObject(readBinary2<Base>(buf)); }
 
 private:
-    StringObject(const Base & str_) : Base(str_) {}
+    StringObject(const Base & str_)
+        : Base(str_)
+    {}
     StringObject(const StringObject & obj) = delete;
     size_t size() const = delete;
 };
@@ -59,12 +67,17 @@ using TiKVKey = StringObject<true>;
 using TiKVValue = StringObject<false>;
 using TiKVKeyValue = std::pair<TiKVKey, TiKVValue>;
 
-struct DecodedTiKVKey : std::string, private boost::noncopyable
+struct DecodedTiKVKey : std::string
+    , private boost::noncopyable
 {
     using Base = std::string;
-    DecodedTiKVKey(Base && str_) : Base(std::move(str_)) {}
+    DecodedTiKVKey(Base && str_)
+        : Base(std::move(str_))
+    {}
     DecodedTiKVKey() = default;
-    DecodedTiKVKey(DecodedTiKVKey && obj) : Base((Base &&) obj) {}
+    DecodedTiKVKey(DecodedTiKVKey && obj)
+        : Base((Base &&) obj)
+    {}
     DecodedTiKVKey & operator=(DecodedTiKVKey && obj)
     {
         if (this == &obj)
@@ -90,7 +103,10 @@ struct RawTiDBPK : std::shared_ptr<const std::string>
     bool operator!=(const RawTiDBPK & y) const { return !((*this) == y); }
     bool operator<(const RawTiDBPK & y) const { return (**this) < (*y); }
 
-    RawTiDBPK(const Base & o) : Base(o), handle(o->size() == 8 ? getHandleID() : 0) {}
+    RawTiDBPK(const Base & o)
+        : Base(o)
+        , handle(o->size() == 8 ? getHandleID() : 0)
+    {}
 
     // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
     std::string toDebugString() const

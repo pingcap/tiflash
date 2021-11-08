@@ -5,7 +5,6 @@
 #include <Common/NaNUtils.h>
 #include <Common/SipHash.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 
 #include <cmath>
@@ -29,7 +28,7 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 template <typename T>
 StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const
 {
-    auto pos = arena.allocContinue(sizeof(T), begin);
+    auto * pos = arena.allocContinue(sizeof(T), begin);
     memcpy(pos, &data[n], sizeof(T));
     return StringRef(pos, sizeof(T));
 }
@@ -62,7 +61,9 @@ void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollat
     auto s = data.size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()),
+            ErrorCodes::LOGICAL_ERROR);
 
     const T * begin = data.data();
     const T * end = begin + s;
@@ -181,12 +182,13 @@ void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t 
     const ColumnVector & src_vec = static_cast<const ColumnVector &>(src);
 
     if (start + length > src_vec.data.size())
-        throw Exception("Parameters start = "
-                            + toString(start) + ", length = "
-                            + toString(length) + " are out of bound in ColumnVector<T>::insertRangeFrom method"
-                                                 " (data.size() = "
-                            + toString(src_vec.data.size()) + ").",
-                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
+        throw Exception(
+            fmt::format(
+                "Parameters start = {}, length = {} are out of bound in ColumnVector<T>::insertRangeFrom method (data.size() = {}).",
+                start,
+                length,
+                src_vec.data.size()),
+            ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t old_size = data.size();
     data.resize(old_size + length);

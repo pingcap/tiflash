@@ -83,28 +83,41 @@ namespace DM
 //   MergeDeltaTaskPool
 // ================================================
 
-bool DeltaMergeStore::MergeDeltaTaskPool::addTask(const BackgroundTask & task, const ThreadType & whom, Poco::Logger * log_)
+std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, Poco::Logger * log_)
 {
-    LOG_DEBUG(log_,
-              "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
-                          << toString(whom) << "]");
-
     std::scoped_lock lock(mutex);
+    if (light_tasks.size() + heavy_tasks.size() >= max_task_num)
+        return std::make_pair(false, false);
+
+    bool is_heavy = false;
     switch (task.type)
     {
     case TaskType::Split:
     case TaskType::Merge:
     case TaskType::MergeDelta:
+        is_heavy = true;
+        // reserve some task space for light tasks
+        if (max_task_num > 1 && heavy_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
+            return std::make_pair(false, is_heavy);
         heavy_tasks.push(task);
-        return true;
+        break;
     case TaskType::Compact:
     case TaskType::Flush:
     case TaskType::PlaceIndex:
+        is_heavy = false;
+        // reserve some task space for heavy tasks
+        if (max_task_num > 1 && light_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
+            return std::make_pair(false, is_heavy);
         light_tasks.push(task);
-        return false;
+        break;
     default:
         throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
     }
+
+    LOG_DEBUG(log_,
+              "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
+                          << toString(whom) << "]");
+    return std::make_pair(true, is_heavy);
 }
 
 DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bool is_heavy, Poco::Logger * log_)
@@ -278,7 +291,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
             }
         }
     };
-    storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
+    storage_pool.data()->registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
 
     gc_handle = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });
@@ -1148,18 +1161,17 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     fiu_do_on(FailPoints::force_triggle_foreground_flush, { should_foreground_flush = true; });
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
-        // Prevent too many tasks.
-        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
-        {
-            if (shutdown_called.load(std::memory_order_relaxed))
-                return;
+        if (shutdown_called.load(std::memory_order_relaxed))
+            return;
 
-            auto heavy = background_tasks.addTask(task, thread_type, log);
-            if (heavy)
-                blockable_background_pool_handle->wake();
-            else
-                background_task_handle->wake();
-        }
+        auto [added, heavy] = background_tasks.tryAddTask(task, thread_type, std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3), log);
+        // Prevent too many tasks.
+        if (!added)
+            return;
+        if (heavy)
+            blockable_background_pool_handle->wake();
+        else
+            background_task_handle->wake();
     };
 
     /// Flush is always try first.
@@ -2168,8 +2180,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         std::tie(stat.storage_stable_num_snapshots, //
                  stat.storage_stable_oldest_snapshot_lifetime,
                  stat.storage_stable_oldest_snapshot_thread_id)
-            = storage_pool.data().getSnapshotsStat();
-        PageStorage::SnapshotPtr stable_snapshot = storage_pool.data().getSnapshot();
+            = storage_pool.data()->getSnapshotsStat();
+        PageStorage::SnapshotPtr stable_snapshot = storage_pool.data()->getSnapshot();
         stat.storage_stable_num_pages = stable_snapshot->version()->numPages();
         stat.storage_stable_num_normal_pages = stable_snapshot->version()->numNormalPages();
         stat.storage_stable_max_page_id = stable_snapshot->version()->maxId();
@@ -2178,8 +2190,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         std::tie(stat.storage_delta_num_snapshots, //
                  stat.storage_delta_oldest_snapshot_lifetime,
                  stat.storage_delta_oldest_snapshot_thread_id)
-            = storage_pool.log().getSnapshotsStat();
-        PageStorage::SnapshotPtr log_snapshot = storage_pool.log().getSnapshot();
+            = storage_pool.log()->getSnapshotsStat();
+        PageStorage::SnapshotPtr log_snapshot = storage_pool.log()->getSnapshot();
         stat.storage_delta_num_pages = log_snapshot->version()->numPages();
         stat.storage_delta_num_normal_pages = log_snapshot->version()->numNormalPages();
         stat.storage_delta_max_page_id = log_snapshot->version()->maxId();
@@ -2188,8 +2200,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         std::tie(stat.storage_meta_num_snapshots, //
                  stat.storage_meta_oldest_snapshot_lifetime,
                  stat.storage_meta_oldest_snapshot_thread_id)
-            = storage_pool.meta().getSnapshotsStat();
-        PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta().getSnapshot();
+            = storage_pool.meta()->getSnapshotsStat();
+        PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta()->getSnapshot();
         stat.storage_meta_num_pages = meta_snapshot->version()->numPages();
         stat.storage_meta_num_normal_pages = meta_snapshot->version()->numNormalPages();
         stat.storage_meta_max_page_id = meta_snapshot->version()->maxId();

@@ -51,6 +51,12 @@ private:
     using Writes = std::vector<Write>;
 
 public:
+    WriteBatch() = default;
+    WriteBatch(WriteBatch && rhs)
+        : writes(std::move(rhs.writes))
+        , sequence(rhs.sequence)
+    {}
+
     void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
         // Conver from data_sizes to the offset of each field
@@ -169,15 +175,8 @@ public:
         return str;
     }
 
-    WriteBatch() = default;
-    WriteBatch(WriteBatch && rhs)
-        : writes(std::move(rhs.writes))
-        , sequence(rhs.sequence)
-    {}
-
 private:
     Writes writes;
     SequenceID sequence = 0;
 };
-
 } // namespace DB

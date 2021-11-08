@@ -1257,6 +1257,8 @@ struct Aggregation : public Executor
                     throw Exception("udaf max only accept 1 argument");
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
+                ft->set_decimal(agg_func->children(0).field_type().decimal());
+                ft->set_flag(agg_func->children(0).field_type().flag());
                 ft->set_collate(collator_id);
             }
             else if (func->name == "min")
@@ -1266,6 +1268,8 @@ struct Aggregation : public Executor
                     throw Exception("udaf min only accept 1 argument");
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
+                ft->set_decimal(agg_func->children(0).field_type().decimal());
+                ft->set_flag(agg_func->children(0).field_type().flag());
                 ft->set_collate(collator_id);
             }
             else if (func->name == UniqRawResName)
@@ -2484,7 +2488,7 @@ void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_r
 {
     auto codec = getCodec(dag_response.encode_type());
     for (const auto & chunk : dag_response.chunks())
-        blocks.emplace_back(codec->decode(chunk, schema));
+        blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
 }
 
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)

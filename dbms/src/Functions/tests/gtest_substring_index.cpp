@@ -1,5 +1,4 @@
 #include <DataTypes/DataTypeNullable.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -11,20 +10,8 @@ namespace DB
 {
 namespace tests
 {
-class SubStringIndex : public ::testing::Test
+class SubStringIndex : public DB::tests::FunctionTest
 {
-protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
 };
 
 TEST_F(SubStringIndex, strStringIndexStrTest)

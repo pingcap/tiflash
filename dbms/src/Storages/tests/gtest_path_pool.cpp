@@ -12,11 +12,12 @@ namespace DB
 {
 namespace tests
 {
-
 class PathPool_test : public ::testing::Test
 {
 public:
-    PathPool_test() : log(&Poco::Logger::get("PathPool_test")) {}
+    PathPool_test()
+        : log(&Poco::Logger::get("PathPool_test"))
+    {}
 
     static void SetUpTestCase() {}
 
@@ -105,7 +106,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
     // PS-single delegate
@@ -139,7 +140,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
     // PS-Raft delegate
@@ -173,7 +174,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
 }
@@ -249,7 +250,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
     // PS-single delegate
@@ -283,7 +284,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
     // PS-Raft delegate
@@ -317,7 +318,7 @@ try
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
         {
             PageFileIdAndLevel id{i, 0};
-            delegate->removePageFile(id, bytes_written, false);
+            delegate->removePageFile(id, bytes_written, false, false);
         }
     }
 }
@@ -327,7 +328,8 @@ class MockPathCapacityMetrics : public PathCapacityMetrics
 {
 public:
     MockPathCapacityMetrics(const size_t capacity_quota_, const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
-        const Strings & latest_paths_, const std::vector<size_t> latest_capacity_quota_)
+                            const Strings & latest_paths_,
+                            const std::vector<size_t> latest_capacity_quota_)
         : PathCapacityMetrics(capacity_quota_, main_paths_, main_capacity_quota_, latest_paths_, latest_capacity_quota_)
     {}
 
@@ -352,21 +354,21 @@ class PathCapcatity : public DB::base::TiFlashStorageTestBasic
         main_data_path = getTemporaryPath() + "/main";
         createIfNotExist(main_data_path);
 
-        lastest_data_path = getTemporaryPath() + "/lastest";
-        createIfNotExist(lastest_data_path);
+        latest_data_path = getTemporaryPath() + "/lastest";
+        createIfNotExist(latest_data_path);
     }
 
     void TearDown() override
     {
         dropDataOnDisk(main_data_path);
-        dropDataOnDisk(lastest_data_path);
+        dropDataOnDisk(latest_data_path);
         TiFlashStorageTestBasic::TearDown();
     }
 
 protected:
     struct statvfs vfs_info;
     std::string main_data_path;
-    std::string lastest_data_path;
+    std::string latest_data_path;
 };
 
 TEST_F(PathCapcatity, SingleDiskSinglePathTest)
@@ -378,7 +380,7 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
 
     // Single disk with single path
     {
-        auto capacity = PathCapacityMetrics(0, {main_data_path}, {capactity}, {lastest_data_path}, {capactity});
+        auto capacity = PathCapacityMetrics(0, {main_data_path}, {capactity}, {latest_data_path}, {capactity});
 
         capacity.addUsedSize(main_data_path, used);
         auto stats = capacity.getFsStats();
@@ -391,7 +393,7 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
         ASSERT_EQ(main_path_stats.used_size, used);
         ASSERT_EQ(main_path_stats.avail_size, capactity - used);
 
-        auto lastest_path_stats = std::get<0>(capacity.getFsStatsOfPath(lastest_data_path));
+        auto lastest_path_stats = std::get<0>(capacity.getFsStatsOfPath(latest_data_path));
         ASSERT_EQ(lastest_path_stats.capacity_size, capactity);
         ASSERT_EQ(lastest_path_stats.used_size, 0);
         ASSERT_EQ(lastest_path_stats.avail_size, capactity);
@@ -405,12 +407,11 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
         createIfNotExist(lastest_data_path1);
 
         // Not use the capacity limit
-        auto capacity = PathCapacityMetrics(0, {main_data_path, main_data_path1}, {capactity * 2, capactity * 2},
-            {lastest_data_path, lastest_data_path1}, {capactity, capactity});
+        auto capacity = PathCapacityMetrics(0, {main_data_path, main_data_path1}, {capactity * 2, capactity * 2}, {latest_data_path, lastest_data_path1}, {capactity, capactity});
 
         capacity.addUsedSize(main_data_path, used);
         capacity.addUsedSize(main_data_path1, used);
-        capacity.addUsedSize(lastest_data_path, used);
+        capacity.addUsedSize(latest_data_path, used);
 
         auto stats = capacity.getFsStats();
         ASSERT_EQ(stats.capacity_size, capactity * 6);
@@ -424,7 +425,7 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
 
 TEST_F(PathCapcatity, MultiDiskMultiPathTest)
 {
-    MockPathCapacityMetrics capacity = MockPathCapacityMetrics(0, {main_data_path}, {100}, {lastest_data_path}, {100});
+    MockPathCapacityMetrics capacity = MockPathCapacityMetrics(0, {main_data_path}, {100}, {latest_data_path}, {100});
 
     std::map<FSID, DiskCapacity> disk_capacity_map;
 
@@ -447,10 +448,10 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     fake_vfs.f_frsize = 1;
 
     disk_capacity_map[100] = {.vfs_info = fake_vfs,
-        .path_stats = {
-            {.used_size = 4, .avail_size = 50, .capacity_size = 100, .ok = 1},
-            {.used_size = 12, .avail_size = 50, .capacity_size = 1000, .ok = 1},
-        }};
+                              .path_stats = {
+                                  {.used_size = 4, .avail_size = 50, .capacity_size = 100, .ok = 1},
+                                  {.used_size = 12, .avail_size = 50, .capacity_size = 1000, .ok = 1},
+                              }};
     capacity.setDiskStats(disk_capacity_map);
     FsStats total_stats = capacity.getFsStats();
     ASSERT_EQ(total_stats.capacity_size, 100);
@@ -471,10 +472,10 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ///             - used size     : 12
     ///             - avail size    : 38  // min(capacity size - used size, disk avail size);
     disk_capacity_map[101] = {.vfs_info = fake_vfs,
-        .path_stats = {
-            {.used_size = 40, .avail_size = 8, .capacity_size = 48, .ok = 1},
-            {.used_size = 12, .avail_size = 38, .capacity_size = 50, .ok = 1},
-        }};
+                              .path_stats = {
+                                  {.used_size = 40, .avail_size = 8, .capacity_size = 48, .ok = 1},
+                                  {.used_size = 12, .avail_size = 38, .capacity_size = 50, .ok = 1},
+                              }};
     capacity.setDiskStats(disk_capacity_map);
 
     total_stats = capacity.getFsStats();
@@ -482,6 +483,27 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ASSERT_EQ(total_stats.used_size, 16 + 52);
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
 }
+
+TEST_F(PathCapcatity, FsStats)
+try
+{
+    size_t global_capacity_quota = 10;
+    size_t capacity = 100;
+    {
+        PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {capacity}, {latest_data_path}, {capacity});
+
+        FsStats fs_stats = path_capacity.getFsStats();
+        EXPECT_EQ(fs_stats.capacity_size, 2 * capacity); // summing the capacity of main and latest path
+    }
+
+    {
+        PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {}, {latest_data_path}, {});
+
+        FsStats fs_stats = path_capacity.getFsStats();
+        EXPECT_EQ(fs_stats.capacity_size, global_capacity_quota); // Use `global_capacity_quota` when `main_capacity_quota_` is empty
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

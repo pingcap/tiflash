@@ -141,7 +141,7 @@
           },
           "yaxes": [
             {
-              "format": "decbytes",
+              "format": "bytes",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -238,7 +238,7 @@
           },
           "yaxes": [
             {
-              "format": "decbytes",
+              "format": "bytes",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -335,7 +335,7 @@
           },
           "yaxes": [
             {
-              "format": "decbytes",
+              "format": "bytes",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -2490,7 +2490,7 @@
               "show": true
             },
             {
-              "format": "Bps",
+              "format": "binBps",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -3363,7 +3363,7 @@
           },
           "yaxes": [
             {
-              "format": "Bps",
+              "format": "binBps",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -3485,7 +3485,7 @@
           },
           "yaxes": [
             {
-              "format": "Bps",
+              "format": "binBps",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -3899,7 +3899,7 @@
           "yaxes": [
             {
               "decimals": 0,
-              "format": "Bps",
+              "format": "binBps",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -4170,7 +4170,7 @@
           },
           "yaxes": [
             {
-              "format": "Bps",
+              "format": "binBps",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -4374,7 +4374,7 @@
           },
           "yaxes": [
             {
-              "format": "Bps",
+              "format": "binBps",
               "label": null,
               "logBase": 1,
               "max": null,

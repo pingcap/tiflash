@@ -6,6 +6,9 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/FunctionTestUtils.h>
+
+#include <vector>
 
 #include "dm_basic_include.h"
 
@@ -36,18 +39,28 @@ TEST(DMFileWriterFlags_test, SetClearFlags)
     EXPECT_TRUE(flags.isSingleFile());
 }
 
-String paramToString(const ::testing::TestParamInfo<DMFile::Mode> & info)
+enum class DMFileMode
+{
+    SingleFile,
+    DirectoryLegacy,
+    DirectoryChecksum
+};
+
+String paramToString(const ::testing::TestParamInfo<DMFileMode> & info)
 {
     const auto mode = info.param;
 
     String name;
     switch (mode)
     {
-    case DMFile::Mode::SINGLE_FILE:
+    case DMFileMode::SingleFile:
         name = "single_file";
         break;
-    case DMFile::Mode::FOLDER:
+    case DMFileMode::DirectoryLegacy:
         name = "folder";
+        break;
+    case DMFileMode::DirectoryChecksum:
+        name = "folder_checksum";
         break;
     }
     return name;
@@ -57,7 +70,7 @@ using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 
 class DMFile_Test : public DB::base::TiFlashStorageTestBasic
-    , public testing::WithParamInterface<DMFile::Mode>
+    , public testing::WithParamInterface<DMFileMode>
 {
 public:
     DMFile_Test()
@@ -72,11 +85,12 @@ public:
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode = GetParam();
-        bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+        bool single_file_mode = mode == DMFileMode::SingleFile;
+        auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
-        dm_file = DMFile::create(1, parent_path, single_file_mode);
+        dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
 
@@ -253,9 +267,10 @@ try
     dm_file.reset();
 
     auto mode = GetParam();
-    bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+    bool single_file_mode = mode == DMFileMode::SingleFile;
+    auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
-    dm_file = DMFile::create(id, parent_path, single_file_mode);
+    dm_file = DMFile::create(id, parent_path, single_file_mode, std::move(configuration));
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
     DMFile::ListOptions options;
@@ -576,17 +591,12 @@ try
         size_t pk_beg = 0;
         for (size_t i = 0; i < nparts; ++i)
         {
-            auto pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
+            size_t pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
             Block block = DMTestEnv::prepareSimpleWriteBlock(pk_beg, pk_end, false);
-
-            auto col = i64_cd.type->createColumn();
-            for (size_t i = pk_beg; i < pk_end; i++)
-            {
-                col->insert(toField(Int64(i)));
-            }
-            ColumnWithTypeAndName i64(std::move(col), i64_cd.type, i64_cd.name, i64_cd.id);
-            block.insert(i64);
-
+            block.insert(DB::tests::createColumn<Int64>(
+                createNumbers<Int64>(pk_beg, pk_end),
+                i64_cd.name,
+                i64_cd.id));
             stream->write(block, block_property);
             pk_beg += num_rows_write / nparts;
         }
@@ -681,17 +691,12 @@ try
         size_t pk_beg = 0;
         for (size_t i = 0; i < nparts; ++i)
         {
-            auto pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
+            size_t pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
             Block block = DMTestEnv::prepareSimpleWriteBlock(pk_beg, pk_end, false);
-
-            auto col = i64_cd.type->createColumn();
-            for (size_t i = pk_beg; i < pk_end; i++)
-            {
-                col->insert(toField(Int64(i)));
-            }
-            ColumnWithTypeAndName i64(std::move(col), i64_cd.type, i64_cd.name, i64_cd.id);
-            block.insert(i64);
-
+            block.insert(DB::tests::createColumn<Int64>(
+                createNumbers<Int64>(pk_beg, pk_end),
+                i64_cd.name,
+                i64_cd.id));
             stream->write(block, block_property);
             pk_beg += num_rows_write / nparts;
         }
@@ -880,23 +885,14 @@ try
     {
         // Prepare write
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-
-        auto col = i64_col.type->createColumn();
-        for (size_t i = 0; i < num_rows_write; i++)
-        {
-            col->insert(toField(Int64(i)));
-        }
-        ColumnWithTypeAndName i64(std::move(col), i64_col.type, i64_col.name, i64_col.id);
-
-        col = f64_col.type->createColumn();
-        for (size_t i = 0; i < num_rows_write; i++)
-        {
-            col->insert(toField(Float64(0.125)));
-        }
-        ColumnWithTypeAndName f64(std::move(col), f64_col.type, f64_col.name, f64_col.id);
-
-        block.insert(i64);
-        block.insert(f64);
+        block.insert(DB::tests::createColumn<Int64>(
+            createNumbers<Int64>(0, num_rows_write),
+            i64_col.name,
+            i64_col.id));
+        block.insert(DB::tests::createColumn<Float64>(
+            std::vector<Float64>(num_rows_write, 0.125),
+            f64_col.name,
+            f64_col.id));
 
         auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
 
@@ -958,15 +954,11 @@ try
     {
         // Prepare write
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-
-        auto col = fixed_str_col.type->createColumn();
-        for (size_t i = 0; i < num_rows_write; i++)
-        {
-            col->insert(toField(String("hello")));
-        }
-        ColumnWithTypeAndName str(std::move(col), fixed_str_col.type, fixed_str_col.name, fixed_str_col.id);
-
-        block.insert(str);
+        block.insert(ColumnWithTypeAndName{
+            DB::tests::makeColumn<String>(fixed_str_col.type, Strings(num_rows_write, "hello")),
+            fixed_str_col.type,
+            fixed_str_col.name,
+            fixed_str_col.id});
 
         auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
 
@@ -1024,20 +1016,18 @@ try
     {
         // Prepare write
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-
-        ColumnWithTypeAndName nullable_col({}, typeFromString("Nullable(Int32)"), "i32_null", 2);
+        // Half of the column are filled by NULL
         auto col = nullable_col.type->createColumn();
         for (size_t i = 0; i < 64; i++)
-        {
             col->insert(toField(Int64(i)));
-        }
         for (size_t i = 64; i < num_rows_write; i++)
-        {
             col->insertDefault();
-        }
-        nullable_col.column = std::move(col);
+        block.insert(ColumnWithTypeAndName{
+            std::move(col),
+            nullable_col.type,
+            nullable_col.name,
+            nullable_col.id});
 
-        block.insert(nullable_col);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
 
         DMFileBlockOutputStream::BlockProperty block_property;
@@ -1101,14 +1091,14 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFile_Test,
-                        testing::Values(DMFile::Mode::FOLDER, DMFile::Mode::SINGLE_FILE),
+                        testing::Values(DMFileMode::SingleFile, DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
                         paramToString);
 
 
 /// DMFile test for clustered index
 class DMFile_Clustered_Index_Test : public DB::base::TiFlashStorageTestBasic
     , //
-                                    public testing::WithParamInterface<DMFile::Mode>
+                                    public testing::WithParamInterface<DMFileMode>
 {
 public:
     DMFile_Clustered_Index_Test()
@@ -1121,11 +1111,12 @@ public:
         path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode = GetParam();
-        bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+        bool single_file_mode = mode == DMFileMode::SingleFile;
+        auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, DB::Settings());
-        dm_file = DMFile::create(0, path, single_file_mode);
+        dm_file = DMFile::create(0, path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
 
@@ -1382,17 +1373,16 @@ public:
                     field = toField(Int64(i) * (-1 * (i % 2)));
                 col->insert(field);
             }
-            ColumnWithTypeAndName i64(std::move(col), i8_col.type, i8_col.name, i8_col.id);
+            block.insert(ColumnWithTypeAndName{
+                std::move(col),
+                i8_col.type,
+                i8_col.name,
+                i8_col.id});
 
-            col = f64_col.type->createColumn();
-            for (size_t i = 0; i < num_rows_write; i++)
-            {
-                col->insert(toField(Float64(0.125)));
-            }
-            ColumnWithTypeAndName f64(std::move(col), f64_col.type, f64_col.name, f64_col.id);
-
-            block.insert(i64);
-            block.insert(f64);
+            block.insert(DB::tests::createColumn<Float64>(
+                std::vector<Float64>(num_rows_write, 0.125),
+                f64_col.name,
+                f64_col.id));
 
             auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, *cols_before_ddl);
             DMFileBlockOutputStream::BlockProperty block_property;
@@ -1720,7 +1710,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFile_DDL_Test,
-                        testing::Values(DMFile::Mode::FOLDER, DMFile::Mode::SINGLE_FILE),
+                        testing::Values(DMFileMode::SingleFile, DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
                         paramToString);
 
 } // namespace tests

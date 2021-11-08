@@ -135,7 +135,7 @@ public:
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) override
     {
         auto & mutable_data = data->assumeMutableRef();
-        auto res = mutable_data.deserializeAndInsertFromArena(pos, collator);
+        const auto * res = mutable_data.deserializeAndInsertFromArena(pos, collator);
         mutable_data.popBack(1);
         ++s;
         return res;

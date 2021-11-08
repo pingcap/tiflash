@@ -260,7 +260,7 @@ private:
     SipHash & hash;
 
 public:
-    FieldVisitorHash(SipHash & hash);
+    explicit FieldVisitorHash(SipHash & hash);
 
     void operator()(const Null & x) const;
     void operator()(const UInt64 & x) const;

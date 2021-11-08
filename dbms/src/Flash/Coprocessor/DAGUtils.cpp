@@ -16,7 +16,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
 extern const int LOGICAL_ERROR;
 extern const int NOT_IMPLEMENTED;
@@ -114,6 +113,14 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         auto ret = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<UInt64>());
         if (expr.field_type().tp() == TiDB::TypeTimestamp)
             ret = ret + "_ts";
+        return ret;
+    }
+    case tipb::ExprType::MysqlDuration:
+    {
+        if (!expr.has_field_type())
+            throw TiFlashException("MySQL Duration literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+        auto t = decodeDAGInt64(expr.val());
+        auto ret = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
         return ret;
     }
     case tipb::ExprType::ColumnRef:
@@ -266,8 +273,14 @@ Field decodeLiteral(const tipb::Expr & expr)
         auto t = decodeDAGUInt64(expr.val());
         return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
     }
-    case tipb::ExprType::MysqlBit:
     case tipb::ExprType::MysqlDuration:
+    {
+        if (!expr.has_field_type())
+            throw TiFlashException("MySQL Duration literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+        auto t = decodeDAGInt64(expr.val());
+        return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
+    }
+    case tipb::ExprType::MysqlBit:
     case tipb::ExprType::MysqlEnum:
     case tipb::ExprType::MysqlHex:
     case tipb::ExprType::MysqlSet:
@@ -282,23 +295,23 @@ Field decodeLiteral(const tipb::Expr & expr)
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
     auto column_index = decodeDAGInt64(expr.val());
-    if (column_index < 0 || column_index >= (Int64)input_col.size())
+    if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
     {
         throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
     return input_col[column_index].name;
 }
 
-// for some historical or unknown reasons, TiDB might set a invalid
-// field type. This function checks if the expr has a valid field type
-// so far the known invalid field types are:
+// For some historical or unknown reasons, TiDB might set an invalid
+// field type. This function checks if the expr has a valid field type.
+// So far the known invalid field types are:
 // 1. decimal type with scale == -1
 // 2. decimal type with precision == 0
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type()
-        && !((expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1)
-             || (expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().flen() == 0));
+        && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal
+             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
@@ -336,7 +349,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
         //  we fix the codec issue.
         if (exprHasValidFieldType(expr))
         {
-            target_type = getDataTypeByFieldType(expr.field_type());
+            target_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         }
         else
         {
@@ -361,7 +374,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
         }
         else
         {
-            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldTypeForComputingLayer(expr.field_type()) : flash_type;
         }
         // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
         target_type = removeNullable(target_type);
@@ -514,6 +527,26 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
     }
 }
 
+void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String & s)
+{
+    if (!dag_req.ParseFromString(s))
+    {
+        /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
+        /// it may exceed this limit, so just try again by double the recursion limit
+        ::google::protobuf::io::CodedInputStream coded_input_stream(reinterpret_cast<const UInt8 *>(s.data()), s.size());
+        coded_input_stream.SetRecursionLimit(::google::protobuf::io::CodedInputStream::GetDefaultRecursionLimit() * 2);
+        if (!dag_req.ParseFromCodedStream(&coded_input_stream))
+        {
+            /// just return error if decode failed this time, because it's really a corner case, and even if we can decode the plan
+            /// successfully by using a very large value of the recursion limit, it is kinds of meaningless because the runtime
+            /// performance of this task may be very bad if the plan tree is too deep
+            throw TiFlashException(
+                std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan, the most likely is that the plan/expression tree is too deep",
+                Errors::Coprocessor::BadRequest);
+        }
+    }
+}
+
 extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -578,7 +611,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastStringAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastTimeAsInt, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastTimeAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
@@ -590,7 +623,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastDurationAsString, "cast"},
     //{tipb::ScalarFuncSig::CastDurationAsDecimal, "cast"},
     //{tipb::ScalarFuncSig::CastDurationAsTime, "cast"},
-    //{tipb::ScalarFuncSig::CastDurationAsDuration, "cast"},
+    {tipb::ScalarFuncSig::CastDurationAsDuration, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastDurationAsJson, "cast"},
 
     //{tipb::ScalarFuncSig::CastJsonAsInt, "cast"},
@@ -959,10 +992,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::AddDateDurationDecimal, "cast"},
 
     {tipb::ScalarFuncSig::Date, "toMyDate"},
-    //{tipb::ScalarFuncSig::Hour, "cast"},
-    //{tipb::ScalarFuncSig::Minute, "cast"},
-    //{tipb::ScalarFuncSig::Second, "cast"},
-    //{tipb::ScalarFuncSig::MicroSecond, "cast"},
+    {tipb::ScalarFuncSig::Hour, "hour"},
+    {tipb::ScalarFuncSig::Minute, "minute"},
+    {tipb::ScalarFuncSig::Second, "second"},
+    {tipb::ScalarFuncSig::MicroSecond, "microSecond"},
     {tipb::ScalarFuncSig::Month, "toMonth"},
     //{tipb::ScalarFuncSig::MonthName, "cast"},
 
@@ -984,8 +1017,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::YearWeekWithoutMode, "cast"},
 
     //{tipb::ScalarFuncSig::GetFormat, "cast"},
-    //{tipb::ScalarFuncSig::SysDateWithFsp, "cast"},
-    //{tipb::ScalarFuncSig::SysDateWithoutFsp, "cast"},
+    {tipb::ScalarFuncSig::SysDateWithFsp, "sysDateWithFsp"},
+    {tipb::ScalarFuncSig::SysDateWithoutFsp, "sysDateWithoutFsp"},
     //{tipb::ScalarFuncSig::CurrentDate, "cast"},
     //{tipb::ScalarFuncSig::CurrentTime0Arg, "cast"},
     //{tipb::ScalarFuncSig::CurrentTime1Arg, "cast"},
@@ -1097,7 +1130,6 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::InstrUTF8, "cast"},
     //{tipb::ScalarFuncSig::Instr, "cast"},
 
-    {tipb::ScalarFuncSig::LTrim, "ltrim"},
     {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
     //{tipb::ScalarFuncSig::Left, "cast"},
     {tipb::ScalarFuncSig::Length, "length"},
@@ -1106,7 +1138,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Locate2Args, "position"},
     //{tipb::ScalarFuncSig::Locate3Args, "cast"},
 
-    {tipb::ScalarFuncSig::Lower, "lower"},
+    {tipb::ScalarFuncSig::Lower, "lowerBinary"},
+    {tipb::ScalarFuncSig::LowerUTF8, "lowerUTF8"},
     //{tipb::ScalarFuncSig::LpadUTF8, "cast"},
     //{tipb::ScalarFuncSig::Lpad, "cast"},
     //{tipb::ScalarFuncSig::MakeSet, "cast"},
@@ -1114,7 +1147,6 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::OctString, "cast"},
     //{tipb::ScalarFuncSig::Ord, "cast"},
     //{tipb::ScalarFuncSig::Quote, "cast"},
-    {tipb::ScalarFuncSig::RTrim, "rtrim"},
     //{tipb::ScalarFuncSig::Repeat, "cast"},
     {tipb::ScalarFuncSig::Replace, "replaceAll"},
     //{tipb::ScalarFuncSig::ReverseUTF8, "cast"},
@@ -1130,14 +1162,18 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Substring2Args, "cast"},
     //{tipb::ScalarFuncSig::Substring3Args, "cast"},
     {tipb::ScalarFuncSig::SubstringIndex, "substringIndex"},
+    {tipb::ScalarFuncSig::Format, "format"},
+    {tipb::ScalarFuncSig::FormatWithLocale, "formatWithLocale"},
 
     //{tipb::ScalarFuncSig::ToBase64, "cast"},
-    {tipb::ScalarFuncSig::Trim1Arg, "trim"},
-    //{tipb::ScalarFuncSig::Trim2Args, "cast"},
-    //{tipb::ScalarFuncSig::Trim3Args, "cast"},
+    {tipb::ScalarFuncSig::Trim1Arg, "tidbTrim"},
+    {tipb::ScalarFuncSig::Trim2Args, "tidbTrim"},
+    {tipb::ScalarFuncSig::Trim3Args, "tidbTrim"},
+    {tipb::ScalarFuncSig::LTrim, "tidbLTrim"},
+    {tipb::ScalarFuncSig::RTrim, "tidbRTrim"},
     //{tipb::ScalarFuncSig::UnHex, "cast"},
-    {tipb::ScalarFuncSig::UpperUTF8, "upper"},
-    //{tipb::ScalarFuncSig::Upper, "upper"},
+    {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
+    {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
 

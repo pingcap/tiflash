@@ -7,6 +7,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
+#include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <Interpreters/Context.h>
@@ -14,9 +15,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <pingcap/Exception.h>
-#include <pingcap/kv/LockResolver.h>
 
 namespace DB
 {
@@ -116,6 +115,8 @@ try
             collators,
             tipb::ExchangeType::PassThrough,
             context.getSettings().dag_records_per_chunk,
+            context.getSettings().batch_send_min_limit,
+            true,
             dag.getEncodeType(),
             dag.getResultFieldTypes(),
             dag_context,
@@ -151,7 +152,7 @@ try
         {
             // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
             // Throw exception to prevent receiver from getting wrong response.
-            if (p_stream->getProfileInfo().bytes > std::numeric_limits<int>::max())
+            if (accurate::greaterOp(p_stream->getProfileInfo().bytes, std::numeric_limits<int>::max()))
                 throw TiFlashException("DAG response is too big, please check config about region size or region merge scheduler",
                                        Errors::Coprocessor::Internal);
         }

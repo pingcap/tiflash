@@ -99,7 +99,7 @@ void FileChecker::save() const
 
             /// `escapeForFileName` is not really needed. But it is left for compatibility with the old code.
             writeJSONString(escapeForFileName(it->first), out);
-            writeString(":{\"size\":\"", out);
+            writeString(R"(:{"size":")", out);
             writeIntText(it->second, out);
             writeString("\"}", out);
         }

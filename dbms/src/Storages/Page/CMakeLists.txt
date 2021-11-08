@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 add_headers_and_sources(page_storage ./)
 add_headers_and_sources(page_storage ./mvcc)
 add_headers_and_sources(page_storage ./VersionSet)
@@ -57,3 +58,6 @@ target_include_directories(page_ctl PUBLIC ${ClickHouse_SOURCE_DIR}/contrib/tifl
 target_link_libraries(page_ctl clickhouse_common_io cpptoml)
 target_compile_options(page_ctl  PRIVATE -Wno-format)
 target_compile_definitions(page_ctl PRIVATE PAGE_STORAGE_UTIL_DEBUGGGING DBMS_PUBLIC_GTEST)
+=======
+add_subdirectory(V2)
+>>>>>>> master

@@ -53,23 +53,22 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
 
 StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
     : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-    log_storage(
-        name + ".log",
-        path_pool.getPSDiskDelegatorMulti("log"),
-        extractConfig(settings, StorageType::Log),
-        global_ctx.getFileProvider())
+    log_storage(PageStorage::create(name + ".log",
+                                    path_pool.getPSDiskDelegatorMulti("log"),
+                                    extractConfig(settings, StorageType::Log),
+                                    global_ctx.getFileProvider()))
     ,
     // The iops in data_storage is low, only use the first disk for storing data
-    data_storage(name + ".data",
-                 path_pool.getPSDiskDelegatorSingle("data"),
-                 extractConfig(settings, StorageType::Data),
-                 global_ctx.getFileProvider())
+    data_storage(PageStorage::create(name + ".data",
+                                     path_pool.getPSDiskDelegatorSingle("data"),
+                                     extractConfig(settings, StorageType::Data),
+                                     global_ctx.getFileProvider()))
     ,
     // The iops in meta_storage is relatively high, use multi-disks if possible
-    meta_storage(name + ".meta",
-                 path_pool.getPSDiskDelegatorMulti("meta"),
-                 extractConfig(settings, StorageType::Meta),
-                 global_ctx.getFileProvider())
+    meta_storage(PageStorage::create(name + ".meta",
+                                     path_pool.getPSDiskDelegatorMulti("meta"),
+                                     extractConfig(settings, StorageType::Meta),
+                                     global_ctx.getFileProvider()))
     , max_log_page_id(0)
     , max_data_page_id(0)
     , max_meta_page_id(0)
@@ -78,20 +77,20 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
 
 void StoragePool::restore()
 {
-    log_storage.restore();
-    data_storage.restore();
-    meta_storage.restore();
+    log_storage->restore();
+    data_storage->restore();
+    meta_storage->restore();
 
-    max_log_page_id = log_storage.getMaxId();
-    max_data_page_id = data_storage.getMaxId();
-    max_meta_page_id = meta_storage.getMaxId();
+    max_log_page_id = log_storage->getMaxId();
+    max_data_page_id = data_storage->getMaxId();
+    max_meta_page_id = meta_storage->getMaxId();
 }
 
 void StoragePool::drop()
 {
-    meta_storage.drop();
-    data_storage.drop();
-    log_storage.drop();
+    meta_storage->drop();
+    data_storage->drop();
+    log_storage->drop();
 }
 
 PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
@@ -140,16 +139,16 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
     auto write_limiter = global_context.getWriteLimiter();
     auto read_limiter = global_context.getReadLimiter();
     auto config = extractConfig(settings, StorageType::Meta);
-    meta_storage.reloadSettings(config);
-    done_anything |= meta_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
+    meta_storage->reloadSettings(config);
+    done_anything |= meta_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     config = extractConfig(settings, StorageType::Data);
-    data_storage.reloadSettings(config);
-    done_anything |= data_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
+    data_storage->reloadSettings(config);
+    done_anything |= data_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     config = extractConfig(settings, StorageType::Log);
-    log_storage.reloadSettings(config);
-    done_anything |= log_storage.gc(/*not_skip*/ false, write_limiter, read_limiter);
+    log_storage->reloadSettings(config);
+    done_anything |= log_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
 
     return done_anything;
 }

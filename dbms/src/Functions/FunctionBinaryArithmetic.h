@@ -479,7 +479,7 @@ private:
                 res = res / scale;
                 if constexpr (check_overflow)
                 {
-                    if (res > DecimalMaxValue::MaxValue())
+                    if (res > DecimalMaxValue::maxValue())
                     {
                         throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
                     }
@@ -503,7 +503,7 @@ private:
             auto res = Op::template apply<PromoteResultType>(a, b);
             if constexpr (check_overflow)
             {
-                if (res > DecimalMaxValue::MaxValue())
+                if (res > DecimalMaxValue::maxValue())
                 {
                     throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
                 }
@@ -532,7 +532,7 @@ private:
 
             if constexpr (check_overflow)
             {
-                if (res > DecimalMaxValue::MaxValue())
+                if (res > DecimalMaxValue::maxValue())
                 {
                     throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
                 }
@@ -558,7 +558,7 @@ private:
 
             if constexpr (check_overflow)
             {
-                if (res > DecimalMaxValue::MaxValue())
+                if (res > DecimalMaxValue::maxValue())
                 {
                     throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
                 }

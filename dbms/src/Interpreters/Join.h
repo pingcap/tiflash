@@ -5,6 +5,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/AggregationCommon.h>
@@ -90,7 +91,8 @@ public:
          const String & other_filter_column = "",
          const String & other_eq_filter_from_in_column = "",
          ExpressionActionsPtr other_condition_ptr = nullptr,
-         size_t max_block_size = 0);
+         size_t max_block_size = 0,
+         const LogWithPrefixPtr & log_ = nullptr);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -300,7 +302,7 @@ private:
     mutable std::condition_variable build_table_cv;
     bool have_finish_build;
 
-    Poco::Logger * log;
+    const LogWithPrefixPtr log;
 
     /// Limits for maximum map size.
     SizeLimits limits;

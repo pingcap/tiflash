@@ -147,7 +147,7 @@ public:
     using Container = PaddedPODArray<value_type>;
 
 private:
-    ColumnVector() {}
+    ColumnVector() = default;
     explicit ColumnVector(const size_t n)
         : data(n)
     {}
@@ -278,7 +278,6 @@ public:
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
-
 
     bool canBeInsideNullable() const override { return true; }
 

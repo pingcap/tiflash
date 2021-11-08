@@ -5,7 +5,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -23,21 +22,9 @@ namespace DB
 {
 namespace tests
 {
-class StringReplace : public ::testing::Test
+class StringReplace : public DB::tests::FunctionTest
 {
 protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
-
     ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
     {
         return createColumn<Nullable<String>>(v);

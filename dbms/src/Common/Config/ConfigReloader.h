@@ -45,7 +45,7 @@ public:
     void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true); }
 
 protected:
-    virtual void reloadIfNewer(bool force, bool throw_on_error);
+    void reloadIfNewer(bool force, bool throw_on_error);
     Updater & getUpdater() { return updater; }
 
 private:
@@ -58,7 +58,7 @@ private:
         std::set<FileWithTimestamp> files;
 
         void addIfExists(const std::string & path);
-        bool isDifferOrNewerThan(const FilesChangesTracker & rhs);
+        bool isDifferOrNewerThan(const FilesChangesTracker & rhs) const;
     };
 
     FilesChangesTracker getNewFileList() const;
