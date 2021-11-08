@@ -151,7 +151,7 @@ ExpressionActionsPtr generateProjectExpressionActions(
 }
 
 // the flow is the same as executeFetchcolumns
-void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::executeTableScan(DAGPipeline & pipeline, const tipb::TableScan & ts)
 {
     if (!ts.has_table_id())
     {
@@ -781,7 +781,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else
     {
         assert(query_block.source->tp() == tipb::ExecType::TypeTableScan);
-        executeTS(query_block.source->tbl_scan(), pipeline);
+        executeTableScan(pipeline, query_block.source->tbl_scan());
         recordProfileStreams(pipeline, query_block.source_name);
         dag.getDAGContext().table_scan_executor_id = query_block.source_name;
 
