@@ -174,25 +174,18 @@ MetricsPrometheus::MetricsPrometheus(
         }
     }
 
-    if (conf.hasOption(status_metrics_port))
+    auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
+    if (security_config.has_tls_config)
     {
-        auto metrics_port = conf.getString(status_metrics_port);
-        if (security_config.has_tls_config)
-        {
-            server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
-            server->start();
-            LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = " << metrics_port);
-        }
-        else
-        {
-            exposer = std::make_shared<prometheus::Exposer>(metrics_port);
-            exposer->RegisterCollectable(tiflash_metrics.registry);
-            LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
-        }
+        server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
+        server->start();
+        LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = " << metrics_port);
     }
     else
     {
-        LOG_INFO(log, "Disable prometheus pull mode");
+        exposer = std::make_shared<prometheus::Exposer>(metrics_port);
+        exposer->RegisterCollectable(tiflash_metrics.registry);
+        LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
     }
 
     timer.scheduleAtFixedRate(
