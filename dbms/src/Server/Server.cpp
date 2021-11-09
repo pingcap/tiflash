@@ -216,12 +216,12 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
-    const char * engine_store_version = "engine-version";
-    const char * engine_store_git_hash = "engine-git-hash";
-    const char * engine_store_address = "engine-addr";
-    const char * engine_store_advertise_address = "advertise-engine-addr";
-    const char * pd_endpoints = "pd-endpoints";
-    const char * addr = "addr";
+    const String engine_store_version = "engine-version";
+    const String engine_store_git_hash = "engine-git-hash";
+    const String engine_store_address = "engine-addr";
+    const String engine_store_advertise_address = "advertise-engine-addr";
+    const String pd_endpoints = "pd-endpoints";
+    const String addr = "addr";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
