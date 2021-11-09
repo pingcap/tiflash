@@ -20,8 +20,6 @@ public:
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
         return !rsindex.minmax->checkEqual(pack_id, value, rsindex.type);
     }
-
-    RSOperatorPtr applyNot() override { return createEqual(attr, value); };
 };
 
 } // namespace DM
