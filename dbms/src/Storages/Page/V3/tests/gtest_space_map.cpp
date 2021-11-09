@@ -4,8 +4,7 @@
 
 namespace DB::PS::V3::tests
 {
-
-TEST(SpaceMap_test,create)
+TEST(SpaceMap_test, create)
 {
     // TODO
 }

@@ -1,11 +1,12 @@
 #include "SpaceMap.h"
 
 #include <Common/Exception.h>
-#include <stdlib.h>
-#include <sys/statvfs.h>
-#include <memory>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/BlobParser.h>
+#include <stdlib.h>
+#include <sys/statvfs.h>
+
+#include <memory>
 
 using namespace DB::PS::V2;
 namespace DB
@@ -15,15 +16,14 @@ namespace ErrorCodes
 extern const int CANNOT_ALLOCATE_MEMORY;
 }
 
-namespace PS::V3 
+namespace PS::V3
 {
-
 class SpaceMapParser : public BlobFileParser
 {
 public:
     SpaceMapParser(bitmaps * bitmap_, PageEntriesEdit * edit_, char * buffer_, UInt64 size)
         : BlobFileParser(edit_, buffer_, size)
-        , bitmap(bitmap_) {};
+        , bitmap(bitmap_){};
 
     void applyPU(PFMeta * meta, PageEntry & entry) override
     {
@@ -48,8 +48,7 @@ SpaceMap::SpaceMap(bitmaps * bitmap_, String & file_path_, FileProviderPtr file_
     , bitmap(bitmap_)
     , log(&Poco::Logger::get("SpaceMap"))
 {
-    LOG_INFO(log, "Begin to restore data from disk. [path=" << file_path
-        << "]");
+    LOG_INFO(log, "Begin to restore data from disk. [path=" << file_path << "]");
 };
 
 SpaceMap::~SpaceMap()

@@ -2,13 +2,11 @@
 
 namespace DB::PS::V3
 {
-
-// TBD : 
+// TBD :
 class PageStorageGCRules
 {
 public:
-
-    enum FlatTypes 
+    enum FlatTypes
     {
         TRUNCATE_FILE_END = 1,
         SEQUENCE_AT_END = 2,
@@ -20,6 +18,7 @@ public:
         bool measure();
         void flat();
         void getType();
+
     private:
         int type;
     };
@@ -38,7 +37,7 @@ public:
                 const Config & config_,
                 const FileProviderPtr & file_provider_);
 
-    ~PageStorage() {};
+    ~PageStorage(){};
 
     void restore() override;
 
@@ -75,7 +74,7 @@ public:
 private:
 #endif
 
-    Poco::Logger * log;    
+    Poco::Logger * log;
 };
 
-} // DB::PS::V3
+} // namespace DB::PS::V3

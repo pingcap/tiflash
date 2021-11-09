@@ -1,24 +1,26 @@
 #pragma once
 
-#include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/PageUtil.h>
-#include <Storages/Page/V3/PageSpec.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/V3/PageSpec.h>
+#include <Storages/Page/WriteBatch.h>
 using namespace DB::PS::V2;
 namespace DB::PS::V3
 {
-
-class BlobFileParser 
+class BlobFileParser
 {
 public:
-    BlobFileParser (PageEntriesEdit * edit_, char * buffer_, UInt64 size) :buffer(buffer_), buffer_size(size), curr_edit(edit_) {};
+    BlobFileParser(PageEntriesEdit * edit_, char * buffer_, UInt64 size)
+        : buffer(buffer_)
+        , buffer_size(size)
+        , curr_edit(edit_){};
 
-    virtual ~BlobFileParser (){};
+    virtual ~BlobFileParser(){};
 
     virtual void parse()
     {
         pos = buffer;
-        while(pos < buffer + buffer_size)
+        while (pos < buffer + buffer_size)
         {
             parserHeader();
         }
@@ -28,11 +30,11 @@ public:
     {
         if (meta->pu.type == 1)
         {
-            curr_edit->put(meta->pu.page_id,entry);
-        } 
-        else 
+            curr_edit->put(meta->pu.page_id, entry);
+        }
+        else
         {
-            curr_edit->upsertPage(meta->pu.page_id,entry);
+            curr_edit->upsertPage(meta->pu.page_id, entry);
         }
     }
 
@@ -43,7 +45,7 @@ public:
 
     virtual void applyRef(PFMeta * meta)
     {
-        curr_edit->ref(meta->ref.page_id,meta->ref.og_page_id);
+        curr_edit->ref(meta->ref.page_id, meta->ref.og_page_id);
     }
 
     virtual void dealPU(PFMeta * meta)
@@ -51,7 +53,7 @@ public:
         PageEntry entry;
         entry.offset = meta->pu.page_offset;
         entry.size = meta->pu.page_size;
-        for (size_t i = 0 ; i < meta->pu.field_offset_len ; i++)
+        for (size_t i = 0; i < meta->pu.field_offset_len; i++)
         {
             auto field_offset = PageUtil::cast<PFMetaFieldOffset>(pos);
             entry.field_offsets.emplace_back(field_offset->bits.field_offset, 0);
@@ -72,27 +74,30 @@ public:
     virtual void parseWriteBatch()
     {
         auto meta = PageUtil::cast<PFMeta>(pos);
-        switch((WriteBatch::WriteType)meta->pu.type) 
+        switch ((WriteBatch::WriteType)meta->pu.type)
         {
-            case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT: {
-                dealPU(meta);
-                break;
-            }
-            case WriteBatch::WriteType::DEL: {
-                dealDel(meta);
-                break;
-            }
-            case WriteBatch::WriteType::REF: {
-                dealRef(meta);
-                break;
-            }
-            default:
-                // TBD:
-                return;
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT:
+        {
+            dealPU(meta);
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            dealDel(meta);
+            break;
+        }
+        case WriteBatch::WriteType::REF:
+        {
+            dealRef(meta);
+            break;
+        }
+        default:
+            // TBD:
+            return;
         }
     }
-    
+
     virtual void parserHeader()
     {
         char * curr_pos = pos;
@@ -107,7 +112,7 @@ public:
         UInt64 meta_crc = meta_header->bits.page_checksum;
         // TBD: do crc check
         (void)meta_crc;
-        curr_write_batch_sequence = std::max(curr_write_batch_sequence,meta_header->bits.meta_seq_id);
+        curr_write_batch_sequence = std::max(curr_write_batch_sequence, meta_header->bits.meta_seq_id);
 
         while (pos < curr_pos + meta_size)
         {
@@ -125,4 +130,4 @@ protected:
     PageEntriesEdit * curr_edit;
 };
 
-}
+} // namespace DB::PS::V3

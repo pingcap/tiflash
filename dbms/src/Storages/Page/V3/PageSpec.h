@@ -1,12 +1,13 @@
 #pragma once
 
 #include <Core/Types.h>
+
 #include <type_traits>
 
 namespace DB::PS::V3
 {
-
-union PFMetaHeader {
+union PFMetaHeader
+{
     struct
     {
         UInt32 meta_byte_size : 32;
@@ -20,8 +21,8 @@ union PFMetaHeader {
 
 static_assert(sizeof(union PFMetaHeader) == 16, "Invaild size of PFMetaHeader.");
 
-union PFMeta {
-
+union PFMeta
+{
     struct
     {
         // It can support 2^4 - 1 = 15.
@@ -44,7 +45,7 @@ union PFMeta {
         UInt64 field_offset_len : 26;
     } pu;
 
-    struct 
+    struct
     {
         UInt64 type : 4;
 
@@ -58,7 +59,7 @@ union PFMeta {
         UInt64 unused : 26;
     } del;
 
-    struct 
+    struct
     {
         UInt64 type : 4;
 
@@ -69,7 +70,7 @@ union PFMeta {
         // unused lane
 
     } ref;
-    
+
     UInt8 raws[24];
 };
 
@@ -88,4 +89,4 @@ union PFMetaFieldOffset
 };
 
 static_assert(sizeof(union PFMetaFieldOffset) == 8, "Invaild size of PFMetaFieldOffset.");
-}
+} // namespace DB::PS::V3

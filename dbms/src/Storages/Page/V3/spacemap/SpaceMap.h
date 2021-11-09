@@ -1,21 +1,21 @@
 #pragma once
 
-#include "BitMap.h"
-#include <Core/Types.h>
 #include <Common/Allocator.h>
-#include <Poco/Logger.h>
+#include <Core/Types.h>
 #include <Encryption/FileProvider.h>
+#include <Poco/Logger.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 
+#include "BitMap.h"
+
 namespace DB::PS::V3
 {
-
 class SpaceMap;
 using SpaceMapPtr = std::shared_ptr<SpaceMap>;
 
-class SpaceMap : public Allocator<false> {
-
+class SpaceMap : public Allocator<false>
+{
 public:
     SpaceMap(bitmaps * bitmap, String & file_path, FileProviderPtr file_provider_);
 
@@ -27,13 +27,13 @@ public:
 
     UInt64 getDataRange(UInt64 size, bool also_mark = false);
 
-    void getDataRange(UInt64 * sizes,size_t nums, UInt64 * offsets, bool also_mark = false);
+    void getDataRange(UInt64 * sizes, size_t nums, UInt64 * offsets, bool also_mark = false);
 
-    void splitDataInRange(UInt64 * sizes, size_t nums, UInt64 *offsets, UInt64 start_range, UInt64 range_len);
+    void splitDataInRange(UInt64 * sizes, size_t nums, UInt64 * offsets, UInt64 start_range, UInt64 range_len);
 
     void markDataRange(UInt64 offsets, UInt64 size);
 
-    void markDataRange(UInt64 * offsets,UInt64 *  sizes,size_t nums);
+    void markDataRange(UInt64 * offsets, UInt64 * sizes, size_t nums);
 
     void unmarkDataRange(UInt64 offsets, UInt64 size);
 
@@ -52,4 +52,4 @@ private:
     Poco::Logger * log;
 };
 
-} // DB::PS::V3
+} // namespace DB::PS::V3
