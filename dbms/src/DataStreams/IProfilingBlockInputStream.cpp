@@ -125,7 +125,10 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 void IProfilingBlockInputStream::dumpProfileInfo(std::ostream & ostr)
 {
     std::unordered_set<Int64> dumped;
+
+    ostr << "[";
     recursiveDumpProfileInfo(ostr, dumped);
+    ostr << "]";
 }
 
 void IProfilingBlockInputStream::recursiveDumpProfileInfo(std::ostream & ostr, std::unordered_set<Int64> & dumped)
@@ -141,15 +144,29 @@ void IProfilingBlockInputStream::recursiveDumpProfileInfo(std::ostream & ostr, s
     ostr << "{";
 
     ostr << "\"signature\":" << info.signature << ",";
+    ostr << "\"name\":\"" << getName() << "\",";
+
+    ostr << "\"children\":[";
+    first = true;
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+        if (first)
+            first = false;
+        else
+            ostr << ",";
+        ostr << child.info.signature;
+        return false;
+    });
+    ostr << "],";
+
+    ostr << "\"stat\":";
     dumpProfileInfoImpl(ostr);
 
     ostr << "}";
 
-    for (auto & child : children)
-    {
-        auto * child_ptr = dynamic_cast<IProfilingBlockInputStream *>(child.get());
-        child_ptr->recursiveDumpProfileInfo(ostr, dumped);
-    }
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+        child.recursiveDumpProfileInfo(ostr, dumped);
+        return false;
+    });
 }
 
 void IProfilingBlockInputStream::dumpProfileInfoImpl(std::ostream & ostr)
