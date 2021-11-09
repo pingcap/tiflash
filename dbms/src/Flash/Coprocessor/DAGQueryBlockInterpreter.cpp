@@ -212,10 +212,7 @@ AnalysisResult analyzeExpressions(
         query_block.qb_column_prefix,
         keep_session_timezone_info || !query_block.isRootQueryBlock());
 
-    if (query_block.limitOrTopN)
-    {
-        res.before_order_and_select = chain.getLastActions();
-    }
+    res.before_order_and_select = chain.getLastActions();
 
     chain.finalize();
     chain.clear();
