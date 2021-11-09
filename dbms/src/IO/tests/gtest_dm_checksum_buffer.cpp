@@ -182,12 +182,12 @@ void runReadBigTest()
     auto [data, seed] = randomData(size);
     auto compare = data;
     {
-        auto file = provider->newWritableFile("/tmp/test", {"/tmp/test.enc", "test.enc"}, true, true, limiter->getWriteLimiter());
+        auto file = provider->newWritableFile(filename, {"/tmp/test.enc", "test.enc"}, true, true, limiter->getWriteLimiter());
         auto buffer = FramedChecksumWriteBuffer<D>(file);
         buffer.write(data.data(), data.size());
     }
     {
-        auto file = provider->newRandomAccessFile("/tmp/test", {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
+        auto file = provider->newRandomAccessFile(filename, {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
         auto buffer = FramedChecksumReadBuffer<D>(file);
         buffer.readBig(compare.data(), compare.size());
         ASSERT_EQ(std::memcmp(compare.data(), data.data(), data.size()), 0) << "seed: " << seed;
@@ -195,13 +195,13 @@ void runReadBigTest()
 
     for (size_t i = 1; i <= data.size() / 2; i <<= 1)
     {
-        auto file = provider->newRandomAccessFile("/tmp/test", {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
+        auto file = provider->newRandomAccessFile(filename, {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
         auto buffer = FramedChecksumReadBuffer<D>(file);
         buffer.seek(static_cast<ssize_t>(i));
         buffer.readBig(compare.data(), i);
         ASSERT_EQ(std::memcmp(compare.data(), data.data() + i, i), 0) << "seed: " << seed;
     }
-    Poco::File file{"/tmp/test"};
+    Poco::File file{filename};
     file.remove();
 }
 
