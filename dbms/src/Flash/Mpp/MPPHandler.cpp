@@ -28,7 +28,7 @@ void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;
-    current_memory_tracker = nullptr;  /// to avoid reusing threads in gRPC
+    current_memory_tracker = nullptr; /// to avoid reusing threads in gRPC
     try
     {
         Stopwatch stopwatch;
