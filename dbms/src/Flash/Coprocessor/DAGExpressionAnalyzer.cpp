@@ -1211,7 +1211,6 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
     if (unlikely(!keep_session_timezone_info && output_offsets.empty()))
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
-    initChain(chain, getCurrentInputColumns());
     NamesWithAliases final_project;
     const auto & current_columns = getCurrentInputColumns();
     UniqueNameGenerator unique_name_generator;
@@ -1261,6 +1260,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
     {
         /// for all the columns that need to be returned, if the type is timestamp, then convert
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
+        initChain(chain, getCurrentInputColumns());
         ExpressionActionsChain::Step step = chain.steps.back();
 
         tipb::Expr tz_expr;
@@ -1308,6 +1308,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
         }
     }
 
+    initChain(chain, getCurrentInputColumns());
     for (const auto & name : final_project)
     {
         chain.steps.back().required_output.push_back(name.first);
