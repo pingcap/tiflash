@@ -62,8 +62,6 @@ public:
         , warning_count(0)
     {
         assert(dag_request.has_root_executor());
-        exchange_sender_executor_id = dag_request.root_executor().executor_id();
-        exchange_sender_execution_summary_key = dag_request.root_executor().exchange_sender().child().executor_id();
     }
 
     explicit DAGContext(UInt64 max_error_count_)
@@ -130,8 +128,6 @@ public:
     size_t final_concurrency = 1;
     Int64 compile_time_ns;
     String table_scan_executor_id = "";
-    String exchange_sender_executor_id = "";
-    String exchange_sender_execution_summary_key = "";
     bool collect_execution_summaries;
     bool return_executor_id;
     bool is_mpp_task;

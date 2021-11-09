@@ -10,6 +10,7 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Coprocessor/recordProfileStreams.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
@@ -150,6 +151,10 @@ BlockIO InterpreterDAG::execute()
                 log);
             stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
         });
+        if (dag.getDAGRequest().root_executor().has_executor_id())
+        {
+            recordProfileStreams(dag, pipeline, dag.getDAGRequest().root_executor().executor_id());
+        }
     }
 
     /// add union to run in parallel if needed

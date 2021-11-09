@@ -79,8 +79,6 @@ private:
         AggregateDescriptions & aggregate_descriptions);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
-    void recordProfileStreams(DAGPipeline & pipeline, const String & key);
-
     void executeRemoteQueryImpl(
         DAGPipeline & pipeline,
         const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
