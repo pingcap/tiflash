@@ -1,54 +1,27 @@
 #pragma once
 
-#include "pagemap/PageMap.h"
 #include <Encryption/FileProvider.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <Storages/Page/V3/spacemap/SpaceMap.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 
-namespace DB
+using namespace DB::PS::V2;
+namespace DB::PS::V3
 {
 
 #define PAGE_FILE_DATA "page_file_data"
 #define PAGE_FILE_META "page_file_meta"
 
-
-class NPageFileFlat
-{
-public:
-
-    enum FlatTypes 
-    {
-        TRUNCATE_FILE_END = 1,
-        SEQUENCE_AT_END = 2,
-    };
-
-    class NPageFileFlatRules : Allocator<false>
-    {
-    public:
-        bool measure();
-        void flat();
-        void getType();
-    private:
-        int type;
-    };
-
-    NPageFileFlat(NPageMapPtr page_map_);
-
-private:
-    std::vector<NPageFileFlatRules> rules;
-    NPageMapPtr page_map;
-};
-
-class NPageFile : Allocator<false>
+class BlobFile : Allocator<false>
 {
     using VersionedPageEntries = PageEntriesVersionSetWithDelta;
     using SnapshotPtr = VersionedPageEntries::SnapshotPtr;
 public:
-    NPageFile(String path_, FileProviderPtr file_provider_);
+    BlobFile(String path_, FileProviderPtr file_provider_);
 
     String getPath();
 
@@ -98,7 +71,7 @@ private:
     
     FileProviderPtr file_provider;
 
-    NPageMapPtr page_map;
+    SpaceMapPtr space_map;
     String path;
 
     ::DB::MVCC::VersionSetConfig version_set_config;

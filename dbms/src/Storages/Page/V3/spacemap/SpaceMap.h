@@ -5,25 +5,25 @@
 #include <Common/Allocator.h>
 #include <Poco/Logger.h>
 #include <Encryption/FileProvider.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 
-namespace DB 
+namespace DB::PS::V3
 {
 
-class NPageMap;
-using NPageMapPtr = std::shared_ptr<NPageMap>;
+class SpaceMap;
+using SpaceMapPtr = std::shared_ptr<SpaceMap>;
 
-class NPageMap : public Allocator<false> {
+class SpaceMap : public Allocator<false> {
 
 public:
-    NPageMap(bitmaps * bitmap, String & file_path, FileProviderPtr file_provider_);
+    SpaceMap(bitmaps * bitmap, String & file_path, FileProviderPtr file_provider_);
 
-    ~NPageMap();
+    ~SpaceMap();
 
-    PageEntriesEdit restore();
+    V2::PageEntriesEdit restore();
 
-    static NPageMapPtr newPageMap(String & path, int bitmap_type, FileProviderPtr file_provider);
+    static SpaceMapPtr create(String & path, int bitmap_type, FileProviderPtr file_provider);
 
     UInt64 getDataRange(UInt64 size, bool also_mark = false);
 
@@ -38,9 +38,9 @@ public:
     void unmarkDataRange(UInt64 offsets, UInt64 size);
 
     String toString() const;
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    Poco::Logger * page_storage_log;
+#endif
 
     // TODO : not support encryption yet.
     FileProviderPtr file_provider;
@@ -49,6 +49,7 @@ private:
 
     UInt64 page_nums = 0;
     std::recursive_mutex query_metux;
+    Poco::Logger * log;
 };
 
-}
+} // DB::PS::V3

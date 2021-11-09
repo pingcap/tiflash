@@ -1,19 +1,19 @@
 #pragma once
 
-#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/PageUtil.h>
-#include "PageSpec.h"
-
-namespace DB
+#include <Storages/Page/V3/PageSpec.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
+using namespace DB::PS::V2;
+namespace DB::PS::V3
 {
 
-class NPageFileParser 
+class BlobFileParser 
 {
 public:
-    NPageFileParser(PageEntriesEdit * edit_, char * buffer_, UInt64 size) :buffer(buffer_), buffer_size(size), curr_edit(edit_) {};
+    BlobFileParser (PageEntriesEdit * edit_, char * buffer_, UInt64 size) :buffer(buffer_), buffer_size(size), curr_edit(edit_) {};
 
-    virtual ~NPageFileParser(){};
+    virtual ~BlobFileParser (){};
 
     virtual void parse()
     {
@@ -123,24 +123,6 @@ protected:
 
     WriteBatch::SequenceID curr_write_batch_sequence = 0;
     PageEntriesEdit * curr_edit;
-};
-
-
-class NPageFileBuilder
-{
-public:
-    NPageFileBuilder(WriteBatch & write_batch_) : write_batch(write_batch_)
-    {
-        
-    };
-
-
-private:
-    char * buffer;
-    char * pos;
-
-    UInt64 buffer_size;
-    WriteBatch & write_batch;
 };
 
 }

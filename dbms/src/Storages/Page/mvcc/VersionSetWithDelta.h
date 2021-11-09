@@ -51,9 +51,6 @@ extern const char random_slow_page_storage_remove_expired_snapshots[];
 } // namespace FailPoints
 namespace MVCC
 {
-
-using PageEntityRmHandler = std::function<void(PageEntry &)>;
-
 /// Base type for VersionType of VersionSetWithDelta
 template <typename T>
 struct MultiVersionCountableForDelta
@@ -108,13 +105,6 @@ public:
 
         // snapshot list is empty
         assert(snapshots.empty());
-    }
-
-    /// Just for simple
-    /// 
-    void regPageEntityRmHandler(PageEntityRmHandler handler)
-    {
-        current->regPageEntityRmHandler(handler);
     }
 
     void apply(TVersionEdit & edit)

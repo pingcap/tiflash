@@ -136,7 +136,6 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
     return v;
 }
 
-<<<<<<< HEAD
 /// Cast and advance sizeof(T) bytes.
 template <typename T, bool advance = true>
 T * cast(std::conditional_t<advance, char *&, const char *> pos)
@@ -147,8 +146,6 @@ T * cast(std::conditional_t<advance, char *&, const char *> pos)
     return t;
 }
 
-=======
->>>>>>> master
 } // namespace PageUtil
 
 } // namespace DB

@@ -3,6 +3,9 @@
 #include <Core/Types.h>
 #include <type_traits>
 
+namespace DB::PS::V3
+{
+
 union PFMetaHeader {
     struct
     {
@@ -85,3 +88,4 @@ union PFMetaFieldOffset
 };
 
 static_assert(sizeof(union PFMetaFieldOffset) == 8, "Invaild size of PFMetaFieldOffset.");
+}

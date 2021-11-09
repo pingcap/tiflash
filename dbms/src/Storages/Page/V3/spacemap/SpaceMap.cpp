@@ -1,14 +1,13 @@
-#include "PageMap.h"
+#include "SpaceMap.h"
 
 #include <Common/Exception.h>
-#include <Storages/Page/PageUtil.h>
 #include <stdlib.h>
 #include <sys/statvfs.h>
-
 #include <memory>
+#include <Storages/Page/PageUtil.h>
+#include <Storages/Page/V3/BlobParser.h>
 
-#include "../NPageFileParser.h"
-
+using namespace DB::PS::V2;
 namespace DB
 {
 namespace ErrorCodes
@@ -16,24 +15,26 @@ namespace ErrorCodes
 extern const int CANNOT_ALLOCATE_MEMORY;
 }
 
-class NPageMapParser : public NPageFileParser
+namespace PS::V3 
+{
+
+class SpaceMapParser : public BlobFileParser
 {
 public:
-    NPageMapParser(bitmaps * bitmap_, PageEntriesEdit * edit_, char * buffer_, UInt64 size)
-        : NPageFileParser(edit_, buffer_, size)
-        , bitmap(bitmap_){};
+    SpaceMapParser(bitmaps * bitmap_, PageEntriesEdit * edit_, char * buffer_, UInt64 size)
+        : BlobFileParser(edit_, buffer_, size)
+        , bitmap(bitmap_) {};
 
     void applyPU(PFMeta * meta, PageEntry & entry) override
     {
-        NPageFileParser::applyPU(meta, entry);
-
+        BlobFileParser::applyPU(meta, entry);
         // FIXME : maybe should consider the same page_id in put
         bitmap->bitmap_ops->mark_bmap_extent(bitmap, entry.offset, entry.size);
     }
 
     void applyDel(PFMeta * meta) override
     {
-        NPageFileParser::applyDel(meta);
+        BlobFileParser::applyDel(meta);
         bitmap->bitmap_ops->unmark_bmap_extent(bitmap, meta->del.page_offset, meta->del.page_size);
     }
 
@@ -41,14 +42,17 @@ private:
     bitmaps * bitmap;
 };
 
-NPageMap::NPageMap(bitmaps * bitmap_, String & file_path_, FileProviderPtr file_provider_)
+SpaceMap::SpaceMap(bitmaps * bitmap_, String & file_path_, FileProviderPtr file_provider_)
     : file_provider{file_provider_}
     , file_path(file_path_)
     , bitmap(bitmap_)
+    , log(&Poco::Logger::get("SpaceMap"))
 {
-}
+    LOG_INFO(log, "Begin to restore data from disk. [path=" << file_path
+        << "]");
+};
 
-NPageMap::~NPageMap()
+SpaceMap::~SpaceMap()
 {
     free_bitmaps(bitmap);
 }
@@ -57,7 +61,7 @@ NPageMap::~NPageMap()
 #define PAGE_FILE_META "page_file_meta"
 
 // FIXME : some problem to restore
-PageEntriesEdit NPageMap::restore()
+PageEntriesEdit SpaceMap::restore()
 {
     auto meta_reader = file_provider->newRandomAccessFile(
         file_path + PAGE_FILE_META,
@@ -89,13 +93,13 @@ PageEntriesEdit NPageMap::restore()
     PageEntriesEdit edit;
 
     // parse and restore
-    NPageMapParser page_map_parser(bitmap, &edit, meta_buffer, file_size);
+    SpaceMapParser page_map_parser(bitmap, &edit, meta_buffer, file_size);
     page_map_parser.parse();
 
     return edit;
 }
 
-UInt64 NPageMap::getDataRange(UInt64 size, bool also_mark)
+UInt64 SpaceMap::getDataRange(UInt64 size, bool also_mark)
 {
     if (size == 0)
     {
@@ -117,7 +121,7 @@ UInt64 NPageMap::getDataRange(UInt64 size, bool also_mark)
     return fist_free_block;
 }
 
-void NPageMap::getDataRange(UInt64 * sizes, size_t nums, UInt64 * offsets, bool also_mark)
+void SpaceMap::getDataRange(UInt64 * sizes, size_t nums, UInt64 * offsets, bool also_mark)
 {
     std::lock_guard<std::recursive_mutex> lock(query_metux);
     UInt64 start_position = bitmap->start;
@@ -139,7 +143,7 @@ void NPageMap::getDataRange(UInt64 * sizes, size_t nums, UInt64 * offsets, bool 
         markDataRange(offsets, sizes, nums);
 }
 
-void NPageMap::splitDataInRange(UInt64 * sizes, size_t nums, UInt64 * offsets, UInt64 start_range, UInt64 range_len)
+void SpaceMap::splitDataInRange(UInt64 * sizes, size_t nums, UInt64 * offsets, UInt64 start_range, UInt64 range_len)
 {
     UInt64 cur_range = start_range;
     for (size_t i = 0; i < nums; i++)
@@ -159,7 +163,7 @@ void NPageMap::splitDataInRange(UInt64 * sizes, size_t nums, UInt64 * offsets, U
     }
 }
 
-void NPageMap::markDataRange(UInt64 offsets, UInt64 size)
+void SpaceMap::markDataRange(UInt64 offsets, UInt64 size)
 {
     std::lock_guard<std::recursive_mutex> lock(query_metux);
     if (mark_block_bmap_range(bitmap, offsets, size) != 0)
@@ -168,8 +172,7 @@ void NPageMap::markDataRange(UInt64 offsets, UInt64 size)
     }
 }
 
-
-void NPageMap::unmarkDataRange(UInt64 offsets, UInt64 size)
+void SpaceMap::unmarkDataRange(UInt64 offsets, UInt64 size)
 {
     std::lock_guard<std::recursive_mutex> lock(query_metux);
     if (unmark_block_bmap_range(bitmap, offsets, size) != 0)
@@ -178,7 +181,7 @@ void NPageMap::unmarkDataRange(UInt64 offsets, UInt64 size)
     }
 }
 
-void NPageMap::markDataRange(UInt64 * offsets, UInt64 * sizes, size_t nums)
+void SpaceMap::markDataRange(UInt64 * offsets, UInt64 * sizes, size_t nums)
 {
     std::lock_guard<std::recursive_mutex> lock(query_metux);
 
@@ -192,7 +195,7 @@ void NPageMap::markDataRange(UInt64 * offsets, UInt64 * sizes, size_t nums)
 }
 
 
-NPageMapPtr NPageMap::newPageMap(String & path, int bitmap_type, FileProviderPtr file_provider)
+SpaceMapPtr SpaceMap::create(String & path, int bitmap_type, FileProviderPtr file_provider)
 {
     auto * bitmap = (struct bitmaps *)std::calloc(1, sizeof(struct bitmaps));
     if (bitmap == nullptr)
@@ -214,8 +217,8 @@ NPageMapPtr NPageMap::newPageMap(String & path, int bitmap_type, FileProviderPtr
         throw DB::Exception("Init Bitmap failed.", DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
     }
 
-    NPageMapPtr page_map = std::make_shared<NPageMap>(bitmap, path, file_provider);
-    return page_map;
+    return std::make_shared<SpaceMap>(bitmap, path, file_provider);
 }
 
+} // namespace PS::V3
 } // namespace DB

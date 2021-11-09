@@ -41,11 +41,6 @@ public:
 
     bool isBase() const { return is_base; }
 
-    void regPageEntityRmHandler(MVCC::PageEntityRmHandler handler_)
-    {
-        handler = handler_;
-    }
-
 public:
     /** Update Page{page_id} / RefPage{page_id} entry. If it's a new page_id,
      *  create a RefPage{page_id} -> Page{page_id} at the same time.
@@ -150,8 +145,6 @@ protected:
 
     PageId max_page_id;
     bool is_base;
-
-    MVCC::PageEntityRmHandler handler;
 
 protected:
     size_t numDeletions() const
@@ -342,10 +335,6 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
         if (entry.ref == 0)
         {
             normal_pages.erase(iter);
-            if (handler)
-            {
-                handler(entry);
-            }
         }
     }
 }

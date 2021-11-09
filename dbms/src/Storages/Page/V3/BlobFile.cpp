@@ -1,15 +1,16 @@
-#include "NPageFile.h"
+#include <Storages/Page/V3/BlobFile.h>
 
 #include <Poco/File.h>
-#include <Storages/Page/PageUtil.h>
 #include <stdlib.h>
 
-#include "PageSpec.h"
-#include "pagemap/BitMap.h"
+#include <Storages/Page/PageUtil.h>
+#include <Storages/Page/V3/PageSpec.h>
+#include <Storages/Page/V3/spacemap/BitMap.h>
 
-namespace DB
+using namespace DB::PS::V2;
+namespace DB::PS::V3
 {
-NPageFile::NPageFile(String path_, FileProviderPtr file_provider_)
+BlobFile::BlobFile(String path_, FileProviderPtr file_provider_)
     : file_provider{file_provider_}
     , path(path_)
     , log(&Poco::Logger::get("NewPageStorage"))
@@ -36,7 +37,7 @@ NPageFile::NPageFile(String path_, FileProviderPtr file_provider_)
     }
 
     // todo try/catch here
-    page_map = NPageMap::newPageMap(path, BMAP64_RBTREE, file_provider_);
+    space_map = SpaceMap::create(path, BMAP64_RBTREE, file_provider_);
 
     data_writer = file_provider->newWritableFile(
         path + PAGE_FILE_DATA,
@@ -57,23 +58,16 @@ NPageFile::NPageFile(String path_, FileProviderPtr file_provider_)
     meta_reader = file_provider->newRandomAccessFile(
         path + PAGE_FILE_META,
         EncryptionPath(path + PAGE_FILE_META, ""));
-
-    DB::MVCC::PageEntityRmHandler handler = [this](const DB::PageEntry & entry) {
-        if (entry.size != 0)
-            this->page_map->unmarkDataRange(entry.offset, entry.size);
-    };
-
-    versioned_page_entries.regPageEntityRmHandler(handler);
 };
 
-void NPageFile::restore()
+void BlobFile::restore()
 {
     PageEntriesEdit edit;
-    edit = page_map->restore();
+    edit = space_map->restore();
     versioned_page_entries.apply(edit);
 }
 
-void NPageFile::write(WriteBatch && write_batch)
+void BlobFile::write(WriteBatch && write_batch)
 {
     PageEntriesEdit edit;
     size_t meta_write_bytes = sizeof(PFMetaHeader);
@@ -104,12 +98,12 @@ void NPageFile::write(WriteBatch && write_batch)
     }
 
     // This will multi-io , so give up different offset, just let it combine to big io.
-    /* page_map->getDataRange(data_sizes, write_batch_size, offsets_in_file, true); */
+    /* space_map->getDataRange(data_sizes, write_batch_size, offsets_in_file, true); */
 
-    auto offset_begin = page_map->getDataRange(total_data_sizes, true);
+    auto offset_begin = space_map->getDataRange(total_data_sizes, true);
     if (offset_begin != UINT64_MAX)
     {
-        page_map->splitDataInRange(data_sizes, write_batch_size, offsets_in_file, offset_begin, total_data_sizes);
+        space_map->splitDataInRange(data_sizes, write_batch_size, offsets_in_file, offset_begin, total_data_sizes);
     }
 
     char * meta_buffer = (char *)alloc(meta_write_bytes);
@@ -212,13 +206,13 @@ void NPageFile::write(WriteBatch && write_batch)
     versioned_page_entries.apply(edit);
 }
 
-String NPageFile::getPath()
+String BlobFile::getPath()
 {
     return path;
 }
 
 
-void NPageFile::read(PageIdAndEntries & to_read, const PageHandler & handler)
+void BlobFile::read(PageIdAndEntries & to_read, const PageHandler & handler)
 {
     std::sort(to_read.begin(), to_read.end(), [](const PageIdAndEntry & a, const PageIdAndEntry & b) {
         return a.second.offset < b.second.offset;
@@ -250,7 +244,7 @@ void NPageFile::read(PageIdAndEntries & to_read, const PageHandler & handler)
 }
 
 
-void NPageFile::read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot)
+void BlobFile::read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -269,7 +263,7 @@ void NPageFile::read(const std::vector<PageId> & page_ids, const PageHandler & h
     read(to_read, handler);
 }
 
-void NPageFile::read(const PageId & page_id, const PageHandler & handler, SnapshotPtr snapshot)
+void BlobFile::read(const PageId & page_id, const PageHandler & handler, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
