@@ -175,6 +175,18 @@ public:
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
 
+    template <typename F>
+    void forEachProfilingChild(F && f)
+    {
+        /// NOTE: Acquire a read lock, therefore f() should be thread safe
+        std::shared_lock lock(children_mutex);
+
+        for (auto & child : children)
+            if (IProfilingBlockInputStream * p_child = dynamic_cast<IProfilingBlockInputStream *>(child.get()))
+                if (f(*p_child))
+                    return;
+    }
+
 protected:
     BlockStreamProfileInfo info;
     std::atomic<bool> is_cancelled{false};
@@ -230,19 +242,6 @@ private:
       */
     bool checkTimeLimit();
     void checkQuota(Block & block);
-
-
-    template <typename F>
-    void forEachProfilingChild(F && f)
-    {
-        /// NOTE: Acquire a read lock, therefore f() should be thread safe
-        std::shared_lock lock(children_mutex);
-
-        for (auto & child : children)
-            if (IProfilingBlockInputStream * p_child = dynamic_cast<IProfilingBlockInputStream *>(child.get()))
-                if (f(*p_child))
-                    return;
-    }
 };
 
 } // namespace DB

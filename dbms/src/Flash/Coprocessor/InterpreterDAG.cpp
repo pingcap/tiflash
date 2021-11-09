@@ -149,6 +149,10 @@ BlockIO InterpreterDAG::execute()
                 log);
             stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
         });
+        if (dag.getDAGRequest().root_executor().has_executor_id())
+        {
+            recordProfileStreams(pipeline, dag.getDAGRequest().root_executor().executor_id());
+        }
     }
 
     /// add union to run in parallel if needed
@@ -167,5 +171,16 @@ BlockIO InterpreterDAG::execute()
     BlockIO res;
     res.in = pipeline.firstStream();
     return res;
+}
+
+void InterpreterDAG::recordProfileStreams(DAGPipeline & pipeline, const String & key)
+{
+    dag.getDAGContext().getProfileStreamsMap()[key].qb_id = 0;
+    for (auto & stream : pipeline.streams)
+    {
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
+    }
+    for (auto & stream : pipeline.streams_with_non_joined_data)
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
 }
 } // namespace DB
