@@ -32,9 +32,7 @@ public:
 
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
-    const std::vector<tipb::FieldType> & getOutputFieldTypes() const { return output_field_types; }
     const std::vector<tipb::FieldType> & getResultFieldTypes() const { return result_field_types; }
-    const std::vector<Int32> & getOutputOffsets() const { return output_offsets; }
 
     ASTPtr getAST() const { return ast; };
 
@@ -61,9 +59,7 @@ protected:
 
     const tipb::DAGRequest & dag_request;
 
-    std::vector<tipb::FieldType> output_field_types;
     std::vector<tipb::FieldType> result_field_types;
-    std::vector<Int32> output_offsets;
     tipb::EncodeType encode_type;
     std::shared_ptr<DAGQueryBlock> root_query_block;
     ASTPtr ast;

@@ -908,8 +908,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         pipeline,
         analyzer->appendFinalProject(
             chain,
-            dag.getOutputFieldTypes(),
-            dag.getOutputOffsets(),
+            query_block.output_field_types,
+            query_block.output_offsets,
             query_block.qb_column_prefix,
             keep_session_timezone_info || !query_block.isRootQueryBlock()));
 
