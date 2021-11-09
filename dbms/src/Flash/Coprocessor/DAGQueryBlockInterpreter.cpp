@@ -15,7 +15,6 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
-#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -970,7 +969,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         executeJoin(query_block.source->join(), pipeline, right_query);
-        recordProfileStreams(dag, pipeline, query_block.source_name);
+        recordProfileStreams(dag, pipeline, query_block.source_name, query_block.id);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
@@ -992,7 +991,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             source_columns.emplace_back(NameAndTypePair(col.name, col.type));
         }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-        recordProfileStreams(dag, pipeline, query_block.source_name);
+        recordProfileStreams(dag, pipeline, query_block.source_name, query_block.id);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
     {
@@ -1019,12 +1018,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
         executeProject(pipeline, project_cols);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
-        recordProfileStreams(dag, pipeline, query_block.source_name);
+        recordProfileStreams(dag, pipeline, query_block.source_name, query_block.id);
     }
     else
     {
         executeTS(query_block.source->tbl_scan(), pipeline);
-        recordProfileStreams(dag, pipeline, query_block.source_name);
+        recordProfileStreams(dag, pipeline, query_block.source_name, query_block.id);
         dag.getDAGContext().table_scan_executor_id = query_block.source_name;
     }
 
@@ -1082,7 +1081,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     if (res.has_where)
     {
-        recordProfileStreams(dag, pipeline, query_block.selection_name);
+        recordProfileStreams(dag, pipeline, query_block.selection_name, query_block.id);
     }
 
     // this log measures the concurrent degree in this mpp task
@@ -1094,13 +1093,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
-        recordProfileStreams(dag, pipeline, query_block.aggregation_name);
+        recordProfileStreams(dag, pipeline, query_block.aggregation_name, query_block.id);
     }
     if (res.has_having)
     {
         // execute having
         executeWhere(pipeline, res.before_having, res.having_column_name);
-        recordProfileStreams(dag, pipeline, query_block.having_name);
+        recordProfileStreams(dag, pipeline, query_block.having_name, query_block.id);
     }
     if (res.before_order_and_select)
     {
@@ -1111,7 +1110,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         // execute topN
         executeOrder(pipeline, res.order_columns);
-        recordProfileStreams(dag, pipeline, query_block.limitOrTopN_name);
+        recordProfileStreams(dag, pipeline, query_block.limitOrTopN_name, query_block.id);
     }
 
     // execute projection
@@ -1121,7 +1120,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (query_block.limitOrTopN != nullptr && query_block.limitOrTopN->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
-        recordProfileStreams(dag, pipeline, query_block.limitOrTopN_name);
+        recordProfileStreams(dag, pipeline, query_block.limitOrTopN_name, query_block.id);
     }
 
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)

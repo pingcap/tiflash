@@ -6,7 +6,7 @@
 
 namespace DB
 {
-void recordProfileStreams(const DAGQuerySource & dag, DAGPipeline & pipeline, const String & key)
+void recordProfileStreams(const DAGQuerySource & dag, DAGPipeline & pipeline, const String & key, UInt32 qb_id = 0)
 {
     dag.getDAGContext().getProfileStreamsMap()[key].qb_id = 0;
     for (auto & stream : pipeline.streams)
