@@ -10,6 +10,8 @@ catchError {
 }
 
 stage('Summary') {
+    println("Coverage detail: ${CI_COVERAGE_BASE_URL}/${BUILD_NUMBER}/cobertura/\nCoverage detail url is limited office network access\n")
+
     def duration = ((System.currentTimeMillis() - currentBuild.startTimeInMillis) / 1000 / 60).setScale(2, BigDecimal.ROUND_HALF_UP)
     def msg = "[#${ghprbPullId}: ${ghprbPullTitle}]" + "\n" +
             "${ghprbPullLink}" + "\n" +
