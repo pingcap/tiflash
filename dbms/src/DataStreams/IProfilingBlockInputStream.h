@@ -188,7 +188,7 @@ public:
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
 
-    void dumpProfileInfo(std::ostream & ostr) override;
+    void dumpProfileInfo(std::ostream & ostr);
 
 protected:
     Int64 id = -1;
@@ -260,6 +260,9 @@ private:
 
     /// Here you need to do a finalization, which can lead to an exception.
     virtual void readSuffixImpl() {}
+
+    void recursiveDumpProfileInfo(std::ostream & ostr, std::unordered_set<Int64> & dumped);
+    virtual void dumpProfileInfoImpl(std::ostream & ostr);
 
     void updateExtremes(Block & block);
 

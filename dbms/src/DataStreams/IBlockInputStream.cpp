@@ -64,9 +64,6 @@ void IBlockInputStream::dumpTree(std::ostream & ostr, size_t indent, size_t mult
 {
     ostr << String(indent, ' ') << getName();
 
-    ostr << " ";
-    dumpProfileInfo(ostr);
-
     if (multiplier > 1)
         ostr << " × " << multiplier;
     //ostr << ": " << getHeader().dumpStructure();

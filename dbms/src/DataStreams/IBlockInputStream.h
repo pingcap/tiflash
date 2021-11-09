@@ -96,8 +96,6 @@ public:
       */
     void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1);
 
-    virtual void dumpProfileInfo(std::ostream & ostr [[maybe_unused]]) {}
-
     /** Check the depth of the pipeline.
       * If max_depth is specified and the `depth` is greater - throw an exception.
       * Must be called before read, readPrefix.
