@@ -134,13 +134,10 @@ cmake "$SRCPATH" \
 
 make -j ${NPROC} tiflash
 
-# copy gtest binary under Debug mode
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TESTS} -ne 0 ]]; then
   make -j ${NPROC} page_ctl
-  make -j ${NPROC} gtests_dbms gtests_libcommon page_stress_testing gtests_libdaemon
-  cp -f "${BUILD_DIR}/dbms/gtests_dbms" "${INSTALL_DIR}/"
-  cp -f "${BUILD_DIR}/libs/libcommon/src/tests/gtests_libcommon" "${INSTALL_DIR}/"
-  cp -f "${BUILD_DIR}/libs/libdaemon/src/tests/gtests_libdaemon" "${INSTALL_DIR}/"
+  make -j ${NPROC} page_stress_testing
+  # build gtest in `release-centos7/build/build-tiflash-ut-coverage.sh`
 fi
 
 ccache -s
