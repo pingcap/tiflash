@@ -2,7 +2,7 @@
 
 >> drop table if exists test
 
->> create table test (i Int64, f Float64, d decimal(1, 0) default -5.4999999) engine = MutableMergeTree((i), 8192)
+>> create table test (i Int64, f Float64, d decimal(1, 0) default -5.4999999) engine = Log((i), 8192)
 
 >> insert into test (i, f) values (4, 0.5)
 
