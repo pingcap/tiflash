@@ -6,11 +6,10 @@
 
 namespace DB
 {
-
 String AggStatistics::toString() const
 {
     return fmt::format(
-        "{}<selectivity: {}(row), {}(blocks), {}(bytes); hash_table_bytes: {}(bytes)>",
+        R"({{"executor_id":"{}","rows_selectivity":{},"blocks_selectivity":{},"bytes_selectivity":{},"hash_table_bytes":{}}})",
         executor_id,
         divide(outbound_rows, inbound_rows),
         divide(outbound_blocks, inbound_blocks),
@@ -27,8 +26,8 @@ AggStatisticsPtr AggStatistics::buildStatistics(const String & executor_id, cons
             statistics->outbound_rows += profile_info.rows;
             statistics->outbound_blocks += profile_info.blocks;
             statistics->outbound_bytes += profile_info.bytes;
-            },
-            [&](const BlockStreamProfileInfo & child_profile_info) {
+        },
+        [&](const BlockStreamProfileInfo & child_profile_info) {
             statistics->inbound_rows += child_profile_info.rows;
             statistics->inbound_blocks += child_profile_info.blocks;
             statistics->inbound_bytes += child_profile_info.bytes;

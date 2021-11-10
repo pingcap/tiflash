@@ -23,11 +23,11 @@ void ExecutorStatistics::collectExecutorStatistics(DAGContext & dag_context)
 String ExecutorStatistics::toString() const
 {
     FmtBuffer buffer;
-    buffer.append("agg_stats: {");
-    joinStr(agg_stats.cbegin(), agg_stats.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s->toString()); });
-    buffer.append("}  filter_stats: {");
+    buffer.append(R"({"agg_stats":[)");
+    joinStr(agg_stats.cbegin(), agg_stats.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s->toString()); }, ",");
+    buffer.append(R"(],"filter_stats":[)");
     joinStr(filter_stats.cbegin(), filter_stats.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s->toString()); });
-    buffer.append("}");
+    buffer.append("]}");
     return buffer.toString();
 }
 } // namespace DB

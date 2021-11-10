@@ -9,7 +9,7 @@ namespace DB
 String FilterStatistics::toString() const
 {
     return fmt::format(
-        "{}<selectivity: {}(row), {}(blocks), {}(bytes); avg row per block: {}; avg bytes per block: {}>",
+        R"({{"executor_id":"{}","rows_selectivity":{},"blocks_selectivity":{},"bytes_selectivity":{},"avg_rows_per_block":{},"avg_bytes_per_block":{}}})",
         executor_id,
         divide(outbound_rows, inbound_rows),
         divide(outbound_blocks, inbound_blocks),
