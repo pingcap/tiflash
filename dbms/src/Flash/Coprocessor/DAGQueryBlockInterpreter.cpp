@@ -299,6 +299,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
 
     DAGStorageInterpreter storage_interpreter(context, dag, query_block, ts, conditions, max_streams, log);
     storage_interpreter.execute(pipeline);
+    dag.getDAGContext().getLocalInputStreams().insert(dag.getDAGContext().getLocalInputStreams().end(), pipeline.streams.begin(), pipeline.streams.end());
 
     analyzer = std::move(storage_interpreter.analyzer);
     need_add_cast_column_flag_for_tablescan = std::move(storage_interpreter.is_need_add_cast_column);

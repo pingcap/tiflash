@@ -184,21 +184,37 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
 }
 
-double DAGContext::getRemoteInputThroughput()
+namespace
+{
+double getInputThroughput(BlockInputStreams & block_input_streams)
 {
     UInt64 time_processed_ns = 0;
     UInt64 num_produced_bytes = 0;
-    for (auto & remote_block_input_stream : remote_block_input_streams)
+    for (auto & block_input_stream : block_input_streams)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(remote_block_input_stream.get()))
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(block_input_stream.get()))
         {
             time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
             num_produced_bytes += p_stream->getProfileInfo().bytes;
         }
     }
 
+    if (0 == time_processed_ns)
+        return 0.0;
+
     // convert to bytes per second
     return num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
+}
+} // namespace
+
+double DAGContext::getRemoteInputThroughput()
+{
+    return getInputThroughput(remote_block_input_streams);
+}
+
+double DAGContext::getLocalInputThroughput()
+{
+    return getInputThroughput(local_block_input_streams);
 }
 
 double DAGContext::getOutputThroughput()

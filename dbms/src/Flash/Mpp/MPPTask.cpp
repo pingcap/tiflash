@@ -363,7 +363,8 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
         task_stats->memory_peak = peak_memory;
 
-        task_stats->input_throughput = dag_context->getRemoteInputThroughput();
+        task_stats->local_input_throughput = dag_context->getLocalInputThroughput();
+        task_stats->remote_input_throughput = dag_context->getRemoteInputThroughput();
         task_stats->output_throughput = dag_context->getOutputThroughput();
     }
     else

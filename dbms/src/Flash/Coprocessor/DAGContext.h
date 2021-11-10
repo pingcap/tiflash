@@ -134,9 +134,12 @@ public:
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
+    BlockInputStreams & getLocalInputStreams() { return local_block_input_streams; }
+
     std::pair<bool, double> getTableScanThroughput();
 
     double getRemoteInputThroughput();
+    double getLocalInputThroughput();
     double getOutputThroughput();
 
     size_t final_concurrency = 1;
@@ -167,6 +170,7 @@ private:
     /// in this query block and all its children query block
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
     BlockInputStreams remote_block_input_streams;
+    BlockInputStreams local_block_input_streams;
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
