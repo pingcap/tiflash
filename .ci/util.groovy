@@ -175,8 +175,13 @@ def runUTCoverTICS(CURWS, NPROC) {
                 timeout(time: 5, unit: 'MINUTES') {
                     container("builder") {
                         sh "NPROC=${NPROC} /build/tics/release-centos7/build/upload-ut-coverage.sh"
+                        sh "cp /tmp/tiflash_gcovr_coverage.xml ./"
                     }
                 }
+                cobertura autoUpdateHealth: false, autoUpdateStability: false, 
+                    coberturaReportFile: "tiflash_gcovr_coverage.xml", 
+                    lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 
+                    maxNumberOfBuilds: 10, onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
             }
         }
     }
