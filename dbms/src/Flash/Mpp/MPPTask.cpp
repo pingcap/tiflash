@@ -38,6 +38,11 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
+bool operator<(const MPPTaskId & lid, const MPPTaskId & rid)
+{
+    return lid.start_ts < rid.start_ts || (lid.start_ts == rid.start_ts && lid.task_id < rid.task_id);
+}
+
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
@@ -79,15 +84,15 @@ void MPPTask::run()
     worker.detach();
 }
 
-void MPPTask::registerTunnel(const MPPTaskId & mpp_task_id, MPPTunnelPtr tunnel)
+void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
 {
     if (status == CANCELLED)
         throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is cancelled");
 
-    if (tunnel_map.find(mpp_task_id) != tunnel_map.end())
+    if (tunnel_map.find(id) != tunnel_map.end())
         throw Exception("the tunnel " + tunnel->id() + " has been registered");
 
-    tunnel_map[mpp_task_id] = tunnel;
+    tunnel_map[id] = tunnel;
 }
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)

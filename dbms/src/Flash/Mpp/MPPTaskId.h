@@ -18,7 +18,7 @@ struct MPPTaskId
     const UInt64 start_ts;
     const Int64 task_id;
 
-    bool operator<(const MPPTaskId & rhs) const;
+    bool isUnknown() const { return task_id == unknown_task_id; }
 
     String toString() const;
 
