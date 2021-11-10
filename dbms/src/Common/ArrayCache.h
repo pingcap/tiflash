@@ -269,7 +269,7 @@ private:
     /// Represents pending insertion attempt.
     struct InsertToken
     {
-        InsertToken(ArrayCache & cache_)
+        explicit InsertToken(ArrayCache & cache_)
             : cache(cache_)
         {}
 
@@ -546,7 +546,7 @@ private:
 
 
 public:
-    ArrayCache(size_t max_total_size_)
+    explicit ArrayCache(size_t max_total_size_)
         : max_total_size(max_total_size_)
     {
     }

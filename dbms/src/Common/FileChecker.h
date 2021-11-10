@@ -18,7 +18,7 @@ private:
 public:
     using Files = std::vector<Poco::File>;
 
-    FileChecker(const std::string & file_info_path_);
+    explicit FileChecker(const std::string & file_info_path_);
     void setPath(const std::string & file_info_path_);
     void update(const Poco::File & file);
     void update(const Files::const_iterator & begin, const Files::const_iterator & end);

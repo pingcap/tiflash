@@ -150,12 +150,10 @@ public:
 
     static void initializeGlobalContext();
     static Context & getGlobalContext() { return *global_context; }
-    static DAGContext & getDAGContext() { return *dag_context; }
     static void shutdown();
 
 private:
     static std::unique_ptr<Context> global_context;
-    static std::unique_ptr<DAGContext> dag_context;
 
 private:
     TiFlashTestEnv() = delete;

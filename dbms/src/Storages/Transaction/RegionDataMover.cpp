@@ -102,7 +102,7 @@ template void getHandleMapByRange<UInt64>(Context &, StorageMergeTree &, const H
 
 void tryOptimizeStorageFinal(Context & context, TableID table_id)
 {
-    auto log = &Poco::Logger::get(RegionDataMoverName);
+    auto * log = &Poco::Logger::get(RegionDataMoverName);
     auto & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
     if (!storage)

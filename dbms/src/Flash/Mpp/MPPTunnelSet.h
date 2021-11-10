@@ -25,9 +25,11 @@ public:
     /// user confused.
     // this is a broadcast writing.
     void write(tipb::SelectResponse & response);
+    void write(mpp::MPPDataPacket & packet);
 
     // this is a partition writing.
     void write(tipb::SelectResponse & response, int16_t partition_id);
+    void write(mpp::MPPDataPacket & packet, int16_t partition_id);
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
 

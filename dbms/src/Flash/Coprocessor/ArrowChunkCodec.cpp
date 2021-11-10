@@ -30,9 +30,8 @@ void ArrowChunkCodecStream::encode(const Block & block, size_t start, size_t end
     ti_chunk->buildDAGChunkFromBlock(block, field_types, start, end);
 }
 
-Block ArrowChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schema)
+Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
 {
-    const String & row_data = chunk.rows_data();
     const char * start = row_data.c_str();
     const char * pos = start;
     int column_index = 0;
@@ -46,7 +45,7 @@ Block ArrowChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schem
         std::vector<UInt8> null_bitmap;
         const auto & field = schema[column_index];
         const auto & name = field.first;
-        auto data_type = getDataTypeByColumnInfo(field.second);
+        auto data_type = getDataTypeByColumnInfoForComputingLayer(field.second);
         if (null_count > 0)
         {
             auto bit_map_length = (length + 7) / 8;

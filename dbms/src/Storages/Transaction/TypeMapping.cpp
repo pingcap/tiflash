@@ -7,6 +7,7 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -191,7 +192,21 @@ DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
     {
         return std::make_shared<DataTypeNullable>(base);
     }
+    return base;
+}
 
+DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_info)
+{
+    DataTypePtr base = TypeMapping::instance().getDataType(column_info);
+
+    if (column_info.tp == TiDB::TypeTime)
+    {
+        base = std::make_shared<DataTypeMyDuration>(column_info.decimal);
+    }
+    if (!column_info.hasNotNullFlag())
+    {
+        return std::make_shared<DataTypeNullable>(base);
+    }
     return base;
 }
 
@@ -199,6 +214,12 @@ DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type)
 {
     ColumnInfo ci = TiDB::fieldTypeToColumnInfo(field_type);
     return getDataTypeByColumnInfo(ci);
+}
+
+DataTypePtr getDataTypeByFieldTypeForComputingLayer(const tipb::FieldType & field_type)
+{
+    ColumnInfo ci = TiDB::fieldTypeToColumnInfo(field_type);
+    return getDataTypeByColumnInfoForComputingLayer(ci);
 }
 
 TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type)
@@ -420,6 +441,10 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     // Fill decimal for date time.
     if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
         column_info.decimal = type->getFraction();
+
+    // Fill decimal for duration.
+    if (auto type = checkAndGetDataType<DataTypeMyDuration>(nested_type))
+        column_info.decimal = type->getFsp();
 
     // Fill elems for enum.
     if (checkDataType<DataTypeEnum16>(nested_type))

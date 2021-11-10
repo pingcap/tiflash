@@ -86,7 +86,7 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                              const String & parent_path,
                              DMFileBlockOutputStream::Flags flags)
 {
-    auto dmfile = DMFile::create(file_id, parent_path, flags.isSingleFile());
+    auto dmfile = DMFile::create(file_id, parent_path, flags.isSingleFile(), dm_context.createChecksumConfig(flags.isSingleFile()));
     auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
     auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
@@ -220,7 +220,7 @@ SegmentPtr Segment::newSegment(
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 {
-    Page page = context.storage_pool.meta().read(segment_id, nullptr); // not limit restore
+    Page page = context.storage_pool.meta()->read(segment_id, nullptr); // not limit restore
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     SegmentFormat::Version version;

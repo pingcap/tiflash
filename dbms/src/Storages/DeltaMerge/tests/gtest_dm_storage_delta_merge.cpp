@@ -22,6 +22,7 @@
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
+#include <TestUtils/FunctionTestUtils.h>
 
 #include <limits>
 
@@ -38,39 +39,15 @@ try
 {
     // prepare block data
     Block sample;
-    {
-        ColumnWithTypeAndName col1;
-        col1.name = "col1";
-        col1.type = std::make_shared<DataTypeInt64>();
-        {
-            IColumn::MutablePtr m_col = col1.type->createColumn();
-            // insert form large to small
-            for (int i = 0; i < 100; i++)
-            {
-                Field field = Int64(99 - i);
-                m_col->insert(field);
-            }
-            col1.column = std::move(m_col);
-        }
-        sample.insert(col1);
-
-        ColumnWithTypeAndName col2;
-        col2.name = "col2";
-        col2.type = std::make_shared<DataTypeString>();
-        {
-            IColumn::MutablePtr m_col2 = col2.type->createColumn();
-            for (int i = 0; i < 100; i++)
-            {
-                Field field("a", 1);
-                m_col2->insert(field);
-            }
-            col2.column = std::move(m_col2);
-        }
-        sample.insert(col2);
-    }
+    sample.insert(DB::tests::createColumn<Int64>(
+        createNumbers<Int64>(0, 100, /*reversed*/ true),
+        "col1"));
+    sample.insert(DB::tests::createColumn<String>(
+        Strings(100, "a"),
+        "col2"));
 
     Context ctx = DMTestEnv::getContext();
-    StoragePtr storage;
+    std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
     // create table
@@ -150,7 +127,23 @@ try
     in->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
 
-
+    auto store_status = storage->status();
+    Block status = store_status->read();
+    String name_str = "Name";
+    String value_str = "Value";
+    ColumnPtr col_name = status.getByName(name_str).column;
+    ColumnPtr col_value = status.getByName(value_str).column;
+    for (size_t i = 0; i < col_name->size(); i++)
+    {
+        if (col_name->getDataAt(i) == String("segment_count"))
+        {
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(1)));
+        }
+        else if (col_name->getDataAt(i) == String("total_rows"))
+        {
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(num_rows_read)));
+        }
+    }
     storage->drop();
 }
 CATCH
@@ -214,36 +207,12 @@ try
 
     // prepare block data
     Block sample;
-    {
-        ColumnWithTypeAndName col1;
-        col1.name = "col1";
-        col1.type = std::make_shared<DataTypeInt64>();
-        {
-            IColumn::MutablePtr m_col = col1.type->createColumn();
-            // insert form large to small
-            for (int i = 0; i < 100; i++)
-            {
-                Field field = Int64(99 - i);
-                m_col->insert(field);
-            }
-            col1.column = std::move(m_col);
-        }
-        sample.insert(col1);
-
-        ColumnWithTypeAndName col2;
-        col2.name = "col2";
-        col2.type = std::make_shared<DataTypeString>();
-        {
-            IColumn::MutablePtr m_col2 = col2.type->createColumn();
-            for (int i = 0; i < 100; i++)
-            {
-                Field field("a", 1);
-                m_col2->insert(field);
-            }
-            col2.column = std::move(m_col2);
-        }
-        sample.insert(col2);
-    }
+    sample.insert(DB::tests::createColumn<Int64>(
+        createNumbers<Int64>(0, 100, /*reversed*/ true),
+        "col1"));
+    sample.insert(DB::tests::createColumn<String>(
+        Strings(100, "a"),
+        "col2"));
     // Writing will create store object.
     {
         ASTPtr insertptr(new ASTInsertQuery());

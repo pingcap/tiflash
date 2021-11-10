@@ -45,6 +45,8 @@ protected:
     Block readImpl() override;
 
 private:
+    const LogWithPrefixPtr log;
+
     Aggregator::Params params;
     Aggregator aggregator;
     FileProviderPtr file_provider;
@@ -100,7 +102,7 @@ private:
 
     struct Handler
     {
-        Handler(ParallelAggregatingBlockInputStream & parent_)
+        explicit Handler(ParallelAggregatingBlockInputStream & parent_)
             : parent(parent_)
         {}
 
@@ -108,7 +110,7 @@ private:
         void onFinishThread(size_t thread_num);
         void onFinish();
         void onException(std::exception_ptr & exception, size_t thread_num);
-        String getName() const
+        static String getName()
         {
             return "ParallelAgg";
         }
@@ -126,8 +128,6 @@ private:
     /** From here we get the finished blocks after the aggregation.
       */
     std::unique_ptr<IBlockInputStream> impl;
-
-    LogWithPrefixPtr log;
 };
 
 } // namespace DB

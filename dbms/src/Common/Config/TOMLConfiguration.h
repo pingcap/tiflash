@@ -16,7 +16,7 @@ using TOMLTablePtr = std::shared_ptr<cpptoml::table>;
 class TOMLConfiguration : public Poco::Util::AbstractConfiguration
 {
 public:
-    TOMLConfiguration(TOMLTablePtr toml_doc);
+    explicit TOMLConfiguration(TOMLTablePtr toml_doc);
 
 protected:
     bool getRaw(const std::string & key, std::string & value) const;
@@ -36,7 +36,7 @@ protected:
     /// Does nothing if the key does not exist.
 private:
     TOMLTablePtr root;
-    bool find_parent(const std::string & key, TOMLTablePtr & parent, std::string & child_key);
+    bool findParent(const std::string & key, TOMLTablePtr & parent, std::string & child_key);
 };
 
 } // namespace DB

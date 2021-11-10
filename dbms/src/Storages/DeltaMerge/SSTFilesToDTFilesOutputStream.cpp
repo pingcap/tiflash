@@ -118,7 +118,8 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
         // Can no allocate path and id for storing DTFiles (the storage may be dropped / shutdown)
         return false;
     }
-    auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile());
+
+    auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile(), storage->createChecksumConfig(flags.isSingleFile()));
     LOG_INFO(log,
              "Create file for snapshot data " << child->getRegion()->toString(true) << " [file=" << dt_file->path()
                                               << "] [single_file_mode=" << flags.isSingleFile() << "]");

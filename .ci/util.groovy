@@ -78,10 +78,44 @@ def runClosure(label, Closure body) {
                     alwaysPullImage: true, envVars: [
                     envVar(key: 'DOCKER_HOST', value: 'tcp://localhost:2375'),
             ], ttyEnabled: true, command: 'cat'),
-    ]) {
+            containerTemplate(name: 'builder', image: 'hub.pingcap.net/tiflash/tiflash-builder-ci',
+                    alwaysPullImage: true, ttyEnabled: true, command: 'cat',
+                    resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
+                    resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
+    ],
+    volumes: [
+            nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
+                    serverPath: '/mnt/ci.pingcap.net-nfs/git', readOnly: false),
+    ]
+    ) {
         node(label) {
             body()
         }
+    }
+}
+
+def runWithTiCSFull(label, curws, Closure body) {
+    runClosure(label) {
+        dir("${curws}/tics") {
+            stage("Checkout") {
+                container("docker") {
+                    def repoDailyCache = "/home/jenkins/agent/ci-cached-code-daily/src-tics.tar.gz"
+                    if (fileExists(repoDailyCache)) {
+                        println "get code from nfs to reduce clone time"
+                        sh """
+                        cp -R ${repoDailyCache}  ./
+                        tar -xzf ${repoDailyCache} --strip-components=1
+                        rm -f src-tics.tar.gz
+                        """
+                        sh "chown -R 1000:1000 ./"
+                    } else {
+                        sh "exit -1"
+                    }
+                }
+                checkoutTiCSFull("${ghprbActualCommit}", "${ghprbPullId}")
+            }
+        }
+        body()
     }
 }
 
@@ -115,6 +149,40 @@ def runTest(label, testPath, tidbBranch) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+def runUTCoverTICS(CURWS, NPROC) {
+    def NPROC_UT = NPROC * 2
+    runWithTiCSFull("ut-tics", CURWS) {
+        dir("${CURWS}/tics") {
+            stage("Build") {
+                timeout(time: 70, unit: 'MINUTES') {
+                    container("builder") {
+                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} UPDATE_CCACHE=false ${CURWS}/tics/release-centos7/build/build-tiflash-ut-coverage.sh"
+                    }
+                }
+            }
+            stage("Tests") {
+                timeout(time: 50, unit: 'MINUTES') {
+                    container("builder") {
+                        sh "NPROC=${NPROC_UT} /build/tics/release-centos7/build/run-ut.sh"
+                    }
+                }
+            }
+            stage("Show UT Coverage") {
+                timeout(time: 5, unit: 'MINUTES') {
+                    container("builder") {
+                        sh "NPROC=${NPROC} /build/tics/release-centos7/build/upload-ut-coverage.sh"
+                        sh "cp /tmp/tiflash_gcovr_coverage.xml ./"
+                    }
+                }
+                cobertura autoUpdateHealth: false, autoUpdateStability: false, 
+                    coberturaReportFile: "tiflash_gcovr_coverage.xml", 
+                    lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 
+                    maxNumberOfBuilds: 10, onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
             }
         }
     }
