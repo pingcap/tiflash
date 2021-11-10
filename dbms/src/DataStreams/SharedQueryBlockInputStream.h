@@ -86,6 +86,8 @@ protected:
                 return {};
         } while (!queue.tryPop(block, try_action_millisecionds));
 
+        onQueue(queue.size());
+
         return block;
     }
 
@@ -106,6 +108,8 @@ protected:
                         break;
                     }
                 } while (!queue.tryPush(block, try_action_millisecionds));
+
+                onQueue(queue.size());
 
                 if (!block)
                     break;
@@ -141,5 +145,7 @@ private:
 
     LogWithPrefixPtr log;
     BlockInputStreamPtr in;
+
+    virtual void onQueue(size_t size [[maybe_unused]]) {}
 };
 } // namespace DB

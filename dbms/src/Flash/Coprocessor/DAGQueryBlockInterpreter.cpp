@@ -12,6 +12,7 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <DataStreams/TrafficMonitorInputBlockStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
@@ -656,6 +657,10 @@ void DAGQueryBlockInterpreter::executeAggregation(
     TiDB::TiDBCollators & collators,
     AggregateDescriptions & aggregate_descriptions)
 {
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
+    });
+
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log); });
 
     Block header = pipeline.firstStream()->getHeader();
@@ -732,6 +737,10 @@ void DAGQueryBlockInterpreter::executeAggregation(
             log);
     }
     // add cast
+
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
+    });
 }
 
 void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)

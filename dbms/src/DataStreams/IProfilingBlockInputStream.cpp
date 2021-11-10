@@ -1,3 +1,4 @@
+#include <Common/joinStr.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
@@ -122,16 +123,16 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 }
 
 
-void IProfilingBlockInputStream::dumpProfileInfo(std::ostream & ostr)
+void IProfilingBlockInputStream::dumpProfileInfo(FmtBuffer & buf)
 {
     std::unordered_set<Int64> dumped;
 
-    ostr << "[";
-    recursiveDumpProfileInfo(ostr, dumped);
-    ostr << "]";
+    buf.append("[]");
+    recursiveDumpProfileInfo(buf, dumped);
+    buf.append("]");
 }
 
-void IProfilingBlockInputStream::recursiveDumpProfileInfo(std::ostream & ostr, std::unordered_set<Int64> & dumped)
+void IProfilingBlockInputStream::recursiveDumpProfileInfo(FmtBuffer & buf, std::unordered_set<Int64> & dumped)
 {
     if (dumped.count(info.signature))
         return;
@@ -140,68 +141,69 @@ void IProfilingBlockInputStream::recursiveDumpProfileInfo(std::ostream & ostr, s
     dumped.insert(info.signature);
 
     if (!first)
-        ostr << ",";
-    ostr << "{";
+        buf.append(",");
+    buf.append("{");
 
-    ostr << "\"signature\":" << info.signature << ",";
-    ostr << "\"name\":\"" << getName() << "\",";
+    buf.fmtAppend("\"signature\":{},", info.signature)
+        .fmtAppend("\"name\":\"{}\",", getName());
 
-    ostr << "\"children\":[";
-    first = true;
+    buf.append("\"children\":[");
+    joinStr(
+        children.begin(),
+        children.end(),
+        buf,
+        [](const std::shared_ptr<IBlockInputStream> & child, FmtBuffer & buf) {
+            auto * child_ptr = dynamic_cast<IProfilingBlockInputStream *>(child.get());
+            buf.fmtAppend("{}", child_ptr->info.signature);
+        },
+        ",");
+    buf.append("],");
+
+    buf.append("\"stat\":");
+    dumpProfileInfoImpl(buf);
+
+    buf.append("}");
+
     forEachProfilingChild([&](IProfilingBlockInputStream & child) {
-        if (first)
-            first = false;
-        else
-            ostr << ",";
-        ostr << child.info.signature;
-        return false;
-    });
-    ostr << "],";
-
-    ostr << "\"stat\":";
-    dumpProfileInfoImpl(ostr);
-
-    ostr << "}";
-
-    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
-        child.recursiveDumpProfileInfo(ostr, dumped);
+        child.recursiveDumpProfileInfo(buf, dumped);
         return false;
     });
 }
 
-void IProfilingBlockInputStream::dumpProfileInfoImpl(std::ostream & ostr)
+void IProfilingBlockInputStream::dumpProfileInfoImpl(FmtBuffer & buf)
 {
-    ostr << "{";
+    buf.append("{");
 
-    ostr << "\"prefix\":" << info.prefix_duration << ",";
-    ostr << "\"suffix\":" << info.suffix_duration << ",";
-    ostr << "\"running\":" << info.running_duration << ",";
-    ostr << "\"waiting\":" << info.waiting_duration << ",";
-    ostr << "\"self\":" << info.self_duration << ",";
-    ostr << "\"first_ts\":" << info.toNanoseconds(info.first_ts) << ",";
-    ostr << "\"last_ts\":" << info.toNanoseconds(info.last_ts) << ",";
+    buf.fmtAppend("\"prefix\":{},", info.prefix_duration)
+        .fmtAppend("\"suffix\":{},", info.suffix_duration)
+        .fmtAppend("\"running\":{},", info.running_duration)
+        .fmtAppend("\"waiting\":{},", info.waiting_duration)
+        .fmtAppend("\"self\":{},", info.self_duration)
+        .fmtAppend("\"first_ts\":{},", info.toNanoseconds(info.first_ts))
+        .fmtAppend("\"last_ts\":{},", info.toNanoseconds(info.last_ts));
 
-    ostr << "\"traffic\":{";
-    ostr << "\"rows\":[";
-    for (size_t i = 0; i < info.traffic.max_size; i++)
-    {
-        ostr << info.traffic.rows[i];
-        if (i + 1 < info.traffic.max_size)
-            ostr << ',';
-    }
-    ostr << "],";
+    buf.append("\"traffic\":{}");
+    // ostr << "\"traffic\":{";
+    // ostr << "\"rows\":[";
+    // for (size_t i = 0; i < info.traffic.max_size; i++)
+    // {
+    //     ostr << info.traffic.rows[i];
+    //     if (i + 1 < info.traffic.max_size)
+    //         ostr << ',';
+    // }
+    // ostr << "],";
 
-    ostr << "\"bytes\":[";
-    for (size_t i = 0; i < info.traffic.max_size; i++)
-    {
-        ostr << info.traffic.bytes[i];
-        if (i + 1 < info.traffic.max_size)
-            ostr << ',';
-    }
-    ostr << "]";
-    ostr << "}";
+    // ostr << "\"bytes\":[";
+    // for (size_t i = 0; i < info.traffic.max_size; i++)
+    // {
+    //     ostr << info.traffic.bytes[i];
+    //     if (i + 1 < info.traffic.max_size)
+    //         ostr << ',';
+    // }
+    // ostr << "]";
+    // ostr << "}";
 
-    ostr << "}";
+    buf.append("}");
 }
 
 IProfilingBlockInputStream::SelfTimer IProfilingBlockInputStream::getSelfTimer()

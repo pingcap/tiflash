@@ -334,10 +334,10 @@ void MPPTask::runImpl()
         finishWrite();
         LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
 
-        std::stringstream ss;
+        FmtBuffer buf;
         auto * profile_ptr = dynamic_cast<IProfilingBlockInputStream *>(from.get());
-        profile_ptr->dumpProfileInfo(ss);
-        LOG_DEBUG(log, "runtime info: \n" + ss.str());
+        profile_ptr->dumpProfileInfo(buf);
+        LOG_DEBUG(log, "runtime info: \n" + buf.toString());
     }
     catch (Exception & e)
     {
