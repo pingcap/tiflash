@@ -1196,22 +1196,19 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
     /// TiFlash will append extra type cast if needed.
     bool need_append_type_cast = false;
     BoolVec need_append_type_cast_vec;
-    if (!output_offsets.empty())
+    /// !output_offsets.empty() means root block, we need to append type cast for root block if necessary
+    for (UInt32 i : output_offsets)
     {
-        /// !output_offsets.empty() means root block, we need to append type cast for root block if necessary
-        for (UInt32 i : output_offsets)
+        const auto & actual_type = current_columns[i].type;
+        auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
+        if (actual_type->getName() != expected_type->getName())
         {
-            const auto & actual_type = current_columns[i].type;
-            auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
-            if (actual_type->getName() != expected_type->getName())
-            {
-                need_append_type_cast = true;
-                need_append_type_cast_vec.push_back(true);
-            }
-            else
-            {
-                need_append_type_cast_vec.push_back(false);
-            }
+            need_append_type_cast = true;
+            need_append_type_cast_vec.push_back(true);
+        }
+        else
+        {
+            need_append_type_cast_vec.push_back(false);
         }
     }
     if (!need_append_timezone_cast && !need_append_type_cast)
