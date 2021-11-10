@@ -5,6 +5,8 @@
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <Storages/Page/Config.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 #include <stdint.h>
 
@@ -40,14 +42,13 @@ namespace CurrentMetrics
 extern const Metric PSMVCCNumSnapshots;
 extern const Metric PSMVCCSnapshotsList;
 } // namespace CurrentMetrics
-
+using DB::MVCC::VersionSetConfig;
 namespace DB
 {
 namespace FailPoints
 {
 extern const char random_slow_page_storage_remove_expired_snapshots[];
 } // namespace FailPoints
-
 namespace MVCC
 {
 /// Base type for VersionType of VersionSetWithDelta
@@ -85,7 +86,7 @@ public:
     using VersionPtr = std::shared_ptr<VersionType>;
 
 public:
-    explicit VersionSetWithDelta(String name_, const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
+    explicit VersionSetWithDelta(String name_, const VersionSetConfig & config_, Poco::Logger * log_)
         : current(std::move(VersionType::createBase()))
         , //
         snapshots()
@@ -438,7 +439,7 @@ protected:
     mutable std::shared_mutex read_write_mutex;
     VersionPtr current;
     mutable std::list<SnapshotWeakPtr> snapshots;
-    const ::DB::MVCC::VersionSetConfig config;
+    const VersionSetConfig config;
     const String name;
     Poco::Logger * log;
 };

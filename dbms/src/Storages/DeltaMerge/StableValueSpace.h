@@ -4,8 +4,9 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
-
+#include <Storages/Page/WriteBatch.h>
 
 namespace DB
 {
