@@ -66,16 +66,12 @@ private:
         std::vector<NameAndTypePair> & source_columns,
         String & filter_column_for_other_condition,
         String & filter_column_for_other_eq_condition);
-    void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeAggregation(
         DAGPipeline & pipeline,
-        const ExpressionActionsPtr & expression_actions_ptr,
-        Names & key_names,
-        TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions);
+        ExpressionActionsChain & chain);
     void executeProject(DAGPipeline & pipeline, const NamesWithAliases & project_cols);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
@@ -85,6 +81,10 @@ private:
         const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
         ::tipb::DAGRequest & dag_req,
         const DAGSchema & schema);
+
+    void executeWhere(
+        DAGPipeline & pipeline,
+        ExpressionActionsChain & chain);
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
