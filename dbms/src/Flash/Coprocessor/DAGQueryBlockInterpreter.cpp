@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -554,10 +555,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
-void DAGQueryBlockInterpreter::executeHaving(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
-{
-}
-
 void DAGQueryBlockInterpreter::executeAggregation(
     DAGPipeline & pipeline,
     ExpressionActionsChain & chain)
@@ -856,18 +853,38 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
 
+    if (!pipeline.streams().empty())
+    {
+        auto stream = pipeline.streams[0];
+        auto block = stream->getHeader();
+        FmtBuffer buf;
+        auto f = [](const ColumnWithTypeAndName & col, FmtBuffer & buf) {
+            buf.fmtAppend("{}({})", col.name, col.type->getName());
+        };
+        LOG_DEBUG(log, "FUZHE Block: " << joinStr(block.cbegin(), block.cend(), buf, f));
+    }
+
     if (!conditions.empty())
+    {
         executeWhere(pipeline, chain);
+        LOG_DEBUG(log, "FUZHE After executeWhere: " << chain.dumpChain());
+    }
+
 
     if (query_block.aggregation)
+    {
         executeAggregation(pipeline, chain);
+        LOG_DEBUG(log, "FUZHE After executeAggregation: " << chain.dumpChain());
+    }
 
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
     {
         executeExpression(pipeline, chain.getLastActions());
+        LOG_DEBUG(log, "FUZHE After execute before_order_and_select: " << chain.dumpChain());
 
         // execute topN
         executeOrder(pipeline, analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn()));
+        LOG_DEBUG(log, "FUZHE After executeOrder: " << chain.dumpChain());
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
@@ -879,15 +896,18 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             query_block.output_offsets,
             query_block.qb_column_prefix,
             keep_session_timezone_info || !query_block.isRootQueryBlock()));
+    LOG_DEBUG(log, "FUZHE After executeProject: " << chain.dumpChain());
 
     // execute limit
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
+        LOG_DEBUG(log, "FUZHE After executeLimit: " << chain.dumpChain());
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
     chain.finalize();
+    LOG_DEBUG(log, "FUZHE After finalize: " << chain.dumpChain());
     chain.clear();
 }
 
