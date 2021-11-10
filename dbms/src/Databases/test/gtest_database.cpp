@@ -37,8 +37,7 @@ extern String createDatabaseStmt(Context & context, const TiDB::DBInfo & db_info
 
 namespace tests
 {
-
-class DatabaseTiFlash_test : public ::testing::Test
+class DatabaseTiFlashTest : public ::testing::Test
 {
 public:
     constexpr static const char * TEST_DB_NAME = "test";
@@ -55,7 +54,9 @@ public:
         }
     }
 
-    DatabaseTiFlash_test() : log(&Poco::Logger::get("DatabaseTiFlash_test")) {}
+    DatabaseTiFlashTest()
+        : log(&Poco::Logger::get("DatabaseTiFlashTest"))
+    {}
 
     void SetUp() override { recreateMetadataPath(); }
 
@@ -98,20 +99,20 @@ ASTPtr parseCreateStatement(const String & statement)
     const char * pos = statement.data();
     std::string error_msg;
     auto ast = tryParseQuery(parser,
-        pos,
-        pos + statement.size(),
-        error_msg,
-        /*hilite=*/false,
-        String("in ") + __PRETTY_FUNCTION__,
-        /*allow_multi_statements=*/false,
-        0);
+                             pos,
+                             pos + statement.size(),
+                             error_msg,
+                             /*hilite=*/false,
+                             String("in ") + __PRETTY_FUNCTION__,
+                             /*allow_multi_statements=*/false,
+                             0);
     if (!ast)
         throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
     return ast;
 }
 } // namespace
 
-TEST_F(DatabaseTiFlash_test, CreateDBAndTable)
+TEST_F(DatabaseTiFlashTest, CreateDBAndTable)
 try
 {
     const String db_name = "db_1";
@@ -195,7 +196,7 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlash_test, RenameTable)
+TEST_F(DatabaseTiFlashTest, RenameTable)
 try
 {
     const String db_name = "db_1";
@@ -296,7 +297,7 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlash_test, RenameTableBetweenDatabase)
+TEST_F(DatabaseTiFlashTest, RenameTableBetweenDatabase)
 try
 {
     const String db_name = "db_1";
@@ -428,7 +429,7 @@ try
 CATCH
 
 
-TEST_F(DatabaseTiFlash_test, AtomicRenameTableBetweenDatabase)
+TEST_F(DatabaseTiFlashTest, AtomicRenameTableBetweenDatabase)
 try
 {
     const String db_name = "db_1";
@@ -482,7 +483,8 @@ try
     // Rename table to another database, and mock crash by failed point
     FailPointHelper::enableFailPoint(FailPoints::exception_before_rename_table_old_meta_removed);
     ASSERT_THROW(
-        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name), DB::Exception);
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name),
+        DB::Exception);
 
     {
         // After fail point triggled we should have both meta file in disk
@@ -526,7 +528,7 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlash_test, RenameTableOnlyUpdateDisplayName)
+TEST_F(DatabaseTiFlashTest, RenameTableOnlyUpdateDisplayName)
 try
 {
     const String db_name = "db_1";
@@ -628,7 +630,7 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlash_test, ISSUE_1055)
+TEST_F(DatabaseTiFlashTest, ISSUE1055)
 try
 {
     CHECK_TESTS_WITH_DATA_ENABLED;
@@ -677,7 +679,7 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlash_test, ISSUE_1093)
+TEST_F(DatabaseTiFlashTest, ISSUE1093)
 try
 {
     // The json info get by `curl http://{tidb-ip}:{tidb-status-port}/schema`
@@ -799,7 +801,7 @@ DatabasePtr detachThenAttach(Context & ctx, const String & db_name, DatabasePtr 
     return std::move(db);
 }
 
-TEST_F(DatabaseTiFlash_test, Tombstone)
+TEST_F(DatabaseTiFlashTest, Tombstone)
 try
 {
     const String db_name = "db_1";
