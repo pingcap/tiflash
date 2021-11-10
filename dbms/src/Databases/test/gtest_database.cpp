@@ -31,7 +31,8 @@ extern const int SYNTAX_ERROR;
 namespace FailPoints
 {
 extern const char exception_before_rename_table_old_meta_removed[];
-}
+extern const char force_context_path[];
+} // namespace FailPoints
 
 extern String createDatabaseStmt(Context & context, const TiDB::DBInfo & db_info, const SchemaNameMapper & name_mapper);
 
@@ -40,8 +41,6 @@ namespace tests
 class DatabaseTiFlashTest : public ::testing::Test
 {
 public:
-    constexpr static const char * TEST_DB_NAME = "test";
-
     static void SetUpTestCase()
     {
         try
@@ -52,13 +51,23 @@ public:
         {
             // Maybe another test has already registed, ignore exception here.
         }
+
+        FailPointHelper::enableFailPoint(FailPoints::force_context_path);
+    }
+
+    static void TearDownTestCase()
+    {
+        FailPointHelper::disableFailPoint(FailPoints::force_context_path);
     }
 
     DatabaseTiFlashTest()
         : log(&Poco::Logger::get("DatabaseTiFlashTest"))
     {}
 
-    void SetUp() override { recreateMetadataPath(); }
+    void SetUp() override
+    {
+        recreateMetadataPath();
+    }
 
     void TearDown() override
     {
@@ -76,15 +85,14 @@ public:
         String path = TiFlashTestEnv::getContext().getPath();
 
         auto p = path + "/metadata/";
-
         if (Poco::File file(p); file.exists())
             file.remove(true);
-        Poco::File{p}.createDirectory();
+        Poco::File{p}.createDirectories();
 
         p = path + "/data/";
         if (Poco::File file(p); file.exists())
             file.remove(true);
-        Poco::File{p}.createDirectory();
+        Poco::File{p}.createDirectories();
     }
 
 protected:
