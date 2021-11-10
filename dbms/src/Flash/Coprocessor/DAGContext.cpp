@@ -184,4 +184,54 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
 }
 
+double DAGContext::getRemoteInputThroughput()
+{
+    UInt64 time_processed_ns = 0;
+    UInt64 num_produced_bytes = 0;
+    for (auto & remote_block_input_stream : remote_block_input_streams)
+    {
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(remote_block_input_stream.get()))
+        {
+            time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
+            num_produced_bytes += p_stream->getProfileInfo().bytes;
+        }
+    }
+
+    // convert to bytes per second
+    return num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
+}
+
+double DAGContext::getOutputThroughput()
+{
+    if (!return_executor_id)
+        return 0.0;
+
+    String output_executor_id;
+    if (is_mpp_task)
+        output_executor_id = exchange_sender_execution_summary_key;
+    else
+        output_executor_id = root_executor_id;
+
+    UInt64 time_processed_ns = 0;
+    UInt64 num_produced_bytes = 0;
+    for (auto & p : getProfileStreamsMap())
+    {
+        if (p.first == output_executor_id)
+        {
+            for (auto & stream_ptr : p.second.input_streams)
+            {
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
+                {
+                    time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
+                    num_produced_bytes += p_stream->getProfileInfo().bytes;
+                }
+            }
+            break;
+        }
+    }
+
+    // convert to bytes per second
+    return num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
+}
+
 } // namespace DB

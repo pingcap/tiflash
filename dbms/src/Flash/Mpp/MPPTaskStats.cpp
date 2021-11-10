@@ -1,5 +1,6 @@
 #include <Flash/Mpp/MPPTaskStats.h>
 #include <fmt/core.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -20,8 +21,11 @@ void MPPTaskStats::end(const TaskStatus & status_, StringRef error_message_)
 String MPPTaskStats::toString() const
 {
     return fmt::format(
-        "MPPTaskStats: {{id: {}, task_init_timestamp: {}, tunnels_init_start_timestamp: {}, tunnels_init_end_timestamp: {}, task_start_timestamp: {}, task_end_timestamp: {}, compile_duration: {} ns, wait_index_duration: {} ns, status: {}, error_message: {}, cpu_usage: {}, memory_peak: {}}}",
-        id.toString(),
+        R"(task_tracing: {"query_id":{},"task_id":{},"node_host":"{}","upstream_task_ids":[{}],"task_init_timestamp":{},"tunnels_init_start_timestamp":{},"tunnels_init_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"compile_duration":{},"wait_index_duration":{},"status":"{}","error_message":"{}","input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}})",
+        id.start_ts,
+        id.task_id,
+        node_host,
+        fmt::join(upstream_task_ids, ","),
         Clock::to_time_t(task_init_timestamp),
         Clock::to_time_t(tunnels_init_start_timestamp),
         Clock::to_time_t(tunnels_init_end_timestamp),
@@ -31,6 +35,8 @@ String MPPTaskStats::toString() const
         wait_index_duration,
         taskStatusToString(status),
         error_message,
+        input_throughput,
+        output_throughput,
         cpu_usage,
         memory_peak);
 }

@@ -45,7 +45,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     , log(std::make_shared<LogWithPrefix>(
           &Poco::Logger::get("MPPTask"),
           fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
-    , task_stats(std::make_shared<MPPTaskStats>(log, id))
+    , task_stats(std::make_shared<MPPTaskStats>(log, id, meta_.address()))
 {}
 
 MPPTask::~MPPTask()
@@ -245,6 +245,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
         }
+        task_stats->upstream_task_ids.push_back(task_meta.task_id());
     }
     dag_context->tunnel_set = tunnel_set;
     task_stats->tunnels_init_end_timestamp = Clock::now();
@@ -356,10 +357,14 @@ void MPPTask::runImpl()
         auto throughput = dag_context->getTableScanThroughput();
         if (throughput.first)
             GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
+
         auto process_info = context.getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
         task_stats->memory_peak = peak_memory;
+
+        task_stats->input_throughput = dag_context->getRemoteInputThroughput();
+        task_stats->output_throughput = dag_context->getOutputThroughput();
     }
     else
     {

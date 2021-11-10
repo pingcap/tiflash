@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <mutex>
+#include <vector>
 
 namespace DB
 {
@@ -17,9 +18,10 @@ struct MPPTaskStats
     using Timestamp = Clock::time_point;
     using Duration = Int64; /// ns
 
-    MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_)
+    MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_)
         : log(log_)
         , id(id_)
+        , node_host(std::move(address_))
         , task_init_timestamp(Clock::now())
         , status(INITIALIZING)
     {}
@@ -33,7 +35,9 @@ struct MPPTaskStats
     const LogWithPrefixPtr log;
 
     /// common
-    MPPTaskId id;
+    const MPPTaskId id;
+    const String node_host;
+    std::vector<Int64> upstream_task_ids;
     String signature;
     String executor_structure;
     String inputstream_structure;
@@ -46,6 +50,9 @@ struct MPPTaskStats
     Duration wait_index_duration = 0;
     TaskStatus status;
     String error_message;
+
+    double input_throughput = 0.0;
+    double output_throughput = 0.0;
 
     /// resource
     Int64 cpu_usage = 0;
