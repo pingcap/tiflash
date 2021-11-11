@@ -1,15 +1,13 @@
-# display_name = "TiFlash"
-
 ## The listening host for supporting services such as TPC/HTTP. It is recommended to configure it as "0.0.0.0", which means to listen on all IP addresses of this machine.
 # listen_host = "0.0.0.0"
-## The cache size limit of the metadata of a data block. Generally, you do not need to change this value.
-# mark_cache_size = 5368709120
-## The cache size limit of the min-max index of a data block. Generally, you do not need to change this value.
-# minmax_index_cache_size = 5368709120
 ## The TiFlash TCP service port.
 # tcp_port = 9000
 ## The TiFlash HTTP service port.
 # http_port = 8123
+## The cache size limit of the metadata of a data block. Generally, you do not need to change this value.
+# mark_cache_size = 5368709120
+## The cache size limit of the min-max index of a data block. Generally, you do not need to change this value.
+# minmax_index_cache_size = 5368709120
 
 ## The path in which the TiFlash temporary files are stored. By default it is the first directory in storage.latest.dir appended with "/tmp".
 # tmp_path = "/tidb-data/tiflash-9000/tmp"
@@ -90,31 +88,36 @@
 [flash]
 # tidb_status_addr = "tidb0:10080"
 # service_addr = "0.0.0.0:3930"
-# compact_log_min_period = "120"
-# compact_log_min_rows = "40960"
-# compact_log_min_bytes = "33554432"
-# replica_read_max_thread = "1"
-# batch_read_index_timeout_ms = "10000"
-# wait_index_timeout_ms = "300000"
-# wait_region_ready_timeout_sec = "1200"
+# compact_log_min_period = 120
+# overlap_threshold = 0.6
+# compact_log_min_rows = 40960
+# compact_log_min_bytes = 33554432
+# replica_read_max_thread = 1
+# batch_read_index_timeout_ms = 10000
+# wait_index_timeout_ms = 300000
+# wait_region_ready_timeout_sec = 1200
 [flash.flash_cluster]
-# update_rule_interval = 5
+# update_rule_interval = 10
+# master_ttl = 60
+# cluster_manager_path = "./flash_cluster_manager"
+# log = "[tmp_path]/flash_cluster_manager.log"
 [flash.proxy]
 # addr = "0.0.0.0:20170"
 # advertise-addr = "tiflash0:20170"
 # data-dir = "/data"
 # config = "/proxy.toml"
 # log-file = "/log/proxy.log"
-# engine-addr = "tiflash0:3930"
+# log-level = "info"
 # status-addr = "0.0.0.0:20181"
 # advertise-status-addr = "tiflash0:20181"
+# engine-addr = "tiflash0:3930"
 
 [logger]
-# count = 10
-# errorlog = "/tmp/tiflash/log/error.log"
-# size = "1000M"
 # log = "/tmp/tiflash/log/server.log"
-# level = "trace"
+# level = "debug"
+# errorlog = "/tmp/tiflash/log/error.log"
+# size = "100M"
+# count = 10
 
 [application]
 # runAsDaemon = true
@@ -129,6 +132,11 @@
 # The way to apply snapshot data
 # The value is one of "block" / "file1" / "file2".
 # method = "file1"
+
+[status]
+# The port through which Prometheus pulls metrics information.
+# metrics_port = 8234
+# metrics_interval = 15
 
 [profiles]
 [profiles.default]
