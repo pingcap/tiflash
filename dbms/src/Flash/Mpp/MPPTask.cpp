@@ -76,15 +76,15 @@ void MPPTask::run()
     worker.detach();
 }
 
-void MPPTask::registerTunnel(const MPPTaskId & mpp_task_id, MPPTunnelPtr tunnel)
+void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
 {
     if (status == CANCELLED)
         throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is cancelled");
 
-    if (tunnel_map.find(mpp_task_id) != tunnel_map.end())
+    if (tunnel_map.find(id) != tunnel_map.end())
         throw Exception("the tunnel " + tunnel->id() + " has been registered");
 
-    tunnel_map[mpp_task_id] = tunnel;
+    tunnel_map[id] = tunnel;
 }
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)

@@ -21,7 +21,7 @@ struct MPPTaskId
     bool operator<(const MPPTaskId & rhs) const;
 
     bool isUnknown() const { return task_id == unknown_task_id; }
-  
+
     String toString() const;
 
     static const MPPTaskId unknown_mpp_task_id;
