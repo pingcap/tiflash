@@ -1,0 +1,156 @@
+#include <Common/Checksum.h>
+#include <Common/Exception.h>
+#include <Common/RedactHelpers.h>
+#include <IO/ReadBuffer.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteHelpers.h>
+#include <Poco/Logger.h>
+#include <Storages/Page/V3/LogWriter.h>
+#include <common/logger_useful.h>
+#include <fmt/format.h>
+
+namespace DB::PS::V3
+{
+LogWriter::LogWriter(
+    std::unique_ptr<WriteBufferFromFileBase> && dest_,
+    UInt64 log_number_,
+    bool recycle_log_files_,
+    bool manual_flush_)
+    : dest(std::move(dest_))
+    , block_offset(0)
+    , log_number(log_number_)
+    , recycle_log_files(recycle_log_files_)
+    , manual_flush(manual_flush_)
+{
+}
+
+LogWriter::~LogWriter()
+{
+    if (dest)
+    {
+        flush();
+    }
+}
+
+void LogWriter::flush()
+{
+    dest->sync();
+}
+
+void LogWriter::close()
+{
+    if (dest)
+    {
+        dest->close();
+        dest.reset();
+    }
+}
+
+void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
+{
+    // Header size varies depending on whether we are recycling or not.
+    const int header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
+
+    // Fragment the record if necessary and emit it. Note that if payload is empty,
+    // we still want to iterate once to emit a single zero-length record.
+    bool begin = true;
+    size_t payload_left = payload_size;
+    do
+    {
+        const Int64 leftover = Format::BLOCK_SIZE - block_offset;
+        assert(leftover >= 0);
+        if (leftover < header_size)
+        {
+            // Switch to a new block
+            if (leftover > 0)
+            {
+                // Fill the trailer (literal below relies on HeaderSize and RecyclableHeaderSize being <= 11)
+                assert(header_size <= 11);
+                writeString("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", leftover, *dest);
+            }
+            block_offset = 0;
+        }
+        // Invariant: we never leave < header_size bytes in a block.
+        assert(static_cast<int64_t>(Format::BLOCK_SIZE - block_offset) >= header_size);
+
+        const size_t avail_payload_size = Format::BLOCK_SIZE - block_offset - header_size;
+        const size_t fragment_length = (payload_left < avail_payload_size) ? payload_left : avail_payload_size;
+        const bool end = (payload_left == fragment_length);
+        Format::RecordType type;
+        if (begin && end)
+            type = recycle_log_files ? Format::RecyclableFullType : Format::FullType;
+        else if (begin)
+            type = recycle_log_files ? Format::RecyclableFirstType : Format::FirstType;
+        else if (end)
+            type = recycle_log_files ? Format::RecyclableLastType : Format::LastType;
+        else
+            type = recycle_log_files ? Format::RecyclableMiddleType : Format::MiddleType;
+        emitPhysicalRecord(type, payload, fragment_length);
+        payload.ignore(fragment_length);
+        payload_left -= fragment_length;
+        begin = false;
+    } while (payload.hasPendingData());
+
+    if (!manual_flush)
+        dest->sync();
+}
+
+void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length)
+{
+    assert(length <= 0xFFFF); // Must fit in two bytes
+
+    static_assert(Format::RECYCLABLE_HEADER_SIZE > sizeof(Digest::CRC32::HashType), "Header size must be greater than the checksum size");
+    static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::HEADER_SIZE, "Ensure the min buffer size for physical record");
+    constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - sizeof(Digest::CRC32::HashType);
+    char buf[HEADER_BUFF_SIZE];
+    WriteBuffer header_buff(buf, HEADER_BUFF_SIZE);
+
+    // Format the header
+    writeIntBinary(static_cast<UInt16>(length), header_buff);
+    writeChar(static_cast<char>(type), header_buff);
+
+    Digest::CRC32 digest;
+    char ch_type = static_cast<char>(type);
+    digest.update(&ch_type, 1);
+
+    size_t header_size;
+    if (type < Format::RecyclableFullType)
+    {
+        // Legacy record format
+        assert(block_offset + Format::HEADER_SIZE + length <= Format::BLOCK_SIZE);
+        header_size = Format::HEADER_SIZE;
+    }
+    else
+    {
+        // Recyclabel record format
+        assert(block_offset + Format::RECYCLABLE_HEADER_SIZE + length <= Format::BLOCK_SIZE);
+        header_size = Format::RECYCLABLE_HEADER_SIZE;
+
+        // Only encode low 32-bits of the 64-bit log number.  This means
+        // we will fail to detect an old record if we recycled a log from
+        // ~4 billion logs ago, but that is effectively impossible, and
+        // even if it were we'dbe far more likely to see a false positive
+        // on the 32-bit CRC.
+        writeIntBinary(static_cast<UInt32>(log_number), header_buff);
+        digest.update(header_buff.position() - sizeof(UInt32), sizeof(UInt32));
+    }
+
+    // Compute the crc of the record type and the payload.
+    digest.update(payload.position(), length);
+    Digest::CRC32::HashType crc = digest.checksum();
+    writeIntBinary(crc, *dest);
+
+    // Write the header and the payload
+    writeString(header_buff.buffer().begin(), header_buff.count(), *dest);
+    writeString(payload.position(), length, *dest);
+
+    // LOG_DEBUG(
+    //     &Poco::Logger::get("fff"),
+    //     fmt::format("CRC: {:08X} header: {} payload: {}",
+    //                 crc,
+    //                 Redact::keyToHexString(header_buff.buffer().begin(), header_buff.count()),
+    //                 Redact::keyToHexString(payload.position(), length)));
+
+    block_offset += header_size + length;
+}
+} // namespace DB::PS::V3
