@@ -559,7 +559,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
 
     Poco::Logger * log = &Poco::Logger::get(__FUNCTION__);
 
-    LOG_INFO(log, fmt::format("start to check regions ready, wait-tick {}, max-wait-tick {}", sleep_time, max_sleep_time));
+    LOG_INFO(log, fmt::format("start to check regions ready, wait-tick {}s, max-wait-tick {}s", sleep_time, max_sleep_time));
 
     std::unordered_set<RegionID> remain_regions;
     std::unordered_map<RegionID, uint64_t> regions_to_check;
