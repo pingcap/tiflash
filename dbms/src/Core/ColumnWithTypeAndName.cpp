@@ -30,12 +30,12 @@ void ColumnWithTypeAndName::dumpStructure(WriteBuffer & out) const
     else
         out << " nullptr";
 
-    if (column)
-        out << ' ' << column->dumpStructure();
-    else
-        out << " nullptr";
+//    if (column)
+//        out << '\t' << column->dumpStructure();
+//    else
+//        out << "\tnullptr";
 
-    out << " " << column_id;
+//    out << "\t" << column_id;
 }
 
 String ColumnWithTypeAndName::dumpStructure() const
