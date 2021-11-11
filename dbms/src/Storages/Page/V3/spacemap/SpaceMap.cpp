@@ -48,7 +48,7 @@ SpaceMap::SpaceMap(bitmaps * bitmap_, String & file_path_, FileProviderPtr file_
     , bitmap(bitmap_)
     , log(&Poco::Logger::get("SpaceMap"))
 {
-    LOG_INFO(log, "Begin to restore data from disk. [path=" << file_path << "]");
+    LOG_INFO(log, "Begin to build space from data. [path=" << file_path << "]");
 };
 
 SpaceMap::~SpaceMap()

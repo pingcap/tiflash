@@ -10,6 +10,7 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/mvcc/VersionSetWithDelta.h>
+#include <Storages/PathPool.h>
 
 #include <condition_variable>
 #include <functional>

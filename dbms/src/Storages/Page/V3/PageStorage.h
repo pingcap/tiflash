@@ -1,4 +1,9 @@
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V3/BlobFile.h>
+
+#include <set>
 
 namespace DB::PS::V3
 {
@@ -70,11 +75,15 @@ public:
     bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) override;
 
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
+
+    static std::set<BlobFile> listAllPageFiles(const FileProviderPtr & file_provider,
+                                               PSDiskDelegatorPtr & delegator,
+                                               Poco::Logger * page_file_log);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-
     Poco::Logger * log;
+    SpaceMapPtr space_map;
 };
 
 } // namespace DB::PS::V3
