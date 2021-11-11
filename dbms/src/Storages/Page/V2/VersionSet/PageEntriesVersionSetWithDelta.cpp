@@ -1,6 +1,5 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
-#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>

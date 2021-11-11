@@ -7,7 +7,6 @@
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/mvcc/VersionSet.h>
 #include <stdint.h>
 
 #include <boost/core/noncopyable.hpp>
@@ -51,6 +50,63 @@ extern const char random_slow_page_storage_remove_expired_snapshots[];
 } // namespace FailPoints
 namespace MVCC
 {
+/// Base type for VersionType of VersionSet
+template <typename T>
+struct MultiVersionCountable
+{
+public:
+    uint32_t ref_count;
+    T * next;
+    T * prev;
+
+public:
+    explicit MultiVersionCountable(T * self)
+        : ref_count(0)
+        , next(self)
+        , prev(self)
+    {}
+    virtual ~MultiVersionCountable()
+    {
+        assert(ref_count == 0);
+
+        // Remove from linked list
+        prev->next = next;
+        next->prev = prev;
+    }
+
+    void increase(const std::unique_lock<std::shared_mutex> & lock)
+    {
+        (void)lock;
+        ++ref_count;
+    }
+
+    void release(const std::unique_lock<std::shared_mutex> & lock)
+    {
+        (void)lock;
+        assert(ref_count >= 1);
+        if (--ref_count == 0)
+        {
+            // in case two neighbor nodes remove from linked list
+            delete this;
+        }
+    }
+
+    // Not thread-safe function. Only for VersionSet::Builder.
+
+    // Not thread-safe, caller ensure.
+    void increase() { ++ref_count; }
+
+    // Not thread-safe, caller ensure.
+    void release()
+    {
+        assert(ref_count >= 1);
+        if (--ref_count == 0)
+        {
+            delete this; // remove this node from version set
+        }
+    }
+};
+
 /// Base type for VersionType of VersionSetWithDelta
 template <typename T>
 struct MultiVersionCountableForDelta

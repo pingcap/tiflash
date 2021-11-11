@@ -14,7 +14,6 @@ list(APPEND page_storage_v2_headers
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/PageUtil.h
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/WriteBatch.h
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.h
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/mvcc/VersionSet.h
         ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/mvcc/VersionSetWithDelta.h
 )
 list(APPEND page_storage_v2_sources 

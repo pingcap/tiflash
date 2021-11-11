@@ -3,7 +3,6 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/mvcc/VersionSet.h>
 #include <Storages/Page/mvcc/VersionSetWithDelta.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>

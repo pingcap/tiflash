@@ -1,10 +1,9 @@
 #pragma once
 
 #include <Storages/Page/V2/PageEntries.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesBuilder.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
-#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesView.h>
-#include <Storages/Page/mvcc/VersionSet.h>
 #include <Storages/Page/mvcc/VersionSetWithDelta.h>
 
 #include <utility>

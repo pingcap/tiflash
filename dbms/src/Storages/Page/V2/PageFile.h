@@ -5,7 +5,8 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/V2/PageEntries.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
 #include <Storages/Page/WriteBatch.h>
 
 #include <unordered_map>
