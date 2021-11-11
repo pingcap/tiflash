@@ -448,18 +448,17 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
     return std::move(block);
 }
 
-void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block && to_write)
+void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_TRACE(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << to_write.rows());
+    LOG_TRACE(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << block.rows());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
-    const auto rows = to_write.rows();
+    const auto rows = block.rows();
     if (rows == 0)
         return;
 
     auto dm_context = newDMContext(db_context, db_settings);
-    Block block = addExtraColumnIfNeed(db_context, original_table_handle_define, std::move(to_write));
 
     const auto bytes = block.bytes();
 

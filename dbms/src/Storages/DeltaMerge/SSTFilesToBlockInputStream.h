@@ -42,7 +42,7 @@ public:
     SSTFilesToBlockInputStream(RegionPtr region_,
                                const SSTViewVec & snaps_,
                                const TiFlashRaftProxyHelper * proxy_helper_,
-                               const DecodingStorageSchemaSnapshot & schema_snap_,
+                               DecodingStorageSchemaSnapshotConstPtr schema_snap_,
                                Timestamp gc_safepoint_,
                                bool force_decode_,
                                TMTContext & tmt_,
@@ -51,7 +51,7 @@ public:
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 
-    Block getHeader() const override { return toEmptyBlock(*(schema_snap.column_defines)); }
+    Block getHeader() const override { return toEmptyBlock(*(schema_snap->column_defines)); }
 
     void readPrefix() override;
     void readSuffix() override;
@@ -76,7 +76,7 @@ private:
     RegionPtr region;
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    const DecodingStorageSchemaSnapshot & schema_snap;
+    DecodingStorageSchemaSnapshotConstPtr schema_snap;
     TMTContext & tmt;
     const Timestamp gc_safepoint;
     size_t expected_size;
@@ -105,7 +105,7 @@ class BoundedSSTFilesToBlockInputStream final
 public:
     BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
                                       const ColId pk_column_id_,
-                                      const DecodingStorageSchemaSnapshot & schema_snap);
+                                      DecodingStorageSchemaSnapshotConstPtr schema_snap);
 
     String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
 

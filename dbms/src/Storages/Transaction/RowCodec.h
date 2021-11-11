@@ -34,6 +34,9 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 
 using SortedColumnIDs = std::set<ColumnID>;
-bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos);
+using ColumnIdToPos = std::map<ColumnID, size_t>;
+bool decodeRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode);
+bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode);
+bool decodeRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode);
 
 } // namespace DB

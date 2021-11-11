@@ -6,6 +6,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
 
 #include <ext/shared_ptr_helper.h>
@@ -49,7 +50,7 @@ public:
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     /// Write from raft layer.
-    void write(Block && block, const Settings & settings);
+    void write(Block & block, const Settings & settings);
 
     void flushCache(const Context & context) override;
 
@@ -120,6 +121,8 @@ public:
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
+
+    DB::DecodingStorageSchemaSnapshotConstPtr getDecodingSchemaSnapshot() override;
 
     bool initStoreIfDataDirExist() override;
 
@@ -197,6 +200,9 @@ private:
 
     // The table schema synced from TiDB
     TiDB::TableInfo tidb_table_info;
+
+    mutable std::mutex schema_snapshot_mutex;
+    DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
 
     // Used to allocate new column-id when this table is NOT synced from TiDB
     ColumnID max_column_id_used;

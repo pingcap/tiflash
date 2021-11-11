@@ -11,6 +11,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>
@@ -303,7 +304,7 @@ public:
 
     static Block addExtraColumnIfNeed(const Context & db_context, const ColumnDefine & handle_define, Block && block);
 
-    void write(const Context & db_context, const DB::Settings & db_settings, Block && block);
+    void write(const Context & db_context, const DB::Settings & db_settings, Block & block);
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 

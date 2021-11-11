@@ -7,6 +7,7 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 
 namespace TiDB
 {
@@ -143,6 +144,11 @@ public:
     virtual bool isCommonHandle() const { return false; }
 
     virtual size_t getRowKeyColumnSize() const { return 1; }
+
+    virtual DecodingStorageSchemaSnapshotConstPtr getDecodingSchemaSnapshot()
+    {
+        throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    };
 
 private:
     virtual DataTypePtr getPKTypeImpl() const = 0;

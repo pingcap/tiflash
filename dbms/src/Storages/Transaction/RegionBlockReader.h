@@ -8,6 +8,7 @@
 
 #include <Columns/ColumnsNumber.h>
 #include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/Region.h>
 #include <Common/typeid_cast.h>
 
@@ -71,22 +72,15 @@ using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 /// The Reader to read the region data in `data_list` and decode based on the given table_info and columns, as a block.
 class RegionBlockReader : private boost::noncopyable
 {
-    /// The schema to decode rows
-    const TiDB::TableInfo & table_info;
-    const ColumnsDescription & columns;
-
     RegionScanFilterPtr scan_filter;
     Timestamp start_ts = std::numeric_limits<Timestamp>::max();
 
     // Whether to reorder the rows when pk is uint64.
     // For Delta-Tree, we don't need to reorder rows to be sorted by uint64 pk
-    bool do_reorder_for_uint64_pk = true;
+    bool do_reorder_for_uint64_pk = false;
 
 public:
-    // Decode and read columns from `storage`
-    RegionBlockReader(const ManageableStoragePtr & storage);
-
-    RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_);
+    RegionBlockReader(TiDB::StorageEngine engine_type);
 
     inline RegionBlockReader & setFilter(RegionScanFilterPtr filter)
     {
@@ -123,72 +117,11 @@ public:
     ///
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
     /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
-    std::tuple<Block, bool> read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode);
+    bool read(TMTPKType pk_type, const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot, Block & block, RegionDataReadInfoList & data_list, bool force_decode);
 
-    ///  Read all columns from `data_list` as a block.
-    inline std::tuple<Block, bool> read(RegionDataReadInfoList & data_list, bool force_decode)
-    {
-        return read(columns.getNamesOfPhysical(), data_list, force_decode);
-    }
-};
-using SortedColumnIDs = std::set<ColumnID>;
-/// The Reader to read the region data in `data_list` and decode based on the given table_info and columns, as a block.
-class RegionBlockReaderOptimized : private boost::noncopyable
-{
-    /// The schema to decode rows
-    const TiDB::TableInfo & table_info;
-    const ColumnsDescription & columns;
-
-    RegionScanFilterPtr scan_filter;
-    Timestamp start_ts = std::numeric_limits<Timestamp>::max();
-
-    // Whether to reorder the rows when pk is uint64.
-    // For Delta-Tree, we don't need to reorder rows to be sorted by uint64 pk
-    bool do_reorder_for_uint64_pk = true;
-
-public:
-    // Decode and read columns from `storage`
-    RegionBlockReaderOptimized(const ManageableStoragePtr & storage);
-
-    RegionBlockReaderOptimized(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_);
-
-    inline RegionBlockReaderOptimized & setFilter(RegionScanFilterPtr filter)
-    {
-        scan_filter = std::move(filter);
-        return *this;
-    }
-
-    /// Set the `start_ts` for reading data. The `start_ts` is `Timestamp::max` if not set.
-    ///
-    /// Data with commit_ts > start_ts will be ignored. This is for the sake of decode safety on read,
-    /// i.e. as data keeps being synced to region cache while the schema for a specific read is fixed,
-    /// we'll always have newer data than schema, only ignoring them can guarantee the decode safety.
-    inline RegionBlockReaderOptimized & setStartTs(Timestamp tso)
-    {
-        start_ts = tso;
-        return *this;
-    }
-
-    /// Set whether to reorder rows when the type of primary key is UInt64.
-    /// It is false if this reader is created by `RegionBlockReader(const ManageableStoragePtr &)` and the
-    /// storage engine is Delta-Tree.
-    /// Otherwise it is true by default.
-    inline RegionBlockReaderOptimized & setReorderUInt64PK(bool flag)
-    {
-        do_reorder_for_uint64_pk = flag;
-        return *this;
-    }
-
-    /// Read `data_list` as a block.
-    ///
-    /// On decode error, i.e. column number/type mismatch, will do force apply schema,
-    /// i.e. add/remove/cast unknown/missing/type-mismatch column if force_decode is true, otherwise return empty block and false.
-    /// Moreover, exception will be thrown if we see fatal decode error meanwhile `force_decode` is true.
-    ///
-    /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
-    /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
+private:
     template <TMTPKType pk_type>
-    bool read(const SortedColumnIDs & read_column_ids, Block & block, const std::vector<ColumnID> & pk_column_ids, const std::map<ColumnID, size_t> & pk_pos_map, RegionDataReadInfoList & data_list, bool force_decode);
+    bool read(const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot, Block & block, RegionDataReadInfoList & data_list, bool force_decode);
 };
 
 } // namespace DB
