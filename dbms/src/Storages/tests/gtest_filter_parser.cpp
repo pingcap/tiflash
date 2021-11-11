@@ -1,7 +1,5 @@
-#include <AggregateFunctions/AggregateFunctionSequenceMatch.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/typeid_cast.h>
-#include <DataTypes/DataTypeString.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -9,13 +7,8 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/makeDummyQuery.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
@@ -95,12 +88,9 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
             DAGPreparedSets(),
             source_columns,
             ctx.getTimezoneInfo());
-        DM::ColId cur_col_id = 1;
-        for (const auto & name_type : source_columns)
+        for (const auto & column : table_info.columns)
         {
-            // FIXME: get the column id from table_info
-            columns_to_read.push_back(DM::ColumnDefine(cur_col_id, name_type.name, name_type.type));
-            cur_col_id++;
+            columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
         }
     }
     auto create_attr_by_column_id = [columns_to_read](ColumnID column_id) -> DM::Attr {
