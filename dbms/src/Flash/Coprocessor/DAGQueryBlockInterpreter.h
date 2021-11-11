@@ -54,7 +54,10 @@ private:
         DAGPipeline & pipeline,
         ExpressionActionsChain & chain,
         const tipb::TableScan & ts);
-    void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    void executeJoin(
+        DAGPipeline & pipeline,
+        const tipb::Join & join,
+        SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,

@@ -327,7 +327,7 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
     }
 }
 
-void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
+void DAGQueryBlockInterpreter::executeJoin(DAGPipeline & pipeline, const tipb::Join & join, SubqueryForSet & right_query)
 {
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
@@ -574,7 +574,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         group_by_collation_sensitive);
     ExpressionActionsPtr before_aggregation = chain.getLastActions();
 
-    //chain.finalize();
+    chain.finalize();
     chain.clear();
 
     // add cast if type is not match
@@ -665,6 +665,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         String having_column_name = analyzer->appendWhere(chain, having_conditions);
         ExpressionActionsPtr before_having = chain.getLastActions();
         chain.addStep();
+        chain.finalize();
 
         pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_having, having_column_name, log); });
         recordProfileStreams(pipeline, query_block.having_name);
@@ -791,7 +792,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     ExpressionActionsChain chain;
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
-        executeJoin(query_block.source->join(), pipeline, right_query);
+        executeJoin(pipeline, query_block.source->join(), right_query);
         recordProfileStreams(pipeline, query_block.source_name);
 
         SubqueriesForSets subquries;
@@ -912,7 +913,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
-    //chain.finalize();
+    chain.finalize();
     LOG_DEBUG(log, "FUZHE After finalize: " << chain.dumpChain());
     chain.clear();
 }
@@ -924,6 +925,7 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, ExpressionAc
     ExpressionActionsPtr before_where = chain.getLastActions();
     ExpressionActionsPtr project_after_where;
     chain.addStep();
+    chain.finalize();
     LOG_DEBUG(log, "FUZHE After executeWhere: " << chain.dumpChain());
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
