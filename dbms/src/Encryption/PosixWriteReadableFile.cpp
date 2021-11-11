@@ -71,10 +71,18 @@ PosixWriteReadableFile::PosixWriteReadableFile(const std::string & file_name_,
 void PosixWriteReadableFile::close()
 {
     if (fd < 0)
+    {
         return;
+    }
+
     while (0 != ::close(fd))
+    {
         if (errno != EINTR)
+        {
             throwFromErrno("Cannot close file " + file_name, ErrorCodes::CANNOT_CLOSE_FILE);
+        }
+    }
+
 
     metric_increment.changeTo(0); // Subtract metrics for `CurrentMetrics::OpenFileForWrite`
 
@@ -82,18 +90,23 @@ void PosixWriteReadableFile::close()
     metric_increment.destroy();
 }
 
-ssize_t PosixWriteReadableFile::write(char * buf, size_t size)
-{
-    if (write_limiter)
-        write_limiter->request(static_cast<UInt64>(size));
-    return ::write(fd, buf, size);
-}
-
 ssize_t PosixWriteReadableFile::pwrite(char * buf, size_t size, off_t offset) const
 {
     if (write_limiter)
-        write_limiter->request(static_cast<UInt64>(size));
+    {
+        write_limiter->request(size);
+    }
+
     return ::pwrite(fd, buf, size, offset);
+}
+
+ssize_t PosixWriteReadableFile::pread(char * buf, size_t size, off_t offset) const
+{
+    if (read_limiter != nullptr)
+    {
+        read_limiter->request(size);
+    }
+    return ::pread(fd, buf, size, offset);
 }
 
 int PosixWriteReadableFile::fsync()
@@ -130,29 +143,6 @@ void PosixWriteReadableFile::hardLink(const std::string & existing_file)
     {
         throw Exception("Failed to create hard link for:" + existing_file + " to an empty path", ErrorCodes::LOGICAL_ERROR);
     }
-}
-
-off_t PosixWriteReadableFile::seek(off_t offset, int whence)
-{
-    return ::lseek(fd, offset, whence);
-}
-
-ssize_t PosixWriteReadableFile::read(char * buf, size_t size)
-{
-    if (read_limiter != nullptr)
-    {
-        read_limiter->request(size);
-    }
-    return ::read(fd, buf, size);
-}
-
-ssize_t PosixWriteReadableFile::pread(char * buf, size_t size, off_t offset) const
-{
-    if (read_limiter != nullptr)
-    {
-        read_limiter->request(size);
-    }
-    return ::pread(fd, buf, size, offset);
 }
 
 } // namespace DB
