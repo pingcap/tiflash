@@ -370,9 +370,9 @@ try
 }
 CATCH
 
-class SegmentDeletionRelevantPlace_test : public Segment_test
-    , //
-                                          public testing::WithParamInterface<bool>
+class SegmentDeletionRelevantPlace_test
+    : public Segment_test
+    , public testing::WithParamInterface<bool>
 {
     DB::Settings getSettings()
     {
@@ -430,9 +430,9 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(WhetherEnableRelevantPlace, SegmentDeletionRelevantPlace_test, testing::Values(true, false));
 
-class SegmentDeletion_test : public Segment_test
-    , //
-                             public testing::WithParamInterface<std::tuple<bool, bool>>
+class SegmentDeletion_test
+    : public Segment_test
+    , public testing::WithParamInterface<std::tuple<bool, bool>>
 {
 };
 
@@ -1379,9 +1379,9 @@ enum class SegmentWriteType
     ToDisk,
     ToCache
 };
-class Segment_DDL_test : public Segment_test
-    , //
-                         public testing::WithParamInterface<std::tuple<SegmentWriteType, bool>>
+class Segment_DDL_test
+    : public Segment_test
+    , public testing::WithParamInterface<std::tuple<SegmentWriteType, bool>>
 {
 };
 String paramToString(const ::testing::TestParamInfo<Segment_DDL_test::ParamType> & info)
