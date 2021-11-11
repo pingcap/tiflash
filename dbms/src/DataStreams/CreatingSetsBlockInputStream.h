@@ -2,6 +2,7 @@
 
 #include <Common/MemoryTracker.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/ExpressionAnalyzer.h> /// SubqueriesForSets
 
 
@@ -24,7 +25,7 @@ public:
         const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
         const SizeLimits & network_transfer_limits,
-        Int64 mpp_task_id_,
+        const MPPTaskId & mpp_task_id_,
         const LogWithPrefixPtr & log_);
     ~CreatingSetsBlockInputStream()
     {
@@ -35,7 +36,9 @@ public:
         }
     }
 
-    String getName() const override { return "CreatingSets"; }
+    static constexpr auto name = "CreatingSets";
+
+    String getName() const override { return name; }
 
     Block getHeader() const override { return children.back()->getHeader(); }
 
@@ -56,7 +59,7 @@ private:
 
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
-    Int64 mpp_task_id = 0;
+    MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
 
     std::vector<std::thread> workers;
     std::mutex exception_mutex;
