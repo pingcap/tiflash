@@ -24,9 +24,9 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args);
 
 struct DAGProperties
 {
-    String encode_type = "";
+    String encode_type;
     Int64 tz_offset = 0;
-    String tz_name = "";
+    String tz_name;
     Int32 collator = 0;
     bool is_mpp_query = false;
     bool use_broadcast_join = false;
@@ -35,7 +35,7 @@ struct DAGProperties
     Int32 mpp_timeout = 10;
 };
 
-DAGProperties getDAGProperties(String prop_string);
+DAGProperties getDAGProperties(const String & prop_string);
 
 enum QueryTaskType
 {

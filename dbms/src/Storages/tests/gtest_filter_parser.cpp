@@ -1,11 +1,7 @@
 #include <AggregateFunctions/AggregateFunctionSequenceMatch.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
-#include <DataStreams/IBlockOutputStream.h>
-#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
-#include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -13,8 +9,6 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InterpreterDropQuery.h>
-#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -22,19 +16,14 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
-#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/SchemaBuilder-internal.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TMTStorages.h>
-#include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <optional>
@@ -74,7 +63,6 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
 {
     const TiDB::TableInfo table_info(table_info_json);
 
-    DAGProperties properties = getDAGProperties("");
     auto ctx = TiFlashTestEnv::getContext();
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
@@ -83,14 +71,12 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         [&](const String &, const String &) {
             return table_info;
         },
-        properties);
-    RegionInfoMap regions;
-    RegionInfoList retry_regions;
-    regions.emplace(4, RegionInfo(4, 0, 0, {}, nullptr));
+        getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
     DAGContext dag_context(dag_request);
     ctx.setDAGContext(&dag_context);
-    DAGQuerySource dag(ctx, regions, retry_regions, dag_request, std::make_shared<LogWithPrefix>(&Poco::Logger::get("CoprocessorHandler"), ""), false);
+    // Don't care about regions information in this test
+    DAGQuerySource dag(ctx, /*regions*/ RegionInfoMap{}, /*retry_regions*/ RegionInfoList{}, dag_request, std::make_shared<LogWithPrefix>(log, ""), false);
     auto query_block = *dag.getRootQueryBlock();
     std::vector<const tipb::Expr *> conditions;
     if (query_block.children[0]->selection != nullptr)
@@ -99,20 +85,23 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
             conditions.push_back(&condition);
     }
 
-    NamesAndTypes source_columns;
-    std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info, log);
-    auto dag_query = std::make_unique<DAGQueryInfo>(
-        conditions,
-        DAGPreparedSets(),
-        source_columns,
-        ctx.getTimezoneInfo());
-
+    std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;
-    DM::ColId cur_col_id = 1;
-    for (const auto & name_type : source_columns)
     {
-        columns_to_read.push_back(DM::ColumnDefine(cur_col_id, name_type.name, name_type.type));
-        cur_col_id++;
+        NamesAndTypes source_columns;
+        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info, log);
+        dag_query = std::make_unique<DAGQueryInfo>(
+            conditions,
+            DAGPreparedSets(),
+            source_columns,
+            ctx.getTimezoneInfo());
+        DM::ColId cur_col_id = 1;
+        for (const auto & name_type : source_columns)
+        {
+            // FIXME: get the column id from table_info
+            columns_to_read.push_back(DM::ColumnDefine(cur_col_id, name_type.name, name_type.type));
+            cur_col_id++;
+        }
     }
     auto create_attr_by_column_id = [columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(

@@ -158,7 +158,7 @@ DAGColumnInfo toNullableDAGColumnInfo(DAGColumnInfo & input)
 class UniqRawResReformatBlockOutputStream : public IProfilingBlockInputStream
 {
 public:
-    UniqRawResReformatBlockOutputStream(const BlockInputStreamPtr & in_)
+    explicit UniqRawResReformatBlockOutputStream(const BlockInputStreamPtr & in_)
         : in(in_)
     {}
 
@@ -213,16 +213,16 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 
-DAGProperties getDAGProperties(String prop_string)
+DAGProperties getDAGProperties(const String & prop_string)
 {
     DAGProperties ret;
     if (prop_string.empty())
         return ret;
     std::unordered_map<String, String> properties;
     Poco::StringTokenizer string_tokens(prop_string, ",");
-    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    for (const auto & string_token : string_tokens)
     {
-        Poco::StringTokenizer tokens(*it, ":");
+        Poco::StringTokenizer tokens(string_token, ":");
         if (tokens.count() != 2)
             continue;
         properties[Poco::toLower(tokens[0])] = tokens[1];
