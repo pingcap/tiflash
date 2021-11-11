@@ -144,7 +144,8 @@ public:
 
     size_t final_concurrency = 1;
     Int64 compile_time_ns;
-    Int64 wait_index_time_ns = 0;
+    Clock::time_point wait_index_start_timestamp;
+    Clock::time_point wait_index_end_timestamp;
     String table_scan_executor_id = "";
     String exchange_sender_executor_id = "";
     String root_executor_id = "";

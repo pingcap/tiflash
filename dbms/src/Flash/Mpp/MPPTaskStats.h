@@ -21,7 +21,7 @@ struct MPPTaskStats
     MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_)
         : log(log_)
         , id(id_)
-        , node_host(std::move(address_))
+        , host(std::move(address_))
         , task_init_timestamp(Clock::now())
         , status(INITIALIZING)
     {}
@@ -36,18 +36,18 @@ struct MPPTaskStats
 
     /// common
     const MPPTaskId id;
-    const String node_host;
+    const String host;
     std::vector<Int64> upstream_task_ids;
     String signature;
     String executor_structure;
     String inputstream_structure;
     Timestamp task_init_timestamp;
-    Timestamp tunnels_init_start_timestamp;
-    Timestamp tunnels_init_end_timestamp;
+    Timestamp compile_start_timestamp;
+    Timestamp wait_index_start_timestamp;
+    Timestamp wait_index_end_timestamp;
+    Timestamp compile_end_timestamp;
     Timestamp task_start_timestamp;
     Timestamp task_end_timestamp;
-    Duration compile_duration = 0;
-    Duration wait_index_duration = 0;
     TaskStatus status;
     String error_message;
 

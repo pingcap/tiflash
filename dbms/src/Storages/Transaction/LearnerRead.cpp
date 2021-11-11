@@ -409,8 +409,8 @@ LearnerReadSnapshot doLearnerRead(
     if (context.getDAGContext() != nullptr)
     {
         auto * dag_context = context.getDAGContext();
-        auto batch_wait_index_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        dag_context->wait_index_time_ns += batch_wait_index_elapsed_ns;
+        dag_context->wait_index_start_timestamp = start_time;
+        dag_context->wait_index_end_timestamp = end_time;
     }
     return regions_snapshot;
 }

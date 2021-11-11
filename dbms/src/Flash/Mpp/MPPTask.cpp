@@ -230,7 +230,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         return sp && sp->getStatus() == CANCELLED;
     };
 
-    task_stats->tunnels_init_start_timestamp = Clock::now();
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
@@ -248,7 +247,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         task_stats->upstream_task_ids.push_back(task_meta.task_id());
     }
     dag_context->tunnel_set = tunnel_set;
-    task_stats->tunnels_init_end_timestamp = Clock::now();
 
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
@@ -277,9 +275,11 @@ void MPPTask::preprocess()
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+    task_stats->compile_start_timestamp = start_time;
+    task_stats->compile_end_timestamp = end_time;
 
-    task_stats->compile_duration = dag_context->compile_time_ns;
-    task_stats->wait_index_duration = dag_context->wait_index_time_ns;
+    task_stats->wait_index_start_timestamp = dag_context->wait_index_start_timestamp;
+    task_stats->wait_index_end_timestamp = dag_context->wait_index_end_timestamp;
 }
 
 void MPPTask::runImpl()
