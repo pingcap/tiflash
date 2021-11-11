@@ -786,7 +786,6 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
             expr->set_sig(it_sig->second);
             auto * ft = expr->mutable_field_type();
             ft->set_tp(TiDB::TypeLongLong);
-            std::cerr << ft->flag() << std::endl;
             ft->set_flag(TiDB::ColumnFlagUnsigned);
             ft->set_collate(collator_id);
             break;

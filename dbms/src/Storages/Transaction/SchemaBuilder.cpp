@@ -2,6 +2,7 @@
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
+#include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockSchemaGetter.h>
@@ -27,8 +28,6 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include <tuple>
-
-#include "Core/NamesAndTypes.h"
 
 namespace DB
 {

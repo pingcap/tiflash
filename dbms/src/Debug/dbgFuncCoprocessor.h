@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Databases/IDatabase.h>
 #include <Debug/DBGInvoker.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST.h>
