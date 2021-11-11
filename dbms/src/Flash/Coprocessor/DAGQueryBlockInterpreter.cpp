@@ -621,7 +621,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         sample_block.insert(ColumnWithTypeAndName(std::make_shared<DataTypeInt8>(), "non-matched"));
     }
     right_query.join->setSampleBlock(sample_block);
-    r
     dag.getDAGContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;

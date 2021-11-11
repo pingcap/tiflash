@@ -14,14 +14,7 @@ ExpressionBlockInputStream::ExpressionBlockInputStream(const BlockInputStreamPtr
 
 String ExpressionBlockInputStream::getName() const
 {
-    std::stringstream log_str;
-    log_str << "Expression \t"
-            << "type: " << expression->getActions()[0].type << "\t"
-            << "input_columns" << "system"
-    std::string res = "Expression \t" +
-            "type: \t" +
-                      "input_columns";
-    return ;
+    return "Expression";
 }
 
 Block ExpressionBlockInputStream::getTotals()
