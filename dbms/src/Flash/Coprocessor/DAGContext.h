@@ -119,7 +119,6 @@ public:
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
-
     const MPPTaskId & getMPPTaskId() const
     {
         return mpp_task_id;

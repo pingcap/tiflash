@@ -89,7 +89,7 @@ private:
 
     mpp::TaskMeta meta;
 
-    const MPPTaskId id;
+    MPPTaskId id;
 
     MPPTunnelSetPtr tunnel_set;
 

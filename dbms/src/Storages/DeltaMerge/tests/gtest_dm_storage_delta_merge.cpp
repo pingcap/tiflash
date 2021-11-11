@@ -47,7 +47,7 @@ try
         "col2"));
 
     Context ctx = DMTestEnv::getContext();
-    StoragePtr storage;
+    std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
     // create table
@@ -127,7 +127,23 @@ try
     in->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
 
-
+    auto store_status = storage->status();
+    Block status = store_status->read();
+    String name_str = "Name";
+    String value_str = "Value";
+    ColumnPtr col_name = status.getByName(name_str).column;
+    ColumnPtr col_value = status.getByName(value_str).column;
+    for (size_t i = 0; i < col_name->size(); i++)
+    {
+        if (col_name->getDataAt(i) == String("segment_count"))
+        {
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(1)));
+        }
+        else if (col_name->getDataAt(i) == String("total_rows"))
+        {
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(num_rows_read)));
+        }
+    }
     storage->drop();
 }
 CATCH
