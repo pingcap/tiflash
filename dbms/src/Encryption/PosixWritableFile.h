@@ -45,7 +45,7 @@ public:
 
     void close() override;
 
-    bool isClosed() override { return fd == -1; }
+    bool isClosed() const override { return fd == -1; }
 
     int fsync() override;
 
