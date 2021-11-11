@@ -551,17 +551,20 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & terminate_signals_counter)
 {
     constexpr double batch_read_index_time_rate = 0.2; // part of time for waiting shall be assigned to batch-read-index
-    constexpr double max_sleep_time = 20;
+
+    // wait interval to check region ready, not recommended to modify only if for tesing
+    auto wait_region_ready_tick = tmt.getContext().getConfigRef().getUInt64("flash.wait_region_ready_tick", 0);
+    const double max_sleep_time = 0 == wait_region_ready_tick ? 20.0 : static_cast<double>(tmt.waitRegionReadyTimeout());
+    double sleep_time = 0 == wait_region_ready_tick ? 2.5 : static_cast<double>(wait_region_ready_tick); // default tick in TiKV is about 2s (without hibernate-region)
 
     Poco::Logger * log = &Poco::Logger::get(__FUNCTION__);
 
-    LOG_INFO(log, "start to check regions ready");
+    LOG_INFO(log, fmt::format("start to check regions ready, wait-tick {}, max-wait-tick {}", sleep_time, max_sleep_time));
 
     std::unordered_set<RegionID> remain_regions;
     std::unordered_map<RegionID, uint64_t> regions_to_check;
     Stopwatch region_check_watch;
     size_t total_regions_cnt = 0;
-    double sleep_time = 2.5; // default tick in TiKV is about 2s (without hibernate-region)
     {
         tmt.getKVStore()->traverseRegions([&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
         total_regions_cnt = remain_regions.size();
