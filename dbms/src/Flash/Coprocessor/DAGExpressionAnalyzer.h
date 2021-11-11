@@ -128,6 +128,7 @@ private:
         ExpressionActionsChain::Step & step,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
+        std::vector<NameAndTypePair> & aggregated_columns,
         bool result_is_nullable);
 
     void makeExplicitSet(
@@ -188,10 +189,8 @@ private:
         const tipb::Expr & expr,
         ExpressionActionsPtr & actions);
 
-    // all columns from table scan
+    // all columns from table scan or aggregation
     std::vector<NameAndTypePair> source_columns;
-    // all columns after aggregation
-    std::vector<NameAndTypePair> aggregated_columns;
     DAGPreparedSets prepared_sets;
     Settings settings;
     const Context & context;

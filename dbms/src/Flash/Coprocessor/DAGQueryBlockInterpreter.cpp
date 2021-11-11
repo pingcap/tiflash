@@ -574,7 +574,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         group_by_collation_sensitive);
     ExpressionActionsPtr before_aggregation = chain.getLastActions();
 
-    chain.finalize();
+    //chain.finalize();
     chain.clear();
 
     // add cast if type is not match
@@ -912,7 +912,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
-    chain.finalize();
+    //chain.finalize();
     LOG_DEBUG(log, "FUZHE After finalize: " << chain.dumpChain());
     chain.clear();
 }
