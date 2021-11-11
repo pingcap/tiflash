@@ -15,8 +15,8 @@ struct MPPTaskId
         : start_ts(start_ts_)
         , task_id(task_id_){};
 
-    const UInt64 start_ts;
-    const Int64 task_id;
+    UInt64 start_ts;
+    Int64 task_id;
 
     bool operator<(const MPPTaskId & rhs) const;
 
