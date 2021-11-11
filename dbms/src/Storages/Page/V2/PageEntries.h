@@ -339,7 +339,8 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
 }
 
 /// For PageEntriesVersionSet
-class PageEntries : public PageEntriesMixin<PageEntries>
+class PageEntries
+    : public PageEntriesMixin<PageEntries>
     , public DB::MVCC::MultiVersionCountable<PageEntries>
 {
 public:
