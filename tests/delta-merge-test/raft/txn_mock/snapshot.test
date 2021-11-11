@@ -26,7 +26,7 @@
 │    13 │           1 │
 │    11 │           2 │
 └───────┴─────────────┘
-=> selraw (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+=> selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    12 │           1 │                 2 │                 0 │
 │    13 │           1 │                 3 │                 0 │
@@ -39,16 +39,16 @@
 │     0 │           4 │                 4 │                 1 │
 │     0 │           4 │                 4 │                 1 │
 └───────┴─────────────┴───────────────────┴───────────────────┘
-=> optimize table default.test partition id '0'
-=> selraw (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+=> manage table default.test merge delta
+=> selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    13 │           1 │                 3 │                 0 │
 │    11 │           2 │                 3 │                 0 │
 │     0 │           3 │                 4 │                 1 │
 │     0 │           4 │                 4 │                 1 │
 └───────┴─────────────┴───────────────────┴───────────────────┘
-=> optimize table default.test partition id '0' final
-=> selraw (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+=> manage table default.test merge delta
+=> selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    13 │           1 │                 3 │                 0 │
 │    11 │           2 │                 3 │                 0 │
