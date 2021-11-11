@@ -38,21 +38,14 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
-String MPPTaskId::toString() const
-{
-    return fmt::format("[{},{}]", start_ts, task_id);
-}
-
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
+    , id(meta.start_ts(), meta.task_id())
     , log(std::make_shared<LogWithPrefix>(
           &Poco::Logger::get("MPPTask"),
           fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
-{
-    id.start_ts = meta.start_ts();
-    id.task_id = meta.task_id();
-}
+{}
 
 MPPTask::~MPPTask()
 {
@@ -107,8 +100,8 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
         return {nullptr, err_msg};
     }
 
-    MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
-    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(id);
+    MPPTaskId receiver_id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
+    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(receiver_id);
     if (it == tunnel_map.end())
     {
         auto err_msg = fmt::format(

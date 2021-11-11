@@ -44,7 +44,11 @@ void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
     region_table.restore();
     store_status = StoreStatus::Ready;
 
-    background_service = std::make_unique<BackgroundService>(*this);
+    if (proxy_helper != nullptr)
+    {
+        // Only create when running with Raft threads
+        background_service = std::make_unique<BackgroundService>(*this);
+    }
 }
 
 KVStorePtr & TMTContext::getKVStore()
