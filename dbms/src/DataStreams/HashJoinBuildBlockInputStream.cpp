@@ -10,6 +10,7 @@ Block HashJoinBuildBlockInputStream::readImpl()
 
     if (!block)
         return block;
+    std::this_thread::sleep_for(std::chrono::seconds(3));
     join->insertFromBlock(block, stream_index);
     return block;
 }

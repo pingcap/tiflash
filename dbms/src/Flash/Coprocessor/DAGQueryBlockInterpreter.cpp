@@ -546,6 +546,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     /// add necessary transformation if the join key is an expression
 
+    left_pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
+    });
+    right_pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
+    });
+
     prepareJoin(
         swap_join_side ? join.right_join_keys() : join.left_join_keys(),
         join_key_types,
@@ -657,10 +664,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
     TiDB::TiDBCollators & collators,
     AggregateDescriptions & aggregate_descriptions)
 {
-    pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
-    });
-
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log); });
 
     Block header = pipeline.firstStream()->getHeader();
@@ -737,10 +740,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
             log);
     }
     // add cast
-
-    pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
-    });
 }
 
 void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
