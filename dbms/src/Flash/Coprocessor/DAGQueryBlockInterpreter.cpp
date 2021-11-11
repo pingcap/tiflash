@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
+#include <Common/joinStr.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
@@ -152,7 +153,7 @@ ExpressionActionsPtr generateProjectExpressionActions(
 }
 
 // the flow is the same as executeFetchcolumns
-void DAGQueryBlockInterpreter::executeTableScan(DAGPipeline & pipeline, const tipb::TableScan & ts)
+void DAGQueryBlockInterpreter::executeTableScan(DAGPipeline & pipeline, ExpressionActionsChain & chain, const tipb::TableScan & ts)
 {
     if (!ts.has_table_id())
     {
@@ -222,6 +223,7 @@ void DAGQueryBlockInterpreter::executeTableScan(DAGPipeline & pipeline, const ti
     {
         extra_cast = chain.getLastActions();
         chain.addStep();
+        LOG_DEBUG(log, "FUZHE After extra cast: " << chain.dumpChain());
         size_t index = 0;
         for (const auto & col : analyzer->getCurrentInputColumns())
         {
@@ -848,12 +850,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else
     {
         assert(query_block.source->tp() == tipb::ExecType::TypeTableScan);
-        executeTableScan(pipeline, query_block.source->tbl_scan());
+        executeTableScan(pipeline, chain, query_block.source->tbl_scan());
     }
 
     dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
 
-    if (!pipeline.streams().empty())
+    if (!pipeline.streams.empty())
     {
         auto stream = pipeline.streams[0];
         auto block = stream->getHeader();
@@ -861,13 +863,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         auto f = [](const ColumnWithTypeAndName & col, FmtBuffer & buf) {
             buf.fmtAppend("{}({})", col.name, col.type->getName());
         };
-        LOG_DEBUG(log, "FUZHE Block: " << joinStr(block.cbegin(), block.cend(), buf, f));
+        joinStr(block.cbegin(), block.cend(), buf, f);
+        LOG_DEBUG(log, "FUZHE Block: " << buf.toString());
     }
 
     if (!conditions.empty())
     {
         executeWhere(pipeline, chain);
-        LOG_DEBUG(log, "FUZHE After executeWhere: " << chain.dumpChain());
     }
 
 
@@ -877,11 +879,14 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         LOG_DEBUG(log, "FUZHE After executeAggregation: " << chain.dumpChain());
     }
 
-    if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
+    if (!chain.steps.empty())
     {
         executeExpression(pipeline, chain.getLastActions());
         LOG_DEBUG(log, "FUZHE After execute before_order_and_select: " << chain.dumpChain());
+    }
 
+    if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
+    {
         // execute topN
         executeOrder(pipeline, analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn()));
         LOG_DEBUG(log, "FUZHE After executeOrder: " << chain.dumpChain());
@@ -896,6 +901,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             query_block.output_offsets,
             query_block.qb_column_prefix,
             keep_session_timezone_info || !query_block.isRootQueryBlock()));
+
     LOG_DEBUG(log, "FUZHE After executeProject: " << chain.dumpChain());
 
     // execute limit
@@ -914,9 +920,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, ExpressionActionsChain & chain)
 {
     String filter_column_name = analyzer->appendWhere(chain, conditions);
+    LOG_DEBUG(log, "FUZHE In executeWhere filter_column_name: " << filter_column_name);
     ExpressionActionsPtr before_where = chain.getLastActions();
     ExpressionActionsPtr project_after_where;
     chain.addStep();
+    LOG_DEBUG(log, "FUZHE After executeWhere: " << chain.dumpChain());
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
         NamesWithAliases project_cols;
@@ -927,6 +935,7 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, ExpressionAc
         chain.getLastActions()->add(ExpressionAction::project(project_cols));
         project_after_where = chain.getLastActions();
         chain.addStep();
+        LOG_DEBUG(log, "FUZHE After project_after_where: " << chain.dumpChain());
     }
 
     /// execute timezone cast and the selection

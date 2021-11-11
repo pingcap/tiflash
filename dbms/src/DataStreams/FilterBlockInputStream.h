@@ -35,7 +35,8 @@ protected:
 private:
     ExpressionActionsPtr expression;
     Block header;
-    ssize_t filter_column;
+    String filter_column_name;
+    ssize_t filter_column = -1;
 
     ConstantFilterDescription constant_filter_description;
 

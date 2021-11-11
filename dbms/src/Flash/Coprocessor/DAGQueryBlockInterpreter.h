@@ -50,7 +50,10 @@ public:
 
 private:
     void executeImpl(DAGPipeline & pipeline);
-    void executeTableScan(DAGPipeline & pipeline, const tipb::TableScan & ts);
+    void executeTableScan(
+        DAGPipeline & pipeline,
+        ExpressionActionsChain & chain,
+        const tipb::TableScan & ts);
     void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,

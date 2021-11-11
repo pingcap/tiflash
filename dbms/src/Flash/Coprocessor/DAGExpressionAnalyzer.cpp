@@ -1131,7 +1131,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
-    ExpressionActionsChain::Step step = chain.steps.back();
+    ExpressionActionsChain::Step & step = chain.steps.back();
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
         String & name = aggregated_columns[i].name;
@@ -1235,7 +1235,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
         /// for all the columns that need to be returned, if the type is timestamp, then convert
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         initChain(chain, getCurrentInputColumns());
-        ExpressionActionsChain::Step step = chain.steps.back();
+        ExpressionActionsChain::Step & step = chain.steps.back();
 
         tipb::Expr tz_expr;
         constructTZExpr(tz_expr, context.getTimezoneInfo(), false);
