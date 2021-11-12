@@ -8,5 +8,5 @@
 
 namespace DB
 {
-void recordProfileStreams(std::map<String, ProfileStreamsInfo> & profile_streams_map, DAGPipeline & pipeline, const String & key, UInt32 qb_id = 0);
+void recordProfileStreams(std::map<String, ProfileStreamsInfo> & profile_streams_map, DAGPipeline & pipeline, const String & key, UInt32 qb_id);
 } // namespace DB

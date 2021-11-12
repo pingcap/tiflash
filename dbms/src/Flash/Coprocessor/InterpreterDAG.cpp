@@ -153,7 +153,7 @@ BlockIO InterpreterDAG::execute()
         });
         if (dag.getDAGRequest().root_executor().has_executor_id())
         {
-            recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, dag.getDAGRequest().root_executor().executor_id());
+            recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, dag.getDAGRequest().root_executor().executor_id(), dag.getRootQueryBlock()->id);
         }
     }
 
