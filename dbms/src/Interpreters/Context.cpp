@@ -1,5 +1,6 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
+#include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -54,6 +55,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <boost/functional/hash/hash.hpp>
 #include <map>
@@ -92,6 +94,10 @@ extern const int SESSION_NOT_FOUND;
 extern const int SESSION_IS_LOCKED;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char force_context_path[];
+} // namespace FailPoints
 
 
 /** Set of known objects (environment), that could be used in query.
@@ -503,6 +509,8 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
 String Context::getPath() const
 {
     auto lock = getLock();
+    // Now we only make this failpoint for gtest_database.
+    fiu_return_on(FailPoints::force_context_path, fmt::format("{}{}/", shared->path, "DatabaseTiFlashTest"));
     return shared->path;
 }
 

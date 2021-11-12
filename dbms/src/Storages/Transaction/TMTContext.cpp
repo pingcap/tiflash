@@ -25,10 +25,10 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , region_table(context)
     , background_service(nullptr)
     , gc_manager(context)
-    , cluster(raft_config.pd_addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
-                                               : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
+    , cluster(raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
+                                           : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
     , ignore_databases(raft_config.ignore_databases)
-    , schema_syncer(raft_config.pd_addrs.size() == 0
+    , schema_syncer(raft_config.pd_addrs.empty()
                         ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ true>>(cluster))
                         : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ false>>(cluster)))
     , mpp_task_manager(std::make_shared<MPPTaskManager>())
@@ -44,7 +44,11 @@ void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
     region_table.restore();
     store_status = StoreStatus::Ready;
 
-    background_service = std::make_unique<BackgroundService>(*this);
+    if (proxy_helper != nullptr)
+    {
+        // Only create when running with Raft threads
+        background_service = std::make_unique<BackgroundService>(*this);
+    }
 }
 
 KVStorePtr & TMTContext::getKVStore()
@@ -93,6 +97,11 @@ GCManager & TMTContext::getGCManager()
 }
 
 Context & TMTContext::getContext()
+{
+    return context;
+}
+
+const Context & TMTContext::getContext() const
 {
     return context;
 }

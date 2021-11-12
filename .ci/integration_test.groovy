@@ -46,10 +46,6 @@ catchError {
             def label = "tidb-ci-test"
             util.runTest(label, "tics/tests/tidb-ci", tidbBranch)
         },
-        "gtest": {
-            def label = "gtest"
-            util.runTest(label, "tics/tests/gtest", tidbBranch)
-        },
         "delta merge test": {
             def label = "delta-merge-test"
             util.runTest(label, "tics/tests/delta-merge-test", tidbBranch)
