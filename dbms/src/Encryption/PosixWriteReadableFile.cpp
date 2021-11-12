@@ -21,7 +21,7 @@ extern const int CANNOT_CLOSE_FILE;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-PosixWriteReadableFile::PosixWriteReadableFile(const std::string & file_name_,
+PosixWriteReadableFile::PosixWriteReadableFile(const String & file_name_,
                                                bool truncate_when_exists_,
                                                int flags,
                                                mode_t mode,
@@ -67,6 +67,16 @@ PosixWriteReadableFile::PosixWriteReadableFile(const std::string & file_name_,
     }
 #endif
 }
+
+PosixWriteReadableFile::~PosixWriteReadableFile()
+{
+    metric_increment.destroy();
+    if (fd < 0)
+        return;
+
+    ::close(fd);
+}
+
 
 void PosixWriteReadableFile::close()
 {
@@ -115,7 +125,7 @@ int PosixWriteReadableFile::fsync()
     return ::fsync(fd);
 }
 
-void PosixWriteReadableFile::hardLink(const std::string & existing_file)
+void PosixWriteReadableFile::hardLink(const String & existing_file)
 {
     if (existing_file.empty())
     {

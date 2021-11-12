@@ -2,6 +2,7 @@
 
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/WritableFile.h>
+#include <common/types.h>
 
 #include <memory>
 

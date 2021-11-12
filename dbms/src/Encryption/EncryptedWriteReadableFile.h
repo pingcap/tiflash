@@ -15,7 +15,7 @@ public:
         : file{file_}
         , stream{std::move(stream_)} {};
 
-    ~EncryptedWriteReadableFile() override;
+    ~EncryptedWriteReadableFile() override = default;
 
     ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
 
@@ -46,7 +46,7 @@ public:
         file->hardLink(existing_file);
     }
 
-    String getFileName() const
+    String getFileName() const override
     {
         return file->getFileName();
     };

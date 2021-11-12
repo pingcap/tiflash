@@ -1,10 +1,13 @@
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
+#include <Encryption/EncryptedWriteReadableFile.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
+#include <Encryption/PosixWriteReadableFile.h>
+#include <Encryption/WriteReadableFile.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
@@ -185,6 +188,61 @@ try
     f.close();
     f.open();
     f.close();
+}
+CATCH
+
+TEST(PosixWriteReadableFileTest, WriteRead)
+try
+{
+    size_t buff_size = 123;
+    size_t buff_offset = 20;
+    char buff_write[buff_size];
+    char buff_read[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_wr_file");
+    WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path, true, -1, 0600, nullptr, nullptr);
+
+    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+}
+CATCH
+
+TEST(PosixWriteReadableFileTest, EncryptedWriteRead)
+try
+{
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
+    WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path, true, -1, 0600, nullptr, nullptr);
+
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
+    auto encryption_info = key_manager->newFile("encryption");
+    BlockAccessCipherStreamPtr cipher_stream
+        = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+
+    WriteReadableFilePtr enc_file = std::make_shared<EncryptedWriteReadableFile>(file, cipher_stream);
+
+    size_t buff_size = 123;
+    size_t buff_offset = 20;
+    char buff_write[buff_size];
+    char buff_read[buff_size];
+    char buff_write_cpy[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+    memcpy(buff_write_cpy, buff_write, buff_size);
+
+    ASSERT_EQ(buff_size, enc_file->pwrite(buff_write, buff_size, buff_offset));
+    ASSERT_EQ(buff_size, enc_file->pread(buff_read, buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write_cpy, buff_read, buff_size), 0);
 }
 CATCH
 

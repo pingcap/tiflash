@@ -17,7 +17,7 @@ class PosixWriteReadableFile : public WriteReadableFile
 {
 public:
     PosixWriteReadableFile(
-        const std::string & file_name_,
+        const String & file_name_,
         bool truncate_when_exists_,
         int flags,
         mode_t mode,
@@ -40,11 +40,11 @@ public:
 
     int fsync() override;
 
-    void hardLink(const std::string & existing_file) override;
+    void hardLink(const String & existing_file) override;
 
     ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
-    std::string getFileName() const override
+    String getFileName() const override
     {
         return file_name;
     }

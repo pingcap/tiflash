@@ -1,5 +1,3 @@
-#pragma once
-
 #include <Encryption/EncryptedWriteReadableFile.h>
 
 
