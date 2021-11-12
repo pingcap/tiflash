@@ -64,5 +64,25 @@ private:
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 
+/**
+ * Create a simple stream that read all blocks on default.
+ * @param context Database context.
+ * @param file DMFile pointer.
+ * @return A shared pointer of an input stream
+ */
+inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context & context, const DMFilePtr & file)
+{
+    return std::make_shared<DMFileBlockInputStream>(context,
+                                                    DB::DM::MAX_UINT64,
+                                                    false,
+                                                    0,
+                                                    file,
+                                                    file->getColumnDefines(),
+                                                    DB::DM::RowKeyRanges{},
+                                                    DB::DM::RSOperatorPtr{},
+                                                    DB::DM::ColumnCachePtr{},
+                                                    DB::DM::IdSetPtr{});
+}
+
 } // namespace DM
 } // namespace DB

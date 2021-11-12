@@ -259,6 +259,20 @@ public:
 
     DMConfigurationOpt & getConfiguration() { return configuration; }
 
+    /**
+     * Return all column defines. This is useful if you want to read all data from a dmfile.
+     * @return All columns
+     */
+    ColumnDefines getColumnDefines()
+    {
+        ColumnDefines results;
+        for (const auto & i : this->column_stats)
+        {
+            results.emplace_back(i.first, "", i.second.type);
+        }
+        return results;
+    }
+
 private:
     DMFile(UInt64 file_id_,
            UInt64 ref_id_,

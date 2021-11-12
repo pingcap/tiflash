@@ -1,9 +1,11 @@
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 
 #include <boost/program_options.hpp>
 #include <iostream>
+#include <random>
 namespace bpo = boost::program_options;
 
 namespace DTTool::Inspect
@@ -100,6 +102,18 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 }
                 std::cout << "[success]" << std::endl;
             }
+        }
+        std::cout << "examine all data blocks: ";
+        std::cout.flush();
+        {
+            auto stream = DB::DM::createSimpleBlockInputStream(context, dmfile);
+            size_t counter = 0;
+            stream->readPrefix();
+            while (stream->read()) {
+                counter++;
+            }
+            stream->readSuffix();
+            std::cout << "[success] ( " << counter << " blocks )" << std::endl;
         }
     }
     return 0;
