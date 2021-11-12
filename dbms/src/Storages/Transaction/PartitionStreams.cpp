@@ -130,7 +130,8 @@ static void writeRegionDataToStorage(
             block = createBlockSortByColumnID(decoding_schema_snapshot);
 
             auto reader = RegionBlockReader(storage->engineType());
-            if (!reader.read(decoding_schema_snapshot->pk_type, decoding_schema_snapshot, block, data_list_read, force_decode))
+            ok = reader.read(decoding_schema_snapshot->pk_type, decoding_schema_snapshot, block, data_list_read, force_decode);
+            if (!ok)
                 return false;
             region_decode_cost = watch.elapsedMilliseconds();
             GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(region_decode_cost / 1000.0);
