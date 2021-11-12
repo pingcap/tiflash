@@ -109,7 +109,7 @@ private:
     void init()
     {
         size_t pack_count = dmfile->getPacks();
-        auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) && rowkey_ranges.empty();
+        auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
         if (!read_all_packs)
         {
             tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
