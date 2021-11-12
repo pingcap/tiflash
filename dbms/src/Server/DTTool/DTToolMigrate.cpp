@@ -5,6 +5,8 @@
 #include <IO/IOSWrapper.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <fcntl.h>
 
 #include <boost/program_options.hpp>
@@ -94,215 +96,122 @@ struct DirLock
     }
 };
 
+struct MigrationHouseKeeper
+{
+    bool success;
+    bool no_keep;
+    Poco::File migration_temp_dir;
+    Poco::File migration_target_dir;
+    size_t migration_file;
+
+    MigrationHouseKeeper(std::string migration_temp_dir,
+                         std::string migration_target_dir,
+                         size_t migration_file,
+                         bool no_keep)
+        : success(false)
+        , no_keep(no_keep)
+        , migration_temp_dir(migration_temp_dir)
+        , migration_target_dir(migration_target_dir)
+        , migration_file(migration_file)
+
+    {
+        if (!this->migration_temp_dir.createDirectory())
+        {
+            throw DB::Exception("cannot create migration temp dir " + migration_temp_dir);
+        }
+    }
+
+    void markSuccess()
+    {
+        success = true;
+    }
+
+    ~MigrationHouseKeeper() noexcept(false)
+    {
+        if (success)
+        {
+            auto target_path = fmt::format("{}/dmf_{}", migration_target_dir.path(), migration_file);
+            Poco::File old{target_path};
+            if (no_keep)
+            {
+                old.remove(true);
+            }
+            else
+            {
+                old.moveTo(fmt::format("{}.old", target_path));
+            }
+            Poco::File target{fmt::format("{}/dmf_{}", migration_temp_dir.path(), migration_file)};
+            target.copyTo(target_path);
+        }
+        migration_temp_dir.remove(true);
+    }
+};
+
 
 int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
 {
-    DirLock _lock{args.workdir};
-    auto migrate_path = args.workdir + "/" + "dmf_" + DB::toString(args.file_id) + ".migrate/";
-    auto fp = context.getFileProvider();
-    auto src_file = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-    std::cout << "source version: " << (src_file->getConfiguration() ? 2 : 1) << std::endl;
-    std::cout << "source bytes: " << (src_file->getBytesOnDisk()) << std::endl;
-    std::cout << "creating migration temporary directory" << std::endl;
-    if (!args.dry_mode && !Poco::File(migrate_path).createDirectory())
+    DirLock lock{args.workdir};
     {
-        std::cerr << "could not create: " << migrate_path << std::endl;
-        return 1;
-    }
-    DB::DM::DMConfigurationOpt option{};
-    if (args.version == 2)
-    {
-        DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
-        option.emplace(std::map<std::string, std::string>{}, args.frame, args.algorithm);
-    }
-    else
-    {
-        DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V2;
-    }
-    auto & embedded_checksums = option->getEmbeddedChecksum();
-    // meta.txt
-    {
-        auto source_path = src_file->metaPath();
-        auto target_path = migrate_path + src_file->metaFileName();
-        std::cout << "migrating " << src_file->metaFileName() << " from " << source_path << " to " << target_path << std::endl;
-        auto file = Poco::File(source_path);
-        if (!args.dry_mode && file.exists())
+        MigrationHouseKeeper keeper{
+            fmt::format("{}/.migration", args.workdir),
+            args.workdir,
+            args.file_id,
+            args.no_keep};
+        auto src_file = DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
+        std::cout << "source version: " << (src_file->getConfiguration() ? 2 : 1) << std::endl;
+        std::cout << "source bytes: " << (src_file->getBytesOnDisk()) << std::endl;
+        std::cout << "creating migration temporary directory" << std::endl;
+        DB::DM::DMConfigurationOpt option{};
+        if (args.version == 2)
         {
-            auto meta_size = Poco::File(source_path).getSize();
-            auto file_buf = DB::DM::openForRead(fp, source_path, src_file->encryptionMetaPath(), meta_size);
-            auto meta_buf = std::vector<char>(meta_size);
-
-            file_buf.readBig(meta_buf.data(), meta_size);
-
-            // override first format line:
-            {
-                auto buffer = DB::WriteBufferFromVector(meta_buf);
-                writeString("DTFile format: ", buffer);
-                writeIntText(option ? DB::DMFileFormat::V2 : DB::DMFileFormat::V1, buffer);
-                writeString("\n", buffer);
-            }
-
-            if (option)
-            {
-                auto digest = option->createUnifiedDigest();
-                digest->update(meta_buf.data(), meta_size);
-                embedded_checksums[src_file->metaFileName()] = digest->raw();
-            }
-
-            DB::WriteBufferFromFileProvider buf(fp, target_path, src_file->encryptionMetaPath(), false, nullptr, 4096);
-            buf.write(meta_buf.data(), meta_size);
-            buf.sync();
+            DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
+            option.emplace(std::map<std::string, std::string>{}, args.frame, args.algorithm);
         }
-    }
-    // pack property
-    {
-        auto source_path = src_file->packPropertyPath();
-        auto target_path = migrate_path + src_file->packPropertyFileName();
-        std::cout << "migrating " << src_file->packPropertyFileName() << " from " << source_path << " to " << target_path << std::endl;
-        auto file = Poco::File(source_path);
-        if (!args.dry_mode && file.exists())
+        else
         {
-            file.copyTo(target_path);
-            if (option)
-            {
-                auto digest = option->createUnifiedDigest();
-                auto property = src_file->pack_properties.SerializeAsString();
-                digest->update(property.data(), property.size());
-                embedded_checksums[src_file->packPropertyFileName()] = digest->raw();
-            }
+            DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V2;
         }
-    }
 
-    auto prefix = args.workdir + "/dmf_" + DB::toString(args.file_id);
+        std::cout << "creating new dmfile" << std::endl;
+        auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), false, std::move(option));
 
-    std::vector<std::string> sub;
-    {
-        auto file = Poco::File{prefix};
-        file.list(sub);
-    }
-    for (auto & i : sub)
-    {
-        if (!isRecognizable(*src_file, i))
+        std::cout << "creating input stream" << std::endl;
+        auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);
+
+        std::cout << "creating output stream" << std::endl;
+        auto output_stream = DB::DM::DMFileBlockOutputStream(context, new_file, src_file->getColumnDefines());
+
+        input_stream->readPrefix();
+        if (!args.dry_mode)
+            output_stream.writePrefix();
+        auto stat_iter = src_file->pack_stats.begin();
+        auto properties_iter = src_file->pack_properties.property().begin();
+        size_t counter = 0;
+        while (auto block = input_stream->read())
         {
-            std::cerr << "target file: " << i << " is not recognizable by this tool" << std::endl;
-        }
-        if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
-        {
-            auto source_path = src_file->path() + "/" + i;
-            auto target_path = migrate_path + i;
-            std::cout << "migrating " << i << " from " << source_path << " to " << target_path << std::endl;
-
+            std::cout << "migrating block " << counter++ << std::endl;
             if (!args.dry_mode)
-            {
-                DB::ReadBufferPtr read_buffer;
-                if (src_file->getConfiguration())
-                {
-                    read_buffer = DB::createReadBufferFromFileBaseByFileProvider(
-                        fp,
-                        source_path,
-                        DB::EncryptionPath(source_path, i),
-                        src_file->getConfiguration()->getChecksumFrameLength(),
-                        nullptr,
-                        src_file->getConfiguration()->getChecksumAlgorithm(),
-                        src_file->getConfiguration()->getChecksumFrameLength());
-                }
-                else
-                {
-                    read_buffer = DB::createReadBufferFromFileBaseByFileProvider(
-                        fp,
-                        source_path,
-                        DB::EncryptionPath(source_path, i),
-                        DBMS_DEFAULT_BUFFER_SIZE,
-                        0,
-                        nullptr);
-                }
-                DB::WriteBufferPtr write_buffer;
-                size_t buffer_size;
-                if (option)
-                {
-                    write_buffer = DB::createWriteBufferFromFileBaseByFileProvider(
-                        fp,
-                        target_path,
-                        DB::EncryptionPath(source_path, i), // use original path
-                        false,
-                        nullptr,
-                        option->getChecksumAlgorithm(),
-                        option->getChecksumFrameLength());
-                    buffer_size = option->getChecksumFrameLength();
-                }
-                else
-                {
-                    write_buffer = DB::createWriteBufferFromFileBaseByFileProvider(
-                        fp,
-                        target_path,
-                        DB::EncryptionPath(source_path, i), // use original path
-                        false,
-                        nullptr,
-                        DBMS_DEFAULT_BUFFER_SIZE,
-                        0,
-                        DBMS_DEFAULT_BUFFER_SIZE);
-                    buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
-                }
-                while (auto size = read_buffer->readBig(write_buffer->buffer().begin(), buffer_size))
-                {
-                    write_buffer->buffer().resize(size);
-                    write_buffer->position() = write_buffer->buffer().begin() + size;
-                    write_buffer->next();
-                }
-            }
+                output_stream.write(
+                    block,
+                    {properties_iter->num_rows(),
+                     stat_iter->not_clean,
+                     properties_iter->gc_hint_version()});
+            stat_iter++;
+            properties_iter++;
         }
-    }
-
-    if (option)
-    {
-        auto target_path = migrate_path + "config";
-        std::cout << "writing new config to " << target_path << std::endl;
+        input_stream->readSuffix();
         if (!args.dry_mode)
         {
-            DB::WriteBufferFromFileProvider buf(fp, target_path, src_file->encryptionMetaPath(), false, nullptr, 4096);
-            DB::OutputStreamWrapper wrapper(buf);
-            wrapper << *option;
-            buf.sync();
+            output_stream.writeSuffix();
+            keeper.markSuccess();
         }
-    }
 
-    // rename old dmfile
-    auto original_path = src_file->path();
-    auto backup_path = src_file->path() + ".old";
-    {
-        std::cout << "renaming old dmfile to " << backup_path << std::endl;
+        std::cout << "checking meta status for new file" << std::endl;
         if (!args.dry_mode)
         {
-            auto file = Poco::File(original_path);
-            file.renameTo(backup_path);
+            DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 1, keeper.migration_temp_dir.path(), DB::DM::DMFile::ReadMetaMode::all());
         }
     }
-    // rename new dmfile
-    {
-        std::cout << "renaming new dmfile to " << original_path << std::endl;
-        if (!args.dry_mode)
-        {
-            auto file = Poco::File(migrate_path);
-            file.renameTo(original_path);
-        }
-    }
-
-    if (args.no_keep)
-    {
-        std::cout << "removing " << backup_path << std::endl;
-        if (!args.dry_mode)
-        {
-            auto file = Poco::File(backup_path);
-            file.remove(true);
-        }
-    }
-
-    std::cout << "checking meta status for " << original_path << std::endl;
-    if (!args.dry_mode)
-    {
-        DB::DM::DMFile::restore(fp, args.file_id, 1, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-    }
-
     std::cout << "migration finished" << std::endl;
 
     return 0;
