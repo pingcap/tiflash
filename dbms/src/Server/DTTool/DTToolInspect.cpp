@@ -109,7 +109,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
             auto stream = DB::DM::createSimpleBlockInputStream(context, dmfile);
             size_t counter = 0;
             stream->readPrefix();
-            while (stream->read()) {
+            while (stream->read())
+            {
                 counter++;
             }
             stream->readSuffix();
