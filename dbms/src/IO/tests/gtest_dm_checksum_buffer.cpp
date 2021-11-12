@@ -16,6 +16,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/Page/PageUtil.h>
+#include <fmt/format.h>
 
 #include <random>
 
@@ -68,8 +69,7 @@ std::tuple<off_t, int, size_t, off_t> randomOperation(size_t size, off_t current
     return {offset, whence, length, update};
 }
 
-
-constexpr char CHECKSUM_BUFFER_TEST_PATH[] = "/tmp/tiflash_dm_checksum_buffer_gtest";
+constexpr char CHECKSUM_BUFFER_TEST_PATH[] = "/tmp/tiflash_checksum_gtest";
 
 auto prepareIO()
 {
@@ -82,29 +82,34 @@ auto prepareIO()
 } // namespace
 
 #define TEST_STREAM(ALGO) \
-    TEST(ChecksumBuffer, ALGO##Streaming) { runStreamingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+    TEST(ChecksumBuffer##ALGO, Streaming) { runStreamingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
 
 template <class D>
 void runStreamingTest()
 {
+    const std::string filename = fmt::format(
+        "{}_{}_{}",
+        CHECKSUM_BUFFER_TEST_PATH,
+        ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name(),
+        ::testing::UnitTest::GetInstance()->current_test_info()->name());
     for (auto size = 1; size <= 1024 * 1024; size <<= 1)
     {
         auto [data, seed] = randomData(size);
         {
-            auto writable_file_ptr = std::make_shared<PosixWritableFile>(CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);
+            auto writable_file_ptr = std::make_shared<PosixWritableFile>(filename, true, -1, 0755);
             auto buffer = DB::FramedChecksumWriteBuffer<D>(writable_file_ptr);
             buffer.write(data.data(), data.size());
         }
 
         {
-            auto readable_file_ptr = std::make_shared<PosixRandomAccessFile>(CHECKSUM_BUFFER_TEST_PATH, -1);
+            auto readable_file_ptr = std::make_shared<PosixRandomAccessFile>(filename, -1);
             auto buffer = DB::FramedChecksumReadBuffer<D>(readable_file_ptr);
             auto cmp = std::vector<char>(size);
             ASSERT_EQ(buffer.read(cmp.data(), size), size) << "random seed: " << seed << std::endl;
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    Poco::File file{CHECKSUM_BUFFER_TEST_PATH};
+    Poco::File file{filename};
     file.remove();
 }
 
@@ -115,21 +120,26 @@ TEST_STREAM(City128)
 TEST_STREAM(XXH3)
 
 #define TEST_SEEK(ALGO) \
-    TEST(ChecksumBuffer, ALGO##Seeking) { runSeekingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+    TEST(ChecksumBuffer##ALGO, Seeking) { runSeekingTest<Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
 
 template <class D>
 void runSeekingTest()
 {
+    const std::string filename = fmt::format(
+        "{}_{}_{}",
+        CHECKSUM_BUFFER_TEST_PATH,
+        ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name(),
+        ::testing::UnitTest::GetInstance()->current_test_info()->name());
     for (auto size = 1024; size <= 4096 * 1024; size <<= 1)
     {
         auto [data, seed] = randomData(size);
         {
-            auto writable_file_ptr = std::make_shared<PosixWritableFile>(CHECKSUM_BUFFER_TEST_PATH, true, -1, 0755);
+            auto writable_file_ptr = std::make_shared<PosixWritableFile>(filename, true, -1, 0755);
             auto buffer = DB::FramedChecksumWriteBuffer<D>(writable_file_ptr);
             buffer.write(data.data(), data.size());
         }
         {
-            auto readable_file_ptr = std::make_shared<PosixRandomAccessFile>(CHECKSUM_BUFFER_TEST_PATH, -1);
+            auto readable_file_ptr = std::make_shared<PosixRandomAccessFile>(filename, -1);
             auto buffer = DB::FramedChecksumReadBuffer<D>(readable_file_ptr);
             off_t current = 0;
             for (auto i = 0; i < 1024; ++i)
@@ -149,7 +159,7 @@ void runSeekingTest()
             }
         };
     }
-    Poco::File file{CHECKSUM_BUFFER_TEST_PATH};
+    Poco::File file{filename};
     file.remove();
 }
 
@@ -162,17 +172,22 @@ TEST_SEEK(XXH3)
 template <class D>
 void runReadBigTest()
 {
+    const std::string filename = fmt::format(
+        "{}_{}_{}",
+        CHECKSUM_BUFFER_TEST_PATH,
+        ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name(),
+        ::testing::UnitTest::GetInstance()->current_test_info()->name());
     auto [limiter, provider] = prepareIO();
     size_t size = 1024 * 1024 * 4;
     auto [data, seed] = randomData(size);
     auto compare = data;
     {
-        auto file = provider->newWritableFile("/tmp/test", {"/tmp/test.enc", "test.enc"}, true, true, limiter->getWriteLimiter());
+        auto file = provider->newWritableFile(filename, {"/tmp/test.enc", "test.enc"}, true, true, limiter->getWriteLimiter());
         auto buffer = FramedChecksumWriteBuffer<D>(file);
         buffer.write(data.data(), data.size());
     }
     {
-        auto file = provider->newRandomAccessFile("/tmp/test", {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
+        auto file = provider->newRandomAccessFile(filename, {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
         auto buffer = FramedChecksumReadBuffer<D>(file);
         buffer.readBig(compare.data(), compare.size());
         ASSERT_EQ(std::memcmp(compare.data(), data.data(), data.size()), 0) << "seed: " << seed;
@@ -180,18 +195,18 @@ void runReadBigTest()
 
     for (size_t i = 1; i <= data.size() / 2; i <<= 1)
     {
-        auto file = provider->newRandomAccessFile("/tmp/test", {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
+        auto file = provider->newRandomAccessFile(filename, {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
         auto buffer = FramedChecksumReadBuffer<D>(file);
         buffer.seek(static_cast<ssize_t>(i));
         buffer.readBig(compare.data(), i);
         ASSERT_EQ(std::memcmp(compare.data(), data.data() + i, i), 0) << "seed: " << seed;
     }
-    Poco::File file{"/tmp/test"};
+    Poco::File file{filename};
     file.remove();
 }
 
 #define TEST_BIG_READING(ALGO) \
-    TEST(ChecksumBuffer, ALGO##BigReading) { runReadBigTest<DB::Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
+    TEST(ChecksumBuffer##ALGO, BigReading) { runReadBigTest<DB::Digest::ALGO>(); } // NOLINT(cert-err58-cpp)
 
 TEST_BIG_READING(None)
 TEST_BIG_READING(CRC32)
@@ -202,6 +217,11 @@ TEST_BIG_READING(XXH3)
 template <ChecksumAlgo D>
 void runStackingTest()
 {
+    const std::string filename = fmt::format(
+        "{}_{}_{}",
+        CHECKSUM_BUFFER_TEST_PATH,
+        ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name(),
+        ::testing::UnitTest::GetInstance()->current_test_info()->name());
     auto [limiter, provider] = prepareIO();
     auto config = DM::DMChecksumConfig{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
     for (auto size = 1024; size <= 4096 * 1024; size <<= 1)
@@ -210,7 +230,7 @@ void runStackingTest()
         {
             auto buffer = createWriteBufferFromFileBaseByFileProvider(
                 provider,
-                "/tmp/test",
+                filename,
                 {"/tmp/test.enc", "test.enc"},
                 true,
                 limiter->getReadLimiter(),
@@ -222,7 +242,7 @@ void runStackingTest()
         {
             auto buffer = CompressedReadBufferFromFileProvider<false>(
                 provider,
-                "/tmp/test",
+                filename,
                 {"/tmp/test.enc", "test.enc"},
                 config.getChecksumFrameLength(),
                 limiter->getReadLimiter(),
@@ -233,12 +253,12 @@ void runStackingTest()
             ASSERT_EQ(data, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    Poco::File file{"/tmp/test"};
+    Poco::File file{filename};
     file.remove();
 }
 
 #define TEST_STACKING(ALGO) \
-    TEST(DMChecksumBuffer, ALGO##Stacking) { runStackingTest<ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
+    TEST(DMChecksumBuffer##ALGO, Stacking) { runStackingTest<ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
 
 TEST_STACKING(None)
 TEST_STACKING(CRC32)
@@ -250,6 +270,11 @@ TEST_STACKING(XXH3)
 template <ChecksumAlgo D>
 void runStackedSeekingTest()
 {
+    const std::string filename = fmt::format(
+        "{}_{}_{}",
+        CHECKSUM_BUFFER_TEST_PATH,
+        ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name(),
+        ::testing::UnitTest::GetInstance()->current_test_info()->name());
     auto local_engine = std::mt19937_64{seed};
     auto [limiter, provider] = prepareIO();
     auto config = DM::DMChecksumConfig{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
@@ -259,7 +284,7 @@ void runStackedSeekingTest()
     {
         auto buffer = createWriteBufferFromFileBaseByFileProvider(
             provider,
-            "/tmp/test",
+            filename,
             {"/tmp/test.enc", "test.enc"},
             true,
             limiter->getWriteLimiter(),
@@ -285,7 +310,7 @@ void runStackedSeekingTest()
     {
         auto buffer = CompressedReadBufferFromFileProvider<false>(
             provider,
-            "/tmp/test",
+            filename,
             {"/tmp/test.enc", "test.enc"},
             config.getChecksumFrameLength(),
             limiter->getReadLimiter(),
@@ -300,12 +325,12 @@ void runStackedSeekingTest()
             ASSERT_EQ(x, cmp) << "random seed: " << seed << std::endl;
         }
     }
-    Poco::File file{"/tmp/test"};
+    Poco::File file{filename};
     file.remove();
 }
 
 #define TEST_STACKED_SEEKING(ALGO) \
-    TEST(DMChecksumBuffer, ALGO##StackedSeeking) { runStackedSeekingTest<DB::ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
+    TEST(DMChecksumBuffer##ALGO, StackedSeeking) { runStackedSeekingTest<DB::ChecksumAlgo::ALGO>(); } // NOLINT(cert-err58-cpp)
 
 TEST_STACKED_SEEKING(None)
 TEST_STACKED_SEEKING(CRC32)
