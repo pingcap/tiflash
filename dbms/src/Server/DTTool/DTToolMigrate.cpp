@@ -193,9 +193,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             if (!args.dry_mode)
                 output_stream.write(
                     block,
-                    {properties_iter->num_rows(),
-                     stat_iter->not_clean,
-                     properties_iter->gc_hint_version()});
+                    {stat_iter->not_clean, properties_iter->num_rows(), properties_iter->gc_hint_version()});
             stat_iter++;
             properties_iter++;
         }
