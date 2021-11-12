@@ -6,12 +6,16 @@
 
 namespace DB
 {
+inline LogWithPrefixPtr getMPPTaskLog(const String & name, const MPPTaskId & mpp_task_id_)
+{
+    return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), mpp_task_id_.toString());
+}
+
 inline LogWithPrefixPtr getMPPTaskLog(const LogWithPrefixPtr & log, const String & name, const MPPTaskId & mpp_task_id_ = MPPTaskId::unknown_mpp_task_id)
 {
     if (log == nullptr)
     {
-        String prefix = mpp_task_id_.isUnknown() ? "[task: N/A query: N/A] " : fmt::format("[task: {} query: {}] ", mpp_task_id_.task_id, mpp_task_id_.start_ts);
-        return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), prefix);
+        return getMPPTaskLog(name, mpp_task_id_);
     }
 
     return log->append(name);
