@@ -6,7 +6,7 @@
 
 namespace DB
 {
-inline LogWithPrefixPtr newMPPTaskLog(const String & name, const MPPTaskId & mpp_task_id_)
+inline LogWithPrefixPtr getMPPTaskLog(const String & name, const MPPTaskId & mpp_task_id_)
 {
     return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), mpp_task_id_.toString());
 }
@@ -15,7 +15,7 @@ inline LogWithPrefixPtr getMPPTaskLog(const LogWithPrefixPtr & log, const String
 {
     if (log == nullptr)
     {
-        return newMPPTaskLog(name, mpp_task_id_);
+        return getMPPTaskLog(name, mpp_task_id_);
     }
 
     return log->append(name);

@@ -66,10 +66,10 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
     // TODO: cancel tasks in order rather than issuing so many threads to cancel tasks
     std::vector<std::thread> cancel_workers;
-    for (const auto & task_it : task_set.task_map)
+    for (const auto & task : task_set.task_map)
     {
-        ss << task_it.first.toString() << " ";
-        std::thread t(&MPPTask::cancel, task_it.second, std::ref(reason));
+        ss << task.first.toString() << " ";
+        std::thread t(&MPPTask::cancel, task.second, std::ref(reason));
         cancel_workers.push_back(std::move(t));
     }
     LOG_WARNING(log, ss.str());

@@ -42,7 +42,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
-    , log(newMPPTaskLog("MPPTask", id))
+    , log(getMPPTaskLog("MPPTask", id))
 {}
 
 MPPTask::~MPPTask()

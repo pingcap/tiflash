@@ -28,7 +28,7 @@ private:
     static constexpr Int64 unknown_task_id = -1;
 };
 
-bool operator==(const MPPTaskId& lid, const MPPTaskId& rid)
+bool operator==(const MPPTaskId & lid, const MPPTaskId & rid)
 {
     return lid.start_ts == rid.start_ts && lid.task_id == rid.task_id;
 }
