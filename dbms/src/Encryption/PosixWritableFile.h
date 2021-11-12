@@ -19,10 +19,6 @@ namespace DB
 {
 class PosixWritableFile : public WritableFile
 {
-protected:
-    // Only add metrics when file is actually added in `doOpenFile`.
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
-
 public:
     PosixWritableFile(
         const std::string & file_name_,
@@ -55,6 +51,8 @@ private:
     void doOpenFile(bool truncate_when_exists_, int flags, mode_t mode);
 
 private:
+    // Only add metrics when file is actually added in `doOpenFile`.
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
     std::string file_name;
     int fd;
     WriteLimiterPtr write_limiter;

@@ -51,11 +51,9 @@ public:
 
     void close() override;
 
-protected:
-    // Only add metrics when file is actually added in `doOpenFile`.
+private:
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
 
-private:
     String file_name;
     int fd;
     WriteLimiterPtr write_limiter;
