@@ -9,4 +9,9 @@ String MPPTaskId::toString() const
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
+
+bool operator==(const MPPTaskId & lid, const MPPTaskId & rid)
+{
+    return lid.start_ts == rid.start_ts && lid.task_id == rid.task_id;
+}
 } // namespace DB
