@@ -3,15 +3,15 @@
 
 namespace DB
 {
-bool MPPTaskId::operator<(const MPPTaskId & rhs) const
-{
-    return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id);
-}
-
 String MPPTaskId::toString() const
 {
     return isUnknown() ? "<query:N/A,task:N/A>" : fmt::format("<query:{},task:{}>", start_ts, task_id);
 }
 
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
+
+bool operator==(const MPPTaskId & lid, const MPPTaskId & rid)
+{
+    return lid.start_ts == rid.start_ts && lid.task_id == rid.task_id;
+}
 } // namespace DB

@@ -17,6 +17,7 @@
 #include <atomic>
 #include <boost/noncopyable.hpp>
 #include <memory>
+#include <unordered_map>
 
 namespace DB
 {
@@ -94,7 +95,7 @@ private:
     MPPTunnelSetPtr tunnel_set;
 
     // which targeted task we should send data by which tunnel.
-    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
+    std::unordered_map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
     MPPTaskManager * manager = nullptr;
 
@@ -107,6 +108,6 @@ private:
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
-using MPPTaskMap = std::map<MPPTaskId, MPPTaskPtr>;
+using MPPTaskMap = std::unordered_map<MPPTaskId, MPPTaskPtr>;
 
 } // namespace DB
