@@ -104,6 +104,7 @@ struct MigrationHouseKeeper
     Poco::File migration_target_dir;
     size_t migration_file;
 
+    DB::StorageFormatVersion old_version;
     MigrationHouseKeeper(std::string migration_temp_dir,
                          std::string migration_target_dir,
                          size_t migration_file,
@@ -113,7 +114,7 @@ struct MigrationHouseKeeper
         , migration_temp_dir(migration_temp_dir)
         , migration_target_dir(migration_target_dir)
         , migration_file(migration_file)
-
+        , old_version(DB::STORAGE_FORMAT_CURRENT)
     {
         if (!this->migration_temp_dir.createDirectory())
         {
@@ -126,8 +127,15 @@ struct MigrationHouseKeeper
         success = true;
     }
 
+    void setStorageVersion(DB::StorageFormatVersion version)
+    {
+        old_version = DB::STORAGE_FORMAT_CURRENT;
+        DB::STORAGE_FORMAT_CURRENT = version;
+    }
+
     ~MigrationHouseKeeper() noexcept(false)
     {
+        DB::STORAGE_FORMAT_CURRENT = old_version;
         if (success)
         {
             auto target_path = fmt::format("{}/dmf_{}", migration_target_dir.path(), migration_file);
@@ -150,10 +158,13 @@ struct MigrationHouseKeeper
 
 int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
 {
+    // exclude other dttool from running on the same directory
     DirLock lock{args.workdir};
     // from this part, the base daemon is running, so we use logger instead
     auto * logger = &Poco::Logger::get("DTToolMigration");
     {
+        // the HouseKeeper is to make sure the directories will be removed or renamed
+        // after the running.
         MigrationHouseKeeper keeper{
             fmt::format("{}/.migration", args.workdir),
             args.workdir,
@@ -164,14 +175,16 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         LOG_INFO(logger, "source bytes: " << src_file->getBytesOnDisk());
         LOG_INFO(logger, "migration temporary directory: " << keeper.migration_temp_dir.path().c_str());
         DB::DM::DMConfigurationOpt option{};
+
+        // if new format is the target, we construct a config file.
         if (args.version == 2)
         {
-            DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
+            keeper.setStorageVersion(DB::STORAGE_FORMAT_V3);
             option.emplace(std::map<std::string, std::string>{}, args.frame, args.algorithm);
         }
         else
         {
-            DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V2;
+            keeper.setStorageVersion(DB::STORAGE_FORMAT_V2);
         }
 
         LOG_INFO(logger, "creating new dmfile");
@@ -189,6 +202,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         auto stat_iter = src_file->pack_stats.begin();
         auto properties_iter = src_file->pack_properties.property().begin();
         size_t counter = 0;
+        // iterate all blocks and rewrite them to new dmfile
         while (auto block = input_stream->read())
         {
             LOG_INFO(logger, "migrating block " << counter++ << " ( size: " << block.bytes() << " )");
