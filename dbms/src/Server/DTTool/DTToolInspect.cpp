@@ -25,7 +25,7 @@ static constexpr char INSPECT_HELP[] =
 int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 {
     // from this part, the base daemon is running, so we use logger instead
-    auto * logger = &Poco::Logger::get("DTToolMigration");
+    auto * logger = &Poco::Logger::get("DTToolInspect");
     auto black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
     SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
     auto consume = [&](DB::ReadBuffer & t) {
