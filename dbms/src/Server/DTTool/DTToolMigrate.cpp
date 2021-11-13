@@ -151,6 +151,8 @@ struct MigrationHouseKeeper
 int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
 {
     DirLock lock{args.workdir};
+    // from this part, the base daemon is running, so we use logger instead
+    auto * logger = &Poco::Logger::get("DTToolMigration");
     {
         MigrationHouseKeeper keeper{
             fmt::format("{}/.migration", args.workdir),
@@ -158,9 +160,9 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             args.file_id,
             args.no_keep};
         auto src_file = DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-        std::cout << "source version: " << (src_file->getConfiguration() ? 2 : 1) << std::endl;
-        std::cout << "source bytes: " << (src_file->getBytesOnDisk()) << std::endl;
-        std::cout << "creating migration temporary directory" << std::endl;
+        LOG_INFO(logger, "source version: " << (src_file->getConfiguration() ? 2 : 1));
+        LOG_INFO(logger, "source bytes: " << src_file->getBytesOnDisk());
+        LOG_INFO(logger, "migration temporary directory: " << keeper.migration_temp_dir.path().c_str());
         DB::DM::DMConfigurationOpt option{};
         if (args.version == 2)
         {
@@ -172,13 +174,13 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V2;
         }
 
-        std::cout << "creating new dmfile" << std::endl;
+        LOG_INFO(logger, "creating new dmfile");
         auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), false, std::move(option));
 
-        std::cout << "creating input stream" << std::endl;
+        LOG_INFO(logger, "creating input stream");
         auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);
 
-        std::cout << "creating output stream" << std::endl;
+        LOG_INFO(logger, "creating output stream");
         auto output_stream = DB::DM::DMFileBlockOutputStream(context, new_file, src_file->getColumnDefines());
 
         input_stream->readPrefix();
@@ -189,7 +191,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         size_t counter = 0;
         while (auto block = input_stream->read())
         {
-            std::cout << "migrating block " << counter++ << std::endl;
+            LOG_INFO(logger, "migrating block " << counter++ << " ( size: " << block.bytes() << " )");
             if (!args.dry_mode)
                 output_stream.write(
                     block,
@@ -204,13 +206,13 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             keeper.markSuccess();
         }
 
-        std::cout << "checking meta status for new file" << std::endl;
+        LOG_INFO(logger, "checking meta status for new file");
         if (!args.dry_mode)
         {
             DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 1, keeper.migration_temp_dir.path(), DB::DM::DMFile::ReadMetaMode::all());
         }
     }
-    std::cout << "migration finished" << std::endl;
+    LOG_INFO(logger, "migration finished");
 
     return 0;
 }

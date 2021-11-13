@@ -24,6 +24,8 @@ static constexpr char INSPECT_HELP[] =
 
 int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 {
+    // from this part, the base daemon is running, so we use logger instead
+    auto * logger = &Poco::Logger::get("DTToolMigration");
     auto black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
     SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
     auto consume = [&](DB::ReadBuffer & t) {
@@ -31,37 +33,38 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
     };
     auto fp = context.getFileProvider();
     auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-    std::cout << "bytes on disk: " << dmfile->getBytesOnDisk() << std::endl;
-    std::cout << "single file: " << dmfile->isSingleFileMode() << std::endl;
+
+    LOG_INFO(logger, "bytes on disk: " << dmfile->getBytesOnDisk());
+    LOG_INFO(logger, "single file: " << dmfile->isSingleFileMode());
     if (auto conf = dmfile->getConfiguration())
     {
-        std::cout << "with new checksum: true" << std::endl;
+        LOG_INFO(logger, "with new checksum: true" << std::endl);
         switch (conf->getChecksumAlgorithm())
         {
         case DB::ChecksumAlgo::None:
-            std::cout << "checksum algorithm: none" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: none");
             break;
         case DB::ChecksumAlgo::CRC32:
-            std::cout << "checksum algorithm: crc32" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: crc32");
             break;
         case DB::ChecksumAlgo::CRC64:
-            std::cout << "checksum algorithm: crc64" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: crc64");
             break;
         case DB::ChecksumAlgo::City128:
-            std::cout << "checksum algorithm: city128" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: city128");
             break;
         case DB::ChecksumAlgo::XXH3:
-            std::cout << "checksum algorithm: xxh3" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: xxh3");
             break;
         }
         for (const auto & [name, msg] : conf->getDebugInfo())
         {
-            std::cout << name << ": " << msg << std::endl;
+            LOG_INFO(logger, name << ": " << msg);
         }
     }
     if (args.check && dmfile->isSingleFileMode())
     {
-        std::cerr << "single file integrity checking is not yet supported" << std::endl;
+        LOG_ERROR(logger, "single file integrity checking is not yet supported");
         return -EINVAL;
     }
     if (args.check)
@@ -77,7 +80,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 auto full_path = prefix;
                 full_path += "/";
                 full_path += i;
-                std::cout << "checking " << i << ": ";
+                LOG_INFO(logger, "checking " << i << ": ");
                 std::cout.flush();
                 if (dmfile->getConfiguration())
                 {
@@ -100,10 +103,10 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                         0,
                         nullptr));
                 }
-                std::cout << "[success]" << std::endl;
+                LOG_INFO(logger, "[success]");
             }
         }
-        std::cout << "examine all data blocks: ";
+        LOG_INFO(logger, "examine all data blocks: ");
         std::cout.flush();
         {
             auto stream = DB::DM::createSimpleBlockInputStream(context, dmfile);
@@ -114,7 +117,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 counter++;
             }
             stream->readSuffix();
-            std::cout << "[success] ( " << counter << " blocks )" << std::endl;
+            LOG_INFO(logger, "[success] ( " << counter << " blocks )");
         }
     }
     return 0;
