@@ -369,8 +369,8 @@ DataCompactor<SnapshotPtr>::migratePages( //
             page_file_log);
 
         LOG_INFO(log, storage_name << " GC decide to link "
-                     << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
-                     << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
+                                   << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
+                                   << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
 
         PageEntriesEdit edit_;
         if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit_))
