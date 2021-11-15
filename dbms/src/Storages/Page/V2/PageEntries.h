@@ -1,16 +1,20 @@
 #pragma once
 
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/Config.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
 #include <cassert>
+#include <mutex>
 #include <optional>
+#include <shared_mutex>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
+
 
 namespace DB
 {
@@ -21,6 +25,79 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V2
 {
+/// Base type for VersionType of VersionSet
+template <typename T>
+struct MultiVersionCountable
+{
+public:
+    uint32_t ref_count;
+    T * next;
+    T * prev;
+
+public:
+    explicit MultiVersionCountable(T * self)
+        : ref_count(0)
+        , next(self)
+        , prev(self)
+    {}
+    virtual ~MultiVersionCountable()
+    {
+        assert(ref_count == 0);
+
+        // Remove from linked list
+        prev->next = next;
+        next->prev = prev;
+    }
+
+    void increase(const std::unique_lock<std::shared_mutex> & lock)
+    {
+        (void)lock;
+        ++ref_count;
+    }
+
+    void release(const std::unique_lock<std::shared_mutex> & lock)
+    {
+        (void)lock;
+        assert(ref_count >= 1);
+        if (--ref_count == 0)
+        {
+            // in case two neighbor nodes remove from linked list
+            delete this;
+        }
+    }
+
+    // Not thread-safe function. Only for VersionSet::Builder.
+
+    // Not thread-safe, caller ensure.
+    void increase() { ++ref_count; }
+
+    // Not thread-safe, caller ensure.
+    void release()
+    {
+        assert(ref_count >= 1);
+        if (--ref_count == 0)
+        {
+            delete this; // remove this node from version set
+        }
+    }
+};
+
+
+/// Base type for VersionType of VersionSetWithDelta
+template <typename T>
+struct MultiVersionCountableForDelta
+{
+public:
+    std::shared_ptr<T> prev;
+
+public:
+    explicit MultiVersionCountableForDelta()
+        : prev(nullptr)
+    {}
+
+    virtual ~MultiVersionCountableForDelta() = default;
+};
+
 template <typename T>
 class PageEntriesMixin
 {
@@ -340,12 +417,12 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
 
 /// For PageEntriesVersionSet
 class PageEntries : public PageEntriesMixin<PageEntries>
-    , public DB::MVCC::MultiVersionCountable<PageEntries>
+    , public MultiVersionCountable<PageEntries>
 {
 public:
     explicit PageEntries(bool is_base_ = true)
         : PageEntriesMixin(true)
-        , DB::MVCC::MultiVersionCountable<PageEntries>(this)
+        , MultiVersionCountable<PageEntries>(this)
     {
         (void)is_base_;
     }
@@ -452,16 +529,16 @@ public:
 class PageEntriesForDelta;
 using PageEntriesForDeltaPtr = std::shared_ptr<PageEntriesForDelta>;
 class PageEntriesForDelta : public PageEntriesMixin<PageEntriesForDelta>
-    , public DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
+    , public MultiVersionCountableForDelta<PageEntriesForDelta>
 {
 public:
     explicit PageEntriesForDelta(bool is_base_)
         : PageEntriesMixin(is_base_)
-        , DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>()
+        , MultiVersionCountableForDelta<PageEntriesForDelta>()
     {
     }
 
-    bool shouldCompactToBase(const VersionSetConfig & config)
+    bool shouldCompactToBase(const MVCC::VersionSetConfig & config)
     {
         assert(!this->isBase());
         return numDeletions() >= config.compact_hint_delta_deletions //

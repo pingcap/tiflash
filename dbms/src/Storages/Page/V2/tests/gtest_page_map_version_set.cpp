@@ -1,12 +1,8 @@
-#include <type_traits>
-
-#define protected public
-#include <Storages/Page/mvcc/VersionSetWithDelta.h>
-#undef protected
-
 #include <Poco/AutoPtr.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <type_traits>
 
 namespace DB::PS::V2::tests
 {
