@@ -69,7 +69,8 @@ String paramToString(const ::testing::TestParamInfo<DMFileMode> & info)
 using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 
-class DMFile_Test : public DB::base::TiFlashStorageTestBasic
+class DMFile_Test
+    : public DB::base::TiFlashStorageTestBasic
     , public testing::WithParamInterface<DMFileMode>
 {
 public:
@@ -82,13 +83,13 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
-        parent_path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode = GetParam();
-        bool single_file_mode = mode == DMFileMode::SingleFile;
-        auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
+        bool single_file_mode = (mode == DMFileMode::SingleFile);
+        auto configuration = (mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt);
 
-        path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        parent_path = TiFlashStorageTestBasic::getTemporaryPath();
+        path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
         dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();

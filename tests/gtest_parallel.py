@@ -65,7 +65,8 @@ class SigintHandler(object):
         self.__lock = threading.Lock()
         self.__processes = set()
         self.__got_sigint = False
-        signal.signal(signal.SIGINT, lambda signal_num, frame: self.interrupt())
+        signal.signal(signal.SIGINT, lambda signal_num,
+                      frame: self.interrupt())
 
     def __on_sigint(self):
         self.__got_sigint = True
@@ -125,14 +126,16 @@ class Outputter(object):
     def __init__(self, out_file):
         self.__out_file = out_file
         self.__previous_line_was_transient = False
-        self.__width = term_width(out_file)  # Line width, or None if not a tty.
+        # Line width, or None if not a tty.
+        self.__width = term_width(out_file)
 
     def transient_line(self, msg):
         if self.__width is None:
             self.__out_file.write(msg + "\n")
             self.__out_file.flush()
         else:
-            self.__out_file.write("\r" + msg[:self.__width].ljust(self.__width))
+            self.__out_file.write(
+                "\r" + msg[:self.__width].ljust(self.__width))
             self.__previous_line_was_transient = True
 
     def flush_transient_output(self):
@@ -304,7 +307,8 @@ class TaskManager(object):
                 break
 
             if try_number < self.times_to_retry:
-                execution_number = self.__get_next_execution_number(task.test_id)
+                execution_number = self.__get_next_execution_number(
+                    task.test_id)
                 # We need create a new Task instance. Each task represents a single test
                 # execution, with its own runtime, exit code and log file.
                 task = self.task_factory(task.test_binary, task.test_name,
@@ -384,7 +388,8 @@ class FilterFormat(object):
                 except OSError as e:
                     if e.errno is not errno.ENOENT:
                         if i is num_tries - 1:
-                            self.out.permanent_line('Could not remove temporary log file: ' + str(e))
+                            self.out.permanent_line(
+                                'Could not remove temporary log file: ' + str(e))
                         else:
                             time.sleep(0.1)
                         continue
@@ -610,7 +615,8 @@ def find_tests(binaries, additional_args, options, times):
         command += ['--gtest_color=' + options.gtest_color]
 
         if options.gtest_catch_exceptions:
-            command += ['--gtest_catch_exceptions={}'.format(options.gtest_catch_exceptions)]
+            command += ['--gtest_catch_exceptions={}'.format(
+                options.gtest_catch_exceptions)]
 
         if options.gtest_break_on_failure:
             command += ['--gtest_catch_exceptions']
@@ -750,7 +756,8 @@ def default_options_parser():
     parser.add_option('--serialize_test_cases', action='store_true',
                       default=False, help='Do not run tests from the same test '
                                           'case in parallel.')
-    parser.add_option('--gtest_catch_exceptions', default=0, help='Do not report exceptions as test failures.')
+    parser.add_option('--gtest_catch_exceptions', default=0,
+                      help='Do not report exceptions as test failures.')
     parser.add_option('--gtest_break_on_failure', action='store_true', default=False,
                       help='Turn assertion failures into debugger break-points.')
 
@@ -839,10 +846,12 @@ def main():
     if task_manager.passed:
         logger.move_to('passed', task_manager.passed)
         if options.print_test_times:
-            logger.print_tests('PASSED TESTS', task_manager.passed, print_try_number)
+            logger.print_tests(
+                'PASSED TESTS', task_manager.passed, print_try_number)
 
     if task_manager.failed:
-        logger.print_tests('FAILED TESTS', task_manager.failed, print_try_number)
+        logger.print_tests(
+            'FAILED TESTS', task_manager.failed, print_try_number)
         logger.move_to('failed', task_manager.failed)
 
     if task_manager.started:

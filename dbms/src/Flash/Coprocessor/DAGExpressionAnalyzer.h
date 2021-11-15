@@ -46,22 +46,18 @@ public:
 
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
 
-    void appendWhere(
+    String appendWhere(
         ExpressionActionsChain & chain,
-        const std::vector<const tipb::Expr *> & conditions,
-        String & filter_column_name);
+        const std::vector<const tipb::Expr *> & conditions);
 
-    void appendOrderBy(
+    std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
-        const tipb::TopN & topN,
-        std::vector<NameAndTypePair> & order_columns);
+        const tipb::TopN & topN);
 
-    void appendAggregation(
+    /// <aggregation_keys, collators, aggregate_descriptions>
+    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
-        Names & aggregation_keys,
-        TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions,
         bool group_by_collation_sensitive);
 
     void appendAggSelect(
