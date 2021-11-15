@@ -20,7 +20,8 @@ struct TableScanStatistics
 
     size_t hash_table_bytes = 0;
 
-    explicit TableScanStatistics(const String & executor_id_): executor_id(executor_id_)
+    explicit TableScanStatistics(const String & executor_id_)
+        : executor_id(executor_id_)
     {}
 
     static bool isHit(const String & executor_id)

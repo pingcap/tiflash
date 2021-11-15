@@ -6,6 +6,12 @@
 
 #include <unordered_set>
 
+namespace DB
+{
+struct JoinStatistics;
+
+using JoinStatisticsPtr = std::shared_ptr<JoinStatistics>;
+
 struct JoinStatistics
 {
     const String & executor_id;
@@ -20,15 +26,17 @@ struct JoinStatistics
 
     size_t hash_table_bytes = 0;
 
-    JoinStatistics(const String & executor_id_): executor_id(executor_id_)
+    explicit JoinStatistics(const String & executor_id_)
+        : executor_id(executor_id_)
     {}
+
+    String toString() const;
 
     static bool isHit(const String & executor_id)
     {
         return startsWith(executor_id, "Join_");
     }
 
-    static void buildStatistics(JoinStatistics & statistics, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context)
-    {
-    }
+    static JoinStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context);
 };
+} // namespace DB

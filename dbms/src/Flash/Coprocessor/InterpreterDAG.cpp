@@ -175,7 +175,7 @@ BlockIO InterpreterDAG::execute()
 
 void InterpreterDAG::recordProfileStreams(DAGPipeline & pipeline, const String & key)
 {
-    dag.getDAGContext().getProfileStreamsMap()[key].qb_id = 0;
+    dag.getDAGContext().getProfileStreamsMap()[key].qb_id = dag.getRootQueryBlock()->id;
     for (auto & stream : pipeline.streams)
     {
         dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);

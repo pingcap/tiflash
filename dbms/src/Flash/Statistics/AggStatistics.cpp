@@ -9,12 +9,11 @@ namespace DB
 String AggStatistics::toString() const
 {
     return fmt::format(
-        R"({{"executor_id":"{}","rows_selectivity":{},"blocks_selectivity":{},"bytes_selectivity":{},"hash_table_bytes":{}}})",
+        R"({{"executor_id":"{}","rows_selectivity":{},"blocks_selectivity":{},"bytes_selectivity":{}}})",
         executor_id,
         divide(outbound_rows, inbound_rows),
         divide(outbound_blocks, inbound_blocks),
-        divide(outbound_bytes, inbound_bytes),
-        hash_table_bytes);
+        divide(outbound_bytes, inbound_bytes));
 }
 
 AggStatisticsPtr AggStatistics::buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context [[maybe_unused]])

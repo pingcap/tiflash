@@ -27,8 +27,8 @@ FilterStatisticsPtr FilterStatistics::buildStatistics(const String & executor_id
             statistics->outbound_rows += profile_info.rows;
             statistics->outbound_blocks += profile_info.blocks;
             statistics->outbound_bytes += profile_info.bytes;
-            },
-            [&](const BlockStreamProfileInfo & child_profile_info) {
+        },
+        [&](const BlockStreamProfileInfo & child_profile_info) {
             statistics->inbound_rows += child_profile_info.rows;
             statistics->inbound_blocks += child_profile_info.blocks;
             statistics->inbound_bytes += child_profile_info.bytes;

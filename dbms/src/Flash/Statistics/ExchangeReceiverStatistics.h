@@ -20,7 +20,8 @@ struct ExchangeReceiverStatistics
 
     size_t hash_table_bytes = 0;
 
-    ExchangeReceiverStatistics(const String & executor_id_): executor_id(executor_id_)
+    ExchangeReceiverStatistics(const String & executor_id_)
+        : executor_id(executor_id_)
     {}
 
     static bool isHit(const String & executor_id)

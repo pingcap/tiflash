@@ -1,6 +1,6 @@
-#include <Flash/Statistics/ExecutorStatistics.h>
 #include <Common/FmtUtils.h>
 #include <Common/joinStr.h>
+#include <Flash/Statistics/ExecutorStatistics.h>
 
 namespace DB
 {
@@ -24,7 +24,12 @@ String ExecutorStatistics::toString() const
 {
     FmtBuffer buffer;
     buffer.append(R"({"agg_stats":[)");
-    joinStr(agg_stats.cbegin(), agg_stats.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s->toString()); }, ",");
+    joinStr(
+        agg_stats.cbegin(),
+        agg_stats.cend(),
+        buffer,
+        [](const auto & s, FmtBuffer & fb) { fb.append(s->toString()); },
+        ",");
     buffer.append(R"(],"filter_stats":[)");
     joinStr(filter_stats.cbegin(), filter_stats.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s->toString()); });
     buffer.append("]}");

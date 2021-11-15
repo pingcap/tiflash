@@ -23,8 +23,6 @@ struct AggStatistics
     size_t outbound_blocks = 0;
     size_t outbound_bytes = 0;
 
-    size_t hash_table_bytes = 0;
-
     explicit AggStatistics(const String & executor_id_)
         : executor_id(executor_id_)
     {}

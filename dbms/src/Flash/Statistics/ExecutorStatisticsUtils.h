@@ -4,13 +4,13 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <common/types.h>
 
+#include <functional>
 #include <memory>
 #include <unordered_set>
-#include <functional>
 
 namespace DB
 {
-template<typename FF, typename CF>
+template <typename FF, typename CF>
 inline void visitProfileStreamsInfo(const ProfileStreamsInfo & profile_streams_info, FF && cur_f, CF && child_f)
 {
     std::unordered_set<IProfilingBlockInputStream *> visited_set;
@@ -20,8 +20,7 @@ inline void visitProfileStreamsInfo(const ProfileStreamsInfo & profile_streams_i
         {
             cur_f(p_stream->getProfileInfo());
 
-            p_stream->forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-            {
+            p_stream->forEachProfilingChild([&](IProfilingBlockInputStream & child) {
                 auto it = visited_set.find(&child);
                 if (it == visited_set.end())
                 {
@@ -34,7 +33,7 @@ inline void visitProfileStreamsInfo(const ProfileStreamsInfo & profile_streams_i
     }
 }
 
-template<typename FF>
+template <typename FF>
 inline void visitProfileStreamsInfo(const ProfileStreamsInfo & profile_streams_info, FF && ff)
 {
     std::unordered_set<IProfilingBlockInputStream *> visited_set;
@@ -55,4 +54,4 @@ inline double divide(size_t value1, size_t value2)
     }
     return 1.0 * value1 / value2;
 }
-}
+} // namespace DB
