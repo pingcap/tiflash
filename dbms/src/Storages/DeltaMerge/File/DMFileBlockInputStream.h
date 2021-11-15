@@ -81,7 +81,9 @@ inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context 
                                                     DB::DM::RowKeyRanges{},
                                                     DB::DM::RSOperatorPtr{},
                                                     DB::DM::ColumnCachePtr{},
-                                                    DB::DM::IdSetPtr{});
+                                                    DB::DM::IdSetPtr{},
+                                                    DMFILE_READ_ROWS_THRESHOLD,
+                                                    true);
 }
 
 } // namespace DM
