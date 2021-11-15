@@ -181,8 +181,12 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         case DB::DMFileFormat::V2:
             keeper.setStorageVersion(DB::STORAGE_FORMAT_V3);
             option.emplace(std::map<std::string, std::string>{}, args.frame, args.algorithm);
-        default:
+            break;
+        case DB::DMFileFormat::V1:
             keeper.setStorageVersion(DB::STORAGE_FORMAT_V2);
+            break;
+        default:
+            throw DB::Exception(fmt::format("invalid dmfile version: {}", args.version));
         }
 
         LOG_INFO(logger, "creating new dmfile");
