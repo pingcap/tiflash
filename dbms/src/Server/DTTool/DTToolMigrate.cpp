@@ -48,7 +48,8 @@ static constexpr char MIGRATE_HELP[] =
     "  --file-id     Target file id.\n"
     "  --workdir     Target directory.\n"
     "  --nokeep      Do not keep old version.\n"
-    "  --dry         Dry run: only print change list.";
+    "  --dry         Dry run: only print change list.\n"
+    "  --config-file Path to TiFlash config (tiflash.toml).";
 
 // clang-format on
 
