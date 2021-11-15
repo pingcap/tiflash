@@ -381,6 +381,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
         hard_link_file.setFormal();
         gc_file_edit.concate(edit_);
+        delegator->addPageFileUsedSize(hard_link_file.fileIdLevel(), 0, hard_link_file.parentPath(), /*need_insert_location*/ true);
     }
 
     if (gc_file_edit.empty())
