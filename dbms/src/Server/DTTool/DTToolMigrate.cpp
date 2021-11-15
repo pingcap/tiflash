@@ -176,13 +176,12 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         DB::DM::DMConfigurationOpt option{};
 
         // if new format is the target, we construct a config file.
-        if (args.version == 2)
+        switch (args.version)
         {
+        case DB::DMFileFormat::V2:
             keeper.setStorageVersion(DB::STORAGE_FORMAT_V3);
             option.emplace(std::map<std::string, std::string>{}, args.frame, args.algorithm);
-        }
-        else
-        {
+        default:
             keeper.setStorageVersion(DB::STORAGE_FORMAT_V2);
         }
 
