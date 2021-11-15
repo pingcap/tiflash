@@ -386,8 +386,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
     if (gc_file_edit.empty())
     {
-        LOG_INFO(log, 
-                 << " No valid pages, deleting PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
+        LOG_INFO(log, storage_name << " No valid pages, deleting PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
         gc_file.destroy();
     }
     else
