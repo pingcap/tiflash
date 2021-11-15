@@ -1,13 +1,8 @@
-#include <type_traits>
-
-#define protected public
-#include <Storages/Page/mvcc/VersionSetWithDelta.h>
-#undef protected
-
 #include <Poco/AutoPtr.h>
-#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <type_traits>
 
 namespace DB::PS::V2::tests
 {
@@ -97,15 +92,13 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     // Release snapshot2
     s2.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
-    /// For VersionSet, size is 2 since A is still hold by s1
+
     /// For VersionDeltaSet, size is 1 since we do a compaction on delta
-    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
-        EXPECT_EQ(versions.size(), 2UL);
-    else
-        EXPECT_EQ(versions.size(), 1UL);
+    EXPECT_EQ(versions.size(), 1UL);
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
+
     // VersionSet, old version removed from version set
     // VersionSetWithDelta, delta version merged
     EXPECT_EQ(versions.size(), 1UL);
@@ -151,12 +144,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
-    // VersionSet, size decrease to 1 when s1 release
+
     // VersionSetWithDelta, size is 2 since we can not do a compaction on delta
-    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
-        EXPECT_EQ(versions.size(), 1UL);
-    else
-        EXPECT_EQ(versions.size(), 2UL);
+    EXPECT_EQ(versions.size(), 2UL);
 
     s2.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
@@ -196,19 +186,13 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
 
     s1.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 1:" + versions.toDebugString());
-    // VersionSet, size decrease to 2 when s1 release
+
     // VersionSetWithDelta, size is 3 since we can not do a compaction on delta
-    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
-        EXPECT_EQ(versions.size(), 2UL);
-    else
-        EXPECT_EQ(versions.size(), 3UL);
+    EXPECT_EQ(versions.size(), 3UL);
 
     s2.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 2:" + versions.toDebugString());
-    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
-        EXPECT_EQ(versions.size(), 1UL);
-    else
-        EXPECT_EQ(versions.size(), 2UL);
+    EXPECT_EQ(versions.size(), 2UL);
 
     s3.reset();
     LOG_TRACE(&Poco::Logger::root(), "rel snap 3:" + versions.toDebugString());
@@ -219,14 +203,6 @@ namespace
 {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
-
-std::set<PageId> getNormalPageIDs(const PageEntriesVersionSet::SnapshotPtr & s)
-{
-    std::set<PageId> ids;
-    for (auto iter = s->version()->pages_cbegin(); iter != s->version()->pages_cend(); iter++)
-        ids.insert(iter->first);
-    return ids;
-}
 
 std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::SnapshotPtr & s)
 {
@@ -240,51 +216,23 @@ std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::Snapshot
 TYPED_TEST_P(PageMapVersionSet_test, Restore)
 {
     TypeParam versions("vset_test", this->config_, this->log);
-    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
+    // For PageEntriesVersionSetWithDelta, we directly apply edit to versions
     {
-        // For PageEntriesVersionSet, we need a builder
-        auto s1 = versions.getSnapshot();
-
-        typename TypeParam::BuilderType builder(s1->version(), true, &Poco::Logger::root());
-        {
-            PageEntriesEdit edit;
-            PageEntry e;
-            e.checksum = 1;
-            edit.put(1, e);
-            edit.del(1);
-            e.checksum = 2;
-            edit.put(2, e);
-            e.checksum = 3;
-            edit.put(3, e);
-            builder.apply(edit);
-        }
-        {
-            PageEntriesEdit edit;
-            edit.del(2);
-            builder.apply(edit);
-        }
-        versions.restore(builder.build());
+        PageEntriesEdit edit;
+        PageEntry e;
+        e.checksum = 1;
+        edit.put(1, e);
+        edit.del(1);
+        e.checksum = 2;
+        edit.put(2, e);
+        e.checksum = 3;
+        edit.put(3, e);
+        versions.apply(edit);
     }
-    else
     {
-        // For PageEntriesVersionSetWithDelta, we directly apply edit to versions
-        {
-            PageEntriesEdit edit;
-            PageEntry e;
-            e.checksum = 1;
-            edit.put(1, e);
-            edit.del(1);
-            e.checksum = 2;
-            edit.put(2, e);
-            e.checksum = 3;
-            edit.put(3, e);
-            versions.apply(edit);
-        }
-        {
-            PageEntriesEdit edit;
-            edit.del(2);
-            versions.apply(edit);
-        }
+        PageEntriesEdit edit;
+        edit.del(2);
+        versions.apply(edit);
     }
 
     auto s = versions.getSnapshot();
@@ -385,18 +333,10 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
         ASSERT_FALSE(entry2);
 
         auto normal_entry2 = s4->version()->findNormalPageEntry(2);
-        if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
-        {
-            // For PageEntriesVersionSet, we delete the normal page
-            ASSERT_FALSE(normal_entry2);
-        }
-        else
-        {
-            // For PageEntriesVersionSetWithDelta, a tombstone is left.
-            ASSERT_TRUE(normal_entry2);
-            ASSERT_EQ(normal_entry2->checksum, 0xfUL);
-            ASSERT_TRUE(normal_entry2->isTombstone());
-        }
+        // For PageEntriesVersionSetWithDelta, a tombstone is left.
+        ASSERT_TRUE(normal_entry2);
+        ASSERT_EQ(normal_entry2->checksum, 0xfUL);
+        ASSERT_TRUE(normal_entry2->isTombstone());
 
         // We can not get 2 or 3 as normal page
         std::set<PageId> valid_normal_page_ids = getNormalPageIDs(s4);
@@ -916,7 +856,7 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            LiveFiles,
                            PutOnTombstonePageEntry);
 
-using VersionSetTypes = ::testing::Types<PageEntriesVersionSet, PageEntriesVersionSetWithDelta>;
+using VersionSetTypes = ::testing::Types<PageEntriesVersionSetWithDelta>;
 INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);
 
 } // namespace DB::PS::V2::tests
