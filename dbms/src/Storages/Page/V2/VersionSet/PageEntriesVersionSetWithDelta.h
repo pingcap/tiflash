@@ -94,6 +94,9 @@ public:
         return s;
     }
 
+    /// Snapshot.
+    /// When snapshot object is freed, it will call `view.release()` to compact VersionList,
+    /// and its weak_ptr in the VersionSet's snapshots list will become empty.
     class Snapshot : private boost::noncopyable
     {
     public:
