@@ -368,7 +368,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
             PageFile::Type::Temp,
             page_file_log);
 
-        LOG_INFO(log, "GC decide to link "
+        LOG_INFO(log, storage_name << "GC decide to link "
                      << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
                      << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
 
@@ -386,7 +386,8 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
     if (gc_file_edit.empty())
     {
-        LOG_INFO(log, storage_name << " No valid pages, deleting PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
+        LOG_INFO(log, 
+                 << " No valid pages, deleting PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
         gc_file.destroy();
     }
     else
