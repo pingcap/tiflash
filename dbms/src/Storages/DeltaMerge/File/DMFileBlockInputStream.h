@@ -72,10 +72,12 @@ using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
  */
 inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context & context, const DMFilePtr & file)
 {
+    // disable clean read is needed, since we just want to read all data from the file, and we do not know about the column handle
+    // enable read_one_pack_every_time_ is needed to preserve same block structure as the original file
     return std::make_shared<DMFileBlockInputStream>(context,
-                                                    DB::DM::MAX_UINT64,
-                                                    false,
-                                                    0,
+                                                    DB::DM::MAX_UINT64 /*< max_read_version */,
+                                                    false /*< enable_clean_read */,
+                                                    0 /*< hash_salt */,
                                                     file,
                                                     file->getColumnDefines(),
                                                     DB::DM::RowKeyRanges{},
@@ -83,7 +85,7 @@ inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context 
                                                     DB::DM::ColumnCachePtr{},
                                                     DB::DM::IdSetPtr{},
                                                     DMFILE_READ_ROWS_THRESHOLD,
-                                                    true);
+                                                    true /*< read_one_pack_every_time_ */);
 }
 
 } // namespace DM
