@@ -119,9 +119,6 @@
 # size = "100M"
 # count = 10
 
-[application]
-# runAsDaemon = true
-
 [raft]
 # pd_addr = "pd0:2379"
 # ignore_databases = "system,default"
@@ -155,8 +152,8 @@
 # cop_pool_size = 0
 ## New in v5.0. This item specifies the maximum number of batch requests that TiFlash Coprocessor executes at the same time. If the number of requests exceeds the specified value, the exceeded requests will queue. If the configuration value is set to 0 or not set, the default value is used, which is twice the number of physical cores.
 # batch_cop_pool_size = 0
-## Security settings take effect starting from v4.0.5.
 
+## Security settings take effect starting from v4.0.5.
 [security]
 ## Path of the file that contains a list of trusted SSL CAs. If set, the following settings
 ## cert_path and key_path are also needed.
