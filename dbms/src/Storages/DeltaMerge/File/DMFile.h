@@ -22,8 +22,8 @@ class DMFile;
 namespace DTTool::Migrate
 {
 struct MigrateArgs;
-bool isRecognizable(const DB::DM::DMFile & file, std::string & target);
-bool needFrameMigration(const DB::DM::DMFile & file, std::string & target);
+bool isRecognizable(const DB::DM::DMFile & file, const std::string & target);
+bool needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
 int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 } // namespace DTTool::Migrate
 
@@ -259,6 +259,21 @@ public:
 
     DMConfigurationOpt & getConfiguration() { return configuration; }
 
+    /**
+     * Return all column defines. This is useful if you want to read all data from a dmfile.
+     * @return All columns
+     */
+    ColumnDefines getColumnDefines()
+    {
+        ColumnDefines results{};
+        results.reserve(this->column_stats.size());
+        for (const auto & i : this->column_stats)
+        {
+            results.emplace_back(i.first, "", i.second.type);
+        }
+        return results;
+    }
+
 private:
     DMFile(UInt64 file_id_,
            UInt64 ref_id_,
@@ -388,8 +403,8 @@ private:
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend int ::DTTool::Migrate::migrateServiceMain(DB::Context & context, const ::DTTool::Migrate::MigrateArgs & args);
-    friend bool ::DTTool::Migrate::isRecognizable(const DB::DM::DMFile & file, std::string & target);
-    friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, std::string & target);
+    friend bool ::DTTool::Migrate::isRecognizable(const DB::DM::DMFile & file, const std::string & target);
+    friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
 };
 
 inline ReadBufferFromFileProvider openForRead(
