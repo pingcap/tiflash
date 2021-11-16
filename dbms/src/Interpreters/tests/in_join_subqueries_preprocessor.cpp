@@ -1,34 +1,34 @@
-#include <ext/shared_ptr_helper.h>
-
+#include <Common/typeid_cast.h>
+#include <Databases/DatabaseOrdinary.h>
+#include <Databases/IDatabase.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InJoinSubqueriesPreprocessor.h>
+#include <Interpreters/Settings.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
-#include <Interpreters/InJoinSubqueriesPreprocessor.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/Settings.h>
 #include <Storages/IStorage.h>
-#include <Databases/IDatabase.h>
-#include <Databases/DatabaseOrdinary.h>
-#include <Common/typeid_cast.h>
 
+#include <ext/shared_ptr_helper.h>
 #include <iostream>
-#include <vector>
-#include <utility>
 #include <string>
+#include <utility>
+#include <vector>
 
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED;
-    }
+namespace ErrorCodes
+{
+extern const int DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED;
 }
+} // namespace DB
 
 
 /// Simplified version of the StorageDistributed class.
-class StorageDistributedFake : public ext::shared_ptr_helper<StorageDistributedFake>, public DB::IStorage
+class StorageDistributedFake : public ext::SharedPtrHelper<StorageDistributedFake>
+    , public DB::IStorage
 {
 public:
     std::string getName() const override { return "DistributedFake"; }
@@ -41,7 +41,9 @@ public:
 
 protected:
     StorageDistributedFake(const std::string & remote_database_, const std::string & remote_table_, size_t shard_count_)
-        : remote_database(remote_database_), remote_table(remote_table_), shard_count(shard_count_)
+        : remote_database(remote_database_)
+        , remote_table(remote_table_)
+        , shard_count(shard_count_)
     {
     }
 
@@ -73,7 +75,7 @@ public:
     getRemoteDatabaseAndTableName(const DB::IStorage & table) const override
     {
         const StorageDistributedFake & distributed = dynamic_cast<const StorageDistributedFake &>(table);
-        return { distributed.getRemoteDatabaseName(), distributed.getRemoteTableName() };
+        return {distributed.getRemoteDatabaseName(), distributed.getRemoteTableName()};
     }
 };
 
@@ -97,8 +99,7 @@ bool equals(const DB::ASTPtr & lhs, const DB::ASTPtr & rhs);
 void reorder(DB::IAST * ast);
 
 
-TestEntries entries =
-{
+TestEntries entries = {
     /// Trivial query.
 
     {
@@ -107,107 +108,84 @@ TestEntries entries =
         "SELECT 1",
         0,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        1,
-        DB::DistributedProductMode::ALLOW,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     1,
+     DB::DistributedProductMode::ALLOW,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        2,
-        DB::DistributedProductMode::ALLOW,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     2,
+     DB::DistributedProductMode::ALLOW,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        0,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     0,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        1,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     1,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        0,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     0,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        1,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     1,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        0,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     0,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        1,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     1,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT 1",
-        "SELECT 1",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT 1",
+     "SELECT 1",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
     /// Section IN / depth 1
 
@@ -217,71 +195,56 @@ TestEntries entries =
         "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
         1,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::ALLOW,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::ALLOW,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        1,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     1,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section NOT IN / depth 1
 
@@ -291,53 +254,42 @@ TestEntries entries =
         "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
-        "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
+     "SELECT count() FROM test.visits_all WHERE UserID NOT IN (SELECT UserID FROM remote_db.remote_visits)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section GLOBAL IN / depth 1
 
@@ -347,35 +299,28 @@ TestEntries entries =
         "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section GLOBAL NOT IN / depth 1
 
@@ -385,35 +330,28 @@ TestEntries entries =
         "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL NOT IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section JOIN / depth 1
 
@@ -423,53 +361,42 @@ TestEntries entries =
         "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits) USING UserID",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section GLOBAL JOIN / depth 1
 
@@ -479,35 +406,28 @@ TestEntries entries =
         "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all) USING UserID",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section JOIN / depth 1 / 2 of the subquery.
 
@@ -517,44 +437,35 @@ TestEntries entries =
         "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits WHERE RegionID = 2) USING UserID",
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits WHERE RegionID = 2) USING UserID",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits WHERE RegionID = 2) USING UserID",
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits WHERE RegionID = 2) USING UserID",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE RegionID = 2) USING UserID",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section IN / depth 1 / table at level 2
 
@@ -564,53 +475,42 @@ TestEntries entries =
         "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     "SELECT count() FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section GLOBAL IN / depth 1 / table at level 2
 
@@ -620,35 +520,28 @@ TestEntries entries =
         "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     "SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section IN at level 1, GLOBAL IN section at level 2.
 
@@ -658,26 +551,21 @@ TestEntries entries =
         "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)))",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)))",
-        "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)))",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)))",
+     "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)))",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)))",
-        "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)))",
+     "SELECT UserID FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote_db.remote_visits WHERE UserID GLOBAL IN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section JOIN / depth 1 / table at level 2
 
@@ -687,53 +575,42 @@ TestEntries entries =
         "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM test.visits_all)) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM (SELECT UserID FROM remote_db.remote_visits)) USING UserID",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section IN / depth 2
 
@@ -743,71 +620,56 @@ TestEntries entries =
         "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM remote_db.remote_visits WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM remote_db.remote_visits WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM test.visits_all WHERE OtherID = 1))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM remote_db.remote_visits WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM remote_db.remote_visits WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section JOIN / depth 2
 
@@ -817,44 +679,35 @@ TestEntries entries =
         "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM remote_db.remote_visits)) USING CounterID)",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM remote_db.remote_visits)) USING CounterID)",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM remote_db.remote_visits)) USING CounterID)",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM remote_db.remote_visits)) USING CounterID)",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID GLOBAL IN (SELECT CounterID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
-        "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM remote_db.remote_visits ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM remote_db.remote_visits)) USING CounterID)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM test.visits_all ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM test.visits_all)) USING CounterID)",
+     "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM remote_db.remote_visits ALL INNER JOIN (SELECT CounterID FROM (SELECT CounterID FROM remote_db.remote_visits)) USING CounterID)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section JOIN / depth 2
 
@@ -864,53 +717,42 @@ TestEntries entries =
         "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2) USING OtherID)",
-        "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2) USING OtherID)",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2) USING OtherID)",
+     "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2) USING OtherID)",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
-        "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
+     "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
-        "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
+     "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
-        "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) GLOBAL ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
+     "SELECT UserID FROM test.visits_all WHERE OtherID GLOBAL IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) GLOBAL ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
-        "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2) USING OtherID)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM test.visits_all WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2) USING OtherID)",
+     "SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 1) ALL INNER JOIN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2) USING OtherID)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section JOIN / section IN
 
@@ -920,44 +762,35 @@ TestEntries entries =
         "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2)) USING UserID",
-        "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2)) USING UserID",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2)) USING UserID",
+     "SELECT UserID FROM test.visits_all GLOBAL ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2)) USING UserID",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
-        "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits WHERE OtherID IN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2)) USING UserID",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM test.visits_all WHERE OtherID IN (SELECT OtherID FROM test.visits_all WHERE RegionID = 2)) USING UserID",
+     "SELECT UserID FROM test.visits_all ALL INNER JOIN (SELECT UserID FROM remote_db.remote_visits WHERE OtherID IN (SELECT OtherID FROM remote_db.remote_visits WHERE RegionID = 2)) USING UserID",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Table function.
 
@@ -967,62 +800,49 @@ TestEntries entries =
         "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     "SELECT count() FROM remote('127.0.0.{1,2}', test, visits_all) WHERE UserID IN (SELECT UserID FROM test.visits_all)",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
-        "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
+     "SELECT count() FROM test.visits_all WHERE UserID IN (SELECT UserID FROM remote('127.0.0.{1,2}', test, visits_all))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Section IN / depth 2 / two distributed tables
 
@@ -1032,8 +852,7 @@ TestEntries entries =
         "SELECT UserID, RegionID FROM test.visits_all WHERE CounterID IN (SELECT CounterID FROM distant_db.distant_hits WHERE BrowserID IN (SELECT BrowserID FROM remote_db.remote_visits WHERE OtherID = 1))",
         2,
         DB::DistributedProductMode::LOCAL,
-        true
-    },
+        true},
 
     /// Aggregate function.
 
@@ -1043,53 +862,42 @@ TestEntries entries =
         "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
         2,
         DB::DistributedProductMode::ALLOW,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        2,
-        DB::DistributedProductMode::DENY,
-        false
-    },
+    {__LINE__,
+     "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     2,
+     DB::DistributedProductMode::DENY,
+     false},
 
-    {
-        __LINE__,
-        "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    },
+    {__LINE__,
+     "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     2,
+     DB::DistributedProductMode::DENY,
+     true},
 
-    {
-        __LINE__,
-        "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     "SELECT sum(RegionID GLOBAL IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
-        "SELECT sum(RegionID IN (SELECT RegionID from distant_db.distant_hits)) FROM test.visits_all",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT sum(RegionID IN (SELECT RegionID from test.hits_all)) FROM test.visits_all",
+     "SELECT sum(RegionID IN (SELECT RegionID from distant_db.distant_hits)) FROM test.visits_all",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
     /// Miscellaneous.
 
@@ -1099,36 +907,28 @@ TestEntries entries =
         "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
         2,
         DB::DistributedProductMode::DENY,
-        true
-    },
+        true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
-        "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
-        2,
-        DB::DistributedProductMode::LOCAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
+     "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
+     2,
+     DB::DistributedProductMode::LOCAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
-        "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
-        2,
-        DB::DistributedProductMode::GLOBAL,
-        true
-    },
+    {__LINE__,
+     "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
+     "SELECT count() FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all WHERE x GLOBAL IN (SELECT x FROM test.visits_all))",
+     2,
+     DB::DistributedProductMode::GLOBAL,
+     true},
 
-    {
-        __LINE__,
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.hits_all))",
-        "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.hits_all))",
-        2,
-        DB::DistributedProductMode::DENY,
-        true
-    }
-};
+    {__LINE__,
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.hits_all))",
+     "SELECT UserID FROM (SELECT UserID FROM test.visits_all WHERE UserID GLOBAL IN (SELECT UserID FROM test.hits_all))",
+     2,
+     DB::DistributedProductMode::DENY,
+     true}};
 
 
 bool performTests(const TestEntries & entries)
@@ -1145,8 +945,10 @@ bool performTests(const TestEntries & entries)
         }
         else
             std::cout << "Test " << i << " at line " << entry.line_num << " failed.\n"
-                "Expected: " << entry.expected_output << ".\n"
-                "Received: " << res.second << "\n";
+                                                                          "Expected: "
+                      << entry.expected_output << ".\n"
+                                                  "Received: "
+                      << res.second << "\n";
 
         ++i;
     }
@@ -1168,7 +970,6 @@ TestResult check(const TestEntry & entry)
 
     try
     {
-
         auto storage_distributed_visits = StorageDistributedFake::create("remote_db", "remote_visits", entry.shard_count);
         auto storage_distributed_hits = StorageDistributedFake::create("distant_db", "distant_hits", entry.shard_count);
 
@@ -1261,8 +1062,7 @@ void reorder(DB::IAST * ast)
     for (auto & child : children)
         reorder(&*child);
 
-    std::sort(children.begin(), children.end(), [](const DB::ASTPtr & lhs, const DB::ASTPtr & rhs)
-    {
+    std::sort(children.begin(), children.end(), [](const DB::ASTPtr & lhs, const DB::ASTPtr & rhs) {
         return lhs->getTreeHash() < rhs->getTreeHash();
     });
 }
