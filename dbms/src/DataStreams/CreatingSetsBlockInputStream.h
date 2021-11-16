@@ -27,6 +27,7 @@ public:
         const SizeLimits & network_transfer_limits,
         const MPPTaskId & mpp_task_id_,
         const LogWithPrefixPtr & log_);
+
     ~CreatingSetsBlockInputStream()
     {
         for (auto & worker : workers)

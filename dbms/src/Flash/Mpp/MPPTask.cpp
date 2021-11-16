@@ -4,7 +4,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/CoprocessorHandler.h>
@@ -12,6 +11,7 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -42,16 +42,15 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
-    , log(std::make_shared<LogWithPrefix>(
-          &Poco::Logger::get("MPPTask"),
-          fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
+    , log(getMPPTaskLog("MPPTask", id))
 {}
 
 MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    current_memory_tracker = memory_tracker;
+    if (current_memory_tracker != memory_tracker)
+        current_memory_tracker = memory_tracker;
     closeAllTunnels("");
     LOG_DEBUG(log, "finish MPPTask: " << id.toString());
 }
@@ -101,7 +100,7 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
     }
 
     MPPTaskId receiver_id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
-    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(receiver_id);
+    auto it = tunnel_map.find(receiver_id);
     if (it == tunnel_map.end())
     {
         auto err_msg = fmt::format(
