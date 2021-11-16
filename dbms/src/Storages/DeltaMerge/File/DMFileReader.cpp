@@ -226,11 +226,14 @@ DMFileReader::DMFileReader(
         throw Exception("DMFile [" + DB::toString(dmfile->fileId())
                         + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
 
-    if (unlikely(rowkey_ranges_.empty()))
-        throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
+    // if `rowkey_ranges` is empty, we unconditionally read all packs
+    // `rowkey_ranges` and `is_common_handle`  will only be useful in clean read mode.
+    // It is safe to ignore them here.
+    if (unlikely(rowkey_ranges_.empty() && enable_clean_read_))
+        throw Exception("rowkey ranges shouldn't be empty with clean-read enabled", ErrorCodes::LOGICAL_ERROR);
 
     pack_filter.init();
-    is_common_handle = rowkey_ranges_[0].is_common_handle;
+    is_common_handle = !rowkey_ranges_.empty() && rowkey_ranges_[0].is_common_handle;
 
     for (const auto & cd : read_columns)
     {
