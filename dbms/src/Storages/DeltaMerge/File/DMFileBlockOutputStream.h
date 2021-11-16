@@ -31,7 +31,7 @@ public:
             context.getFileProvider(),
             context.getWriteLimiter(),
             DMFileWriter::Options{
-                compression_settings, // context.chooseCompressionSettings(0, 0), TODO: should enable this, and make unit testes work.
+                compression_settings,
                 context.getSettingsRef().min_compress_block_size,
                 context.getSettingsRef().max_compress_block_size,
                 flags})
