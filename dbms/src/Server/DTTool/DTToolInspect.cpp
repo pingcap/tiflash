@@ -88,7 +88,6 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                     full_path += "/";
                     full_path += i;
                     LOG_INFO(logger, "checking " << i << ": ");
-                    std::cout.flush();
                     if (dmfile->getConfiguration())
                     {
                         consume(*DB::createReadBufferFromFileBaseByFileProvider(
@@ -117,7 +116,6 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         // for both directory file and single mode file, we can read out all blocks from the file.
         // this procedure will also trigger the checksum checking in the compression buffer.
         LOG_INFO(logger, "examine all data blocks: ");
-        std::cout.flush();
         {
             auto stream = DB::DM::createSimpleBlockInputStream(context, dmfile);
             size_t counter = 0;
