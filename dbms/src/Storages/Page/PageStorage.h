@@ -49,7 +49,7 @@ public:
         // When the value of gc_force_hardlink_rate is less than or equal to 1,
         // It means that candidates whose valid rate is greater than this value will be forced to hardlink(This will reduce the gc duration).
         // Otherwise, if gc_force_hardlink_rate is greater than 1, hardlink won't happen
-        SettingDouble gc_force_hardlink_rate = 0.8;
+        SettingDouble gc_force_hardlink_rate = 2; // FIXME: disabled after multi-path test
 
         SettingDouble gc_max_valid_rate = 0.35;
         SettingUInt64 gc_min_bytes = PAGE_FILE_ROLL_SIZE;
