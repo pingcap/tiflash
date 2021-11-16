@@ -205,7 +205,7 @@ TEST_F(DTToolTest, ConsecutiveMigration)
     compareHash(records);
 }
 
-TEST_F(DTToolTest, BlockSize)
+TEST_F(DTToolTest, BlockwiseInvariant)
 {
     std::vector<size_t> size_info{};
     {
@@ -246,12 +246,31 @@ TEST_F(DTToolTest, BlockSize)
             getTemporaryPath(),
             DB::DM::DMFile::ReadMetaMode::all());
         auto stream = DB::DM::createSimpleBlockInputStream(*db_context, refreshed_file);
-        auto iter = size_info.begin();
+        auto size_iter = size_info.begin();
+        auto prop_iter = dmfile->getPackProperties().property().begin();
+        auto new_prop_iter = refreshed_file->getPackProperties().property().begin();
+        auto stat_iter = dmfile->getPackStats().begin();
+        auto new_stat_iter = refreshed_file->getPackStats().begin();
         stream->readPrefix();
         while (auto block = stream->read())
         {
-            EXPECT_EQ(*iter++, block.bytes());
+            EXPECT_EQ(*size_iter++, block.bytes());
+            EXPECT_EQ(prop_iter->gc_hint_version(), new_prop_iter->gc_hint_version());
+            EXPECT_EQ(prop_iter->num_rows(), new_prop_iter->num_rows());
+            EXPECT_EQ(stat_iter->rows, new_stat_iter->rows);
+            EXPECT_EQ(stat_iter->not_clean, new_stat_iter->not_clean);
+            EXPECT_EQ(stat_iter->first_version, new_stat_iter->first_version);
+            EXPECT_EQ(stat_iter->bytes, new_stat_iter->bytes);
+            EXPECT_EQ(stat_iter->first_tag, new_stat_iter->first_tag);
+            prop_iter++;
+            new_prop_iter++;
+            stat_iter++;
+            new_stat_iter++;
         }
+        EXPECT_EQ(stat_iter, dmfile->getPackStats().end());
+        EXPECT_EQ(new_stat_iter, refreshed_file->getPackStats().end());
+        EXPECT_EQ(prop_iter, dmfile->getPackProperties().property().end());
+        EXPECT_EQ(new_prop_iter, refreshed_file->getPackProperties().property().end());
         stream->readSuffix();
     }
 }
