@@ -43,6 +43,8 @@ static constexpr char MIGRATE_HELP[] =
     "  --version     Target dmfile version. [default: 2] [available: 1, 2]\n"
     "  --algorithm   Checksum algorithm. [default: xxh3] [available: xxh3, city128, crc32, crc64, none]\n"
     "  --frame       Checksum frame length. [default: " TO_STRING(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE) "]\n"
+    "  --compression Compression method. [default: lz4] [available: lz4, lz4hc, zstd, none]\n"
+    "  --level       Compression level. [default: -1 (auto)]\n"
     "  --file-id     Target file id.\n"
     "  --workdir     Target directory.\n"
     "  --nokeep      Do not keep old version.\n"
@@ -196,7 +198,12 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);
 
         LOG_INFO(logger, "creating output stream");
-        auto output_stream = DB::DM::DMFileBlockOutputStream(context, new_file, src_file->getColumnDefines());
+        auto output_stream = DB::DM::DMFileBlockOutputStream(
+            context,
+            new_file,
+            src_file->getColumnDefines(),
+            {},
+            {args.compression_method, args.compression_level});
 
         input_stream->readPrefix();
         if (!args.dry_mode)
@@ -250,6 +257,8 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("config-file", bpo::value<std::string>()->required())
         ("file-id", bpo::value<size_t>()->required())
         ("dry", bpo::bool_switch(&dry_mode))
+        ("compression", bpo::value<std::string>()->default_value("lz4"))
+        ("level", bpo::value<int>()->default_value(-1))
         ("nokeep", bpo::bool_switch(&no_keep));
     // clang-format on
 
@@ -278,6 +287,41 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         args.dry_mode = dry_mode;
         args.workdir = vm["workdir"].as<std::string>();
         args.file_id = vm["file-id"].as<size_t>();
+
+        {
+            auto compression_method = vm["compression"].as<std::string>();
+            if (compression_method == "lz4")
+            {
+                args.compression_method = DB::CompressionMethod::LZ4;
+            }
+            else if (compression_method == "lz4hc")
+            {
+                args.compression_method = DB::CompressionMethod::LZ4HC;
+            }
+            else if (compression_method == "zstd")
+            {
+                args.compression_method = DB::CompressionMethod::ZSTD;
+            }
+            else if (compression_method == "none")
+            {
+                args.compression_method = DB::CompressionMethod::NONE;
+            }
+            else
+            {
+                std::cerr << "invalid compression method: " << compression_method << std::endl;
+                return -EINVAL;
+            }
+
+            auto compression_level = vm["level"].as<int>();
+            if (compression_level == -1)
+            {
+                args.compression_level = DB::CompressionSettings::getDefaultLevel(args.compression_method);
+            }
+            else
+            {
+                args.compression_level = compression_level;
+            }
+        }
         if (args.version == 2)
         {
             args.frame = vm["frame"].as<size_t>();

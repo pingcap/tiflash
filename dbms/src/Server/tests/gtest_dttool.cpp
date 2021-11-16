@@ -104,7 +104,10 @@ TEST_F(DTToolTest, MigrationSuccess)
             .version = 2,
             .frame = DBMS_DEFAULT_BUFFER_SIZE,
             .algorithm = DB::ChecksumAlgo::XXH3,
-            .workdir = getTemporaryPath()};
+            .workdir = getTemporaryPath(),
+            .compression_method = DB::CompressionMethod::LZ4,
+            .compression_level = DB::CompressionSettings::getDefaultLevel(DB::CompressionMethod::LZ4),
+        };
 
         EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, args), 0);
     }
