@@ -21,7 +21,6 @@ public:
         return rsindex.minmax->checkGreaterEqual(pack_id, value, rsindex.type, null_direction);
     }
 
-    RSOperatorPtr applyNot() override { return createLess(attr, value, null_direction); };
     RSOperatorPtr switchDirection() override { return createLessEqual(attr, value, null_direction); }
 };
 
