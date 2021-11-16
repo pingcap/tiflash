@@ -173,7 +173,8 @@ TEST_F(DTToolTest, ConsecutiveMigration)
         file.list(subfiles);
         for (const auto & i : subfiles)
         {
-            if (!DTTool::Migrate::needFrameMigration(*dmfile, i)) continue;
+            if (!DTTool::Migrate::needFrameMigration(*dmfile, i))
+                continue;
             LOG_INFO(logger, "record file: " << i);
             getHash(records, i);
         }
@@ -202,4 +203,52 @@ TEST_F(DTToolTest, ConsecutiveMigration)
     }
 
     compareHash(records);
+}
+
+TEST_F(DTToolTest, BlockSize)
+{
+    std::vector<size_t> size_info{};
+    {
+        auto stream = DB::DM::createSimpleBlockInputStream(*db_context, dmfile);
+        stream->readPrefix();
+        while (auto block = stream->read())
+        {
+            size_info.push_back(block.bytes());
+        }
+        stream->readSuffix();
+    }
+
+    std::vector<std::tuple<size_t, DB::ChecksumAlgo, DB::CompressionMethod, int>> test_cases{
+        {2, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::LZ4, -1},
+        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::ZSTD, 1},
+        {2, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
+        {2, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
+        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::NONE, -1}
+    };
+    for (auto [version, algo, comp, level] : test_cases)
+    {
+        auto a = DTTool::Migrate::MigrateArgs{
+            .no_keep = false,
+            .dry_mode = false,
+            .file_id = 1,
+            .version = version,
+            .frame = DBMS_DEFAULT_BUFFER_SIZE,
+            .algorithm = algo,
+            .workdir = getTemporaryPath(),
+            .compression_method = comp,
+            .compression_level = level,
+        };
+
+        EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, a), 0);
+        auto refreshed_file = DB::DM::DMFile::restore(
+            db_context->getFileProvider(), 1, 0, getTemporaryPath(), DB::DM::DMFile::ReadMetaMode::all());
+        auto stream = DB::DM::createSimpleBlockInputStream(*db_context, refreshed_file);
+        auto iter = size_info.begin();
+        stream->readPrefix();
+        while (auto block = stream->read())
+        {
+            EXPECT_EQ(*iter++, block.bytes());
+        }
+        stream->readSuffix();
+    }
 }
