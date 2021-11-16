@@ -11,7 +11,6 @@
 
 namespace DB
 {
-
 template <typename T>
 std::string DataTypeDecimal<T>::getName() const
 {
@@ -183,15 +182,20 @@ static DataTypePtr create(const ASTPtr & arguments)
     const ASTLiteral * arg0 = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg0 || arg0->value.getType() != Field::Types::UInt64 || arg0->value.get<UInt64>() == 0)
         throw Exception(
-            "Decimal data type family must have a number (positive integer) as its argument", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            "Decimal data type family must have a number (positive integer) as its argument",
+            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     const ASTLiteral * arg1 = typeid_cast<const ASTLiteral *>(arguments->children[1].get());
     if (!arg1 || arg1->value.getType() != Field::Types::UInt64)
         throw Exception(
-            "Decimal data type family must have a number (positive integer) as its argument", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            "Decimal data type family must have a number (positive integer) as its argument",
+            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     return createDecimal(arg0->value.get<UInt64>(), arg1->value.get<UInt64>());
 }
 
-void registerDataTypeDecimal(DataTypeFactory & factory) { factory.registerDataType("Decimal", create, DataTypeFactory::CaseInsensitive); }
+void registerDataTypeDecimal(DataTypeFactory & factory)
+{
+    factory.registerDataType("Decimal", create, DataTypeFactory::CaseInsensitive);
+}
 
 template class DataTypeDecimal<Decimal32>;
 template class DataTypeDecimal<Decimal64>;

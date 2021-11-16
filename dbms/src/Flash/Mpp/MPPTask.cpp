@@ -4,7 +4,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/CoprocessorHandler.h>
@@ -12,6 +11,7 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -38,27 +38,19 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
-String MPPTaskId::toString() const
-{
-    return fmt::format("[{},{}]", start_ts, task_id);
-}
-
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
-    , log(std::make_shared<LogWithPrefix>(
-          &Poco::Logger::get("MPPTask"),
-          fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
-{
-    id.start_ts = meta.start_ts();
-    id.task_id = meta.task_id();
-}
+    , id(meta.start_ts(), meta.task_id())
+    , log(getMPPTaskLog("MPPTask", id))
+{}
 
 MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    current_memory_tracker = memory_tracker;
+    if (current_memory_tracker != memory_tracker)
+        current_memory_tracker = memory_tracker;
     closeAllTunnels("");
     LOG_DEBUG(log, "finish MPPTask: " << id.toString());
 }
@@ -81,7 +73,6 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    memory_tracker = current_memory_tracker;
     auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
     worker.detach();
 }
@@ -108,8 +99,8 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
         return {nullptr, err_msg};
     }
 
-    MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
-    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(id);
+    MPPTaskId receiver_id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
+    auto it = tunnel_map.find(receiver_id);
     if (it == tunnel_map.end())
     {
         auto err_msg = fmt::format(
@@ -146,9 +137,12 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    dag_req = std::make_unique<tipb::DAGRequest>();
-    getDAGRequestFromStringWithRetry(*dag_req, task_request.encoded_plan());
+    getDAGRequestFromStringWithRetry(dag_req, task_request.encoded_plan());
     TMTContext & tmt_context = context.getTMTContext();
+    /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
+    /// will never be used and can be removed later.
+    /// Each MPP task will contain at most one TableScan operator belonging to one table. For those tasks without
+    /// TableScan, their DispatchTaskRequests won't contain any region.
     for (const auto & r : task_request.regions())
     {
         RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
@@ -160,6 +154,13 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
         /// region id, only the first region will be treated as local region
+        ///
+        /// 1. Currently TiDB can't provide a consistent snapshot of the region cache and it may be updated during the
+        ///    planning stage of a query. The planner may see multiple versions of one region (on one TiFlash node).
+        /// 2. Two regions with same region id won't have overlapping key ranges.
+        /// 3. TiFlash will pick the right version of region for local read and others for remote read.
+        /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
+        ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_regions.find(region_info.region_id) != local_regions.end();
 
         if (duplicated_region || needRemoteRead(region_info, tmt_context))
@@ -189,10 +190,10 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
             context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
         }
     }
-    context.getTimezoneInfo().resetByDAGRequest(*dag_req);
+    context.getTimezoneInfo().resetByDAGRequest(dag_req);
 
     bool is_root_mpp_task = false;
-    const auto & exchange_sender = dag_req->root_executor().exchange_sender();
+    const auto & exchange_sender = dag_req.root_executor().exchange_sender();
     if (exchange_sender.encoded_task_meta_size() == 1)
     {
         /// root mpp task always has 1 task_meta because there is only one TiDB
@@ -204,7 +205,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         }
         is_root_mpp_task = task_meta.task_id() == -1;
     }
-    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta(), is_root_mpp_task);
+    dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->mpp_task_log = log;
     context.setDAGContext(dag_context.get());
 
@@ -265,7 +266,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
-    DAGQuerySource dag(context, local_regions, remote_regions, *dag_req, log, true);
+    DAGQuerySource dag(context, local_regions, remote_regions, dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -280,7 +281,6 @@ void MPPTask::runImpl()
         return;
     }
 
-    current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
@@ -293,6 +293,7 @@ void MPPTask::runImpl()
     try
     {
         preprocess();
+        memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however

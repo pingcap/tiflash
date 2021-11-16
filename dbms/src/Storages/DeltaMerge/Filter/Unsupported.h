@@ -35,8 +35,6 @@ public:
     }
 
     RSResult roughCheck(size_t /*pack_id*/, const RSCheckParam & /*param*/) override { return Some; }
-
-    RSOperatorPtr applyNot() override { return createUnsupported(content, reason, !is_not); };
 };
 
 } // namespace DM

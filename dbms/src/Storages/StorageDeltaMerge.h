@@ -24,7 +24,8 @@ class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 } // namespace DM
 
-class StorageDeltaMerge : public ext::SharedPtrHelper<StorageDeltaMerge>
+class StorageDeltaMerge
+    : public ext::SharedPtrHelper<StorageDeltaMerge>
     , public IManageableStorage
 {
 public:

@@ -2,6 +2,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashException.h>
@@ -11,6 +12,7 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <random>
 
 #ifndef __APPLE__
 #include <fcntl.h>
@@ -20,7 +22,6 @@
 #include <Encryption/WritableFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
-#include <Storages/Page/PageFile.h>
 
 #include <ext/scope_guard.h>
 
@@ -56,6 +57,8 @@ extern const int FILE_SIZE_NOT_MATCH;
 
 namespace PageUtil
 {
+UInt32 randInt(const UInt32 min, const UInt32 max);
+
 // =========================================================
 // Helper functions
 // =========================================================
@@ -109,10 +112,10 @@ void writeFile(
     UInt64 offset,
     char * data,
     size_t to_write,
-    const WriteLimiterPtr & write_limiter,
+    const WriteLimiterPtr & write_limiter = nullptr,
     bool enable_failpoint = false);
 
-void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const ReadLimiterPtr & read_limiter);
+void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const ReadLimiterPtr & read_limiter = nullptr);
 
 /// Write and advance sizeof(T) bytes.
 template <typename T>
@@ -132,6 +135,7 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
         pos += sizeof(T);
     return v;
 }
+
 } // namespace PageUtil
 
 } // namespace DB
