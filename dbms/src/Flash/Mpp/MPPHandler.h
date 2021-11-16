@@ -167,7 +167,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     {
         /// MPPTask maybe destructed by different thread, set the query memory_tracker
         /// to current_memory_tracker in the destructor
-	if (current_memory_tracker != memory_tracker)
+        if (current_memory_tracker != memory_tracker)
             current_memory_tracker = memory_tracker;
         closeAllTunnel("");
         LOG_DEBUG(log, "finish MPPTask: " << id.toString());
