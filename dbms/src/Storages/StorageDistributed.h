@@ -24,7 +24,7 @@ class StorageDistributedDirectoryMonitor;
   * You can pass one address, not several.
   * In this case, the table can be considered remote, rather than distributed.
   */
-class StorageDistributed : public ext::shared_ptr_helper<StorageDistributed>
+class StorageDistributed : public ext::SharedPtrHelper<StorageDistributed>
     , public IStorage
 {
     friend class DistributedBlockOutputStream;
