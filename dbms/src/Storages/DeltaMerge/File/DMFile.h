@@ -265,7 +265,8 @@ public:
      */
     ColumnDefines getColumnDefines()
     {
-        ColumnDefines results;
+        ColumnDefines results{};
+        results.reserve(this->column_stats.size());
         for (const auto & i : this->column_stats)
         {
             results.emplace_back(i.first, "", i.second.type);
