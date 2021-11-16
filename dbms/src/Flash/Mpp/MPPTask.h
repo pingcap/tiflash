@@ -85,12 +85,7 @@ private:
     RegionInfoMap local_regions;
     RegionInfoList remote_regions;
 
-<<<<<<< HEAD
     std::unique_ptr<tipb::DAGRequest> dag_req;
-    std::unique_ptr<DAGContext> dag_context;
-=======
-    tipb::DAGRequest dag_req;
->>>>>>> d036d55a4f (avoid tiflash crash when query is killed (#3434))
 
     Context context;
     /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
