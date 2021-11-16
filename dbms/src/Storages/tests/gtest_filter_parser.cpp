@@ -93,7 +93,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
             columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
         }
     }
-    auto create_attr_by_column_id = [columns_to_read](ColumnID column_id) -> DM::Attr {
+    auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
         auto iter = std::find_if(
             columns_to_read.begin(),
             columns_to_read.end(),
@@ -114,7 +114,8 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
         {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_1","O":"col_1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":254}},
         {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},
         {"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"col_3","O":"col_3"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":5}},
-        {"comment":"","default":null,"default_bit":null,"id":4,"name":{"L":"col_time","O":"col_time"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":7}}
+        {"comment":"","default":null,"default_bit":null,"id":4,"name":{"L":"col_time","O":"col_time"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":7}},
+        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_5","O":"col_5"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
         ],
         "pk_is_handle":false,"index_info":[],"is_common_handle":false,
         "name":{"L":"t_111","O":"t_111"},"partition":null,
@@ -129,6 +130,18 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
         EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}"));
+    }
+
+    {
+        // FilterParser::RSFilterType::Equal
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = col_5");
+        EXPECT_EQ(rs_operator->name(), String("unsupported"));
+    }
+
+    {
+        // FilterParser::RSFilterType::Equal
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 666 = 666");
+        EXPECT_EQ(rs_operator->name(), String("unsupported"));
     }
 
     {
@@ -158,7 +171,7 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
     }
 
     {
-        // FilterParser::RSFilterType::GreaterEqual
+        // inverse + FilterParser::RSFilterType::GreaterEqual
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 667 <= col_2");
         EXPECT_EQ(rs_operator->name(), String("greater_equal"));
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);

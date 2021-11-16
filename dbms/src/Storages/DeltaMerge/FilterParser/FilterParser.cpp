@@ -103,8 +103,6 @@ inline RSOperatorPtr parseTiCompareExpr( //
     /// Only support `column` `op` `constant` now.
 
     // TODO: test cases:
-    // c1 < 100
-    // 100 < c1
     // c1 + 1 < 100
     // (c1 + 1) * c2 < 100
     // c1 < 100 - 1
@@ -112,8 +110,6 @@ inline RSOperatorPtr parseTiCompareExpr( //
     // c1 * c2 < 100
     // 100 < c1 * c2
     // ABS(c1) = 100
-    // 1 = 1
-    // c1 = c2
 
     Attr attr;
     Field value;
