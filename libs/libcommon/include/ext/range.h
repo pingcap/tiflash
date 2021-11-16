@@ -15,8 +15,8 @@ template <typename T>
 using range_iterator = boost::counting_iterator<T>;
 
 /** \brief Range-based for loop adapter for (reverse_)range_iterator.
-      *  By and large should be in conjunction with ext::range and ext::reverse_range.
-      */
+ *  By and large should be in conjunction with ext::range and ext::reverse_range.
+ */
 template <typename T>
 struct RangeWrapper
 {
@@ -31,11 +31,11 @@ struct RangeWrapper
 };
 
 /** \brief Constructs range_wrapper for forward-iteration over [begin, end) in range-based for loop.
-     *  Usage example:
-     *      for (const auto i : ext::range(0, 4)) print(i);
-     *  Output:
-     *      0 1 2 3
-     */
+ *  Usage example:
+ *      for (const auto i : ext::range(0, 4)) print(i);
+ *  Output:
+ *      0 1 2 3
+ */
 template <typename T1, typename T2>
 inline RangeWrapper<typename std::common_type<T1, T2>::type> range(T1 begin, T2 end)
 {
