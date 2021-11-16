@@ -27,9 +27,14 @@ extern const int IP_ADDRESS_NOT_ALLOWED;
 
 const Int8 VAR_SIZE = 0;
 
+bool isScalarFunctionExpr(const tipb::Expr & expr)
+{
+    return expr.tp() == tipb::ExprType::ScalarFunc;
+}
+
 bool isFunctionExpr(const tipb::Expr & expr)
 {
-    return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr);
+    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr);
 }
 
 const String & getAggFunctionName(const tipb::Expr & expr)
