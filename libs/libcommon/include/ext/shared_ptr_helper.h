@@ -4,7 +4,6 @@
 
 namespace ext
 {
-
 /** Allows to make std::shared_ptr from T with protected constructor.
   *
   * Derive your T class from shared_ptr_helper<T>
@@ -29,11 +28,12 @@ struct SharedPtrHelper
           */
         struct Local : T
         {
-            explicit Local(TArgs &&... args) : T(std::forward<TArgs>(args)...) {};
+            explicit Local(TArgs &&... args)
+                : T(std::forward<TArgs>(args)...){};
         };
 
         return std::make_shared<Local>(std::forward<TArgs>(args)...);
     }
 };
 
-}
+} // namespace ext

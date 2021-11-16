@@ -1,13 +1,14 @@
 #pragma once
 
 #include <Storages/IStorage.h>
+
 #include <ext/shared_ptr_helper.h>
 
 namespace DB
 {
-
 /// Provides information about Graphite configuration.
-class StorageSystemGraphite : public ext::SharedPtrHelper<StorageSystemGraphite>, public IStorage
+class StorageSystemGraphite : public ext::SharedPtrHelper<StorageSystemGraphite>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemGraphite"; }
@@ -28,4 +29,4 @@ protected:
     StorageSystemGraphite(const std::string & name_);
 };
 
-}
+} // namespace DB

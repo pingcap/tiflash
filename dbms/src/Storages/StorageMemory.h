@@ -1,26 +1,25 @@
 #pragma once
 
-#include <mutex>
+#include <Core/NamesAndTypes.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <Storages/IStorage.h>
 
 #include <ext/shared_ptr_helper.h>
-
-#include <Core/NamesAndTypes.h>
-#include <Storages/IStorage.h>
-#include <DataStreams/IBlockOutputStream.h>
+#include <mutex>
 
 
 namespace DB
 {
-
 /** Implements storage in the RAM.
   * Suitable for temporary data.
   * It does not support keys.
   * Data is stored as a set of blocks and is not stored anywhere else.
   */
-class StorageMemory : public ext::SharedPtrHelper<StorageMemory>, public IStorage
+class StorageMemory : public ext::SharedPtrHelper<StorageMemory>
+    , public IStorage
 {
-friend class MemoryBlockInputStream;
-friend class MemoryBlockOutputStream;
+    friend class MemoryBlockInputStream;
+    friend class MemoryBlockOutputStream;
 
 public:
     std::string getName() const override { return "Memory"; }
@@ -53,4 +52,4 @@ protected:
     StorageMemory(String table_name_, ColumnsDescription columns_description_);
 };
 
-}
+} // namespace DB

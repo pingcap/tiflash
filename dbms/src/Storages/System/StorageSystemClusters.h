@@ -1,19 +1,20 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 /** Implements system table 'clusters'
   *  that allows to obtain information about available clusters
   *  (which may be specified in Distributed tables).
   */
-class StorageSystemClusters : public ext::SharedPtrHelper<StorageSystemClusters>, public IStorage
+class StorageSystemClusters : public ext::SharedPtrHelper<StorageSystemClusters>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemClusters"; }
@@ -34,4 +35,4 @@ protected:
     StorageSystemClusters(const std::string & name_);
 };
 
-}
+} // namespace DB

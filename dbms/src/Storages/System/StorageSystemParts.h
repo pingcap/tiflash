@@ -1,18 +1,19 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/System/StorageSystemPartsBase.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
 /** Implements system table 'parts' which allows to get information about data parts for tables of MergeTree family.
   */
-class StorageSystemParts : public ext::SharedPtrHelper<StorageSystemParts>, public StorageSystemPartsBase
+class StorageSystemParts : public ext::SharedPtrHelper<StorageSystemParts>
+    , public StorageSystemPartsBase
 {
 public:
     std::string getName() const override { return "SystemParts"; }
@@ -22,4 +23,4 @@ protected:
     void processNextStorage(MutableColumns & columns, const StoragesInfo & info, bool has_state_column) override;
 };
 
-}
+} // namespace DB

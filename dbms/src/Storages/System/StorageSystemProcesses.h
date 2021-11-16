@@ -1,18 +1,19 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
 /** Implements `processes` system table, which allows you to get information about the queries that are currently executing.
   */
-class StorageSystemProcesses : public ext::SharedPtrHelper<StorageSystemProcesses>, public IStorage
+class StorageSystemProcesses : public ext::SharedPtrHelper<StorageSystemProcesses>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemProcesses"; }
@@ -33,4 +34,4 @@ protected:
     StorageSystemProcesses(const std::string & name_);
 };
 
-}
+} // namespace DB

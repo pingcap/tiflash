@@ -3,7 +3,6 @@
 
 namespace ext
 {
-
 /** Example (1):
   *
   *    class Derived : public ext::Singleton<Derived>
@@ -23,7 +22,8 @@ namespace ext
   *
   *    class SomeSingleton : public Some, public ext::Singleton<SomeSingleton> {}
   */
-template <typename T> class Singleton
+template <typename T>
+class Singleton
 {
 public:
     static T & instance()
@@ -41,4 +41,4 @@ public:
     Singleton & operator=(const Singleton &) = delete;
 };
 
-}
+} // namespace ext

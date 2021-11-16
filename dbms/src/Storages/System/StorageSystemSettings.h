@@ -1,18 +1,19 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
 /** implements system table "settings", which allows to get information about the current settings.
   */
-class StorageSystemSettings : public ext::SharedPtrHelper<StorageSystemSettings>, public IStorage
+class StorageSystemSettings : public ext::SharedPtrHelper<StorageSystemSettings>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemSettings"; }
@@ -33,4 +34,4 @@ protected:
     StorageSystemSettings(const std::string & name_);
 };
 
-}
+} // namespace DB

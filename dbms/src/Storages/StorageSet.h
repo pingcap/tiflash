@@ -1,13 +1,12 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
-
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Set;
 using SetPtr = std::shared_ptr<Set>;
 
@@ -36,7 +35,7 @@ protected:
     String path;
     String table_name;
 
-    UInt64 increment = 0;    /// For the backup file names.
+    UInt64 increment = 0; /// For the backup file names.
 
     /// Restore from backup.
     void restore();
@@ -55,9 +54,10 @@ private:
   *  and also written to a file-backup, for recovery after a restart.
   * Reading from the table is not possible directly - it is possible to specify only the right part of the IN statement.
   */
-class StorageSet : public ext::SharedPtrHelper<StorageSet>, public StorageSetOrJoinBase
+class StorageSet : public ext::SharedPtrHelper<StorageSet>
+    , public StorageSetOrJoinBase
 {
-friend struct ext::SharedPtrHelper<StorageSet>;
+    friend struct ext::SharedPtrHelper<StorageSet>;
 
 public:
     String getName() const override { return "Set"; }
@@ -78,4 +78,4 @@ protected:
         const ColumnsDescription & columns_);
 };
 
-}
+} // namespace DB

@@ -3,7 +3,6 @@
 #include <TableFunctions/ITableFunction.h>
 
 #include <ext/singleton.h>
-
 #include <functional>
 #include <memory>
 #include <string>
@@ -12,13 +11,12 @@
 
 namespace DB
 {
-
 class Context;
 
 
 /** Lets you get a table function by its name.
   */
-class TableFunctionFactory final: public ext::Singleton<TableFunctionFactory>
+class TableFunctionFactory final : public ext::Singleton<TableFunctionFactory>
 {
 public:
     using Creator = std::function<TableFunctionPtr()>;
@@ -30,8 +28,7 @@ public:
     template <typename Function>
     void registerFunction()
     {
-        auto creator = [] () -> TableFunctionPtr
-        {
+        auto creator = []() -> TableFunctionPtr {
             return std::make_shared<Function>();
         };
         registerFunction(Function::name, std::move(creator));
@@ -48,4 +45,4 @@ private:
     TableFunctions functions;
 };
 
-}
+} // namespace DB

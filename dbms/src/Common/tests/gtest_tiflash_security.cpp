@@ -7,7 +7,6 @@ namespace DB
 {
 namespace tests
 {
-
 class TestTiFlashSecurity : public ext::Singleton<TestTiFlashSecurity>
 {
 };

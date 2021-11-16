@@ -1,13 +1,13 @@
 #pragma once
 
 #include <Storages/IStorage.h>
+
 #include <ext/singleton.h>
 #include <unordered_map>
 
 
 namespace DB
 {
-
 class Context;
 class ASTCreateQuery;
 class ASTStorage;
@@ -60,4 +60,4 @@ private:
     Storages storages;
 };
 
-}
+} // namespace DB

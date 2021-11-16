@@ -1,18 +1,19 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
 /** Implements the system table `tables`, which allows you to get information about all tables.
   */
-class StorageSystemTables : public ext::SharedPtrHelper<StorageSystemTables>, public IStorage
+class StorageSystemTables : public ext::SharedPtrHelper<StorageSystemTables>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemTables"; }
@@ -39,4 +40,4 @@ protected:
     StorageSystemTables(const std::string & name_);
 };
 
-}
+} // namespace DB

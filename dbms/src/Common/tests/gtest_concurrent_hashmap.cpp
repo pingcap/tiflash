@@ -9,7 +9,6 @@ namespace DB
 {
 namespace tests
 {
-
 class TestConcurrentHashMap : public ext::Singleton<TestConcurrentHashMap>
 {
 public:

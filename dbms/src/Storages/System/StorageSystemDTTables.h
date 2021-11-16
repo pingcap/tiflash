@@ -1,16 +1,17 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
-class StorageSystemDTTables : public ext::SharedPtrHelper<StorageSystemDTTables>, public IStorage
+class StorageSystemDTTables : public ext::SharedPtrHelper<StorageSystemDTTables>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemDTTables"; }
@@ -31,4 +32,4 @@ protected:
     StorageSystemDTTables(const std::string & name_);
 };
 
-}
+} // namespace DB

@@ -1,17 +1,18 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 
 
-class StorageView : public ext::SharedPtrHelper<StorageView>, public IStorage
+class StorageView : public ext::SharedPtrHelper<StorageView>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "View"; }
@@ -45,4 +46,4 @@ protected:
         const ColumnsDescription & columns_);
 };
 
-}
+} // namespace DB

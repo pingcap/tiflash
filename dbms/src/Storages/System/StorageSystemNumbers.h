@@ -1,12 +1,12 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
@@ -19,7 +19,8 @@ class Context;
   *  (and result could be out of order). If both multithreaded and limit are specified,
   *  the table could give you not exactly 1..limit range, but some arbitary 'limit' numbers.
   */
-class StorageSystemNumbers : public ext::SharedPtrHelper<StorageSystemNumbers>, public IStorage
+class StorageSystemNumbers : public ext::SharedPtrHelper<StorageSystemNumbers>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemNumbers"; }
@@ -43,4 +44,4 @@ protected:
     StorageSystemNumbers(const std::string & name_, bool multithreaded_, size_t limit_ = 0);
 };
 
-}
+} // namespace DB

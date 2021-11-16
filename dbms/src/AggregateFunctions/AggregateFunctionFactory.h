@@ -3,7 +3,6 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 
 #include <ext/singleton.h>
-
 #include <functional>
 #include <memory>
 #include <string>
@@ -13,7 +12,6 @@
 
 namespace DB
 {
-
 class Context;
 class IDataType;
 
@@ -80,4 +78,4 @@ private:
     AggregateFunctions case_insensitive_aggregate_functions;
 };
 
-}
+} // namespace DB
