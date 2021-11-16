@@ -223,8 +223,7 @@ TEST_F(DTToolTest, BlockSize)
         {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::ZSTD, 1},
         {2, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
         {2, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
-        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::NONE, -1}
-    };
+        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::NONE, -1}};
     for (auto [version, algo, comp, level] : test_cases)
     {
         auto a = DTTool::Migrate::MigrateArgs{
@@ -241,7 +240,11 @@ TEST_F(DTToolTest, BlockSize)
 
         EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, a), 0);
         auto refreshed_file = DB::DM::DMFile::restore(
-            db_context->getFileProvider(), 1, 0, getTemporaryPath(), DB::DM::DMFile::ReadMetaMode::all());
+            db_context->getFileProvider(),
+            1,
+            0,
+            getTemporaryPath(),
+            DB::DM::DMFile::ReadMetaMode::all());
         auto stream = DB::DM::createSimpleBlockInputStream(*db_context, refreshed_file);
         auto iter = size_info.begin();
         stream->readPrefix();
