@@ -127,7 +127,7 @@
 
 [raft.snapshot]
 # The way to apply snapshot data
-# The value is one of "block" / "file1" / "file2".
+# The value is one of "block" / "file1"
 # method = "file1"
 
 [status]
