@@ -1,3 +1,4 @@
+#include <Common/Checksum.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -8,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <ctime>
+#include <fstream>
 #include <random>
 namespace DTTool::Bench
 {
@@ -118,4 +120,86 @@ TEST_F(DTToolTest, MigrationSuccess)
             .workdir = getTemporaryPath()};
         EXPECT_EQ(DTTool::Inspect::inspectServiceMain(*db_context, args), 0);
     }
+}
+
+
+void getHash(std::unordered_map<std::string, std::string> & records, const std::string & path)
+{
+    std::fstream file{path};
+    auto digest = DB::UnifiedDigest<DB::Digest::CRC64>{};
+    std::vector<char> buffer(DBMS_DEFAULT_BUFFER_SIZE);
+    while (auto length = file.readsome(buffer.data(), buffer.size()))
+    {
+        digest.update(buffer.data(), length);
+    }
+    records[path] = digest.raw();
+}
+
+void compareHash(std::unordered_map<std::string, std::string> & records)
+{
+    for (const auto & i : records)
+    {
+        std::fstream file{i.first};
+        auto digest = DB::UnifiedDigest<DB::Digest::CRC64>{};
+        std::vector<char> buffer(DBMS_DEFAULT_BUFFER_SIZE);
+        while (auto length = file.readsome(buffer.data(), buffer.size()))
+        {
+            digest.update(buffer.data(), length);
+        }
+        EXPECT_TRUE(digest.compareRaw(i.second)) << "file: " << i.first;
+    }
+}
+
+TEST_F(DTToolTest, ConsecutiveMigration)
+{
+    auto args = DTTool::Migrate::MigrateArgs{
+        .no_keep = false,
+        .dry_mode = false,
+        .file_id = 1,
+        .version = 1,
+        .frame = DBMS_DEFAULT_BUFFER_SIZE,
+        .algorithm = DB::ChecksumAlgo::XXH3,
+        .workdir = getTemporaryPath(),
+        .compression_method = DB::CompressionMethod::LZ4,
+        .compression_level = DB::CompressionSettings::getDefaultLevel(DB::CompressionMethod::LZ4),
+    };
+
+    EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, args), 0);
+    auto logger = &Poco::Logger::get("DTToolTest");
+    std::unordered_map<std::string, std::string> records;
+    {
+        Poco::File file{dmfile->path()};
+        std::vector<std::string> subfiles;
+        file.list(subfiles);
+        for (const auto & i : subfiles)
+        {
+            if (!DTTool::Migrate::needFrameMigration(*dmfile, i)) continue;
+            LOG_INFO(logger, "record file: " << i);
+            getHash(records, i);
+        }
+    }
+    std::vector<std::tuple<size_t, DB::ChecksumAlgo, DB::CompressionMethod, int>> test_cases{
+        {2, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::LZ4, -1},
+        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::ZSTD, 1},
+        {2, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
+        {2, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
+        {args.version, args.algorithm, args.compression_method, args.compression_level}};
+    for (auto [version, algo, comp, level] : test_cases)
+    {
+        auto a = DTTool::Migrate::MigrateArgs{
+            .no_keep = false,
+            .dry_mode = false,
+            .file_id = 1,
+            .version = version,
+            .frame = DBMS_DEFAULT_BUFFER_SIZE,
+            .algorithm = algo,
+            .workdir = getTemporaryPath(),
+            .compression_method = comp,
+            .compression_level = level,
+        };
+
+        EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, a), 0);
+    }
+
+    compareHash(records);
 }

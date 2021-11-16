@@ -12,19 +12,19 @@
 
 namespace DTTool::Migrate
 {
-bool isIgnoredInMigration(const DB::DM::DMFile & file, std::string & target)
+bool isIgnoredInMigration(const DB::DM::DMFile & file, const std::string & target)
 {
     UNUSED(file);
     return target == "NGC"; // this is not exported
 }
-bool needFrameMigration(const DB::DM::DMFile & file, std::string & target)
+bool needFrameMigration(const DB::DM::DMFile & file, const std::string & target)
 {
     return endsWith(target, ".mrk")
         || endsWith(target, ".dat")
         || endsWith(target, ".idx")
         || file.packStatFileName() == target;
 }
-bool isRecognizable(const DB::DM::DMFile & file, std::string & target)
+bool isRecognizable(const DB::DM::DMFile & file, const std::string & target)
 {
     return file.metaFileName() == target
         || file.configurationFileName() == target

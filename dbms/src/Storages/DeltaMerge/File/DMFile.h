@@ -22,8 +22,8 @@ class DMFile;
 namespace DTTool::Migrate
 {
 struct MigrateArgs;
-bool isRecognizable(const DB::DM::DMFile & file, std::string & target);
-bool needFrameMigration(const DB::DM::DMFile & file, std::string & target);
+bool isRecognizable(const DB::DM::DMFile & file, const std::string & target);
+bool needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
 int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 } // namespace DTTool::Migrate
 
@@ -402,8 +402,8 @@ private:
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend int ::DTTool::Migrate::migrateServiceMain(DB::Context & context, const ::DTTool::Migrate::MigrateArgs & args);
-    friend bool ::DTTool::Migrate::isRecognizable(const DB::DM::DMFile & file, std::string & target);
-    friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, std::string & target);
+    friend bool ::DTTool::Migrate::isRecognizable(const DB::DM::DMFile & file, const std::string & target);
+    friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, const std::string & target);
 };
 
 inline ReadBufferFromFileProvider openForRead(
