@@ -13,8 +13,8 @@ void AggregateFunctionCombinatorFactory::registerCombinator(const AggregateFunct
 {
     if (!dict.emplace(value->getName(), value).second)
         throw Exception(
-        "AggregateFunctionCombinatorFactory: the name '" + value->getName() + "' is not unique",
-                        ErrorCodes::LOGICAL_ERROR);
+            "AggregateFunctionCombinatorFactory: the name '" + value->getName() + "' is not unique",
+            ErrorCodes::LOGICAL_ERROR);
 }
 
 AggregateFunctionCombinatorPtr AggregateFunctionCombinatorFactory::tryFindSuffix(const std::string & name) const

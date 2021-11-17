@@ -40,9 +40,9 @@ public:
     {
         if (!type_val->isComparable())
             throw Exception(
-            "Illegal type " + type_val->getName() + " of second argument of aggregate function " + getName()
-                                + " because the values of that data type are not comparable",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal type " + type_val->getName() + " of second argument of aggregate function " + getName()
+                    + " because the values of that data type are not comparable",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     String getName() const override { return StringRef(Data::ValueData_t::name()) == StringRef("min") ? "argMin" : "argMax"; }
