@@ -21,6 +21,7 @@
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <map>
+#include <mutex>
 
 namespace DB
 {
@@ -263,9 +264,11 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     return remote_regions;
 }
 
+// recursively constructs a tree of `DAGQueryBlock`s and executors in them
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
+    // the following ctor will recursively build a DAGQueryBlock tree, in which tipb::Executor trees are built recursively
     DAGQuerySource dag(context, local_regions, remote_regions, dag_req, log, true);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();

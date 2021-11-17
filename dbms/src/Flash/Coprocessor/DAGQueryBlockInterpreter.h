@@ -8,6 +8,7 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
@@ -51,7 +52,7 @@ public:
 private:
     void executeRemoteQuery(DAGPipeline & pipeline);
     void executeImpl(DAGPipeline & pipeline);
-    void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
+    void executeTableScan(const tipb::TableScan & ts, DAGPipeline & pipeline);
     void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -59,7 +60,7 @@ private:
         DAGPipeline & pipeline,
         Names & key_names,
         bool left,
-        bool is_right_out_join,
+        bool is_tiflash_right_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
     ExpressionActionsPtr genJoinOtherConditionAction(
@@ -91,7 +92,6 @@ private:
     std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
-    const tipb::DAGRequest & rqst;
 
     NamesWithAliases final_project;
 

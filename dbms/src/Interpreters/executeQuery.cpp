@@ -326,7 +326,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
             };
 
-            res.exception_callback = [elem, &context, log_queries]() mutable {
+            res.exception_callback = [elem, &context, log_queries, &res]() mutable {
                 context.getQuota().addError();
 
                 elem.type = QueryLogElement::EXCEPTION_WHILE_PROCESSING;
@@ -351,6 +351,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 setExceptionStackTrace(elem);
                 logException(context, elem);
+
+                std::stringstream log_str;
+                log_str << "Query pipeline in exception:\n";
+                res.in->dumpTree(log_str);
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), log_str.str());
 
                 if (log_queries)
                 {

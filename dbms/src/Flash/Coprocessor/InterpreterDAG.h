@@ -24,7 +24,7 @@ class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
-/** build ch plan from dag request: dag executors -> ch plan
+/** build clickhouse plan from dag request: dag executors -> clickhouse plan
   */
 class InterpreterDAG : public IInterpreter
 {

@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Interpreters interface for different queries.
   */
 class IInterpreter
@@ -17,7 +16,7 @@ public:
       */
     virtual BlockIO execute() = 0;
 
-    virtual ~IInterpreter() {}
+    virtual ~IInterpreter() = default;
 };
 
-}
+} // namespace DB

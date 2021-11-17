@@ -1058,7 +1058,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     const DataTypes & key_types,
     Names & key_names,
     bool left,
-    bool is_right_out_join,
+    bool is_tiflash_right_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     String & filter_column_name)
 {
@@ -1080,7 +1080,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
             key_name = appendCast(key_types[i], actions, key_name);
             has_actions = true;
         }
-        if (!has_actions && (!left || is_right_out_join))
+        if (!has_actions && (!left || is_tiflash_right_join))
         {
             /// if the join key is a columnRef, then add a new column as the join key if needed.
             /// In ClickHouse, the columns returned by join are: join_keys, left_columns and right_columns

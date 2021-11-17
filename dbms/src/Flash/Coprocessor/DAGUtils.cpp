@@ -344,7 +344,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
     /// need to extract target_type from expr.field_type() because the flash_type derived from
     /// value is just a `memory type`, which does not have enough information, for example:
     /// for date literal, the flash_type is `UInt64`
-    DataTypePtr target_type{};
+    DataTypePtr target_type;
     if (expr.tp() == tipb::ExprType::Null)
     {
         // todo We should use DataTypeNothing as NULL literal's TiFlash Type, because TiFlash has a lot of

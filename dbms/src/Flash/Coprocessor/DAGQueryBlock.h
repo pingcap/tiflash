@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 class Context;
 
 /// DAGQueryBlock is a dag query from single source,
@@ -36,10 +35,10 @@ public:
     String aggregation_name;
     const tipb::Executor * having = nullptr;
     String having_name;
-    const tipb::Executor * limitOrTopN = nullptr;
-    String limitOrTopN_name;
-    const tipb::Executor * exchangeSender = nullptr;
-    String exchangeServer_name;
+    const tipb::Executor * limit_or_top_n = nullptr;
+    String limit_or_top_n_name;
+    const tipb::Executor * exchange_sender = nullptr;
+    String exchange_server_name;
     UInt32 id;
     const tipb::Executor * root;
     String qb_column_prefix;

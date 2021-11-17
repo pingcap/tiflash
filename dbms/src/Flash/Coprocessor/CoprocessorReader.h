@@ -34,7 +34,7 @@ struct CoprocessorReaderResult
     String req_info = "cop request";
     Int64 rows;
 
-    CoprocessorReaderResult(
+    CoprocessorReaderResult( // NOLINT(google-explicit-constructor)
         std::shared_ptr<tipb::SelectResponse> resp_,
         bool meet_error_ = false,
         const String & error_msg_ = "",
@@ -140,7 +140,7 @@ public:
         }
     }
 
-    size_t getSourceNum() { return 1; }
-    String getName() { return "CoprocessorReader"; }
+    static size_t getSourceNum() { return 1; }
+    static String getName() { return "CoprocessorReader"; }
 };
 } // namespace DB

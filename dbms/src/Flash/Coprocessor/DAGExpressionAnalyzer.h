@@ -116,7 +116,7 @@ public:
         const DataTypes & key_types,
         Names & key_names,
         bool left,
-        bool is_right_out_join,
+        bool is_tiflash_right_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 

@@ -26,7 +26,7 @@ public:
     MPPTunnelBase(
         const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
-        const std::chrono::seconds timeout_,
+        std::chrono::seconds timeout_,
         TaskCancelledCallback callback,
         int input_steams_num_,
         const LogWithPrefixPtr & log_ = nullptr);
