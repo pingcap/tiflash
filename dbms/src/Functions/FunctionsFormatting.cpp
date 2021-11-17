@@ -3,11 +3,10 @@
 
 namespace DB
 {
-
 void registerFunctionsFormatting(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionBitmaskToList>();
     factory.registerFunction<FunctionFormatReadableSize>();
 }
 
-}
+} // namespace DB

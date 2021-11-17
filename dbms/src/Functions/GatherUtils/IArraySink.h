@@ -1,10 +1,9 @@
 #pragma once
-#include <Functions/GatherUtils/ArraySinkVisitor.h>
 #include <Common/Exception.h>
+#include <Functions/GatherUtils/ArraySinkVisitor.h>
 
 namespace DB::GatherUtils
 {
-
 struct IArraySink
 {
     virtual ~IArraySink() = default;
@@ -16,6 +15,8 @@ struct IArraySink
 };
 
 template <typename Derived>
-class ArraySinkImpl : public Visitable<Derived, IArraySink, ArraySinkVisitor> {};
+class ArraySinkImpl : public Visitable<Derived, IArraySink, ArraySinkVisitor>
+{
+};
 
-}
+} // namespace DB::GatherUtils

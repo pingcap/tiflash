@@ -3,10 +3,9 @@
 
 namespace DB
 {
-
 void registerFunctionsTransform(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTransform>();
 }
 
-}
+} // namespace DB

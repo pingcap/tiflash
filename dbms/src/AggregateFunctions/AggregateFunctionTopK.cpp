@@ -1,7 +1,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionTopK.h>
-#include <AggregateFunctions/Helpers.h>
 #include <AggregateFunctions/FactoryHelpers.h>
+#include <AggregateFunctions/Helpers.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 
@@ -10,17 +10,15 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ARGUMENT_OUT_OF_BOUND;
+} // namespace ErrorCodes
 
 
 namespace
 {
-
 /// Substitute return type for Date and DateTime
 class AggregateFunctionTopKDate : public AggregateFunctionTopK<DataTypeDate::FieldType>
 {
@@ -37,8 +35,10 @@ class AggregateFunctionTopKDateTime : public AggregateFunctionTopK<DataTypeDateT
 
 static IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_type, UInt64 threshold)
 {
-    if (typeid_cast<const DataTypeDate *>(argument_type.get())) return new AggregateFunctionTopKDate(threshold);
-    if (typeid_cast<const DataTypeDateTime *>(argument_type.get())) return new AggregateFunctionTopKDateTime(threshold);
+    if (typeid_cast<const DataTypeDate *>(argument_type.get()))
+        return new AggregateFunctionTopKDate(threshold);
+    if (typeid_cast<const DataTypeDateTime *>(argument_type.get()))
+        return new AggregateFunctionTopKDateTime(threshold);
 
     /// Check that we can use plain version of AggregateFunctionTopKGeneric
     if (argument_type->isValueUnambiguouslyRepresentedInContiguousMemoryRegion())
@@ -51,7 +51,7 @@ AggregateFunctionPtr createAggregateFunctionTopK(const std::string & name, const
 {
     assertUnary(name, argument_types);
 
-    UInt64 threshold = 10;  /// default value
+    UInt64 threshold = 10; /// default value
 
     if (!params.empty())
     {
@@ -62,11 +62,11 @@ AggregateFunctionPtr createAggregateFunctionTopK(const std::string & name, const
 
         if (k > TOP_K_MAX_SIZE)
             throw Exception("Too large parameter for aggregate function " + name + ". Maximum: " + toString(TOP_K_MAX_SIZE),
-                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
         if (k == 0)
             throw Exception("Parameter 0 is illegal for aggregate function " + name,
-                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
         threshold = k;
     }
@@ -77,17 +77,16 @@ AggregateFunctionPtr createAggregateFunctionTopK(const std::string & name, const
         res = AggregateFunctionPtr(createWithExtraTypes(argument_types[0], threshold));
 
     if (!res)
-        throw Exception("Illegal type " + argument_types[0]->getName() +
-            " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
 }
 
-}
+} // namespace
 
 void registerAggregateFunctionTopK(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("topK", createAggregateFunctionTopK);
 }
 
-}
+} // namespace DB

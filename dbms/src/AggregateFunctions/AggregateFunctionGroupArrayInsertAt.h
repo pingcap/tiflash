@@ -1,32 +1,27 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnVector.h>
-
 #include <Common/FieldVisitors.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/convertFieldToType.h>
-
-#include <AggregateFunctions/IAggregateFunction.h>
 
 #define AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE 0xFFFFFF
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_LARGE_ARRAY_SIZE;
-    extern const int CANNOT_CONVERT_TYPE;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int TOO_LARGE_ARRAY_SIZE;
+extern const int CANNOT_CONVERT_TYPE;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 /** Aggregate function, that takes two arguments: value and position,
@@ -46,7 +41,7 @@ namespace ErrorCodes
 /// Generic case (inefficient).
 struct AggregateFunctionGroupArrayInsertAtDataGeneric
 {
-    Array value;    /// TODO Add MemoryTracker
+    Array value; /// TODO Add MemoryTracker
 };
 
 
@@ -56,7 +51,7 @@ class AggregateFunctionGroupArrayInsertAtGeneric final
 private:
     DataTypePtr type;
     Field default_value;
-    UInt64 length_to_resize = 0;    /// zero means - do not do resizing.
+    UInt64 length_to_resize = 0; /// zero means - do not do resizing.
 
 public:
     AggregateFunctionGroupArrayInsertAtGeneric(const DataTypes & arguments, const Array & params)
@@ -91,7 +86,9 @@ public:
             Field converted = convertFieldToType(default_value, *type);
             if (converted.isNull())
                 throw Exception("Cannot convert parameter of aggregate function " + getName() + " (" + applyVisitor(FieldVisitorToString(), default_value) + ")"
-                    " to type " + type->getName() + " to be used as default value in array", ErrorCodes::CANNOT_CONVERT_TYPE);
+                                                                                                                                                             " to type "
+                                    + type->getName() + " to be used as default value in array",
+                                ErrorCodes::CANNOT_CONVERT_TYPE);
 
             default_value = converted;
         }
@@ -115,8 +112,9 @@ public:
 
         if (position >= AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE)
             throw Exception("Too large array size: position argument (" + toString(position) + ")"
-                " is greater or equals to limit (" + toString(AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE) + ")",
-                ErrorCodes::TOO_LARGE_ARRAY_SIZE);
+                                                                                               " is greater or equals to limit ("
+                                + toString(AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE) + ")",
+                            ErrorCodes::TOO_LARGE_ARRAY_SIZE);
 
         Array & arr = data(place).value;
 
@@ -212,4 +210,4 @@ public:
 
 #undef AGGREGATE_FUNCTION_GROUP_ARRAY_INSERT_AT_MAX_SIZE
 
-}
+} // namespace DB

@@ -1,13 +1,12 @@
-#include <AggregateFunctions/AggregateFunctionForEach.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/AggregateFunctionForEach.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 class AggregateFunctionCombinatorForEach final : public IAggregateFunctionCombinator
@@ -24,14 +23,18 @@ public:
                 nested_arguments.push_back(array->getNestedType());
             else
                 throw Exception("Illegal type " + type->getName() + " of argument"
-                    " for aggregate function with " + getName() + " suffix. Must be array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                                                    " for aggregate function with "
+                                    + getName() + " suffix. Must be array.",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return nested_arguments;
     }
 
     AggregateFunctionPtr transformAggregateFunction(
-        const AggregateFunctionPtr & nested_function, const DataTypes & arguments, const Array &) const override
+        const AggregateFunctionPtr & nested_function,
+        const DataTypes & arguments,
+        const Array &) const override
     {
         return std::make_shared<AggregateFunctionForEach>(nested_function, arguments);
     }
@@ -42,4 +45,4 @@ void registerAggregateFunctionCombinatorForEach(AggregateFunctionCombinatorFacto
     factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorForEach>());
 }
 
-}
+} // namespace DB

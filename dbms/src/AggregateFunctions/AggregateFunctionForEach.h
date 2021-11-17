@@ -1,25 +1,23 @@
 #pragma once
 
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
-#include <AggregateFunctions/IAggregateFunction.h>
-
-#include <IO/WriteBuffer.h>
 #include <IO/ReadBuffer.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int PARAMETER_OUT_OF_BOUND;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
-}
+extern const int PARAMETER_OUT_OF_BOUND;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 struct AggregateFunctionForEachData
@@ -97,7 +95,8 @@ private:
 
 public:
     AggregateFunctionForEach(AggregateFunctionPtr nested_, const DataTypes & arguments)
-        : nested_func(nested_), num_arguments(arguments.size())
+        : nested_func(nested_)
+        , num_arguments(arguments.size())
     {
         nested_size_of_data = nested_func->sizeOfData();
 
@@ -243,4 +242,4 @@ public:
 };
 
 
-}
+} // namespace DB

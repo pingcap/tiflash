@@ -1,8 +1,8 @@
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <memory>
 #include <string>
-#include <boost/noncopyable.hpp>
 
 struct UCollator;
 

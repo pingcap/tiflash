@@ -3,12 +3,11 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int AGGREGATE_FUNCTION_DOESNT_ALLOW_PARAMETERS;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int AGGREGATE_FUNCTION_DOESNT_ALLOW_PARAMETERS;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 void assertNoParameters(const std::string & name, const Array & parameters)
 {
@@ -28,4 +27,4 @@ void assertBinary(const std::string & name, const DataTypes & argument_types)
         throw Exception("Aggregate function " + name + " require two arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 }
 
-}
+} // namespace DB
