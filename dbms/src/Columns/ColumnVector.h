@@ -194,14 +194,12 @@ public:
         data.push_back(static_cast<const Self &>(src).getData()[n]);
     }
 
-    void insertData(const char * pos, size_t /*length*/)
-        override
+    void insertData(const char * pos, size_t /*length*/) override
     {
         data.push_back(*reinterpret_cast<const T *>(pos));
     }
 
-    void decodeData(const char * pos, size_t length)
-    override
+    void decodeData(const char * pos, size_t length[[maybe_unused]]) override
     {
         if constexpr (std::is_same_v<T, Float32> || std::is_same_v<T, Float64>)
         {
@@ -211,7 +209,9 @@ public:
                 num ^= SIGN_MASK;
             else
                 num = ~num;
-            data.push_back(static_cast<T>(*(reinterpret_cast<Float64 *>(&num))));
+            T res;
+            memcpy(&res, &num, sizeof(UInt64));
+            data.push_back(res);
         }
         else
         {
