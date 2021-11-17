@@ -1,4 +1,5 @@
 #include <Core/BlockGen.h>
+#include <DataTypes/DataTypeArray.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -205,6 +206,7 @@ try
     ASSERT_EQ(true, checkMatch(case_name, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createLessEqual(attr("Nullable(Int64)"), Field((Int64)99), 0)));
 
     ASSERT_EQ(false, checkDelMatch(case_name, *context, "Int64", "100", createEqual(attr("Int64"), Field((Int64)100))));
+    ASSERT_EQ(true, checkPkMatch(case_name, *context, "Int64", "100", createEqual(pkAttr(), Field((Int64)100)), true));
     ASSERT_EQ(true, checkPkMatch(case_name, *context, "Int64", "100", createGreater(pkAttr(), Field((Int64)99), 0), true));
     ASSERT_EQ(true, checkPkMatch(case_name, *context, "Int64", "100", createGreater(pkAttr(), Field((Int64)99), 0), false));
 
@@ -301,6 +303,26 @@ try
     ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16)50), true);
     ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test"), enum16_type, (Int16)51), true);
     ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test_2"), enum16_type, (Int16)101), true);
+}
+CATCH
+
+TEST_F(DMMinMaxIndexTest, ArrayCompare)
+try
+{
+    auto array_type_ptr = std::make_shared<DataTypeArray>(std::make_shared<DataTypeInt64>());
+    ASSERT_EQ(RoughCheck::Cmp<EqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)60)}), true);
+
+    ASSERT_EQ(RoughCheck::Cmp<LessOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)70)}), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)60), Field((Int64)60)}), true);
+
+    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)60)}), true);
+    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)60), Field((Int64)60)}), true);
+
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)40), Field((Int64)60)}), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)50)}), true);
+
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)60)}), true);
+    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)50)}), true);
 }
 CATCH
 } // namespace tests
