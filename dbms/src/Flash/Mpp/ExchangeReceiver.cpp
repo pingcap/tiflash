@@ -131,8 +131,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 bool success = reader->read(recv_msg->packet.get());
                 if (!success)
                 {
-                    if (!has_data) /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.
-                        returnEmptyMsg(recv_msg);
+                    /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.
+                    returnEmptyMsg(recv_msg);
                     break;
                 }
                 else
