@@ -149,6 +149,9 @@ void StorageDeltaMerge::updateTableColumnInfo()
             if (itr != columns.end())
             {
                 col_def.default_value = itr->defaultValueToField();
+                col_def.is_not_null = itr->hasNotNullFlag();
+                col_def.has_no_default_value = itr->hasNoDefaultValueFlag();
+                col_def.is_pk = itr->hasPriKeyFlag();
             }
 
             if (col_def.id != TiDBPkColumnID && col_def.id != VersionColumnID && col_def.id != DelMarkColumnID
@@ -833,69 +836,10 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 DB::DecodingStorageSchemaSnapshotConstPtr StorageDeltaMerge::getDecodingSchemaSnapshot()
 {
     std::lock_guard lock{schema_snapshot_mutex};
-    if (!decoding_schema_snapshot || decoding_schema_snapshot->table_info.schema_version < tidb_table_info.schema_version)
+    if (!decoding_schema_snapshot || decoding_schema_snapshot->schema_version < tidb_table_info.schema_version)
     {
-        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(tidb_table_info);
         auto & store = getAndMaybeInitStore();
-        ColumnDefinesPtr store_columns = store->getStoreColumns();
-        auto & original_handle = store->getHandle();
-        decoding_schema_snapshot->column_defines = store->getStoreColumns();
-        decoding_schema_snapshot->is_common_handle = is_common_handle;
-        for (size_t i = 0; i < decoding_schema_snapshot->column_defines->size(); i++)
-        {
-            auto & column_define = (*(decoding_schema_snapshot->column_defines))[i];
-            decoding_schema_snapshot->sorted_column_ids.insert(column_define.id);
-            decoding_schema_snapshot->column_pos_in_cd.emplace(column_define.id, i);
-        }
-
-        for (size_t i = 0; i < tidb_table_info.columns.size(); i++)
-        {
-            ColumnID col_id = tidb_table_info.columns[i].id;
-            decoding_schema_snapshot->column_pos_in_table_info.emplace(col_id, i);
-        }
-
-        // create pk related metadata if needed
-        if (tidb_table_info.is_common_handle)
-        {
-            auto & primary_index_info = tidb_table_info.getPrimaryIndexInfo();
-            for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
-            {
-                decoding_schema_snapshot->pk_column_ids.emplace_back(tidb_table_info.columns[primary_index_info.idx_cols[i].offset].id);
-                decoding_schema_snapshot->pk_pos_map.emplace(original_handle.id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max));
-            }
-            decoding_schema_snapshot->pk_type = TMTPKType::STRING;
-        }
-        else if (tidb_table_info.pk_is_handle)
-        {
-            decoding_schema_snapshot->pk_column_ids.emplace_back(original_handle.id);
-            decoding_schema_snapshot->pk_pos_map.emplace(original_handle.id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max));
-            decoding_schema_snapshot->pk_type = getTMTPKType(*original_handle.type);
-        }
-        else
-        {
-            decoding_schema_snapshot->pk_type = TMTPKType::INT64;
-        }
-
-        // calculate pk column pos in block
-        if (!decoding_schema_snapshot->pk_pos_map.empty())
-        {
-            auto pk_pos_iter = decoding_schema_snapshot->pk_pos_map.begin();
-            size_t column_pos_in_block = 0;
-            for (auto iter = decoding_schema_snapshot->sorted_column_ids.begin(); iter != decoding_schema_snapshot->sorted_column_ids.end(); iter++)
-            {
-                if (pk_pos_iter == decoding_schema_snapshot->pk_pos_map.end())
-                    break;
-                if (pk_pos_iter->first == *iter)
-                {
-                    pk_pos_iter->second = column_pos_in_block;
-                    pk_pos_iter++;
-                }
-                iter++;
-                column_pos_in_block++;
-            }
-            if (unlikely(pk_pos_iter != decoding_schema_snapshot->pk_pos_map.end()))
-                throw Exception("Cannot find all pk columns in block", ErrorCodes::LOGICAL_ERROR);
-        }
+        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), is_common_handle);
     }
     return decoding_schema_snapshot;
 }

@@ -128,6 +128,12 @@ public:
     /// Parameter length could be ignored if column values have fixed size.
     virtual void insertData(const char * pos, size_t length) = 0;
 
+    /// decode row data synced from tiv
+    virtual void decodeData(const char *, size_t)
+    {
+        throw Exception("Method decodeData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Like getData, but has special behavior for columns that contain variable-length strings.
     /// In this special case inserting data should be zero-ending (i.e. length is 1 byte greater than real string size).
     virtual void insertDataWithTerminatingZero(const char * pos, size_t length)

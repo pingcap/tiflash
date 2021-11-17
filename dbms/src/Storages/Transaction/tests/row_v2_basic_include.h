@@ -191,12 +191,6 @@ size_t valueStartPos(const TableInfo & table_info)
     return 1 + 1 + 2 + 2 + (is_big ? 8 : 3) * table_info.columns.size();
 }
 
-bool isBig(const TiKVValue::Base & encoded)
-{
-    static constexpr UInt8 BigRowMask = 0x1;
-    return encoded[1] & BigRowMask;
-}
-
 template <bool is_big, typename T>
 std::tuple<T, size_t> getValueLength(const T & v)
 {

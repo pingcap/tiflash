@@ -6,6 +6,12 @@
 namespace DB::tests
 {
 
+bool isBig(const TiKVValue::Base & encoded)
+{
+    static constexpr UInt8 BigRowMask = 0x1;
+    return encoded[1] & BigRowMask;
+}
+
 #define ASSERT_INT_VALUE_LENGTH(v, l) ASSERT_EQ(getValueLength<false>(v), std::make_tuple(v, l))
 
 TEST(RowV2Suite, IntValueLength)

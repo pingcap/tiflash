@@ -166,6 +166,11 @@ public:
         offsets.push_back(new_size);
     }
 
+    void decodeData(const char * pos, size_t length) override
+    {
+        insertData(pos, length);
+    }
+
     void insertDataWithTerminatingZero(const char * pos, size_t length) override
     {
         const size_t old_size = chars.size();

@@ -84,7 +84,7 @@ bool checkMatch(const String & test_case, //
         false,
         1);
 
-    store->write(context, context.getSettingsRef(), std::move(block));
+    store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);
     store->mergeDeltaAll(context);
 

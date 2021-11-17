@@ -3,6 +3,7 @@
 #include <Storages/Transaction/DecodedRow.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Core/Block.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
@@ -33,10 +34,11 @@ Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_inf
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 
-using SortedColumnIDs = std::set<ColumnID>;
-using ColumnIdToPos = std::map<ColumnID, size_t>;
-bool decodeRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode);
-bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode);
-bool decodeRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode);
+// TODO: move these function to a separate file
+bool decodeRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
+bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
+template <bool is_big>
+bool decodeRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
+bool decodeRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
 
 } // namespace DB

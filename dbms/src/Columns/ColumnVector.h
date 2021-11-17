@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Columns/ColumnVectorHelper.h>
+#include <IO/Endian.h>
 
 #include <cmath>
 
@@ -126,6 +127,19 @@ inline UInt64 unionCastToUInt64(Float32 x)
     return res;
 }
 
+template <typename dstT, typename srcT>
+static dstT readInt(const char * pos)
+{
+    if (is_signed_v<dstT>)
+    {
+        return static_cast<dstT>(static_cast<std::make_signed_t<srcT>>(readLittleEndian<srcT>(pos)));
+    }
+    else
+    {
+        return static_cast<dstT>(static_cast<std::make_unsigned_t<srcT>>(readLittleEndian<srcT>(pos)));
+    }
+}
+
 
 /** A template for columns that use a simple array to store.
   */
@@ -184,6 +198,41 @@ public:
         override
     {
         data.push_back(*reinterpret_cast<const T *>(pos));
+    }
+
+    void decodeData(const char * pos, size_t length)
+    override
+    {
+        if constexpr (std::is_same_v<T, Float32> || std::is_same_v<T, Float64>)
+        {
+            constexpr UInt64 SIGN_MASK = UInt64(1) << 63;
+            auto num = readBigEndian<UInt64>(pos);
+            if (num & SIGN_MASK)
+                num ^= SIGN_MASK;
+            else
+                num = ~num;
+            data.push_back(static_cast<T>(*(reinterpret_cast<Float64 *>(&num))));
+        }
+        else
+        {
+            switch (length)
+            {
+            case sizeof(UInt8):
+                data.push_back(readInt<T, UInt8>(pos));
+                break;
+            case sizeof(UInt16):
+                data.push_back(readInt<T, UInt16>(pos));
+                break;
+            case sizeof(UInt32):
+                data.push_back(readInt<T, UInt32>(pos));
+                break;
+            case sizeof(UInt64):
+                data.push_back(readInt<T, UInt64>(pos));
+                break;
+            default:
+                throw Exception(std::string("Invalid integer length ") + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
+            }
+        }
     }
 
     void insertDefault() override

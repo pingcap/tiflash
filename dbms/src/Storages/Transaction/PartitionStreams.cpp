@@ -37,17 +37,7 @@ extern const int ILLFORMAT_RAFT_ROW;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
-Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot)
-{
-    Block block;
-    for (auto iter = schema_snapshot->sorted_column_ids.begin(); iter != schema_snapshot->sorted_column_ids.end(); iter++)
-    {
-        auto col_id = *iter;
-        auto & cd = (*(schema_snapshot->column_defines))[schema_snapshot->column_pos_in_cd.at(col_id)];
-        block.insert({cd.type->createColumn(), cd.type, cd.name, col_id});
-    }
-    return block;
-}
+
 
 //void clearBlockData(Block & block)
 //{
@@ -129,8 +119,8 @@ static void writeRegionDataToStorage(
             auto decoding_schema_snapshot = storage->getDecodingSchemaSnapshot();
             block = createBlockSortByColumnID(decoding_schema_snapshot);
 
-            auto reader = RegionBlockReader(storage->engineType());
-            ok = reader.read(decoding_schema_snapshot->pk_type, decoding_schema_snapshot, block, data_list_read, force_decode);
+            auto reader = RegionBlockReader(decoding_schema_snapshot);
+            ok = reader.read(block, data_list_read, force_decode);
             if (!ok)
                 return false;
             region_decode_cost = watch.elapsedMilliseconds();
@@ -142,16 +132,9 @@ static void writeRegionDataToStorage(
         TableLockHolder drop_lock;
         std::tie(std::ignore, drop_lock) = std::move(lock).release();
         watch.restart();
-        // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
+        // Note: do NOT use typeid_cast, since Storage is multi-inherited and typeid_cast will return nullptr
         switch (storage->engineType())
         {
-        case ::TiDB::StorageEngine::TMT:
-        {
-            auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-            TxnMergeTreeBlockOutputStream output(*tmt_storage);
-            output.write(block);
-            break;
-        }
         case ::TiDB::StorageEngine::DT:
         {
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
@@ -399,11 +382,11 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
                               assert(0);
                               {
                                   // This is a deprecated function that is only used in TMT storage engine
-                                  // TODO: do we need to support it or just throw a exception here?
-                                  auto reader = RegionBlockReader(TiDB::StorageEngine::TMT);
+                                  // TODO: remove this function
+                                  auto reader = RegionBlockReader(nullptr);
                                   bool ok = reader.setStartTs(start_ts)
                                                 .setFilter(scan_filter)
-                                                .read(TMTPKType::UNSPECIFIED, schema_snapshot, block, data_list_read, /*force_decode*/ true);
+                                                .read(block, data_list_read, /*force_decode*/ true);
                                   if (!ok)
                                       // TODO: Enrich exception message.
                                       throw Exception("Read region " + std::to_string(region->id()) + " of table "
@@ -523,8 +506,8 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
         auto decoding_schema_snapshot = storage->getDecodingSchemaSnapshot();
         res_block = createBlockSortByColumnID(decoding_schema_snapshot);
-        auto reader = RegionBlockReader(storage->engineType());
-        if (!reader.read(decoding_schema_snapshot->pk_type, decoding_schema_snapshot, res_block, *data_list_read, force_decode))
+        auto reader = RegionBlockReader(decoding_schema_snapshot);
+        if (!reader.read(res_block, *data_list_read, force_decode))
             return false;
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
         return true;
@@ -648,9 +631,9 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
         Stopwatch watch;
         {
             // Compare schema_snap with current schema, throw exception if changed.
-            auto reader = RegionBlockReader(TiDB::StorageEngine::DT);
+            auto reader = RegionBlockReader(schema_snap);
             res_block = createBlockSortByColumnID(schema_snap);
-            if (unlikely(!reader.read(schema_snap->pk_type, schema_snap, res_block, *data_list_read, force_decode)))
+            if (unlikely(!reader.read(res_block, *data_list_read, force_decode)))
                 throw Exception("RegionBlockReader decode error", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
         }
 

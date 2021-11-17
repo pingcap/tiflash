@@ -7,6 +7,7 @@
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
+#include <Storages/Transaction/RowCodec.h>
 
 
 template <typename T>
@@ -230,6 +231,14 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
         memcpy(&tmp, src, sizeof(T));
         data.emplace_back(tmp);
     }
+}
+
+template <typename T>
+void ColumnDecimal<T>::decodeData(const char * pos, size_t length)
+{
+    size_t cursor = 0;
+    // TODO: fix this extra memory copy
+    insert(DecodeDecimal(cursor, String(pos, length)));
 }
 
 template <typename T>

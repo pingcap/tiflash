@@ -525,35 +525,44 @@ void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & 
     RowEncoderV2(table_info, fields).encode(ss);
 }
 
-inline bool isMissingColumn(ColumnID column_id, const SortedColumnIDs & sorted_pk_column_ids,  const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info)
+inline bool isMissingColumn(const DM::ColumnDefine & column_define)
 {
-    if (sorted_pk_column_ids.find(column_id) != sorted_pk_column_ids.end())
+    if (column_define.is_pk)
     {
         // we can decode pk column from row key
         return false;
     }
+    else if (column_define.has_no_default_value && column_define.is_not_null)
+    {
+        return false;
+    }
     else
     {
-        auto & column_info = table_info.columns[column_pos_in_table_info.at(column_id)];
-        if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
-            return true;
-        else
-            return false;
+        return false;
     }
 }
 
-bool decodeRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode)
+bool decodeRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
 {
     switch (static_cast<UInt8>(raw_value[0]))
     {
     case static_cast<UInt8>(RowCodecVer::ROW_V2):
-        return decodeRowV2ToBlock(raw_value, column_ids_iter, column_ids_iter_end, sorted_pk_column_ids, block, block_column_pos,  table_info, column_pos_in_table_info, force_decode);
+        return decodeRowV2ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_defines, force_decode);
     default:
-        return decodeRowV1ToBlock(raw_value, column_ids_iter, column_ids_iter_end, sorted_pk_column_ids, block, block_column_pos,  table_info, column_pos_in_table_info, force_decode);
+        return decodeRowV1ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos,  column_defines, force_decode);
     }
 }
 
-bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode)
+bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
+{
+    UInt8 row_flag = readLittleEndian<UInt8>(&raw_value[1]);
+    bool is_big = row_flag & RowV2::BigRowMask;
+    return is_big ? decodeRowV2ToBlockImpl<true>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_defines, force_decode)
+                  : decodeRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_defines, force_decode);
+}
+
+template <bool is_big>
+bool decodeRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
 {
     size_t cursor = 2; // Skip the initial codec ver and row flag.
     size_t num_not_null_columns = decodeUInt<UInt16>(cursor, raw_value);
@@ -561,9 +570,9 @@ bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iter
     std::vector<ColumnID> not_null_column_ids;
     std::vector<ColumnID> null_column_ids;
     std::vector<size_t> value_offsets;
-    decodeUInts<ColumnID, typename RowV2::Types<false>::ColumnIDType>(cursor, raw_value, num_not_null_columns, not_null_column_ids);
-    decodeUInts<ColumnID, typename RowV2::Types<false>::ColumnIDType>(cursor, raw_value, num_null_columns, null_column_ids);
-    decodeUInts<size_t, typename RowV2::Types<false>::ValueOffsetType>(cursor, raw_value, num_not_null_columns, value_offsets);
+    decodeUInts<ColumnID, typename RowV2::Types<is_big>::ColumnIDType>(cursor, raw_value, num_not_null_columns, not_null_column_ids);
+    decodeUInts<ColumnID, typename RowV2::Types<is_big>::ColumnIDType>(cursor, raw_value, num_null_columns, null_column_ids);
+    decodeUInts<size_t, typename RowV2::Types<is_big>::ValueOffsetType>(cursor, raw_value, num_not_null_columns, value_offsets);
     size_t values_start_pos = cursor;
     size_t id_not_null = 0, id_null = 0;
     // Merge ordered not null/null columns to keep order.
@@ -586,50 +595,50 @@ bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iter
 
         if (is_null)
         {
-            if (*column_ids_iter > null_column_ids[id_null])
+            if (column_ids_iter->first > null_column_ids[id_null])
             {
                 // extra column
                 if (!force_decode)
                     return false;
             }
-            else if (*column_ids_iter < null_column_ids[id_null])
+            else if (column_ids_iter->first < null_column_ids[id_null])
             {
+                auto & column_define = (*column_defines)[column_ids_iter->second];
                 // maybe missing column
-                if (!force_decode && isMissingColumn(*column_ids_iter, sorted_pk_column_ids, table_info, column_pos_in_table_info))
+                if (!force_decode && isMissingColumn(column_define))
                     return false;
                 else
                 {
                     auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-                    auto & column_info = table_info.columns[column_pos_in_table_info.at(*column_ids_iter)];
-                    raw_column->insert(column_info.defaultValueToField());
+                    raw_column->insert(column_define.default_value);
                 }
             }
             else
             {
                 auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-                auto & column_info = table_info.columns[column_pos_in_table_info.at(*column_ids_iter)];
-                raw_column->insert(column_info.defaultValueToField());
+                auto & column_define = (*column_defines)[column_ids_iter->second];
+                raw_column->insert(column_define.default_value);
             }
             id_null++;
         }
         else
         {
-            if (*column_ids_iter > not_null_column_ids[id_not_null])
+            if (column_ids_iter->first > not_null_column_ids[id_not_null])
             {
                 // extra column
                 if (!force_decode)
                     return false;
             }
-            else if (*column_ids_iter < not_null_column_ids[id_not_null])
+            else if (column_ids_iter->first < not_null_column_ids[id_not_null])
             {
+                auto & column_define = (*column_defines)[column_ids_iter->second];
                 // maybe missing column
-                if (!force_decode && isMissingColumn(*column_ids_iter, sorted_pk_column_ids, table_info, column_pos_in_table_info))
+                if (!force_decode && isMissingColumn(column_define))
                     return false;
                 else
                 {
                     auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-                    auto & column_info = table_info.columns[column_pos_in_table_info.at(*column_ids_iter)];
-                    raw_column->insert(column_info.defaultValueToField());
+                    raw_column->insert(column_define.default_value);
                 }
             }
             else
@@ -637,7 +646,7 @@ bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iter
                 auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
                 size_t start = id_not_null ? value_offsets[id_not_null - 1] : 0;
                 size_t length = value_offsets[id_not_null] - start;
-                raw_column->insertData(raw_value.c_str() + values_start_pos + start, length);
+                raw_column->decodeData(raw_value.c_str() + values_start_pos + start, length);
             }
             id_not_null++;
         }
@@ -647,7 +656,7 @@ bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iter
     return true;
 }
 
-bool decodeRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iterator column_ids_iter, SortedColumnIDs::iterator column_ids_iter_end, const SortedColumnIDs & sorted_pk_column_ids, Block & block, size_t block_column_pos, const TableInfo & table_info, const ColumnIdToPos column_pos_in_table_info, bool force_decode)
+bool decodeRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
 {
     size_t cursor = 0;
     std::map<ColumnID, Field> decoded_fields;
@@ -675,22 +684,22 @@ bool decodeRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDs::iter
                 break;
         }
 
-        if (*column_ids_iter > decoded_field_iter->first)
+        if (column_ids_iter->first > decoded_field_iter->first)
         {
             // extra column
             if (!force_decode)
                 return false;
         }
-        else if (*column_ids_iter < decoded_field_iter->first)
+        else if (column_ids_iter->first < decoded_field_iter->first)
         {
+            auto & column_define = (*column_defines)[column_ids_iter->second];
             // maybe missing column
-            if (!force_decode && isMissingColumn(*column_ids_iter, sorted_pk_column_ids, table_info, column_pos_in_table_info))
+            if (!force_decode && isMissingColumn(column_define))
                 return false;
             else
             {
                 auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-                auto & column_info = table_info.columns[column_pos_in_table_info.at(*column_ids_iter)];
-                raw_column->insert(column_info.defaultValueToField());
+                raw_column->insert(column_define.default_value);
             }
         }
         else

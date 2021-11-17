@@ -100,33 +100,33 @@ void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
     }
 }
 
-RegionBlockReader::RegionBlockReader(TiDB::StorageEngine engine_type)
-    : do_reorder_for_uint64_pk(engine_type != TiDB::StorageEngine::DT)
+RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schema_snapshot_)
+    : schema_snapshot{std::move(schema_snapshot_)}
 {}
 
-bool RegionBlockReader::read(TMTPKType pk_type, const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot, Block & block, RegionDataReadInfoList & data_list, bool force_decode)
+bool RegionBlockReader::read(Block & block, RegionDataReadInfoList & data_list, bool force_decode)
 {
-    switch (pk_type)
+    switch (schema_snapshot->pk_type)
     {
     case TMTPKType::INT64:
-        return read<TMTPKType::INT64>(schema_snapshot, block, data_list, force_decode);
+        return readImpl<TMTPKType::INT64>(block, data_list, force_decode);
     case TMTPKType::UINT64:
-        return read<TMTPKType::UINT64>(schema_snapshot, block, data_list, force_decode);
+        return readImpl<TMTPKType::UINT64>(block, data_list, force_decode);
     case TMTPKType::STRING:
-        return read<TMTPKType::STRING>(schema_snapshot, block, data_list, force_decode);
+        return readImpl<TMTPKType::STRING>(block, data_list, force_decode);
     default:
-        return read<TMTPKType::UNSPECIFIED>(schema_snapshot, block, data_list, force_decode);
+        return readImpl<TMTPKType::UNSPECIFIED>(block, data_list, force_decode);
     }
 }
 
 template <TMTPKType pk_type>
-bool RegionBlockReader::read(const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot, Block & block, RegionDataReadInfoList & data_list, bool force_decode)
+bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_list, bool force_decode)
 {
-    const auto & read_column_ids = schema_snapshot->sorted_column_ids;
+    const auto & read_column_ids = schema_snapshot->sorted_column_id_with_pos;
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
 
-    auto column_ids_iter = read_column_ids.begin();
+    SortedColumnIDWithPosConstIter column_ids_iter = read_column_ids.begin();
     size_t next_column_pos = 0;
 
     /// every table in tiflash must have an extra handle column, it either
@@ -143,15 +143,15 @@ bool RegionBlockReader::read(const DecodingStorageSchemaSnapshotConstPtr & schem
     size_t extra_handle_column_pos = invalid_column_pos;
     while (raw_delmark_col == nullptr || raw_version_col == nullptr || extra_handle_column_pos == invalid_column_pos)
     {
-        if (*column_ids_iter == DelMarkColumnID)
+        if (column_ids_iter->first == DelMarkColumnID)
         {
             raw_delmark_col = static_cast<ColumnUInt8 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
         }
-        else if (*column_ids_iter == VersionColumnID)
+        else if (column_ids_iter->first == VersionColumnID)
         {
             raw_version_col = static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
         }
-        else if (*column_ids_iter == TiDBPkColumnID)
+        else if (column_ids_iter->first == TiDBPkColumnID)
         {
             extra_handle_column_pos = next_column_pos;
         }
@@ -162,10 +162,6 @@ bool RegionBlockReader::read(const DecodingStorageSchemaSnapshotConstPtr & schem
     if (unlikely(next_column_pos != MustHaveColCnt))
         throw Exception("del, version column must exist before all other visible columns.", ErrorCodes::LOGICAL_ERROR);
 
-    if (do_reorder_for_uint64_pk && pk_type == TMTPKType::UINT64)
-        ReorderRegionDataReadList(data_list);
-
-    SortedColumnIDs sorted_pk_column_ids(pk_column_ids.begin(), pk_column_ids.end());
     ColumnUInt8::Container & delmark_data = raw_delmark_col->getData();
     ColumnUInt64::Container & version_data = raw_version_col->getData();
     delmark_data.reserve(data_list.size());
@@ -189,7 +185,7 @@ bool RegionBlockReader::read(const DecodingStorageSchemaSnapshotConstPtr & schem
 
         if (need_decode_value)
         {
-            if (!decodeRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), sorted_pk_column_ids, block, next_column_pos, schema_snapshot->table_info, schema_snapshot->column_pos_in_table_info, force_decode))
+            if (!decodeRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_defines, force_decode))
                 return false;
         }
 

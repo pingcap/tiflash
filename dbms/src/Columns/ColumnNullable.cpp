@@ -161,6 +161,11 @@ void ColumnNullable::insertData(const char * pos, size_t length)
     }
 }
 
+void ColumnNullable::decodeData(const char * pos, size_t length)
+{
+    insertData(pos, length);
+}
+
 StringRef ColumnNullable::serializeValueIntoArena(
     size_t n,
     Arena & arena,

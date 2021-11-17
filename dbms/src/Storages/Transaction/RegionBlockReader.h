@@ -75,12 +75,8 @@ class RegionBlockReader : private boost::noncopyable
     RegionScanFilterPtr scan_filter;
     Timestamp start_ts = std::numeric_limits<Timestamp>::max();
 
-    // Whether to reorder the rows when pk is uint64.
-    // For Delta-Tree, we don't need to reorder rows to be sorted by uint64 pk
-    bool do_reorder_for_uint64_pk = false;
-
 public:
-    RegionBlockReader(TiDB::StorageEngine engine_type);
+    RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schema_snapshot_);
 
     inline RegionBlockReader & setFilter(RegionScanFilterPtr filter)
     {
@@ -99,16 +95,6 @@ public:
         return *this;
     }
 
-    /// Set whether to reorder rows when the type of primary key is UInt64.
-    /// It is false if this reader is created by `RegionBlockReader(const ManageableStoragePtr &)` and the
-    /// storage engine is Delta-Tree.
-    /// Otherwise it is true by default.
-    inline RegionBlockReader & setReorderUInt64PK(bool flag)
-    {
-        do_reorder_for_uint64_pk = flag;
-        return *this;
-    }
-
     /// Read `data_list` as a block.
     ///
     /// On decode error, i.e. column number/type mismatch, will do force apply schema,
@@ -117,11 +103,14 @@ public:
     ///
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
     /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
-    bool read(TMTPKType pk_type, const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot, Block & block, RegionDataReadInfoList & data_list, bool force_decode);
+    bool read(Block & block, RegionDataReadInfoList & data_list, bool force_decode);
 
 private:
     template <TMTPKType pk_type>
-    bool read(const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot, Block & block, RegionDataReadInfoList & data_list, bool force_decode);
+    bool readImpl(Block & block, RegionDataReadInfoList & data_list, bool force_decode);
+
+private:
+    DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 };
 
 } // namespace DB
