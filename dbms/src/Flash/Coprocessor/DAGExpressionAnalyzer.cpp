@@ -858,7 +858,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     // the basic rule is:
     // 1. if the column is only null, just return it is fine
     // 2. if the column is numeric, compare it with 0
-    // 3. if the column is string, convert it to numeric column, and compare with 0
+    // 3. if the column is string, convert it to float-point column, and compare with 0
     // 4. if the column is date/datetime, compare it with zeroDate
     // 5. if the column is other type, throw exception
     if (actions->getSampleBlock().getByName(column_name).type->onlyNull())
@@ -878,9 +878,10 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         /// use tidb_cast to make it compatible with TiDB
         tipb::FieldType field_type;
         // TODO: Use TypeDouble as return type, to be compatible with TiDB
-        field_type.set_tp(TiDB::TypeLongLong);
+        field_type.set_tp(TiDB::TypeDouble);
+        field_type.set_flen(-1);
         tipb::Expr type_expr;
-        constructStringLiteralTiExpr(type_expr, "Nullable(Int64)");
+        constructStringLiteralTiExpr(type_expr, "Nullable(Double)");
         auto type_expr_name = getActions(type_expr, actions);
         String num_col_name = buildCastFunctionInternal(this, {column_name, type_expr_name}, false, field_type, actions);
 
