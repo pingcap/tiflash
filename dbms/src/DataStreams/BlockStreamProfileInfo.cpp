@@ -8,13 +8,26 @@
 
 namespace DB
 {
-void BlockStreamProfileInfo::Timeline::record(UInt64 ns, UInt64 rows_, UInt64 bytes_)
+BlockStreamProfileInfo::Timeline::Timeline()
 {
-    size_t i = ns / time_span;
-    if (i < max_size)
+    memset(count, 0, sizeof(count));
+}
+
+void BlockStreamProfileInfo::Timeline::record(size_t count_id, const TimePoint & begin_tp, const TimePoint & end_tp, double value)
+{
+    if (count_id >= num_counters)
+        throw TiFlashException(fmt::format("count_id = {} is too large", count_id), Errors::Coprocessor::Internal);
+
+    auto begin_ts = std::chrono::duration_cast<std::chrono::nanoseconds>(begin_tp.time_since_epoch()).count();
+    auto end_ts = std::chrono::duration_cast<std::chrono::nanoseconds>(end_tp.time_since_epoch()).count();
+
+    double duration = end_ts - begin_ts;
+    for (Int64 ts = begin_ts, step = 0; ts < end_ts; ts += step)
     {
-        rows[i] += rows_;
-        bytes[i] += bytes_;
+        step = std::min(end_ts - ts, time_span - ts % time_span);
+        size_t i = (ts / time_span) % max_size;
+        double ratio = step / duration;
+        count[count_id][i] += value * ratio;
     }
 }
 

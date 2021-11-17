@@ -21,17 +21,19 @@ class IProfilingBlockInputStream;
 /// Information for profiling. See IProfilingBlockInputStream.h
 struct BlockStreamProfileInfo
 {
-    using TimePoint = std::chrono::system_clock::time_point;
+    using TimePoint = std::chrono::high_resolution_clock::time_point;
 
     struct Timeline
     {
-        static constexpr UInt64 time_span = 100'000'000; // 100 ms
-        static constexpr UInt64 max_size = 1024;
+        static constexpr Int64 time_span = 100'000'000; // 100 ms
+        static constexpr size_t max_size = 1024;
+        static constexpr size_t num_counters = 2;
 
-        UInt64 rows[max_size]{0};
-        UInt64 bytes[max_size]{0};
+        double count[num_counters][max_size];
 
-        void record(UInt64 ns, UInt64 rows_, UInt64 bytes_);
+        Timeline();
+
+        void record(size_t count_id, const TimePoint & begin_tp, const TimePoint & end_tp, double value);
     };
 
     /// Info about stream object this profile info refers to.
@@ -61,14 +63,17 @@ struct BlockStreamProfileInfo
     UInt64 waiting_duration = 0;
     UInt64 self_duration = 0;
 
+    UInt64 total_bytes = 0;
+    UInt64 total_rows = 0;
+
     bool is_first = true;
     TimePoint first_ts;
     TimePoint last_ts;
-    Timeline traffic;
+    Timeline timeline;
 
     static TimePoint now()
     {
-        return std::chrono::system_clock::now();
+        return std::chrono::high_resolution_clock::now();
     }
 
     static UInt64 toNanoseconds(const TimePoint & tp)

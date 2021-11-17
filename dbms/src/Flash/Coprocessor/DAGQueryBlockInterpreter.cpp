@@ -566,12 +566,12 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         swap_join_side ? join.left_conditions() : join.right_conditions(),
         right_filter_column_name);
 
-    left_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
-    });
-    right_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
-    });
+    // left_pipeline.transform([&](auto & stream) {
+    //     stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
+    // });
+    // right_pipeline.transform([&](auto & stream) {
+    //     stream = std::make_shared<TrafficMonitorInputBlockStream>(stream, log);
+    // });
 
     String other_filter_column_name, other_eq_filter_from_in_column_name;
     for (auto const & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())

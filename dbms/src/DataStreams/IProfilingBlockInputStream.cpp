@@ -57,6 +57,8 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
     if (!limit_exceeded_need_break)
     {
+        auto begin_tp = info.now();
+
         if (return_filter)
             res = readImpl(res_filter, return_filter);
         else
@@ -70,8 +72,10 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
         if (res)
         {
-            UInt64 ns = std::chrono::duration_cast<std::chrono::nanoseconds>(info.now() - info.first_ts).count();
-            info.traffic.record(ns, res.rows(), res.bytes());
+            auto end_tp = info.now();
+            info.timeline.record(0, begin_tp, end_tp, res.rows());
+            info.total_rows += res.rows();
+            info.total_bytes += res.bytes();
         }
         else
         {
@@ -127,7 +131,7 @@ void IProfilingBlockInputStream::dumpProfileInfo(FmtBuffer & buf)
 {
     std::unordered_set<Int64> dumped;
 
-    buf.append("[]");
+    buf.append("[");
     recursiveDumpProfileInfo(buf, dumped);
     buf.append("]");
 }
@@ -144,7 +148,7 @@ void IProfilingBlockInputStream::recursiveDumpProfileInfo(FmtBuffer & buf, std::
         buf.append(",");
     buf.append("{");
 
-    buf.fmtAppend("\"signature\":{},", info.signature)
+    buf.fmtAppend("\"id\":{},", info.signature)
         .fmtAppend("\"name\":\"{}\",", getName());
 
     buf.append("\"children\":[");
@@ -174,30 +178,41 @@ void IProfilingBlockInputStream::dumpProfileInfoImpl(FmtBuffer & buf)
 {
     buf.append("{");
 
-    buf.fmtAppend("\"prefix\":{},", info.prefix_duration)
-        .fmtAppend("\"suffix\":{},", info.suffix_duration)
-        .fmtAppend("\"running\":{},", info.running_duration)
-        .fmtAppend("\"waiting\":{},", info.waiting_duration)
-        .fmtAppend("\"self\":{},", info.self_duration)
+    buf.fmtAppend("\"prefix_duration\":{},", info.prefix_duration)
+        .fmtAppend("\"suffix_duration\":{},", info.suffix_duration)
+        .fmtAppend("\"running_duration\":{},", info.running_duration)
+        .fmtAppend("\"waiting_duration\":{},", info.waiting_duration)
+        .fmtAppend("\"self_duration\":{},", info.self_duration)
         .fmtAppend("\"first_ts\":{},", info.toNanoseconds(info.first_ts))
-        .fmtAppend("\"last_ts\":{},", info.toNanoseconds(info.last_ts));
+        .fmtAppend("\"last_ts\":{},", info.toNanoseconds(info.last_ts))
+        .fmtAppend("\"total_rows\":{},", info.total_rows)
+        .fmtAppend("\"total_bytes\":{},", info.total_bytes);
 
-    buf.append("\"traffic\":{}");
-    // ostr << "\"traffic\":{";
+    // buf.append("\"timeline\":{}");
+    buf.append("\"timeline\":{");
+    buf.append("\"self\":[");
+    for (size_t i = 0; i < info.timeline.max_size; ++i)
+    {
+        buf.fmtAppend(i == 0 ? "{:.3f}" : ",{:.3f}", info.timeline.count[1][i]);
+    }
+    buf.append("]");
+    buf.append("}");
+
+    // ostr << "\"timeline\":{";
     // ostr << "\"rows\":[";
-    // for (size_t i = 0; i < info.traffic.max_size; i++)
+    // for (size_t i = 0; i < info.timeline.max_size; i++)
     // {
-    //     ostr << info.traffic.rows[i];
-    //     if (i + 1 < info.traffic.max_size)
+    //     ostr << info.timeline.rows[i];
+    //     if (i + 1 < info.timeline.max_size)
     //         ostr << ',';
     // }
     // ostr << "],";
 
     // ostr << "\"bytes\":[";
-    // for (size_t i = 0; i < info.traffic.max_size; i++)
+    // for (size_t i = 0; i < info.timeline.max_size; i++)
     // {
-    //     ostr << info.traffic.bytes[i];
-    //     if (i + 1 < info.traffic.max_size)
+    //     ostr << info.timeline.bytes[i];
+    //     if (i + 1 < info.timeline.max_size)
     //         ostr << ',';
     // }
     // ostr << "]";
@@ -221,6 +236,7 @@ void IProfilingBlockInputStream::SelfTimer::stop()
     auto ts = Clock::now();
     UInt64 duration = std::chrono::duration_cast<std::chrono::nanoseconds>(ts - last_ts).count();
     parent->info.self_duration += duration;
+    parent->info.timeline.record(1, last_ts, ts, duration);
     last_ts = ts;
 }
 
