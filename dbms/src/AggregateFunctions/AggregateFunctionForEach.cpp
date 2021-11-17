@@ -22,7 +22,8 @@ public:
             if (const DataTypeArray * array = typeid_cast<const DataTypeArray *>(type.get()))
                 nested_arguments.push_back(array->getNestedType());
             else
-                throw Exception("Illegal type " + type->getName() + " of argument"
+                throw Exception(
+                "Illegal type " + type->getName() + " of argument"
                                                                     " for aggregate function with "
                                     + getName() + " suffix. Must be array.",
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
