@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
@@ -33,7 +32,9 @@ public:
     }
 
     AggregateFunctionPtr transformAggregateFunction(
-        const AggregateFunctionPtr & nested_function, const DataTypes & arguments, const Array &) const override
+        const AggregateFunctionPtr & nested_function,
+        const DataTypes & arguments,
+        const Array &) const override
     {
         /// group_concat reuses groupArray and groupUniqArray with the special warp function `AggregateFunctionGroupConcat` to process,
         /// the warp function needs more complex arguments, including collators, sort descriptions and others, which are hard to deliver via Array type,
