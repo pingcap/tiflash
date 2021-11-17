@@ -12,7 +12,8 @@ extern const int LOGICAL_ERROR;
 void AggregateFunctionCombinatorFactory::registerCombinator(const AggregateFunctionCombinatorPtr & value)
 {
     if (!dict.emplace(value->getName(), value).second)
-        throw Exception("AggregateFunctionCombinatorFactory: the name '" + value->getName() + "' is not unique",
+        throw Exception(
+        "AggregateFunctionCombinatorFactory: the name '" + value->getName() + "' is not unique",
                         ErrorCodes::LOGICAL_ERROR);
 }
 
