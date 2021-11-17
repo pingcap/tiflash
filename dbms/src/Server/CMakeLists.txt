@@ -10,7 +10,7 @@ option(ENABLE_CLICKHOUSE_LOCAL "Enable local" OFF)
 option(ENABLE_CLICKHOUSE_BENCHMARK "Enable benchmark" OFF)
 option(ENABLE_CLICKHOUSE_PERFORMANCE "Enable performance" OFF)
 option(ENABLE_CLICKHOUSE_TOOLS "Enable tools: compressor format extract-from-config-lib" OFF)
-option(ENABLE_TIFLASH_DTTOOL "Enable dttool: tools to manage dmfile" ${ENABLE_CLICKHOUSE_ALL})
+option(ENABLE_TIFLASH_DTTOOL "Enable dttool: tools to manage dmfile" OFF) # dttool is still broken in 5.3
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
