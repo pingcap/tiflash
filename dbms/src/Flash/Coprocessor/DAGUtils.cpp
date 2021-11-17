@@ -552,7 +552,7 @@ void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String &
     }
 }
 
-extern const String uniq_raw_res_name;
+extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
@@ -560,7 +560,7 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Min, "min"},
     {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "first_row"},
-    {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
+    {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
     {tipb::ExprType::GroupConcat, "groupArray"},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},

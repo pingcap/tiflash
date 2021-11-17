@@ -25,7 +25,7 @@ namespace DB
 {
 /// uniq
 
-extern const String uniq_raw_res_name;
+extern const String UniqRawResName;
 
 struct AggregateFunctionUniqUniquesHashSetData : AggregationCollatorsWrapper<false>
 {
@@ -79,7 +79,7 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes : AggregationCol
     using Set = UniquesHashSet<TrivialHash, false>;
     Set set;
 
-    static String getName() { return uniq_raw_res_name; }
+    static String getName() { return UniqRawResName; }
 };
 
 /// uniqHLL12
