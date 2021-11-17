@@ -922,11 +922,14 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, ExpressionAc
 {
     String filter_column_name = analyzer->appendWhere(chain, conditions);
     LOG_DEBUG(log, "FUZHE In executeWhere filter_column_name: " << filter_column_name);
+    for (const auto & col : analyzer->getCurrentInputColumns())
+        chain.getLastStep().required_output.push_back(col.name);
     ExpressionActionsPtr before_where = chain.getLastActions();
-    ExpressionActionsPtr project_after_where;
     chain.addStep();
     chain.finalize();
     LOG_DEBUG(log, "FUZHE After executeWhere: " << chain.dumpChain());
+
+    ExpressionActionsPtr project_after_where;
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
         NamesWithAliases project_cols;
