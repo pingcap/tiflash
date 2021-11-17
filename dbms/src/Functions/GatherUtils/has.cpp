@@ -1,9 +1,8 @@
-#include <Functions/GatherUtils/Selectors.h>
 #include <Functions/GatherUtils/Algorithms.h>
+#include <Functions/GatherUtils/Selectors.h>
 
 namespace DB::GatherUtils
 {
-
 struct ArrayHasSelectArraySourcePair : public ArraySourcePairSelector<ArrayHasSelectArraySourcePair>
 {
     template <typename FirstSource, typename SecondSource>
@@ -21,4 +20,4 @@ void sliceHas(IArraySource & first, IArraySource & second, bool all, ColumnUInt8
     ArrayHasSelectArraySourcePair::select(first, second, all, result);
 }
 
-}
+} // namespace DB::GatherUtils

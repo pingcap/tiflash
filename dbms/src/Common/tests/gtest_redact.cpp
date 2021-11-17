@@ -1,11 +1,10 @@
-#include <TestUtils/TiFlashTestBasic.h>
 #include <Common/RedactHelpers.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
 namespace tests
 {
-
 TEST(RedactLog_test, Basic)
 {
     const char * test_key = "\x01\x0a\xff";
@@ -26,5 +25,5 @@ TEST(RedactLog_test, Basic)
     Redact::setRedactLog(false); // restore flags
 }
 
-}
-}
+} // namespace tests
+} // namespace DB
