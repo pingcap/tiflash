@@ -8,7 +8,8 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t where a;
 +------+
 | a    |
 +------+
-| 0.1   |
-| -0.1   |
+| 0.1  |
+| -0.1 |
 | -1   |
+| 0x01 |
 +------+
