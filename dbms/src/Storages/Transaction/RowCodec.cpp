@@ -527,19 +527,7 @@ void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & 
 
 inline bool isMissingColumn(const DM::ColumnDefine & column_define)
 {
-    if (column_define.is_pk)
-    {
-        // we can decode pk column from row key
-        return false;
-    }
-    else if (column_define.has_no_default_value && column_define.is_not_null)
-    {
-        return false;
-    }
-    else
-    {
-        return false;
-    }
+    return !(column_define.has_no_default_value && column_define.is_not_null);
 }
 
 bool decodeRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
@@ -604,9 +592,14 @@ bool decodeRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWit
             else if (column_ids_iter->first < null_column_ids[id_null])
             {
                 auto & column_define = (*column_defines)[column_ids_iter->second];
-                // maybe missing column
-                if (!force_decode && isMissingColumn(column_define))
+                if (column_define.is_pk)
+                {
+                    // we can decode pk from key
+                }
+                else if (!force_decode && isMissingColumn(column_define))
+                {
                     return false;
+                }
                 else
                 {
                     auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
@@ -618,8 +611,8 @@ bool decodeRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWit
                 auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
                 auto & column_define = (*column_defines)[column_ids_iter->second];
                 raw_column->insert(column_define.default_value);
+                id_null++;
             }
-            id_null++;
         }
         else
         {
@@ -632,9 +625,14 @@ bool decodeRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWit
             else if (column_ids_iter->first < not_null_column_ids[id_not_null])
             {
                 auto & column_define = (*column_defines)[column_ids_iter->second];
-                // maybe missing column
-                if (!force_decode && isMissingColumn(column_define))
+                if (column_define.is_pk)
+                {
+                    // we can decode pk from key
+                }
+                else if (!force_decode && isMissingColumn(column_define))
+                {
                     return false;
+                }
                 else
                 {
                     auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
@@ -647,8 +645,8 @@ bool decodeRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWit
                 size_t start = id_not_null ? value_offsets[id_not_null - 1] : 0;
                 size_t length = value_offsets[id_not_null] - start;
                 raw_column->decodeData(raw_value.c_str() + values_start_pos + start, length);
+                id_not_null++;
             }
-            id_not_null++;
         }
         column_ids_iter++;
         block_column_pos++;

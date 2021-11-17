@@ -554,6 +554,8 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         // Get a structure read lock. It will throw exception if the table has been dropped,
         // the caller should handle this situation.
         auto table_lock = storage->lockStructureForShare(getThreadName());
+        dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        // only dt storage engine support `getDecodingSchemaSnapshot`, otherwise it will throw exception
         schema_snapshot = storage->getDecodingSchemaSnapshot();
         std::tie(std::ignore, drop_lock) = std::move(table_lock).release();
         return true;
