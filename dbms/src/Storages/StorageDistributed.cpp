@@ -160,7 +160,7 @@ StoragePtr StorageDistributed::createWithOwnCluster(
     ClusterPtr & owned_cluster_,
     const Context & context_)
 {
-    auto res = ext::shared_ptr_helper<StorageDistributed>::create(
+    auto res = ext::SharedPtrHelper<StorageDistributed>::create(
         String{},
         name_,
         columns_,

@@ -1,46 +1,37 @@
-#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/V2/PageEntries.h>
+#include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
-#include "gtest/gtest.h"
+#include <memory>
 
 namespace DB::PS::V2::tests
 {
-class PageEntryMap_test : public ::testing::Test
+class PageEntryMapTest : public ::testing::Test
 {
-public:
-    PageEntryMap_test()
-        : map(nullptr)
-        , log(&Poco::Logger::get("PageEntryMap_test"))
-        , versions("entries_map_test", config_, log)
-    {}
-
 protected:
     void SetUp() override
     {
         // Generate an empty PageEntries for each test
-        auto snapshot = versions.getSnapshot();
-        PageEntriesBuilder builder(snapshot->version());
-        map = builder.build();
+        map = std::make_unique<PageEntries>();
     }
 
-    void TearDown() override { delete map; }
+    void TearDown() override
+    {
+        map.reset();
+    }
 
-    PageEntries * map;
-
-private:
-    DB::MVCC::VersionSetConfig config_;
-    Poco::Logger * log;
-    PageEntriesVersionSet versions;
+    std::unique_ptr<PageEntries> map;
 };
 
-TEST_F(PageEntryMap_test, Empty)
+TEST_F(PageEntryMapTest, Empty)
 {
     size_t item_count = 0;
     for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
     {
         item_count += 1;
     }
-    ASSERT_EQ(item_count, 0UL);
-    ASSERT_EQ(map->maxId(), 0UL);
+    ASSERT_EQ(item_count, 0);
+    ASSERT_EQ(map->maxId(), 0);
 
 
     // add some Pages, RefPages
@@ -55,8 +46,8 @@ TEST_F(PageEntryMap_test, Empty)
     {
         item_count += 1;
     }
-    ASSERT_EQ(item_count, 2UL);
-    ASSERT_EQ(map->maxId(), 1UL);
+    ASSERT_EQ(item_count, 2);
+    ASSERT_EQ(map->maxId(), 1);
 
     map->clear();
     item_count = 0;
@@ -64,11 +55,11 @@ TEST_F(PageEntryMap_test, Empty)
     {
         item_count += 1;
     }
-    ASSERT_EQ(item_count, 0UL);
-    ASSERT_EQ(map->maxId(), 0UL);
+    ASSERT_EQ(item_count, 0);
+    ASSERT_EQ(map->maxId(), 0);
 }
 
-TEST_F(PageEntryMap_test, UpdatePageEntry)
+TEST_F(PageEntryMapTest, UpdatePageEntry)
 {
     const PageId page_id = 0;
     PageEntry entry0;
@@ -85,7 +76,7 @@ TEST_F(PageEntryMap_test, UpdatePageEntry)
     ASSERT_EQ(map->find(page_id), std::nullopt);
 }
 
-TEST_F(PageEntryMap_test, PutDel)
+TEST_F(PageEntryMapTest, PutDel)
 {
     PageEntry p0entry;
     p0entry.file_id = 1;
@@ -128,7 +119,7 @@ TEST_F(PageEntryMap_test, PutDel)
     ASSERT_EQ(map->find(2), std::nullopt);
 }
 
-TEST_F(PageEntryMap_test, IdempotentDel)
+TEST_F(PageEntryMapTest, IdempotentDel)
 {
     PageEntry p0entry;
     p0entry.file_id = 1;
@@ -177,7 +168,7 @@ TEST_F(PageEntryMap_test, IdempotentDel)
     }
 }
 
-TEST_F(PageEntryMap_test, UpdateRefPageEntry)
+TEST_F(PageEntryMapTest, UpdateRefPageEntry)
 {
     const PageId page_id = 0;
     const PageId ref_id = 1; // RefPage1 -> Page0
@@ -214,7 +205,7 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
     ASSERT_EQ(map->find(ref_id), std::nullopt);
 }
 
-TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
+TEST_F(PageEntryMapTest, UpdateRefPageEntry2)
 {
     PageEntry entry0;
     entry0.checksum = 0xf;
@@ -222,17 +213,17 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
     map->ref(1, 0);
     map->del(0);
     ASSERT_EQ(map->find(0), std::nullopt);
-    ASSERT_EQ(map->at(1).checksum, 0xfUL);
+    ASSERT_EQ(map->at(1).checksum, 0xf);
 
     // update Page0, both Page0 and RefPage1 got update
     PageEntry entry1;
     entry1.checksum = 0x1;
     map->put(0, entry1);
-    ASSERT_EQ(map->at(0).checksum, 0x1UL);
-    ASSERT_EQ(map->at(1).checksum, 0x1UL);
+    ASSERT_EQ(map->at(0).checksum, 0x1);
+    ASSERT_EQ(map->at(1).checksum, 0x1);
 }
 
-TEST_F(PageEntryMap_test, AddRefToNonExistPage)
+TEST_F(PageEntryMapTest, AddRefToNonExistPage)
 {
     PageEntry p0entry;
     p0entry.file_id = 1;
@@ -244,7 +235,7 @@ TEST_F(PageEntryMap_test, AddRefToNonExistPage)
     ASSERT_THROW({ map->at(3); }, DB::Exception);
 }
 
-TEST_F(PageEntryMap_test, PutDuplicateRef)
+TEST_F(PageEntryMapTest, PutDuplicateRef)
 {
     PageEntry p0entry;
     p0entry.checksum = 0xFF;
@@ -262,7 +253,7 @@ TEST_F(PageEntryMap_test, PutDuplicateRef)
     ASSERT_EQ(map->at(1).checksum, p0entry.checksum);
 }
 
-TEST_F(PageEntryMap_test, PutRefOnRef)
+TEST_F(PageEntryMapTest, PutRefOnRef)
 {
     PageEntry p0entry;
     p0entry.file_id = 1;
@@ -325,7 +316,7 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     ASSERT_EQ(map->find(2), std::nullopt);
 }
 
-TEST_F(PageEntryMap_test, ReBindRef)
+TEST_F(PageEntryMapTest, ReBindRef)
 {
     PageEntry entry0;
     entry0.file_id = 1;
@@ -350,7 +341,7 @@ TEST_F(PageEntryMap_test, ReBindRef)
     map->del(0);
 }
 
-TEST_F(PageEntryMap_test, Scan)
+TEST_F(PageEntryMapTest, Scan)
 {
     PageEntry p0entry;
     p0entry.file_id = 1;
@@ -385,7 +376,7 @@ TEST_F(PageEntryMap_test, Scan)
             EXPECT_EQ(entry.checksum, p1entry.checksum);
         }
     }
-    ASSERT_EQ(page_ids.size(), 4UL);
+    ASSERT_EQ(page_ids.size(), 4);
 
     // clear all mapping
     map->clear();

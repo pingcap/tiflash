@@ -1,18 +1,16 @@
-#include <sstream>
-
-#include <Storages/Transaction/RegionManager.h>
-#include <Storages/Transaction/RegionPersister.h>
-
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionManager.h>
+#include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
+#include <sstream>
 
 #include "region_helper.h"
 
@@ -26,11 +24,12 @@ extern const char force_disable_region_persister_compatible_mode[];
 
 namespace tests
 {
-
 class RegionPersister_test : public ::testing::Test
 {
 public:
-    RegionPersister_test() : dir_path(TiFlashTestEnv::getTemporaryPath() + "/region_persister_tmp") {}
+    RegionPersister_test()
+        : dir_path(TiFlashTestEnv::getTemporaryPath("/region_persister_tmp"))
+    {}
 
     static void SetUpTestCase() {}
 
@@ -54,7 +53,7 @@ protected:
     DB::Timestamp tso = 0;
 };
 
-static ::testing::AssertionResult PeerCompare( //
+static ::testing::AssertionResult PeerCompare(
     const char * lhs_expr,
     const char * rhs_expr,
     const metapb::Peer & lhs,
@@ -67,7 +66,7 @@ static ::testing::AssertionResult PeerCompare( //
 }
 #define ASSERT_PEER_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::PeerCompare, val1, val2)
 
-static ::testing::AssertionResult RegionCompare( //
+static ::testing::AssertionResult RegionCompare(
     const char * lhs_expr,
     const char * rhs_expr,
     const DB::Region & lhs,
@@ -198,9 +197,9 @@ try
     std::string path = dir_path + "/broken_file";
 
     auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
-        Strings{
-            path,
-        });
+                                          Strings{
+                                              path,
+                                          });
 
     size_t region_num = 100;
     RegionMap regions;
@@ -268,9 +267,9 @@ try
     FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
     SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode); });
     auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
-        Strings{
-            path,
-        });
+                                          Strings{
+                                              path,
+                                          });
 
     size_t region_num = 500;
     RegionMap regions;
@@ -377,9 +376,9 @@ void RegionPersister_test::testFunc(const String & path, const PageStorage::Conf
         dropFiles();
 
     auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
-        Strings{
-            path,
-        });
+                                          Strings{
+                                              path,
+                                          });
 
     RegionManager region_manager;
     RegionPersister persister(ctx, region_manager);
@@ -500,7 +499,7 @@ void RegionPersister_test::runTest(const String & path, bool sync_on_write)
 
     auto seconds = watch.elapsedSeconds();
     LOG_INFO(&Poco::Logger::get("RegionPersister_test"), //
-        "[sync_on_write=" << sync_on_write << "], [time=" << DB::toString(seconds, 4) << "s]");
+             "[sync_on_write=" << sync_on_write << "], [time=" << DB::toString(seconds, 4) << "s]");
 }
 
 // This test takes about 10 minutes. Disable by default
