@@ -149,7 +149,8 @@ void IProfilingBlockInputStream::recursiveDumpProfileInfo(FmtBuffer & buf, std::
     buf.append("{");
 
     buf.fmtAppend("\"id\":{},", info.signature)
-        .fmtAppend("\"name\":\"{}\",", getName());
+        .fmtAppend("\"name\":\"{}\",", getName())
+        .fmtAppend("\"executor\":\"{}\",", info.executor.empty() ? "<unknown>" : info.executor);
 
     buf.append("\"children\":[");
     joinStr(

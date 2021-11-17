@@ -47,9 +47,16 @@ public:
             info.signature = assign();
 
         forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+            child.assignExecutor(info.executor);
             child.assignSignature(assign);
             return false;
         });
+    }
+
+    void assignExecutor(const String & executor_name)
+    {
+        if (info.executor.empty())
+            info.executor = executor_name;
     }
 
     Block read() override final;

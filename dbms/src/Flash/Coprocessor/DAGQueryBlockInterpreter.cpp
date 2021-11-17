@@ -801,12 +801,24 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
 {
     dag.getDAGContext().getProfileStreamsMap()[key].qb_id = query_block.id;
+
     for (auto & stream : pipeline.streams)
     {
         dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
+
+        auto * p = dynamic_cast<IProfilingBlockInputStream *>(stream.get());
+        if (p)
+            p->assignExecutor(key);
     }
+
     for (auto & stream : pipeline.streams_with_non_joined_data)
+    {
         dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
+
+        auto * p = dynamic_cast<IProfilingBlockInputStream *>(stream.get());
+        if (p)
+            p->assignExecutor(key);
+    }
 }
 
 void copyExecutorTreeWithLocalTableScan(
