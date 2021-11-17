@@ -1,19 +1,20 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
 /** Implements `functions`system table, which allows you to get a list
   * all normal and aggregate functions.
   */
-class StorageSystemFunctions : public ext::shared_ptr_helper<StorageSystemFunctions>, public IStorage
+class StorageSystemFunctions : public ext::SharedPtrHelper<StorageSystemFunctions>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemFunctions"; }
@@ -34,4 +35,4 @@ private:
     const std::string name;
 };
 
-}
+} // namespace DB

@@ -59,6 +59,8 @@ public:
 
     Context & getContext();
 
+    const Context & getContext() const;
+
     bool isBgFlushDisabled() const { return disable_bg_flush; }
 
     explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);

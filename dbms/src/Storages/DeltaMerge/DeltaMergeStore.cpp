@@ -291,7 +291,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
             }
         }
     };
-    storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
+    storage_pool.data()->registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
 
     gc_handle = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });
@@ -2180,8 +2180,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         std::tie(stat.storage_stable_num_snapshots, //
                  stat.storage_stable_oldest_snapshot_lifetime,
                  stat.storage_stable_oldest_snapshot_thread_id)
-            = storage_pool.data().getSnapshotsStat();
-        PageStorage::SnapshotPtr stable_snapshot = storage_pool.data().getSnapshot();
+            = storage_pool.data()->getSnapshotsStat();
+        PageStorage::SnapshotPtr stable_snapshot = storage_pool.data()->getSnapshot();
         stat.storage_stable_num_pages = stable_snapshot->version()->numPages();
         stat.storage_stable_num_normal_pages = stable_snapshot->version()->numNormalPages();
         stat.storage_stable_max_page_id = stable_snapshot->version()->maxId();
@@ -2190,8 +2190,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         std::tie(stat.storage_delta_num_snapshots, //
                  stat.storage_delta_oldest_snapshot_lifetime,
                  stat.storage_delta_oldest_snapshot_thread_id)
-            = storage_pool.log().getSnapshotsStat();
-        PageStorage::SnapshotPtr log_snapshot = storage_pool.log().getSnapshot();
+            = storage_pool.log()->getSnapshotsStat();
+        PageStorage::SnapshotPtr log_snapshot = storage_pool.log()->getSnapshot();
         stat.storage_delta_num_pages = log_snapshot->version()->numPages();
         stat.storage_delta_num_normal_pages = log_snapshot->version()->numNormalPages();
         stat.storage_delta_max_page_id = log_snapshot->version()->maxId();
@@ -2200,8 +2200,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         std::tie(stat.storage_meta_num_snapshots, //
                  stat.storage_meta_oldest_snapshot_lifetime,
                  stat.storage_meta_oldest_snapshot_thread_id)
-            = storage_pool.meta().getSnapshotsStat();
-        PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta().getSnapshot();
+            = storage_pool.meta()->getSnapshotsStat();
+        PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta()->getSnapshot();
         stat.storage_meta_num_pages = meta_snapshot->version()->numPages();
         stat.storage_meta_num_normal_pages = meta_snapshot->version()->numNormalPages();
         stat.storage_meta_max_page_id = meta_snapshot->version()->maxId();

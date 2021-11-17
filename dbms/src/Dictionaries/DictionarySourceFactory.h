@@ -1,28 +1,27 @@
 #pragma once
 
 #include <Dictionaries/IDictionarySource.h>
-#include <ext/singleton.h>
 
+#include <ext/singleton.h>
 #include <unordered_map>
 
 namespace Poco
 {
-    namespace Util
-    {
-        class AbstractConfiguration;
-    }
-
-    class Logger;
+namespace Util
+{
+class AbstractConfiguration;
 }
+
+class Logger;
+} // namespace Poco
 
 namespace DB
 {
-
 class Context;
 struct DictionaryStructure;
 
 /// creates IDictionarySource instance from config and DictionaryStructure
-class DictionarySourceFactory : public ext::singleton<DictionarySourceFactory>
+class DictionarySourceFactory : public ext::Singleton<DictionarySourceFactory>
 {
 public:
     using Creator = std::function<DictionarySourcePtr(
@@ -37,8 +36,11 @@ public:
     void registerSource(const std::string & source_type, Creator create_source);
 
     DictionarySourcePtr create(
-        const std::string & name, const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix,
-        const DictionaryStructure & dict_struct, Context & context) const;
+        const std::string & name,
+        const Poco::Util::AbstractConfiguration & config,
+        const std::string & config_prefix,
+        const DictionaryStructure & dict_struct,
+        Context & context) const;
 
 private:
     using SourceRegistry = std::unordered_map<std::string, Creator>;
@@ -47,4 +49,4 @@ private:
     Poco::Logger * log;
 };
 
-}
+} // namespace DB

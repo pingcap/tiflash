@@ -16,8 +16,6 @@ public:
     String name() override { return "not_like"; }
 
     RSResult roughCheck(size_t /*pack_id*/, const RSCheckParam & /*param*/) override { return Some; }
-
-    RSOperatorPtr applyNot() override { return createLike(attr, value); };
 };
 
 } // namespace DM

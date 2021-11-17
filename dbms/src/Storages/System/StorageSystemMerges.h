@@ -1,16 +1,17 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
-class StorageSystemMerges : public ext::shared_ptr_helper<StorageSystemMerges>, public IStorage
+class StorageSystemMerges : public ext::SharedPtrHelper<StorageSystemMerges>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemMerges"; }
@@ -31,4 +32,4 @@ protected:
     StorageSystemMerges(const std::string & name);
 };
 
-}
+} // namespace DB

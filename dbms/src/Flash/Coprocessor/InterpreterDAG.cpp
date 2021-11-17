@@ -2,6 +2,7 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExchangeSender.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -44,12 +45,15 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, 
     }
 }
 
-BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets)
+/** executeQueryBlock recursively converts all the children of the DAGQueryBlock and itself (Coprocessor DAG request)
+  * into an array of IBlockInputStream (element of physical executing plan of TiFlash)
+  */
+BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets)
 {
     std::vector<BlockInputStreams> input_streams_vec;
     for (auto & child : query_block.children)
     {
-        BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
+        BlockInputStreams child_streams = executeQueryBlock(*child, subqueries_for_sets);
         input_streams_vec.push_back(child_streams);
     }
     DAGQueryBlockInterpreter query_block_interpreter(
@@ -58,7 +62,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         query_block,
         keep_session_timezone_info,
         dag,
-        subqueriesForSets,
+        subqueries_for_sets,
         mpp_exchange_receiver_maps,
         log);
     return query_block_interpreter.execute();
@@ -87,12 +91,12 @@ BlockIO InterpreterDAG::execute()
     if (dag.getDAGContext().isMPPTask())
         /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
         /// the query plan, so we init mpp exchange receiver before executeQueryBlock
-        initMPPExchangeReceiver(*dag.getQueryBlock());
+        initMPPExchangeReceiver(*dag.getRootQueryBlock());
     /// region_info should base on the source executor, however
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
-    std::vector<SubqueriesForSets> subqueriesForSets;
-    BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), subqueriesForSets);
+    std::vector<SubqueriesForSets> subqueries_for_sets;
+    BlockInputStreams streams = executeQueryBlock(*dag.getRootQueryBlock(), subqueries_for_sets);
     DAGPipeline pipeline;
     pipeline.streams = streams;
 
@@ -120,7 +124,7 @@ BlockIO InterpreterDAG::execute()
             assert(isColumnExpr(expr));
             auto column_index = decodeDAGInt64(expr.val());
             partition_col_id.emplace_back(column_index);
-            if (has_collator_info && getDataTypeByFieldType(expr.field_type())->isString())
+            if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
             {
                 collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
             }
@@ -130,7 +134,7 @@ BlockIO InterpreterDAG::execute()
             }
         }
         restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
-        int streamID = 0;
+        int stream_id = 0;
         pipeline.transform([&](auto & stream) {
             // construct writer
             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
@@ -140,7 +144,7 @@ BlockIO InterpreterDAG::execute()
                 exchange_sender.tp(),
                 context.getSettings().dag_records_per_chunk,
                 context.getSettings().batch_send_min_limit,
-                streamID++ == 0, /// only one stream needs to sending execution summaries for the last response
+                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
                 dag.getEncodeType(),
                 dag.getResultFieldTypes(),
                 dag.getDAGContext(),
@@ -151,12 +155,12 @@ BlockIO InterpreterDAG::execute()
 
     /// add union to run in parallel if needed
     DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
-    if (!subqueriesForSets.empty())
+    if (!subqueries_for_sets.empty())
     {
         const Settings & settings = context.getSettingsRef();
         pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
             pipeline.firstStream(),
-            std::move(subqueriesForSets),
+            std::move(subqueries_for_sets),
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
             dag.getDAGContext().getMPPTaskId(),
             log);

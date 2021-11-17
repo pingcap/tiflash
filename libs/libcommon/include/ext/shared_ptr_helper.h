@@ -4,7 +4,6 @@
 
 namespace ext
 {
-
 /** Allows to make std::shared_ptr from T with protected constructor.
   *
   * Derive your T class from shared_ptr_helper<T>
@@ -17,7 +16,7 @@ namespace ext
   * - different dynamic type of created object, you cannot use typeid.
   */
 template <typename T>
-struct shared_ptr_helper
+struct SharedPtrHelper
 {
     template <typename... TArgs>
     static auto create(TArgs &&... args)
@@ -29,11 +28,12 @@ struct shared_ptr_helper
           */
         struct Local : T
         {
-            Local(TArgs &&... args) : T(std::forward<TArgs>(args)...) {};
+            explicit Local(TArgs &&... args)
+                : T(std::forward<TArgs>(args)...){};
         };
 
         return std::make_shared<Local>(std::forward<TArgs>(args)...);
     }
 };
 
-}
+} // namespace ext
