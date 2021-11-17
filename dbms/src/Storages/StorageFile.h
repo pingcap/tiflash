@@ -15,7 +15,7 @@ namespace DB
 class StorageFileBlockInputStream;
 class StorageFileBlockOutputStream;
 
-class StorageFile : public ext::shared_ptr_helper<StorageFile>
+class StorageFile : public ext::SharedPtrHelper<StorageFile>
     , public IStorage
 {
 public:

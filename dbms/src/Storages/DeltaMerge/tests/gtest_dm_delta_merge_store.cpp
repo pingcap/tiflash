@@ -1375,7 +1375,7 @@ CATCH
 TEST_P(DeltaMergeStore_RWTest, Split)
 try
 {
-    // set some params to smaller threshold so that we can trigger split faster
+    // set some params to smaller threshold so that we can trigger split more frequently
     auto settings = db_context->getSettings();
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_delta_limit_rows = 7;

@@ -1,3 +1,4 @@
+#include <Common/Exception.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/Page.h>
@@ -7,17 +8,11 @@
 
 namespace DB::PS::V2::tests
 {
-TEST(PageFile_test, Compare)
+TEST(PageFileTest, Compare)
 {
     // clean up
     const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("pageFileCompare");
-    {
-        if (Poco::File p(path); p.exists())
-        {
-            Poco::File file(Poco::Path(path).parent());
-            file.remove(true);
-        }
-    }
+    DB::tests::TiFlashTestEnv::tryRemovePath(path);
 
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
     Poco::Logger * log = &Poco::Logger::get("PageFile");
@@ -167,19 +162,13 @@ TEST(PageEntry_test, GetFieldInfo)
     ASSERT_THROW({ entry.getFieldSize(5); }, DB::Exception);
 }
 
-TEST(PageFile_test, PageFileLink)
+TEST(PageFileTest, PageFileLink)
 {
     Poco::Logger * log = &Poco::Logger::get("PageFileLink");
     PageId page_id = 55;
     UInt64 tag = 0;
     const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("PageFileLink/");
-    {
-        if (Poco::File p(path); p.exists())
-        {
-            Poco::File file(Poco::Path(path).parent());
-            file.remove(true);
-        }
-    }
+    DB::tests::TiFlashTestEnv::tryRemovePath(path);
 
     const auto file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
     PageFile pf0 = PageFile::newPageFile(page_id, 0, path, file_provider, PageFile::Type::Formal, log);
@@ -223,19 +212,13 @@ TEST(PageFile_test, PageFileLink)
     ASSERT_EQ(reader->fileIdLevel().second, 1);
 }
 
-TEST(PageFile_test, EncryptedPageFileLink)
+TEST(PageFileTest, EncryptedPageFileLink)
 {
     Poco::Logger * log = &Poco::Logger::get("EncryptedPageFileLink");
     PageId page_id = 55;
     UInt64 tag = 0;
     const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("EncryptedPageFileLink/");
-    {
-        if (Poco::File p(path); p.exists())
-        {
-            Poco::File file(Poco::Path(path).parent());
-            file.remove(true);
-        }
-    }
+    DB::tests::TiFlashTestEnv::tryRemovePath(path);
 
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
     const auto file_provider = std::make_shared<FileProvider>(key_manager, true);
