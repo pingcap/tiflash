@@ -80,7 +80,7 @@ def runClosure(label, Closure body) {
             ], ttyEnabled: true, command: 'cat'),
             containerTemplate(name: 'builder', image: 'hub.pingcap.net/tiflash/tiflash-builder-ci',
                     alwaysPullImage: true, ttyEnabled: true, command: 'cat',
-                    resourceRequestCpu: '4000m', resourceRequestMemory: '8Gi',
+                    resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
                     resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
     ],
     volumes: [
@@ -155,6 +155,7 @@ def runTest(label, testPath, tidbBranch) {
 }
 
 def runUTCoverTICS(CURWS, NPROC) {
+    def NPROC_UT = NPROC * 2
     runWithTiCSFull("ut-tics", CURWS) {
         dir("${CURWS}/tics") {
             stage("Build") {
@@ -167,7 +168,7 @@ def runUTCoverTICS(CURWS, NPROC) {
             stage("Tests") {
                 timeout(time: 50, unit: 'MINUTES') {
                     container("builder") {
-                        sh "NPROC=${NPROC} /build/tics/release-centos7/build/run-ut.sh"
+                        sh "NPROC=${NPROC_UT} /build/tics/release-centos7/build/run-ut.sh"
                     }
                 }
             }
@@ -175,8 +176,13 @@ def runUTCoverTICS(CURWS, NPROC) {
                 timeout(time: 5, unit: 'MINUTES') {
                     container("builder") {
                         sh "NPROC=${NPROC} /build/tics/release-centos7/build/upload-ut-coverage.sh"
+                        sh "cp /tmp/tiflash_gcovr_coverage.xml ./"
                     }
                 }
+                cobertura autoUpdateHealth: false, autoUpdateStability: false, 
+                    coberturaReportFile: "tiflash_gcovr_coverage.xml", 
+                    lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 
+                    maxNumberOfBuilds: 10, onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
             }
         }
     }

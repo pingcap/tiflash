@@ -19,6 +19,7 @@ extern const Metric StoreSizeAvailable;
 extern const Metric StoreSizeUsed;
 } // namespace CurrentMetrics
 
+
 namespace DB
 {
 inline size_t safeGetQuota(const std::vector<size_t> & quotas, size_t idx)
@@ -243,7 +244,10 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     struct statvfs vfs;
     if (int code = statvfs(path.data(), &vfs); code != 0)
     {
-        LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
+        if (log)
+        {
+            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
+        }
         return {};
     }
 

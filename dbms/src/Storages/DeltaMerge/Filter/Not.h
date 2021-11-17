@@ -16,8 +16,6 @@ public:
     String name() override { return "not"; }
 
     RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override { return !children[0]->roughCheck(pack_id, param); }
-
-    RSOperatorPtr applyNot() override { return children[0]; };
 };
 
 } // namespace DM

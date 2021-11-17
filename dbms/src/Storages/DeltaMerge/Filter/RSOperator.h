@@ -46,7 +46,6 @@ public:
 
     virtual RSOperatorPtr optimize() { return shared_from_this(); };
     virtual RSOperatorPtr switchDirection() { return shared_from_this(); };
-    virtual RSOperatorPtr applyNot() = 0;
 };
 
 class ColCmpVal : public RSOperator
