@@ -15,14 +15,16 @@ AggregateFunctionPtr createAggregateFunctionBitwise(const std::string & name, co
     assertUnary(name, argument_types);
 
     if (!argument_types[0]->canBeUsedInBitOperations())
-        throw Exception("The type " + argument_types[0]->getName() + " of argument for aggregate function " + name
+        throw Exception(
+        "The type " + argument_types[0]->getName() + " of argument for aggregate function " + name
                             + " is illegal, because it cannot be used in bitwise operations",
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     AggregateFunctionPtr res(createWithUnsignedIntegerType<AggregateFunctionBitwise, Data>(*argument_types[0]));
 
     if (!res)
-        throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(
+        "Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
 }
