@@ -1,38 +1,17 @@
-#include <Common/FmtUtils.h>
-#include <Common/joinStr.h>
+#include <Common/TiFlashException.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 
 namespace DB
 {
-void ExecutorStatistics::collectExecutorStatistics(DAGContext & dag_context)
+ExecutorStatistics::ExecutorStatistics(const String & executor_id)
 {
-    for (auto & profile_streams_info : dag_context.getProfileStreamsMap())
+    auto split_index = executor_id.find('_');
+    if (split_index == String::npos || split_index == (executor_id.size() - 1))
     {
-        const auto & executor_id = profile_streams_info.first;
-        if (AggStatistics::hit(executor_id))
-        {
-            agg_stats.push_back(AggStatistics::buildStatistics(executor_id, profile_streams_info.second, dag_context));
-        }
-        else if (FilterStatistics::hit(executor_id))
-        {
-            filter_stats.push_back(FilterStatistics::buildStatistics(executor_id, profile_streams_info.second, dag_context));
-        }
+        throw TiFlashException("Illegal executor_id: " + executor_id, Errors::Coprocessor::Internal);
     }
-}
 
-String ExecutorStatistics::toString() const
-{
-    FmtBuffer buffer;
-    buffer.append(R"({"agg_stats":[)");
-    joinStr(
-        agg_stats.cbegin(),
-        agg_stats.cend(),
-        buffer,
-        [](const auto & s, FmtBuffer & fb) { fb.append(s->toString()); },
-        ",");
-    buffer.append(R"(],"filter_stats":[)");
-    joinStr(filter_stats.cbegin(), filter_stats.cend(), buffer, [](const auto & s, FmtBuffer & fb) { fb.append(s->toString()); });
-    buffer.append("]}");
-    return buffer.toString();
+    type = executor_id.substr(0, split_index);
+    id = executor_id.substr(split_index + 1, executor_id.size());
 }
 } // namespace DB

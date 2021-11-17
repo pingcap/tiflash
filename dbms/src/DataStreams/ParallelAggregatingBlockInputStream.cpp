@@ -108,6 +108,12 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         }
 
         executed = true;
+
+        aggregated_data_variants_size_without_overflow_row = 0;
+        for (const auto & data_variants : many_data)
+        {
+            aggregated_data_variants_size_without_overflow_row += data_variants->sizeWithoutOverflowRow();
+        }
     }
 
     Block res;

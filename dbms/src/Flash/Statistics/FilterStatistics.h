@@ -1,20 +1,14 @@
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Statistics/ExecutorStatistics.h>
 #include <common/types.h>
 
 #include <memory>
 
 namespace DB
 {
-struct FilterStatistics;
-
-using FilterStatisticsPtr = std::shared_ptr<FilterStatistics>;
-
-struct FilterStatistics
+struct FilterStatistics : public ExecutorStatistics
 {
-    const String & executor_id;
-
     size_t inbound_rows = 0;
     size_t inbound_blocks = 0;
     size_t inbound_bytes = 0;
@@ -24,16 +18,13 @@ struct FilterStatistics
     size_t outbound_bytes = 0;
 
     explicit FilterStatistics(const String & executor_id_)
-        : executor_id(executor_id_)
+        : ExecutorStatistics(executor_id_)
     {}
 
-    String toString() const;
+    String toJson() const override;
 
-    static bool hit(const String & executor_id)
-    {
-        return startsWith(executor_id, "Selection_");
-    }
+    static bool hit(const String & executor_id);
 
-    static FilterStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context);
+    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context);
 };
 } // namespace DB

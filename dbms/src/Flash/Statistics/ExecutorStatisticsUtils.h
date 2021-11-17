@@ -3,6 +3,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <common/types.h>
+#include <fmt/format.h>
 
 #include <functional>
 #include <memory>
@@ -10,40 +11,82 @@
 
 namespace DB
 {
-template <typename FF, typename CF>
-inline void visitProfileStreamsInfo(const ProfileStreamsInfo & profile_streams_info, FF && cur_f, CF && child_f)
+inline void throwFailCastException(bool isCasted, const String & source_type, const String & cast_types)
 {
-    std::unordered_set<IProfilingBlockInputStream *> visited_set;
-    for (const auto & stream_ptr : profile_streams_info.input_streams)
+    if (!isCasted)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
-        {
-            cur_f(p_stream->getProfileInfo());
+        throw TiFlashException(fmt::format("Fail to cast {} to {}", source_type, cast_types), Errors::Coprocessor::Internal);
+    }
+}
 
-            p_stream->forEachProfilingChild([&](IProfilingBlockInputStream & child) {
-                auto it = visited_set.find(&child);
-                if (it == visited_set.end())
-                {
-                    visited_set.insert(&child);
-                    child_f(child.getProfileInfo());
-                }
-                return false;
-            });
+template <typename FF1, typename FF2>
+inline bool elseThen(FF1 ff1, FF2 ff2)
+{
+    if (!ff1())
+    {
+        return ff2();
+    }
+    return true;
+}
+
+template <typename T, typename FF>
+inline bool castBlockInputStream(const BlockInputStreamPtr & stream_ptr, FF && ff)
+{
+    if (auto * p_stream = dynamic_cast<T *>(stream_ptr.get()))
+    {
+        ff(*p_stream);
+        return true;
+    }
+    return false;
+}
+
+template <typename FF>
+inline void visitBlockInputStreamsWithVisitedSet(std::unordered_set<IBlockInputStream *> & visited_set, const BlockInputStreams & input_streams, FF && ff)
+{
+    for (const auto & stream_ptr : input_streams)
+    {
+        auto it = visited_set.find(stream_ptr.get());
+        if (it == visited_set.end())
+        {
+            visited_set.insert(stream_ptr.get());
+            ff(stream_ptr);
         }
     }
 }
 
 template <typename FF>
-inline void visitProfileStreamsInfo(const ProfileStreamsInfo & profile_streams_info, FF && ff)
+inline void visitBlockInputStreams(const BlockInputStreams & input_streams, FF && ff)
 {
-    std::unordered_set<IProfilingBlockInputStream *> visited_set;
-    for (const auto & stream_ptr : profile_streams_info.input_streams)
-    {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
+    std::unordered_set<IBlockInputStream *> visited_set;
+    visitBlockInputStreamsWithVisitedSet(visited_set, input_streams, ff);
+}
+
+template <typename FF, typename CF>
+inline void visitBlockInputStreams(const BlockInputStreams & input_streams, FF && cur_f, CF && child_f)
+{
+    std::unordered_set<IBlockInputStream *> visited_set;
+    visitBlockInputStreamsWithVisitedSet(visited_set, input_streams, [&](const BlockInputStreamPtr & stream_ptr) {
+        cur_f(stream_ptr);
+        visitBlockInputStreamsWithVisitedSet(visited_set, stream_ptr->getChildren(), child_f);
+    });
+}
+
+template <typename FF>
+inline void visitBlockInputStreamsRecursiveWithVisitedSet(std::unordered_set<IBlockInputStream *> & visited_set, const BlockInputStreams & input_streams, FF && ff)
+{
+    visitBlockInputStreamsWithVisitedSet(visited_set, input_streams, [&](const BlockInputStreamPtr & stream_ptr) {
+        if (!ff(stream_ptr))
         {
-            ff(p_stream->getProfileInfo());
+            visitBlockInputStreamsRecursiveWithVisitedSet(visited_set, stream_ptr->getChildren(), ff);
         }
-    }
+    });
+}
+
+template <typename FF>
+inline void visitBlockInputStreamsRecursive(const BlockInputStreams & input_streams, FF && ff)
+{
+    std::unordered_set<IBlockInputStream *> visited_set;
+    visitBlockInputStreamsRecursiveWithVisitedSet(visited_set, input_streams, ff);
 }
 
 inline double divide(size_t value1, size_t value2)

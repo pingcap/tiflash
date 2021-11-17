@@ -36,6 +36,8 @@ public:
 
     Block getHeader() const override;
 
+    size_t getAggregatedDataVariantsSizeWithoutOverflowRow() const { return aggregated_data_variants_size_without_overflow_row; }
+
 protected:
     /// Do nothing that preparation to execution of the query be done in parallel, in ParallelInputsProcessor.
     void readPrefix() override
@@ -65,6 +67,8 @@ private:
     bool no_more_keys = false;
 
     std::atomic<bool> executed{false};
+
+    size_t aggregated_data_variants_size_without_overflow_row = 0;
 
     /// To read the data stored into the temporary data file.
     struct TemporaryFileStream

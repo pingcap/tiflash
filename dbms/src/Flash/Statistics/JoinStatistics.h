@@ -1,21 +1,14 @@
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Statistics/ExecutorStatistics.h>
 #include <common/types.h>
 
-#include <unordered_set>
+#include <memory>
 
 namespace DB
 {
-struct JoinStatistics;
-
-using JoinStatisticsPtr = std::shared_ptr<JoinStatistics>;
-
-struct JoinStatistics
+struct JoinStatistics : public ExecutorStatistics
 {
-    const String & executor_id;
-
     size_t probe_inbound_rows = 0;
     size_t probe_inbound_blocks = 0;
     size_t probe_inbound_bytes = 0;
@@ -26,17 +19,16 @@ struct JoinStatistics
 
     size_t hash_table_bytes = 0;
 
+    UInt64 process_time_for_build = 0;
+
     explicit JoinStatistics(const String & executor_id_)
-        : executor_id(executor_id_)
+        : ExecutorStatistics(executor_id_)
     {}
 
-    String toString() const;
+    String toJson() const override;
 
-    static bool isHit(const String & executor_id)
-    {
-        return startsWith(executor_id, "Join_");
-    }
+    static bool hit(const String & executor_id);
 
-    static JoinStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context);
+    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context);
 };
 } // namespace DB

@@ -7,8 +7,11 @@
 
 namespace DB
 {
-struct AggStatistics : public ExecutorStatistics
+struct LimitStatistics : public ExecutorStatistics
 {
+    size_t limit;
+    size_t offset;
+
     size_t inbound_rows = 0;
     size_t inbound_blocks = 0;
     size_t inbound_bytes = 0;
@@ -17,9 +20,7 @@ struct AggStatistics : public ExecutorStatistics
     size_t outbound_blocks = 0;
     size_t outbound_bytes = 0;
 
-    size_t hash_table_rows = 0;
-
-    explicit AggStatistics(const String & executor_id_)
+    explicit LimitStatistics(const String & executor_id_)
         : ExecutorStatistics(executor_id_)
     {}
 

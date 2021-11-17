@@ -1,20 +1,25 @@
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Statistics/AggStatistics.h>
-#include <Flash/Statistics/FilterStatistics.h>
+#include <Flash/Coprocessor/ProfileStreamsInfo.h>
+#include <common/types.h>
 
-#include <map>
+#include <memory>
 
 namespace DB
 {
+class DAGContext;
+
 struct ExecutorStatistics
 {
-    std::vector<AggStatisticsPtr> agg_stats;
-    std::vector<FilterStatisticsPtr> filter_stats;
+    String id;
+    String type;
 
-    void collectExecutorStatistics(DAGContext & dag_context);
+    explicit ExecutorStatistics(const String & executor_id);
 
-    String toString() const;
+    virtual String toJson() const = 0;
+
+    virtual ~ExecutorStatistics() = default;
 };
+
+using ExecutorStatisticsPtr = std::shared_ptr<ExecutorStatistics>;
 } // namespace DB

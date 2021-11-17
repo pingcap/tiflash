@@ -24,6 +24,8 @@ public:
     String getName() const override { return "HashJoinBuildBlockInputStream"; }
     Block getHeader() const override { return children.back()->getHeader(); }
 
+    const JoinPtr & getJoinPtr() const { return join; }
+
 protected:
     Block readImpl() override;
 

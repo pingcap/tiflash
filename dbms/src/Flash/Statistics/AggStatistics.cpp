@@ -1,35 +1,70 @@
+#include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/ParallelAggregatingBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/AggStatistics.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>
-#include <common/types.h>
 #include <fmt/format.h>
 
 namespace DB
 {
-String AggStatistics::toString() const
+String AggStatistics::toJson() const
 {
     return fmt::format(
-        R"({{"executor_id":"{}","rows_selectivity":{},"blocks_selectivity":{},"bytes_selectivity":{}}})",
-        executor_id,
+        R"({{"id":"{}","type":"{}","rows_selectivity":{},"blocks_selectivity":{},"bytes_selectivity":{},"hash_table_rows":{}}})",
+        id,
+        type,
         divide(outbound_rows, inbound_rows),
         divide(outbound_blocks, inbound_blocks),
-        divide(outbound_bytes, inbound_bytes));
+        divide(outbound_bytes, inbound_bytes),
+        hash_table_rows);
 }
 
-AggStatisticsPtr AggStatistics::buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context [[maybe_unused]])
+bool AggStatistics::hit(const String & executor_id)
 {
+    return startsWith(executor_id, "HashAgg_") || startsWith(executor_id, "StreamAgg_");
+}
+
+ExecutorStatisticsPtr AggStatistics::buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context [[maybe_unused]])
+{
+    using AggStatisticsPtr = std::shared_ptr<AggStatistics>;
     AggStatisticsPtr statistics = std::make_shared<AggStatistics>(executor_id);
-    visitProfileStreamsInfo(
-        profile_streams_info,
-        [&](const BlockStreamProfileInfo & profile_info) {
-            statistics->outbound_rows += profile_info.rows;
-            statistics->outbound_blocks += profile_info.blocks;
-            statistics->outbound_bytes += profile_info.bytes;
+    visitBlockInputStreams(
+        profile_streams_info.input_streams,
+        [&](const BlockInputStreamPtr & stream_ptr) {
+            throwFailCastException(
+                elseThen(
+                    [&]() {
+                        return castBlockInputStream<AggregatingBlockInputStream>(stream_ptr, [&](const AggregatingBlockInputStream & stream) {
+                            statistics->hash_table_rows += stream.getAggregatedDataVariantsSizeWithoutOverflowRow();
+                            const auto & profile_info = stream.getProfileInfo();
+                            statistics->outbound_rows += profile_info.rows;
+                            statistics->outbound_blocks += profile_info.blocks;
+                            statistics->outbound_bytes += profile_info.bytes;
+                        });
+                    },
+                    [&]() {
+                        return castBlockInputStream<ParallelAggregatingBlockInputStream>(stream_ptr, [&](const ParallelAggregatingBlockInputStream & stream) {
+                            statistics->hash_table_rows += stream.getAggregatedDataVariantsSizeWithoutOverflowRow();
+                            const auto & profile_info = stream.getProfileInfo();
+                            statistics->outbound_rows += profile_info.rows;
+                            statistics->outbound_blocks += profile_info.blocks;
+                            statistics->outbound_bytes += profile_info.bytes;
+                        });
+                    }),
+                stream_ptr->getName(),
+                "AggregatingBlockInputStream/ParallelAggregatingBlockInputStream");
         },
-        [&](const BlockStreamProfileInfo & child_profile_info) {
-            statistics->inbound_rows += child_profile_info.rows;
-            statistics->inbound_blocks += child_profile_info.blocks;
-            statistics->inbound_bytes += child_profile_info.bytes;
+        [&](const BlockInputStreamPtr & child_stream_ptr) {
+            throwFailCastException(
+                castBlockInputStream<IProfilingBlockInputStream>(child_stream_ptr, [&](const IProfilingBlockInputStream & stream) {
+                    const auto & profile_info = stream.getProfileInfo();
+                    statistics->inbound_rows += profile_info.rows;
+                    statistics->inbound_blocks += profile_info.blocks;
+                    statistics->inbound_bytes += profile_info.bytes;
+                }),
+                child_stream_ptr->getName(),
+                "IProfilingBlockInputStream");
         });
     return statistics;
 }
