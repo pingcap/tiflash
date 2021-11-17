@@ -18,7 +18,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
-using DB::tests::TiFlashTestEnv;
 namespace DB
 {
 namespace FailPoints

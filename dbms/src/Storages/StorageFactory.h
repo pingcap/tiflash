@@ -1,13 +1,13 @@
 #pragma once
 
 #include <Storages/IStorage.h>
+
 #include <ext/singleton.h>
 #include <unordered_map>
 
 
 namespace DB
 {
-
 class Context;
 class ASTCreateQuery;
 class ASTStorage;
@@ -17,7 +17,7 @@ class ASTStorage;
   * In 'columns' Nested data structures must be flattened.
   * You should subsequently call IStorage::startup method to work with table.
   */
-class StorageFactory : public ext::singleton<StorageFactory>
+class StorageFactory : public ext::Singleton<StorageFactory>
 {
 public:
     struct Arguments
@@ -60,4 +60,4 @@ private:
     Storages storages;
 };
 
-}
+} // namespace DB

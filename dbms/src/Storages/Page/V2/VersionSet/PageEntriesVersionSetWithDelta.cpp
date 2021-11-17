@@ -1,6 +1,5 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
-#include <Storages/Page/V2/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>
@@ -12,6 +11,15 @@
 #include <thread>
 #endif
 
+namespace ProfileEvents
+{
+extern const Event PSMVCCCompactOnDelta;
+extern const Event PSMVCCCompactOnDeltaRebaseRejected;
+extern const Event PSMVCCCompactOnBase;
+extern const Event PSMVCCApplyOnCurrentBase;
+extern const Event PSMVCCApplyOnCurrentDelta;
+extern const Event PSMVCCApplyOnNewDelta;
+} // namespace ProfileEvents
 
 namespace CurrentMetrics
 {
@@ -23,6 +31,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char random_slow_page_storage_list_all_live_files[];
+extern const char random_slow_page_storage_remove_expired_snapshots[];
 } // namespace FailPoints
 
 namespace PS::V2
@@ -30,6 +39,219 @@ namespace PS::V2
 //==========================================================================================
 // PageEntriesVersionSetWithDelta
 //==========================================================================================
+
+void PageEntriesVersionSetWithDelta::apply(PageEntriesEdit & edit)
+{
+    std::unique_lock read_lock(read_write_mutex);
+
+    if (current.use_count() == 1 && current->isBase())
+    {
+        ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentBase);
+        // If no readers, we could directly merge edits.
+        DeltaVersionEditAcceptor::applyInplace(name, current, edit, log);
+        return;
+    }
+
+    if (current.use_count() != 1)
+    {
+        ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnNewDelta);
+        // There are reader(s) on current, generate new delta version and append to version-list
+        VersionPtr v = PageEntriesForDelta::createDelta();
+        appendVersion(std::move(v), read_lock);
+    }
+    else
+    {
+        ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentDelta);
+    }
+    // Make a view from head to new version, then apply edits on `current`.
+    auto view = std::make_shared<PageEntriesView>(current);
+    EditAcceptor builder(view.get(), name, /* ignore_invalid_ref_= */ true, log);
+    builder.apply(edit);
+}
+
+size_t PageEntriesVersionSetWithDelta::size() const
+{
+    std::shared_lock read_lock(read_write_mutex);
+    return sizeUnlocked();
+}
+
+size_t PageEntriesVersionSetWithDelta::sizeUnlocked() const
+{
+    size_t sz = 0;
+    for (auto v = current; v != nullptr; v = std::atomic_load(&v->prev))
+    {
+        sz += 1;
+    }
+    return sz;
+}
+
+std::tuple<size_t, double, unsigned> PageEntriesVersionSetWithDelta::getSnapshotsStat() const
+{
+    // Note: this will scan and remove expired weak_ptrs from `snapshots`
+    return removeExpiredSnapshots();
+}
+
+
+PageEntriesVersionSetWithDelta::SnapshotPtr PageEntriesVersionSetWithDelta::getSnapshot()
+{
+    // acquire for unique_lock since we need to add all snapshots to link list
+    std::unique_lock<std::shared_mutex> lock(read_write_mutex);
+
+    auto s = std::make_shared<Snapshot>(this, current);
+    // Register a weak_ptr to snapshot into VersionSet so that we can get all living PageFiles
+    // by `PageEntriesVersionSetWithDelta::listAllLiveFiles`, and it remove useless weak_ptr of snapshots.
+    // Do not call `vset->removeExpiredSnapshots` inside `~Snapshot`, or it may cause incursive deadlock
+    // on `vset->read_write_mutex`.
+    snapshots.emplace_back(SnapshotWeakPtr(s));
+    CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
+    return s;
+}
+
+void PageEntriesVersionSetWithDelta::appendVersion(VersionPtr && v, const std::unique_lock<std::shared_mutex> & lock)
+{
+    (void)lock; // just for ensure lock is hold
+    assert(v != current);
+    // Append to linked list
+    v->prev = current;
+    current = v;
+}
+
+PageEntriesVersionSetWithDelta::RebaseResult PageEntriesVersionSetWithDelta::rebase(const VersionPtr & old_base, const VersionPtr & new_base)
+{
+    assert(old_base != nullptr);
+    std::unique_lock lock(read_write_mutex);
+    // Should check `old_base` is valid
+    if (!isValidVersion(old_base))
+    {
+        return RebaseResult::INVALID_VERSION;
+    }
+    if (old_base == current)
+    {
+        current = new_base;
+        return RebaseResult::SUCCESS;
+    }
+
+    auto q = current, p = std::atomic_load(&current->prev);
+    while (p != nullptr && p != old_base)
+    {
+        q = p;
+        p = std::atomic_load(&q->prev);
+    }
+    // p must point to `old_base` now
+    assert(p == old_base);
+    // rebase q on `new_base`
+    std::atomic_store(&q->prev, new_base);
+    return RebaseResult::SUCCESS;
+}
+
+std::unique_lock<std::shared_mutex> PageEntriesVersionSetWithDelta::acquireForLock()
+{
+    return std::unique_lock<std::shared_mutex>(read_write_mutex);
+}
+
+bool PageEntriesVersionSetWithDelta::isValidVersion(const VersionPtr tail) const
+{
+    for (auto node = current; node != nullptr; node = std::atomic_load(&node->prev))
+    {
+        if (node == tail)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void PageEntriesVersionSetWithDelta::compactOnDeltaRelease(VersionPtr tail)
+{
+    if (tail == nullptr || tail->isBase())
+        return;
+
+    {
+        // If we can not found tail from `current` version-list, then other view has already
+        // do compaction on `tail` version, and we can just free that version
+        std::shared_lock lock(read_write_mutex);
+        if (!isValidVersion(tail))
+            return;
+    }
+    // do compact on delta
+    ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDelta);
+    VersionPtr tmp = PageEntriesForDelta::compactDeltas(tail); // Note: May be compacted by different threads
+    if (tmp != nullptr)
+    {
+        // rebase vset->current on `this->tail` to base on `tmp`
+        if (this->rebase(tail, tmp) == RebaseResult::INVALID_VERSION)
+        {
+            // Another thread may have done compaction and rebase, then we just release `tail`
+            ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
+            return;
+        }
+        // release tail ref on this view, replace with tmp
+        tail = tmp;
+        tmp.reset();
+    }
+    // do compact on base
+    if (tail->shouldCompactToBase(config))
+    {
+        ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
+        auto old_base = std::atomic_load(&tail->prev);
+        assert(old_base != nullptr);
+        VersionPtr new_base = PageEntriesForDelta::compactDeltaAndBase(old_base, tail);
+        // replace nodes [head, tail] -> new_base
+        if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
+        {
+            // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
+            ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
+            return;
+        }
+    }
+}
+
+std::tuple<size_t, double, unsigned> PageEntriesVersionSetWithDelta::removeExpiredSnapshots() const
+{
+    // Notice: we should free those valid snapshots without locking, or it may cause
+    // incursive deadlock on `vset->read_write_mutex`.
+    std::vector<SnapshotPtr> valid_snapshots;
+    double longest_living_seconds = 0.0;
+    unsigned longest_living_from_thread_id = 0;
+    DB::Int64 num_snapshots_removed = 0;
+    {
+        std::unique_lock lock(read_write_mutex);
+        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
+        {
+            auto snapshot_or_invalid = iter->lock();
+            if (snapshot_or_invalid == nullptr)
+            {
+                // Clear expired snapshots weak_ptrs
+                iter = snapshots.erase(iter);
+                num_snapshots_removed += 1;
+            }
+            else
+            {
+                fiu_do_on(FailPoints::random_slow_page_storage_remove_expired_snapshots, {
+                    pcg64 rng(randomSeed());
+                    std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
+                    std::this_thread::sleep_for(ms);
+                });
+                const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
+                if (snapshot_lifetime > longest_living_seconds)
+                {
+                    longest_living_seconds = snapshot_lifetime;
+                    longest_living_from_thread_id = snapshot_or_invalid->t_id;
+                }
+                valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
+                iter++;
+            }
+        }
+    } // unlock `read_write_mutex`
+
+    const size_t num_valid_snapshots = valid_snapshots.size();
+    valid_snapshots.clear();
+
+    CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
+    // Return some statistics of the oldest living snapshot.
+    return {num_valid_snapshots, longest_living_seconds, longest_living_from_thread_id};
+}
+
 
 std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> //
 PageEntriesVersionSetWithDelta::gcApply( //
@@ -78,7 +300,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         }
         else
         {
-            fiu_do_on(FailPoints::random_slow_page_storage_list_all_live_files, {
+            fiu_do_on(DB::FailPoints::random_slow_page_storage_list_all_live_files, {
                 pcg64 rng(randomSeed());
                 std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
                 std::this_thread::sleep_for(ms);

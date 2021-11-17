@@ -15,7 +15,7 @@ namespace DB
 /** Implements a table engine that is suitable for small chunks of the log.
   * It differs from StorageLog in the absence of mark files.
   */
-class StorageTinyLog : public ext::shared_ptr_helper<StorageTinyLog>
+class StorageTinyLog : public ext::SharedPtrHelper<StorageTinyLog>
     , public IStorage
 {
     friend class TinyLogBlockInputStream;
