@@ -147,8 +147,9 @@ struct AggregateFunctionSumData
 template <typename T>
 struct AggregateFunctionSumKahanData
 {
-    static_assert(std::is_floating_point_v<T>,
-                  "It doesn't make sense to use Kahan Summation algorithm for non floating point types");
+    static_assert(
+        std::is_floating_point_v<T>,
+        "It doesn't make sense to use Kahan Summation algorithm for non floating point types");
 
     T sum{};
     T compensation{};

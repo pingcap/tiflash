@@ -26,18 +26,20 @@ extern const String count_second_stage;
 void AggregateFunctionFactory::registerFunction(const String & name, Creator creator, CaseSensitiveness case_sensitiveness)
 {
     if (creator == nullptr)
-        throw Exception("AggregateFunctionFactory: the aggregate function " + name + " has been provided "
-                                                                                     " a null constructor",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "AggregateFunctionFactory: the aggregate function " + name + " has been provided a null constructor",
+            ErrorCodes::LOGICAL_ERROR);
 
     if (!aggregate_functions.emplace(name, creator).second)
-        throw Exception("AggregateFunctionFactory: the aggregate function name '" + name + "' is not unique",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "AggregateFunctionFactory: the aggregate function name '" + name + "' is not unique",
+            ErrorCodes::LOGICAL_ERROR);
 
     if (case_sensitiveness == CaseInsensitive
         && !case_insensitive_aggregate_functions.emplace(Poco::toLower(name), creator).second)
-        throw Exception("AggregateFunctionFactory: the case insensitive aggregate function name '" + name + "' is not unique",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "AggregateFunctionFactory: the case insensitive aggregate function name '" + name + "' is not unique",
+            ErrorCodes::LOGICAL_ERROR);
 }
 
 /// A little hack - if we have NULL arguments, don't even create nested function.
@@ -67,7 +69,9 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
     {
         AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("Null");
         if (!combinator)
-            throw Exception("Logical error: cannot find aggregate function combinator to apply a function to Nullable arguments.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Logical error: cannot find aggregate function combinator to apply a function to Nullable arguments.",
+                ErrorCodes::LOGICAL_ERROR);
 
         DataTypes nested_types = combinator->transformArguments(argument_types);
 

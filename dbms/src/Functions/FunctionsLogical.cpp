@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 void registerFunctionsLogical(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionAnd>();
@@ -12,4 +11,4 @@ void registerFunctionsLogical(FunctionFactory & factory)
     factory.registerFunction<FunctionNot>();
 }
 
-}
+} // namespace DB

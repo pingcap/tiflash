@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /** Allows to access internal array of ColumnVector or ColumnFixedString without cast to concrete type.
   * We will inherit ColumnVector and ColumnFixedString from this class instead of IColumn.
   * Assumes data layout of ColumnVector, ColumnFixedString and PODArray.
@@ -37,4 +36,4 @@ public:
     }
 };
 
-}
+} // namespace DB

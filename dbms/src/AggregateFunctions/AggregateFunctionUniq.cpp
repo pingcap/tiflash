@@ -31,8 +31,9 @@ AggregateFunctionPtr createAggregateFunctionUniq(const std::string & name, const
     assertNoParameters(name, params);
 
     if (argument_types.empty())
-        throw Exception("Incorrect number of arguments for aggregate function " + name,
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "Incorrect number of arguments for aggregate function " + name,
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if (argument_types.size() == 1)
     {
@@ -58,8 +59,9 @@ AggregateFunctionPtr createAggregateFunctionUniq(const std::string & name, const
         /// If there are several arguments, then no tuples allowed among them.
         for (const auto & type : argument_types)
             if (typeid_cast<const DataTypeTuple *>(type.get()))
-                throw Exception("Tuple argument of function " + name + " must be the only argument",
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    "Tuple argument of function " + name + " must be the only argument",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     /// "Variadic" method also works as a fallback generic case for single argument.
@@ -72,8 +74,9 @@ AggregateFunctionPtr createAggregateFunctionUniq(const std::string & name, const
     assertNoParameters(name, params);
 
     if (argument_types.empty())
-        throw Exception("Incorrect number of arguments for aggregate function " + name,
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "Incorrect number of arguments for aggregate function " + name,
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if (argument_types.size() == 1)
     {
@@ -99,8 +102,9 @@ AggregateFunctionPtr createAggregateFunctionUniq(const std::string & name, const
         /// If there are several arguments, then no tuples allowed among them.
         for (const auto & type : argument_types)
             if (typeid_cast<const DataTypeTuple *>(type.get()))
-                throw Exception("Tuple argument of function " + name + " must be the only argument",
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    "Tuple argument of function " + name + " must be the only argument",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     /// "Variadic" method also works as a fallback generic case for single argument.
@@ -128,17 +132,21 @@ AggregateFunctionPtr createAggregateFunctionUniqRawRes(const std::string & name,
 
 void registerAggregateFunctionsUniq(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("uniq",
-                             createAggregateFunctionUniq<AggregateFunctionUniqUniquesHashSetData, AggregateFunctionUniqUniquesHashSetDataForVariadic>);
+    factory.registerFunction(
+        "uniq",
+        createAggregateFunctionUniq<AggregateFunctionUniqUniquesHashSetData, AggregateFunctionUniqUniquesHashSetDataForVariadic>);
 
-    factory.registerFunction("uniqHLL12",
-                             createAggregateFunctionUniq<AggregateFunctionUniqHLL12Data, AggregateFunctionUniqHLL12DataForVariadic>);
+    factory.registerFunction(
+        "uniqHLL12",
+        createAggregateFunctionUniq<AggregateFunctionUniqHLL12Data, AggregateFunctionUniqHLL12DataForVariadic>);
 
-    factory.registerFunction("uniqExact",
-                             createAggregateFunctionUniq<AggregateFunctionUniqExactData, AggregateFunctionUniqExactData<String>>);
+    factory.registerFunction(
+        "uniqExact",
+        createAggregateFunctionUniq<AggregateFunctionUniqExactData, AggregateFunctionUniqExactData<String>>);
 
-    factory.registerFunction("uniqCombined",
-                             createAggregateFunctionUniq<AggregateFunctionUniqCombinedData, AggregateFunctionUniqCombinedData<UInt64>>);
+    factory.registerFunction(
+        "uniqCombined",
+        createAggregateFunctionUniq<AggregateFunctionUniqCombinedData, AggregateFunctionUniqCombinedData<UInt64>>);
 
     factory.registerFunction(uniq_raw_res_name, createAggregateFunctionUniqRawRes);
 }
