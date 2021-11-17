@@ -71,7 +71,4 @@ public:
 };
 void getDAGRequestFromStringWithRetry(tipb::DAGRequest & req, const String & s);
 
-std::vector<tipb::FieldType> extractOutputFields(const tipb::Executor & root);
-std::vector<tipb::FieldType> extractOutputFields(const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors);
-
 } // namespace DB

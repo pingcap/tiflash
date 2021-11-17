@@ -34,7 +34,7 @@ DAGQuerySource::DAGQuerySource(
     root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(context.getDAGContext()->getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
-    for (UInt32 i : root_query_block->output_offsets)
+    for (UInt32 i : dag_request.output_offsets())
     {
         if (unlikely(i >= root_query_block->output_field_types.size()))
             throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "

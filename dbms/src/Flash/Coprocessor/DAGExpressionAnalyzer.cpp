@@ -1196,7 +1196,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
     /// TiFlash will append extra type cast if needed.
     bool need_append_type_cast = false;
     BoolVec need_append_type_cast_vec;
-    /// !output_offsets.empty() means root block, we need to append type cast for root block if necessary
+    /// we need to append type cast for root block if necessary
     for (UInt32 i : output_offsets)
     {
         const auto & actual_type = current_columns[i].type;

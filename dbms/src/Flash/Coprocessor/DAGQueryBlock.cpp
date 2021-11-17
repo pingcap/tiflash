@@ -42,7 +42,7 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
     *to = from;
 }
 
-static void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, const tipb::Aggregation & agg)
+void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, const tipb::Aggregation & agg)
 {
     for (const auto & expr : agg.agg_func())
     {
@@ -197,6 +197,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 aggregation_name = executors[i].executor_id();
             else
                 aggregation_name = std::to_string(i) + "_aggregation";
+            collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
             break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
@@ -220,6 +221,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 Errors::Coprocessor::Unimplemented);
         }
     }
+    fillOutputFieldTypes();
 }
 
 void DAGQueryBlock::fillOutputFieldTypes()

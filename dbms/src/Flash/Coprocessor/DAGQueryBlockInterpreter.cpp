@@ -104,8 +104,6 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
-
-    NamesWithAliases final_project;
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -205,7 +203,7 @@ AnalysisResult analyzeExpressions(
     }
 
     // Append final project results if needed.
-    res.final_project = analyzer.appendFinalProject(
+    final_project = analyzer.appendFinalProject(
         chain,
         query_block.output_field_types,
         query_block.output_offsets,
@@ -1113,7 +1111,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // execute projection
-    executeProject(pipeline, res.final_project);
+    executeProject(pipeline, final_project);
 
     // execute limit
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::TypeLimit)
