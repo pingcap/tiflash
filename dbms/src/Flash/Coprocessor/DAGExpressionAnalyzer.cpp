@@ -654,7 +654,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 }
 
 
-extern const String CountSecondStage;
+extern const String count_second_stage;
 
 std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnalyzer::appendAggregation(
     ExpressionActionsChain & chain,
@@ -688,7 +688,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnaly
         {
             /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
             /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
-            agg_func_name = CountSecondStage;
+            agg_func_name = count_second_stage;
         }
 
         if (expr.tp() == tipb::ExprType::GroupConcat)
