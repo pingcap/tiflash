@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 void registerFunctionsHigherOrder(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionArrayMap>();
@@ -19,4 +18,4 @@ void registerFunctionsHigherOrder(FunctionFactory & factory)
     factory.registerFunction<FunctionArrayCumSum>();
 }
 
-}
+} // namespace DB

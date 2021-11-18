@@ -1,9 +1,8 @@
-#include <Functions/GatherUtils/Selectors.h>
 #include <Functions/GatherUtils/Algorithms.h>
+#include <Functions/GatherUtils/Selectors.h>
 
 namespace DB::GatherUtils
 {
-
 struct ArrayConcat : public ArraySinkSourceSelector<ArrayConcat>
 {
     using Sources = std::vector<std::unique_ptr<IArraySource>>;
@@ -36,4 +35,4 @@ void concat(const std::vector<std::unique_ptr<IArraySource>> & sources, IArraySi
         throw Exception("Concat function should get at least 1 ArraySource", ErrorCodes::LOGICAL_ERROR);
     return ArrayConcat::select(*sources.front(), sink, sources);
 }
-}
+} // namespace DB::GatherUtils

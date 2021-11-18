@@ -1,4 +1,5 @@
 #include <Core/ColumnNumbers.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -115,6 +116,12 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, argument_column_numbers, columns.size());
     return block.getByPosition(columns.size());
+}
+
+ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
+{
+    DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
+    return {data_type->createColumnConst(size, Null()), data_type, name};
 }
 } // namespace tests
 } // namespace DB

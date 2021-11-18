@@ -1,11 +1,11 @@
-#include <iostream>
-#include <Core/Types.h>
 #include <Common/ShellCommand.h>
-#include <IO/copyData.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
+#include <Core/Types.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+#include <IO/copyData.h>
 
 #include <chrono>
+#include <iostream>
 #include <thread>
 
 using namespace DB;

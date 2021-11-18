@@ -1,11 +1,10 @@
 #pragma once
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTLiteral.h>
 
 
 namespace DB
 {
-
 Array getAggregateFunctionParametersArray(const ASTPtr & expression_list, const std::string & error_context = "");
 
 
@@ -15,4 +14,4 @@ void getAggregateFunctionNameAndParametersArray(
     Array & aggregate_function_parameters,
     const std::string & error_context);
 
-}
+} // namespace DB

@@ -1,19 +1,19 @@
-#include <Common/StringUtils/StringUtils.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <Common/StringUtils/StringUtils.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 void AggregateFunctionCombinatorFactory::registerCombinator(const AggregateFunctionCombinatorPtr & value)
 {
     if (!dict.emplace(value->getName(), value).second)
-        throw Exception("AggregateFunctionCombinatorFactory: the name '" + value->getName() + "' is not unique",
+        throw Exception(
+            "AggregateFunctionCombinatorFactory: the name '" + value->getName() + "' is not unique",
             ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -26,4 +26,4 @@ AggregateFunctionCombinatorPtr AggregateFunctionCombinatorFactory::tryFindSuffix
     return {};
 }
 
-}
+} // namespace DB

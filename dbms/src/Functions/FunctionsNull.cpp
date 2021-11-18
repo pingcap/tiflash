@@ -213,7 +213,7 @@ void FunctionCoalesce::executeImpl(Block & block, const ColumnNumbers & argument
     ColumnPtr res = std::move(temp_block.getByPosition(result).column);
 
     /// if last argument is not nullable, result should be also not nullable
-    if (!block.getByPosition(multi_if_args.back()).column->isColumnNullable() && res->isColumnNullable())
+    if (!block.getByPosition(filtered_args.back()).type->isNullable() && res->isColumnNullable())
         res = static_cast<const ColumnNullable &>(*res).getNestedColumnPtr();
 
     block.getByPosition(result).column = std::move(res);

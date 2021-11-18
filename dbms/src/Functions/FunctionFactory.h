@@ -3,7 +3,6 @@
 #include <Functions/IFunction.h>
 
 #include <ext/singleton.h>
-
 #include <functional>
 #include <memory>
 #include <string>
@@ -12,7 +11,6 @@
 
 namespace DB
 {
-
 class Context;
 
 
@@ -20,7 +18,7 @@ class Context;
   * Function could use for initialization (take ownership of shared_ptr, for example)
   *  some dictionaries from Context.
   */
-class FunctionFactory : public ext::singleton<FunctionFactory>
+class FunctionFactory : public ext::Singleton<FunctionFactory>
 {
     friend class StorageSystemFunctions;
 
@@ -70,9 +68,9 @@ private:
     /// Register a function by its name.
     /// No locking, you must register all functions before usage of get.
     void registerFunction(
-            const std::string & name,
-            Creator creator,
-            CaseSensitiveness case_sensitiveness = CaseSensitive);
+        const std::string & name,
+        Creator creator,
+        CaseSensitiveness case_sensitiveness = CaseSensitive);
 };
 
-}
+} // namespace DB

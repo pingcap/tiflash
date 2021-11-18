@@ -18,6 +18,7 @@
 #include <atomic>
 #include <boost/noncopyable.hpp>
 #include <memory>
+#include <unordered_map>
 
 namespace DB
 {
@@ -73,28 +74,30 @@ private:
 
     bool switchStatus(TaskStatus from, TaskStatus to);
 
-    Context context;
-
     RegionInfoMap local_regions;
     RegionInfoList remote_regions;
 
     tipb::DAGRequest dag_req;
-    std::unique_ptr<DAGContext> dag_context;
 
+    Context context;
     /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
-    /// BlockIO contains some information stored in Context and DAGContext, so need deconstruct it before Context and DAGContext
+    /// BlockIO contains some information stored in Context, so need deconstruct it before Context
     BlockIO io;
+    /// The inputStreams should be released in the destructor of BlockIO, since DAGContext contains
+    /// some reference to inputStreams, so it need to be destructed before BlockIO
+    std::unique_ptr<DAGContext> dag_context;
     MemoryTracker * memory_tracker = nullptr;
-
-    MPPTaskId id;
 
     std::atomic<TaskStatus> status{INITIALIZING};
 
     mpp::TaskMeta meta;
+
+    MPPTaskId id;
+
     MPPTunnelSetPtr tunnel_set;
 
     // which targeted task we should send data by which tunnel.
-    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
+    std::unordered_map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
     MPPTaskManager * manager = nullptr;
 
@@ -109,6 +112,6 @@ private:
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
-using MPPTaskMap = std::map<MPPTaskId, MPPTaskPtr>;
+using MPPTaskMap = std::unordered_map<MPPTaskId, MPPTaskPtr>;
 
 } // namespace DB

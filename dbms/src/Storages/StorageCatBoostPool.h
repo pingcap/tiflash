@@ -1,13 +1,14 @@
 #pragma once
 
-#include <Storages/IStorage.h>
 #include <Core/Defines.h>
+#include <Storages/IStorage.h>
+
 #include <ext/shared_ptr_helper.h>
 
 namespace DB
 {
-
-class StorageCatBoostPool : public ext::shared_ptr_helper<StorageCatBoostPool>, public IStorage
+class StorageCatBoostPool : public ext::SharedPtrHelper<StorageCatBoostPool>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "CatBoostPool"; }
@@ -43,15 +44,14 @@ private:
 
     ColumnTypesMap getColumnTypesMap() const
     {
-        return
-        {
-                {"Target", DatasetColumnType::Target},
-                {"Num", DatasetColumnType::Num},
-                {"Categ", DatasetColumnType::Categ},
-                {"Auxiliary", DatasetColumnType::Auxiliary},
-                {"DocId", DatasetColumnType::DocId},
-                {"Weight", DatasetColumnType::Weight},
-                {"Baseline", DatasetColumnType::Baseline},
+        return {
+            {"Target", DatasetColumnType::Target},
+            {"Num", DatasetColumnType::Num},
+            {"Categ", DatasetColumnType::Categ},
+            {"Auxiliary", DatasetColumnType::Auxiliary},
+            {"DocId", DatasetColumnType::DocId},
+            {"Weight", DatasetColumnType::Weight},
+            {"Baseline", DatasetColumnType::Baseline},
         };
     };
 
@@ -63,9 +63,14 @@ private:
         std::string alias;
         DatasetColumnType column_type;
 
-        ColumnDescription() : column_type(DatasetColumnType::Num) {}
+        ColumnDescription()
+            : column_type(DatasetColumnType::Num)
+        {}
         ColumnDescription(std::string column_name, std::string alias, DatasetColumnType column_type)
-                : column_name(std::move(column_name)), alias(std::move(alias)), column_type(column_type) {}
+            : column_name(std::move(column_name))
+            , alias(std::move(alias))
+            , column_type(column_type)
+        {}
     };
 
     std::vector<ColumnDescription> columns_description;
@@ -78,4 +83,4 @@ protected:
     StorageCatBoostPool(const Context & context, String column_description_file_name, String data_description_file_name);
 };
 
-}
+} // namespace DB

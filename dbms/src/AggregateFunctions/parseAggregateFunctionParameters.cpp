@@ -1,17 +1,16 @@
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>
+#include <Common/typeid_cast.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/parseQuery.h>
-#include <Common/typeid_cast.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int PARAMETERS_TO_AGGREGATE_FUNCTIONS_MUST_BE_LITERALS;
-}
+extern const int BAD_ARGUMENTS;
+extern const int PARAMETERS_TO_AGGREGATE_FUNCTIONS_MUST_BE_LITERALS;
+} // namespace ErrorCodes
 
 Array getAggregateFunctionParametersArray(const ASTPtr & expression_list, const std::string & error_context)
 {
@@ -26,8 +25,8 @@ Array getAggregateFunctionParametersArray(const ASTPtr & expression_list, const 
         const ASTLiteral * lit = typeid_cast<const ASTLiteral *>(parameters[i].get());
         if (!lit)
         {
-            throw Exception("Parameters to aggregate functions must be literals" + (error_context.empty() ? "" : " (in " + error_context +")"),
-                        ErrorCodes::PARAMETERS_TO_AGGREGATE_FUNCTIONS_MUST_BE_LITERALS);
+            throw Exception("Parameters to aggregate functions must be literals" + (error_context.empty() ? "" : " (in " + error_context + ")"),
+                            ErrorCodes::PARAMETERS_TO_AGGREGATE_FUNCTIONS_MUST_BE_LITERALS);
         }
 
         params_row[i] = lit->value;
@@ -53,26 +52,29 @@ void getAggregateFunctionNameAndParametersArray(
     size_t pos = aggregate_function_name_with_params.find('(');
     if (pos == std::string::npos || pos + 2 >= aggregate_function_name_with_params.size())
         throw Exception(aggregate_function_name_with_params + " doesn't look like aggregate function name in " + error_context + ".",
-            ErrorCodes::BAD_ARGUMENTS);
+                        ErrorCodes::BAD_ARGUMENTS);
 
     aggregate_function_name = aggregate_function_name_with_params.substr(0, pos);
     std::string parameters_str = aggregate_function_name_with_params.substr(pos + 1, aggregate_function_name_with_params.size() - pos - 2);
 
     if (aggregate_function_name.empty())
         throw Exception(aggregate_function_name_with_params + " doesn't look like aggregate function name in " + error_context + ".",
-            ErrorCodes::BAD_ARGUMENTS);
+                        ErrorCodes::BAD_ARGUMENTS);
 
     ParserExpressionList params_parser(false);
     ASTPtr args_ast = parseQuery(params_parser,
-        parameters_str.data(), parameters_str.data() + parameters_str.size(),
-        "parameters of aggregate function in " + error_context, 0);
+                                 parameters_str.data(),
+                                 parameters_str.data() + parameters_str.size(),
+                                 "parameters of aggregate function in " + error_context,
+                                 0);
 
     ASTExpressionList & args_list = typeid_cast<ASTExpressionList &>(*args_ast);
     if (args_list.children.empty())
         throw Exception("Incorrect list of parameters to aggregate function "
-            + aggregate_function_name, ErrorCodes::BAD_ARGUMENTS);
+                            + aggregate_function_name,
+                        ErrorCodes::BAD_ARGUMENTS);
 
     aggregate_function_parameters = getAggregateFunctionParametersArray(args_ast);
 }
 
-}
+} // namespace DB

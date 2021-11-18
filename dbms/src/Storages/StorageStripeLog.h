@@ -16,7 +16,7 @@ namespace DB
 /** Implements a table engine that is suitable for small chunks of the log.
   * In doing so, stores all the columns in a single Native file, with a nearby index.
   */
-class StorageStripeLog : public ext::shared_ptr_helper<StorageStripeLog>
+class StorageStripeLog : public ext::SharedPtrHelper<StorageStripeLog>
     , public IStorage
 {
     friend class StripeLogBlockInputStream;

@@ -1,8 +1,7 @@
 #pragma once
 
-#include <Poco/Util/AbstractConfiguration.h>
 #include <Poco/Exception.h>
-
+#include <Poco/Util/AbstractConfiguration.h>
 #include <common/types.h>
 
 #include <ext/singleton.h>
@@ -15,8 +14,8 @@
 class TechDataHierarchy
 {
 private:
-    UInt8 os_parent[256] {};
-    UInt8 se_parent[256] {};
+    UInt8 os_parent[256]{};
+    UInt8 se_parent[256]{};
 
 public:
     void reload();
@@ -71,4 +70,7 @@ public:
 };
 
 
-class TechDataHierarchySingleton : public ext::singleton<TechDataHierarchySingleton>, public TechDataHierarchy {};
+class TechDataHierarchySingleton : public ext::Singleton<TechDataHierarchySingleton>
+    , public TechDataHierarchy
+{
+};

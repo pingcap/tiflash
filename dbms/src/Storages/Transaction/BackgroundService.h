@@ -20,7 +20,7 @@ using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 class BackgroundService : boost::noncopyable
 {
 public:
-    BackgroundService(TMTContext &);
+    explicit BackgroundService(TMTContext &);
 
     ~BackgroundService();
 

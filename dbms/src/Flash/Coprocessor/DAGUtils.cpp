@@ -27,9 +27,14 @@ extern const int IP_ADDRESS_NOT_ALLOWED;
 
 const Int8 VAR_SIZE = 0;
 
+bool isScalarFunctionExpr(const tipb::Expr & expr)
+{
+    return expr.tp() == tipb::ExprType::ScalarFunc;
+}
+
 bool isFunctionExpr(const tipb::Expr & expr)
 {
-    return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr);
+    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr);
 }
 
 const String & getAggFunctionName(const tipb::Expr & expr)
@@ -547,7 +552,7 @@ void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String &
     }
 }
 
-extern const String UniqRawResName;
+extern const String uniq_raw_res_name;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
@@ -555,7 +560,7 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Min, "min"},
     {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "first_row"},
-    {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},

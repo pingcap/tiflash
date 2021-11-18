@@ -7,15 +7,39 @@ namespace DB
 // Identify a mpp task.
 struct MPPTaskId
 {
-    MPPTaskId(uint64_t start_ts_, int64_t task_id_)
+    MPPTaskId()
+        : start_ts(0)
+        , task_id(unknown_task_id){};
+
+    MPPTaskId(UInt64 start_ts_, Int64 task_id_)
         : start_ts(start_ts_)
         , task_id(task_id_){};
 
-    uint64_t start_ts;
-    int64_t task_id;
+    UInt64 start_ts;
+    Int64 task_id;
 
-    bool operator<(const MPPTaskId & rhs) const;
+    bool isUnknown() const { return task_id == unknown_task_id; }
 
     String toString() const;
+
+    static const MPPTaskId unknown_mpp_task_id;
+
+private:
+    static constexpr Int64 unknown_task_id = -1;
 };
+
+bool operator==(const MPPTaskId & lid, const MPPTaskId & rid);
 } // namespace DB
+
+namespace std
+{
+template <>
+class hash<DB::MPPTaskId>
+{
+public:
+    size_t operator()(const DB::MPPTaskId & id) const
+    {
+        return hash<UInt64>()(id.start_ts) ^ hash<Int64>()(id.task_id);
+    }
+};
+} // namespace std
