@@ -40,10 +40,10 @@ extern const char force_no_local_region_for_mpp_task[];
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
-    , id(meta_.start_ts(), meta_.task_id())
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
+    , task_stats(std::make_shared<MPPTaskStats>(log, id, meta.address()))
 {}
 
 MPPTask::~MPPTask()
@@ -139,8 +139,6 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     getDAGRequestFromStringWithRetry(dag_req, task_request.encoded_plan());
-    if (dag_req.has_root_executor())
-        task_stats->setExecutorsStructure(dag_req.root_executor());
     TMTContext & tmt_context = context.getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
     /// will never be used and can be removed later.
@@ -272,6 +270,7 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     DAGQuerySource dag(context, local_regions, remote_regions, dag_req, log, true);
+    task_stats->setExecutorsStructure(dag_req);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();

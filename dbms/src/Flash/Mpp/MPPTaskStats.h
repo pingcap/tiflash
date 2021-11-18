@@ -5,7 +5,7 @@
 #include <Flash/Mpp/TaskStatus.h>
 #include <common/StringRef.h>
 #include <common/types.h>
-#include <tipb/executor.pb.h>
+#include <tipb/select.pb.h>
 
 #include <chrono>
 #include <mutex>
@@ -19,13 +19,7 @@ struct MPPTaskStats
     using Timestamp = Clock::time_point;
     using Duration = Int64; /// ns
 
-    MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_)
-        : log(log_)
-        , id(id_)
-        , host(std::move(address_))
-        , task_init_timestamp(Clock::now())
-        , status(INITIALIZING)
-    {}
+    MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_);
 
     void start();
 
@@ -33,7 +27,7 @@ struct MPPTaskStats
 
     String toString() const;
 
-    void setExecutorsStructure(const tipb::Executor & root_executor);
+    void setExecutorsStructure(const tipb::DAGRequest & dag_request);
 
     void setWaitIndexTimestamp(const Timestamp & wait_index_start_timestamp_, const Timestamp & wait_index_end_timestamp_);
 

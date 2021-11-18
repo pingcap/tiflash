@@ -1,10 +1,20 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Mpp/MPPTaskStats.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
+MPPTaskStats::MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_)
+    : log(getMPPTaskLog(log_, "mpp_task_tracing"))
+    , id(id_)
+    , host(std::move(address_))
+    , task_init_timestamp(Clock::now())
+    , status(INITIALIZING)
+{}
+
 void MPPTaskStats::start()
 {
     task_start_timestamp = Clock::now();
@@ -68,6 +78,8 @@ String childrenToJson(const tipb::Executor & executor)
 
 String toJson(const tipb::Executor & executor)
 {
+    if (!executor.has_executor_id())
+        throw TiFlashException("Illegal mpp dag_request: `!executor.has_executor_id()`", Errors::Coprocessor::BadRequest);
     return fmt::format(R"({{"id":"{}","children":[{}]}})", parseId(executor.executor_id()), childrenToJson(executor));
 }
 
@@ -77,15 +89,17 @@ Int64 toMicroseconds(MPPTaskStats::Timestamp timestamp)
 }
 } // namespace
 
-void MPPTaskStats::setExecutorsStructure(const tipb::Executor & root_executor)
+void MPPTaskStats::setExecutorsStructure(const tipb::DAGRequest & dag_request)
 {
-    executors_structure = toJson(root_executor);
+    if (!dag_request.has_root_executor())
+        throw TiFlashException("Illegal mpp dag_request: `!dag_request.has_root_executor()`", Errors::Coprocessor::BadRequest);
+    executors_structure = toJson(dag_request.root_executor());
 }
 
 String MPPTaskStats::toString() const
 {
     return fmt::format(
-        R"(task_tracing: {{"query_tso":{},"task_id":{},"executors_structure":{},"host":"{}","upstream_task_ids":[{}],"task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_throughput":{},"remote_input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}}})",
+        R"({{"query_tso":{},"task_id":{},"executors_structure":{},"host":"{}","upstream_task_ids":[{}],"task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_throughput":{},"remote_input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         executors_structure,
