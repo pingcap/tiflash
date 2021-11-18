@@ -121,134 +121,134 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
     {
         // FilterParser::RSFilterType::Equal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 666");
-        EXPECT_EQ(rs_operator->name(), String("equal"));
+        EXPECT_EQ(rs_operator->name(), "equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}");
     }
 
     {
         // FilterParser::RSFilterType::Equal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = col_5");
-        EXPECT_EQ(rs_operator->name(), String("unsupported"));
+        EXPECT_EQ(rs_operator->name(), "unsupported");
     }
 
     {
         // FilterParser::RSFilterType::Equal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 666 = 666");
-        EXPECT_EQ(rs_operator->name(), String("unsupported"));
+        EXPECT_EQ(rs_operator->name(), "unsupported");
     }
 
     {
         // FilterParser::RSFilterType::Greater
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 > 666");
-        EXPECT_EQ(rs_operator->name(), String("greater"));
+        EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"666\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"666\"}");
     }
 
     {
         // FilterParser::RSFilterType::Greater
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_3 > 1234568.890123");
-        EXPECT_EQ(rs_operator->name(), String("unsupported"));
+        EXPECT_EQ(rs_operator->name(), "unsupported");
     }
 
     {
         // FilterParser::RSFilterType::GreaterEqual
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 >= 667");
-        EXPECT_EQ(rs_operator->name(), String("greater_equal"));
+        EXPECT_EQ(rs_operator->name(), "greater_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
     }
 
     {
         // inverse + FilterParser::RSFilterType::GreaterEqual
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 667 <= col_2");
-        EXPECT_EQ(rs_operator->name(), String("greater_equal"));
+        EXPECT_EQ(rs_operator->name(), "greater_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
     }
 
     {
         // FilterParser::RSFilterType::Less
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 < 777");
-        EXPECT_EQ(rs_operator->name(), String("less"));
+        EXPECT_EQ(rs_operator->name(), "less");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
     }
 
     {
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 777 > col_2");
-        EXPECT_EQ(rs_operator->name(), String("less"));
+        EXPECT_EQ(rs_operator->name(), "less");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
     }
 
     {
         // FilterParser::RSFilterType::LessEqual
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 <= 776");
-        EXPECT_EQ(rs_operator->name(), String("less_equal"));
+        EXPECT_EQ(rs_operator->name(), "less_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"776\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"776\"}");
     }
 
     {
         // FilterParser::RSFilterType::NotEqual
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 != 777");
-        EXPECT_EQ(rs_operator->name(), String("not_equal"));
+        EXPECT_EQ(rs_operator->name(), "not_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"777\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"777\"}");
     }
 
     {
         // FilterParser::RSFilterType::Not
         auto rs_operator = generateRsOperator(table_info_json, "select col_1, col_2 from default.t_111 where NOT col_2=666");
-        EXPECT_EQ(rs_operator->name(), String("not"));
+        EXPECT_EQ(rs_operator->name(), "not");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}"));
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
     }
 
     {
         // FilterParser::RSFilterType::And
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' and col_2 = 666");
-        EXPECT_EQ(rs_operator->name(), String("and"));
+        EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
     }
 
     {
         // FilterParser::RSFilterType::OR
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test5' or col_2 = 777");
-        EXPECT_EQ(rs_operator->name(), String("or"));
+        EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_2"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
     }
 
     {
         // TimeStamp + FilterParser::RSFilterType::Equal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_time > cast_string_datetime('2021-10-26 17:00:00.00000')");
-        EXPECT_EQ(rs_operator->name(), String("greater"));
+        EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, String("col_time"));
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_time");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
     }
 }
