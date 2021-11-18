@@ -5,12 +5,10 @@
 
 namespace DB
 {
-
 class BatchCoprocessorHandler : public CoprocessorHandler
 {
 public:
-    BatchCoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::BatchRequest * cop_request_,
-        ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_);
+    BatchCoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::BatchRequest * cop_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_);
 
     ~BatchCoprocessorHandler() = default;
 

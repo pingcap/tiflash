@@ -3,7 +3,6 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 
 #include <ext/singleton.h>
-
 #include <functional>
 #include <memory>
 #include <string>
@@ -13,7 +12,6 @@
 
 namespace DB
 {
-
 class Context;
 class IDataType;
 
@@ -23,7 +21,7 @@ using DataTypes = std::vector<DataTypePtr>;
 
 /** Creates an aggregate function by name.
   */
-class AggregateFunctionFactory final : public ext::singleton<AggregateFunctionFactory>
+class AggregateFunctionFactory final : public ext::Singleton<AggregateFunctionFactory>
 {
     friend class StorageSystemFunctions;
 
@@ -80,4 +78,4 @@ private:
     AggregateFunctions case_insensitive_aggregate_functions;
 };
 
-}
+} // namespace DB

@@ -112,6 +112,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
         // Create a mark file to stop this dmfile from being removed by GC.
         // We should create NGC file before creating the file under single file mode,
         // or the file may be removed.
+        // FIXME : this should not use PageUtils.
         PageUtil::touchFile(new_dmfile->ngcPath());
         PageUtil::touchFile(path);
     }
@@ -121,6 +122,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
         // Create a mark file to stop this dmfile from being removed by GC.
         // We should create NGC file after creating the directory under folder mode
         // since the NGC file is a file under the folder.
+        // FIXME : this should not use PageUtils.
         PageUtil::touchFile(new_dmfile->ngcPath());
     }
 

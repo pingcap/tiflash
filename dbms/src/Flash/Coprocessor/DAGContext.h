@@ -11,6 +11,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/ProfileStreamsInfo.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -25,6 +26,7 @@ UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
     /// todo max_error_count is a system variable in mysql, TiDB should put it into dag request, now use the default value instead
     return 1024;
 }
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -53,13 +55,12 @@ public:
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
         , mpp_task_meta(meta_)
+        , mpp_task_id(mpp_task_meta.start_ts(), mpp_task_meta.task_id())
         , max_recorded_error_count(getMaxErrorCount(dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
         assert(dag_request.has_root_executor());
-        exchange_sender_executor_id = dag_request.root_executor().executor_id();
-        exchange_sender_execution_summary_key = dag_request.root_executor().exchange_sender().child().executor_id();
     }
 
     explicit DAGContext(UInt64 max_error_count_)
@@ -112,11 +113,9 @@ public:
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
-    Int64 getMPPTaskId() const
+    const MPPTaskId & getMPPTaskId() const
     {
-        if (is_mpp_task)
-            return mpp_task_meta.task_id();
-        return 0;
+        return mpp_task_id;
     }
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
@@ -126,8 +125,6 @@ public:
     size_t final_concurrency = 1;
     Int64 compile_time_ns;
     String table_scan_executor_id = "";
-    String exchange_sender_executor_id = "";
-    String exchange_sender_execution_summary_key = "";
     bool collect_execution_summaries;
     bool return_executor_id;
     bool is_mpp_task;
@@ -152,6 +149,7 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
+    const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;

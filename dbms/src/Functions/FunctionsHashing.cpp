@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 void registerFunctionsHashing(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionHalfMD5>();
@@ -38,4 +37,4 @@ UInt64 toInteger<Float64>(Float64 x)
     return res;
 }
 
-}
+} // namespace DB
