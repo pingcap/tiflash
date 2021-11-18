@@ -179,6 +179,7 @@ def runUTCoverTICS(CURWS, NPROC) {
                         sh """
                         cp /tmp/tiflash_gcovr_coverage.xml ./
                         cp /tmp/tiflash_gcovr_coverage.res ./
+                        chown -R 1000:1000 tiflash_gcovr_coverage.xml tiflash_gcovr_coverage.res
                         """
                     }
                 }
