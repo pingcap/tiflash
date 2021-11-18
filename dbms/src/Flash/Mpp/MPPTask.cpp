@@ -141,6 +141,8 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     getDAGRequestFromStringWithRetry(dag_req, task_request.encoded_plan());
+    if (dag_req.has_root_executor())
+        task_stats->setExecutorsStructure(dag_req.root_executor());
     TMTContext & tmt_context = context.getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
     /// will never be used and can be removed later.
@@ -277,9 +279,7 @@ void MPPTask::preprocess()
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     task_stats->compile_start_timestamp = start_time;
     task_stats->compile_end_timestamp = end_time;
-
-    task_stats->wait_index_start_timestamp = dag_context->wait_index_start_timestamp;
-    task_stats->wait_index_end_timestamp = dag_context->wait_index_end_timestamp;
+    task_stats->setWaitIndexTimestamp(dag_context->wait_index_start_timestamp, dag_context->wait_index_end_timestamp);
 }
 
 void MPPTask::runImpl()

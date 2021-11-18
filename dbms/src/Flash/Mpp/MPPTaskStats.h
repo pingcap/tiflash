@@ -5,6 +5,7 @@
 #include <Flash/Mpp/TaskStatus.h>
 #include <common/StringRef.h>
 #include <common/types.h>
+#include <tipb/executor.pb.h>
 
 #include <chrono>
 #include <mutex>
@@ -32,15 +33,17 @@ struct MPPTaskStats
 
     String toString() const;
 
+    void setExecutorsStructure(const tipb::Executor & root_executor);
+
+    void setWaitIndexTimestamp(const Timestamp & wait_index_start_timestamp_, const Timestamp & wait_index_end_timestamp_);
+
     const LogWithPrefixPtr log;
 
     /// common
     const MPPTaskId id;
     const String host;
     std::vector<Int64> upstream_task_ids;
-    String signature;
-    String executor_structure;
-    String inputstream_structure;
+    String executors_structure;
     Timestamp task_init_timestamp;
     Timestamp compile_start_timestamp;
     Timestamp wait_index_start_timestamp;
