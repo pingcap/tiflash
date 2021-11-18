@@ -185,8 +185,25 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
 
         if (need_decode_value)
         {
-            if (!decodeRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_defines, force_decode))
-                return false;
+            if (write_type == Region::DelFlag)
+            {
+                while (column_ids_iter != read_column_ids.end())
+                {
+                    auto & cd = (*schema_snapshot->column_defines)[column_ids_iter->second];
+                    if (!cd.is_pk)
+                    {
+                        auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos)).column.get());
+                        raw_column->insertDefault();
+                    }
+                    column_ids_iter++;
+                    next_column_pos++;
+                }
+            }
+            else
+            {
+                if (!decodeRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_defines, force_decode))
+                    return false;
+            }
         }
 
         /// set extra handle column and pk columns if need

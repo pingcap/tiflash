@@ -10,6 +10,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/TiDB.h>
 
 #include <limits>
 #include <memory>

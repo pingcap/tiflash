@@ -209,7 +209,7 @@ public:
                 num ^= SIGN_MASK;
             else
                 num = ~num;
-            T res;
+            Float64 res;
             memcpy(&res, &num, sizeof(UInt64));
             data.push_back(res);
         }
