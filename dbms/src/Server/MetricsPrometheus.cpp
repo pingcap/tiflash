@@ -182,7 +182,8 @@ MetricsPrometheus::MetricsPrometheus(
         }
     }
 
-    // Usually TiFlash enable prometheus pull mode when deployed by TiUP/TiDB-Operator
+    // Usually TiFlash enables Prometheus pull mode when deployed by TiUP/TiDB-Operator.
+    // Enable pull mode by default when push mode is disabled.
     if (conf.hasOption(status_metrics_port) || !conf.hasOption(status_metrics_addr))
     {
         auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
