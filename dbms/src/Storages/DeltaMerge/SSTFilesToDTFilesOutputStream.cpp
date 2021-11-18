@@ -39,7 +39,7 @@ SSTFilesToDTFilesOutputStream::SSTFilesToDTFilesOutputStream( //
     : child(std::move(child_))
     , //
     storage(std::move(storage_))
-    , schema_snap(schema_snap_)
+    , schema_snap(std::move(schema_snap_))
     , method(method_)
     , job_type(job_type_)
     , tmt(tmt_)

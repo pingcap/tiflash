@@ -105,7 +105,7 @@ class BoundedSSTFilesToBlockInputStream final
 public:
     BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
                                       const ColId pk_column_id_,
-                                      DecodingStorageSchemaSnapshotConstPtr schema_snap);
+                                      const DecodingStorageSchemaSnapshotConstPtr & schema_snap);
 
     String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
 

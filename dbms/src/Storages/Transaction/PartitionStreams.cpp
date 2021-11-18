@@ -365,13 +365,11 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
     return std::visit(variant_op::overloaded{
                           [&](RegionDataReadInfoList & data_list_read) -> ReadBlockByRegionRes {
                               /// Read region data as block.
-                              DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
                               Block block;
                               // TODO: whether we need to support this function
                               assert(0);
                               {
-                                  // This is a deprecated function that is only used in TMT storage engine
-                                  // TODO: remove this function
+                                  // TODO: remove this deprecated function
                                   auto reader = RegionBlockReader(nullptr);
                                   bool ok = reader.setStartTs(start_ts)
                                                 .setFilter(scan_filter)
@@ -544,7 +542,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         // the caller should handle this situation.
         auto table_lock = storage->lockStructureForShare(getThreadName());
         dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        // only dt storage engine support `getDecodingSchemaSnapshot`, otherwise it will throw exception
+        // only dt storage engine support `getDecodingSchemaSnapshot`, other engine will throw exception
         schema_snapshot = storage->getDecodingSchemaSnapshot();
         std::tie(std::ignore, drop_lock) = std::move(table_lock).release();
         return true;

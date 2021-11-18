@@ -35,10 +35,10 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 
 // TODO: move these function to a separate file
-bool decodeRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
-bool decodeRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
+bool appendRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
+bool appendRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
 template <bool is_big>
-bool decodeRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
-bool decodeRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
+bool appendRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
+bool appendRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode);
 
 } // namespace DB

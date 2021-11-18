@@ -36,7 +36,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     : region(std::move(region_))
     , snaps(snaps_)
     , proxy_helper(proxy_helper_)
-    , schema_snap(schema_snap_)
+    , schema_snap(std::move(schema_snap_))
     , tmt(tmt_)
     , gc_safepoint(gc_safepoint_)
     , expected_size(expected_size_)
@@ -250,7 +250,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
     const ColId pk_column_id_,
-    DecodingStorageSchemaSnapshotConstPtr schema_snap)
+    const DecodingStorageSchemaSnapshotConstPtr & schema_snap)
     : pk_column_id(pk_column_id_)
     , _raw_child(std::move(child))
 {

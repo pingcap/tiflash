@@ -362,7 +362,7 @@ public:
         const Types::Which requested = TypeToEnum<std::decay_t<T>>::value;
         if (which != requested)
             return false;
-         result = get<T>();
+        result = get<T>();
         return true;
     }
 

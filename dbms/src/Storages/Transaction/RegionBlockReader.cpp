@@ -168,6 +168,7 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
     version_data.reserve(data_list.size());
     bool need_decode_value = block.columns() > MustHaveColCnt;
     size_t index = 0;
+    // TODO: reserve data_list.size() in every column
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
         // Ignore data after the start_ts.
@@ -175,7 +176,17 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
             continue;
 
         bool should_skip = false;
-        should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(pk));
+        if constexpr (pk_type != TMTPKType::STRING)
+        {
+            if constexpr (pk_type == TMTPKType::UINT64)
+            {
+                should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(pk));
+            }
+            else
+            {
+                should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(pk));
+            }
+        }
         if (should_skip)
             continue;
 
@@ -187,21 +198,24 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
         {
             if (write_type == Region::DelFlag)
             {
-                while (column_ids_iter != read_column_ids.end())
+                auto column_ids_iter_copy = column_ids_iter;
+                auto next_column_pos_copy = next_column_pos;
+                while (column_ids_iter_copy != read_column_ids.end())
                 {
-                    auto & cd = (*schema_snapshot->column_defines)[column_ids_iter->second];
-                    if (!cd.is_pk)
+                    auto & cd = (*schema_snapshot->column_defines)[column_ids_iter_copy->second];
+                    // !pk_pos_map.empty() means the table is common index, or pk is handle, so we can decode the pk from the key
+                    if (pk_pos_map.empty() || !cd.is_pk)
                     {
-                        auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos)).column.get());
+                        auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
                         raw_column->insertDefault();
                     }
-                    column_ids_iter++;
-                    next_column_pos++;
+                    column_ids_iter_copy++;
+                    next_column_pos_copy++;
                 }
             }
             else
             {
-                if (!decodeRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_defines, force_decode))
+                if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_defines, force_decode))
                     return false;
             }
         }
@@ -243,6 +257,14 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
             }
         }
         index++;
+    }
+    // TODO: remove it
+    size_t expected_rows = block.rows();
+    for (size_t i = 0; i < block.columns(); i++)
+    {
+        auto & ch_column = block.getByPosition(i);
+        if (ch_column.column->size() != expected_rows)
+            throw Exception("column " + ch_column.name + " rows " + std::to_string(ch_column.column->size()) + " but block rows " + std::to_string(expected_rows), ErrorCodes::LOGICAL_ERROR);
     }
     return true;
 }
