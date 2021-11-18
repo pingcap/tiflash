@@ -1,3 +1,5 @@
+#include <limits>
+
 #include "Columns/ColumnsNumber.h"
 #include "Core/ColumnWithTypeAndName.h"
 #include "DataTypes/DataTypeMyDateTime.h"
@@ -30,10 +32,115 @@ public:
     }
 };
 
+static const std::string func_name = "tidb_cast";
+
+TEST_F(TestTidbConversion, castIntAsInt)
+try
+{
+    static const Int8 MAX_INT8 = std::numeric_limits<Int8>::max();
+    static const Int8 MIN_INT8 = std::numeric_limits<Int8>::min();
+    static const Int16 MAX_INT16 = std::numeric_limits<Int16>::max();
+    static const Int16 MIN_INT16 = std::numeric_limits<Int16>::min();
+    static const Int32 MAX_INT32 = std::numeric_limits<Int32>::max();
+    static const Int32 MIN_INT32 = std::numeric_limits<Int32>::min();
+    static const Int64 MAX_INT64 = std::numeric_limits<Int64>::max();
+    static const Int64 MIN_INT64 = std::numeric_limits<Int64>::min();
+    static const UInt8 MAX_UINT8 = std::numeric_limits<UInt8>::max();
+    static const UInt16 MAX_UINT16 = std::numeric_limits<UInt16>::max();
+    static const UInt32 MAX_UINT32 = std::numeric_limits<UInt32>::max();
+    static const UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
+
+    // uint8/16/32/64 -> uint64, no overflow
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({0, 1, MAX_UINT8}),
+        executeFunction(func_name,
+                        {createColumn<UInt8>({0, 1, MAX_UINT8}),
+                         createConstColumn<String>(3, "UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({0, 1, MAX_UINT16}),
+        executeFunction(func_name,
+                        {createColumn<UInt16>({0, 1, MAX_UINT16}),
+                         createConstColumn<String>(3, "UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({0, 1, MAX_UINT32}),
+        executeFunction(func_name,
+                        {createColumn<UInt32>({0, 1, MAX_UINT32}),
+                         createConstColumn<String>(3, "UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({0, 1, MAX_UINT64}),
+        executeFunction(func_name,
+                        {createColumn<UInt64>({0, 1, MAX_UINT64}),
+                         createConstColumn<String>(3, "UInt64")}));
+    // int8/16/32/64 -> uint64, no overflow
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({0, MAX_INT8, MAX_UINT64, MAX_UINT64 - MAX_INT8}),
+        executeFunction(func_name,
+                        {createColumn<Int8>({0, MAX_INT8, -1, MIN_INT8}),
+                         createConstColumn<String>(4, "UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({0, MAX_INT16, MAX_UINT64, MAX_UINT64 - MAX_INT16}),
+        executeFunction(func_name,
+                        {createColumn<Int16>({0, MAX_INT16, -1, MIN_INT16}),
+                         createConstColumn<String>(4, "UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({0, MAX_INT32, MAX_UINT64, MAX_UINT64 - MAX_INT32}),
+        executeFunction(func_name,
+                        {createColumn<Int32>({0, MAX_INT32, -1, MIN_INT32}),
+                         createConstColumn<String>(4, "UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt64>({0, MAX_INT64, MAX_UINT64, MAX_UINT64 - MAX_INT64}),
+        executeFunction(func_name,
+                        {createColumn<Int64>({0, MAX_INT64, -1, MIN_INT64}),
+                         createConstColumn<String>(4, "UInt64")}));
+    // uint8/16/32 -> int64, no overflow
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({0, MAX_INT8, MAX_UINT8}),
+        executeFunction(func_name,
+                        {createColumn<UInt8>({0, MAX_INT8, MAX_UINT8}),
+                         createConstColumn<String>(3, "Int64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({0, MAX_INT16, MAX_UINT16}),
+        executeFunction(func_name,
+                        {createColumn<UInt16>({0, MAX_INT16, MAX_UINT16}),
+                         createConstColumn<String>(3, "Int64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({0, MAX_INT32, MAX_UINT32}),
+        executeFunction(func_name,
+                        {createColumn<UInt32>({0, MAX_INT32, MAX_UINT32}),
+                         createConstColumn<String>(3, "Int64")}));
+    //  uint64 -> int64, overflow may happen
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({0, MAX_INT64, -1}),
+        executeFunction(func_name,
+                        {createColumn<UInt64>({0, MAX_INT64, MAX_UINT64}),
+                         createConstColumn<String>(3, "Int64")}));
+    // int8/16/32/64 -> int64, no overflow
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({0, MAX_INT8, -1, MIN_INT8}),
+        executeFunction(func_name,
+                        {createColumn<Int8>({0, MAX_INT8, -1, MIN_INT8}),
+                         createConstColumn<String>(4, "Int64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({0, MAX_INT16, -1, MIN_INT16}),
+        executeFunction(func_name,
+                        {createColumn<Int16>({0, MAX_INT16, -1, MIN_INT16}),
+                         createConstColumn<String>(4, "Int64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({0, MAX_INT32, -1, MIN_INT32}),
+        executeFunction(func_name,
+                        {createColumn<Int32>({0, MAX_INT32, -1, MIN_INT32}),
+                         createConstColumn<String>(4, "Int64")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({0, MAX_INT64, -1, MIN_INT64}),
+        executeFunction(func_name,
+                        {createColumn<Int64>({0, MAX_INT64, -1, MIN_INT64}),
+                         createConstColumn<String>(4, "Int64")}));
+}
+CATCH
+
 TEST_F(TestTidbConversion, castTimestampAsReal)
 try
 {
-    static const std::string func_name = "tidb_cast";
     static const auto data_type_ptr = std::make_shared<DataTypeMyDateTime>(6);
     static const Float64 datetime_float = 20211026160859;
     static const Float64 datetime_frac_float = 20211026160859.125;
@@ -94,7 +201,6 @@ CATCH
 TEST_F(TestTidbConversion, castDurationAsDuration)
 try
 {
-    static const std::string func_name = "tidb_cast";
     static const auto from_type = std::make_shared<DataTypeMyDuration>(3);
     static const auto to_type_1 = std::make_shared<DataTypeMyDuration>(5); // from_fsp <  to_fsp
     static const auto to_type_2 = std::make_shared<DataTypeMyDuration>(3); // from_fsp == to_fsp

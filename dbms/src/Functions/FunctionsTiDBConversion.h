@@ -1924,7 +1924,7 @@ private:
             return createWrapper<DataTypeEnum8, return_nullable>(to_type);
         if (checkAndGetDataType<DataTypeEnum16>(from_type.get()))
             return createWrapper<DataTypeEnum16, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
+        if (checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
             return createWrapper<DataTypeMyDuration, return_nullable>(to_type);
 
         // todo support convert to duration/json type
