@@ -156,37 +156,9 @@ bool DAGContext::shouldClipToZero()
     return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT;
 }
 
-std::pair<bool, double> DAGContext::getTableScanThroughput()
-{
-    if (table_scan_executor_id.empty())
-        return std::make_pair(false, 0.0);
-
-    // collect table scan metrics
-    UInt64 time_processed_ns = 0;
-    UInt64 num_produced_bytes = 0;
-    for (auto & p : getProfileStreamsMap())
-    {
-        if (p.first == table_scan_executor_id)
-        {
-            for (auto & streamPtr : p.second.input_streams)
-            {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
-                {
-                    time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                    num_produced_bytes += p_stream->getProfileInfo().bytes;
-                }
-            }
-            break;
-        }
-    }
-
-    // convert to bytes per second
-    return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
-}
-
 namespace
 {
-double getInputThroughput(BlockInputStreams & block_input_streams)
+double getThroughput(BlockInputStreams & block_input_streams)
 {
     UInt64 time_processed_ns = 0;
     UInt64 num_produced_bytes = 0;
@@ -207,47 +179,44 @@ double getInputThroughput(BlockInputStreams & block_input_streams)
 }
 } // namespace
 
+std::pair<bool, double> DAGContext::getTableScanThroughput()
+{
+    if (table_scan_executor_id.empty())
+        return std::make_pair(false, 0.0);
+
+    // collect table scan metrics
+    double throughput = 0.0;
+    auto it = profile_streams_map.find(table_scan_executor_id);
+    if (it != profile_streams_map.end())
+    {
+        throughput = getThroughput(it->second.input_streams);
+    }
+
+    return std::make_pair(true, throughput);
+}
+
 double DAGContext::getRemoteInputThroughput()
 {
-    return getInputThroughput(remote_block_input_streams);
+    return getThroughput(remote_block_input_streams);
 }
 
 double DAGContext::getLocalInputThroughput()
 {
-    return getInputThroughput(local_block_input_streams);
+    return getThroughput(local_block_input_streams);
 }
 
 double DAGContext::getOutputThroughput()
 {
-    if (!return_executor_id)
+    if (!return_executor_id || root_executor_id.empty())
         return 0.0;
 
-    String output_executor_id;
-    if (is_mpp_task)
-        output_executor_id = exchange_sender_execution_summary_key;
-    else
-        output_executor_id = root_executor_id;
-
-    UInt64 time_processed_ns = 0;
-    UInt64 num_produced_bytes = 0;
-    for (auto & p : getProfileStreamsMap())
+    auto it = profile_streams_map.find(root_executor_id);
+    if (it != profile_streams_map.end())
     {
-        if (p.first == output_executor_id)
-        {
-            for (auto & stream_ptr : p.second.input_streams)
-            {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
-                {
-                    time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                    num_produced_bytes += p_stream->getProfileInfo().bytes;
-                }
-            }
-            break;
-        }
+        return getThroughput(it->second.input_streams);
     }
 
-    // convert to bytes per second
-    return num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
+    return 0.0;
 }
 
 } // namespace DB

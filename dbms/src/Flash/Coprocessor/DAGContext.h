@@ -71,8 +71,7 @@ public:
         , warning_count(0)
     {
         assert(dag_request.has_root_executor() && dag_request.root_executor().has_executor_id());
-        exchange_sender_executor_id = dag_request.root_executor().executor_id();
-        exchange_sender_execution_summary_key = dag_request.root_executor().exchange_sender().child().executor_id();
+        root_executor_id = dag_request.root_executor().executor_id();
     }
 
     explicit DAGContext(UInt64 max_error_count_)
