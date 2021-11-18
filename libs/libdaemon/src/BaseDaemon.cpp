@@ -733,7 +733,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         return;
     config_logger = current_logger;
 
-    bool is_daemon = config.getBool("application.runAsDaemon", false);
+    bool is_daemon = config.getBool("application.runAsDaemon", true);
 
     // Split log and error log.
     Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
@@ -755,7 +755,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
         log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
         log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
-        log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
+        log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
         log->setChannel(log_file);
@@ -779,7 +779,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         error_log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
         error_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
         error_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
-        error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
+        error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         error_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
         errorlog->setChannel(error_log_file);
