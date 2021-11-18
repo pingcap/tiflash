@@ -626,7 +626,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     aggregated_columns.emplace_back(func_string, result_type);
 }
 
-extern const String CountSecondStage;
+extern const String count_second_stage;
 
 static String getAggFuncName(
     const tipb::Expr & expr,
@@ -641,7 +641,7 @@ static String getAggFuncName(
     {
         /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
         /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
-        return CountSecondStage;
+        return count_second_stage;
     }
     return agg_func_name;
 }
