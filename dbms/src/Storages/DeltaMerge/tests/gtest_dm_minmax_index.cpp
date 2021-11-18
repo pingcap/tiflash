@@ -1,5 +1,4 @@
 #include <Core/BlockGen.h>
-#include <DataTypes/DataTypeArray.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -305,7 +304,6 @@ try
     ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test_2"), enum16_type, (Int16)101), true);
 }
 CATCH
-
 } // namespace tests
 } // namespace DM
 } // namespace DB
