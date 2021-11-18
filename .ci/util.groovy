@@ -176,10 +176,13 @@ def runUTCoverTICS(CURWS, NPROC) {
                 timeout(time: 5, unit: 'MINUTES') {
                     container("builder") {
                         sh "NPROC=${NPROC} /build/tics/release-centos7/build/upload-ut-coverage.sh"
-                        sh "cp /tmp/tiflash_gcovr_coverage.xml ./"
+                        sh """
+                        cp /tmp/tiflash_gcovr_coverage.xml ./
+                        cp /tmp/tiflash_gcovr_coverage.res ./
+                        """
                     }
                 }
-                ut_coverage_result = sh(script: "cat /tmp/tiflash_gcovr_coverage.res", returnStdout: true).trim()
+                ut_coverage_result = sh(script: "cat tiflash_gcovr_coverage.res", returnStdout: true).trim()
                 sh '''
                 rm -f comment-pr
                 curl -O http://fileserver.pingcap.net/download/comment-pr
