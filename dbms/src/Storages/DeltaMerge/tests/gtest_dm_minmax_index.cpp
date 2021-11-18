@@ -306,25 +306,6 @@ try
 }
 CATCH
 
-TEST_F(DMMinMaxIndexTest, ArrayCompare)
-try
-{
-    auto array_type_ptr = std::make_shared<DataTypeArray>(std::make_shared<DataTypeInt64>());
-    ASSERT_EQ(RoughCheck::Cmp<EqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)60)}), true);
-
-    ASSERT_EQ(RoughCheck::Cmp<LessOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)70)}), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)60), Field((Int64)60)}), true);
-
-    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)60)}), true);
-    ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)60), Field((Int64)60)}), true);
-
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)40), Field((Int64)60)}), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)50)}), true);
-
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)60)}), true);
-    ASSERT_EQ(RoughCheck::Cmp<GreaterOrEqualsOp>::compare(Array{Field((Int64)50), Field((Int64)60)}, array_type_ptr, Array{Field((Int64)50), Field((Int64)50)}), true);
-}
-CATCH
 } // namespace tests
 } // namespace DM
 } // namespace DB
