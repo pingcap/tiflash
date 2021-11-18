@@ -225,7 +225,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg)
 {
-    recv_msg->packet->Clear();
+    if (recv_msg == nullptr)
+        return;
+    if (recv_msg->packet != nullptr)
+        recv_msg->packet->Clear();
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
     res_buffer.pushEmpty(std::move(recv_msg));
