@@ -1,6 +1,6 @@
+#include <Core/TypeListNumber.h>
 #include <Functions/GatherUtils/Sinks.h>
 #include <Functions/GatherUtils/Sources.h>
-#include <Core/TypeListNumber.h>
 
 namespace DB::GatherUtils
 {
@@ -58,4 +58,4 @@ std::unique_ptr<IValueSource> createValueSource(const IColumn & col, bool is_con
     return Creator::create(col, nullptr, is_const, total_rows);
 }
 
-}
+} // namespace DB::GatherUtils

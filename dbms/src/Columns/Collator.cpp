@@ -1,19 +1,18 @@
 #include <Columns/Collator.h>
-
 #include <Common/config.h>
 
 #if USE_ICU
-    #pragma GCC diagnostic push
-    #ifdef __APPLE__
-    #pragma GCC diagnostic ignored "-Wold-style-cast"
-    #endif
-    #include <unicode/ucol.h>
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic push
+#ifdef __APPLE__
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+#include <unicode/ucol.h>
+#pragma GCC diagnostic pop
 #else
-    #if __clang__
-        #pragma clang diagnostic push
-        #pragma clang diagnostic ignored "-Wunused-private-field"
-    #endif
+#if __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-private-field"
+#endif
 #endif
 
 #include <Common/Exception.h>
@@ -23,16 +22,17 @@
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int UNSUPPORTED_COLLATION_LOCALE;
-        extern const int COLLATION_COMPARISON_FAILED;
-        extern const int SUPPORT_IS_DISABLED;
-    }
-}
+namespace ErrorCodes
+{
+extern const int UNSUPPORTED_COLLATION_LOCALE;
+extern const int COLLATION_COMPARISON_FAILED;
+extern const int SUPPORT_IS_DISABLED;
+} // namespace ErrorCodes
+} // namespace DB
 
 
-Collator::Collator(const std::string & locale_) : locale(Poco::toLower(locale_))
+Collator::Collator(const std::string & locale_)
+    : locale(Poco::toLower(locale_))
 {
 #if USE_ICU
     UErrorCode status = U_ZERO_ERROR;

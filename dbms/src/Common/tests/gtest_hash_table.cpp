@@ -1,16 +1,13 @@
-#include <iomanip>
-#include <iostream>
-
-#include <Interpreters/AggregationCommon.h>
-
+#include <Common/HashTable/Hash.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashSet.h>
-#include <Common/HashTable/Hash.h>
-
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
-
+#include <Interpreters/AggregationCommon.h>
 #include <gtest/gtest.h>
+
+#include <iomanip>
+#include <iostream>
 
 
 using namespace DB;
@@ -23,12 +20,12 @@ struct DummyHash
     size_t operator()(T key) const { return T(key); }
 };
 
-template<typename HashTable>
+template <typename HashTable>
 std::set<std::string> convertToSet(const HashTable & table)
 {
     std::set<std::string> result;
 
-    for (auto v: table)
+    for (auto v : table)
         result.emplace(toString(v.getValue()));
 
     return result;
@@ -347,7 +344,7 @@ struct OneElementResizeGrower
 
     void increaseSize() { ++buf_size; }
 
-    void set(size_t) { }
+    void set(size_t) {}
 
     void setBufSize(size_t buf_size_) { buf_size = buf_size_; }
 

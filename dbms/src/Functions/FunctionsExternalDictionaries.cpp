@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 void registerFunctionsExternalDictionaries(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionDictHas>();
@@ -39,4 +38,4 @@ void registerFunctionsExternalDictionaries(FunctionFactory & factory)
     factory.registerFunction<FunctionDictGetStringOrDefault>();
 }
 
-}
+} // namespace DB

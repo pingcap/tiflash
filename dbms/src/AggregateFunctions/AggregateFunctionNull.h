@@ -1,9 +1,5 @@
 #pragma once
 
-#include <array>
-#include <map>
-#include <common/mem_utils.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
@@ -19,17 +15,20 @@
 #include <Functions/FunctionsHigherOrder.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Interpreters/sortBlock.h>
 #include <Interpreters/SetVariants.h>
+#include <Interpreters/sortBlock.h>
+#include <common/mem_utils.h>
+
+#include <array>
+#include <map>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int LOGICAL_ERROR;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 /// This class implements a wrapper around an aggregate function. Despite its name,
@@ -266,8 +265,8 @@ public:
     DataTypePtr getReturnType() const override
     {
         return result_is_nullable
-               ? makeNullable(nested_function->getReturnType())
-               : nested_function->getReturnType();
+            ? makeNullable(nested_function->getReturnType())
+            : nested_function->getReturnType();
     }
 
     void create(AggregateDataPtr __restrict place) const override
@@ -431,7 +430,11 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const override
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const override
     {
         if (batch_size == 0)
             return;
@@ -443,7 +446,12 @@ public:
             const UInt8 * null_map = column->getNullMapData().data();
 
             this->nested_function->addBatchSinglePlaceNotNull(
-                batch_size, this->nestedPlace(place), &nested_column, null_map, arena, if_argument_pos);
+                batch_size,
+                this->nestedPlace(place),
+                &nested_column,
+                null_map,
+                arena,
+                if_argument_pos);
 
             if constexpr (result_is_nullable)
                 if (!mem_utils::memoryIsByte(null_map, batch_size, std::byte{1}))
@@ -452,7 +460,11 @@ public:
         else
         {
             this->nested_function->addBatchSinglePlace(
-                batch_size, this->nestedPlace(place), columns, arena, if_argument_pos);
+                batch_size,
+                this->nestedPlace(place),
+                columns,
+                arena,
+                if_argument_pos);
             this->setFlag(place);
         }
     }
@@ -464,15 +476,15 @@ class AggregateFunctionNullVariadic final : public AggregateFunctionNullBase<res
 {
 public:
     AggregateFunctionNullVariadic(AggregateFunctionPtr nested_function, const DataTypes & arguments)
-        : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionNullVariadic<result_is_nullable>>(nested_function),
-        number_of_arguments(arguments.size())
+        : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionNullVariadic<result_is_nullable>>(nested_function)
+        , number_of_arguments(arguments.size())
     {
         if (number_of_arguments == 1)
             throw Exception("Logical error: single argument is passed to AggregateFunctionNullVariadic", ErrorCodes::LOGICAL_ERROR);
 
         if (number_of_arguments > MAX_ARGS)
             throw Exception("Maximum number of arguments for aggregate function with Nullable types is " + toString(size_t(MAX_ARGS)),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (size_t i = 0; i < number_of_arguments; ++i)
             is_nullable[i] = arguments[i]->isNullable();
@@ -510,9 +522,12 @@ public:
     }
 
 private:
-    enum { MAX_ARGS = 8 };
+    enum
+    {
+        MAX_ARGS = 8
+    };
     size_t number_of_arguments = 0;
-    std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
+    std::array<char, MAX_ARGS> is_nullable; /// Plain array is better than std::vector due to one indirection less.
 };
 
-}
+} // namespace DB

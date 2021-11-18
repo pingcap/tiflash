@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 // `TiDBChunk` stores multiple rows of data in Apache Arrow format.
 // See https://arrow.apache.org/docs/memory_layout.html
 // Values are appended in compact format and can be directly accessed without decoding.
@@ -23,7 +22,10 @@ public:
     }
 
     void buildDAGChunkFromBlock(
-        const Block & block, const std::vector<tipb::FieldType> & field_types, size_t start_index, size_t end_index);
+        const Block & block,
+        const std::vector<tipb::FieldType> & field_types,
+        size_t start_index,
+        size_t end_index);
 
     TiDBColumn & getColumn(int index) { return columns[index]; };
     void clear()

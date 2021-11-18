@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 void registerFunctionsRound(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionRoundToExp2>();
@@ -27,4 +26,4 @@ void registerFunctionsRound(FunctionFactory & factory)
     factory.registerFunction<FunctionTiDBRoundWithFrac>();
 }
 
-}
+} // namespace DB

@@ -1,4 +1,5 @@
 #include <Common/COWPtr.h>
+
 #include <iostream>
 
 
@@ -26,7 +27,9 @@ private:
     friend class COWPtrHelper<IColumn, ConcreteColumn>;
 
     int data;
-    ConcreteColumn(int data) : data(data) {}
+    ConcreteColumn(int data)
+        : data(data)
+    {}
     ConcreteColumn(const ConcreteColumn &) = default;
 
     MutableColumnPtr test() const override
@@ -44,7 +47,7 @@ public:
 int main(int, char **)
 {
     ColumnPtr x = ConcreteColumn::create(1);
-    ColumnPtr y = x;//x->test();
+    ColumnPtr y = x; //x->test();
 
     std::cerr << "values:    " << x->get() << ", " << y->get() << "\n";
     std::cerr << "refcounts: " << x->use_count() << ", " << y->use_count() << "\n";
@@ -83,4 +86,3 @@ int main(int, char **)
 
     return 0;
 }
-

@@ -2,7 +2,6 @@
 
 namespace DB
 {
-
 Int32 vectorToInt(int start_index, int end_index, const std::vector<Int32> & vec)
 {
     Int32 ret = 0;
@@ -13,7 +12,8 @@ Int32 vectorToInt(int start_index, int end_index, const std::vector<Int32> & vec
     return ret;
 }
 
-TiDBDecimal::TiDBDecimal(UInt32 scale, const std::vector<Int32> & digits, bool neg) : negative(neg)
+TiDBDecimal::TiDBDecimal(UInt32 scale, const std::vector<Int32> & digits, bool neg)
+    : negative(neg)
 {
     UInt32 prec = digits.size();
     if (prec == 0)

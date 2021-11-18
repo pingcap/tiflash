@@ -1,13 +1,11 @@
-#include <gtest/gtest.h>
-
 #include <Common/Decimal.h>
 #include <Core/Field.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
 namespace tests
 {
-
 TEST(DecimalType_test, Parse)
 {
     Field field;
