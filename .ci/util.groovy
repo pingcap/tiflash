@@ -187,7 +187,7 @@ def runUTCoverTICS(CURWS, NPROC) {
                         curl -O http://fileserver.pingcap.net/download/comment-pr
                         chmod +x comment-pr
                         set +x
-                        ./comment-pr --token=$TOKEN --owner=pingcap --repo=tics --number=${ghprbPullId} --comment="Coverage detail: ${CI_COVERAGE_BASE_URL}/${BUILD_NUMBER}/cobertura/  \n\n ${ut_coverage_result}"
+                        ./comment-pr --token=$TOKEN --owner=pingcap --repo=tics --number=${ghprbPullId} --comment="Coverage detail: ${CI_COVERAGE_BASE_URL}/${BUILD_NUMBER}/cobertura/  \n(Coverage detail url is limited office network access)   \n\n ${ut_coverage_result}"
                         set -x
                         """
                     }
