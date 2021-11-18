@@ -1,11 +1,12 @@
 #pragma once
 
-#include <Storages/IStorage.h>
 #include <Core/Defines.h>
-#include <common/MultiVersion.h>
-#include <ext/shared_ptr_helper.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
+#include <Storages/IStorage.h>
+#include <common/MultiVersion.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace Poco
@@ -19,17 +20,18 @@ struct DictionaryStructure;
 struct IDictionaryBase;
 class ExternalDictionaries;
 
-class StorageDictionary : public ext::shared_ptr_helper<StorageDictionary>, public IStorage
+class StorageDictionary : public ext::SharedPtrHelper<StorageDictionary>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "Dictionary"; }
     std::string getTableName() const override { return table_name; }
     BlockInputStreams read(const Names & column_names,
-        const SelectQueryInfo & query_info,
-        const Context & context,
-        QueryProcessingStage::Enum & processed_stage,
-        size_t max_block_size = DEFAULT_BLOCK_SIZE,
-        unsigned threads = 1) override;
+                           const SelectQueryInfo & query_info,
+                           const Context & context,
+                           QueryProcessingStage::Enum & processed_stage,
+                           size_t max_block_size = DEFAULT_BLOCK_SIZE,
+                           unsigned threads = 1) override;
 
     void drop() override {}
     static NamesAndTypesList getNamesAndTypes(const DictionaryStructure & dictionary_structure);
@@ -65,9 +67,9 @@ private:
 
 protected:
     StorageDictionary(const String & table_name_,
-        const ColumnsDescription & columns_,
-        const DictionaryStructure & dictionary_structure_,
-        const String & dictionary_name_);
+                      const ColumnsDescription & columns_,
+                      const DictionaryStructure & dictionary_structure_,
+                      const String & dictionary_name_);
 };
 
-}
+} // namespace DB

@@ -1,7 +1,8 @@
-#include <vector>
-#include <thread>
-#include <iostream>
 #include <Common/Stopwatch.h>
+
+#include <iostream>
+#include <thread>
+#include <vector>
 
 
 int main(int, char **)
@@ -16,8 +17,7 @@ int main(int, char **)
 
     for (size_t i = 0; i < num_threads; ++i)
     {
-        threads[i] = std::thread([i, &watch, &total_watch]
-        {
+        threads[i] = std::thread([i, &watch, &total_watch] {
             size_t iteration = 0;
             while (iteration < num_iterations)
             {

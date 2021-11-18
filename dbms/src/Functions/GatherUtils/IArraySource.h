@@ -5,7 +5,6 @@
 
 namespace DB::GatherUtils
 {
-
 struct IArraySource
 {
     virtual ~IArraySource() = default;
@@ -23,6 +22,8 @@ struct IArraySource
 };
 
 template <typename Derived>
-class ArraySourceImpl : public Visitable<Derived, IArraySource, ArraySourceVisitor> {};
+class ArraySourceImpl : public Visitable<Derived, IArraySource, ArraySourceVisitor>
+{
+};
 
-}
+} // namespace DB::GatherUtils

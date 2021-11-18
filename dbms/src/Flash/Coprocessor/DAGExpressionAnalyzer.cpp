@@ -592,60 +592,33 @@ void DAGExpressionAnalyzer::buildGroupConcat(
             result_is_nullable = true;
         }
     }
+
+#define NEW_GROUP_CONCAT_FUNC(result_is_nullable, only_one_column)                       \
+    std::make_shared<AggregateFunctionGroupConcat<result_is_nullable, only_one_column>>( \
+        aggregate.function,                                                              \
+        types,                                                                           \
+        delimiter,                                                                       \
+        max_len,                                                                         \
+        sort_description,                                                                \
+        all_columns_names_and_types,                                                     \
+        arg_collators,                                                                   \
+        expr.has_distinct())
+
     if (result_is_nullable)
     {
         if (only_one_column)
-        {
-            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, true>>(
-                aggregate.function,
-                types,
-                delimiter,
-                max_len,
-                sort_description,
-                all_columns_names_and_types,
-                arg_collators,
-                expr.has_distinct());
-        }
+            aggregate.function = NEW_GROUP_CONCAT_FUNC(true, true);
         else
-        {
-            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<true, false>>(
-                aggregate.function,
-                types,
-                delimiter,
-                max_len,
-                sort_description,
-                all_columns_names_and_types,
-                arg_collators,
-                expr.has_distinct());
-        }
+            aggregate.function = NEW_GROUP_CONCAT_FUNC(true, false);
     }
     else
     {
         if (only_one_column)
-        {
-            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, true>>(
-                aggregate.function,
-                types,
-                delimiter,
-                max_len,
-                sort_description,
-                all_columns_names_and_types,
-                arg_collators,
-                expr.has_distinct());
-        }
+            aggregate.function = NEW_GROUP_CONCAT_FUNC(false, true);
         else
-        {
-            aggregate.function = std::make_shared<AggregateFunctionGroupConcat<false, false>>(
-                aggregate.function,
-                types,
-                delimiter,
-                max_len,
-                sort_description,
-                all_columns_names_and_types,
-                arg_collators,
-                expr.has_distinct());
-        }
+            aggregate.function = NEW_GROUP_CONCAT_FUNC(false, false);
     }
+#undef NEW_GROUP_CONCAT_FUNC
 
     aggregate_descriptions.push_back(aggregate);
     DataTypePtr result_type = aggregate.function->getReturnType();
@@ -653,8 +626,25 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     aggregated_columns.emplace_back(func_string, result_type);
 }
 
+extern const String count_second_stage;
 
-extern const String CountSecondStage;
+static String getAggFuncName(
+    const tipb::Expr & expr,
+    const tipb::Aggregation & agg,
+    const Settings & settings)
+{
+    String agg_func_name = getAggFunctionName(expr);
+    if (expr.has_distinct() && Poco::toLower(agg_func_name) == "countdistinct")
+        return settings.count_distinct_implementation;
+    if (agg.group_by_size() == 0 && agg_func_name == "sum" && expr.has_field_type()
+        && !getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isNullable())
+    {
+        /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
+        /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
+        return count_second_stage;
+    }
+    return agg_func_name;
+}
 
 std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnalyzer::appendAggregation(
     ExpressionActionsChain & chain,
@@ -677,23 +667,10 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnaly
 
     for (const tipb::Expr & expr : agg.agg_func())
     {
-        String agg_func_name = getAggFunctionName(expr);
-        const String agg_func_name_lowercase = Poco::toLower(agg_func_name);
-        if (expr.has_distinct() && agg_func_name_lowercase == "countdistinct")
-        {
-            agg_func_name = settings.count_distinct_implementation;
-        }
-        if (agg.group_by_size() == 0 && agg_func_name == "sum" && expr.has_field_type()
-            && !getDataTypeByFieldTypeForComputingLayer(expr.field_type())->isNullable())
-        {
-            /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
-            /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
-            agg_func_name = CountSecondStage;
-        }
-
+        String agg_func_name = getAggFuncName(expr, agg, settings);
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-            buildGroupConcat(expr, step, agg_func_name, aggregate_descriptions, agg.group_by_size() == 0);
+            buildGroupConcat(expr, step, agg_func_name, aggregate_descriptions, agg.group_by().empty());
             continue;
         }
 
@@ -951,17 +928,6 @@ const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColum
     return after_agg ? aggregated_columns : source_columns;
 }
 
-void DAGExpressionAnalyzer::appendFinalProject(
-    ExpressionActionsChain & chain,
-    const NamesWithAliases & final_project) const
-{
-    initChain(chain, getCurrentInputColumns());
-    for (const auto & name : final_project)
-    {
-        chain.steps.back().required_output.push_back(name.first);
-    }
-}
-
 void constructTZExpr(
     tipb::Expr & tz_expr,
     const TimezoneInfo & dag_timezone_info,
@@ -1212,17 +1178,17 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     }
 }
 
-void DAGExpressionAnalyzer::generateFinalProject(
+NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
     ExpressionActionsChain & chain,
     const std::vector<tipb::FieldType> & schema,
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
-    bool keep_session_timezone_info,
-    NamesWithAliases & final_project)
+    bool keep_session_timezone_info)
 {
     if (unlikely(!keep_session_timezone_info && output_offsets.empty()))
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
+    NamesWithAliases final_project;
     const auto & current_columns = getCurrentInputColumns();
     UniqueNameGenerator unique_name_generator;
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
@@ -1230,22 +1196,19 @@ void DAGExpressionAnalyzer::generateFinalProject(
     /// TiFlash will append extra type cast if needed.
     bool need_append_type_cast = false;
     BoolVec need_append_type_cast_vec;
-    if (!output_offsets.empty())
+    /// we need to append type cast for root block if necessary
+    for (UInt32 i : output_offsets)
     {
-        /// !output_offsets.empty() means root block, we need to append type cast for root block if necessary
-        for (UInt32 i : output_offsets)
+        const auto & actual_type = current_columns[i].type;
+        auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
+        if (actual_type->getName() != expected_type->getName())
         {
-            const auto & actual_type = current_columns[i].type;
-            auto expected_type = getDataTypeByFieldTypeForComputingLayer(schema[i]);
-            if (actual_type->getName() != expected_type->getName())
-            {
-                need_append_type_cast = true;
-                need_append_type_cast_vec.push_back(true);
-            }
-            else
-            {
-                need_append_type_cast_vec.push_back(false);
-            }
+            need_append_type_cast = true;
+            need_append_type_cast_vec.push_back(true);
+        }
+        else
+        {
+            need_append_type_cast_vec.push_back(false);
         }
     }
     if (!need_append_timezone_cast && !need_append_type_cast)
@@ -1318,6 +1281,13 @@ void DAGExpressionAnalyzer::generateFinalProject(
             }
         }
     }
+
+    initChain(chain, getCurrentInputColumns());
+    for (const auto & name : final_project)
+    {
+        chain.steps.back().required_output.push_back(name.first);
+    }
+    return final_project;
 }
 
 String DAGExpressionAnalyzer::alignReturnType(

@@ -1,11 +1,11 @@
-#include <vector>
-#include <string>
-#include <iomanip>
-
 #include <Common/SipHash.h>
+#include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
-#include <Common/Stopwatch.h>
+
+#include <iomanip>
+#include <string>
+#include <vector>
 
 
 /** Test this way:
@@ -39,11 +39,11 @@ int main(int, char **)
 
         double seconds = watch.elapsedSeconds();
         std::cerr << "Read "
-            << data.size() << " rows, "
-            << (in.count() / 1048576.0) << " MiB "
-            << " in " << seconds << " sec., "
-            << (data.size() / seconds) << " rows/sec., "
-            << (in.count() / 1048576.0 / seconds) << " MiB/sec.\n";
+                  << data.size() << " rows, "
+                  << (in.count() / 1048576.0) << " MiB "
+                  << " in " << seconds << " sec., "
+                  << (data.size() / seconds) << " rows/sec., "
+                  << (in.count() / 1048576.0 / seconds) << " MiB/sec.\n";
     }
 
     {
@@ -59,12 +59,12 @@ int main(int, char **)
 
         double seconds = watch.elapsedSeconds();
         std::cerr << "Processed "
-            << data.size() << " rows, "
-            << (in.count() / 1048576.0) << " MiB "
-            << " in " << seconds << " sec., "
-            << (data.size() / seconds) << " rows/sec., "
-            << (in.count() / 1048576.0 / seconds) << " MiB/sec. "
-            << "(res = " << res << ")\n";
+                  << data.size() << " rows, "
+                  << (in.count() / 1048576.0) << " MiB "
+                  << " in " << seconds << " sec., "
+                  << (data.size() / seconds) << " rows/sec., "
+                  << (in.count() / 1048576.0 / seconds) << " MiB/sec. "
+                  << "(res = " << res << ")\n";
     }
 
     return 0;

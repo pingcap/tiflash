@@ -1,12 +1,11 @@
 #pragma once
 
-#include <Core/Types.h>
 #include <Columns/ColumnVector.h>
+#include <Core/Types.h>
 
 
 namespace DB
 {
-
 /** Columns with numbers. */
 
 using ColumnUInt8 = ColumnVector<UInt8>;
@@ -23,4 +22,4 @@ using ColumnInt64 = ColumnVector<Int64>;
 using ColumnFloat32 = ColumnVector<Float32>;
 using ColumnFloat64 = ColumnVector<Float64>;
 
-}
+} // namespace DB

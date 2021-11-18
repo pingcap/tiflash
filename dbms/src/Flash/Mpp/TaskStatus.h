@@ -10,4 +10,3 @@ enum TaskStatus
     CANCELLED,
 };
 } // namespace DB
-

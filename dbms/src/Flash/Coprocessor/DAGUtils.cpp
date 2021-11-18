@@ -470,7 +470,7 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr
     return nullptr;
 }
 
-SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns, const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items)
+SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_columns, const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items)
 {
     SortDescription order_descr;
     order_descr.reserve(by_items.size());
@@ -552,7 +552,7 @@ void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String &
     }
 }
 
-extern const String UniqRawResName;
+extern const String uniq_raw_res_name;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
@@ -560,7 +560,7 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Min, "min"},
     {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "first_row"},
-    {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
+    {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
