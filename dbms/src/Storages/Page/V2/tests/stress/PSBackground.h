@@ -4,6 +4,11 @@
 #include <PSStressEnv.h>
 #include <Poco/Timer.h>
 
+namespace CurrentMetrics
+{
+extern const Metric PSMVCCSnapshotsList;
+}
+
 class PSMetricsDumper
 {
 public:

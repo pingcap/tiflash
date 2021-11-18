@@ -15,7 +15,7 @@ namespace DB
 /** Implements simple table engine without support of indices.
   * The data is stored in a compressed form.
   */
-class StorageLog : public ext::shared_ptr_helper<StorageLog>
+class StorageLog : public ext::SharedPtrHelper<StorageLog>
     , public IStorage
 {
     friend class LogBlockInputStream;

@@ -1,20 +1,18 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/Helpers.h>
-#include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/AggregateFunctionStatistics.h>
+#include <AggregateFunctions/FactoryHelpers.h>
+#include <AggregateFunctions/Helpers.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
 namespace
 {
-
 template <template <typename> class FunctionTemplate>
 AggregateFunctionPtr createAggregateFunctionStatisticsUnary(const std::string & name, const DataTypes & argument_types, const Array & parameters)
 {
@@ -38,12 +36,13 @@ AggregateFunctionPtr createAggregateFunctionStatisticsBinary(const std::string &
     AggregateFunctionPtr res(createWithTwoNumericTypes<FunctionTemplate>(*argument_types[0], *argument_types[1]));
     if (!res)
         throw Exception("Illegal types " + argument_types[0]->getName() + " and " + argument_types[1]->getName()
-            + " of arguments for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            + " of arguments for aggregate function " + name,
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
 }
 
-}
+} // namespace
 
 void registerAggregateFunctionsStatisticsStable(AggregateFunctionFactory & factory)
 {
@@ -56,4 +55,4 @@ void registerAggregateFunctionsStatisticsStable(AggregateFunctionFactory & facto
     factory.registerFunction("corrStable", createAggregateFunctionStatisticsBinary<AggregateFunctionCorrStable>);
 }
 
-}
+} // namespace DB

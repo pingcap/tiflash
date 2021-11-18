@@ -5,15 +5,16 @@
 #endif
 
 #include <Common/CompactArray.h>
-#include <IO/WriteBufferFromFile.h>
 #include <IO/ReadBufferFromFile.h>
-#include <boost/filesystem.hpp>
-#include <string>
-#include <iostream>
-#include <fstream>
-#include <stdexcept>
-#include <cstdlib>
+#include <IO/WriteBufferFromFile.h>
 #include <port/unistd.h>
+
+#include <boost/filesystem.hpp>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <string>
 
 namespace fs = boost::filesystem;
 
@@ -66,13 +67,13 @@ struct Test
         catch (const Poco::Exception & ex)
         {
             std::cout << "Test width=" << width << " bucket_count=" << bucket_count << " failed "
-                << "(Error: " << ex.what() << ": " << ex.displayText() << ")\n";
+                      << "(Error: " << ex.what() << ": " << ex.displayText() << ")\n";
             ok = false;
         }
         catch (const std::runtime_error & ex)
         {
             std::cout << "Test width=" << width << " bucket_count=" << bucket_count << " failed "
-                << "(Error: " << ex.what() << ")\n";
+                      << "(Error: " << ex.what() << ")\n";
             ok = false;
         }
         catch (...)

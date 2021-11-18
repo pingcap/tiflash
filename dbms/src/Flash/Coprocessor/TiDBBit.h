@@ -12,7 +12,6 @@
 
 namespace DB
 {
-
 class TiDBBit
 {
 public:
