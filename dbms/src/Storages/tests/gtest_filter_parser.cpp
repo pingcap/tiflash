@@ -45,7 +45,7 @@ public:
 protected:
     Poco::Logger * log;
 
-    DM::RSOperatorPtr generateRsOperator(const String table_info_json, const String & query);
+    DM::RSOperatorPtr generateRsOperator(String table_info_json, const String & query);
 };
 
 DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_json, const String & query)
@@ -99,27 +99,24 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
-    auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
-    return rs_operator;
+    return DM::FilterParser::parseDAGQuery(*dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
 }
 
-TEST_F(FilterParserTest, TestRSOperatorPtr)
+// Test cases for col and literal
+TEST_F(FilterParserTest, ColAndLiteral)
+try
 {
     const String table_info_json = R"json({
     "cols":[
-        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_1","O":"col_1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":254}},
-        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},
-        {"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"col_3","O":"col_3"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":5}},
-        {"comment":"","default":null,"default_bit":null,"id":4,"name":{"L":"col_time","O":"col_time"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":7}},
-        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_5","O":"col_5"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
-        ],
-        "pk_is_handle":false,"index_info":[],"is_common_handle":false,
-        "name":{"L":"t_111","O":"t_111"},"partition":null,
-        "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
 
     {
-        // FilterParser::RSFilterType::Equal
+        // Equal between col and literal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 666");
         EXPECT_EQ(rs_operator->name(), "equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -129,19 +126,7 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
     }
 
     {
-        // FilterParser::RSFilterType::Equal
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = col_5");
-        EXPECT_EQ(rs_operator->name(), "unsupported");
-    }
-
-    {
-        // FilterParser::RSFilterType::Equal
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 666 = 666");
-        EXPECT_EQ(rs_operator->name(), "unsupported");
-    }
-
-    {
-        // FilterParser::RSFilterType::Greater
+        // Greater between col and literal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 > 666");
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -151,13 +136,7 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
     }
 
     {
-        // FilterParser::RSFilterType::Greater
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_3 > 1234568.890123");
-        EXPECT_EQ(rs_operator->name(), "unsupported");
-    }
-
-    {
-        // FilterParser::RSFilterType::GreaterEqual
+        // GreaterEqual between col and literal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 >= 667");
         EXPECT_EQ(rs_operator->name(), "greater_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -167,17 +146,7 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
     }
 
     {
-        // inverse + FilterParser::RSFilterType::GreaterEqual
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 667 <= col_2");
-        EXPECT_EQ(rs_operator->name(), "greater_equal");
-        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
-    }
-
-    {
-        // FilterParser::RSFilterType::Less
+        // Less between col and literal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 < 777");
         EXPECT_EQ(rs_operator->name(), "less");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -187,16 +156,7 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
     }
 
     {
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 777 > col_2");
-        EXPECT_EQ(rs_operator->name(), "less");
-        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
-    }
-
-    {
-        // FilterParser::RSFilterType::LessEqual
+        // LessEqual between col and literal
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 <= 776");
         EXPECT_EQ(rs_operator->name(), "less_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -204,19 +164,59 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"776\"}");
     }
+}
+CATCH
 
+TEST_F(FilterParserTest, LiteralAndCol)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+    // Test cases for literal and col (inverse direction)
+    // TODO: Add Equal/NotEqual/Greater/LessEqual between literal and col (inverse direction)
     {
-        // FilterParser::RSFilterType::NotEqual
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 != 777");
-        EXPECT_EQ(rs_operator->name(), "not_equal");
+        // GreaterEqual between literal and col (take care of direction)
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 667 <= col_2");
+        EXPECT_EQ(rs_operator->name(), "greater_equal");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"777\"}");
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
     }
 
     {
-        // FilterParser::RSFilterType::Not
+        // Less between literal and col (take care of direction)
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 777 > col_2");
+        EXPECT_EQ(rs_operator->name(), "less");
+        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
+    }
+}
+CATCH
+
+// Test cases for Logic operator
+TEST_F(FilterParserTest, LogicOperator)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_1","O":"col_1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":254}},
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+    {
+        // Not
         auto rs_operator = generateRsOperator(table_info_json, "select col_1, col_2 from default.t_111 where NOT col_2=666");
         EXPECT_EQ(rs_operator->name(), "not");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -226,7 +226,7 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
     }
 
     {
-        // FilterParser::RSFilterType::And
+        // And
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' and col_2 = 666");
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
@@ -235,23 +235,143 @@ TEST_F(FilterParserTest, TestRSOperatorPtr)
     }
 
     {
-        // FilterParser::RSFilterType::OR
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test5' or col_2 = 777");
+        // OR
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 or col_2 = 777");
         EXPECT_EQ(rs_operator->name(), "or");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
     }
 
+    // More complicated
     {
-        // TimeStamp + FilterParser::RSFilterType::Equal
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_time > cast_string_datetime('2021-10-26 17:00:00.00000')");
-        EXPECT_EQ(rs_operator->name(), "greater");
+        // And with "not supported" 
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' and not col_2 = 666");
+        EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_time");
-        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+    }
+
+    {
+        // And with not
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and not col_2 = 666");
+        EXPECT_EQ(rs_operator->name(), "and");
+        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+    }
+
+    {
+        // And with or
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and (col_2 = 666 or col_2 = 678)");
+        EXPECT_EQ(rs_operator->name(), "and");
+        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+    }
+
+    {
+        // Or with "not supported" 
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' or col_2 = 666");
+        EXPECT_EQ(rs_operator->name(), "and");
+        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+    }
+
+    {
+        // Or with not
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 = 'test1' or not col_2 = 666");
+        EXPECT_EQ(rs_operator->name(), "or");
+        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
     }
 }
+CATCH
+
+// Test cases for date,datetime,timestamp column
+TEST_F(FilterParserTest, TimestampColumn)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":4,"name":{"L":"col_time","O":"col_time"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":7}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+    // TimeStamp column + Greater
+    auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_time > cast_string_datetime('2021-10-26 17:00:00.00000')");
+    EXPECT_EQ(rs_operator->name(), "greater");
+    EXPECT_EQ(rs_operator->getAttrs().size(), 1);
+    EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_time");
+    EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
+
+    // TODO: Date, Datetime column
+}
+CATCH
+
+// Test cases for unsupported column type
+TEST_F(FilterParserTest, UnsupportedColumnType)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_1","O":"col_1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":254}},
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},
+        {"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"col_3","O":"col_3"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":5}},
+        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_5","O":"col_5"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+    {
+        // Greater between col and literal (not supported since the type of col_3 is floating point)
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_3 > 1234568.890123");
+        EXPECT_EQ(rs_operator->name(), "unsupported");
+    }
+    // TODO: String column type, unsupported so far since we should take collation into consideration.
+    // TODO: Decimal type
+}
+CATCH
+
+// Test cases for not satisfy `column` `op` `literal`
+TEST_F(FilterParserTest, ComplicatedFilters)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_1","O":"col_1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":254}},
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},
+        {"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"col_3","O":"col_3"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":5}},
+        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_5","O":"col_5"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    for (const auto & test_case : Strings{
+             "select * from default.t_111 where col_2 = col_5", // col and col
+             "select * from default.t_111 where 666 = 666", // literal and literal
+             "select * from default.t_111 where bitand(col_2, 1) > 100",
+              "select * from default.t_111 where col_2 > bitand(100, 1)",
+              "select * from default.t_111 where 100 < bitand(col_2, 1)",
+              "select * from default.t_111 where bitand(100,1) < col_2",
+             "select * from default.t_111 where round_int(col_2) < 1",
+              "select * from default.t_111 where bitand(col_2, 1) = col_5",
+              "select * from default.t_111 where bitor(bitand(col_2, 1), col_2) > col_5",
+         })
+    {
+        auto rs_operator = generateRsOperator(table_info_json, test_case);
+        EXPECT_EQ(rs_operator->name(), "unsupported");
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

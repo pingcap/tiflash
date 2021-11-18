@@ -100,16 +100,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                                      + " children is not supported",
                                  false);
 
-    /// Only support `column` `op` `constant` now.
-
-    // TODO: test cases:
-    // c1 + 1 < 100
-    // (c1 + 1) * c2 < 100
-    // c1 < 100 - 1
-    // 100 + 1 < c1
-    // c1 * c2 < 100
-    // 100 < c1 * c2
-    // ABS(c1) = 100
+    /// Only support `column` `op` `literal` now.
 
     Attr attr;
     Field value;
