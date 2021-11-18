@@ -193,12 +193,12 @@ inline RSOperatorPtr parseTiCompareExpr( //
             filter_type_with_direction = FilterParser::RSFilterType::Less;
             break;
         case FilterParser::RSFilterType::GreaterEqual:
-            filter_type_with_direction = FilterParser::RSFilterType::LessEuqal;
+            filter_type_with_direction = FilterParser::RSFilterType::LessEqual;
             break;
         case FilterParser::RSFilterType::Less:
             filter_type_with_direction = FilterParser::RSFilterType::Greater;
             break;
-        case FilterParser::RSFilterType::LessEuqal:
+        case FilterParser::RSFilterType::LessEqual:
             filter_type_with_direction = FilterParser::RSFilterType::GreaterEqual;
             break;
             // Commutative operators, ignored.
@@ -228,7 +228,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
     case FilterParser::RSFilterType::Less:
         op = createLess(attr, value, -1);
         break;
-    case FilterParser::RSFilterType::LessEuqal:
+    case FilterParser::RSFilterType::LessEqual:
         op = createLessEqual(attr, value, -1);
         break;
     default:
@@ -301,7 +301,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         case FilterParser::RSFilterType::Greater:
         case FilterParser::RSFilterType::GreaterEqual:
         case FilterParser::RSFilterType::Less:
-        case FilterParser::RSFilterType::LessEuqal:
+        case FilterParser::RSFilterType::LessEqual:
             op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info, log);
             break;
 
@@ -439,13 +439,13 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     {tipb::ScalarFuncSig::LTDuration, FilterParser::RSFilterType::Less},
     {tipb::ScalarFuncSig::LTJson, FilterParser::RSFilterType::Less},
 
-    {tipb::ScalarFuncSig::LEInt, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEReal, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEString, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEDecimal, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LETime, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEDuration, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEJson, FilterParser::RSFilterType::LessEuqal},
+    {tipb::ScalarFuncSig::LEInt, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEReal, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEString, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEDecimal, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LETime, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEDuration, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEJson, FilterParser::RSFilterType::LessEqual},
 
     {tipb::ScalarFuncSig::GTInt, FilterParser::RSFilterType::Greater},
     {tipb::ScalarFuncSig::GTReal, FilterParser::RSFilterType::Greater},

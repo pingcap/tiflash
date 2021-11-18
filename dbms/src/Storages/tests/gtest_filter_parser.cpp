@@ -1,4 +1,3 @@
-#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
@@ -15,7 +14,6 @@
 #include <Storages/Transaction/SchemaBuilder-internal.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <TableFunctions/registerTableFunctions.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
@@ -33,8 +31,6 @@ public:
         try
         {
             registerFunctions();
-            registerAggregateFunctions();
-            registerTableFunctions();
         }
         catch (DB::Exception &)
         {
