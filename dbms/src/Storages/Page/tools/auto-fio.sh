@@ -2,10 +2,9 @@
 # fio test for EBS(with filesystem) write/randwrite test.
 # doc : https://docs.google.com/document/d/1NoHeigyfNyB9Bp8cYzYFv-In0dQzjR7smLltMBXCmgs
 if [ $# -lt 1 ]; then
-    echo 'before call auto-fio.sh, please call gen_fio_config.sh at first.'
-    echo 'try use "./auto-fio.sh <path>" '
-    echo ' output for test case 1 : t1_{wr}_ncore{cores}_depth{iodepth}_fio.output'
-    echo ' output for test case 2 : t2_ncore{core}_depth{iodepth}_with_{rand or seqwrite}_fio.output'
+    echo 'Usage: "./auto-fio.sh <path>" '
+    echo '  output for test case 1: t1_{wr}_ncore{cores}_depth{iodepth}_fio.output'
+    echo '  output for test case 2: t2_ncore{core}_depth{iodepth}_with_{rand or seqwrite}_fio.output'
     exit 1
 fi
 
