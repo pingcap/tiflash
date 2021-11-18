@@ -181,7 +181,7 @@ def runUTCoverTICS(CURWS, NPROC) {
                         cp /tmp/tiflash_gcovr_coverage.res ./
                         chown -R 1000:1000 tiflash_gcovr_coverage.xml tiflash_gcovr_coverage.res
                         """
-                        ut_coverage_result = sh(script: "tiflash_gcovr_coverage.res && cat tiflash_gcovr_coverage.res", returnStdout: true).trim()
+                        ut_coverage_result = sh(script: "cat tiflash_gcovr_coverage.res", returnStdout: true).trim()
                         sh """
                         rm -f comment-pr
                         curl -O http://fileserver.pingcap.net/download/comment-pr
