@@ -32,7 +32,7 @@ public:
 
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
-    std::vector<tipb::FieldType> getResultFieldTypes() const { return result_field_types; };
+    const std::vector<tipb::FieldType> & getResultFieldTypes() const { return result_field_types; }
 
     ASTPtr getAST() const { return ast; };
 

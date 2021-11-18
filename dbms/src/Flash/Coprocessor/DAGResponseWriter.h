@@ -12,7 +12,6 @@
 
 namespace DB
 {
-
 /// do not need be thread safe since it is only used in single thread env
 struct ExecutionSummary
 {
@@ -20,7 +19,12 @@ struct ExecutionSummary
     UInt64 num_produced_rows;
     UInt64 num_iterations;
     UInt64 concurrency;
-    ExecutionSummary() : time_processed_ns(0), num_produced_rows(0), num_iterations(0), concurrency(0) {}
+    ExecutionSummary()
+        : time_processed_ns(0)
+        , num_produced_rows(0)
+        , num_iterations(0)
+        , concurrency(0)
+    {}
 
     void merge(const ExecutionSummary & other, bool streaming_call)
     {
@@ -44,10 +48,12 @@ struct ExecutionSummary
 class DAGResponseWriter
 {
 public:
-    DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_,
-        DAGContext & dag_context_);
+    DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_);
     void fillTiExecutionSummary(
-        tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id, bool delta_mode);
+        tipb::ExecutorExecutionSummary * execution_summary,
+        ExecutionSummary & current,
+        const String & executor_id,
+        bool delta_mode);
     void addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode);
     virtual void write(const Block & block) = 0;
     virtual void finishWrite() = 0;

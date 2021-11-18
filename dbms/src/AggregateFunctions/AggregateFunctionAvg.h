@@ -1,25 +1,24 @@
 #pragma once
 
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypesNumber.h>
-
-#include <AggregateFunctions/IAggregateFunction.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
-
-
 template <typename T>
 struct AggregateFunctionAvgData
 {
     T sum;
     UInt64 count;
 
-    AggregateFunctionAvgData() : sum(0), count(0) {}
+    AggregateFunctionAvgData()
+        : sum(0)
+        , count(0)
+    {}
 };
 
 
@@ -38,7 +37,10 @@ class AggregateFunctionAvg final
 public:
     AggregateFunctionAvg() {}
     AggregateFunctionAvg(PrecType prec_, ScaleType scale_, PrecType result_prec_, ScaleType result_scale_)
-        : prec(prec_), scale(scale_), result_prec(result_prec_), result_scale(result_scale_)
+        : prec(prec_)
+        , scale(scale_)
+        , result_prec(result_prec_)
+        , result_scale(result_scale_)
     {}
     String getName() const override { return "avg"; }
 

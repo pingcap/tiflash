@@ -10,11 +10,11 @@
 
 namespace DB
 {
-
 class TiDBTime
 {
 public:
-    TiDBTime(UInt64 packed, const tipb::FieldType & field_type) : my_date_time(packed)
+    TiDBTime(UInt64 packed, const tipb::FieldType & field_type)
+        : my_date_time(packed)
     {
         time_type = field_type.tp();
         fsp = field_type.decimal();

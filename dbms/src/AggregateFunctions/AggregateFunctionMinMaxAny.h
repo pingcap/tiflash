@@ -1,21 +1,18 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <Columns/ColumnVector.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnDecimal.h>
-#include <DataTypes/IDataType.h>
-#include <Common/typeid_cast.h>
-#include <common/StringRef.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnVector.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/IDataType.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <common/StringRef.h>
 
 
 namespace DB
 {
-
 /** Aggregate functions that store one of passed values.
   * For example: min, max, any, anyLast.
   */
@@ -31,7 +28,7 @@ private:
     bool has_value = false; /// We need to remember if at least one value has been passed. This is necessary for AggregateFunctionIf.
     T value;
 
-    using ColumnType = std::conditional_t<IsDecimal<T> , ColumnDecimal<T>, ColumnVector<T>>;
+    using ColumnType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
 
 public:
     bool has() const
@@ -39,7 +36,7 @@ public:
         return has_value;
     }
 
-    void setCollators(const TiDB::TiDBCollators & ) {}
+    void setCollators(const TiDB::TiDBCollators &) {}
 
     void insertResultInto(IColumn & to) const
     {
@@ -180,26 +177,26 @@ struct SingleValueDataString
 private:
     using Self = SingleValueDataString;
 
-    Int32 size = -1;    /// -1 indicates that there is no value.
-    Int32 capacity = 0;    /// power of two or zero
+    Int32 size = -1; /// -1 indicates that there is no value.
+    Int32 capacity = 0; /// power of two or zero
     char * large_data;
     TiDB::TiDBCollatorPtr collator;
 
-    bool less(const StringRef &a, const StringRef &b) const
+    bool less(const StringRef & a, const StringRef & b) const
     {
         if (collator == nullptr)
             return a < b;
         return collator->compare(a.data, a.size, b.data, b.size) < 0;
     }
 
-    bool greater(const StringRef &a, const StringRef &b) const
+    bool greater(const StringRef & a, const StringRef & b) const
     {
         if (collator == nullptr)
             return a > b;
         return collator->compare(a.data, a.size, b.data, b.size) > 0;
     }
 
-    bool equalTo(const StringRef &a, const StringRef &b) const
+    bool equalTo(const StringRef & a, const StringRef & b) const
     {
         if (collator == nullptr)
             return a == b;
@@ -208,8 +205,7 @@ private:
 
 public:
     static constexpr Int32 AUTOMATIC_STORAGE_SIZE = 64;
-    static constexpr Int32 MAX_SMALL_STRING_SIZE = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity) - sizeof(large_data) -
-            sizeof(collator);
+    static constexpr Int32 MAX_SMALL_STRING_SIZE = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity) - sizeof(large_data) - sizeof(collator);
 
 private:
     char small_data[MAX_SMALL_STRING_SIZE]; /// Including the terminating zero.
@@ -444,7 +440,7 @@ public:
         return !value.isNull();
     }
 
-    void setCollators(const TiDB::TiDBCollators & ) {}
+    void setCollators(const TiDB::TiDBCollators &) {}
 
     void insertResultInto(IColumn & to) const
     {
@@ -610,7 +606,7 @@ struct AggregateFunctionMinData : Data
     using Self = AggregateFunctionMinData<Data>;
 
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeIfLess(column, row_num, arena); }
-    bool changeIfBetter(const Self & to, Arena * arena)                        { return this->changeIfLess(to, arena); }
+    bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfLess(to, arena); }
 
     static const char * name() { return "min"; }
 };
@@ -621,7 +617,7 @@ struct AggregateFunctionMaxData : Data
     using Self = AggregateFunctionMaxData<Data>;
 
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeIfGreater(column, row_num, arena); }
-    bool changeIfBetter(const Self & to, Arena * arena)                        { return this->changeIfGreater(to, arena); }
+    bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfGreater(to, arena); }
 
     static const char * name() { return "max"; }
 };
@@ -632,7 +628,7 @@ struct AggregateFunctionAnyData : Data
     using Self = AggregateFunctionAnyData<Data>;
 
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeFirstTime(column, row_num, arena); }
-    bool changeIfBetter(const Self & to, Arena * arena)                        { return this->changeFirstTime(to, arena); }
+    bool changeIfBetter(const Self & to, Arena * arena) { return this->changeFirstTime(to, arena); }
 
     static const char * name() { return "any"; }
 };
@@ -643,7 +639,7 @@ struct AggregateFunctionFirstRowData : Data
     using Self = AggregateFunctionFirstRowData<Data>;
 
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeFirstTime(column, row_num, arena); }
-    bool changeIfBetter(const Self & to, Arena * arena)                        { return this->changeFirstTime(to, arena); }
+    bool changeIfBetter(const Self & to, Arena * arena) { return this->changeFirstTime(to, arena); }
 
     static const char * name() { return "first_row"; }
 };
@@ -654,7 +650,7 @@ struct AggregateFunctionAnyLastData : Data
     using Self = AggregateFunctionAnyLastData<Data>;
 
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeEveryTime(column, row_num, arena); }
-    bool changeIfBetter(const Self & to, Arena * arena)                        { return this->changeEveryTime(to, arena); }
+    bool changeIfBetter(const Self & to, Arena * arena) { return this->changeEveryTime(to, arena); }
 
     static const char * name() { return "anyLast"; }
 };
@@ -734,14 +730,16 @@ private:
     DataTypePtr type;
 
 public:
-    AggregateFunctionsSingleValue(const DataTypePtr & type) : type(type)
+    AggregateFunctionsSingleValue(const DataTypePtr & type)
+        : type(type)
     {
         if (StringRef(Data::name()) == StringRef("min")
             || StringRef(Data::name()) == StringRef("max"))
         {
             if (!type->isComparable())
                 throw Exception("Illegal type " + type->getName() + " of argument of aggregate function " + getName()
-                    + " because the values of that data type are not comparable", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                                    + " because the values of that data type are not comparable",
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 
@@ -780,4 +778,4 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB

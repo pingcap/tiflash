@@ -10,7 +10,6 @@
 
 namespace DB
 {
-
 class TiDBColumn
 {
 public:

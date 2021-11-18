@@ -5,10 +5,8 @@
 
 namespace DB
 {
-
 namespace
 {
-
 template <typename T>
 AggregateFunctionPtr createAggregateFunctionAvgForDecimal(const IDataType * p)
 {
@@ -21,16 +19,32 @@ AggregateFunctionPtr createAggregateFunctionAvgForDecimal(const IDataType * p)
         auto result_type = createDecimal(result_prec, result_scale);
         if (checkDecimal<Decimal32>(*result_type))
             res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal32>(
-                *dec_type, dec_type->getPrec(), dec_type->getScale(), result_prec, result_scale));
+                *dec_type,
+                dec_type->getPrec(),
+                dec_type->getScale(),
+                result_prec,
+                result_scale));
         else if (checkDecimal<Decimal64>(*result_type))
             res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal64>(
-                *dec_type, dec_type->getPrec(), dec_type->getScale(), result_prec, result_scale));
+                *dec_type,
+                dec_type->getPrec(),
+                dec_type->getScale(),
+                result_prec,
+                result_scale));
         else if (checkDecimal<Decimal128>(*result_type))
             res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal128>(
-                *dec_type, dec_type->getPrec(), dec_type->getScale(), result_prec, result_scale));
+                *dec_type,
+                dec_type->getPrec(),
+                dec_type->getScale(),
+                result_prec,
+                result_scale));
         else
             res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal256>(
-                *dec_type, dec_type->getPrec(), dec_type->getScale(), result_prec, result_scale));
+                *dec_type,
+                dec_type->getPrec(),
+                dec_type->getScale(),
+                result_prec,
+                result_scale));
         return res;
     }
     return nullptr;
@@ -56,7 +70,8 @@ AggregateFunctionPtr createAggregateFunctionAvg(const std::string & name, const 
         res = AggregateFunctionPtr(createWithNumericType<AggregateFunctionAvg>(*p));
     if (!res)
         throw Exception(
-            "Illegal type " + p->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            "Illegal type " + p->getName() + " of argument for aggregate function " + name,
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
 }
