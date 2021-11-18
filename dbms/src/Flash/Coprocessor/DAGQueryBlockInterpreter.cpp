@@ -129,7 +129,8 @@ AnalysisResult analyzeExpressions(
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
     const std::vector<ExtraCastAfterTSMode> & is_need_cast_column,
-    bool keep_session_timezone_info)
+    bool keep_session_timezone_info,
+    NamesWithAliases & final_project)
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
@@ -1031,7 +1032,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block,
         conditions,
         need_add_cast_column_flag_for_tablescan,
-        keep_session_timezone_info);
+        keep_session_timezone_info,
+        final_project);
 
     if (res.extra_cast || res.before_where)
     {
