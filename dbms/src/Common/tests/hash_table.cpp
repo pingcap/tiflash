@@ -1,11 +1,9 @@
-#include <iostream>
-#include <iomanip>
-
-#include <Interpreters/AggregationCommon.h>
-
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashSet.h>
+#include <Interpreters/AggregationCommon.h>
 
+#include <iomanip>
+#include <iostream>
 
 
 int main(int, char **)

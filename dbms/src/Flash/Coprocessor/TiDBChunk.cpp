@@ -1,5 +1,3 @@
-#include <Flash/Coprocessor/TiDBChunk.h>
-
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
@@ -11,12 +9,12 @@
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/ArrowColCodec.h>
+#include <Flash/Coprocessor/TiDBChunk.h>
 #include <Flash/Coprocessor/TiDBDecimal.h>
 #include <Functions/FunctionHelpers.h>
 
 namespace DB
 {
-
 TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
 {
     for (auto & type : field_types)
@@ -26,7 +24,10 @@ TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
 }
 
 void TiDBChunk::buildDAGChunkFromBlock(
-    const Block & block, const std::vector<tipb::FieldType> & field_types, size_t start_index, size_t end_index)
+    const Block & block,
+    const std::vector<tipb::FieldType> & field_types,
+    size_t start_index,
+    size_t end_index)
 {
     for (size_t i = 0; i < block.columns(); i++)
     {

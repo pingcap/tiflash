@@ -1,25 +1,18 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-
-#include <Columns/ColumnArray.h>
-
-#include <Common/SpaceSaving.h>
-
-#include <Common/FieldVisitors.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <Columns/ColumnArray.h>
+#include <Common/FieldVisitors.h>
+#include <Common/SpaceSaving.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
-
 // Allow NxK more space before calculating top K to increase accuracy
 #define TOP_K_LOAD_FACTOR 3
 
@@ -45,7 +38,9 @@ private:
 
 public:
     AggregateFunctionTopK(UInt64 threshold)
-        : threshold(threshold), reserved(TOP_K_LOAD_FACTOR * threshold) {}
+        : threshold(threshold)
+        , reserved(TOP_K_LOAD_FACTOR * threshold)
+    {}
 
     String getName() const override { return "topK"; }
 
@@ -128,7 +123,10 @@ private:
 
 public:
     AggregateFunctionTopKGeneric(UInt64 threshold, const DataTypePtr & input_data_type)
-        : threshold(threshold), reserved(TOP_K_LOAD_FACTOR * threshold), input_data_type(input_data_type) {}
+        : threshold(threshold)
+        , reserved(TOP_K_LOAD_FACTOR * threshold)
+        , input_data_type(input_data_type)
+    {}
 
     String getName() const override { return "topK"; }
 
@@ -217,4 +215,4 @@ public:
 
 #undef TOP_K_LOAD_FACTOR
 
-}
+} // namespace DB

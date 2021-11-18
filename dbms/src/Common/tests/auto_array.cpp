@@ -1,13 +1,12 @@
-#include <iostream>
-#include <iomanip>
-#include <map>
-
-#include <Core/Field.h>
-#include <Common/HashTable/HashMap.h>
 #include <Common/AutoArray.h>
+#include <Common/HashTable/HashMap.h>
+#include <Common/Stopwatch.h>
+#include <Core/Field.h>
 #include <IO/WriteHelpers.h>
 
-#include <Common/Stopwatch.h>
+#include <iomanip>
+#include <iostream>
+#include <map>
 
 
 int main(int argc, char ** argv)
@@ -154,7 +153,7 @@ int main(int argc, char ** argv)
             map.emplace(rand(), it, inserted);
             if (inserted)
             {
-                new(&it->second) Arr(n);
+                new (&it->second) Arr(n);
 
                 for (size_t j = 0; j < n; ++j)
                     it->second[j] = field;
@@ -162,10 +161,10 @@ int main(int argc, char ** argv)
         }
 
         std::cerr << std::fixed << std::setprecision(2)
-            << "Vector:    Elapsed: " << watch.elapsedSeconds()
-            << " (" << map_size / watch.elapsedSeconds() << " rows/sec., "
-            << "sizeof(Map::value_type) = " << sizeof(Map::value_type)
-            << std::endl;
+                  << "Vector:    Elapsed: " << watch.elapsedSeconds()
+                  << " (" << map_size / watch.elapsedSeconds() << " rows/sec., "
+                  << "sizeof(Map::value_type) = " << sizeof(Map::value_type)
+                  << std::endl;
     }
 
     {

@@ -3,15 +3,13 @@
 
 namespace DB
 {
-
 namespace detail
 {
-    void seed(LinearCongruentialGenerator & generator, intptr_t additional_seed)
-    {
-        generator.seed(intHash64(randomSeed() ^ intHash64(additional_seed)));
-    }
+void seed(LinearCongruentialGenerator & generator, intptr_t additional_seed)
+{
+    generator.seed(intHash64(randomSeed() ^ intHash64(additional_seed)));
 }
-
+} // namespace detail
 
 
 void registerFunctionsRandom(FunctionFactory & factory)
@@ -21,4 +19,4 @@ void registerFunctionsRandom(FunctionFactory & factory)
     factory.registerFunction<FunctionRandConstant>();
 }
 
-}
+} // namespace DB

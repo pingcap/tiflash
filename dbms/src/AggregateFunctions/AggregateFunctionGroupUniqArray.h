@@ -1,27 +1,21 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-
-#include <Columns/ColumnArray.h>
-
-#include <Common/HashTable/HashSet.h>
-#include <Common/assert_cast.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/KeyHolderHelpers.h>
+#include <Columns/ColumnArray.h>
+#include <Common/HashTable/HashSet.h>
+#include <Common/assert_cast.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #define AGGREGATE_FUNCTION_GROUP_ARRAY_UNIQ_MAX_SIZE 0xFFFFFF
 
 
 namespace DB
 {
-
-
 template <typename T>
 struct AggregateFunctionGroupUniqArrayData
 {
@@ -100,8 +94,7 @@ struct AggregateFunctionGroupUniqArrayGenericData
 {
     static constexpr size_t INITIAL_SIZE_DEGREE = 3; /// adjustable
 
-    using Set = HashSetWithSavedHashWithStackMemory<StringRef, StringRefHash,
-        INITIAL_SIZE_DEGREE>;
+    using Set = HashSetWithSavedHashWithStackMemory<StringRef, StringRefHash, INITIAL_SIZE_DEGREE>;
 
     Set value;
 };
@@ -119,7 +112,8 @@ class AggregateFunctionGroupUniqArrayGeneric
 
 public:
     AggregateFunctionGroupUniqArrayGeneric(const DataTypePtr & input_data_type)
-        : input_data_type(input_data_type) {}
+        : input_data_type(input_data_type)
+    {}
 
     String getName() const override { return "groupUniqArray"; }
 
@@ -200,4 +194,4 @@ public:
 
 #undef AGGREGATE_FUNCTION_GROUP_ARRAY_UNIQ_MAX_SIZE
 
-}
+} // namespace DB

@@ -1,21 +1,17 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-
-#include <Columns/ColumnVector.h>
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnString.h>
-
+#include <Columns/ColumnVector.h>
 #include <Common/ArenaAllocator.h>
-
-#include <AggregateFunctions/IAggregateFunction.h>
-
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <common/likely.h>
+
 #include <type_traits>
 
 #define AGGREGATE_FUNCTION_GROUP_ARRAY_MAX_ARRAY_SIZE 0xFFFFFF
@@ -23,12 +19,11 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_LARGE_ARRAY_SIZE;
-    extern const int LOGICAL_ERROR;
-}
+extern const int TOO_LARGE_ARRAY_SIZE;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 /// A particular case is an implementation for numeric types.
@@ -53,7 +48,9 @@ class GroupArrayNumericImpl final
 
 public:
     explicit GroupArrayNumericImpl(const DataTypePtr & data_type_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : data_type(data_type_), max_elems(max_elems_) {}
+        : data_type(data_type_)
+        , max_elems(max_elems_)
+    {}
 
     String getName() const override { return "groupArray"; }
 
@@ -240,15 +237,17 @@ class GroupArrayGeneralListImpl final
     : public IAggregateFunctionDataHelper<GroupArrayGeneralListData<Node>, GroupArrayGeneralListImpl<Node, limit_num_elems>>
 {
     using Data = GroupArrayGeneralListData<Node>;
-    static Data & data(AggregateDataPtr __restrict place)            { return *reinterpret_cast<Data*>(place); }
-    static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data*>(place); }
+    static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data *>(place); }
+    static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data *>(place); }
 
     DataTypePtr data_type;
     UInt64 max_elems;
 
 public:
     GroupArrayGeneralListImpl(const DataTypePtr & data_type, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : data_type(data_type), max_elems(max_elems_) {}
+        : data_type(data_type)
+        , max_elems(max_elems_)
+    {}
 
     String getName() const override { return "groupArray"; }
 
@@ -398,4 +397,4 @@ public:
 
 #undef AGGREGATE_FUNCTION_GROUP_ARRAY_MAX_ARRAY_SIZE
 
-}
+} // namespace DB

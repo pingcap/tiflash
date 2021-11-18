@@ -1,28 +1,25 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
-
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
-
 #include <Common/FieldVisitors.h>
-#include <AggregateFunctions/IAggregateFunction.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+
 #include <map>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int LOGICAL_ERROR;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 template <typename T>
 struct AggregateFunctionSumMapData
@@ -49,8 +46,7 @@ struct AggregateFunctionSumMapData
   */
 
 template <typename T>
-class AggregateFunctionSumMap final : public IAggregateFunctionDataHelper<
-    AggregateFunctionSumMapData<typename NearestFieldType<T>::Type>, AggregateFunctionSumMap<T>>
+class AggregateFunctionSumMap final : public IAggregateFunctionDataHelper<AggregateFunctionSumMapData<typename NearestFieldType<T>::Type>, AggregateFunctionSumMap<T>>
 {
 private:
     DataTypePtr keys_type;
@@ -58,7 +54,9 @@ private:
 
 public:
     AggregateFunctionSumMap(const DataTypePtr & keys_type, const DataTypes & values_types)
-        : keys_type(keys_type), values_types(values_types) {}
+        : keys_type(keys_type)
+        , values_types(values_types)
+    {}
 
     String getName() const override { return "sumMap"; }
 
@@ -231,4 +229,4 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB
