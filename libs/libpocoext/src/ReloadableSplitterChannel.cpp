@@ -11,7 +11,7 @@ void ReloadableSplitterChannel::setPropertiesRecursively(Channel & channel, Util
     {
         TiFlashLogFileChannel * fileChannel = dynamic_cast<TiFlashLogFileChannel *>(&channel);
         fileChannel->setProperty(FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
-        fileChannel->setProperty(FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
+        fileChannel->setProperty(FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         return;
     }
     if (typeid(channel) == typeid(LevelFilterChannel))
