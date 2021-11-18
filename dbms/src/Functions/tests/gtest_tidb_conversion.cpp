@@ -194,6 +194,54 @@ try
 }
 CATCH
 
+TEST_F(TestTidbConversion, castIntAsString)
+try
+{
+    // uint64/32/16/8 -> string
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"18446744073709551615"}),
+        executeFunction(func_name,
+                        {createColumn<UInt64>({MAX_UINT64}),
+                         createConstColumn<String>(1, "String")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"4294967295"}),
+        executeFunction(func_name,
+                        {createColumn<UInt32>({MAX_UINT32}),
+                         createConstColumn<String>(1, "String")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"65535"}),
+        executeFunction(func_name,
+                        {createColumn<UInt16>({MAX_UINT16}),
+                         createConstColumn<String>(1, "String")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"255"}),
+        executeFunction(func_name,
+                        {createColumn<UInt8>({MAX_UINT8}),
+                         createConstColumn<String>(1, "String")}));
+    // int64/32/16/8 -> string
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"9223372036854775807", "-9223372036854775808"}),
+        executeFunction(func_name,
+                        {createColumn<Int64>({MAX_INT64, MIN_INT64}),
+                         createConstColumn<String>(1, "String")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"2147483647", "-2147483648"}),
+        executeFunction(func_name,
+                        {createColumn<Int32>({MAX_INT32, MIN_INT32}),
+                         createConstColumn<String>(1, "String")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"32767", "-32768"}),
+        executeFunction(func_name,
+                        {createColumn<Int16>({MAX_INT16, MIN_INT16}),
+                         createConstColumn<String>(1, "String")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<String>({"127", "-128"}),
+        executeFunction(func_name,
+                        {createColumn<Int8>({MAX_INT8, MIN_INT8}),
+                         createConstColumn<String>(1, "String")}));
+}
+CATCH
+
 TEST_F(TestTidbConversion, castTimestampAsReal)
 try
 {
