@@ -2,9 +2,8 @@
 
 namespace DB
 {
-
 class FunctionFactory;
 
 void registerFunctionEmptyArrayToSingle(FunctionFactory & factory);
 
-}
+} // namespace DB

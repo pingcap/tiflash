@@ -26,5 +26,4 @@ struct DAGPipeline
 
     bool hasMoreThanOneStream() const { return streams.size() + streams_with_non_joined_data.size() > 1; }
 };
-} // namespace
-
+} // namespace DB

@@ -4,7 +4,6 @@
 
 namespace DB::GatherUtils
 {
-
 template <typename T>
 struct NumericArraySlice
 {
@@ -25,7 +24,9 @@ struct NullableSlice : public Slice
     const UInt8 * null_map = nullptr;
 
     NullableSlice() = default;
-    NullableSlice(const Slice & base) : Slice(base) {}
+    NullableSlice(const Slice & base)
+        : Slice(base)
+    {}
 };
 
 template <typename T>
@@ -42,5 +43,4 @@ struct GenericValueSlice
     static constexpr size_t size = 1;
 };
 
-}
-
+} // namespace DB::GatherUtils

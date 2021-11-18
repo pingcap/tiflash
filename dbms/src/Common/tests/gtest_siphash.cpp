@@ -7,7 +7,6 @@ namespace DB
 {
 namespace tests
 {
-
 template <typename T>
 std::enable_if_t<is_integer_v<T> || std::is_floating_point_v<T> || std::is_same_v<T, Int128>, void> test_siphash(T & value)
 {
