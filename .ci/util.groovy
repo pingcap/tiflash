@@ -181,17 +181,17 @@ def runUTCoverTICS(CURWS, NPROC) {
                         cp /tmp/tiflash_gcovr_coverage.res ./
                         chown -R 1000:1000 tiflash_gcovr_coverage.xml tiflash_gcovr_coverage.res
                         """
+                        ut_coverage_result = sh(script: "pwd && test -f tiflash_gcovr_coverage.res && cat tiflash_gcovr_coverage.res", returnStdout: true).trim()
+                        sh '''
+                        rm -f comment-pr
+                        curl -O http://fileserver.pingcap.net/download/comment-pr
+                        chmod +x comment-pr
+                        set +x
+                        ./comment-pr --token=$TOKEN --owner=pingcap --repo=tics --number=${ghprbPullId} --comment="Coverage detail: ${CI_COVERAGE_BASE_URL}/${BUILD_NUMBER}/cobertura/  \n\n ${ut_coverage_result}"
+                        set -x
+                        '''
                     }
                 }
-                ut_coverage_result = sh(script: "cat tiflash_gcovr_coverage.res", returnStdout: true).trim()
-                sh '''
-                rm -f comment-pr
-                curl -O http://fileserver.pingcap.net/download/comment-pr
-                chmod +x comment-pr
-                set +x
-                ./comment-pr --token=$TOKEN --owner=pingcap --repo=tics --number=${ghprbPullId} --comment="Coverage detail: ${CI_COVERAGE_BASE_URL}/${BUILD_NUMBER}/cobertura/  \n\n ${ut_coverage_result}"
-                set -x
-                '''
 
                 cobertura autoUpdateHealth: false, autoUpdateStability: false, 
                     coberturaReportFile: "tiflash_gcovr_coverage.xml", 
