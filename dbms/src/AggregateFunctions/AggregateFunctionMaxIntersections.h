@@ -1,29 +1,24 @@
 #pragma once
 
-#include <common/logger_useful.h>
-
-#include <DataTypes/DataTypesNumber.h>
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnsNumber.h>
-
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
 #include <Common/ArenaAllocator.h>
 #include <Common/NaNUtils.h>
-
-#include <AggregateFunctions/IAggregateFunction.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <common/logger_useful.h>
 
 #define AGGREGATE_FUNCTION_MAX_INTERSECTIONS_MAX_ARRAY_SIZE 0xFFFFFF
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int TOO_LARGE_ARRAY_SIZE;
-}
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int TOO_LARGE_ARRAY_SIZE;
+} // namespace ErrorCodes
 
 
 /** maxIntersections: returns maximum count of the intersected intervals defined by start_column and end_column values,
@@ -167,4 +162,4 @@ public:
     }
 };
 
-}
+} // namespace DB

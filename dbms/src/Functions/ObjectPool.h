@@ -1,14 +1,12 @@
 #pragma once
 #include <map>
 #include <memory>
-#include <stack>
 #include <mutex>
+#include <stack>
 
 
 namespace DB
 {
-
-
 /** Pool for objects that cannot be used from different threads simultaneously.
   * Allows to create an object for each thread.
   * Pool has unbounded size and objects are not destroyed before destruction of pool.
@@ -22,7 +20,6 @@ template <typename T>
 class SimpleObjectPool
 {
 protected:
-
     /// Hold all avaiable objects in stack.
     std::mutex mutex;
     std::stack<std::unique_ptr<T>> stack;
@@ -33,7 +30,9 @@ protected:
     {
         SimpleObjectPool<T> * parent;
 
-        Deleter(SimpleObjectPool<T> * parent_ = nullptr) : parent{parent_} {}
+        Deleter(SimpleObjectPool<T> * parent_ = nullptr)
+            : parent{parent_}
+        {}
 
         void operator()(T * owning_ptr) const
         {
@@ -55,13 +54,13 @@ public:
         if (stack.empty())
         {
             lock.unlock();
-            return { f(), this };
+            return {f(), this};
         }
 
         auto object = stack.top().release();
         stack.pop();
 
-        return { object, this };
+        return {object, this};
     }
 
     /// Like get(), but creates object using default constructor.
@@ -77,7 +76,6 @@ template <typename T, typename Key>
 class ObjectPoolMap
 {
 private:
-
     using Object = SimpleObjectPool<T>;
 
     /// Key -> objects
@@ -87,7 +85,6 @@ private:
     std::mutex mutex;
 
 public:
-
     using Pointer = typename Object::Pointer;
 
     template <typename Factory>
@@ -104,4 +101,4 @@ public:
 };
 
 
-}
+} // namespace DB

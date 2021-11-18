@@ -1,11 +1,10 @@
 #pragma once
 
-#include <Common/HashTable/HashTableKeyHolder.h>
 #include <Columns/IColumn.h>
+#include <Common/HashTable/HashTableKeyHolder.h>
 
 namespace DB
 {
-
 template <bool is_plain_column = false>
 inline auto getKeyHolder(const IColumn & column, size_t row_num, Arena & arena)
 {
@@ -32,4 +31,3 @@ inline void deserializeAndInsert(StringRef str, IColumn & data_to)
 }
 
 } // namespace DB
-
