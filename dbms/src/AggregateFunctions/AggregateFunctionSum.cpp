@@ -78,14 +78,14 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
 
 } // namespace
 
-const String CountSecondStage = NameCountSecondStage::name;
+extern const String count_second_stage = NameCountSecondStage::name;
 
 void registerAggregateFunctionSum(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("sum", createAggregateFunctionSum<AggregateFunctionSumSimple>, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("sumWithOverflow", createAggregateFunctionSum<AggregateFunctionSumWithOverflow>);
     factory.registerFunction("sumKahan", createAggregateFunctionSum<AggregateFunctionSumKahan>);
-    factory.registerFunction(CountSecondStage, createAggregateFunctionSum<AggregateFunctionCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(count_second_stage, createAggregateFunctionSum<AggregateFunctionCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
 }
 
 } // namespace DB

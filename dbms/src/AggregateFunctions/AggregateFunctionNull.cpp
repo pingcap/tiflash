@@ -14,7 +14,6 @@ namespace ErrorCodes
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-extern const String UniqRawResName;
 extern const std::unordered_set<String> hacking_return_non_null_agg_func_names;
 
 class AggregateFunctionCombinatorNull final : public IAggregateFunctionCombinator

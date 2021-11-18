@@ -148,7 +148,7 @@ void registerAggregateFunctionsUniq(AggregateFunctionFactory & factory)
         "uniqCombined",
         createAggregateFunctionUniq<AggregateFunctionUniqCombinedData, AggregateFunctionUniqCombinedData<UInt64>>);
 
-    factory.registerFunction(UniqRawResName, createAggregateFunctionUniqRawRes);
+    factory.registerFunction(uniq_raw_res_name, createAggregateFunctionUniqRawRes);
 }
 
 } // namespace DB
