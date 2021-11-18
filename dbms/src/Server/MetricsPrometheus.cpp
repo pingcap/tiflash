@@ -90,7 +90,12 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     const std::weak_ptr<prometheus::Collectable> & collectable,
     const String & metrics_port)
 {
-    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+    Poco::Net::Context::Ptr context = new Poco::Net::Context(
+        Poco::Net::Context::TLSV1_2_SERVER_USE,
+        security_config.key_path,
+        security_config.cert_path,
+        security_config.ca_path,
+        Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         if (security_config.allowed_common_names.empty())
@@ -127,6 +132,8 @@ MetricsPrometheus::MetricsPrometheus(
     auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
 
+    // Interval to collect `ProfileEvents::Event`/`CurrentMetrics::Metric`/`AsynchronousMetrics`
+    // When push mode is enabled, it also define the interval that Prometheus client push to pushgateway.
     metrics_interval = conf.getInt(status_metrics_interval, 15);
     if (metrics_interval < 5)
     {
@@ -140,6 +147,7 @@ MetricsPrometheus::MetricsPrometheus(
     }
     LOG_INFO(log, "Config: " << status_metrics_interval << " = " << metrics_interval);
 
+    // Usually TiFlash disable prometheus push mode when deployed by TiUP/TiDB-Operator
     if (!conf.hasOption(status_metrics_addr))
     {
         LOG_INFO(log, "Disable prometheus push mode, cause " << status_metrics_addr << " is not set!");
@@ -174,9 +182,11 @@ MetricsPrometheus::MetricsPrometheus(
         }
     }
 
-    if (conf.hasOption(status_metrics_port))
+    // Usually TiFlash enables Prometheus pull mode when deployed by TiUP/TiDB-Operator.
+    // Enable pull mode by default when push mode is disabled.
+    if (conf.hasOption(status_metrics_port) || !conf.hasOption(status_metrics_addr))
     {
-        auto metrics_port = conf.getString(status_metrics_port);
+        auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
         if (security_config.has_tls_config)
         {
             server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
@@ -244,8 +254,7 @@ void MetricsPrometheus::run()
 
     if (gateway != nullptr)
     {
-        auto return_code = gateway->Push();
-        if (return_code != 200)
+        if (auto return_code = gateway->Push(); return_code != 200)
         {
             LOG_WARNING(log, "Failed to push metrics to gateway, return code is " << return_code);
         }
