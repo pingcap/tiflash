@@ -15,6 +15,8 @@
 │ total size: 1                             │
 └───────────────────────────────────────────┘
 => DBGInvoke __try_flush_region(4)
+=> DBGInvoke __remove_region(4)
+
 # Apply snapshot for Region 4 with range [100, 200)
 => DBGInvoke __region_snapshot_data(default, test, 4, 100, 200,   100, 1, 0, 17,   111, 1, 0, 18)
 => DBGInvoke dump_all_mock_region(default, test)
@@ -27,7 +29,7 @@
 │         100 │    17 │
 │         111 │    18 │
 └─────────────┴───────┘
-=> selraw * from default.test order by _tidb_rowid
+=> selraw *,_INTERNAL_VERSION,_INTERNAL_DELMARK from default.test order by _tidb_rowid
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    12 │           1 │                 1 │                 0 │
 │    10 │           2 │                 1 │                 0 │
@@ -37,7 +39,8 @@
 │    17 │         100 │                 1 │                 0 │
 │    18 │         111 │                 1 │                 0 │
 └───────┴─────────────┴───────────────────┴───────────────────┘
-=> optimize table default.test partition id '0'
+
+=> manage table default.test merge delta
 => select _tidb_rowid, col_1 from default.test order by _tidb_rowid
 ┌─_tidb_rowid─┬─col_1─┐
 │         100 │    17 │
