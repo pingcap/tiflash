@@ -87,7 +87,7 @@ public:
         , connection_context(server.context())
         , query_context(server.context())
     {
-        server_display_name = server.config().getString("display_name", getFQDNOrHostName());
+        server_display_name = server.config().getString("display_name", "TiFlash");
     }
 
     void run();
