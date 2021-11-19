@@ -93,12 +93,14 @@ Int64 toMicroseconds(MPPTaskStats::Timestamp timestamp)
 String toJson(const std::vector<ExecutorStatisticsPtr> & executor_statistics_vec)
 {
     FmtBuffer buffer;
+    buffer.append("{");
     joinStr(
         executor_statistics_vec.cbegin(),
         executor_statistics_vec.cend(),
         buffer,
         [](const ExecutorStatisticsPtr & p, FmtBuffer & fb) { fb.fmtAppend(R"("{}":{})", p->id, p->toJson()); },
         ",");
+    buffer.append("}");
     return buffer.toString();
 }
 } // namespace
@@ -113,7 +115,7 @@ void MPPTaskStats::setExecutorsStructure(const tipb::DAGRequest & dag_request)
 String MPPTaskStats::toJson() const
 {
     return fmt::format(
-        R"({{"query_tso":{},"task_id":{},"executors":{"structure":{},"details":{}},"host":"{}","upstream_task_ids":[{}],"task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_throughput":{},"remote_input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}}})",
+        R"({{"query_tso":{},"task_id":{},"executors":{{"structure":{},"details":{}}},"host":"{}","upstream_task_ids":[{}],"task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_throughput":{},"remote_input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         executors_structure,
