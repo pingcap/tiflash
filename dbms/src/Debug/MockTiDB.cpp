@@ -333,7 +333,9 @@ void MockTiDB::dropPartition(const String & database_name, const String & table_
     TableInfo & table_info = table->table_info;
 
     const auto & part_def = find_if(
-        table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [&partition_id](PartitionDefinition & part_def) { return part_def.id == partition_id; });
+        table_info.partition.definitions.begin(),
+        table_info.partition.definitions.end(),
+        [&partition_id](PartitionDefinition & part_def) { return part_def.id == partition_id; });
     if (part_def == table_info.partition.definitions.end())
         throw Exception("Mock TiDB table " + database_name + "." + table_name + " already drop partition " + std::to_string(partition_id),
                         ErrorCodes::LOGICAL_ERROR);
