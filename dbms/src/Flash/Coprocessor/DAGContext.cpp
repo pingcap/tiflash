@@ -219,4 +219,18 @@ double DAGContext::getOutputThroughput()
     return 0.0;
 }
 
+void DAGContext::setExecutorStatisticsVector(const std::vector<ExecutorStatisticsPtr> & executor_statistics_vec_)
+{
+    if (!executor_statistics_vec.empty())
+    {
+        throw TiFlashException("Repeat to set executor_statistics_vec", Errors::Coprocessor::Internal);
+    }
+    executor_statistics_vec = executor_statistics_vec_;
+}
+
+const std::vector<ExecutorStatisticsPtr> & DAGContext::getExecutorStatisticsVector()
+{
+    return executor_statistics_vec;
+}
+
 } // namespace DB

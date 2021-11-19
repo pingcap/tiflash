@@ -12,6 +12,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/ProfileStreamsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Statistics/ExecutorStatistics.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -138,6 +139,10 @@ public:
     double getLocalInputThroughput();
     double getOutputThroughput();
 
+    void setExecutorStatisticsVector(const std::vector<ExecutorStatisticsPtr> & executor_statistics_vec_);
+
+    const std::vector<ExecutorStatisticsPtr> & getExecutorStatisticsVector();
+
     size_t final_concurrency = 1;
     Int64 compile_time_ns;
     Clock::time_point wait_index_start_timestamp;
@@ -175,6 +180,8 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
+
+    std::vector<ExecutorStatisticsPtr> executor_statistics_vec;
 };
 
 } // namespace DB

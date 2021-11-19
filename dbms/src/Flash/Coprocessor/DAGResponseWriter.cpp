@@ -1,6 +1,8 @@
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
+#include <Flash/Statistics/collectExecutorStatistics.h>
 
 namespace DB
 {
@@ -52,6 +54,8 @@ void mergeRemoteExecuteSummaries(
 
 void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode)
 {
+    dag_context.setExecutorStatisticsVector(collectExecutorStatistics(dag_context));
+
     if (!dag_context.collect_execution_summaries)
         return;
     /// get executionSummary info from remote input streams

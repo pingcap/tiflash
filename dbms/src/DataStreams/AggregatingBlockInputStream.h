@@ -41,6 +41,8 @@ public:
 
     Block getHeader() const override;
 
+    size_t getAggregatedDataVariantsSizeWithoutOverflowRow() const { return aggregated_data_variants_size_without_overflow_row; }
+
 protected:
     Block readImpl() override;
 
@@ -52,6 +54,8 @@ protected:
     bool final;
 
     bool executed = false;
+
+    size_t aggregated_data_variants_size_without_overflow_row = 0;
 
     /// To read the data that was flushed into the temporary data file.
     struct TemporaryFileStream

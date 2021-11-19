@@ -90,6 +90,8 @@ public:
 
     Block getHeader() const override { return header; }
 
+    size_t getLimit() const { return limit; }
+
 protected:
     Block readImpl() override;
 

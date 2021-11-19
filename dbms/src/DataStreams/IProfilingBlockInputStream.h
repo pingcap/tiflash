@@ -231,7 +231,6 @@ private:
     bool checkTimeLimit();
     void checkQuota(Block & block);
 
-
     template <typename F>
     void forEachProfilingChild(F && f)
     {

@@ -53,6 +53,17 @@ private:
     void executeImpl(DAGPipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
     void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    void executeExchangeReceiver(DAGPipeline & pipeline);
+    void executeProjection(const tipb::Projection & projection, DAGPipeline & pipeline);
+    void executeCastAndSelection(
+        DAGPipeline & pipeline,
+        const ExpressionActionsPtr & extra_cast,
+        NamesWithAliases & project_after_ts_and_filter_for_remote_read,
+        bool need_extra_cast_after_tablescan,
+        bool has_where,
+        const ExpressionActionsPtr & before_where,
+        const ExpressionActionsPtr project_after_where,
+        const String & filter_column_name);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
