@@ -3,6 +3,7 @@
 #include <Common/LogWithPrefix.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/TaskStatus.h>
+#include <Flash/Statistics/ExecutorStatistics.h>
 #include <common/StringRef.h>
 #include <common/types.h>
 #include <tipb/select.pb.h>
@@ -25,7 +26,7 @@ struct MPPTaskStats
 
     void end(const TaskStatus & status_, StringRef error_message_ = "");
 
-    String toString() const;
+    String toJson() const;
 
     void setExecutorsStructure(const tipb::DAGRequest & dag_request);
 
@@ -38,6 +39,7 @@ struct MPPTaskStats
     const String host;
     std::vector<Int64> upstream_task_ids;
     String executors_structure;
+    std::vector<ExecutorStatisticsPtr> executor_statistics_vec;
     Timestamp task_init_timestamp;
     Timestamp compile_start_timestamp;
     Timestamp wait_index_start_timestamp;

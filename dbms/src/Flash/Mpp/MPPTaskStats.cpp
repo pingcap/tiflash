@@ -1,4 +1,6 @@
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
+#include <Common/joinStr.h>
 #include <Flash/Mpp/MPPTaskStats.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <fmt/core.h>
@@ -26,7 +28,7 @@ void MPPTaskStats::end(const TaskStatus & status_, StringRef error_message_)
     task_end_timestamp = Clock::now();
     status = status_;
     error_message.assign(error_message_.data, error_message_.size);
-    log->debug(toString());
+    log->debug(toJson());
 }
 
 namespace
@@ -87,22 +89,35 @@ Int64 toMicroseconds(MPPTaskStats::Timestamp timestamp)
 {
     return std::chrono::duration_cast<std::chrono::microseconds>(timestamp.time_since_epoch()).count();
 }
+
+String toJson(const std::vector<ExecutorStatisticsPtr> & executor_statistics_vec)
+{
+    FmtBuffer buffer;
+    joinStr(
+        executor_statistics_vec.cbegin(),
+        executor_statistics_vec.cend(),
+        buffer,
+        [](const ExecutorStatisticsPtr & p, FmtBuffer & fb) { fb.fmtAppend(R"("{}":{})", p->id, p->toJson()); },
+        ",");
+    return buffer.toString();
+}
 } // namespace
 
 void MPPTaskStats::setExecutorsStructure(const tipb::DAGRequest & dag_request)
 {
     if (!dag_request.has_root_executor())
         throw TiFlashException("Illegal mpp dag_request: `!dag_request.has_root_executor()`", Errors::Coprocessor::BadRequest);
-    executors_structure = toJson(dag_request.root_executor());
+    executors_structure = ::DB::toJson(dag_request.root_executor());
 }
 
-String MPPTaskStats::toString() const
+String MPPTaskStats::toJson() const
 {
     return fmt::format(
-        R"({{"query_tso":{},"task_id":{},"executors_structure":{},"host":"{}","upstream_task_ids":[{}],"task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_throughput":{},"remote_input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}}})",
+        R"({{"query_tso":{},"task_id":{},"executors":{"structure":{},"details":{}},"host":"{}","upstream_task_ids":[{}],"task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_throughput":{},"remote_input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         executors_structure,
+        ::DB::toJson(executor_statistics_vec),
         host,
         fmt::join(upstream_task_ids, ","),
         toMicroseconds(task_init_timestamp),
