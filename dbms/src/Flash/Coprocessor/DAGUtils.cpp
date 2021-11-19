@@ -41,21 +41,21 @@ const String & getAggFunctionName(const tipb::Expr & expr)
 {
     if (expr.has_distinct())
     {
-        if (distinct_agg_func_map.find(expr.tp()) != distinct_agg_func_map.end())
-        {
-            return distinct_agg_func_map[expr.tp()];
-        }
+        auto it = distinct_agg_func_map.find(expr.tp());
+        if (it != distinct_agg_func_map.end())
+            return it->second;
     }
     else
     {
-        if (agg_func_map.find(expr.tp()) != agg_func_map.end())
-        {
-            return agg_func_map[expr.tp()];
-        }
+        auto it = agg_func_map.find(expr.tp());
+        if (it != agg_func_map.end())
+            return it->second;
     }
 
-    const auto errmsg
-        = tipb::ExprType_Name(expr.tp()) + "(distinct=" + (expr.has_distinct() ? "true" : "false") + ")" + " is not supported.";
+    const auto errmsg = fmt::format(
+        "{}(distinct={}) is not supported.",
+        tipb::ExprType_Name(expr.tp()),
+        expr.has_distinct() ? "true" : "false");
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
@@ -67,11 +67,10 @@ const String & getFunctionName(const tipb::Expr & expr)
     }
     else
     {
-        if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
-        {
+        auto it = scalar_func_map.find(expr.sig());
+        if (it == scalar_func_map.end())
             throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.", Errors::Coprocessor::Unimplemented);
-        }
-        return scalar_func_map[expr.sig()];
+        return it->second;
     }
 }
 
@@ -425,17 +424,20 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
     }
 }
 
-void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value)
+tipb::Expr constructStringLiteralTiExpr(const String & value)
 {
+    tipb::Expr expr;
     expr.set_tp(tipb::ExprType::String);
     expr.set_val(value);
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeString);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
+    return expr;
 }
 
-void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
+tipb::Expr constructInt64LiteralTiExpr(Int64 value)
 {
+    tipb::Expr expr;
     expr.set_tp(tipb::ExprType::Int64);
     WriteBufferFromOwnString ss;
     encodeDAGInt64(value, ss);
@@ -443,10 +445,12 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeLongLong);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
+    return expr;
 }
 
-void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value)
+tipb::Expr constructDateTimeLiteralTiExpr(UInt64 packed_value)
 {
+    tipb::Expr expr;
     expr.set_tp(tipb::ExprType::MysqlTime);
     WriteBufferFromOwnString ss;
     encodeDAGUInt64(packed_value, ss);
@@ -454,13 +458,16 @@ void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value)
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeDatetime);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
+    return expr;
 }
 
-void constructNULLLiteralTiExpr(tipb::Expr & expr)
+tipb::Expr constructNULLLiteralTiExpr()
 {
+    tipb::Expr expr;
     expr.set_tp(tipb::ExprType::Null);
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeNull);
+    return expr;
 }
 
 std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr)
@@ -532,8 +539,9 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
     }
 }
 
-void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String & s)
+tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s)
 {
+    tipb::DAGRequest dag_req;
     if (!dag_req.ParseFromString(s))
     {
         /// ParseFromString will use the default recursion limit, which is 100 to decode the plan, if the plan tree is too deep,
@@ -550,11 +558,12 @@ void getDAGRequestFromStringWithRetry(tipb::DAGRequest & dag_req, const String &
                 Errors::Coprocessor::BadRequest);
         }
     }
+    return dag_req;
 }
 
 extern const String uniq_raw_res_name;
 
-std::unordered_map<tipb::ExprType, String> agg_func_map({
+extern const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
     {tipb::ExprType::Min, "min"},
@@ -577,12 +586,12 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     //{tipb::ExprType::JsonObjectAgg, ""},
 });
 
-std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
+extern const std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
     {tipb::ExprType::Count, "countDistinct"},
     {tipb::ExprType::GroupConcat, "groupUniqArray"},
 });
 
-std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
+extern const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastIntAsInt, "tidb_cast"},
     {tipb::ScalarFuncSig::CastIntAsReal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastIntAsString, "tidb_cast"},
