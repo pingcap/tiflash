@@ -2,8 +2,8 @@
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Columns/ColumnSet.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
-#include <Common/joinStr.h>
 #include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
@@ -52,7 +52,7 @@ String genFuncString(const String & func_name, const Names & argument_names, con
 
 String getUniqueName(const Block & block, const String & prefix)
 {
-    for (int i = 1; ; ++i)
+    for (int i = 1;; ++i)
     {
         auto name = fmt::format("{}{}", prefix, i);
         if (!block.has(name))
@@ -469,27 +469,27 @@ String DAGExpressionAnalyzerHelper::buildRoundFunction(
 }
 
 DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::function_builder_map(
-        {{"in", DAGExpressionAnalyzerHelper::buildInFunction},
-         {"notIn", DAGExpressionAnalyzerHelper::buildInFunction},
-         {"globalIn", DAGExpressionAnalyzerHelper::buildInFunction},
-         {"globalNotIn", DAGExpressionAnalyzerHelper::buildInFunction},
-         {"tidbIn", DAGExpressionAnalyzerHelper::buildInFunction},
-         {"tidbNotIn", DAGExpressionAnalyzerHelper::buildInFunction},
-         {"ifNull", DAGExpressionAnalyzerHelper::buildIfNullFunction},
-         {"multiIf", DAGExpressionAnalyzerHelper::buildMultiIfFunction},
-         {"tidb_cast", DAGExpressionAnalyzerHelper::buildCastFunction},
-         {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
-         {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
-         {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},
-         {"not", DAGExpressionAnalyzerHelper::buildLogicalFunction},
-         {"bitAnd", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
-         {"bitOr", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
-         {"bitXor", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
-         {"bitNot", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
-         {"leftUTF8", DAGExpressionAnalyzerHelper::buildLeftUTF8Function},
-         {"date_add", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateAdd>},
-         {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},
-         {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction}});
+    {{"in", DAGExpressionAnalyzerHelper::buildInFunction},
+     {"notIn", DAGExpressionAnalyzerHelper::buildInFunction},
+     {"globalIn", DAGExpressionAnalyzerHelper::buildInFunction},
+     {"globalNotIn", DAGExpressionAnalyzerHelper::buildInFunction},
+     {"tidbIn", DAGExpressionAnalyzerHelper::buildInFunction},
+     {"tidbNotIn", DAGExpressionAnalyzerHelper::buildInFunction},
+     {"ifNull", DAGExpressionAnalyzerHelper::buildIfNullFunction},
+     {"multiIf", DAGExpressionAnalyzerHelper::buildMultiIfFunction},
+     {"tidb_cast", DAGExpressionAnalyzerHelper::buildCastFunction},
+     {"and", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+     {"or", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+     {"xor", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+     {"not", DAGExpressionAnalyzerHelper::buildLogicalFunction},
+     {"bitAnd", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+     {"bitOr", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+     {"bitXor", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+     {"bitNot", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+     {"leftUTF8", DAGExpressionAnalyzerHelper::buildLeftUTF8Function},
+     {"date_add", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateAdd>},
+     {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},
+     {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction}});
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_))

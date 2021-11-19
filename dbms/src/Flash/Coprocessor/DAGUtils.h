@@ -1,7 +1,5 @@
 #pragma once
 
-#include <unordered_map>
-
 #include <Core/Block.h>
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
@@ -11,6 +9,8 @@
 #include <Storages/Transaction/Types.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
 #include <tipb/select.pb.h>
+
+#include <unordered_map>
 
 namespace DB
 {
@@ -35,9 +35,6 @@ SortDescription getSortDescription(
     const std::vector<NameAndTypePair> & order_columns,
     const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items);
 
-extern const std::unordered_map<tipb::ExprType, String> agg_func_map;
-extern const std::unordered_map<tipb::ExprType, String> distinct_agg_func_map;
-extern const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map;
 extern const Int8 VAR_SIZE;
 
 UInt8 getFieldLengthForArrowEncode(Int32 tp);
