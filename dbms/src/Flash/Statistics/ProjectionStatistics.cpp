@@ -1,4 +1,6 @@
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <Flash/Statistics/ProjectionStatistics.h>
 #include <common/types.h>
 #include <fmt/format.h>
@@ -22,6 +24,14 @@ ExecutorStatisticsPtr ProjectionStatistics::buildStatistics(const String & execu
 {
     using ProjectionStatisticsPtr = std::shared_ptr<ProjectionStatistics>;
     ProjectionStatisticsPtr statistics = std::make_shared<ProjectionStatistics>(executor_id);
+    visitBlockInputStreams(
+        profile_streams_info.input_streams,
+        [&](const BlockInputStreamPtr & stream_ptr) {
+            throwFailCastException(
+                castBlockInputStream<IProfilingBlockInputStream>(stream_ptr, [&](const IProfilingBlockInputStream &) {}),
+                stream_ptr->getName(),
+                "IProfilingBlockInputStream");
+        });
     return statistics;
 }
 } // namespace DB

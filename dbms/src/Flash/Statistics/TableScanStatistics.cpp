@@ -1,4 +1,7 @@
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <Flash/Statistics/TableScanStatistics.h>
 #include <common/types.h>
 #include <fmt/format.h>
@@ -22,6 +25,20 @@ ExecutorStatisticsPtr TableScanStatistics::buildStatistics(const String & execut
 {
     using TableScanStatisticsPtr = std::shared_ptr<TableScanStatistics>;
     TableScanStatisticsPtr statistics = std::make_shared<TableScanStatistics>(executor_id);
+    visitBlockInputStreams(
+        profile_streams_info.input_streams,
+        [&](const BlockInputStreamPtr & stream_ptr) {
+            throwFailCastException(
+                elseThen(
+                    [&]() {
+                        return castBlockInputStream<CoprocessorBlockInputStream>(stream_ptr, [&](const CoprocessorBlockInputStream &) {});
+                    },
+                    [&]() {
+                        return castBlockInputStream<IProfilingBlockInputStream>(stream_ptr, [&](const IProfilingBlockInputStream &) {});
+                    }),
+                stream_ptr->getName(),
+                "CoprocessorBlockInputStream/IProfilingBlockInputStream");
+        });
     return statistics;
 }
 } // namespace DB

@@ -1,5 +1,7 @@
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExchangeReceiverStatistics.h>
+#include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -22,6 +24,14 @@ ExecutorStatisticsPtr ExchangeReceiverStatistics::buildStatistics(const String &
 {
     using ExchangeReceiverStatisticsPtr = std::shared_ptr<ExchangeReceiverStatistics>;
     ExchangeReceiverStatisticsPtr statistics = std::make_shared<ExchangeReceiverStatistics>(executor_id);
+    visitBlockInputStreams(
+        profile_streams_info.input_streams,
+        [&](const BlockInputStreamPtr & stream_ptr) {
+            throwFailCastException(
+                castBlockInputStream<ExchangeReceiverInputStream>(stream_ptr, [&](const ExchangeReceiverInputStream &) {}),
+                stream_ptr->getName(),
+                "ExchangeReceiverInputStream");
+        });
     return statistics;
 }
 } // namespace DB

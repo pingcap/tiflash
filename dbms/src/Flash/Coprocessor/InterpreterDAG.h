@@ -53,7 +53,5 @@ private:
     const bool keep_session_timezone_info;
 
     LogWithPrefixPtr log;
-
-    void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 };
 } // namespace DB

@@ -184,4 +184,18 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
 }
 
+void DAGContext::setExecutorStatisticsVector(const std::vector<ExecutorStatisticsPtr> & executor_statistics_vec_)
+{
+    if (!executor_statistics_vec.empty())
+    {
+        throw TiFlashException("Repeat to set executor_statistics_vec", Errors::Coprocessor::Internal);
+    }
+    executor_statistics_vec = executor_statistics_vec_;
+}
+
+const std::vector<ExecutorStatisticsPtr> & DAGContext::getExecutorStatisticsVector()
+{
+    return executor_statistics_vec;
+}
+
 } // namespace DB

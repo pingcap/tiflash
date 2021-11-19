@@ -54,12 +54,7 @@ void mergeRemoteExecuteSummaries(
 
 void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode)
 {
-    auto statistics_logger = getLogWithPrefix(nullptr, "executor_statistics");
-    auto vec = collectExecutorStatistics(dag_context);
-    for (const auto & statistics : vec)
-    {
-        LOG_INFO(statistics_logger, statistics->toJson());
-    }
+    dag_context.setExecutorStatisticsVector(collectExecutorStatistics(dag_context));
 
     if (!dag_context.collect_execution_summaries)
         return;
