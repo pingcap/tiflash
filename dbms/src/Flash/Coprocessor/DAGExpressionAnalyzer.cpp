@@ -1117,7 +1117,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
-    ExpressionActionsChain::Step step = chain.steps.back();
+    ExpressionActionsChain::Step & step = chain.steps.back();
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
         String & name = aggregated_columns[i].name;
@@ -1164,7 +1164,23 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     }
 }
 
-NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
+NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
+    ExpressionActionsChain & chain,
+    const String & column_prefix)
+{
+    const auto & current_columns = getCurrentInputColumns();
+    NamesWithAliases final_project;
+    UniqueNameGenerator unique_name_generator;
+    for (const auto & element : current_columns)
+        final_project.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
+
+    initChain(chain, current_columns);
+    for (const auto & name : final_project)
+        chain.steps.back().required_output.push_back(name.first);
+    return final_project;
+}
+
+NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     ExpressionActionsChain & chain,
     const std::vector<tipb::FieldType> & schema,
     const std::vector<Int32> & output_offsets,
@@ -1199,31 +1215,19 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
     }
     if (!need_append_timezone_cast && !need_append_type_cast)
     {
-        if (!output_offsets.empty())
+        for (auto i : output_offsets)
         {
-            /// root query block
-            for (auto i : output_offsets)
-            {
-                final_project.emplace_back(
-                    current_columns[i].name,
-                    unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
-            }
-        }
-        else
-        {
-            /// non-root query block
-            for (const auto & element : current_columns)
-            {
-                final_project.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
-            }
+            final_project.emplace_back(
+                current_columns[i].name,
+                unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
         }
     }
     else
     {
         /// for all the columns that need to be returned, if the type is timestamp, then convert
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
-        initChain(chain, getCurrentInputColumns());
-        ExpressionActionsChain::Step step = chain.steps.back();
+        initChain(chain, current_columns);
+        ExpressionActionsChain::Step & step = chain.steps.back();
 
         tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo(), false);
         String tz_col;
@@ -1269,7 +1273,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProject(
         }
     }
 
-    initChain(chain, getCurrentInputColumns());
+    initChain(chain, current_columns);
     for (const auto & name : final_project)
     {
         chain.steps.back().required_output.push_back(name.first);

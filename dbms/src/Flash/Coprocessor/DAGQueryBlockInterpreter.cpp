@@ -85,7 +85,7 @@ struct AnalysisResult
     ExpressionActionsPtr project_after_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_having;
-    ExpressionActionsPtr before_order_and_select;
+    ExpressionActionsPtr before_final_project;
     ExpressionActionsPtr final_projection;
 
     String filter_column_name;
@@ -197,14 +197,18 @@ AnalysisResult analyzeExpressions(
     }
 
     // Append final project results if needed.
-    final_project = analyzer.appendFinalProject(
-        chain,
-        query_block.output_field_types,
-        query_block.output_offsets,
-        query_block.qb_column_prefix,
-        keep_session_timezone_info);
+    final_project = query_block.isRootQueryBlock()
+        ? analyzer.appendFinalProjectForRootQueryBlock(
+            chain,
+            query_block.output_field_types,
+            query_block.output_offsets,
+            query_block.qb_column_prefix,
+            keep_session_timezone_info)
+        : analyzer.appendFinalProjectForNonRootQueryBlock(
+            chain,
+            query_block.qb_column_prefix);
 
-    res.before_order_and_select = chain.getLastActions();
+    res.before_final_project = chain.getLastActions();
 
     chain.finalize();
     chain.clear();
@@ -1081,21 +1085,19 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
              "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
 
     dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
+
     if (res.before_aggregation)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
+
     if (res.before_having)
     {
         // execute having
         executeWhere(pipeline, res.before_having, res.having_column_name);
         recordProfileStreams(pipeline, query_block.having_name);
-    }
-    if (res.before_order_and_select)
-    {
-        executeExpression(pipeline, res.before_order_and_select);
     }
 
     if (!res.order_columns.empty())
@@ -1105,15 +1107,16 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
-    // execute projection
-    executeProject(pipeline, final_project);
-
     // execute limit
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
+
+    // execute projection
+    executeExpression(pipeline, res.before_final_project);
+    executeProject(pipeline, final_project);
 }
 
 void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols)
