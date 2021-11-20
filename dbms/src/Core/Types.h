@@ -16,10 +16,6 @@ namespace DB
 {
 /// Data types for representing elementary values from a database in RAM.
 
-struct Null
-{
-};
-
 template <typename T>
 struct TypeName;
 

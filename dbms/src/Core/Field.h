@@ -242,6 +242,30 @@ public:
         }
     };
 
+    using FieldStorage = std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which), UInt64, UInt128, Int64, Float64, String, Array, Tuple, DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>>;
+    /// Set the data stored in field to a reasonable value. In TiFlash, it assumes that the data stored inside a null field
+    /// actually contains a valid value, so need to call this function when constructing a null field
+    static void inline clearFieldStorage(FieldStorage & s)
+    {
+        /// can not use `memset(reinterpret_cast<char *>(&s), 0, sizeof(FieldStorage))` because DecimalField<Decimal256>
+        /// is not trivial, a piece of zero memory will create an illegal DecimalField<Decimal256>
+        /// so far, only DecimalField<Decimal256> is not trivial, if more non-trivial data types are added to Field, need to
+        /// make sure that all the non-trivial data are legal
+        static DecimalField<Decimal256> value(Decimal256(0), 0);
+        memcpy(reinterpret_cast<char *>(&s), reinterpret_cast<char *>(&value), sizeof(DecimalField<Decimal256>));
+        if constexpr (sizeof(FieldStorage) > sizeof(DecimalField<Decimal256>))
+        {
+            memset(reinterpret_cast<char *>(&s) + sizeof(DecimalField<Decimal256>), 0, sizeof(FieldStorage) - sizeof(DecimalField<Decimal256>));
+        }
+    }
+    struct Null
+    {
+        FieldStorage storage;
+        Null()
+        {
+            clearFieldStorage(storage);
+        }
+    };
 
     /// Returns an identifier for the type or vice versa.
     template <typename T>
@@ -252,7 +276,9 @@ public:
 
     Field()
         : which(Types::Null)
-    {}
+    {
+        clearFieldStorage(storage);
+    }
 
     /** Despite the presence of a template constructor, this constructor is still needed,
       *  since, in its absence, the compiler will still generate the default constructor.
@@ -518,8 +544,7 @@ public:
     bool operator!=(const Field & rhs) const { return !(*this == rhs); }
 
 private:
-    std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which), Null, UInt64, UInt128, Int64, Float64, String, Array, Tuple, DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>>
-        storage;
+    FieldStorage storage;
 
     Types::Which which;
 
@@ -661,6 +686,7 @@ private:
 
 #undef DBMS_MIN_FIELD_SIZE
 
+using Null = Field::Null;
 
 template <>
 struct Field::TypeToEnum<Null>
