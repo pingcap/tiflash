@@ -1,7 +1,7 @@
 # TODO: Use ut instead
 >> drop table if exists test
 
->> create table test (i Int64, d decimal(19, 4), d2 decimal(8,2), d3 decimal(16,3), d4 decimal(40,5)) engine = Log((i), 8192)
+>> create table test (i Int64, d decimal(19, 4), d2 decimal(8,2), d3 decimal(16,3), d4 decimal(40,5)) engine = Log
 
 >> insert into test values (0, 3.1415926,3.14,3.145,3.14567), (1, 3.12222,3.12,3.122,3.12222), (2, 3.1416,3.14,3.141,3.14161), (3, -3.12222,-3.12,-3.122,-3.12222), (4, 0, 0, 0, 0)
 

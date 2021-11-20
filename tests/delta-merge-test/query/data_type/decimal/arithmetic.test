@@ -3,7 +3,7 @@
 
 >> drop table if exists test
 
->> create table test (i Int64, d1 decimal(1, 0), d2 decimal(2, 0)) engine = Log((i), 8192)
+>> create table test (i Int64, d1 decimal(1, 0), d2 decimal(2, 0)) engine = Log
 
 >> insert into test values (0, 9, 99), (1, -9, -99)
 
@@ -39,7 +39,7 @@
 
 >> drop table if exists test
 
->> create table test (i Int64, d1 decimal(1, 1), d2 decimal(2, 2)) engine = Log((i), 8192)
+>> create table test (i Int64, d1 decimal(1, 1), d2 decimal(2, 2)) engine = Log
 
 >> insert into test values (0, 0.9, 0.99), (1, -0.9, -0.99)
 
@@ -81,7 +81,7 @@
 
 >> drop table if exists test
 
->> create table test (i Int64, d1 decimal(65, 30), d2 decimal(65, 30)) engine = Log((i), 8192)
+>> create table test (i Int64, d1 decimal(65, 30), d2 decimal(65, 30)) engine = Log
 
 >> insert into test values (0, 0.012345678998765432100123456789, 0.012345678998765432100123456789), (1, 0.012345678998765432100123456780, 0.012345678998765432100123456789), (2, 0.0123456789987654321001234567885, 0.0123456789987654321001234567894), (3, 0.0123456789987654321001234567895, 0.0123456789987654321001234567894)
 
@@ -95,7 +95,7 @@
 
 >> drop table if exists test
 
->> create table test (i Int64, d1 decimal(65, 10), d2 decimal(65, 20)) engine = Log((i), 8192)
+>> create table test (i Int64, d1 decimal(65, 10), d2 decimal(65, 20)) engine = Log
 
 >> insert into test values (0, 0.0123456789, 0.01234567890000000000), (1, 0.0123456789, 0.01234567890000000001), (2, 0.01234567894, 0.012345678899999999995), (3, 0.01234567894, 0.012345678899999999994)
 
