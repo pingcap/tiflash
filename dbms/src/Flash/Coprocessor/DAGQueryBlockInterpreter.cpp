@@ -40,6 +40,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     Context & context_,
     const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_,
+    size_t max_streams_,
     bool keep_session_timezone_info_,
     const DAGQuerySource & dag_,
     std::vector<SubqueriesForSets> & subqueries_for_sets_,
@@ -50,6 +51,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , query_block(query_block_)
     , keep_session_timezone_info(keep_session_timezone_info_)
     , rqst(dag_.getDAGRequest())
+    , max_streams(max_streams_)
     , dag(dag_)
     , subqueries_for_sets(subqueries_for_sets_)
     , exchange_receiver_map(exchange_receiver_map_)
@@ -59,15 +61,6 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     {
         for (const auto & condition : query_block.selection->selection().conditions())
             conditions.push_back(&condition);
-    }
-    const Settings & settings = context.getSettingsRef();
-    if (dag.isBatchCop())
-        max_streams = settings.max_threads;
-    else
-        max_streams = 1;
-    if (max_streams > 1)
-    {
-        max_streams *= settings.max_streams_to_max_threads_ratio;
     }
 }
 
@@ -209,7 +202,7 @@ AnalysisResult analyzeExpressions(
         query_block.output_field_types,
         query_block.output_offsets,
         query_block.qb_column_prefix,
-        keep_session_timezone_info || !query_block.isRootQueryBlock());
+        keep_session_timezone_info);
 
     res.before_order_and_select = chain.getLastActions();
 
