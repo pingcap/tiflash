@@ -124,7 +124,7 @@ private:
 
     struct ParallelMergeData
     {
-        ThreadPool pool;
+        ThreadPool *pool;
 
         /// Now one of the merging threads receives next blocks for the merge. This operation must be done sequentially.
         std::mutex get_next_blocks_mutex;
@@ -144,7 +144,7 @@ private:
         /// An event by which the main thread is telling merging threads that it is possible to process the next group of blocks.
         std::condition_variable have_space;
 
-        explicit ParallelMergeData(size_t max_threads) : pool(max_threads) {}
+        explicit ParallelMergeData(size_t max_threads) : pool(glb_thd_pool) {}
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;

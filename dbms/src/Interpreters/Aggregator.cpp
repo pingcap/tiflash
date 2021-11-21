@@ -1453,8 +1453,8 @@ public:
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
-        if (parallel_merge_data)
-            parallel_merge_data->pool.wait();
+        // if (parallel_merge_data)
+            // parallel_merge_data->pool.wait();
     }
 
 protected:
@@ -1560,10 +1560,10 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        ThreadPool pool;
+        ThreadPool* pool;
 
         explicit ParallelMergeData(size_t threads)
-            : pool(threads)
+            : pool(glb_thd_pool)
         {}
     };
 
@@ -1575,7 +1575,7 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool.schedule(
+        parallel_merge_data->pool->schedule(
             ThreadFactory(true, "MergingAggregtd").newJob([this, num] { thread(num); }));
     }
 
