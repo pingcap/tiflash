@@ -137,7 +137,7 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    getDAGRequestFromStringWithRetry(dag_req, task_request.encoded_plan());
+    dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
     TMTContext & tmt_context = context.getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
     /// will never be used and can be removed later.
