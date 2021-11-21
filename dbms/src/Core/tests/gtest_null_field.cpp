@@ -1,5 +1,5 @@
-#include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -25,10 +25,10 @@ void checkNullField(const Field & null)
     ASSERT_EQ(null.get<Float32>(), 0);
     ASSERT_EQ(null.get<Float64>(), 0);
     ASSERT_EQ(null.get<String>(), "");
-    ASSERT_EQ(null.get<Decimal32>(), Decimal32(0));
-    ASSERT_EQ(null.get<Decimal64>(), Decimal64(0));
-    ASSERT_EQ(null.get<Decimal128>(), Decimal128(0));
-    ASSERT_EQ(null.get<Decimal256>(), Decimal256(0));
+    ASSERT_EQ(null.get<DecimalField<Decimal32>>(), DecimalField(Decimal32(0), 0));
+    ASSERT_EQ(null.get<DecimalField<Decimal64>>(), DecimalField(Decimal64(0), 0));
+    ASSERT_EQ(null.get<DecimalField<Decimal128>>(), DecimalField(Decimal128(0), 0));
+    ASSERT_EQ(null.get<DecimalField<Decimal256>>(), DecimalField(Decimal256(0), 0));
 }
 TEST_F(TestNullField, NullField)
 try
