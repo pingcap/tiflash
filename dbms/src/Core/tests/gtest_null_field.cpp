@@ -33,7 +33,7 @@ void checkNullField(const Field & null)
 TEST_F(TestNullField, NullField)
 try
 {
-    Null null;
+    const Field::Null & null = Field::Null::instance();
     /// case 1: null field from default constructor
     Field f1;
     checkNullField(f1);

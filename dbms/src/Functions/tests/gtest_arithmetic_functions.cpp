@@ -110,7 +110,7 @@ try
     col2_types.push_back(null_type);
 
     std::vector<Field> null_or_zero_field;
-    null_or_zero_field.push_back(Null());
+    null_or_zero_field.push_back(Field());
     null_or_zero_field.push_back(Field(DecimalField<Decimal128>(0, 0)));
 
     std::vector<Int64> values{10, 2, 20, 8, 10, 0, 30, 8, 16, 4};
@@ -138,7 +138,7 @@ try
                     continue;
                 if (!col2_value.isNull() && col2_type->onlyNull())
                     continue;
-                auto c1 = col1_type->createColumnConst(size, Null());
+                auto c1 = col1_type->createColumnConst(size, Field());
                 auto c2 = col2_type->createColumnConst(size, col2_value);
                 auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
                 auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -157,7 +157,7 @@ try
                 continue;
             if (col2_type->onlyNull())
                 continue;
-            auto c1 = nullable_decimal_type_1->createColumnConst(size, Null());
+            auto c1 = nullable_decimal_type_1->createColumnConst(size, Field());
             auto c2 = col2_type->createColumnConst(size, Field(DecimalField<Decimal128>(2, 0)));
             auto col1 = ColumnWithTypeAndName(std::move(c1), nullable_decimal_type_1, "col1");
             auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -230,7 +230,7 @@ try
                 for (size_t i = 0; i < values.size(); i++)
                 {
                     if (col1_type->isNullable() && col1_null_map[i])
-                        c1_mutable->insert(Null());
+                        c1_mutable->insert(Field());
                     else
                         c1_mutable->insert(Field(DecimalField<Decimal128>(values[i], 2)));
                 }
@@ -255,7 +255,7 @@ try
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col1_type->isNullable() && col1_null_map[i])
-                    c1_mutable->insert(Null());
+                    c1_mutable->insert(Field());
                 else
                     c1_mutable->insert(Field(DecimalField<Decimal128>(values[i], 2)));
             }
@@ -291,12 +291,12 @@ try
                 continue;
             if (col2_type->onlyNull())
                 continue;
-            auto c1 = col1_type->createColumnConst(size, Null());
+            auto c1 = col1_type->createColumnConst(size, Field());
             auto c2 = col2_type->createColumn();
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col2_type->isNullable() && col2_null_map[i])
-                    c2->insert(Null());
+                    c2->insert(Field());
                 else
                     c2->insert(Field(DecimalField<Decimal128>(values[i], 2)));
             }
@@ -325,7 +325,7 @@ try
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col2_type->isNullable() && col2_null_map[i])
-                    c2->insert(Null());
+                    c2->insert(Field());
                 else
                     c2->insert(Field(DecimalField<Decimal128>(values[i], 0)));
             }
@@ -361,11 +361,11 @@ try
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col1_type->isNullable() && col1_null_map[i])
-                    c1->insert(Null());
+                    c1->insert(Field());
                 else
                     c1->insert(Field(DecimalField<Decimal128>(values[i], 2)));
                 if (col2_type->isNullable() && col2_null_map[i])
-                    c2->insert(Null());
+                    c2->insert(Field());
                 else
                     c2->insert(Field(DecimalField<Decimal128>(values[i], 0)));
             }
@@ -411,7 +411,7 @@ try
     col2_types.push_back(null_type);
 
     std::vector<Field> null_or_zero_field;
-    null_or_zero_field.push_back(Null());
+    null_or_zero_field.push_back(Field());
     null_or_zero_field.push_back(Field((Float64)0));
 
 
@@ -440,7 +440,7 @@ try
                     continue;
                 if (!col2_value.isNull() && col2_type->onlyNull())
                     continue;
-                auto c1 = col1_type->createColumnConst(size, Null());
+                auto c1 = col1_type->createColumnConst(size, Field());
                 auto c2 = col2_type->createColumnConst(size, col2_value);
                 auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
                 auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -460,7 +460,7 @@ try
                 continue;
             if (col2_type->onlyNull())
                 continue;
-            auto c1 = col1_type->createColumnConst(size, Null());
+            auto c1 = col1_type->createColumnConst(size, Field());
             auto c2 = col2_type->createColumnConst(size, Field((Float64)2));
             auto col1 = ColumnWithTypeAndName(std::move(c1), col1_type, "col1");
             auto col2 = ColumnWithTypeAndName(std::move(c2), col2_type, "col2");
@@ -535,7 +535,7 @@ try
                 for (size_t i = 0; i < values.size(); i++)
                 {
                     if (col1_type->isNullable() && col1_null_map[i])
-                        c1_mutable->insert(Null());
+                        c1_mutable->insert(Field());
                     else
                         c1_mutable->insert(Field((Float64)values[i]));
                 }
@@ -560,7 +560,7 @@ try
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col1_type->isNullable() && col1_null_map[i])
-                    c1_mutable->insert(Null());
+                    c1_mutable->insert(Field());
                 else
                     c1_mutable->insert(Field((Float64)values[i]));
             }
@@ -595,12 +595,12 @@ try
                 continue;
             if (col2_type->onlyNull())
                 continue;
-            auto c1 = col1_type->createColumnConst(size, Null());
+            auto c1 = col1_type->createColumnConst(size, Field());
             auto c2 = col2_type->createColumn();
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col2_type->isNullable() && col2_null_map[i])
-                    c2->insert(Null());
+                    c2->insert(Field());
                 else
                     c2->insert(Field((Float64)values[i]));
             }
@@ -629,7 +629,7 @@ try
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col2_type->isNullable() && col2_null_map[i])
-                    c2->insert(Null());
+                    c2->insert(Field());
                 else
                     c2->insert(Field((Float64)values[i]));
             }
@@ -664,12 +664,12 @@ try
             for (size_t i = 0; i < values.size(); i++)
             {
                 if (col1_type->isNullable() && col1_null_map[i])
-                    c1->insert(Null());
+                    c1->insert(Field());
                 else
                     c1->insert(Field((Float64)values[i]));
 
                 if (col2_type->isNullable() && col2_null_map[i])
-                    c2->insert(Null());
+                    c2->insert(Field());
                 else
                     c2->insert(Field((Float64)values[i]));
             }

@@ -1010,7 +1010,7 @@ public:
         {
             if (result_type->onlyNull())
             {
-                block.getByPosition(result).column = result_type->createColumnConst(block.rows(), Null());
+                block.getByPosition(result).column = result_type->createColumnConst(block.rows(), Field());
                 return;
             }
         }
@@ -1102,7 +1102,7 @@ public:
                     if (is_left_null_constant || is_right_null_constant)
                     {
                         /// if one of the input is null constant, just return null constant
-                        block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left_raw->size(), Null());
+                        block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left_raw->size(), Field());
                         return true;
                     }
                 }
@@ -1124,7 +1124,7 @@ public:
                             else
                             {
                                 UInt8 res_null = false;
-                                Field result_field = Null();
+                                Field result_field;
                                 auto res = OpImpl::constant_constant_nullable(
                                     col_left->template getValue<T0>(),
                                     col_right->template getValue<T1>(),
@@ -1147,7 +1147,7 @@ public:
                             else
                             {
                                 UInt8 res_null = false;
-                                Field result_field = Null();
+                                Field result_field;
                                 auto res = OpImpl::constant_constant_nullable(
                                     col_left->getField().template safeGet<FieldT0>(),
                                     col_right->getField().template safeGet<FieldT1>(),

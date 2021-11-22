@@ -1,36 +1,32 @@
-#include <errno.h>
-#include <cstdlib>
-
-#include <IO/ReadHelpers.h>
 #include <IO/ReadBufferFromMemory.h>
-
-#include <Parsers/IAST.h>
+#include <IO/ReadHelpers.h>
+#include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTAsterisk.h>
-#include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTOrderByElement.h>
+#include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTSubquery.h>
-
 #include <Parsers/CommonParsers.h>
-#include <Parsers/ExpressionListParsers.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserCase.h>
-
 #include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/IAST.h>
+#include <Parsers/ParserCase.h>
 #include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
+#include <errno.h>
+
+#include <cstdlib>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
-    extern const int LOGICAL_ERROR;
-}
+extern const int SYNTAX_ERROR;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 bool ParserArray::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
@@ -136,7 +132,7 @@ bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected &)
         else
             readDoubleQuotedStringWithSQLStyle(s, buf);
 
-        if (s.empty())    /// Identifiers "empty string" are not allowed.
+        if (s.empty()) /// Identifiers "empty string" are not allowed.
             return false;
 
         node = std::make_shared<ASTIdentifier>(s);
@@ -158,7 +154,7 @@ bool ParserCompoundIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
 {
     ASTPtr id_list;
     if (!ParserList(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Dot), false)
-        .parse(pos, id_list, expected))
+             .parse(pos, id_list, expected))
         return false;
 
     String name;
@@ -230,8 +226,7 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         && contents_begin[9] >= '0' && contents_begin[9] <= '9')
     {
         std::string contents(contents_begin, contents_end - contents_begin);
-        throw Exception("Argument of function toDate is unquoted: toDate(" + contents + "), must be: toDate('" + contents + "')"
-            , ErrorCodes::SYNTAX_ERROR);
+        throw Exception("Argument of function toDate is unquoted: toDate(" + contents + "), must be: toDate('" + contents + "')", ErrorCodes::SYNTAX_ERROR);
     }
 
     /// The parametric aggregate function has two lists (parameters and arguments) in parentheses. Example: quantile(0.9)(x).
@@ -443,7 +438,7 @@ bool ParserNull::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword nested_parser("NULL");
     if (nested_parser.parse(pos, node, expected))
     {
-        node = std::make_shared<ASTLiteral>(Null());
+        node = std::make_shared<ASTLiteral>(Field());
         return true;
     }
     else
@@ -460,7 +455,7 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         ++pos;
         negative = true;
     }
-    else if (pos->type == TokenType::Plus)  /// Leading plus is simply ignored.
+    else if (pos->type == TokenType::Plus) /// Leading plus is simply ignored.
         ++pos;
 
     Field res;
@@ -485,7 +480,7 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     buf[pos->size()] = 0;
 
     char * pos_double = buf;
-    errno = 0;    /// Functions strto* don't clear errno.
+    errno = 0; /// Functions strto* don't clear errno.
     Float64 float_value = std::strtod(buf, &pos_double);
     if (pos_double != buf + pos->size() || errno == ERANGE)
     {
@@ -638,8 +633,7 @@ bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-const char * ParserAliasBase::restricted_keywords[] =
-{
+const char * ParserAliasBase::restricted_keywords[] = {
     "FROM",
     "FINAL",
     "SAMPLE",
@@ -668,8 +662,7 @@ const char * ParserAliasBase::restricted_keywords[] =
     "INTO",
     "PARTITION",
     "SEGMENT",
-    nullptr
-};
+    nullptr};
 
 template <typename ParserIdentifier>
 bool ParserAliasImpl<ParserIdentifier>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
@@ -893,5 +886,4 @@ bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     return true;
 }
 
-}
-
+} // namespace DB

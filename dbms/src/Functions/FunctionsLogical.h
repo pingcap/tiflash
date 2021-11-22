@@ -418,7 +418,7 @@ public:
                 if (const_val_input_has_null && const_val_res_not_null)
                     Impl::adjustForNullValue(const_val, const_val_input_has_null);
                 if (const_val_input_has_null)
-                    block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Null());
+                    block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(rows, Field());
                 else
                     block.getByPosition(result).column = has_nullable_input_column
                         ? makeNullable(DataTypeUInt8().createColumnConst(rows, toField(const_val)))

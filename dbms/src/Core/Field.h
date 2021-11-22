@@ -245,7 +245,7 @@ public:
     using FieldStorage = std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which), UInt64, UInt128, Int64, Float64, String, Array, Tuple, DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>>;
     /// Set the data stored in field to a reasonable value. In TiFlash, it assumes that the data stored inside a null field
     /// actually contains a valid value, so need to call this function when constructing a null field
-    static void inline clearFieldStorage(FieldStorage & s)
+    static void initFieldStorage(FieldStorage & s)
     {
         /// can not use `memset(reinterpret_cast<char *>(&s), 0, sizeof(FieldStorage))` because DecimalField<Decimal256>
         /// is not trivial, a piece of zero memory will create an illegal DecimalField<Decimal256>
@@ -260,10 +260,18 @@ public:
     }
     struct Null
     {
+    public:
+        static const Null & instance()
+        {
+            static const Null instance;
+            return instance;
+        }
+
+    private:
         FieldStorage storage;
         Null()
         {
-            clearFieldStorage(storage);
+            initFieldStorage(storage);
         }
     };
 
@@ -277,7 +285,7 @@ public:
     Field()
         : which(Types::Null)
     {
-        clearFieldStorage(storage);
+        initFieldStorage(storage);
     }
 
     /** Despite the presence of a template constructor, this constructor is still needed,
@@ -686,10 +694,8 @@ private:
 
 #undef DBMS_MIN_FIELD_SIZE
 
-using Null = Field::Null;
-
 template <>
-struct Field::TypeToEnum<Null>
+struct Field::TypeToEnum<Field::Null>
 {
     static const Types::Which value = Types::Null;
 };
@@ -946,9 +952,9 @@ struct NearestFieldType<bool>
     using Type = UInt64;
 };
 template <>
-struct NearestFieldType<Null>
+struct NearestFieldType<Field::Null>
 {
-    using Type = Null;
+    using Type = Field::Null;
 };
 template <>
 struct NearestFieldType<DecimalField<Decimal32>>

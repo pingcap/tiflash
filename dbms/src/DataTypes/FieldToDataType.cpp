@@ -1,58 +1,64 @@
+#include <Common/Exception.h>
 #include <Common/FieldVisitors.h>
-#include <DataTypes/FieldToDataType.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/FieldToDataType.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/convertFieldToType.h>
-#include <Common/Exception.h>
+
 #include <ext/size.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int EMPTY_DATA_PASSED;
+extern const int EMPTY_DATA_PASSED;
 }
 
 
-DataTypePtr FieldToDataType::operator() (const Null &) const
+DataTypePtr FieldToDataType::operator()(const Field::Null &) const
 {
     return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
 }
 
-DataTypePtr FieldToDataType::operator() (const UInt64 & x) const
+DataTypePtr FieldToDataType::operator()(const UInt64 & x) const
 {
-    if (x <= std::numeric_limits<UInt8>::max())  return std::make_shared<DataTypeUInt8>();
-    if (x <= std::numeric_limits<UInt16>::max()) return std::make_shared<DataTypeUInt16>();
-    if (x <= std::numeric_limits<UInt32>::max()) return std::make_shared<DataTypeUInt32>();
+    if (x <= std::numeric_limits<UInt8>::max())
+        return std::make_shared<DataTypeUInt8>();
+    if (x <= std::numeric_limits<UInt16>::max())
+        return std::make_shared<DataTypeUInt16>();
+    if (x <= std::numeric_limits<UInt32>::max())
+        return std::make_shared<DataTypeUInt32>();
     return std::make_shared<DataTypeUInt64>();
 }
 
-DataTypePtr FieldToDataType::operator() (const Int64 & x) const
+DataTypePtr FieldToDataType::operator()(const Int64 & x) const
 {
-    if (x <= std::numeric_limits<Int8>::max() && x >= std::numeric_limits<Int8>::min())   return std::make_shared<DataTypeInt8>();
-    if (x <= std::numeric_limits<Int16>::max() && x >= std::numeric_limits<Int16>::min()) return std::make_shared<DataTypeInt16>();
-    if (x <= std::numeric_limits<Int32>::max() && x >= std::numeric_limits<Int32>::min()) return std::make_shared<DataTypeInt32>();
+    if (x <= std::numeric_limits<Int8>::max() && x >= std::numeric_limits<Int8>::min())
+        return std::make_shared<DataTypeInt8>();
+    if (x <= std::numeric_limits<Int16>::max() && x >= std::numeric_limits<Int16>::min())
+        return std::make_shared<DataTypeInt16>();
+    if (x <= std::numeric_limits<Int32>::max() && x >= std::numeric_limits<Int32>::min())
+        return std::make_shared<DataTypeInt32>();
     return std::make_shared<DataTypeInt64>();
 }
 
-DataTypePtr FieldToDataType::operator() (const Float64 &) const
+DataTypePtr FieldToDataType::operator()(const Float64 &) const
 {
     return std::make_shared<DataTypeFloat64>();
 }
 
-DataTypePtr FieldToDataType::operator() (const String &) const
+DataTypePtr FieldToDataType::operator()(const String &) const
 {
     return std::make_shared<DataTypeString>();
 }
 
-DataTypePtr FieldToDataType::operator() (const Array & x) const
+DataTypePtr FieldToDataType::operator()(const Array & x) const
 {
     DataTypes element_types;
     element_types.reserve(x.size());
@@ -64,7 +70,7 @@ DataTypePtr FieldToDataType::operator() (const Array & x) const
 }
 
 
-DataTypePtr FieldToDataType::operator() (const Tuple & x) const
+DataTypePtr FieldToDataType::operator()(const Tuple & x) const
 {
     auto & tuple = static_cast<const TupleBackend &>(x);
     if (tuple.empty())
@@ -79,4 +85,4 @@ DataTypePtr FieldToDataType::operator() (const Tuple & x) const
     return std::make_shared<DataTypeTuple>(element_types);
 }
 
-}
+} // namespace DB

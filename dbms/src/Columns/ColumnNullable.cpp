@@ -130,14 +130,14 @@ MutableColumnPtr ColumnNullable::cloneResized(size_t new_size) const
 
 Field ColumnNullable::operator[](size_t n) const
 {
-    return isNullAt(n) ? Null() : getNestedColumn()[n];
+    return isNullAt(n) ? Field() : getNestedColumn()[n];
 }
 
 
 void ColumnNullable::get(size_t n, Field & res) const
 {
     if (isNullAt(n))
-        res = Null();
+        res = Field();
     else
         getNestedColumn().get(n, res);
 }
@@ -417,8 +417,8 @@ void getExtremesFromNullableContent(const ColumnVector<T> & col, const NullMap &
 
     if (size == 0)
     {
-        min = Null();
-        max = Null();
+        min = Field();
+        max = Field();
         return;
     }
 
@@ -478,8 +478,8 @@ static void castNestedColumn(const IColumn * nested_column, F && f)
 
 void ColumnNullable::getExtremes(Field & min, Field & max) const
 {
-    min = Null();
-    max = Null();
+    min = Field();
+    max = Field();
 
     const auto & null_map = getNullMapData();
 

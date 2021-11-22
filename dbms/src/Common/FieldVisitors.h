@@ -36,7 +36,7 @@ typename std::decay_t<Visitor>::ResultType applyVisitor(Visitor && visitor, F &&
     switch (field.getType())
     {
     case Field::Types::Null:
-        return visitor(field.template get<Null>());
+        return visitor(field.template get<Field::Null>());
     case Field::Types::UInt64:
         return visitor(field.template get<UInt64>());
     case Field::Types::Int64:
@@ -70,7 +70,7 @@ static typename std::decay_t<Visitor>::ResultType applyBinaryVisitorImpl(Visitor
     switch (field2.getType())
     {
     case Field::Types::Null:
-        return visitor(field1, field2.template get<Null>());
+        return visitor(field1, field2.template get<Field::Null>());
     case Field::Types::UInt64:
         return visitor(field1, field2.template get<UInt64>());
     case Field::Types::Int64:
@@ -105,7 +105,7 @@ typename std::decay_t<Visitor>::ResultType applyVisitor(Visitor && visitor, F1 &
     case Field::Types::Null:
         return applyBinaryVisitorImpl(
             std::forward<Visitor>(visitor),
-            field1.template get<Null>(),
+            field1.template get<Field::Null>(),
             std::forward<F2>(field2));
     case Field::Types::UInt64:
         return applyBinaryVisitorImpl(
@@ -168,7 +168,7 @@ typename std::decay_t<Visitor>::ResultType applyVisitor(Visitor && visitor, F1 &
 class FieldVisitorToString : public StaticVisitor<String>
 {
 public:
-    String operator()(const Null & x) const;
+    String operator()(const Field::Null & x) const;
     String operator()(const UInt64 & x) const;
     String operator()(const Int64 & x) const;
     String operator()(const Float64 & x) const;
@@ -185,7 +185,7 @@ public:
 class FieldVisitorToDebugString : public StaticVisitor<String>
 {
 public:
-    String operator()(const Null & x) const;
+    String operator()(const Field::Null & x) const;
     String operator()(const UInt64 & x) const;
     String operator()(const Int64 & x) const;
     String operator()(const Float64 & x) const;
@@ -203,7 +203,7 @@ public:
 class FieldVisitorDump : public StaticVisitor<String>
 {
 public:
-    String operator()(const Null & x) const;
+    String operator()(const Field::Null & x) const;
     String operator()(const UInt64 & x) const;
     String operator()(const Int64 & x) const;
     String operator()(const Float64 & x) const;
@@ -222,7 +222,7 @@ template <typename T>
 class FieldVisitorConvertToNumber : public StaticVisitor<T>
 {
 public:
-    T operator()(const Null &) const
+    T operator()(const Field::Null &) const
     {
         throw Exception("Cannot convert NULL to " + demangle(typeid(T).name()), ErrorCodes::CANNOT_CONVERT_TYPE);
     }
@@ -262,7 +262,7 @@ private:
 public:
     explicit FieldVisitorHash(SipHash & hash);
 
-    void operator()(const Null & x) const;
+    void operator()(const Field::Null & x) const;
     void operator()(const UInt64 & x) const;
     void operator()(const Int64 & x) const;
     void operator()(const Float64 & x) const;
@@ -307,15 +307,15 @@ constexpr bool isDecimalField<DecimalField<Decimal256>>()
 class FieldVisitorAccurateEquals : public StaticVisitor<bool>
 {
 public:
-    bool operator()(const Null &, const Null &) const { return true; }
-    bool operator()(const Null &, const UInt64 &) const { return false; }
-    bool operator()(const Null &, const Int64 &) const { return false; }
-    bool operator()(const Null &, const Float64 &) const { return false; }
-    bool operator()(const Null &, const String &) const { return false; }
-    bool operator()(const Null &, const Array &) const { return false; }
-    bool operator()(const Null &, const Tuple &) const { return false; }
+    bool operator()(const Field::Null &, const Field::Null &) const { return true; }
+    bool operator()(const Field::Null &, const UInt64 &) const { return false; }
+    bool operator()(const Field::Null &, const Int64 &) const { return false; }
+    bool operator()(const Field::Null &, const Float64 &) const { return false; }
+    bool operator()(const Field::Null &, const String &) const { return false; }
+    bool operator()(const Field::Null &, const Array &) const { return false; }
+    bool operator()(const Field::Null &, const Tuple &) const { return false; }
 
-    bool operator()(const UInt64 &, const Null &) const { return false; }
+    bool operator()(const UInt64 &, const Field::Null &) const { return false; }
     bool operator()(const UInt64 & l, const UInt64 & r) const { return l == r; }
     bool operator()(const UInt64 & l, const Int64 & r) const { return accurate::equalsOp(l, r); }
     bool operator()(const UInt64 & l, const Float64 & r) const { return accurate::equalsOp(l, r); }
@@ -323,7 +323,7 @@ public:
     bool operator()(const UInt64 &, const Array &) const { return false; }
     bool operator()(const UInt64 &, const Tuple &) const { return false; }
 
-    bool operator()(const Int64 &, const Null &) const { return false; }
+    bool operator()(const Int64 &, const Field::Null &) const { return false; }
     bool operator()(const Int64 & l, const UInt64 & r) const { return accurate::equalsOp(l, r); }
     bool operator()(const Int64 & l, const Int64 & r) const { return l == r; }
     bool operator()(const Int64 & l, const Float64 & r) const { return accurate::equalsOp(l, r); }
@@ -331,7 +331,7 @@ public:
     bool operator()(const Int64 &, const Array &) const { return false; }
     bool operator()(const Int64 &, const Tuple &) const { return false; }
 
-    bool operator()(const Float64 &, const Null &) const { return false; }
+    bool operator()(const Float64 &, const Field::Null &) const { return false; }
     bool operator()(const Float64 & l, const UInt64 & r) const { return accurate::equalsOp(l, r); }
     bool operator()(const Float64 & l, const Int64 & r) const { return accurate::equalsOp(l, r); }
     bool operator()(const Float64 & l, const Float64 & r) const { return l == r; }
@@ -339,7 +339,7 @@ public:
     bool operator()(const Float64 &, const Array &) const { return false; }
     bool operator()(const Float64 &, const Tuple &) const { return false; }
 
-    bool operator()(const String &, const Null &) const { return false; }
+    bool operator()(const String &, const Field::Null &) const { return false; }
     bool operator()(const String &, const UInt64 &) const { return false; }
     bool operator()(const String &, const Int64 &) const { return false; }
     bool operator()(const String &, const Float64 &) const { return false; }
@@ -347,7 +347,7 @@ public:
     bool operator()(const String &, const Array &) const { return false; }
     bool operator()(const String &, const Tuple &) const { return false; }
 
-    bool operator()(const Array &, const Null &) const { return false; }
+    bool operator()(const Array &, const Field::Null &) const { return false; }
     bool operator()(const Array &, const UInt64 &) const { return false; }
     bool operator()(const Array &, const Int64 &) const { return false; }
     bool operator()(const Array &, const Float64 &) const { return false; }
@@ -355,7 +355,7 @@ public:
     bool operator()(const Array & l, const Array & r) const { return l == r; }
     bool operator()(const Array &, const Tuple &) const { return false; }
 
-    bool operator()(const Tuple &, const Null &) const { return false; }
+    bool operator()(const Tuple &, const Field::Null &) const { return false; }
     bool operator()(const Tuple &, const UInt64 &) const { return false; }
     bool operator()(const Tuple &, const Int64 &) const { return false; }
     bool operator()(const Tuple &, const Float64 &) const { return false; }
@@ -364,9 +364,9 @@ public:
     bool operator()(const Tuple & l, const Tuple & r) const { return l == r; }
 
     template <typename T>
-    bool operator()(const Null &, const T &) const
+    bool operator()(const Field::Null &, const T &) const
     {
-        return std::is_same_v<T, Null>;
+        return std::is_same_v<T, Field::Null>;
     }
 
     template <typename T>
@@ -431,7 +431,7 @@ private:
     template <typename T, typename U>
     bool cantCompare(const T &, const U &) const
     {
-        if constexpr (std::is_same_v<U, Null>)
+        if constexpr (std::is_same_v<U, Field::Null>)
             return false;
         throw Exception("Cannot compare " + demangle(typeid(T).name()) + " with " + demangle(typeid(U).name()),
                         ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -441,15 +441,15 @@ private:
 class FieldVisitorAccurateLess : public StaticVisitor<bool>
 {
 public:
-    bool operator()(const Null &, const Null &) const { return false; }
-    bool operator()(const Null &, const UInt64 &) const { return true; }
-    bool operator()(const Null &, const Int64 &) const { return true; }
-    bool operator()(const Null &, const Float64 &) const { return true; }
-    bool operator()(const Null &, const String &) const { return true; }
-    bool operator()(const Null &, const Array &) const { return true; }
-    bool operator()(const Null &, const Tuple &) const { return true; }
+    bool operator()(const Field::Null &, const Field::Null &) const { return false; }
+    bool operator()(const Field::Null &, const UInt64 &) const { return true; }
+    bool operator()(const Field::Null &, const Int64 &) const { return true; }
+    bool operator()(const Field::Null &, const Float64 &) const { return true; }
+    bool operator()(const Field::Null &, const String &) const { return true; }
+    bool operator()(const Field::Null &, const Array &) const { return true; }
+    bool operator()(const Field::Null &, const Tuple &) const { return true; }
 
-    bool operator()(const UInt64 &, const Null &) const { return false; }
+    bool operator()(const UInt64 &, const Field::Null &) const { return false; }
     bool operator()(const UInt64 & l, const UInt64 & r) const { return l < r; }
     bool operator()(const UInt64 & l, const Int64 & r) const { return accurate::lessOp(l, r); }
     bool operator()(const UInt64 & l, const Float64 & r) const { return accurate::lessOp(l, r); }
@@ -457,7 +457,7 @@ public:
     bool operator()(const UInt64 &, const Array &) const { return true; }
     bool operator()(const UInt64 &, const Tuple &) const { return true; }
 
-    bool operator()(const Int64 &, const Null &) const { return false; }
+    bool operator()(const Int64 &, const Field::Null &) const { return false; }
     bool operator()(const Int64 & l, const UInt64 & r) const { return accurate::lessOp(l, r); }
     bool operator()(const Int64 & l, const Int64 & r) const { return l < r; }
     bool operator()(const Int64 & l, const Float64 & r) const { return accurate::lessOp(l, r); }
@@ -465,7 +465,7 @@ public:
     bool operator()(const Int64 &, const Array &) const { return true; }
     bool operator()(const Int64 &, const Tuple &) const { return true; }
 
-    bool operator()(const Float64 &, const Null &) const { return false; }
+    bool operator()(const Float64 &, const Field::Null &) const { return false; }
     bool operator()(const Float64 & l, const UInt64 & r) const { return accurate::lessOp(l, r); }
     bool operator()(const Float64 & l, const Int64 & r) const { return accurate::lessOp(l, r); }
     bool operator()(const Float64 & l, const Float64 & r) const { return l < r; }
@@ -473,7 +473,7 @@ public:
     bool operator()(const Float64 &, const Array &) const { return true; }
     bool operator()(const Float64 &, const Tuple &) const { return true; }
 
-    bool operator()(const String &, const Null &) const { return false; }
+    bool operator()(const String &, const Field::Null &) const { return false; }
     bool operator()(const String &, const UInt64 &) const { return false; }
     bool operator()(const String &, const Int64 &) const { return false; }
     bool operator()(const String &, const Float64 &) const { return false; }
@@ -481,7 +481,7 @@ public:
     bool operator()(const String &, const Array &) const { return true; }
     bool operator()(const String &, const Tuple &) const { return true; }
 
-    bool operator()(const Array &, const Null &) const { return false; }
+    bool operator()(const Array &, const Field::Null &) const { return false; }
     bool operator()(const Array &, const UInt64 &) const { return false; }
     bool operator()(const Array &, const Int64 &) const { return false; }
     bool operator()(const Array &, const Float64 &) const { return false; }
@@ -489,7 +489,7 @@ public:
     bool operator()(const Array & l, const Array & r) const { return l < r; }
     bool operator()(const Array &, const Tuple &) const { return false; }
 
-    bool operator()(const Tuple &, const Null &) const { return false; }
+    bool operator()(const Tuple &, const Field::Null &) const { return false; }
     bool operator()(const Tuple &, const UInt64 &) const { return false; }
     bool operator()(const Tuple &, const Int64 &) const { return false; }
     bool operator()(const Tuple &, const Float64 &) const { return false; }
@@ -498,9 +498,9 @@ public:
     bool operator()(const Tuple & l, const Tuple & r) const { return l < r; }
 
     template <typename T>
-    bool operator()(const Null &, const T &) const
+    bool operator()(const Field::Null &, const T &) const
     {
-        return !std::is_same_v<T, Null>;
+        return !std::is_same_v<T, Field::Null>;
     }
 
     template <typename T>
@@ -605,7 +605,7 @@ public:
         return x.getValue().value != 0;
     }
 
-    bool operator()(Null &) const { throw Exception("Cannot sum Nulls", ErrorCodes::LOGICAL_ERROR); }
+    bool operator()(Field::Null &) const { throw Exception("Cannot sum Nulls", ErrorCodes::LOGICAL_ERROR); }
     bool operator()(String &) const { throw Exception("Cannot sum Strings", ErrorCodes::LOGICAL_ERROR); }
     bool operator()(Array &) const { throw Exception("Cannot sum Arrays", ErrorCodes::LOGICAL_ERROR); }
 };

@@ -174,7 +174,7 @@ Field makeField(const std::optional<T> & value)
     if (value.has_value())
         return Field(value.value());
     else
-        return Null();
+        return Field();
 }
 
 template <typename T>

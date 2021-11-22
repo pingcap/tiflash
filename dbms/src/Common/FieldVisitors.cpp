@@ -37,7 +37,7 @@ static inline String formatQuotedWithPrefix(T x, const char * prefix)
 }
 
 
-String FieldVisitorDump::operator()(const Null &) const
+String FieldVisitorDump::operator()(const Field::Null &) const
 {
     return "NULL";
 }
@@ -134,7 +134,7 @@ static String formatFloat(const Float64 x)
 }
 
 
-String FieldVisitorToString::operator()(const Null &) const
+String FieldVisitorToString::operator()(const Field::Null &) const
 {
     return "NULL";
 }
@@ -205,7 +205,7 @@ String FieldVisitorToString::operator()(const Tuple & x_def) const
 }
 
 
-String FieldVisitorToDebugString::operator()(const Null &) const
+String FieldVisitorToDebugString::operator()(const Field::Null &) const
 {
     if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
         return "?";
@@ -298,7 +298,7 @@ FieldVisitorHash::FieldVisitorHash(SipHash & hash)
     : hash(hash)
 {}
 
-void FieldVisitorHash::operator()(const Null &) const
+void FieldVisitorHash::operator()(const Field::Null &) const
 {
     UInt8 type = Field::Types::Null;
     hash.update(type);

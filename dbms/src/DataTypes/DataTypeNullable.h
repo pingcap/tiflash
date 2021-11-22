@@ -4,7 +4,6 @@
 
 namespace DB
 {
-
 /// A nullable data type is an ordinary data type provided with a tag
 /// indicating that it also contains the NULL value. The following class
 /// embodies this concept.
@@ -80,7 +79,7 @@ public:
 
     MutableColumnPtr createColumn() const override;
 
-    Field getDefault() const override { return Null(); }
+    Field getDefault() const override { return Field(); }
 
     bool equals(const IDataType & rhs) const override;
 
@@ -110,4 +109,4 @@ private:
 DataTypePtr makeNullable(const DataTypePtr & type);
 DataTypePtr removeNullable(const DataTypePtr & type);
 
-}
+} // namespace DB

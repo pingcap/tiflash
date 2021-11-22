@@ -1,15 +1,14 @@
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-
-#include <Core/Field.h>
 #include <Common/FieldVisitors.h>
-
 #include <Common/Stopwatch.h>
+#include <Core/Field.h>
 #include <DataStreams/TabSeparatedRowOutputStream.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/ReadHelpers.h>
 #include <DataTypes/DataTypeString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 
 
 int main(int argc, char ** argv)
@@ -24,7 +23,7 @@ int main(int argc, char ** argv)
     field = std::string("Hello, world!");
     std::cerr << applyVisitor(to_string, field) << std::endl;
 
-    field = Null();
+    field = Field();
     std::cerr << applyVisitor(to_string, field) << std::endl;
 
     Field field2;
@@ -62,9 +61,9 @@ int main(int argc, char ** argv)
 
                 watch.stop();
                 std::cerr << std::fixed << std::setprecision(2)
-                    << "Set " << n << " fields (" << n * sizeof(array[0]) / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
-                    << n / watch.elapsedSeconds() << " elem/sec. (" << n * sizeof(array[0]) / watch.elapsedSeconds() / 1000000 << " MB/s.)"
-                    << std::endl;
+                          << "Set " << n << " fields (" << n * sizeof(array[0]) / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
+                          << n / watch.elapsedSeconds() << " elem/sec. (" << n * sizeof(array[0]) / watch.elapsedSeconds() / 1000000 << " MB/s.)"
+                          << std::endl;
             }
 
             {
@@ -76,9 +75,9 @@ int main(int argc, char ** argv)
 
                 watch.stop();
                 std::cerr << std::fixed << std::setprecision(2)
-                    << "Got " << n << " fields (" << n * sizeof(array[0]) / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
-                    << n / watch.elapsedSeconds() << " elem/sec. (" << n * sizeof(array[0]) / watch.elapsedSeconds() / 1000000 << " MB/s.)"
-                    << std::endl;
+                          << "Got " << n << " fields (" << n * sizeof(array[0]) / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
+                          << n / watch.elapsedSeconds() << " elem/sec. (" << n * sizeof(array[0]) / watch.elapsedSeconds() / 1000000 << " MB/s.)"
+                          << std::endl;
 
                 std::cerr << sum << std::endl;
             }
@@ -89,9 +88,9 @@ int main(int argc, char ** argv)
         watch.stop();
 
         std::cerr << std::fixed << std::setprecision(2)
-            << "Destroyed " << n << " fields (" << n * sizeof(Array::value_type) / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
-            << n / watch.elapsedSeconds() << " elem/sec. (" << n * sizeof(Array::value_type) / watch.elapsedSeconds() / 1000000 << " MB/s.)"
-            << std::endl;
+                  << "Destroyed " << n << " fields (" << n * sizeof(Array::value_type) / 1000000.0 << " MB) in " << watch.elapsedSeconds() << " sec., "
+                  << n / watch.elapsedSeconds() << " elem/sec. (" << n * sizeof(Array::value_type) / watch.elapsedSeconds() / 1000000 << " MB/s.)"
+                  << std::endl;
     }
     catch (const Exception & e)
     {

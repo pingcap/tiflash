@@ -2,10 +2,8 @@
 
 namespace DB
 {
-
 namespace tests
 {
-
 class TestFunctionTestUtils : public ::testing::Test
 {
 };
@@ -50,7 +48,7 @@ try
 
     auto args = std::make_tuple(4, 2);
     auto field = DecimalField64(4200, 2);
-    auto null = Null();
+    auto & null = Field::Null::instance();
 
     {
         std::vector<DecimalField64> vec = {field};

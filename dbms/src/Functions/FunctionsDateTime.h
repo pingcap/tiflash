@@ -1381,7 +1381,7 @@ public:
 
         if (has_null_constant)
         {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Field());
             return;
         }
 
@@ -1752,7 +1752,7 @@ public:
 
         if (has_null_constant)
         {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Field());
             return;
         }
 

@@ -368,7 +368,7 @@ public:
 
 /// Specialization that catches internal errors.
 template <typename T, typename IndexConv>
-struct ArrayIndexNumImpl<T, Null, IndexConv>
+struct ArrayIndexNumImpl<T, Field::Null, IndexConv>
 {
     template <typename ScalarOrVector>
     static void vector(
@@ -788,7 +788,7 @@ private:
             || executeNumberNumber<T, Int64>(block, arguments, result)
             || executeNumberNumber<T, Float32>(block, arguments, result)
             || executeNumberNumber<T, Float64>(block, arguments, result)
-            || executeNumberNumber<T, Null>(block, arguments, result);
+            || executeNumberNumber<T, Field::Null>(block, arguments, result);
     }
 
     template <typename T, typename U>

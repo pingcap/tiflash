@@ -210,7 +210,7 @@ try
         if (value.has_value())
             input_column->insert(Field(value.value()));
         else
-            input_column->insert(Null());
+            input_column->insert(Field());
     }
 
     auto input = ColumnWithTypeAndName{std::move(input_column), data_type, "input"};

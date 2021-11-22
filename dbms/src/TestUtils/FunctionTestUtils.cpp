@@ -121,7 +121,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
 ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
 {
     DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
-    return {data_type->createColumnConst(size, Null()), data_type, name};
+    return {data_type->createColumnConst(size, Field()), data_type, name};
 }
 } // namespace tests
 } // namespace DB

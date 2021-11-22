@@ -774,7 +774,7 @@ public:
         {
             if (left_arg.type->onlyNull())
             {
-                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+                block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Field());
                 return;
             }
         }

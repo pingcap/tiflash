@@ -47,7 +47,7 @@ ColumnPtr wrapInNullable(const ColumnPtr & src, Block & block, const ColumnNumbe
 
         /// Const Nullable that are NULL.
         if (elem.column->onlyNull())
-            return block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return block.getByPosition(result).type->createColumnConst(block.rows(), Field());
 
         if (elem.column->isColumnConst())
             continue;
@@ -190,7 +190,7 @@ bool IExecutableFunction::defaultImplementationForNulls(Block & block, const Col
 
     if (null_presence.has_null_constant)
     {
-        block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+        block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Field());
         return true;
     }
 
