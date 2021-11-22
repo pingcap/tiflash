@@ -31,6 +31,20 @@ public:
         return col_datetime;
     }
 
+    static auto createNullableDateTimeColumn(std::initializer_list<std::optional<MyDateTime>> init, int fraction)
+    {
+        auto data_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(fraction));
+        auto col = data_type_ptr->createColumn();
+        for (const auto dt : init)
+        {
+            if (dt.has_value())
+                col->insert(Field(dt->toPackedUInt()));
+            else
+                col->insert(Null());
+        }
+        return ColumnWithTypeAndName(std::move(col), data_type_ptr, "datetime");
+    }
+
     static auto castType(String str)
     {
         return createConstColumn<String>(1, str);
@@ -514,7 +528,43 @@ try
 }
 CATCH
 
-TEST_F(TestTidbConversion, castTimestampAsReal)
+TEST_F(TestTidbConversion, castIntAsTime)
+try
+{
+    ASSERT_COLUMN_EQ(
+        createNullableDateTimeColumn({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
+        executeFunction(func_name,
+                        {createColumn<Nullable<Int64>>({{}, 20211026160859}),
+                         castType("Nullable(MyDateTime(6))")}));
+    ASSERT_COLUMN_EQ(
+        createNullableDateTimeColumn({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
+        executeFunction(func_name,
+                        {createColumn<Nullable<UInt64>>({{}, 20211026160859}),
+                         castType("Nullable(MyDateTime(6))")}));
+    ASSERT_THROW(
+        executeFunction(func_name,
+                        {createColumn<Nullable<UInt8>>({MAX_UINT8}),
+                         castType("Nullable(MyDateTime(6))")}),
+        TiFlashException);
+    ASSERT_THROW(
+        executeFunction(func_name,
+                        {createColumn<Nullable<UInt16>>({MAX_UINT16}),
+                         castType("Nullable(MyDateTime(6))")}),
+        TiFlashException);
+    ASSERT_THROW(
+        executeFunction(func_name,
+                        {createColumn<Nullable<UInt32>>({MAX_UINT32}),
+                         castType("Nullable(MyDateTime(6))")}),
+        TiFlashException);
+    ASSERT_THROW(
+        executeFunction(func_name,
+                        {createColumn<Nullable<UInt64>>({1}),
+                         castType("Nullable(MyDateTime(6))")}),
+        TiFlashException);
+}
+CATCH
+
+TEST_F(TestTidbConversion, castTimeAsReal)
 try
 {
     static const auto data_type_ptr = std::make_shared<DataTypeMyDateTime>(6);
