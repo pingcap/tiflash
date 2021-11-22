@@ -99,4 +99,6 @@ using DecodingStorageSchemaSnapshotConstPtr = std::shared_ptr<const DecodingStor
 
 Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_snapshot);
 
+void clearBlockData(Block & block);
+
 }

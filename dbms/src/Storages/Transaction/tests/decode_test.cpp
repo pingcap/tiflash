@@ -20,7 +20,6 @@ using ColumnInfo = TiDB::ColumnInfo;
 
 namespace DB::tests
 {
-using ColumnIdValues = std::vector<ColumnIDValue<UInt64, false>>;
 using RegionDataReadInfoLists = std::vector<RegionDataReadInfoList>;
 
 // TODO: verify typical batch_row_num
@@ -64,120 +63,38 @@ int runDecodeBench(int column_num, int batch_row_num, int batch_num) {
     }
     std::cout << "generate data done\n";
 
+    DM::ColumnDefines column_defines;
+    DM::ColumnDefine handle_column{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE};
+    {
+        column_defines.emplace_back(handle_column);
+        column_defines.emplace_back(VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
+        column_defines.emplace_back(TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE);
+    }
+    for (size_t i = 0; i < table_info.columns.size(); i++) {
+        auto & column_info = table_info.columns[i];
+        column_defines.emplace_back(column_info.id, column_info.name, std::make_shared<DataTypeUInt64>());
+    }
+
     // decode
-    ColumnsDescription column_desc;
-    {
-        NamesAndTypesList name_and_type_list;
-        {
-            NameAndTypePair nt{EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE};
-            name_and_type_list.push_back(nt);
-        }
-        {
-            NameAndTypePair nt{VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};
-            name_and_type_list.push_back(nt);
-        }
-        {
-            NameAndTypePair nt{TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
-            name_and_type_list.push_back(nt);
-        }
-        for (int i = 0; i < column_num; i++) {
-            NameAndTypePair nt{fmt::format("a{}", i), std::make_shared<DataTypeUInt64>()};
-            name_and_type_list.push_back(nt);
-        }
-        // TODO: verify we just use ordinary
-        column_desc.ordinary = name_and_type_list;
-    }
-
     {
         Stopwatch stopwatch;
-        RegionBlockReader reader{table_info, column_desc};
+        auto schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<DM::ColumnDefines>(column_defines), table_info, handle_column, false);
+
+        Block block = createBlockSortByColumnID(schema_snapshot);
+        RegionBlockReader reader{schema_snapshot};
         for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto [block, decoded] = reader.read(data_lists_read[batch_index], true);
-            assert(block.rows() == (UInt64)batch_row_num);
-            assert(decoded == true);
-        }
-        auto decode_time = stopwatch.elapsedMilliseconds();
-        std::cout << "decode using read cost " << decode_time << " milliseconds\n";
-    }
-
-    {
-        Stopwatch stopwatch;
-        Block block;
-        SortedColumnIDs column_ids;
-        std::map<ColumnID, NameAndTypePair> column_id_map;
-        for (auto & column : column_desc.getAllPhysical())
-        {
-            auto column_id = table_info.getColumnID(column.name);
-            column_ids.insert(column_id);
-            column_id_map.emplace(column_id, column);
-        }
-
-        for (const auto & column_id : column_ids)
-        {
-            auto & column = column_id_map.at(column_id);
-            block.insert({column.type->createColumn(), column.type, column.name, column_id});
-        }
-
-        std::vector<ColumnID> pk_column_ids;
-        std::map<ColumnID, size_t> pk_pos_map;
-        RegionBlockReaderOptimized reader{table_info, column_desc};
-        for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto decoded = reader.template read<TMTPKType::INT64>(column_ids, block, pk_column_ids, pk_pos_map, data_lists_read[batch_index], true);
+//            Block block = createBlockSortByColumnID(schema_snapshot);
+            auto decoded = reader.read(block, data_lists_read[batch_index], true);
             assert(block.rows() == (UInt64)batch_row_num);
             assert(decoded == true);
             // clear block data
+            size_t orig_rows = block.rows();
             for (size_t i = 0; i < block.columns(); i++) {
                 auto * raw_column = const_cast<IColumn *>(block.getByPosition(i).column.get());
-                raw_column->popBack(block.rows());
+                raw_column->popBack(orig_rows);
             }
         }
-        auto decode_time = stopwatch.elapsedMilliseconds();
-        std::cout << "decode using optimized read cost " << decode_time << " milliseconds\n";
-    }
 
-    {
-        RegionBlockReader reader{table_info, column_desc};
-        Stopwatch stopwatch;
-        for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto [block, decoded] = reader.read(data_lists_read[batch_index], true);
-            assert(block.rows() == (UInt64)batch_row_num);
-            assert(decoded == true);
-        }
-        auto decode_time = stopwatch.elapsedMilliseconds();
-        std::cout << "decode using read cost " << decode_time << " milliseconds\n";
-    }
-
-    {
-        Stopwatch stopwatch;
-        Block block;
-        SortedColumnIDs column_ids;
-        std::map<ColumnID, NameAndTypePair> column_id_map;
-        for (auto & column : column_desc.getAllPhysical())
-        {
-            auto column_id = table_info.getColumnID(column.name);
-            column_ids.insert(column_id);
-            column_id_map.emplace(column_id, column);
-        }
-
-        for (const auto & column_id : column_ids)
-        {
-            auto & column = column_id_map.at(column_id);
-            block.insert({column.type->createColumn(), column.type, column.name, column_id});
-        }
-
-        std::vector<ColumnID> pk_column_ids;
-        std::map<ColumnID, size_t> pk_pos_map;
-        RegionBlockReaderOptimized reader{table_info, column_desc};
-        for (int batch_index = 0; batch_index < batch_num; batch_index++) {
-            auto decoded = reader.template read<TMTPKType::INT64>(column_ids, block, pk_column_ids, pk_pos_map, data_lists_read[batch_index], true);
-            assert(block.rows() == (UInt64)batch_row_num);
-            assert(decoded == true);
-            // clear block data
-            for (size_t i = 0; i < block.columns(); i++) {
-                auto * raw_column = const_cast<IColumn *>(block.getByPosition(i).column.get());
-                raw_column->popBack(block.rows());
-            }
-        }
         auto decode_time = stopwatch.elapsedMilliseconds();
         std::cout << "decode using optimized read cost " << decode_time << " milliseconds\n";
     }

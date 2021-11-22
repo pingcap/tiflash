@@ -103,10 +103,12 @@ static void writeRegionDataToStorage(
         /// Read region data as block.
         Stopwatch watch;
 
+        Int64 block_schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
         if (need_decode)
         {
-            auto decoding_schema_snapshot = storage->getDecodingSchemaSnapshot();
-            block = createBlockSortByColumnID(decoding_schema_snapshot);
+            DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
+            std::tie(decoding_schema_snapshot, block) = storage->getSchemaSnapshotAndBlockForDecoding(true);
+            block_schema_version = decoding_schema_snapshot->schema_version;
 
             auto reader = RegionBlockReader(decoding_schema_snapshot);
             ok = reader.read(block, data_list_read, force_decode);
@@ -135,6 +137,8 @@ static void writeRegionDataToStorage(
         }
         write_part_cost = watch.elapsedMilliseconds();
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
+        if (need_decode)
+            storage->releaseDecodingBlock(block_schema_version, std::move(block));
 
         LOG_TRACE(log,
                   FUNCTION_NAME << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
@@ -491,7 +495,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
                 throw;
         }
 
-        auto decoding_schema_snapshot = storage->getDecodingSchemaSnapshot();
+        auto [decoding_schema_snapshot, _] = storage->getSchemaSnapshotAndBlockForDecoding(false);
         res_block = createBlockSortByColumnID(decoding_schema_snapshot);
         auto reader = RegionBlockReader(decoding_schema_snapshot);
         if (!reader.read(res_block, *data_list_read, force_decode))
@@ -542,8 +546,8 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         // the caller should handle this situation.
         auto table_lock = storage->lockStructureForShare(getThreadName());
         dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-        // only dt storage engine support `getDecodingSchemaSnapshot`, other engine will throw exception
-        schema_snapshot = storage->getDecodingSchemaSnapshot();
+        // only dt storage engine support `getSchemaSnapshotAndBlockForDecoding`, other engine will throw exception
+        std::tie(schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(false);
         std::tie(std::ignore, drop_lock) = std::move(table_lock).release();
         return true;
     };

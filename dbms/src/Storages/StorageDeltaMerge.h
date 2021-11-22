@@ -122,7 +122,12 @@ public:
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
 
-    DB::DecodingStorageSchemaSnapshotConstPtr getDecodingSchemaSnapshot() override;
+    // when `need_block` is true, it will try return a cached block corresponding to DecodingStorageSchemaSnapshotConstPtr,
+    //     and `releaseDecodingBlock` need to be called when the block is free
+    // when `need_block` is false, it will just return an empty block
+    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, Block> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */) override;
+
+    void releaseDecodingBlock(Int64 schema_version, Block && block) override;
 
     bool initStoreIfDataDirExist() override;
 
@@ -201,8 +206,12 @@ private:
     // The table schema synced from TiDB
     TiDB::TableInfo tidb_table_info;
 
-    mutable std::mutex schema_snapshot_mutex;
+    mutable std::mutex decode_schema_mutex;
     DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
+    // avoid creating block every time when decoding row
+    BlocksList cached_blocks;
+    // avoid creating too many cached blocks(the typical num should be less and equal than raft apply thread)
+    static constexpr size_t max_cached_blocks_num = 16;
 
     // Used to allocate new column-id when this table is NOT synced from TiDB
     ColumnID max_column_id_used;

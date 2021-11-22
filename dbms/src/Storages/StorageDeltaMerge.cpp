@@ -833,15 +833,46 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
         LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows) << ", got: " << after_delete_rows);
 }
 
-DB::DecodingStorageSchemaSnapshotConstPtr StorageDeltaMerge::getDecodingSchemaSnapshot()
+std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, Block> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(bool need_block)
 {
-    std::lock_guard lock{schema_snapshot_mutex};
+    std::lock_guard lock{decode_schema_mutex};
     if (!decoding_schema_snapshot || decoding_schema_snapshot->schema_version < tidb_table_info.schema_version)
     {
         auto & store = getAndMaybeInitStore();
         decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), is_common_handle);
+        cached_blocks.clear();
     }
-    return decoding_schema_snapshot;
+
+    if (need_block)
+    {
+        if (cached_blocks.empty())
+        {
+            return std::make_pair(decoding_schema_snapshot, createBlockSortByColumnID(decoding_schema_snapshot));
+        }
+        else
+        {
+            Block block;
+            block.swap(cached_blocks.front());
+            cached_blocks.pop_front();
+            return std::make_pair(decoding_schema_snapshot, std::move(block));
+        }
+    }
+    else
+    {
+        return std::make_pair(decoding_schema_snapshot, Block{});
+    }
+}
+
+
+void StorageDeltaMerge::releaseDecodingBlock(Int64 schema_version, Block && block)
+{
+    std::lock_guard lock{decode_schema_mutex};
+    if (!decoding_schema_snapshot || schema_version < decoding_schema_snapshot->schema_version)
+        return;
+    if (cached_blocks.size() >= max_cached_blocks_num)
+        return;
+    clearBlockData(block);
+    cached_blocks.push_back(std::move(block));
 }
 
 //==========================================================================================

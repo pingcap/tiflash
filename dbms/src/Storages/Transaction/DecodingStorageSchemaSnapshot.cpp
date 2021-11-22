@@ -13,4 +13,14 @@ Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_sna
     }
     return block;
 }
+
+void clearBlockData(Block & block)
+{
+    size_t rows = block.rows();
+    for (size_t i = 0; i < block.columns(); i++)
+    {
+        auto * raw_column = const_cast<IColumn *>((block.getByPosition(i)).column.get());
+        raw_column->popBack(rows);
+    }
+}
 }
