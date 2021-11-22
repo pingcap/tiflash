@@ -40,19 +40,24 @@ public:
 
     FilterParserTest()
         : log(&Poco::Logger::get("FilterParserTest"))
-    {}
+        , ctx(TiFlashTestEnv::getContext())
+    {
+        default_timezone_info = ctx.getTimezoneInfo();
+    }
 
 protected:
     Poco::Logger * log;
-
-    DM::RSOperatorPtr generateRsOperator(String table_info_json, const String & query);
+    Context ctx;
+    static TimezoneInfo default_timezone_info;
+    DM::RSOperatorPtr generateRsOperator(String table_info_json, const String & query, TimezoneInfo & timezone_info);
 };
 
-DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_json, const String & query)
+TimezoneInfo FilterParserTest::default_timezone_info;
+
+DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_json, const String & query, TimezoneInfo & timezone_info = default_timezone_info)
 {
     const TiDB::TableInfo table_info(table_info_json);
 
-    auto ctx = TiFlashTestEnv::getContext();
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
         ctx,
@@ -83,7 +88,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
             conditions,
             DAGPreparedSets(),
             source_columns,
-            ctx.getTimezoneInfo());
+            timezone_info);
         for (const auto & column : table_info.columns)
         {
             columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
@@ -248,7 +253,8 @@ try
     const String table_info_json = R"json({
     "cols":[
         {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"col_1","O":"col_1"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":254}},
-        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},
+        {"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"col_3","O":"col_3"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
     ],
     "pk_is_handle":false,"index_info":[],"is_common_handle":false,
     "name":{"L":"t_111","O":"t_111"},"partition":null,
@@ -271,6 +277,7 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"ColumnRef with field type(254) is not supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\000\" field_type { tp: 254 flag: 4097 flen: 0 decimal: 0 collate: 0 } } children { tp: String val: \"test1\" field_type { tp: 254 flag: 1 collate: 0 } } sig: EQInt field_type { tp: 8 flag: 32 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
     }
 
     {
@@ -280,6 +287,9 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+        EXPECT_EQ(rs_operator->getAttrs()[1].col_name, "col_2");
+        EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 2);
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"777\"}]}");
     }
 
     // More complicated
@@ -290,24 +300,33 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"ColumnRef with field type(254) is not supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\000\" field_type { tp: 254 flag: 4097 flen: 0 decimal: 0 collate: 0 } } children { tp: String val: \"test1\" field_type { tp: 254 flag: 1 collate: 0 } } sig: EQInt field_type { tp: 8 flag: 32 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}]}");
     }
 
     {
         // And with not
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and not col_2 = 666");
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and not col_3 = 666");
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 2);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+        EXPECT_EQ(rs_operator->getAttrs()[1].col_name, "col_3");
+        EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 3);
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"}]}]}");
     }
 
     {
         // And with or
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and (col_2 = 666 or col_2 = 678)");
+        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 = 789 and (col_3 = 666 or col_3 = 678)");
         EXPECT_EQ(rs_operator->name(), "and");
         EXPECT_EQ(rs_operator->getAttrs().size(), 3);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+        EXPECT_EQ(rs_operator->getAttrs()[1].col_name, "col_3");
+        EXPECT_EQ(rs_operator->getAttrs()[1].col_id, 3);
+        EXPECT_EQ(rs_operator->getAttrs()[2].col_name, "col_3");
+        EXPECT_EQ(rs_operator->getAttrs()[2].col_id, 3);
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"},{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"678\"}]}]}");
     }
 
     {
@@ -317,6 +336,7 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"ColumnRef with field type(254) is not supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\000\" field_type { tp: 254 flag: 4097 flen: 0 decimal: 0 collate: 0 } } children { tp: String val: \"test1\" field_type { tp: 254 flag: 1 collate: 0 } } sig: EQInt field_type { tp: 8 flag: 32 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
     }
 
     {
@@ -326,9 +346,28 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
+        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"ColumnRef with field type(254) is not supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\000\" field_type { tp: 254 flag: 4097 flen: 0 decimal: 0 collate: 0 } } children { tp: String val: \"test1\" field_type { tp: 254 flag: 1 collate: 0 } } sig: EQInt field_type { tp: 8 flag: 32 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}]}");
     }
 }
 CATCH
+
+static void setTimezoneByOffset(TimezoneInfo & timezone_info, Int64 offset)
+{
+    timezone_info.is_name_based = false;
+    timezone_info.timezone_offset = offset * 3600;
+    timezone_info.timezone = &DateLUT::instance("UTC");
+    timezone_info.timezone_name = "";
+    timezone_info.is_utc_timezone = offset == 0;
+}
+
+static void setTimezoneByName(TimezoneInfo & timezone_info, String name)
+{
+    timezone_info.is_name_based = true;
+    timezone_info.timezone_offset = 0;
+    timezone_info.timezone = &DateLUT::instance(name);
+    timezone_info.timezone_name = timezone_info.timezone->getTimeZone();
+    timezone_info.is_utc_timezone = timezone_info.timezone_name == "UTC";
+}
 
 // Test cases for date,datetime,timestamp column
 TEST_F(FilterParserTest, TimestampColumn)
@@ -344,31 +383,76 @@ try
     "name":{"L":"t_111","O":"t_111"},"partition":null,
     "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
+
+    String datetime = "2021-10-26 17:00:00.00000";
+    ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
+    UInt64 origin_time_stamp;
+    tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
+    const auto & time_zone_utc = DateLUT::instance("UTC");
+    UInt64 converted_time = origin_time_stamp;
+
     {
-        // Greater between TimeStamp col and Datetime literal
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_timestamp > cast_string_datetime('2021-10-26 17:00:00.00000')");
+        // Greater between TimeStamp col and Datetime literal, use local timezone
+        auto ctx = TiFlashTestEnv::getContext();
+        auto & timezone_info = ctx.getTimezoneInfo();
+        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
+
+        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"));
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
+        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+    }
+
+    {
+        // Greater between TimeStamp col and Datetime literal, use Chicago timezone
+        auto ctx = TiFlashTestEnv::getContext();
+        auto & timezone_info = ctx.getTimezoneInfo();
+        setTimezoneByName(timezone_info, "America/Chicago");
+        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
+
+        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
+        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
+        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+    }
+
+    {
+        // Greater between TimeStamp col and Datetime literal, use Chicago timezone
+        auto ctx = TiFlashTestEnv::getContext();
+        auto & timezone_info = ctx.getTimezoneInfo();
+        setTimezoneByOffset(timezone_info, 28800);
+        convertTimeZoneByOffset(origin_time_stamp, converted_time, -timezone_info.timezone_offset, time_zone_utc);
+
+        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
+        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->getAttrs().size(), 1);
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
+        EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
+        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
     }
 
     {
         // Greater between Datetime col and Datetime literal
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_datetime > cast_string_datetime('2021-10-26 17:00:00.00000')");
+        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime + String("')"));
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_datetime");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 5);
+        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_datetime\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
     }
 
     {
         // Greater between Date col and Datetime literal
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_date > cast_string_datetime('2021-10-26 17:00:00.00000')");
+        auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"));
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_date");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 6);
+        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_date\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
     }
 }
 CATCH
