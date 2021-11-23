@@ -141,7 +141,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
-    if (dag.isBatchCop())
+    if (dag.isBatchCopOrMpp())
         learner_read_snapshot = doBatchCopLearnerRead();
     else
         learner_read_snapshot = doCopLearnerRead();
@@ -285,7 +285,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
         catch (RegionException & e)
         {
             /// Recover from region exception when super batch is enable
-            if (dag.isBatchCop())
+            if (dag.isBatchCopOrMpp())
             {
                 // clean all streams from local because we are not sure the correctness of those streams
                 pipeline.streams.clear();
