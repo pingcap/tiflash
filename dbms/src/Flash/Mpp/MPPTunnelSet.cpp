@@ -84,6 +84,17 @@ void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partit
     tunnels[partition_id]->write(packet);
 }
 
+template <typename Tunnel>
+std::vector<ConnectionProfileInfoPtr> MPPTunnelSetBase<Tunnel>::getConnectionProfileInfos()
+{
+    std::vector<ConnectionProfileInfoPtr> res;
+    for (const auto & tunnel : tunnels)
+    {
+        res.push_back(tunnel->getConnectionProfileInfo());
+    }
+    return res;
+}
+
 /// Explicit template instantiations - to avoid code bloat in headers.
 template class MPPTunnelSetBase<MPPTunnel>;
 

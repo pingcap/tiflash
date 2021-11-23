@@ -1,14 +1,17 @@
 #pragma once
 
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <common/types.h>
 
-#include <memory>
+#include <vector>
 
 namespace DB
 {
 struct TableScanStatistics : public ExecutorStatistics
 {
+    std::vector<ConnectionProfileInfoPtr> connection_profile_infos;
+
     explicit TableScanStatistics(const String & executor_id_)
         : ExecutorStatistics(executor_id_)
     {}

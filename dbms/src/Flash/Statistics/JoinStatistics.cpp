@@ -12,14 +12,14 @@ namespace DB
 String JoinStatistics::toJson() const
 {
     return fmt::format(
-        R"({{"id":"{}","type":"{}","probe_rows_selectivity":{},"probe_blocks_selectivity":{},"probe_bytes_selectivity":{},"hash_table_bytes":{},"process_time_for_build":{}}})",
+        R"({{"id":"{}","type":"{}","probe_rows_selectivity":{},"probe_blocks_selectivity":{},"probe_bytes_selectivity":{},"hash_table_bytes":{},"process_time_ns_for_build":{}}})",
         id,
         type,
         divide(probe_outbound_rows, probe_inbound_rows),
         divide(probe_outbound_blocks, probe_inbound_blocks),
         divide(probe_outbound_bytes, probe_inbound_bytes),
         hash_table_bytes,
-        process_time_for_build);
+        process_time_ns_for_build);
 }
 
 bool JoinStatistics::hit(const String & executor_id)
@@ -68,7 +68,7 @@ ExecutorStatisticsPtr JoinStatistics::buildStatistics(const String & executor_id
                     return castBlockInputStream<HashJoinBuildBlockInputStream>(stream_ptr, [&](const HashJoinBuildBlockInputStream & stream) {
                         statistics->hash_table_bytes += stream.getJoinPtr()->getTotalByteCount();
                         const auto & profile_info = stream.getProfileInfo();
-                        statistics->process_time_for_build = std::max(statistics->process_time_for_build, profile_info.execution_time);
+                        statistics->process_time_ns_for_build = std::max(statistics->process_time_ns_for_build, profile_info.execution_time);
                     });
                 });
         }
