@@ -59,6 +59,7 @@ private:
         if (force_overwrite || !current_memory_tracker)
         {
             current_memory_tracker = memory_tracker;
+            //this is a syscall
             if (!thread_name.empty())
                 setThreadName(thread_name.c_str());
         }

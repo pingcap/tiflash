@@ -136,8 +136,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = source_index;
                 bool success = reader->read(recv_msg->packet.get());
-                if (!success)
+                if (!success) {
+                    returnEmptyMsg(recv_msg);
                     break;
+                }
                 else
                     has_data = true;
                 if (recv_msg->packet->has_error())

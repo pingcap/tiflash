@@ -1,7 +1,19 @@
 #include <common/ThreadPool.h>
 
 #include <iostream>
+#include <exception>
+#include <stdexcept>
 
+void handle_eptr(std::exception_ptr eptr) // passing by value is ok
+{
+    try {
+        if (eptr) {
+            std::rethrow_exception(eptr);
+        }
+    } catch(const std::exception& e) {
+        std::cerr << "Caught exception \"" << e.what() << "\"\n";
+    }
+}
 
 ThreadPool  *glb_thd_pool = nullptr;
 
@@ -89,23 +101,27 @@ void ThreadPool::worker()
 
         if (!need_shutdown)
         {
+            std::exception_ptr eptr;
             try
             {
                 job();
             }
             catch (...)
             {
-                {
+                // {
                     std::unique_lock<std::mutex> lock(mutex);
-                    if (!first_exception)
+                    if (!first_exception) {
                         first_exception = std::current_exception();
-                    shutdown = true;
-                    --active_jobs;
-                }
-                has_free_thread.notify_all();
-                has_new_job_or_shutdown.notify_all();
-                return;
+                        eptr = std::current_exception();
+                    }
+                    // shutdown = true;
+                    // --active_jobs;
+                // }
+                // has_free_thread.notify_all();
+                // has_new_job_or_shutdown.notify_all();
+                // return;
             }
+            handle_eptr(eptr);
         }
 
         {
