@@ -32,7 +32,6 @@ namespace TiDB
 {
 using DB::ColumnID;
 using DB::DatabaseID;
-using DB::Exception;
 using DB::String;
 using DB::TableID;
 using DB::Timestamp;
@@ -316,7 +315,7 @@ struct TableInfo
 
     TableInfo(const TableInfo &) = default;
 
-    TableInfo(const String & table_info_json);
+    explicit TableInfo(const String & table_info_json);
 
     String serialize() const;
 
