@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
@@ -8,9 +7,12 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/IFunction.h>
 
+#include "DataTypes/DataTypeEnum.h"
 #include "DataTypes/DataTypeNothing.h"
 #include "DataTypes/DataTypesNumber.h"
+#include "Functions/FunctionHelpers.h"
 #include "Functions/FunctionsConditional.h"
+#include "Interpreters/executeQuery.h"
 #include "ext/range.h"
 
 namespace DB
@@ -63,11 +65,7 @@ public:
 
         auto res = FunctionMultiIf{context}.getReturnTypeImpl(new_args);
         DataTypePtr type_res;
-        if (!(checkType<DataTypeUInt8>(res, type_res)
-              || checkType<DataTypeUInt16>(res, type_res)
-              || checkType<DataTypeUInt32>(res, type_res)
-              || checkType<DataTypeUInt64>(res, type_res)
-              || checkType<DataTypeInt8>(res, type_res)
+        if (!(checkType<DataTypeInt8>(res, type_res)
               || checkType<DataTypeInt16>(res, type_res)
               || checkType<DataTypeInt32>(res, type_res)
               || checkType<DataTypeInt64>(res, type_res)
@@ -80,7 +78,7 @@ public:
         return makeNullable(type_res);
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result [[maybe_unused]]) const override
     {
         if (arguments.size() <= 1)
         {
@@ -97,17 +95,27 @@ public:
                 types.push_back(cur_arg);
             }
             DataTypePtr result_type = getReturnTypeImpl(types);
-            using ResultDataType = std::decay_t<decltype(result_type)>;
-            const IDataType * from_type = block.getByPosition(arguments[0]).type.get();
-
-            if (checkDataType<DataTypeUInt8>(from_type) || checkDataType<DataTypeUInt16>(from_type) || checkDataType<DataTypeUInt32>(from_type) || checkDataType<DataTypeUInt64>(from_type) || checkDataType<DataTypeInt8>(from_type) || checkDataType<DataTypeInt16>(from_type) || checkDataType<DataTypeInt32>(from_type) || checkDataType<DataTypeInt64>(from_type) || checkDataType<DataTypeFloat32>(from_type) || checkDataType<DataTypeFloat64>(from_type))
-                // in process...
-                return executeNary<ResultDataType>(block, arguments, result);
-            else
-            {
-                throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            DataTypePtr type_res [[maybe_unused]];
+            
+            if (checkType<DataTypeInt8>(result_type, type_res) 
+                || checkType<DataTypeInt16>(result_type, type_res)
+                || checkType<DataTypeInt32>(result_type, type_res)
+                || checkType<DataTypeInt64>(result_type, type_res)) {
+                return executeNary<DataTypeInt64>(block, arguments, result);
             }
+
+            if (checkType<DataTypeFloat32>(result_type, type_res) 
+                || checkType<DataTypeFloat64>(result_type, type_res)) {
+                return executeNary<DataTypeFloat64>(block, arguments, result);
+            }
+
+            // if (checkDataType<DataTypeFloat32>(result_type.get())
+            //     || checkDataType<DataTypeFloat64>(result_type.get())) {
+            //     return executeNary<DataTypeFloat64>(block, arguments, result);
+            // }
+            throw Exception(
+                "Illegal types " + result_type->getName() + " of arguments of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 
@@ -127,10 +135,10 @@ private:
     template <typename T>
     void executeNary(Block & block, const ColumnNumbers & arguments, size_t result [[maybe_unused]]) const
     {
-        const auto col_left [[maybe_unused]] = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get());
-        const auto col_right [[maybe_unused]] = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[1]).column.get());
-        const auto & left_val [[maybe_unused]] = col_left->getData();
-        const auto & right_val [[maybe_unused]] = col_right->getData();
+        auto col_left [[maybe_unused]] = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get());
+        auto col_right [[maybe_unused]] = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[1]).column.get());
+        auto & left_val [[maybe_unused]] = col_left->getData();
+        auto & right_val [[maybe_unused]] = col_right->getData();
         size_t size = col_left->size();
         auto out_col = ColumnVector<T>::create(size);
         typename ColumnVector<T>::Container & vec_res = out_col->getData();
@@ -138,9 +146,10 @@ private:
 
         for (size_t i = 0; i < size; ++i)
         {
-            vec_res[i] = static_cast<T>(left_val[i]) < static_cast<T>(right_val[i])
-                ? static_cast<T>(left_val[i])
-                : static_cast<T>(right_val[i]);
+            // check null?
+            // vec_res[i] = static_cast<T>(left_val[i]) < static_cast<T>(right_val[i])
+                // ? static_cast<T>(left_val[i])
+                // : static_cast<T>(right_val[i]);
         }
 
         block.getByPosition(result).column = std::move(out_col);
