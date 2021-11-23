@@ -166,9 +166,11 @@ public:
         offsets.push_back(new_size);
     }
 
-    void decodeData(const char * pos, size_t length) override
+    bool decodeData(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
     {
-        insertData(pos, length);
+        // Todo: check the implementation difference between insert(Field) and insertData
+        insertData(raw_value.c_str() + cursor, length);
+        return true;
     }
 
     void insertDataWithTerminatingZero(const char * pos, size_t length) override

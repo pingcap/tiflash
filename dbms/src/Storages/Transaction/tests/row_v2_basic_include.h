@@ -206,4 +206,20 @@ std::tuple<T, size_t> getValueLength(const T & v)
     delete decoded;
     return ret;
 }
+
+template <bool is_big, typename T>
+std::tuple<T, size_t> getValueLengthV2(const T & v)
+{
+    using NearestType = typename NearestFieldType<T>::Type;
+    auto [table_info, column_lut, fields] = getTableInfoLutFields(ColumnIDValue(1, v));
+
+    WriteBufferFromOwnString ss;
+    encodeRowV2(table_info, fields, ss);
+    auto encoded = ss.str();
+    auto * decoded = decodeRow(encoded, table_info, column_lut);
+    auto ret = std::make_tuple(static_cast<T>(std::move(decoded->decoded_fields[0].field.template safeGet<NearestType>())),
+                               encoded.size() - valueStartPos<is_big>(table_info));
+    delete decoded;
+    return ret;
+}
 }

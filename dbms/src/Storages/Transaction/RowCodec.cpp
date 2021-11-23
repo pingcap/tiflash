@@ -615,20 +615,30 @@ bool appendRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWit
         else
         {
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-            auto & column_define = (*column_defines)[column_ids_iter->second];
+            auto & cd = (*column_defines)[column_ids_iter->second];
             if (is_null)
             {
-                // TODO: check the raw column is null
-                raw_column->insert(column_define.default_value);
+                if (!raw_column->isColumnNullable())
+                {
+                    if (!force_decode)
+                    {
+                        return false;
+                    }
+                    else
+                    {
+                        throw Exception("Detected invalid null when decoding data of column " + cd.name + " with type " + cd.type->getName(),
+                                        ErrorCodes::LOGICAL_ERROR);
+                    }
+                }
+                raw_column->insertDefault();
                 id_null++;
             }
             else
             {
                 size_t start = id_not_null ? value_offsets[id_not_null - 1] : 0;
                 size_t length = value_offsets[id_not_null] - start;
-                // TODO: unflatten
-                // TODO: check overflow and sync schema if need
-                raw_column->decodeData(raw_value.c_str() + values_start_pos + start, length);
+                if(!raw_column->decodeData(values_start_pos + start, raw_value, length, force_decode))
+                    return false;
                 id_not_null++;
             }
         }

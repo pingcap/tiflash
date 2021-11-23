@@ -199,12 +199,16 @@ public:
         data.push_back(*reinterpret_cast<const T *>(pos));
     }
 
-    void decodeData(const char * pos, size_t length[[maybe_unused]]) override
+    bool decodeData(size_t cursor, const String & raw_value, size_t length, bool force_decode) override
     {
         if constexpr (std::is_same_v<T, Float32> || std::is_same_v<T, Float64>)
         {
+            if (unlikely(length != sizeof(Float64)))
+            {
+                throw Exception("Invalid float value length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
+            }
             constexpr UInt64 SIGN_MASK = UInt64(1) << 63;
-            auto num = readBigEndian<UInt64>(pos);
+            auto num = readBigEndian<UInt64>(raw_value.c_str() + cursor);
             if (num & SIGN_MASK)
                 num ^= SIGN_MASK;
             else
@@ -215,24 +219,39 @@ public:
         }
         else
         {
+            // check overflow
+            if (length > sizeof(T))
+            {
+                if (!force_decode)
+                {
+                    return false;
+                }
+                else
+                {
+                    throw Exception("Detected overflow when decoding integer of length " + std::to_string(length) + " with column type " + this->getName(),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+
             switch (length)
             {
             case sizeof(UInt8):
-                data.push_back(readInt<T, UInt8>(pos));
+                data.push_back(readInt<T, UInt8>(raw_value.c_str() + cursor));
                 break;
             case sizeof(UInt16):
-                data.push_back(readInt<T, UInt16>(pos));
+                data.push_back(readInt<T, UInt16>(raw_value.c_str() + cursor));
                 break;
             case sizeof(UInt32):
-                data.push_back(readInt<T, UInt32>(pos));
+                data.push_back(readInt<T, UInt32>(raw_value.c_str() + cursor));
                 break;
             case sizeof(UInt64):
-                data.push_back(readInt<T, UInt64>(pos));
+                data.push_back(readInt<T, UInt64>(raw_value.c_str() + cursor));
                 break;
             default:
-                throw Exception(std::string("Invalid integer length ") + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Invalid integer length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
             }
         }
+        return true;
     }
 
     void insertDefault() override

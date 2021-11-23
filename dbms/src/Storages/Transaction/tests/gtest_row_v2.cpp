@@ -100,49 +100,49 @@ TEST(RowV2Suite, SmallRow)
         false, ColumnIDValueNull<UInt8>(1), ColumnIDValueNull<Int16>(2), ColumnIDValueNull<UInt32>(4), ColumnIDValueNull<Int64>(3));
     // Small row of integers.
     ASSERT_ROW_VALUE(false,
-        ColumnIDValue(1, std::numeric_limits<Int8>::min()),
-        ColumnIDValue(3, std::numeric_limits<UInt16>::max()),
-        ColumnIDValue(2, std::numeric_limits<Int32>::max()),
-        ColumnIDValueNull<UInt8>(5),
-        ColumnIDValue(4, std::numeric_limits<UInt64>::min()),
-        ColumnIDValueNull<Int64>(6));
+                     ColumnIDValue(1, std::numeric_limits<Int8>::min()),
+                     ColumnIDValue(3, std::numeric_limits<UInt16>::max()),
+                     ColumnIDValue(2, std::numeric_limits<Int32>::max()),
+                     ColumnIDValueNull<UInt8>(5),
+                     ColumnIDValue(4, std::numeric_limits<UInt64>::min()),
+                     ColumnIDValueNull<Int64>(6));
     // Small row of string, float, decimal.
     ASSERT_ROW_VALUE(false,
-        ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() - 128, 'a')),
-        ColumnIDValueNull<DecimalField<Decimal128>>(128),
-        ColumnIDValue(2, std::numeric_limits<Float64>::min()),
-        ColumnIDValueNull<DecimalField<Decimal256>>(4),
-        ColumnIDValue(5, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)),
-        ColumnIDValueNull<String>(255),
-        ColumnIDValueNull<Float32>(1));
+                     ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() - 128, 'a')),
+                     ColumnIDValueNull<DecimalField<Decimal128>>(128),
+                     ColumnIDValue(2, std::numeric_limits<Float64>::min()),
+                     ColumnIDValueNull<DecimalField<Decimal256>>(4),
+                     ColumnIDValue(5, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)),
+                     ColumnIDValueNull<String>(255),
+                     ColumnIDValueNull<Float32>(1));
 }
 
 TEST(RowV2Suite, BigRow)
 {
     // Big row elevated by large null column ID.
     ASSERT_ROW_VALUE(true,
-        ColumnIDValue(1, std::numeric_limits<Int8>::min()),
-        ColumnIDValue(3, std::numeric_limits<UInt16>::max()),
-        ColumnIDValueNull<UInt32>(std::numeric_limits<UInt8>::max() + 1),
-        ColumnIDValue(5, std::numeric_limits<Int32>::max()),
-        ColumnIDValue(4, std::numeric_limits<UInt64>::min()));
+                     ColumnIDValue(1, std::numeric_limits<Int8>::min()),
+                     ColumnIDValue(3, std::numeric_limits<UInt16>::max()),
+                     ColumnIDValueNull<UInt32>(std::numeric_limits<UInt8>::max() + 1),
+                     ColumnIDValue(5, std::numeric_limits<Int32>::max()),
+                     ColumnIDValue(4, std::numeric_limits<UInt64>::min()));
     // Big row elevated by large not null column ID.
     ASSERT_ROW_VALUE(true,
-        ColumnIDValueNull<Int8>(1),
-        ColumnIDValueNull<UInt16>(3),
-        ColumnIDValue(std::numeric_limits<UInt32>::max(), std::numeric_limits<UInt32>::max()),
-        ColumnIDValueNull<Int32>(5),
-        ColumnIDValueNull<UInt64>(4));
+                     ColumnIDValueNull<Int8>(1),
+                     ColumnIDValueNull<UInt16>(3),
+                     ColumnIDValue(std::numeric_limits<UInt32>::max(), std::numeric_limits<UInt32>::max()),
+                     ColumnIDValueNull<Int32>(5),
+                     ColumnIDValueNull<UInt64>(4));
     // Big row elevated by a single large column value.
     ASSERT_ROW_VALUE(true,
-        ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() + 1, 'a')),
-        ColumnIDValue(2, std::numeric_limits<Float64>::min()),
-        ColumnIDValue(1, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)));
+                     ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() + 1, 'a')),
+                     ColumnIDValue(2, std::numeric_limits<Float64>::min()),
+                     ColumnIDValue(1, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)));
     // Big row elevated by overall large column values.
     ASSERT_ROW_VALUE(true,
-        ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() - 8, 'a')),
-        ColumnIDValue(2, std::numeric_limits<Float64>::min()),
-        ColumnIDValue(1, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)));
+                     ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() - 8, 'a')),
+                     ColumnIDValue(2, std::numeric_limits<Float64>::min()),
+                     ColumnIDValue(1, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)));
 }
 
 } // namespace DB::tests

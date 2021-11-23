@@ -161,9 +161,12 @@ void ColumnNullable::insertData(const char * pos, size_t length)
     }
 }
 
-void ColumnNullable::decodeData(const char * pos, size_t length)
+bool ColumnNullable::decodeData(size_t cursor, const String & raw_value, size_t length, bool force_decode)
 {
-    insertData(pos, length);
+    if (!getNestedColumn().decodeData(cursor, raw_value, length, force_decode))
+        return false;
+    getNullMapData().push_back(0);
+    return true;
 }
 
 StringRef ColumnNullable::serializeValueIntoArena(

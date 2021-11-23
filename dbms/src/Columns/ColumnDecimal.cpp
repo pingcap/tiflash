@@ -234,11 +234,10 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
 }
 
 template <typename T>
-void ColumnDecimal<T>::decodeData(const char * pos, size_t length)
+bool ColumnDecimal<T>::decodeData(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
 {
-    size_t cursor = 0;
-    // TODO: fix this extra memory copy
-    insert(DecodeDecimal(cursor, String(pos, length)));
+    insert(DecodeDecimal(cursor, raw_value));
+    return true;
 }
 
 template <typename T>
