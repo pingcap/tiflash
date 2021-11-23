@@ -18,6 +18,7 @@
 #include <common/logger_useful.h>
 
 #include <optional>
+#include <regex>
 
 namespace DB
 {
@@ -277,7 +278,8 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"ColumnRef with field type(254) is not supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\000\" field_type { tp: 254 flag: 4097 flen: 0 decimal: 0 collate: 0 } } children { tp: String val: \"test1\" field_type { tp: 254 flag: 1 collate: 0 } } sig: EQInt field_type { tp: 8 flag: 32 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
+        std::regex rx(R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
+        EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
     }
 
     {
@@ -300,7 +302,8 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"and\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"ColumnRef with field type(254) is not supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\000\" field_type { tp: 254 flag: 4097 flen: 0 decimal: 0 collate: 0 } } children { tp: String val: \"test1\" field_type { tp: 254 flag: 1 collate: 0 } } sig: EQInt field_type { tp: 8 flag: 32 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}]}");
+        std::regex rx(R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
+        EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
     }
 
     {
@@ -336,7 +339,8 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"ColumnRef with field type(254) is not supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\000\" field_type { tp: 254 flag: 4097 flen: 0 decimal: 0 collate: 0 } } children { tp: String val: \"test1\" field_type { tp: 254 flag: 1 collate: 0 } } sig: EQInt field_type { tp: 8 flag: 32 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
+        std::regex rx(R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
+        EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
     }
 
     {
@@ -346,7 +350,8 @@ try
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_2");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 2);
-        EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"or\",\"children\":[{\"op\":\"unsupported\",\"reason\":\"ColumnRef with field type(254) is not supported\",\"content\":\"tp: ScalarFunc children { tp: ColumnRef val: \"\\200\\000\\000\\000\\000\\000\\000\\000\" field_type { tp: 254 flag: 4097 flen: 0 decimal: 0 collate: 0 } } children { tp: String val: \"test1\" field_type { tp: 254 flag: 1 collate: 0 } } sig: EQInt field_type { tp: 8 flag: 32 collate: 0 }\",\"is_not\":\"0\"},{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}]}");
+        std::regex rx(R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
+        EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
     }
 }
 CATCH
@@ -360,7 +365,7 @@ static void setTimezoneByOffset(TimezoneInfo & timezone_info, Int64 offset)
     timezone_info.is_utc_timezone = offset == 0;
 }
 
-static void setTimezoneByName(TimezoneInfo & timezone_info, String name)
+static void setTimezoneByName(TimezoneInfo & timezone_info, const String & name)
 {
     timezone_info.is_name_based = true;
     timezone_info.timezone_offset = 0;
