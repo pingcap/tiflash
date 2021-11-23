@@ -21,6 +21,8 @@ Block AggregatingBlockInputStream::getHeader() const
 
 Block AggregatingBlockInputStream::readImpl()
 {
+    auto timer = newTimer(Timeline::SELF);
+
     if (!executed)
     {
         executed = true;
@@ -29,7 +31,7 @@ Block AggregatingBlockInputStream::readImpl()
         Aggregator::CancellationHook hook = [&]() { return this->isCancelled(); };
         aggregator.setCancellationHook(hook);
 
-        aggregator.execute(children.back(), *data_variants, file_provider);
+        aggregator.execute(children.back(), *data_variants, file_provider, &timer);
 
         if (!aggregator.hasTemporaryFiles())
         {

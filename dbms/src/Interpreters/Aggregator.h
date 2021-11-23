@@ -15,6 +15,7 @@
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Encryption/FileProvider.h>
 #include <Interpreters/AggregateDescription.h>
@@ -778,7 +779,7 @@ public:
     explicit Aggregator(const Params & params_, const LogWithPrefixPtr & log_ = nullptr);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
-    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
+    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider, Timeline::Timer * timer = nullptr);
 
     using AggregateColumns = std::vector<ColumnRawPtrs>;
     using AggregateColumnsData = std::vector<ColumnAggregateFunction::Container *>;

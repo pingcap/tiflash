@@ -198,6 +198,8 @@ public:
 
     void dumpProfileInfo(FmtBuffer & buf);
 
+    Timeline::Timer newTimer(Timeline::CounterType type, bool running = true);
+
 protected:
     Int64 id = -1;
     BlockStreamProfileInfo info;
@@ -205,28 +207,6 @@ protected:
     std::atomic<bool> is_killed{false};
     ProgressCallback progress_callback;
     ProcessListElement * process_list_elem = nullptr;
-
-    struct SelfTimer
-    {
-        using Clock = std::chrono::high_resolution_clock;
-        using TimePoint = Clock::time_point;
-
-        TimePoint last_ts;
-        IProfilingBlockInputStream * parent;
-
-        explicit SelfTimer(IProfilingBlockInputStream * parent_)
-            : parent(parent_)
-        {
-            start();
-        }
-
-        ~SelfTimer() { stop(); }
-
-        void start();
-        void stop();
-    };
-
-    SelfTimer getSelfTimer();
 
     /// Additional information that can be generated during the work process.
 

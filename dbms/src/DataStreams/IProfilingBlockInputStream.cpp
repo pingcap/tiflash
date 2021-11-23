@@ -57,8 +57,6 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
     if (!limit_exceeded_need_break)
     {
-        auto begin_tp = info.now();
-
         if (return_filter)
             res = readImpl(res_filter, return_filter);
         else
@@ -72,8 +70,6 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
         if (res)
         {
-            auto end_tp = info.now();
-            info.timeline.record(0, begin_tp, end_tp, res.rows());
             info.total_rows += res.rows();
             info.total_bytes += res.bytes();
         }
@@ -179,66 +175,25 @@ void IProfilingBlockInputStream::dumpProfileInfoImpl(FmtBuffer & buf)
 {
     buf.append("{");
 
-    buf.fmtAppend("\"prefix_duration\":{},", info.prefix_duration)
-        .fmtAppend("\"suffix_duration\":{},", info.suffix_duration)
-        .fmtAppend("\"running_duration\":{},", info.running_duration)
-        .fmtAppend("\"waiting_duration\":{},", info.waiting_duration)
-        .fmtAppend("\"self_duration\":{},", info.self_duration)
-        .fmtAppend("\"first_ts\":{},", info.toNanoseconds(info.first_ts))
-        .fmtAppend("\"last_ts\":{},", info.toNanoseconds(info.last_ts))
+    buf.fmtAppend("\"prefix_duration_ns\":{},", info.prefix_duration)
+        .fmtAppend("\"suffix_duration_ns\":{},", info.suffix_duration)
+        .fmtAppend("\"pull_duration_ns\":{},", info.timeline.sum(Timeline::PULL))
+        .fmtAppend("\"self_duration_ns\":{},", info.timeline.sum(Timeline::SELF))
+        .fmtAppend("\"push_duration_ns\":{},", info.timeline.sum(Timeline::PUSH))
+        .fmtAppend("\"first_ts_ns\":{},", info.toNanoseconds(info.first_ts))
+        .fmtAppend("\"last_ts_ns\":{},", info.toNanoseconds(info.last_ts))
         .fmtAppend("\"total_rows\":{},", info.total_rows)
         .fmtAppend("\"total_bytes\":{},", info.total_bytes);
 
-    // buf.append("\"timeline\":{}");
-    buf.append("\"timeline\":{");
-    buf.append("\"self\":[");
-    for (size_t i = 0; i < info.timeline.max_size; ++i)
-    {
-        buf.fmtAppend(i == 0 ? "{:.3f}" : ",{:.3f}", info.timeline.count[1][i]);
-    }
-    buf.append("]");
-    buf.append("}");
-
-    // ostr << "\"timeline\":{";
-    // ostr << "\"rows\":[";
-    // for (size_t i = 0; i < info.timeline.max_size; i++)
-    // {
-    //     ostr << info.timeline.rows[i];
-    //     if (i + 1 < info.timeline.max_size)
-    //         ostr << ',';
-    // }
-    // ostr << "],";
-
-    // ostr << "\"bytes\":[";
-    // for (size_t i = 0; i < info.timeline.max_size; i++)
-    // {
-    //     ostr << info.timeline.bytes[i];
-    //     if (i + 1 < info.timeline.max_size)
-    //         ostr << ',';
-    // }
-    // ostr << "]";
-    // ostr << "}";
+    buf.append("\"timeline\":");
+    info.timeline.dump(buf);
 
     buf.append("}");
 }
 
-IProfilingBlockInputStream::SelfTimer IProfilingBlockInputStream::getSelfTimer()
+Timeline::Timer IProfilingBlockInputStream::newTimer(Timeline::CounterType type, bool running)
 {
-    return SelfTimer(this);
-}
-
-void IProfilingBlockInputStream::SelfTimer::start()
-{
-    last_ts = Clock::now();
-}
-
-void IProfilingBlockInputStream::SelfTimer::stop()
-{
-    auto ts = Clock::now();
-    UInt64 duration = std::chrono::duration_cast<std::chrono::nanoseconds>(ts - last_ts).count();
-    parent->info.self_duration += duration;
-    parent->info.timeline.record(1, last_ts, ts, duration);
-    last_ts = ts;
+    return info.timeline.newTimer(type, running);
 }
 
 void IProfilingBlockInputStream::readPrefix()

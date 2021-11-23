@@ -16,6 +16,7 @@ public:
         , log(getLogWithPrefix(log_, getName()))
     {
         children.push_back(input);
+        this->writer->parent = this;
     }
     String getName() const override { return "ExchangeSender"; }
     Block getHeader() const override { return children.back()->getHeader(); }

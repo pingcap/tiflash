@@ -60,6 +60,8 @@ void ParallelAggregatingBlockInputStream::cancel(bool kill)
 
 Block ParallelAggregatingBlockInputStream::readImpl()
 {
+    auto timer = newTimer(Timeline::SELF);
+
     if (!executed)
     {
         Aggregator::CancellationHook hook = [&]() {
@@ -67,7 +69,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         };
         aggregator.setCancellationHook(hook);
 
-        execute();
+        execute(&timer);
 
         if (isCancelledOrThrowIfKilled())
             return {};
@@ -114,7 +116,6 @@ Block ParallelAggregatingBlockInputStream::readImpl()
     if (isCancelledOrThrowIfKilled() || !impl)
         return res;
 
-    auto timer = getSelfTimer();
     return impl->read();
 }
 
@@ -135,7 +136,7 @@ ParallelAggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
 
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
 {
-    auto timer = parent.getSelfTimer();
+    auto timer = parent.newTimer(Timeline::SELF);
 
     parent.aggregator.executeOnBlock(
         block,
@@ -151,6 +152,8 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
 
 void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_num)
 {
+    auto timer = parent.newTimer(Timeline::SELF);
+
     if (!parent.isCancelled() && parent.aggregator.hasTemporaryFiles())
     {
         /// Flush data in the RAM to disk. So it's easier to unite them later.
@@ -166,6 +169,8 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
 
 void ParallelAggregatingBlockInputStream::Handler::onFinish()
 {
+    auto timer = parent.newTimer(Timeline::SELF);
+
     if (!parent.isCancelled() && parent.aggregator.hasTemporaryFiles())
     {
         /// It may happen that some data has not yet been flushed,
@@ -188,7 +193,7 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
 }
 
 
-void ParallelAggregatingBlockInputStream::execute()
+void ParallelAggregatingBlockInputStream::execute(Timeline::Timer * timer)
 {
     many_data.resize(max_threads);
     exceptions.resize(max_threads);
@@ -204,7 +209,12 @@ void ParallelAggregatingBlockInputStream::execute()
         elem = std::make_shared<AggregatedDataVariants>();
 
     processor.process();
+
+    if (timer)
+        timer->pause();
     processor.wait();
+    if (timer)
+        timer->resume();
 
     rethrowFirstException(exceptions);
 

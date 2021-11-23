@@ -37,8 +37,9 @@ Block ExpressionBlockInputStream::getHeader() const
 
 Block ExpressionBlockInputStream::readImpl()
 {
+    auto timer = newTimer(Timeline::PULL);
     Block res = children.back()->read();
-    auto timer = getSelfTimer();
+    timer.switchTo(Timeline::SELF);
 
     if (!res)
         return res;

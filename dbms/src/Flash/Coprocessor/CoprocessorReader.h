@@ -60,6 +60,8 @@ private:
     pingcap::coprocessor::ResponseIter resp_iter;
 
 public:
+    std::atomic<IProfilingBlockInputStream *> parent = nullptr;
+
     CoprocessorReader(
         const DAGSchema & schema_,
         pingcap::kv::Cluster * cluster,

@@ -2,6 +2,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Core/Types.h>
+#include <DataStreams/Timeline.h>
 
 #include <chrono>
 #include <vector>
@@ -22,19 +23,6 @@ class IProfilingBlockInputStream;
 struct BlockStreamProfileInfo
 {
     using TimePoint = std::chrono::high_resolution_clock::time_point;
-
-    struct Timeline
-    {
-        static constexpr Int64 time_span = 100'000'000; // 100 ms
-        static constexpr size_t max_size = 1024;
-        static constexpr size_t num_counters = 2;
-
-        double count[num_counters][max_size];
-
-        Timeline();
-
-        void record(size_t count_id, const TimePoint & begin_tp, const TimePoint & end_tp, double value);
-    };
 
     /// Info about stream object this profile info refers to.
     IProfilingBlockInputStream * parent = nullptr;
