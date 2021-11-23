@@ -2,6 +2,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -53,6 +54,8 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
+    const ConnectionProfileInfoPtr & getConnectionProfileInfo() const { return mpp_tunnel_profile_info; }
+
     const LogWithPrefixPtr & getLogger() const { return log; }
 
 private:
@@ -92,6 +95,8 @@ private:
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
+
+    ConnectionProfileInfoPtr mpp_tunnel_profile_info;
 
     const LogWithPrefixPtr log;
 };

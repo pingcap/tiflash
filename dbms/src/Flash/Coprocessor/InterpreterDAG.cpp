@@ -10,6 +10,7 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Coprocessor/recordProfileStreams.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
@@ -88,9 +89,11 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
 BlockIO InterpreterDAG::execute()
 {
     if (dag.getDAGContext().isMPPTask())
+    {
         /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
         /// the query plan, so we init mpp exchange receiver before executeQueryBlock
         initMPPExchangeReceiver(*dag.getRootQueryBlock());
+    }
     /// region_info should base on the source executor, however
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
@@ -148,8 +151,12 @@ BlockIO InterpreterDAG::execute()
                 dag.getResultFieldTypes(),
                 dag.getDAGContext(),
                 log);
-            stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
+            stream = std::make_shared<ExchangeSender>(exchange_sender, stream, std::move(response_writer), log);
         });
+        if (dag.getDAGRequest().root_executor().has_executor_id())
+        {
+            recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, dag.getDAGRequest().root_executor().executor_id(), dag.getRootQueryBlock()->id);
+        }
     }
 
     /// add union to run in parallel if needed

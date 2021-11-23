@@ -110,6 +110,12 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         }
 
         executed = true;
+
+        aggregated_data_variants_size_without_overflow_row = 0;
+        for (const auto & data_variants : many_data)
+        {
+            aggregated_data_variants_size_without_overflow_row += data_variants->sizeWithoutOverflowRow();
+        }
     }
 
     Block res;
@@ -189,7 +195,9 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
 void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_ptr & exception, size_t thread_num)
 {
     parent.exceptions[thread_num] = exception;
-    parent.cancel(false);
+    /// can not cancel parent inputStream or the exception might be lost
+    if (!parent.executed)
+        parent.processor.cancel(false);
 }
 
 

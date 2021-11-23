@@ -3,11 +3,10 @@
 
 namespace DB
 {
-
 void registerFunctionsFindCluster(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionFindClusterIndex>();
     factory.registerFunction<FunctionFindClusterValue>();
 }
 
-}
+} // namespace DB

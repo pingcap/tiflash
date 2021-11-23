@@ -6,6 +6,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
+#include <fmt/format.h>
 
 
 namespace DB
@@ -28,7 +29,8 @@ public:
     {
         Strings paths;
         for (size_t i = 0; i < TEST_NUMBER_FOR_FOLDER; ++i)
-            paths.emplace_back(Poco::Path{TiFlashTestEnv::getTemporaryPath() + "/path_pool_test/data" + toString(i)}.toString());
+            paths.emplace_back(
+                TiFlashTestEnv::getTemporaryPath(fmt::format("/path_pool_test/data{}", i)));
         return paths;
     }
 

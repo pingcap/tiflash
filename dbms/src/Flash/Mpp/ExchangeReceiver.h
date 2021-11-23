@@ -6,8 +6,10 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/DecodeChunksDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
@@ -37,7 +39,9 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    Int64 rows;
+    UInt64 rows;
+    UInt64 blocks;
+    UInt64 bytes;
 
     ExchangeReceiverResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
@@ -53,6 +57,8 @@ struct ExchangeReceiverResult
         , error_msg(error_msg_)
         , eof(eof_)
         , rows(0)
+        , blocks(0)
+        , bytes(0)
     {}
 
     ExchangeReceiverResult()
@@ -93,10 +99,12 @@ public:
 
     void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
 
-    Int64 decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types);
+    DecodeChunksDetail decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types);
 
     size_t getSourceNum() { return source_num; }
     String getName() { return "ExchangeReceiver"; }
+
+    std::vector<ConnectionProfileInfoPtr> createConnectionProfileInfos() const;
 
     std::atomic<IProfilingBlockInputStream *> parent = nullptr;
 

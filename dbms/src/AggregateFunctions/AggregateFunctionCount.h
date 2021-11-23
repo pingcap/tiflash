@@ -1,18 +1,17 @@
 #pragma once
 
+#include <AggregateFunctions/IAggregateFunction.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnsCommon.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <IO/VarInt.h>
+#include <IO/WriteHelpers.h>
 
 #include <array>
-#include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnsCommon.h>
-#include <Columns/ColumnNullable.h>
-#include <AggregateFunctions/IAggregateFunction.h>
-#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 struct AggregateFunctionCountData
 {
     UInt64 count = 0;
@@ -20,9 +19,9 @@ struct AggregateFunctionCountData
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+extern const int LOGICAL_ERROR;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+} // namespace ErrorCodes
 
 
 /// Simply count number of calls.
@@ -42,7 +41,11 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos) const override
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena *,
+        ssize_t if_argument_pos) const override
     {
         if (if_argument_pos >= 0)
         {
@@ -111,7 +114,9 @@ public:
     AggregateFunctionCountNotNullUnary(const DataTypePtr & argument)
     {
         if (!argument->isNullable())
-            throw Exception("Logical error: not Nullable data type passed to AggregateFunctionCountNotNullUnary", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Logical error: not Nullable data type passed to AggregateFunctionCountNotNullUnary",
+                ErrorCodes::LOGICAL_ERROR);
     }
 
     String getName() const override { return "count"; }
@@ -162,7 +167,8 @@ public:
             throw Exception("Logical error: single argument is passed to AggregateFunctionCountNotNullVariadic", ErrorCodes::LOGICAL_ERROR);
 
         if (number_of_arguments > MAX_ARGS)
-            throw Exception("Maximum number of arguments for aggregate function with Nullable types is " + toString(size_t(MAX_ARGS)),
+            throw Exception(
+                "Maximum number of arguments for aggregate function with Nullable types is " + toString(size_t(MAX_ARGS)),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (size_t i = 0; i < number_of_arguments; ++i)
@@ -208,9 +214,12 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 
 private:
-    enum { MAX_ARGS = 8 };
+    enum
+    {
+        MAX_ARGS = 8
+    };
     size_t number_of_arguments = 0;
-    std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
+    std::array<char, MAX_ARGS> is_nullable; /// Plain array is better than std::vector due to one indirection less.
 };
 
-}
+} // namespace DB

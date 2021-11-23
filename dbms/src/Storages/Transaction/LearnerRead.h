@@ -30,7 +30,7 @@ doLearnerRead(
     MvccQueryInfo & mvcc_query_info,
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,
-    TMTContext & tmt,
+    Context & context,
     Poco::Logger * log);
 
 // After getting stream from storage, we must make sure regions' version haven't changed after learner read.

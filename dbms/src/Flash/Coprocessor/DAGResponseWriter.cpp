@@ -1,6 +1,8 @@
+#include <Common/LogWithPrefix.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
+#include <Flash/Statistics/collectExecutorStatistics.h>
 
 namespace DB
 {
@@ -52,6 +54,8 @@ void mergeRemoteExecuteSummaries(
 
 void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode)
 {
+    dag_context.setExecutorStatisticsVector(collectExecutorStatistics(dag_context));
+
     if (!dag_context.collect_execution_summaries)
         return;
     /// get executionSummary info from remote input streams
@@ -103,14 +107,6 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
 
         current.time_processed_ns += dag_context.compile_time_ns;
         fillTiExecutionSummary(response.add_execution_summaries(), current, p.first, delta_mode);
-        /// do not have an easy and meaningful way to get the execution summary for exchange sender
-        /// executor, however, TiDB requires execution summary for all the executors, so just return
-        /// its child executor's execution summary
-        if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
-        {
-            current.concurrency = dag_context.final_concurrency;
-            fillTiExecutionSummary(response.add_execution_summaries(), current, dag_context.exchange_sender_executor_id, delta_mode);
-        }
     }
     for (auto & p : merged_remote_execution_summaries)
     {

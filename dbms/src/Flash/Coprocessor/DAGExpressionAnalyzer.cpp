@@ -654,14 +654,11 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 }
 
 
-extern const String CountSecondStage;
+extern const String count_second_stage;
 
-void DAGExpressionAnalyzer::appendAggregation(
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnalyzer::appendAggregation(
     ExpressionActionsChain & chain,
     const tipb::Aggregation & agg,
-    Names & aggregation_keys,
-    TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
     bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
@@ -669,6 +666,11 @@ void DAGExpressionAnalyzer::appendAggregation(
         //should not reach here
         throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
     }
+
+    Names aggregation_keys;
+    TiDB::TiDBCollators collators;
+    AggregateDescriptions aggregate_descriptions;
+
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
     std::unordered_set<String> agg_key_set;
@@ -686,7 +688,7 @@ void DAGExpressionAnalyzer::appendAggregation(
         {
             /// this is a little hack: if the query does not have group by column, and the result of sum is not nullable, then the sum
             /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
-            agg_func_name = CountSecondStage;
+            agg_func_name = count_second_stage;
         }
 
         if (expr.tp() == tipb::ExprType::GroupConcat)
@@ -809,6 +811,7 @@ void DAGExpressionAnalyzer::appendAggregation(
         }
     }
     after_agg = true;
+    return {aggregation_keys, collators, aggregate_descriptions};
 }
 
 bool isUInt8Type(const DataTypePtr & type)
@@ -832,45 +835,39 @@ String DAGExpressionAnalyzer::applyFunction(
     return result_name;
 }
 
-void DAGExpressionAnalyzer::appendWhere(
+String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
-    const std::vector<const tipb::Expr *> & conditions,
-    String & filter_column_name)
+    const std::vector<const tipb::Expr *> & conditions)
 {
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & last_step = chain.steps.back();
-    Names arg_names;
-    for (const auto * condition : conditions)
+
+    String filter_column_name;
+    if (conditions.size() == 1)
     {
-        arg_names.push_back(getActions(*condition, last_step.actions, true));
-    }
-    if (arg_names.size() == 1)
-    {
-        filter_column_name = arg_names[0];
-        if (isColumnExpr(*conditions[0]))
-        {
-            bool need_warp_column_expr = true;
-            if (exprHasValidFieldType(*conditions[0]) && !isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type())))
-            {
+        filter_column_name = getActions(*conditions[0], last_step.actions, true);
+        if (isColumnExpr(*conditions[0])
+            && (!exprHasValidFieldType(*conditions[0])
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
-                need_warp_column_expr = false;
-            }
-            if (need_warp_column_expr)
-            {
-                /// FilterBlockInputStream will CHANGE the filter column inplace, so
-                /// filter column should never be a columnRef in DAG request, otherwise
-                /// for queries like select c1 from t where c1 will got wrong result
-                /// as after FilterBlockInputStream, c1 will become a const column of 1
-                filter_column_name = convertToUInt8(last_step.actions, filter_column_name);
-            }
+                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type()))))
+        {
+            /// FilterBlockInputStream will CHANGE the filter column inplace, so
+            /// filter column should never be a columnRef in DAG request, otherwise
+            /// for queries like select c1 from t where c1 will got wrong result
+            /// as after FilterBlockInputStream, c1 will become a const column of 1
+            filter_column_name = convertToUInt8(last_step.actions, filter_column_name);
         }
     }
     else
     {
+        Names arg_names;
+        for (const auto * condition : conditions)
+            arg_names.push_back(getActions(*condition, last_step.actions, true));
         // connect all the conditions by logical and
         filter_column_name = applyFunction("and", arg_names, last_step.actions, nullptr);
     }
     chain.steps.back().required_output.push_back(filter_column_name);
+    return filter_column_name;
 }
 
 String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, const String & column_name)
@@ -926,15 +923,17 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
 }
 
-void DAGExpressionAnalyzer::appendOrderBy(
+std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     ExpressionActionsChain & chain,
-    const tipb::TopN & topN,
-    std::vector<NameAndTypePair> & order_columns)
+    const tipb::TopN & topN)
 {
     if (topN.order_by_size() == 0)
     {
         throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
+    std::vector<NameAndTypePair> order_columns;
+    order_columns.reserve(topN.order_by_size());
+
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
     for (const tipb::ByItem & by_item : topN.order_by())
@@ -944,6 +943,7 @@ void DAGExpressionAnalyzer::appendOrderBy(
         order_columns.emplace_back(name, type);
         step.required_output.push_back(name);
     }
+    return order_columns;
 }
 
 const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const
@@ -1123,7 +1123,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         {
             filter_vector.push_back(&c);
         }
-        appendWhere(chain, filter_vector, filter_column_name);
+        filter_column_name = appendWhere(chain, filter_vector);
     }
     /// remove useless columns to avoid duplicate columns
     /// as when compiling the key/filter expression, the origin
@@ -1452,12 +1452,8 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         ret = getColumnNameForColumnExpr(expr, getCurrentInputColumns());
     }
-    else if (isFunctionExpr(expr))
+    else if (isScalarFunctionExpr(expr))
     {
-        if (isAggFunctionExpr(expr))
-        {
-            throw TiFlashException("agg function is not supported yet", Errors::Coprocessor::Unimplemented);
-        }
         const String & func_name = getFunctionName(expr);
         if (function_builder_map.find(func_name) != function_builder_map.end())
         {

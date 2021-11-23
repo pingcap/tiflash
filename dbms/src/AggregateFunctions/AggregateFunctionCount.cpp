@@ -1,14 +1,12 @@
-#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 
 
 namespace DB
 {
-
 namespace
 {
-
 AggregateFunctionPtr createAggregateFunctionCount(const std::string & name, const DataTypes & /*argument_types*/, const Array & parameters)
 {
     assertNoParameters(name, parameters);
@@ -17,11 +15,11 @@ AggregateFunctionPtr createAggregateFunctionCount(const std::string & name, cons
     return std::make_shared<AggregateFunctionCount>();
 }
 
-}
+} // namespace
 
 void registerAggregateFunctionCount(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("count", createAggregateFunctionCount, AggregateFunctionFactory::CaseInsensitive);
 }
 
-}
+} // namespace DB

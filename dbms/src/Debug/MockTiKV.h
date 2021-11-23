@@ -4,10 +4,9 @@
 
 namespace DB
 {
-
-class MockTiKV : public ext::singleton<MockTiKV>
+class MockTiKV : public ext::Singleton<MockTiKV>
 {
-    friend class ext::singleton<MockTiKV>;
+    friend class ext::Singleton<MockTiKV>;
 
 public:
     UInt64 getRaftIndex(RegionID region_id)
@@ -16,9 +15,9 @@ public:
         auto it = raft_index.find(region_id);
         if (it == raft_index.end())
         {
-            // Usually index 6 is empty and we ignore it. 
+            // Usually index 6 is empty and we ignore it.
             // https://github.com/tikv/tikv/issues/7047
-            auto init_index = RAFT_INIT_LOG_INDEX +  1;
+            auto init_index = RAFT_INIT_LOG_INDEX + 1;
             it = raft_index.emplace_hint(it, region_id, init_index);
         }
         ++(it->second);

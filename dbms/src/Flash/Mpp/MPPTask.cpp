@@ -4,7 +4,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/CoprocessorHandler.h>
@@ -12,6 +11,7 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -38,27 +38,20 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
-String MPPTaskId::toString() const
-{
-    return fmt::format("[{},{}]", start_ts, task_id);
-}
-
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     : context(context_)
     , meta(meta_)
-    , log(std::make_shared<LogWithPrefix>(
-          &Poco::Logger::get("MPPTask"),
-          fmt::format("[task {} query {}] ", meta.task_id(), meta.start_ts())))
-{
-    id.start_ts = meta.start_ts();
-    id.task_id = meta.task_id();
-}
+    , id(meta.start_ts(), meta.task_id())
+    , log(getMPPTaskLog("MPPTask", id))
+    , task_stats(std::make_shared<MPPTaskStats>(log, id, meta.address()))
+{}
 
 MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    current_memory_tracker = memory_tracker;
+    if (current_memory_tracker != memory_tracker)
+        current_memory_tracker = memory_tracker;
     closeAllTunnels("");
     LOG_DEBUG(log, "finish MPPTask: " << id.toString());
 }
@@ -81,7 +74,6 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    memory_tracker = current_memory_tracker;
     auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
     worker.detach();
 }
@@ -108,8 +100,8 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
         return {nullptr, err_msg};
     }
 
-    MPPTaskId id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
-    std::map<MPPTaskId, MPPTunnelPtr>::iterator it = tunnel_map.find(id);
+    MPPTaskId receiver_id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
+    auto it = tunnel_map.find(receiver_id);
     if (it == tunnel_map.end())
     {
         auto err_msg = fmt::format(
@@ -250,8 +242,10 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
         }
+        task_stats->upstream_task_ids.push_back(task_meta.task_id());
     }
     dag_context->tunnel_set = tunnel_set;
+
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_DEBUG(log, "begin to register the task " << id.toString());
@@ -276,9 +270,13 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     DAGQuerySource dag(context, local_regions, remote_regions, dag_req, log, true);
+    task_stats->setExecutorsStructure(dag_req);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+    task_stats->compile_start_timestamp = start_time;
+    task_stats->compile_end_timestamp = end_time;
+    task_stats->setWaitIndexTimestamp(dag_context->wait_index_start_timestamp, dag_context->wait_index_end_timestamp);
 }
 
 void MPPTask::runImpl()
@@ -289,8 +287,8 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
+    task_stats->start();
 
-    current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_run_mpp_task).Increment();
@@ -303,6 +301,7 @@ void MPPTask::runImpl()
     try
     {
         preprocess();
+        memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
@@ -360,9 +359,17 @@ void MPPTask::runImpl()
         auto throughput = dag_context->getTableScanThroughput();
         if (throughput.first)
             GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
+
         auto process_info = context.getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
+        task_stats->memory_peak = peak_memory;
+
+        task_stats->local_input_throughput = dag_context->getLocalInputThroughput();
+        task_stats->remote_input_throughput = dag_context->getRemoteInputThroughput();
+        task_stats->output_throughput = dag_context->getOutputThroughput();
+
+        task_stats->executor_statistics_vec = dag_context->getExecutorStatisticsVector();
     }
     else
     {
@@ -372,9 +379,15 @@ void MPPTask::runImpl()
     unregisterTask();
 
     if (switchStatus(RUNNING, FINISHED))
+    {
         LOG_INFO(log, "finish task");
+    }
     else
+    {
         LOG_WARNING(log, "finish task which was cancelled before");
+    }
+
+    task_stats->end(status.load(), err_msg);
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)

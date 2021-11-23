@@ -2,6 +2,7 @@
 #include <Common/ThreadFactory.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Statistics/ExchangeReceiveProfileInfo.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -18,7 +19,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , source_num(pb_exchange_receiver.encoded_task_meta_size())
     , task_meta(meta)
     , max_streams(max_streams_)
-    , max_buffer_size(max_streams_ * 2)
+    , max_buffer_size(std::max(source_num, max_streams_) * 2)
     , res_buffer(max_buffer_size)
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
     , state(ExchangeReceiverState::NORMAL)
@@ -241,26 +242,28 @@ void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMe
 }
 
 template <typename RPCContext>
-Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
+DecodeChunksDetail ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
 {
     assert(recv_msg != nullptr);
-    Int64 rows = 0;
+    DecodeChunksDetail detail;
 
     int chunk_size = recv_msg->packet->chunks_size();
     if (chunk_size == 0)
-        return rows;
+        return detail;
 
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
     for (int i = 0; i < chunk_size; i++)
     {
         Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
-        rows += block.rows();
+        detail.rows += block.rows();
+        detail.bytes += block.bytes();
         if (unlikely(block.rows() == 0))
             continue;
         assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
         block_queue.push(std::move(block));
     }
-    return rows;
+    detail.blocks = chunk_size;
+    return detail;
 }
 
 template <typename RPCContext>
@@ -319,7 +322,10 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 if (!resp_ptr->chunks().empty())
                 {
                     assert(recv_msg->packet->chunks().empty());
-                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
+                    auto detail = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
+                    result.rows = detail.rows;
+                    result.blocks = detail.blocks;
+                    result.bytes = detail.bytes;
                 }
             }
         }
@@ -330,11 +336,28 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
         if (!result.meet_error && !recv_msg->packet->chunks().empty())
         {
             assert(result.rows == 0);
-            result.rows = decodeChunks(recv_msg, block_queue, expected_types);
+            auto detail = decodeChunks(recv_msg, block_queue, expected_types);
+            result.rows = detail.rows;
+            result.blocks = detail.blocks;
+            result.bytes = detail.bytes;
         }
     }
     returnEmptyMsg(recv_msg);
     return result;
+}
+
+template <typename RPCContext>
+std::vector<ConnectionProfileInfoPtr> ExchangeReceiverBase<RPCContext>::createConnectionProfileInfos() const
+{
+    auto exchange_receive_profile_infos = std::vector<ConnectionProfileInfoPtr>();
+    for (size_t index = 0; index < source_num; ++index)
+    {
+        auto sender_task = mpp::TaskMeta{};
+        if (!sender_task.ParseFromString(pb_exchange_receiver.encoded_task_meta(index)))
+            throw Exception("parse task meta error!");
+        exchange_receive_profile_infos.push_back(std::make_shared<ExchangeReceiveProfileInfo>(index, sender_task.task_id()));
+    }
+    return exchange_receive_profile_infos;
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

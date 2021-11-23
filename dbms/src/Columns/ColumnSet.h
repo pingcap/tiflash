@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class Set;
 using ConstSetPtr = std::shared_ptr<const Set>;
 
@@ -19,7 +18,11 @@ class ColumnSet final : public COWPtrHelper<IColumnDummy, ColumnSet>
 private:
     friend class COWPtrHelper<IColumnDummy, ColumnSet>;
 
-    ColumnSet(size_t s_, const ConstSetPtr & data_) : data(data_) { s = s_; }
+    ColumnSet(size_t s_, const ConstSetPtr & data_)
+        : data(data_)
+    {
+        s = s_;
+    }
     ColumnSet(const ColumnSet &) = default;
 
 public:
@@ -32,4 +35,4 @@ private:
     ConstSetPtr data;
 };
 
-}
+} // namespace DB
