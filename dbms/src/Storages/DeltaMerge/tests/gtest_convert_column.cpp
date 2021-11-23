@@ -13,7 +13,7 @@ namespace DM
 {
 namespace tests
 {
-TEST(ConvertColumnType_test, CastNumeric)
+TEST(ConvertColumnTypeTest, CastNumeric)
 {
     {
         const Strings to_types = {"UInt8", "UInt16", "UInt32", "UInt64"};
@@ -165,7 +165,7 @@ TEST(ConvertColumnType_test, CastNumeric)
     }
 }
 
-TEST(ConvertColumnType_test, CastNullableToNotNull)
+TEST(ConvertColumnTypeTest, CastNullableToNotNull)
 {
     const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
@@ -190,7 +190,7 @@ TEST(ConvertColumnType_test, CastNullableToNotNull)
     }
 }
 
-TEST(ConvertColumnType_test, CastNullableToNotNullWithNonZeroDefaultValue)
+TEST(ConvertColumnTypeTest, CastNullableToNotNullWithNonZeroDefaultValue)
 {
     const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
@@ -215,7 +215,7 @@ TEST(ConvertColumnType_test, CastNullableToNotNullWithNonZeroDefaultValue)
     }
 }
 
-TEST(ConvertColumnType_test, CastNullableToNullable)
+TEST(ConvertColumnTypeTest, CastNullableToNullable)
 {
     const Strings to_types = {"Nullable(Int8)", "Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
 
@@ -246,7 +246,7 @@ TEST(ConvertColumnType_test, CastNullableToNullable)
     }
 }
 
-TEST(ConvertColumnType_test, CastNotNullToNullable)
+TEST(ConvertColumnTypeTest, CastNotNullToNullable)
 {
     const Strings to_types = {"Nullable(Int8)", "Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
 
@@ -272,11 +272,18 @@ TEST(ConvertColumnType_test, CastNotNullToNullable)
     }
 }
 
-TEST(ConvertColumnType_test, GetDefaultValue)
+TEST(ConvertColumnTypeTest, GetDefaultValue)
 try
 {
     const String json_table_info
-        = R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":768,"Tp":15}},{"comment":"","default":"3.14","default_bit":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}},{"comment":"","default":"3.14","default_bit":null,"id":3,"name":{"L":"f2","O":"f2"},"offset":2,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}],"comment":"","id":627,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":252,"state":5,"tiflash_replica":{"Count":0},"update_timestamp":422031263342264329})json";
+        = R"json({
+"cols":[
+    {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":768,"Tp":15}}
+    ,{"comment":"","default":"3.14","default_bit":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}}
+    ,{"comment":"","default":"3.14","default_bit":null,"id":3,"name":{"L":"f2","O":"f2"},"offset":2,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}
+]
+,"comment":"","id":627,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":252,"state":5,"tiflash_replica":{"Count":0},"update_timestamp":422031263342264329
+})json";
 
     TiDB::TableInfo table_info(json_table_info);
     const auto & columns = table_info.columns;
