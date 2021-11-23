@@ -19,7 +19,7 @@ struct JoinStatistics : public ExecutorStatistics
 
     size_t hash_table_bytes = 0;
 
-    UInt64 process_time_for_build = 0;
+    UInt64 process_time_ns_for_build = 0;
 
     explicit JoinStatistics(const String & executor_id_)
         : ExecutorStatistics(executor_id_)

@@ -4,6 +4,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
+#include <Flash/Statistics/MPPTunnelProfileInfo.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -30,6 +31,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
+    , mpp_tunnel_profile_info(std::make_shared<MPPTunnelProfileInfo>(tunnel_id))
     , log(getMPPTaskLog(log_, tunnel_id))
 {
 }
@@ -153,6 +155,7 @@ void MPPTunnelBase<Writer>::sendLoop()
                     LOG_ERROR(log, msg);
                     throw Exception(tunnel_id + msg);
                 }
+                mpp_tunnel_profile_info->bytes += res->ByteSizeLong();
             }
         }
     }

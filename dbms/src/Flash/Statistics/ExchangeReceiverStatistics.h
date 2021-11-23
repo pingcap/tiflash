@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <common/types.h>
 
@@ -9,6 +10,12 @@ namespace DB
 {
 struct ExchangeReceiverStatistics : public ExecutorStatistics
 {
+    std::vector<Int64> downstream_task_ids;
+
+    std::vector<ConnectionProfileInfoPtr> connection_profile_infos;
+
+    size_t partition_num;
+
     explicit ExchangeReceiverStatistics(const String & executor_id_)
         : ExecutorStatistics(executor_id_)
     {}

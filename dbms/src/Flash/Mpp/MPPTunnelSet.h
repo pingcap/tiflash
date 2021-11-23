@@ -31,6 +31,8 @@ public:
     void write(tipb::SelectResponse & response, int16_t partition_id);
     void write(mpp::MPPDataPacket & packet, int16_t partition_id);
 
+    std::vector<ConnectionProfileInfoPtr> getConnectionProfileInfos();
+
     uint16_t getPartitionNum() const { return tunnels.size(); }
 
     void addTunnel(const TunnelPtr & tunnel) { tunnels.push_back(tunnel); }

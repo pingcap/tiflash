@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Common/FmtUtils.h>
+#include <Common/joinStr.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <common/types.h>
@@ -96,5 +98,29 @@ inline double divide(size_t value1, size_t value2)
         return 0;
     }
     return 1.0 * value1 / value2;
+}
+
+template <bool is_ptr = true, typename Array>
+String arrayToJson(const Array & array)
+{
+    FmtBuffer buffer;
+    buffer.append("[");
+    joinStr(
+        array.cbegin(),
+        array.cend(),
+        buffer,
+        [](const auto & t, FmtBuffer & fb) {
+            if constexpr (is_ptr)
+            {
+                fb.append(t->toJson());
+            }
+            else
+            {
+                fb.append(t.toJson());
+            }
+        },
+        ",");
+    buffer.append("]");
+    return buffer.toString();
 }
 } // namespace DB
