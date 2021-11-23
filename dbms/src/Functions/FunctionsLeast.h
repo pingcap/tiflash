@@ -5,10 +5,11 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
-#include "DataTypes/DataTypeNothing.h"
-#include "DataTypes/DataTypesNumber.h"
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/IFunction.h>
+
+#include "DataTypes/DataTypeNothing.h"
+#include "DataTypes/DataTypesNumber.h"
 #include "Functions/FunctionsConditional.h"
 #include "ext/range.h"
 
@@ -25,7 +26,7 @@ public:
     static constexpr auto name = "tidbLeast";
     explicit FunctionTiDBLeast(const Context & context)
         : context(context){};
-    static FunctionPtr create(const Context &context)
+    static FunctionPtr create(const Context & context)
     {
         return std::make_shared<FunctionTiDBLeast>(context);
     }
@@ -44,7 +45,8 @@ public:
         DataTypes new_args;
         for (size_t i = 0; i < arguments.size(); ++i)
         {
-            if (arguments[i]->onlyNull()) {
+            if (arguments[i]->onlyNull())
+            {
                 return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
             }
             bool is_last = i + 1 == arguments.size();
@@ -83,8 +85,8 @@ public:
         if (arguments.size() <= 1)
         {
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                            + toString(arguments.size()) + ", should be at least 2.",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                                + toString(arguments.size()) + ", should be at least 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
         else
         {
@@ -98,16 +100,7 @@ public:
             using ResultDataType = std::decay_t<decltype(result_type)>;
             const IDataType * from_type = block.getByPosition(arguments[0]).type.get();
 
-            if (checkDataType<DataTypeUInt8>(from_type) || 
-                checkDataType<DataTypeUInt16>(from_type) || 
-                checkDataType<DataTypeUInt32>(from_type) || 
-                checkDataType<DataTypeUInt64>(from_type) || 
-                checkDataType<DataTypeInt8>(from_type) || 
-                checkDataType<DataTypeInt16>(from_type) || 
-                checkDataType<DataTypeInt32>(from_type) || 
-                checkDataType<DataTypeInt64>(from_type) || 
-                checkDataType<DataTypeFloat32>(from_type) || 
-                checkDataType<DataTypeFloat64>(from_type))
+            if (checkDataType<DataTypeUInt8>(from_type) || checkDataType<DataTypeUInt16>(from_type) || checkDataType<DataTypeUInt32>(from_type) || checkDataType<DataTypeUInt64>(from_type) || checkDataType<DataTypeInt8>(from_type) || checkDataType<DataTypeInt16>(from_type) || checkDataType<DataTypeInt32>(from_type) || checkDataType<DataTypeInt64>(from_type) || checkDataType<DataTypeFloat32>(from_type) || checkDataType<DataTypeFloat64>(from_type))
                 // in process...
                 return executeNary<ResultDataType>(block, arguments, result);
             else
@@ -132,7 +125,7 @@ private:
     }
 
     template <typename T>
-    void executeNary(Block & block, const ColumnNumbers & arguments, size_t result[[maybe_unused]]) const
+    void executeNary(Block & block, const ColumnNumbers & arguments, size_t result [[maybe_unused]]) const
     {
         const auto col_left [[maybe_unused]] = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get());
         const auto col_right [[maybe_unused]] = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[1]).column.get());
@@ -155,4 +148,3 @@ private:
 };
 
 } // namespace DB
-
