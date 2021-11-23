@@ -7,8 +7,7 @@
 
 namespace CurrentMetrics
 {
-// TODO : replace it with new metrics which named OpenFile
-extern const Metric OpenFileForWrite;
+extern const Metric OpenFileForReadWrite;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -40,8 +39,6 @@ public:
 
     int fsync() override;
 
-    void hardLink(const String & existing_file) override;
-
     ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
     String getFileName() const override
@@ -52,7 +49,7 @@ public:
     void close() override;
 
 private:
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForReadWrite, 0};
 
     String file_name;
     int fd;

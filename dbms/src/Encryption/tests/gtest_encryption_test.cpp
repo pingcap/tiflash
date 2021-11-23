@@ -210,6 +210,13 @@ try
     ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
     ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
     ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+
+    // Do it twice to ensure we can call close safely on a closed file
+    // file->close();
+    // ASSERT_TRUE(file->isClosed());
 }
 CATCH
 
@@ -243,6 +250,13 @@ try
     ASSERT_EQ(buff_size, enc_file->pwrite(buff_write, buff_size, buff_offset));
     ASSERT_EQ(buff_size, enc_file->pread(buff_read, buff_size, buff_offset));
     ASSERT_EQ(strncmp(buff_write_cpy, buff_read, buff_size), 0);
+
+    enc_file->close();
+    ASSERT_TRUE(enc_file->isClosed());
+
+    // Do it twice to ensure we can call close safely on a closed file
+    enc_file->close();
+    ASSERT_TRUE(enc_file->isClosed());
 }
 CATCH
 

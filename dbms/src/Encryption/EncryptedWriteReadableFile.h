@@ -13,7 +13,8 @@ class EncryptedWriteReadableFile : public WriteReadableFile
 public:
     EncryptedWriteReadableFile(WriteReadableFilePtr & file_, BlockAccessCipherStreamPtr stream_)
         : file{file_}
-        , stream{std::move(stream_)} {};
+        , stream{std::move(stream_)}
+    {}
 
     ~EncryptedWriteReadableFile() override = default;
 
@@ -39,11 +40,6 @@ public:
     bool isClosed() const override
     {
         return file->isClosed();
-    }
-
-    void hardLink(const String & existing_file) override
-    {
-        file->hardLink(existing_file);
     }
 
     String getFileName() const override

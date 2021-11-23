@@ -8,6 +8,9 @@
 
 namespace DB
 {
+/**
+ * Do not add write/read/seek, This may cause some multi-threaded reading and writing problems
+ */
 class WriteReadableFile
 {
 public:
@@ -24,8 +27,6 @@ public:
     virtual bool isClosed() const = 0;
 
     virtual void close() = 0;
-
-    virtual void hardLink(const String & existing_file) = 0;
 
     virtual String getFileName() const = 0;
 };

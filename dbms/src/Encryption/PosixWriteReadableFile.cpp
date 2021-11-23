@@ -125,34 +125,4 @@ int PosixWriteReadableFile::fsync()
     return ::fsync(fd);
 }
 
-void PosixWriteReadableFile::hardLink(const String & existing_file)
-{
-    if (existing_file.empty())
-    {
-        throw Exception("Failed to create hard link for empty file name", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    if (file_name.empty())
-    {
-        throw Exception("Failed to create hard link for:" + existing_file + " to an empty path", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    close();
-    int rc = ::remove(file_name.c_str());
-    if (rc != 0)
-    {
-        throwFromErrno("Can't remove file : " + file_name);
-    }
-
-    // The link() function shall create a new link (directory entry) for the existing file, `existing_file`. The second path argument
-    // points to a pathname naming the new directory entry to be created. The link() function shall atomically create a new link
-    // for the existing file and the link count of the file shall be incremented by one.
-    // Reference: https://linux.die.net/man/3/link
-    rc = ::link(existing_file.c_str(), file_name.c_str());
-    if (rc != 0)
-    {
-        throw Exception("Failed to create hard link for:" + existing_file + " to an empty path", ErrorCodes::LOGICAL_ERROR);
-    }
-}
-
 } // namespace DB
