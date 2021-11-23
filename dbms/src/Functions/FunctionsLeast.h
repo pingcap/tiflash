@@ -12,7 +12,6 @@
 #include "DataTypes/DataTypesNumber.h"
 #include "Functions/FunctionHelpers.h"
 #include "Functions/FunctionsConditional.h"
-#include "Interpreters/executeQuery.h"
 #include "ext/range.h"
 
 namespace DB
@@ -96,23 +95,21 @@ public:
             }
             DataTypePtr result_type = getReturnTypeImpl(types);
             DataTypePtr type_res [[maybe_unused]];
-            
-            if (checkType<DataTypeInt8>(result_type, type_res) 
+
+            if (checkType<DataTypeInt8>(result_type, type_res)
                 || checkType<DataTypeInt16>(result_type, type_res)
                 || checkType<DataTypeInt32>(result_type, type_res)
-                || checkType<DataTypeInt64>(result_type, type_res)) {
+                || checkType<DataTypeInt64>(result_type, type_res))
+            {
                 return executeNary<DataTypeInt64>(block, arguments, result);
             }
 
-            if (checkType<DataTypeFloat32>(result_type, type_res) 
-                || checkType<DataTypeFloat64>(result_type, type_res)) {
+            if (checkType<DataTypeFloat32>(result_type, type_res)
+                || checkType<DataTypeFloat64>(result_type, type_res))
+            {
                 return executeNary<DataTypeFloat64>(block, arguments, result);
             }
 
-            // if (checkDataType<DataTypeFloat32>(result_type.get())
-            //     || checkDataType<DataTypeFloat64>(result_type.get())) {
-            //     return executeNary<DataTypeFloat64>(block, arguments, result);
-            // }
             throw Exception(
                 "Illegal types " + result_type->getName() + " of arguments of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -148,8 +145,8 @@ private:
         {
             // check null?
             // vec_res[i] = static_cast<T>(left_val[i]) < static_cast<T>(right_val[i])
-                // ? static_cast<T>(left_val[i])
-                // : static_cast<T>(right_val[i]);
+            // ? static_cast<T>(left_val[i])
+            // : static_cast<T>(right_val[i]);
         }
 
         block.getByPosition(result).column = std::move(out_col);
