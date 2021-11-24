@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 String trim(const StringRef & value)
 {
     StringRef ret;
@@ -28,6 +27,9 @@ String trim(const StringRef & value)
     return ret.toString();
 }
 
-void registerFunctionsTiDBConversion(FunctionFactory & factory) { factory.registerFunction<FunctionBuilderTiDBCast>(); }
+void registerFunctionsTiDBConversion(FunctionFactory & factory)
+{
+    factory.registerFunction<FunctionBuilderTiDBCast>();
+}
 
 } // namespace DB

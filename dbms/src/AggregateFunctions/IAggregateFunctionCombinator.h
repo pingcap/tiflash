@@ -1,13 +1,13 @@
 #pragma once
 
-#include <memory>
-#include <DataTypes/IDataType.h>
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <DataTypes/IDataType.h>
+
+#include <memory>
 
 
 namespace DB
 {
-
 /** Aggregate function combinator allows to take one aggregate function
   *  and transform it to another aggregate function.
   *
@@ -53,4 +53,4 @@ public:
 
 using AggregateFunctionCombinatorPtr = std::shared_ptr<const IAggregateFunctionCombinator>;
 
-}
+} // namespace DB

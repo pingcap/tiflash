@@ -1,18 +1,21 @@
 #include <Common/PODArray.h>
 #include <Core/Types.h>
+
 #include <iostream>
 
-#define ASSERT_CHECK(cond, res)                        \
-do                                    \
-{                                    \
-    if (!(cond))                            \
-    {                                \
-        std::cerr << __FILE__ << ":" << __LINE__ << ":"        \
-            << "Assertion " << #cond << " failed.\n";    \
-        if ((res)) { (res) = false; }                \
-    }                                \
-} \
-while (0)
+#define ASSERT_CHECK(cond, res)                                 \
+    do                                                          \
+    {                                                           \
+        if (!(cond))                                            \
+        {                                                       \
+            std::cerr << __FILE__ << ":" << __LINE__ << ":"     \
+                      << "Assertion " << #cond << " failed.\n"; \
+            if ((res))                                          \
+            {                                                   \
+                (res) = false;                                  \
+            }                                                   \
+        }                                                       \
+    } while (0)
 
 void test1()
 {

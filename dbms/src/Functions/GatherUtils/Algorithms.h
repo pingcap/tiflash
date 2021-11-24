@@ -1,20 +1,18 @@
 #pragma once
 
 #include <Common/FieldVisitors.h>
-
-#include <Functions/GatherUtils/Sources.h>
 #include <Functions/GatherUtils/Sinks.h>
+#include <Functions/GatherUtils/Sources.h>
 
 #include <ext/range.h>
 
 namespace DB::ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
-namespace  DB::GatherUtils
+namespace DB::GatherUtils
 {
-
 /// Methods to copy Slice to Sink, overloaded for various combinations of types.
 
 template <typename T>
@@ -153,7 +151,6 @@ inline ALWAYS_INLINE void writeSlice(const NumericValueSlice<T> & slice, Generic
 }
 
 
-
 template <typename SourceA, typename SourceB, typename Sink>
 void NO_INLINE concat(SourceA && src_a, SourceB && src_b, Sink && sink)
 {
@@ -176,12 +173,12 @@ void concat(const std::vector<std::unique_ptr<IArraySource>> & array_sources, Si
     size_t sources_num = array_sources.size();
     std::vector<char> is_const(sources_num);
 
-    auto checkAndGetSizeToReserve = [] (auto source, IArraySource * array_source)
-    {
+    auto checkAndGetSizeToReserve = [](auto source, IArraySource * array_source) {
         if (source == nullptr)
             throw Exception("Concat function expected " + demangle(typeid(Source).name()) + " or "
-                            + demangle(typeid(ConstSource<Source>).name()) + " but got "
-                            + demangle(typeid(*array_source).name()), ErrorCodes::LOGICAL_ERROR);
+                                + demangle(typeid(ConstSource<Source>).name()) + " but got "
+                                + demangle(typeid(*array_source).name()),
+                            ErrorCodes::LOGICAL_ERROR);
         return source->getSizeForReserve();
     };
 
@@ -198,8 +195,7 @@ void concat(const std::vector<std::unique_ptr<IArraySource>> & array_sources, Si
 
     sink.reserve(size_to_reserve);
 
-    auto writeNext = [& sink] (auto source)
-    {
+    auto writeNext = [&sink](auto source) {
         writeSlice(source->getWhole(), sink);
         source->next();
     };
@@ -262,7 +258,8 @@ void NO_INLINE trim(Source && source, Sink && sink)
             size_t end = slice.size - 1;
 
             /// It seems that rtrim will be optimized by compiler
-            if (rtrim) {
+            if (rtrim)
+            {
                 for (; end >= start && slice.data[end] == 0x20; --end)
                 {
                     ;
@@ -321,7 +318,8 @@ void NO_INLINE trim(SourceA && source, SourceB && exclude, Sink && sink)
         {
             size_t end = src.size - 1;
             /// It seems that rtrim will be optimized by compiler
-            if (rtrim) {
+            if (rtrim)
+            {
                 for (; end >= start; --end)
                 {
                     size_t i;
@@ -332,7 +330,8 @@ void NO_INLINE trim(SourceA && source, SourceB && exclude, Sink && sink)
                             break;
                         }
                     }
-                    if (i == exc.size) {
+                    if (i == exc.size)
+                    {
                         /// not in the exclude set
                         break;
                     }
@@ -555,10 +554,8 @@ void NO_INLINE conditional(SourceA && src_a, SourceB && src_b, Sink && sink, con
 
 /// Methods to check if first array has elements from second array, overloaded for various combinations of types.
 
-template <bool all, typename FirstSliceType, typename SecondSliceType,
-          bool (*isEqual)(const FirstSliceType &, const SecondSliceType &, size_t, size_t)>
-bool sliceHasImpl(const FirstSliceType & first, const SecondSliceType & second,
-                  const UInt8 * first_null_map, const UInt8 * second_null_map)
+template <bool all, typename FirstSliceType, typename SecondSliceType, bool (*isEqual)(const FirstSliceType &, const SecondSliceType &, size_t, size_t)>
+bool sliceHasImpl(const FirstSliceType & first, const SecondSliceType & second, const UInt8 * first_null_map, const UInt8 * second_null_map)
 {
     const bool has_first_null_map = first_null_map != nullptr;
     const bool has_second_null_map = second_null_map != nullptr;
@@ -583,7 +580,6 @@ bool sliceHasImpl(const FirstSliceType & first, const SecondSliceType & second,
 
         if (!has && all)
             return false;
-
     }
 
     return all;
@@ -770,4 +766,4 @@ void resizeConstantSize(ArraySource && array_source, ValueSource && value_source
     }
 }
 
-}
+} // namespace DB::GatherUtils

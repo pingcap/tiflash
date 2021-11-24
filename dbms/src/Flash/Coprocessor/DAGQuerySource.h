@@ -24,7 +24,7 @@ public:
         const RegionInfoList & regions_for_remote_read_,
         const tipb::DAGRequest & dag_request_,
         const LogWithPrefixPtr & log_,
-        bool is_batch_cop_ = false);
+        const bool is_batch_cop_or_mpp_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t) override;
     String str(size_t max_query_size) override;
@@ -32,7 +32,7 @@ public:
 
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
-    std::vector<tipb::FieldType> getResultFieldTypes() const { return result_field_types; };
+    const std::vector<tipb::FieldType> & getResultFieldTypes() const { return result_field_types; }
 
     ASTPtr getAST() const { return ast; };
 
@@ -42,7 +42,7 @@ public:
     const RegionInfoMap & getRegions() const { return regions; }
     const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
 
-    bool isBatchCop() const { return is_batch_cop; }
+    bool isBatchCopOrMpp() const { return is_batch_cop_or_mpp; }
 
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
@@ -64,7 +64,7 @@ protected:
     std::shared_ptr<DAGQueryBlock> root_query_block;
     ASTPtr ast;
 
-    const bool is_batch_cop;
+    const bool is_batch_cop_or_mpp;
 
     LogWithPrefixPtr log;
 };

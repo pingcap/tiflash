@@ -37,6 +37,7 @@ public:
         Context & context_,
         const std::vector<BlockInputStreams> & input_streams_vec_,
         const DAGQueryBlock & query_block_,
+        size_t max_streams_,
         bool keep_session_timezone_info_,
         const DAGQuerySource & dag_,
         std::vector<SubqueriesForSets> & subqueries_for_sets_,
@@ -70,7 +71,7 @@ private:
         String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
-    void executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
+    void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeAggregation(
         DAGPipeline & pipeline,
