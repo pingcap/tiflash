@@ -81,6 +81,7 @@ private:
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
+    void recordProfileStream(const BlockInputStreamPtr & stream, const String & key);
 
     void executeRemoteQueryImpl(
         DAGPipeline & pipeline,
