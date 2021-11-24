@@ -1049,7 +1049,7 @@ void DAGQueryBlockInterpreter::executeCastAndSelection(
             if (has_where)
             {
                 stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
-                recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, query_block.selection_name, query_block.id);
+                // recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, query_block.selection_name, query_block.id);
                 if (project_after_where)
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
             }
@@ -1061,7 +1061,7 @@ void DAGQueryBlockInterpreter::executeCastAndSelection(
         if (has_where)
         {
             stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
-            recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, query_block.selection_name, query_block.id);
+            // recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, query_block.selection_name, query_block.id);
             if (project_after_where)
                 stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
         }
