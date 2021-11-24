@@ -39,6 +39,18 @@ mysql> insert into test.f values('pingcap','tidb',1);
 mysql> insert into test.f values(null,null,null);
 mysql> insert into test.f values(null,'std',null);
 mysql> insert into test.f values('平凯xingchen公司',null,1);
+
+mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
++------+------+----------------------+------+----+----------+
+| c1   | c2   | a                    | b    | id | count(*) |
++------+------+----------------------+------+----+----------+
+| NULL | d    | NULL                 | std  |  1 |        1 |
+| 平   | NULL | 平凯xingchen公司     | NULL |  1 |        1 |
+| p    | b    | pingcap              | tidb |  1 |        1 |
+| NULL | NULL | NULL                 | NULL |  1 |        1 |
+| a    | h    | abc                  | fzh  |  1 |        1 |
++------+------+----------------------+------+----+----------+
+
 mysql> alter table test.f set tiflash replica 1;
 
 mysql> analyze table test.f;
