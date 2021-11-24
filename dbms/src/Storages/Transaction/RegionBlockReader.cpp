@@ -10,8 +10,6 @@
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiDB.h>
 
-#include <Storages/Transaction/RegionBlockReaderHelper.hpp>
-
 namespace DB
 {
 
@@ -63,40 +61,6 @@ Field GenDefaultField(const ColumnInfo & col_info)
             return Field(Int64(0));
         default:
             throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
-    }
-}
-
-void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
-{
-    // resort the data_list
-    // if the order in int64 is like -3 -1 0 1 2 3, the real order in uint64 is 0 1 2 3 -3 -1
-    if (data_list.size() > 2)
-    {
-        bool need_check = false;
-        {
-            const auto & h1 = std::get<0>(data_list.front());
-            const auto & h2 = std::get<0>(data_list.back());
-            if ((h1 & SIGN_MASK) && !(h2 & SIGN_MASK))
-                need_check = true;
-        }
-
-        if (need_check)
-        {
-            auto it = data_list.begin();
-            for (; it != data_list.end();)
-            {
-                const auto & pk = std::get<0>(*it);
-
-                if (pk & SIGN_MASK)
-                    ++it;
-                else
-                    break;
-            }
-
-            std::reverse(it, data_list.end());
-            std::reverse(data_list.begin(), it);
-            std::reverse(data_list.begin(), data_list.end());
-        }
     }
 }
 
@@ -202,12 +166,12 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
                 auto next_column_pos_copy = next_column_pos;
                 while (column_ids_iter_copy != read_column_ids.end())
                 {
-                    auto & ci = schema_snapshot->column_infos[column_ids_iter_copy->second];
+                    const auto * ci = schema_snapshot->column_infos[column_ids_iter_copy->second];
                     // !pk_pos_map.empty() means the table is common index, or pk is handle, so we can decode the pk from the key
                     if (pk_pos_map.empty() || !ci->hasPriKeyFlag())
                     {
                         auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
-                        raw_column->insertDefault();
+                        raw_column->insert(GenDefaultField(*ci));
                     }
                     column_ids_iter_copy++;
                     next_column_pos_copy++;

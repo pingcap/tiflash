@@ -73,8 +73,9 @@ struct DecodingStorageSchemaSnapshot
             auto & primary_index_info = table_info_.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
-                pk_column_ids.emplace_back(table_info_.columns[primary_index_info.idx_cols[i].offset].id);
-                pk_pos_map.emplace(original_handle_.id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max));
+                auto pk_column_id = table_info_.columns[primary_index_info.idx_cols[i].offset].id;
+                pk_column_ids.emplace_back(pk_column_id);
+                pk_pos_map.emplace(pk_column_id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max));
             }
             pk_type = TMTPKType::STRING;
         }

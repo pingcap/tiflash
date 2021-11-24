@@ -127,16 +127,16 @@ inline UInt64 unionCastToUInt64(Float32 x)
     return res;
 }
 
-template <typename dstT, typename srcT>
-static dstT readInt(const char * pos)
+template <typename targetType, typename encodeType>
+inline targetType decodeInt(const char * pos)
 {
-    if (is_signed_v<dstT>)
+    if (is_signed_v<targetType>)
     {
-        return static_cast<dstT>(static_cast<std::make_signed_t<srcT>>(readLittleEndian<srcT>(pos)));
+        return static_cast<targetType>(static_cast<std::make_signed_t<encodeType>>(readLittleEndian<encodeType>(pos)));
     }
     else
     {
-        return static_cast<dstT>(static_cast<std::make_unsigned_t<srcT>>(readLittleEndian<srcT>(pos)));
+        return static_cast<targetType>(static_cast<std::make_unsigned_t<encodeType>>(readLittleEndian<encodeType>(pos)));
     }
 }
 
@@ -236,16 +236,16 @@ public:
             switch (length)
             {
             case sizeof(UInt8):
-                data.push_back(readInt<T, UInt8>(raw_value.c_str() + cursor));
+                data.push_back(decodeInt<T, UInt8>(raw_value.c_str() + cursor));
                 break;
             case sizeof(UInt16):
-                data.push_back(readInt<T, UInt16>(raw_value.c_str() + cursor));
+                data.push_back(decodeInt<T, UInt16>(raw_value.c_str() + cursor));
                 break;
             case sizeof(UInt32):
-                data.push_back(readInt<T, UInt32>(raw_value.c_str() + cursor));
+                data.push_back(decodeInt<T, UInt32>(raw_value.c_str() + cursor));
                 break;
             case sizeof(UInt64):
-                data.push_back(readInt<T, UInt64>(raw_value.c_str() + cursor));
+                data.push_back(decodeInt<T, UInt64>(raw_value.c_str() + cursor));
                 break;
             default:
                 throw Exception("Invalid integer length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);

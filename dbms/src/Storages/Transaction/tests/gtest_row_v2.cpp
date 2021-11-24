@@ -1,7 +1,7 @@
 #include <Storages/Transaction/RowCodec.h>
 #include <gtest/gtest.h>
 
-#include "row_v2_basic_include.h"
+#include "row_codec_test_basic_include.h"
 
 namespace DB::tests
 {
@@ -12,7 +12,7 @@ bool isBig(const TiKVValue::Base & encoded)
     return encoded[1] & BigRowMask;
 }
 
-#define ASSERT_INT_VALUE_LENGTH(v, l) ASSERT_EQ(getValueLength<false>(v), std::make_tuple(v, l))
+#define ASSERT_INT_VALUE_LENGTH(v, l) ASSERT_EQ(getValueLengthByRowV2<false>(v), std::make_tuple(v, l))
 
 TEST(RowV2Suite, IntValueLength)
 {
@@ -46,7 +46,7 @@ TEST(RowV2Suite, IntValueLength)
     ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt64>::min(), 1UL);
 }
 
-#define ASSERT_FLOAT_VALUE(f) ASSERT_DOUBLE_EQ(std::get<0>(getValueLength<false>(f)), f)
+#define ASSERT_FLOAT_VALUE(f) ASSERT_DOUBLE_EQ(std::get<0>(getValueLengthByRowV2<false>(f)), f)
 
 TEST(RowV2Suite, FloatValue)
 {
@@ -58,7 +58,7 @@ TEST(RowV2Suite, FloatValue)
     ASSERT_FLOAT_VALUE(std::numeric_limits<Float64>::max());
 }
 
-#define ASSERT_STRING_VALUE_LENGTH(b, s) ASSERT_EQ(getValueLength<b>(s), std::make_tuple(s, s.length()))
+#define ASSERT_STRING_VALUE_LENGTH(b, s) ASSERT_EQ(getValueLengthByRowV2<b>(s), std::make_tuple(s, s.length()))
 
 TEST(RowV2Suite, StringValueLength)
 {
@@ -68,7 +68,7 @@ TEST(RowV2Suite, StringValueLength)
     ASSERT_STRING_VALUE_LENGTH(true, String(std::numeric_limits<UInt16>::max() + 1, 'a'));
 }
 
-#define ASSERT_DECIMAL_VALUE(d) ASSERT_EQ(std::get<0>(getValueLength<false>(d)), d)
+#define ASSERT_DECIMAL_VALUE(d) ASSERT_EQ(std::get<0>(getValueLengthByRowV2<false>(d)), d)
 
 TEST(RowV2Suite, DecimalValueLength)
 {
@@ -79,18 +79,17 @@ TEST(RowV2Suite, DecimalValueLength)
 
 #define ASSERT_ROW_VALUE(is_big, ...)                                               \
     {                                                                               \
-        auto [table_info, column_lut, fields] = getTableInfoLutFields(__VA_ARGS__); \
+        auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false, __VA_ARGS__);\
         WriteBufferFromOwnString ss;                                                       \
         encodeRowV2(table_info, fields, ss);                                        \
         auto encoded = ss.str();                                                    \
         ASSERT_EQ(is_big, isBig(encoded));                                          \
-        auto * decoded = decodeRow(encoded, table_info, column_lut);                \
-        ASSERT_EQ(fields.size(), decoded->decoded_fields.size());                   \
+        auto block = decodeRowToBlock(encoded, decoding_schema);                \
+        ASSERT_EQ(fields.size(), block.columns());                   \
         for (size_t i = 0; i < fields.size(); i++)                                  \
         {                                                                           \
-            ASSERT_EQ(fields[i], decoded->decoded_fields[i].field);                 \
+            ASSERT_EQ(fields[i], ((*block.getByPosition(i).column)[0]));                 \
         }                                                                           \
-        delete decoded;                                                             \
     }
 
 TEST(RowV2Suite, SmallRow)

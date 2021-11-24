@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Common/RedactHelpers.h>
-#include <Storages/Transaction/AtomicDecodedRow.h>
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
 

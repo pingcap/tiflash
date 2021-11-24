@@ -7,7 +7,7 @@
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
-#include <Storages/Transaction/RowCodec.h>
+#include <Storages/Transaction/DatumCodec.h>
 
 
 template <typename T>
