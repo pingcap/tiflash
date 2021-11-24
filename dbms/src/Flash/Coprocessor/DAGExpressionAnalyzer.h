@@ -86,7 +86,7 @@ public:
 
     String getActions(
         const tipb::Expr & expr,
-        ExpressionActions & actions,
+        ExpressionActionsPtr & actions,
         bool output_as_uint8_type = false);
 
     // appendExtraCastsAfterTS will append extra casts after tablescan if needed.
@@ -125,7 +125,7 @@ private:
         SortDescription & sort_desc,
         NamesAndTypes & names_and_types,
         TiDB::TiDBCollators & collators,
-        ExpressionActions & actions);
+        ExpressionActionsPtr & actions);
 
     void buildGroupConcat(
         const tipb::Expr & expr,
@@ -142,12 +142,12 @@ private:
 
     String appendCast(
         const DataTypePtr & target_type,
-        ExpressionActions & actions,
+        ExpressionActionsPtr & actions,
         const String & expr_name);
 
     String appendCastIfNeeded(
         const tipb::Expr & expr,
-        ExpressionActions & actions,
+        ExpressionActionsPtr & actions,
         const String & expr_name,
         bool explicit_cast);
 
@@ -162,35 +162,35 @@ private:
      */
     String alignReturnType(
         const tipb::Expr & expr,
-        ExpressionActions & actions,
+        ExpressionActionsPtr & actions,
         const String & expr_name,
         bool force_uint8);
 
     String applyFunction(
         const String & func_name,
         const Names & arg_names,
-        ExpressionActions & actions,
+        ExpressionActionsPtr & actions,
         const TiDB::TiDBCollatorPtr & collator);
 
     String appendTimeZoneCast(
         const String & tz_col,
         const String & ts_col,
         const String & func_name,
-        ExpressionActions & actions);
+        ExpressionActionsPtr & actions);
 
     String appendDurationCast(
         const String & fsp_expr,
         const String & dur_expr,
         const String & func_name,
-        ExpressionActions & actions);
+        ExpressionActionsPtr & actions);
 
     String convertToUInt8(
-        ExpressionActions & actions,
+        ExpressionActionsPtr & actions,
         const String & column_name);
 
     String buildFunction(
         const tipb::Expr & expr,
-        ExpressionActions & actions);
+        ExpressionActionsPtr & actions);
 
     // all columns from table scan
     std::vector<NameAndTypePair> source_columns;
