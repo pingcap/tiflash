@@ -2,6 +2,8 @@
 
 #include <Common/FmtUtils.h>
 
+#include <chrono>
+
 
 namespace DB
 {
