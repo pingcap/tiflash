@@ -215,8 +215,8 @@ try
     ASSERT_TRUE(file->isClosed());
 
     // Do it twice to ensure we can call close safely on a closed file
-    // file->close();
-    // ASSERT_TRUE(file->isClosed());
+    file->close();
+    ASSERT_TRUE(file->isClosed());
 }
 CATCH
 

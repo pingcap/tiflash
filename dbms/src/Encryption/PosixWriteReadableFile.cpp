@@ -97,7 +97,6 @@ void PosixWriteReadableFile::close()
     metric_increment.changeTo(0); // Subtract metrics for `CurrentMetrics::OpenFileForWrite`
 
     fd = -1;
-    metric_increment.destroy();
 }
 
 ssize_t PosixWriteReadableFile::pwrite(char * buf, size_t size, off_t offset) const
