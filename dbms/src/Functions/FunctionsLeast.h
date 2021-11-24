@@ -68,19 +68,35 @@ public:
             }
         }
 
-        DataTypePtr type_res;
         auto res = FunctionMultiIf{context}.getReturnTypeImpl(new_args);
-        if (!(checkType<DataTypeInt8>(res, type_res)
-              || checkType<DataTypeInt16>(res, type_res)
-              || checkType<DataTypeInt32>(res, type_res)
-              || checkType<DataTypeInt64>(res, type_res)
-              || checkType<DataTypeFloat32>(res, type_res)
-              || checkType<DataTypeFloat64>(res, type_res)))
+        if (!(checkType<DataTypeInt8>(res)
+              || checkType<DataTypeInt16>(res)
+              || checkType<DataTypeInt32>(res)
+              || checkType<DataTypeInt64>(res)
+              || checkType<DataTypeFloat32>(res)
+              || checkType<DataTypeFloat64>(res)))
             throw Exception(
                 "Illegal types " + res->getName() + " of arguments of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return type_res;
+        if (checkType<DataTypeInt8>(res)
+           || checkType<DataTypeInt16>(res)
+           || checkType<DataTypeInt32>(res)
+           || checkType<DataTypeInt64>(res)) 
+        {
+            return std::make_shared<DataTypeInt64>();
+        }
+
+        if (checkType<DataTypeFloat32>(res)
+            || checkType<DataTypeFloat64>(res))
+        {
+            return std::make_shared<DataTypeFloat64>();
+        }
+
+        throw Exception(
+                "Illegal types " + res->getName() + " of arguments of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result [[maybe_unused]]) const override
@@ -123,17 +139,6 @@ public:
 
 private:
     const Context & context;
-    template <typename T0>
-    bool checkType(const DataTypePtr & arg, DataTypePtr & type_res) const
-    {
-        if (typeid_cast<const T0 *>(arg.get()))
-        {
-            type_res = std::make_shared<T0>();
-            return true;
-        }
-        return false;
-    }
-    
 
     template <typename T0>
     bool checkType(const DataTypePtr & arg) const
@@ -166,7 +171,7 @@ private:
                     if (checkType<DataTypeInt8>(cur_type))
                     {
                         const auto * cur_col = checkAndGetColumn<ColumnVector<DataTypeInt8::FieldType>>(
-                                                    block.getByPosition(arguments[0]).column.get());
+                                                    block.getByPosition(arguments[j]).column.get());
                         const auto & val = cur_col->getData();
                         cur_val = cur_val < static_cast<T>(val[i]) ? cur_val : static_cast<T>(val[i]);
                         vec_res[i] = cur_val;
@@ -174,7 +179,7 @@ private:
                     else if (checkType<DataTypeInt16>(cur_type))
                     {
                         const auto * cur_col = checkAndGetColumn<ColumnVector<DataTypeInt16::FieldType>>(
-                                                    block.getByPosition(arguments[0]).column.get());
+                                                    block.getByPosition(arguments[j]).column.get());
                         const auto & val = cur_col->getData();
                         cur_val = cur_val < static_cast<T>(val[i]) ? cur_val : static_cast<T>(val[i]);
                         vec_res[i] = cur_val;
@@ -182,7 +187,7 @@ private:
                     else if (checkType<DataTypeInt32>(cur_type))
                     {
                         const auto * cur_col = checkAndGetColumn<ColumnVector<DataTypeInt32::FieldType>>(
-                                                    block.getByPosition(arguments[0]).column.get());
+                                                    block.getByPosition(arguments[j]).column.get());
                         const auto & val = cur_col->getData();
                         cur_val = cur_val < static_cast<T>(val[i]) ? cur_val : static_cast<T>(val[i]);
                         vec_res[i] = cur_val;
@@ -190,7 +195,7 @@ private:
                     else if (checkType<DataTypeInt64>(cur_type))
                     {
                         const auto * cur_col = checkAndGetColumn<ColumnVector<DataTypeInt64::FieldType>>(
-                                                    block.getByPosition(arguments[0]).column.get());
+                                                    block.getByPosition(arguments[j]).column.get());
                         const auto & val = cur_col->getData();
                         cur_val = cur_val < static_cast<T>(val[i]) ? cur_val : static_cast<T>(val[i]);
                         vec_res[i] = cur_val;
