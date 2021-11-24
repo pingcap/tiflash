@@ -223,6 +223,7 @@ class Matcher:
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CMD_PREFIX_TIDB):]
+            if verbose: print self.query
             self.outputs = self.executor_tidb.exe(self.query)
             self.outputs = map(lambda x: x.strip(), self.outputs)
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
