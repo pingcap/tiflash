@@ -116,17 +116,17 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
                                     PageId                      stable_id,
                                     WriteBatches &              wbs)
 {
-    auto delegate   = context.path_pool.getStableDiskDelegator();
-    auto store_path = delegate.choosePath();
+    auto delegator   = context.path_pool.getStableDiskDelegator();
+    auto store_path = delegator.choosePath();
 
-    PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path);
+    PageId dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile});
     stable->saveMeta(wbs.meta);
-    wbs.data.putExternal(dmfile_id, 0);
-    delegate.addDTFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
-
+    wbs.data.putExternal(dtfile_id, 0);
+    delegator.addDTFile(dtfile_id, dmfile->getBytesOnDisk(), store_path);
+    
     return stable;
 }
 
@@ -771,15 +771,15 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     DMFiles my_stable_files;
     DMFiles other_stable_files;
 
-    auto delegate = dm_context.path_pool.getStableDiskDelegator();
+    auto delegator = dm_context.path_pool.getStableDiskDelegator();
     for (auto & dmfile : segment_snap->stable->getDMFiles())
     {
         auto ori_ref_id       = dmfile->refId();
         auto file_id          = segment_snap->delta->storage_snap->data_reader.getNormalPageId(ori_ref_id);
-        auto file_parent_path = delegate.getDTFilePath(file_id);
+        auto file_parent_path = delegator.getDTFilePath(file_id);
 
-        auto my_dmfile_id    = storage_pool.newDataPageId();
-        auto other_dmfile_id = storage_pool.newDataPageId();
+        auto my_dmfile_id    = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto other_dmfile_id = storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
 
         wbs.data.putRefPage(my_dmfile_id, file_id);
         wbs.data.putRefPage(other_dmfile_id, file_id);

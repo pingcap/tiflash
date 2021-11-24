@@ -1,3 +1,5 @@
+#include <Common/FailPoint.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -6,6 +8,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_set_dtfile_exist_when_acquire_id[];
+} // namespace FailPoints
 namespace DM
 {
 enum class StorageType
@@ -66,7 +72,8 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
                    global_ctx.getTiFlashMetrics()),
       max_log_page_id(0),
       max_data_page_id(0),
-      max_meta_page_id(0)
+      max_meta_page_id(0),
+      global_context(global_ctx)
 {
 }
 
@@ -88,6 +95,37 @@ void StoragePool::drop()
     log_storage.drop();
 }
 
+PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
+{
+    // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
+    // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may
+    // get a duplicated ID from the `storage_pool.data`. (tics#2756)
+    PageId dtfile_id;
+    do
+    {
+        dtfile_id = ++max_data_page_id;
+
+        auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
+        fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
+            static size_t fail_point_called = 0;
+            if (existed_path.empty() && fail_point_called % 10 == 0)
+            {
+                existed_path = "<mock for existed path>";
+            }
+            fail_point_called++;
+        });
+        if (likely(existed_path.empty()))
+        {
+            break;
+        }
+        // else there is a DTFile with that id, continue to acquire a new ID.
+        LOG_WARNING(&Poco::Logger::get(who),
+                    "The DTFile is already exists, continute to acquire another ID. [path=" + existed_path
+                        + "] [id=" + DB::toString(dtfile_id) + "]");
+    } while (true);
+    return dtfile_id;
+}
+
 bool StoragePool::gc(const Settings & /*settings*/, const Seconds & try_gc_period)
 {
     {
@@ -100,22 +138,22 @@ bool StoragePool::gc(const Settings & /*settings*/, const Seconds & try_gc_perio
         last_try_gc_time = now;
     }
 
-    bool ok = false;
+    bool done_anything = false;
 
     // FIXME: The global_context.settings is mutable, we need a way to reload thses settings.
     // auto config = extractConfig(settings, StorageType::Meta);
     // meta_storage.reloadSettings(config);
-    ok |= meta_storage.gc();
+    done_anything |= meta_storage.gc();
 
     // config = extractConfig(settings, StorageType::Data);
     // data_storage.reloadSettings(config);
-    ok |= data_storage.gc();
+    done_anything |= data_storage.gc();
 
     // config = extractConfig(settings, StorageType::Log);
     // log_storage.reloadSettings(config);
-    ok |= log_storage.gc();
+    done_anything |= log_storage.gc();
 
-    return ok;
+    return done_anything;
 }
 
 } // namespace DM
