@@ -237,7 +237,7 @@ struct ExpressionActionsChain
         ExpressionActionsPtr actions;
         Names required_output;
 
-        std::function<void (const ExpressionActionsPtr &)> callback;
+        std::function<void(const ExpressionActionsPtr &)> callback;
 
         Step(const ExpressionActionsPtr & actions_ = nullptr, const Names & required_output_ = Names())
             : actions(actions_)
