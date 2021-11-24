@@ -50,7 +50,6 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
     , keep_session_timezone_info(keep_session_timezone_info_)
-    , rqst(dag_.getDAGRequest())
     , max_streams(max_streams_)
     , dag(dag_)
     , subqueries_for_sets(subqueries_for_sets_)
@@ -954,7 +953,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         executeJoin(query_block.source->join(), pipeline, right_query);
-        recordProfileStreams(pipeline, query_block.source_name);
 
         SubqueriesForSets subquries;
         subquries[query_block.qb_join_subquery_alias] = right_query;
@@ -980,7 +978,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             source_columns.emplace_back(NameAndTypePair(col.name, col.type));
         }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-        recordProfileStreams(pipeline, query_block.source_name);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
     {
@@ -1007,13 +1004,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
         executeProject(pipeline, project_cols);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
-        recordProfileStreams(pipeline, query_block.source_name);
     }
     else
     {
         executeTableScan(query_block.source->tbl_scan(), pipeline);
         dag.getDAGContext().table_scan_executor_id = query_block.source_name;
     }
+    recordProfileStreams(pipeline, query_block.source_name);
 
     auto res = analyzeExpressions(
         context,

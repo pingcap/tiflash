@@ -21,7 +21,6 @@
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <map>
-#include <mutex>
 
 namespace DB
 {
