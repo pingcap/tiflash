@@ -2,17 +2,23 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
-#include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/ColumnVector.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsConditional.h>
 #include <Functions/IFunction.h>
+#include <openssl/ec.h>
 
-#include "DataTypes/DataTypeEnum.h"
-#include "DataTypes/DataTypeNothing.h"
-#include "DataTypes/DataTypesNumber.h"
-#include "Functions/FunctionHelpers.h"
-#include "Functions/FunctionsConditional.h"
-#include "ext/range.h"
+#include <cstddef>
+#include <ext/range.h>
+#include "Columns/IColumn.h"
+#include "DataTypes/IDataType.h"
 
 namespace DB
 {
@@ -62,8 +68,8 @@ public:
             }
         }
 
-        auto res = FunctionMultiIf{context}.getReturnTypeImpl(new_args);
         DataTypePtr type_res;
+        auto res = FunctionMultiIf{context}.getReturnTypeImpl(new_args);
         if (!(checkType<DataTypeInt8>(res, type_res)
               || checkType<DataTypeInt16>(res, type_res)
               || checkType<DataTypeInt32>(res, type_res)
@@ -74,12 +80,12 @@ public:
                 "Illegal types " + res->getName() + " of arguments of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return makeNullable(type_res);
+        return type_res;
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result [[maybe_unused]]) const override
     {
-        if (arguments.size() <= 1)
+        if (arguments.size() < 2)
         {
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
                                 + toString(arguments.size()) + ", should be at least 2.",
@@ -94,20 +100,19 @@ public:
                 types.push_back(cur_arg);
             }
             DataTypePtr result_type = getReturnTypeImpl(types);
-            DataTypePtr type_res [[maybe_unused]];
 
-            if (checkType<DataTypeInt8>(result_type, type_res)
-                || checkType<DataTypeInt16>(result_type, type_res)
-                || checkType<DataTypeInt32>(result_type, type_res)
-                || checkType<DataTypeInt64>(result_type, type_res))
+            if (checkType<DataTypeInt8>(result_type)
+                || checkType<DataTypeInt16>(result_type)
+                || checkType<DataTypeInt32>(result_type)
+                || checkType<DataTypeInt64>(result_type))
             {
-                return executeNary<DataTypeInt64>(block, arguments, result);
+                return executeNary<DataTypeInt64::FieldType>(block, arguments, result, types);
             }
 
-            if (checkType<DataTypeFloat32>(result_type, type_res)
-                || checkType<DataTypeFloat64>(result_type, type_res))
+            if (checkType<DataTypeFloat32>(result_type)
+                || checkType<DataTypeFloat64>(result_type))
             {
-                return executeNary<DataTypeFloat64>(block, arguments, result);
+                return executeNary<DataTypeFloat64::FieldType>(block, arguments, result, types);
             }
 
             throw Exception(
@@ -118,38 +123,83 @@ public:
 
 private:
     const Context & context;
-    template <typename T>
+    template <typename T0>
     bool checkType(const DataTypePtr & arg, DataTypePtr & type_res) const
     {
-        if (typeid_cast<const T *>(arg.get()))
+        if (typeid_cast<const T0 *>(arg.get()))
         {
-            type_res = std::make_shared<T>();
+            type_res = std::make_shared<T0>();
             return true;
         }
         return false;
     }
+    
+
+    template <typename T0>
+    bool checkType(const DataTypePtr & arg) const
+    {
+        return static_cast<bool>(typeid_cast<const T0 *>(arg.get()));
+    }
+
 
     template <typename T>
-    void executeNary(Block & block, const ColumnNumbers & arguments, size_t result [[maybe_unused]]) const
+    void executeNary(Block & block, const ColumnNumbers & arguments, size_t result, DataTypes & types) const
     {
-        auto col_left [[maybe_unused]] = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[0]).column.get());
-        auto col_right [[maybe_unused]] = checkAndGetColumn<ColumnVector<T>>(block.getByPosition(arguments[1]).column.get());
-        auto & left_val [[maybe_unused]] = col_left->getData();
-        auto & right_val [[maybe_unused]] = col_right->getData();
-        size_t size = col_left->size();
-        auto out_col = ColumnVector<T>::create(size);
-        typename ColumnVector<T>::Container & vec_res = out_col->getData();
-        vec_res.resize(col_left->getData().size());
-
-        for (size_t i = 0; i < size; ++i)
+        // just a POC.
+        const DataTypePtr first_type = types[0];
+        if (checkType<DataTypeInt8>(first_type))
         {
-            // check null?
-            // vec_res[i] = static_cast<T>(left_val[i]) < static_cast<T>(right_val[i])
-            // ? static_cast<T>(left_val[i])
-            // : static_cast<T>(right_val[i]);
+            const auto * first_col = checkAndGetColumn<ColumnVector<DataTypeInt8::FieldType>>(
+                block.getByPosition(arguments[0]).column.get());
+            
+            size_t size = first_col->size(); 
+            auto out_col = ColumnVector<T>::create(size);
+            typename ColumnVector<T>::Container & vec_res = out_col->getData();
+            vec_res.resize(size);
+            const auto & first_val = first_col->getData();
+            for (size_t i = 0; i < size; i++) 
+            {
+                T cur_val = static_cast<T>(static_cast<unsigned char>(first_val[i]));  // so ugly... and not reuseable
+                for (size_t j = 1; j < arguments.size(); j++)
+                {
+                    const DataTypePtr cur_type = types[j];
+                    if (checkType<DataTypeInt8>(cur_type))
+                    {
+                        const auto * cur_col = checkAndGetColumn<ColumnVector<DataTypeInt8::FieldType>>(
+                                                    block.getByPosition(arguments[0]).column.get());
+                        const auto & val = cur_col->getData();
+                        cur_val = cur_val < static_cast<T>(val[i]) ? cur_val : static_cast<T>(val[i]);
+                        vec_res[i] = cur_val;
+                    } 
+                    else if (checkType<DataTypeInt16>(cur_type))
+                    {
+                        const auto * cur_col = checkAndGetColumn<ColumnVector<DataTypeInt16::FieldType>>(
+                                                    block.getByPosition(arguments[0]).column.get());
+                        const auto & val = cur_col->getData();
+                        cur_val = cur_val < static_cast<T>(val[i]) ? cur_val : static_cast<T>(val[i]);
+                        vec_res[i] = cur_val;
+                    } 
+                    else if (checkType<DataTypeInt32>(cur_type))
+                    {
+                        const auto * cur_col = checkAndGetColumn<ColumnVector<DataTypeInt32::FieldType>>(
+                                                    block.getByPosition(arguments[0]).column.get());
+                        const auto & val = cur_col->getData();
+                        cur_val = cur_val < static_cast<T>(val[i]) ? cur_val : static_cast<T>(val[i]);
+                        vec_res[i] = cur_val;
+                    } 
+                    else if (checkType<DataTypeInt64>(cur_type))
+                    {
+                        const auto * cur_col = checkAndGetColumn<ColumnVector<DataTypeInt64::FieldType>>(
+                                                    block.getByPosition(arguments[0]).column.get());
+                        const auto & val = cur_col->getData();
+                        cur_val = cur_val < static_cast<T>(val[i]) ? cur_val : static_cast<T>(val[i]);
+                        vec_res[i] = cur_val;
+                    }
+                }
+            }  
+            // todo tidy up code...
+            block.getByPosition(result).column = std::move(out_col);
         }
-
-        block.getByPosition(result).column = std::move(out_col);
     }
 };
 
