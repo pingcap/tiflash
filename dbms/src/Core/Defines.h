@@ -92,8 +92,6 @@
 
 #define DEFAULT_METRICS_PORT 8234
 
-#define DEFAULT_PROXY_ADDR "127.0.0.1:20170"
-
 #define DEFAULT_HTTP_PORT 8123
 
 #if !defined(__x86_64__) && !defined(__aarch64__)
