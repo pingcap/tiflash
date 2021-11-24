@@ -57,7 +57,8 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("random_kill", value<uint64_t>()->default_value(0), "") //
         ("max_sleep_sec", value<uint64_t>()->default_value(600), "") //
         //
-        ("work_dirs", value<std::vector<std::string>>()->multitoken(), "dir1 dir2 dir3...") //
+        // std::vector<std::string>{"tmp1", "tmp2", "tmp3"}
+        ("work_dirs", value<std::vector<std::string>>()->multitoken()->default_value(std::vector<std::string>{"tmp1", "tmp2", "tmp3"}, "tmp1 tmp2 tmp3"), "dir1 dir2 dir3...") //
         ("config_file", value<std::string>()->default_value(""), "Configuation file of DeltaTree") //
         ;
 
@@ -86,10 +87,6 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     }
 
     log_file = vm["log_file"].as<std::string>();
-    if (log_file.empty())
-    {
-        log_file = fmt::format("{}dt_workload-{}.log", DB::tests::TiFlashTestEnv::getTemporaryPath(), localTime());
-    }
     log_level = vm["log_level"].as<std::string>();
 
     verification = vm["verification"].as<bool>();
@@ -108,6 +105,11 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     if (verification && random_kill > 0)
     {
         return {false, fmt::format("Disallow verification({}) and randomly kill({}) are enabled simultaneously.", verification, random_kill)};
+    }
+
+    if (log_file.empty())
+    {
+        log_file = fmt::format("{}/dt_workload_{}.log", work_dirs[0], localTime());
     }
 
     return {true, toString()};

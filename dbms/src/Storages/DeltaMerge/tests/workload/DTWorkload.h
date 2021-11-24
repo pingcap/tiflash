@@ -35,7 +35,7 @@ class SharedHandleTable;
 class DTWorkload
 {
 public:
-    DTWorkload(const WorkloadOptions & opts_);
+    DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_);
     ~DTWorkload();
 
     void run(uint64_t r);
@@ -53,7 +53,6 @@ public:
     struct Statistics
     {
         double init_store_sec = 0.0;
-        double init_handle_table_sec = 0.0;
         std::vector<ThreadWriteStat> write_stats;
         uint64_t total_read_count = 0;
         double total_read_sec = 0.0;
@@ -71,7 +70,6 @@ private:
     void write(ThreadWriteStat & write_stat);
     void verifyHandle(uint64_t r);
     void randomRead();
-    void initHandleTable();
     template <typename T>
     void read(const ColumnDefines & columns, int stream_count, T func);
 
@@ -86,7 +84,7 @@ private:
     std::unique_ptr<DeltaMergeStore> store;
 
     std::unique_ptr<HandleLock> handle_lock;
-    std::unique_ptr<SharedHandleTable> handle_table;
+    std::shared_ptr<SharedHandleTable> handle_table;
 
     std::atomic<int> writing_threads;
 

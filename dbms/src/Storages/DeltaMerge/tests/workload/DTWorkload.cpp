@@ -30,9 +30,10 @@ DB::Settings createSettings(const std::string & fname)
     return settings;
 }
 
-DTWorkload::DTWorkload(const WorkloadOptions & opts_)
+DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_)
     : log(&Poco::Logger::get("DTWorkload"))
     , opts(std::make_unique<WorkloadOptions>(opts_))
+    , handle_table(handle_table_)
     , writing_threads(0)
 {
     auto settings = createSettings(opts_.config_file);
@@ -61,7 +62,6 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_)
     if (opts_.verification)
     {
         handle_lock = std::make_unique<HandleLock>();
-        initHandleTable();
         verifyHandle(std::numeric_limits<uint64_t>::max()); // uint64_max means recovery.
     }
 }
@@ -69,24 +69,6 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_)
 DTWorkload::~DTWorkload()
 {
     store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-}
-
-void DTWorkload::initHandleTable()
-{
-    // HandleTable supports simply WAL to handle crash recovery and verify data consistency with DeltaMergeStore.
-    // However, DeltaMergeStore may loss data after crash.
-    // Currently, we use this WAL to recover handle table after gracefully shutdown and open again (Although seems not very necessary).
-    auto wal_dir = fmt::format("{}handle_wal/{}/{}", DB::tests::TiFlashTestEnv::getTemporaryPath(), table_info->db_name, table_info->table_name);
-    LOG_INFO(log, "wal_dir: " << wal_dir);
-
-    // Create wal dir if not exist...use 'system' for simplicity.
-    auto cmd = fmt::format("mkdir -p {}", wal_dir);
-    system(cmd.c_str());
-
-    Stopwatch sw;
-    handle_table = std::make_unique<SharedHandleTable>(wal_dir);
-    stat.init_handle_table_sec = sw.elapsedSeconds();
-    LOG_INFO(log, fmt::format("Init handle table {} seconds", stat.init_handle_table_sec));
 }
 
 void DTWorkload::write(ThreadWriteStat & write_stat)

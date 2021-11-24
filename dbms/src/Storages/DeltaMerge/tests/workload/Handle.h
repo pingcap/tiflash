@@ -176,7 +176,7 @@ class SharedHandleTable
 public:
     static constexpr uint64_t default_shared_count = 4096;
 
-    SharedHandleTable(const std::string & waldir, uint64_t shared_cnt = default_shared_count)
+    SharedHandleTable(const std::string & waldir = "", uint64_t shared_cnt = default_shared_count)
         : tables(shared_cnt)
     {
         for (uint64_t i = 0; i < shared_cnt; i++)

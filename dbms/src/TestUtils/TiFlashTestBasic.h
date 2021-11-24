@@ -160,7 +160,7 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
-    static void initializeGlobalContext();
+    static void initializeGlobalContext(Strings testdata_path = {});
     static Context & getGlobalContext() { return *global_context; }
     static void shutdown();
 

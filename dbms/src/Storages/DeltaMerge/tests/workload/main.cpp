@@ -1,4 +1,5 @@
 #include <Storages/DeltaMerge/tests/workload/DTWorkload.h>
+#include <Storages/DeltaMerge/tests/workload/Handle.h>
 #include <Storages/DeltaMerge/tests/workload/Options.h>
 #include <Storages/DeltaMerge/tests/workload/Utils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -11,7 +12,7 @@ using namespace DB::DM::tests;
 
 void init(WorkloadOptions & opts)
 {
-    TiFlashTestEnv::initializeGlobalContext();
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs);
     static std::ofstream log_ofs(opts.log_file, std::ios_base::out | std::ios_base::app);
     if (!log_ofs)
     {
@@ -29,7 +30,7 @@ void shutdown()
 void print(uint64_t i, const DTWorkload::Statistics & stat)
 {
     std::cerr << fmt::format("[{}]{}\n", i, localTime());
-    std::cerr << fmt::format("init_store_sec {} init_handle_table_sec {}\n", stat.init_store_sec, stat.init_handle_table_sec);
+    std::cerr << fmt::format("init_store_sec {}\n", stat.init_store_sec);
     std::cerr << fmt::format("total_read_count {} total_read_sec {}\n", stat.total_read_count, stat.total_read_sec);
     for (size_t k = 0; k < stat.write_stats.size(); k++)
     {
@@ -38,15 +39,22 @@ void print(uint64_t i, const DTWorkload::Statistics & stat)
     std::cerr << fmt::format("verify_count {} verify_sec {}\n", stat.verify_count, stat.verify_sec);
 }
 
+std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
+{
+    return opts.verification ? std::make_unique<SharedHandleTable>() : nullptr;
+}
+
 void run(WorkloadOptions & opts)
 {
     try
     {
         init(opts);
+        // HandleTable is a unordered_map that stores handle->timestamp for data verified.
+        auto handle_table = createHandleTable(opts);
         // In this for loop, destory DeltaMergeStore gracefully and recreate it.
         for (uint64_t i = 0; i < opts.verify_round; i++)
         {
-            DTWorkload workload(opts);
+            DTWorkload workload(opts, handle_table);
             workload.run(i);
             auto stat = workload.getStat();
             print(i, stat);
