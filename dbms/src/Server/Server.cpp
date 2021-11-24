@@ -216,6 +216,7 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
+    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     const String engine_store_version = "engine-version";
     const String engine_store_git_hash = "engine-git-hash";
     const String engine_store_address = "engine-addr";
