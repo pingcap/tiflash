@@ -19,7 +19,7 @@ UNFINISHED_2_PREFIX = '   '
 WORD_PH = '{#WORD}'
 CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 
-verbose = False
+verbose = True
 
 
 class Executor:
