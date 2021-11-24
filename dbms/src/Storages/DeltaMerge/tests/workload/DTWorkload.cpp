@@ -1,4 +1,6 @@
+#include <Common/Config/TOMLConfiguration.h>
 #include <Poco/Logger.h>
+#include <Poco/Util/LayeredConfiguration.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
@@ -12,14 +14,30 @@
 #include <Storages/DeltaMerge/tests/workload/TableGenerator.h>
 #include <Storages/DeltaMerge/tests/workload/TimestampGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <cpptoml.h>
 namespace DB::DM::tests
 {
+DB::Settings createSettings(const std::string & fname)
+{
+    DB::Settings settings;
+    if (!fname.empty())
+    {
+        auto table = cpptoml::parse_file(fname);
+        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
+        config->add(new DB::TOMLConfiguration(table), /*shared=*/false); // Take ownership of TOMLConfig
+        settings.setProfile("default", *config);
+    }
+    return settings;
+}
+
 DTWorkload::DTWorkload(const WorkloadOptions & opts_)
     : log(&Poco::Logger::get("DTWorkload"))
-    , context(std::make_unique<Context>(DMTestEnv::getContext()))
     , opts(std::make_unique<WorkloadOptions>(opts_))
     , writing_threads(0)
 {
+    auto settings = createSettings(opts_.config_file);
+    context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext(settings, opts_.work_dirs));
+
     table_gen = TableGenerator::create(opts_);
     table_info = std::make_unique<TableInfo>(table_gen->get());
     auto v = table_info->toStrings();

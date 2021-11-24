@@ -24,13 +24,16 @@ std::string WorkloadOptions::toString() const
         fmt::format("verification {}\n", verification) + //
         fmt::format("verify_round {}\n", verify_round) + //
         fmt::format("random_kill {}\n", random_kill) + //
-        fmt::format("max_sleep_sec {}\n", max_sleep_sec);
+        fmt::format("max_sleep_sec {}\n", max_sleep_sec) + //
+        fmt::format("work_dirs {}\n", work_dirs) + //
+        fmt::format("config_file {}\n", config_file);
 }
 
 std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv[])
 {
     using boost::program_options::value;
     boost::program_options::options_description desc("Allowed options");
+
     desc.add_options() //
         ("help", "produce help message") //
         ("max_key_count", value<uint64_t>()->default_value(1000000), "") //
@@ -43,7 +46,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("pk_type", value<std::string>()->default_value(""), "tidb_rowid/pk_is_handle64") //
         ("columns_count", value<uint64_t>()->default_value(0), "0 means random columns count") //
         //
-        ("failpoints,F", value<std::vector<std::string>>(), "failpoint(s) to enable") //
+        ("failpoints,F", value<std::vector<std::string>>()->multitoken(), "failpoint(s) to enable: fp1 fp2 fp3...") //
         //
         ("log_file", value<std::string>()->default_value(""), "") //
         ("log_level", value<std::string>()->default_value("debug"), "") //
@@ -53,6 +56,9 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("random_kill", value<uint64_t>()->default_value(0), "") //
         ("max_sleep_sec", value<uint64_t>()->default_value(600), "") //
+        //
+        ("work_dirs", value<std::vector<std::string>>()->multitoken(), "dir1 dir2 dir3...") //
+        ("config_file", value<std::string>()->default_value(""), "Configuation file of DeltaTree") //
         ;
 
     boost::program_options::variables_map vm;
@@ -91,6 +97,12 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     random_kill = vm["random_kill"].as<uint64_t>();
     max_sleep_sec = vm["max_sleep_sec"].as<uint64_t>();
+
+    if (vm.count("work_dirs"))
+    {
+        work_dirs = vm["work_dirs"].as<std::vector<std::string>>();
+    }
+    config_file = vm["config_file"].as<std::string>();
 
     // Randomly kill could cause DeltaMergeStore loss some data, so disallow verification and random_kill both enable.
     if (verification && random_kill > 0)

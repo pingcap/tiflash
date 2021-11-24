@@ -29,6 +29,9 @@ struct WorkloadOptions
     uint64_t random_kill;
     uint64_t max_sleep_sec;
 
+    std::vector<std::string> work_dirs;
+    std::string config_file;
+
     std::string toString() const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
     void initFailpoints() const;
