@@ -31,6 +31,7 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_al
 
 mysql> drop table if exists test.t;
 
+mysql> set @@tidb_general_log=on;
 mysql> drop table if exists test.f;
 mysql> CREATE TABLE test.f (a char(255),b varchar(20), id int);
 mysql> insert into test.f values('abc','fzh',1);
@@ -43,17 +44,6 @@ mysql> alter table test.f set tiflash replica 1;
 mysql> analyze table test.f;
 
 func> wait_table test f
-
-mysql> select hex(a) from test.f;
-+------------------------------------------+
-| hex(a)                                   |
-+------------------------------------------+
-| 616263                                   |
-| 70696E67636170                           |
-| NULL                                     |
-| NULL                                     |
-| E5B9B3E587AF78696E676368656EE585ACE58FB8 |
-+------------------------------------------+
 
 mysql> use test;  select t.c1,t.c2,a,b,id, count(*) from (select left(a,1) c1,right(b,1) c2, a, b, 1 as id from test.f) t group by t.c1, t.c2,a,b,id;
 +------+------+----------------------+------+----+----------+
