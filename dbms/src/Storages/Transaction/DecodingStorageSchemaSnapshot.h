@@ -18,10 +18,16 @@ namespace DB
 using SortedColumnIDWithPos = std::map<ColumnID, size_t>;
 using SortedColumnIDWithPosConstIter = SortedColumnIDWithPos::const_iterator;
 using TableInfo = TiDB::TableInfo;
+using ColumnInfos = std::vector<const TiDB::ColumnInfo *>;
 struct DecodingStorageSchemaSnapshot
 {
+    // There is a one-to-one correspondence between elements in `column_defines` and elements in `column_infos`
+    // Note that some columns(EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN) may be be a real column in tidb schema,
+    // so their corresponding elements in `column_infos` are just nullptr and won't be used when decoding.
     DM::ColumnDefinesPtr column_defines;
-    // column id -> column pos in column_defines
+    ColumnInfos column_infos;
+
+    // column id -> column pos in column_defines/column_infos
     SortedColumnIDWithPos sorted_column_id_with_pos;
 
     // 1. when the table doesn't have a common handle,
@@ -40,10 +46,25 @@ struct DecodingStorageSchemaSnapshot
     DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_, bool is_common_handle_)
         : column_defines{std::move(column_defines_)}, is_common_handle{is_common_handle_}, schema_version{table_info_.schema_version}
     {
+        std::unordered_map<ColumnID, size_t> column_lut;
+        for (size_t i = 0; i < table_info_.columns.size(); i++)
+        {
+            auto & ci = table_info_.columns[i];
+            column_lut.emplace(ci.id, i);
+        }
         for (size_t i = 0; i < column_defines->size(); i++)
         {
-            auto & column_define = (*column_defines)[i];
-            sorted_column_id_with_pos.insert({column_define.id, i});
+            auto & cd = (*column_defines)[i];
+            sorted_column_id_with_pos.insert({cd.id, i});
+            if (cd.id != TiDBPkColumnID && cd.id != VersionColumnID && cd.id != DelMarkColumnID)
+            {
+                auto & columns = table_info_.columns;
+                column_infos.push_back(&columns[column_lut.at(cd.id)]);
+            }
+            else
+            {
+                column_infos.push_back(nullptr);
+            }
         }
 
         // create pk related metadata if needed

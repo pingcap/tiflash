@@ -202,9 +202,9 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
                 auto next_column_pos_copy = next_column_pos;
                 while (column_ids_iter_copy != read_column_ids.end())
                 {
-                    auto & cd = (*schema_snapshot->column_defines)[column_ids_iter_copy->second];
+                    auto & ci = schema_snapshot->column_infos[column_ids_iter_copy->second];
                     // !pk_pos_map.empty() means the table is common index, or pk is handle, so we can decode the pk from the key
-                    if (pk_pos_map.empty() || !cd.is_pk)
+                    if (pk_pos_map.empty() || !ci->hasPriKeyFlag())
                     {
                         auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
                         raw_column->insertDefault();
@@ -215,7 +215,7 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
             }
             else
             {
-                if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_defines, force_decode))
+                if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, force_decode))
                     return false;
             }
         }

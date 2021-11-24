@@ -525,32 +525,73 @@ void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & 
     RowEncoderV2(table_info, fields).encode(ss);
 }
 
-inline bool isMissingColumn(const DM::ColumnDefine & column_define)
-{
-    return !(column_define.has_no_default_value && column_define.is_not_null);
-}
-
-bool appendRowToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
+bool appendRowToBlock(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    bool force_decode)
 {
     switch (static_cast<UInt8>(raw_value[0]))
     {
     case static_cast<UInt8>(RowCodecVer::ROW_V2):
-        return appendRowV2ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_defines, force_decode);
+        return appendRowV2ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, force_decode);
     default:
-        return appendRowV1ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos,  column_defines, force_decode);
+        return appendRowV1ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, force_decode);
     }
 }
 
-bool appendRowV2ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
+bool appendRowV2ToBlock(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    bool force_decode)
 {
     UInt8 row_flag = readLittleEndian<UInt8>(&raw_value[1]);
     bool is_big = row_flag & RowV2::BigRowMask;
-    return is_big ? appendRowV2ToBlockImpl<true>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_defines, force_decode)
-                  : appendRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_defines, force_decode);
+    return is_big ? appendRowV2ToBlockImpl<true>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, force_decode)
+                  : appendRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, force_decode);
+}
+
+inline bool addDefaultValueToColumnIfPossible(const ColumnInfo * column_info, Block & block, size_t block_column_pos, bool force_decode)
+{
+    if (column_info->hasPriKeyFlag())
+    {
+        // we can decode pk from key
+    }
+    else if (column_info->hasNoDefaultValueFlag() && column_info->hasNotNullFlag())
+    {
+        if (likely(!force_decode))
+        {
+            return false;
+        }
+        else
+        {
+            throw Exception("Missing column: " + std::to_string(column_info->id) + " when decoding from data using newer schema. Shouldn't happen", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    else
+    {
+        auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
+        raw_column->insert(column_info->defaultValueToField());
+    }
+    return true;
 }
 
 template <bool is_big>
-bool appendRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
+bool appendRowV2ToBlockImpl(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    bool force_decode)
 {
     size_t cursor = 2; // Skip the initial codec ver and row flag.
     size_t num_not_null_columns = decodeUInt<UInt16>(cursor, raw_value);
@@ -590,32 +631,14 @@ bool appendRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWit
         }
         else if (column_ids_iter->first < next_datum_column_id)
         {
-            auto & column_define = (*column_defines)[column_ids_iter->second];
-            if (column_define.is_pk)
-            {
-                // we can decode pk from key
-            }
-            else if (column_define.has_no_default_value && column_define.is_not_null)
-            {
-                if (likely(!force_decode))
-                {
-                    return false;
-                }
-                else
-                {
-                    throw Exception("Missing column: " + std::to_string(column_define.id) + " when decoding from data using newer schema. Shouldn't happen", ErrorCodes::LOGICAL_ERROR);
-                }
-            }
-            else
-            {
-                auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-                raw_column->insert(column_define.default_value);
-            }
+            const auto * column_info = column_infos[column_ids_iter->second];
+            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+                return false;
         }
         else
         {
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-            auto & cd = (*column_defines)[column_ids_iter->second];
+            const auto * column_info = column_infos[column_ids_iter->second];
             if (is_null)
             {
                 if (!raw_column->isColumnNullable())
@@ -626,7 +649,7 @@ bool appendRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWit
                     }
                     else
                     {
-                        throw Exception("Detected invalid null when decoding data of column " + cd.name + " with type " + cd.type->getName(),
+                        throw Exception("Detected invalid null when decoding data of column " + column_info->name + " with column type " + raw_column->getName(),
                                         ErrorCodes::LOGICAL_ERROR);
                     }
                 }
@@ -645,14 +668,26 @@ bool appendRowV2ToBlockImpl(const TiKVValue::Base & raw_value, SortedColumnIDWit
         column_ids_iter++;
         block_column_pos++;
     }
+    while (column_ids_iter != column_ids_iter_end)
+    {
+        const auto * column_info = column_infos[column_ids_iter->second];
+        if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+            return false;
+    }
     return true;
 }
 
-bool appendRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPosConstIter column_ids_iter, SortedColumnIDWithPosConstIter column_ids_iter_end, Block & block, size_t block_column_pos, const DM::ColumnDefinesPtr & column_defines, bool force_decode)
+bool appendRowV1ToBlock(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    bool force_decode)
 {
     size_t cursor = 0;
     std::map<ColumnID, Field> decoded_fields;
-
     while (cursor < raw_value.size())
     {
         Field f = DecodeDatum(cursor, raw_value);
@@ -661,11 +696,12 @@ bool appendRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPos
         ColumnID col_id = f.get<ColumnID>();
         decoded_fields.emplace(col_id, DecodeDatum(cursor, raw_value));
     }
-
     if (cursor != raw_value.size())
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": cursor is not end, remaining: " + raw_value.substr(cursor),
                         ErrorCodes::LOGICAL_ERROR);
-    for (auto decoded_field_iter = decoded_fields.begin(); decoded_field_iter != decoded_fields.end(); decoded_field_iter++)
+
+    auto decoded_field_iter = decoded_fields.begin();
+    while (decoded_field_iter != decoded_fields.end())
     {
         if (column_ids_iter == column_ids_iter_end)
         {
@@ -673,33 +709,35 @@ bool appendRowV1ToBlock(const TiKVValue::Base & raw_value, SortedColumnIDWithPos
             if (!force_decode)
                 return false;
             else
-                break;
+                return true;
         }
-
-        if (column_ids_iter->first > decoded_field_iter->first)
+        auto next_field_column_id = decoded_field_iter->first;
+        if (column_ids_iter->first > next_field_column_id)
         {
             // extra column
             if (!force_decode)
                 return false;
         }
-        else if (column_ids_iter->first < decoded_field_iter->first)
+        else if (column_ids_iter->first < next_field_column_id)
         {
-            auto & column_define = (*column_defines)[column_ids_iter->second];
-            // maybe missing column
-            if (!force_decode && isMissingColumn(column_define))
+            const auto * column_info = column_infos[column_ids_iter->second];
+            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
                 return false;
-            else
-            {
-                auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
-                raw_column->insert(column_define.default_value);
-            }
         }
         else
         {
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             raw_column->insert(decoded_field_iter->second);
-            column_ids_iter++;
+            decoded_field_iter++;
         }
+        column_ids_iter++;
+        block_column_pos++;
+    }
+    while (column_ids_iter != column_ids_iter_end)
+    {
+        const auto * column_info = column_infos[column_ids_iter->second];
+        if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+            return false;
     }
     return true;
 }

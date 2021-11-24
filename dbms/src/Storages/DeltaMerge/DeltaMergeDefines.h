@@ -74,9 +74,6 @@ struct ColumnDefine
     String name;
     DataTypePtr type;
     Field default_value;
-    bool is_not_null = true;
-    bool has_no_default_value = true;
-    bool is_pk = false;
 
     explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr, Field default_value_ = Field{})
         : id(id_)
