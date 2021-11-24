@@ -924,7 +924,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // this log measures the concurrent degree in this mpp task
     LOG_INFO(
         log,
-             fmt::format("execution stream size for query block(before aggregation){} is {}", query_block.qb_column_prefix, pipeline.streams.size()));
+        fmt::format("execution stream size for query block(before aggregation){} is {}", query_block.qb_column_prefix, pipeline.streams.size()));
 
     dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
 
@@ -974,7 +974,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         res.filter_column_name = analyzer->appendWhere(chain, conditions);
         chain.getLastStep().callback = [&](const ExpressionActionsPtr & before_where) {
-            pipeline.transform([&] (auto & stream) {
+            pipeline.transform([&](auto & stream) {
                 /// CoprocessorBlockInputStream will push down filters
                 if (query_block.source->tp() != tipb::ExecType::TypeTableScan || dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) == nullptr)
                 {
@@ -992,7 +992,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                 project_cols.emplace_back(col.name, col.name);
             chain.getLastActions()->add(ExpressionAction::project(project_cols));
             chain.getLastStep().callback = [&](const ExpressionActionsPtr & project_after_where) {
-                pipeline.transform([&] (auto & stream) {
+                pipeline.transform([&](auto & stream) {
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
                 });
             };
@@ -1035,7 +1035,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             for (const auto & c : query_block.having->selection().conditions())
                 having_conditions.push_back(&c);
             res.having_column_name = analyzer->appendWhere(chain, having_conditions);
-            chain.getLastStep().callback = [&] (const ExpressionActionsPtr & before_having) {
+            chain.getLastStep().callback = [&](const ExpressionActionsPtr & before_having) {
                 executeWhere(pipeline, before_having, res.having_column_name);
                 recordProfileStreams(pipeline, query_block.having_name);
             };
@@ -1049,7 +1049,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         if (query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
         {
             res.order_columns = analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn());
-            chain.getLastStep().callback = [&] (const ExpressionActionsPtr & before_order) {
+            chain.getLastStep().callback = [&](const ExpressionActionsPtr & before_order) {
                 executeExpression(pipeline, before_order);
                 executeOrder(pipeline, res.order_columns);
                 recordProfileStreams(pipeline, query_block.limitOrTopN_name);
@@ -1058,7 +1058,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         }
         else if (query_block.limitOrTopN->tp() == tipb::TypeLimit)
         {
-            chain.getLastStep().callback = [&] (const ExpressionActionsPtr & before_limit) {
+            chain.getLastStep().callback = [&](const ExpressionActionsPtr & before_limit) {
                 executeExpression(pipeline, before_limit);
                 executeLimit(pipeline);
                 recordProfileStreams(pipeline, query_block.limitOrTopN_name);
