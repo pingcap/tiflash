@@ -85,7 +85,7 @@ struct AnalysisResult
     ExpressionActionsPtr project_after_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_having;
-    ExpressionActionsPtr before_final_project;
+    ExpressionActionsPtr before_order_and_select;
     ExpressionActionsPtr final_projection;
 
     String filter_column_name;
@@ -208,7 +208,7 @@ AnalysisResult analyzeExpressions(
             chain,
             query_block.qb_column_prefix);
 
-    res.before_final_project = chain.getLastActions();
+    res.before_order_and_select = chain.getLastActions();
 
     chain.finalize();
     chain.clear();
@@ -1100,6 +1100,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.having_name);
     }
 
+    if (res.before_order_and_select)
+    {
+        executeExpression(pipeline, res.before_order_and_select);
+    }
+
     if (!res.order_columns.empty())
     {
         // execute topN
@@ -1107,16 +1112,15 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
+    // execute projection
+    executeProject(pipeline, final_project);
+
     // execute limit
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
-
-    // execute projection
-    executeExpression(pipeline, res.before_final_project);
-    executeProject(pipeline, final_project);
 }
 
 void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols)
