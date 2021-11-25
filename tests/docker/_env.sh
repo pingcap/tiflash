@@ -25,3 +25,6 @@ export tidb_db="test"
 
 # TiDB default table
 export tidb_table="t"
+
+export LANG=en_US.utf-8
+export LC_ALL=en_US.utf-8
