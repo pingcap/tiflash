@@ -1,3 +1,4 @@
+# TODO: Use ut instead
 >> DBGInvoke __enable_schema_sync_service('false')
 
 >> drop table if exists test
