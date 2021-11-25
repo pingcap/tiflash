@@ -933,9 +933,15 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
+        auto original_source_columns = analyzer->getCurrentInputColumns();
         if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, chain, query_block))
         {
-            auto original_source_columns = analyzer->getCurrentInputColumns();
+            size_t index = 0;
+            for (const auto & col : analyzer->getCurrentInputColumns())
+            {
+                res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
+                ++index;
+            }
             chain.getLastStep().setCallback(
                 "appendExtraCast",
                 [&](const ExpressionActionsPtr & extra_cast) {
@@ -963,12 +969,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                     }
                 });
             chain.addStep();
-            size_t index = 0;
-            for (const auto & col : analyzer->getCurrentInputColumns())
-            {
-                res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
-                ++index;
-            }
         }
     }
 
