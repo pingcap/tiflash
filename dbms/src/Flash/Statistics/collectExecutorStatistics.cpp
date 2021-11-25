@@ -9,6 +9,7 @@
 #include <Flash/Statistics/TableScanStatistics.h>
 #include <Flash/Statistics/TopNStatistics.h>
 #include <Flash/Statistics/collectExecutorStatistics.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -16,12 +17,12 @@ namespace
 {
 struct ExecutorStatisticsCollector
 {
-    DAGContext & dag_context;
+    Context & context;
 
-    std::vector<ExecutorStatisticsPtr> res;
+    std::map<String, ExecutorStatisticsPtr> res;
 
-    explicit ExecutorStatisticsCollector(DAGContext & dag_context_)
-        : dag_context(dag_context_)
+    explicit ExecutorStatisticsCollector(Context & context_)
+        : context(context_)
     {}
 
     template <typename T>
@@ -29,7 +30,7 @@ struct ExecutorStatisticsCollector
     {
         if (T::hit(executor_id))
         {
-            res.push_back(T::buildStatistics(executor_id, profile_streams_info, dag_context));
+            res[executor_id] = T::buildStatistics(executor_id, profile_streams_info, context);
             return true;
         }
         else
@@ -40,9 +41,10 @@ struct ExecutorStatisticsCollector
 };
 } // namespace
 
-std::vector<ExecutorStatisticsPtr> collectExecutorStatistics(DAGContext & dag_context)
+std::map<String, ExecutorStatisticsPtr> collectExecutorStatistics(Context & context)
 {
-    ExecutorStatisticsCollector collector{dag_context};
+    ExecutorStatisticsCollector collector{context};
+    auto & dag_context = *context.getDAGContext();
     for (const auto & profile_streams_info_entry : dag_context.getProfileStreamsMap())
     {
         const auto & executor_id = profile_streams_info_entry.first;

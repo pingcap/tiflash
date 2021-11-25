@@ -38,8 +38,6 @@ public:
     void write(const Block & block) override;
     void finishWrite() override;
 
-    const tipb::ExchangeType & getExchangeType() const { return exchange_type; }
-
 private:
     template <bool send_exec_summary_at_last>
     void batchWrite();

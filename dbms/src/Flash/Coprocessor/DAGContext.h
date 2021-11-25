@@ -54,6 +54,7 @@ public:
             root_executor_id = dag_request.executors(0).executor_id();
             return_executor_id = true;
         }
+        fillExecutorMap(dag_request);
     }
 
     DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
@@ -72,6 +73,7 @@ public:
     {
         assert(dag_request.has_root_executor() && dag_request.root_executor().has_executor_id());
         root_executor_id = dag_request.root_executor().executor_id();
+        fillExecutorMap(dag_request);
     }
 
     explicit DAGContext(UInt64 max_error_count_)
@@ -139,9 +141,13 @@ public:
     double getLocalInputThroughput();
     double getOutputThroughput();
 
-    void setExecutorStatisticsVector(const std::vector<ExecutorStatisticsPtr> & executor_statistics_vec_);
+    void collectExecutorStatistics(Context & context);
 
-    const std::vector<ExecutorStatisticsPtr> & getExecutorStatisticsVector();
+    std::map<String, ExecutorStatisticsPtr> & getExecutorStatisticsMap();
+
+    std::map<String, const tipb::Executor *> & getExecutorMap();
+
+    const tipb::Executor * getExecutor(const String & executor_id);
 
     size_t final_concurrency = 1;
     Int64 compile_time_ns;
@@ -181,7 +187,11 @@ private:
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
 
-    std::vector<ExecutorStatisticsPtr> executor_statistics_vec;
+    std::map<String, ExecutorStatisticsPtr> executor_statistics_map;
+
+    std::map<String, const tipb::Executor *> executor_map;
+
+    void fillExecutorMap(const tipb::DAGRequest & dag_request);
 };
 
 } // namespace DB

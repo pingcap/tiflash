@@ -6,11 +6,11 @@
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <common/StringRef.h>
 #include <common/types.h>
+#include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
 #include <chrono>
-#include <mutex>
-#include <vector>
+#include <map>
 
 namespace DB
 {
@@ -18,7 +18,6 @@ struct MPPTaskStats
 {
     using Clock = std::chrono::system_clock;
     using Timestamp = Clock::time_point;
-    using Duration = Int64; /// ns
 
     MPPTaskStats(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_);
 
@@ -28,7 +27,7 @@ struct MPPTaskStats
 
     String toJson() const;
 
-    void setExecutorsStructure(const tipb::DAGRequest & dag_request);
+    void setSenderExecutorId(DAGContext & dag_context);
 
     void setWaitIndexTimestamp(const Timestamp & wait_index_start_timestamp_, const Timestamp & wait_index_end_timestamp_);
 
@@ -37,9 +36,8 @@ struct MPPTaskStats
     /// common
     const MPPTaskId id;
     const String host;
-    std::vector<Int64> upstream_task_ids;
-    String executors_structure;
-    std::vector<ExecutorStatisticsPtr> executor_statistics_vec;
+    Int64 sender_executor_id;
+    std::map<String, ExecutorStatisticsPtr> * executor_statistics_map = nullptr;
     Timestamp task_init_timestamp;
     Timestamp compile_start_timestamp;
     Timestamp wait_index_start_timestamp;

@@ -10,7 +10,8 @@ struct MPPTunnelProfileInfo : public ConnectionProfileInfo
     String tunnel_id;
 
     explicit MPPTunnelProfileInfo(const String & tunnel_id_)
-        : ConnectionProfileInfo("MPPTunnel"), tunnel_id(tunnel_id_)
+        : ConnectionProfileInfo("MPPTunnel")
+        , tunnel_id(tunnel_id_)
     {}
 
     String toJson() const override;

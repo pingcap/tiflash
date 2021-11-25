@@ -4,7 +4,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Interpreters/ExpressionAnalyzer.h>
-#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -13,9 +12,8 @@ namespace DB
 class ExchangeSender : public IProfilingBlockInputStream
 {
 public:
-    ExchangeSender(const tipb::ExchangeSender & exs, const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
-        : pb_exchange_sender(exs)
-        , writer(std::move(writer))
+    ExchangeSender(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
+        : writer(std::move(writer))
         , log(getLogWithPrefix(log_, getName()))
     {
         children.push_back(input);
@@ -26,8 +24,6 @@ public:
     {
         writer->finishWrite();
     }
-
-    const tipb::ExchangeSender pb_exchange_sender;
 
 protected:
     Block readImpl() override;

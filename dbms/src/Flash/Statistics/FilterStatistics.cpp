@@ -1,6 +1,5 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <Flash/Statistics/FilterStatistics.h>
 #include <common/types.h>
@@ -8,17 +7,13 @@
 
 namespace DB
 {
-String FilterStatistics::toJson() const
+String FilterStatistics::extraToJson() const
 {
     return fmt::format(
-        R"({{"id":"{}","type":"{}","rows_selectivity":{},"blocks_selectivity":{},"bytes_selectivity":{},"avg_rows_per_block":{},"avg_bytes_per_block":{}}})",
-        id,
-        type,
-        divide(outbound_rows, inbound_rows),
-        divide(outbound_blocks, inbound_blocks),
-        divide(outbound_bytes, inbound_bytes),
-        divide(outbound_rows, outbound_blocks),
-        divide(outbound_bytes, outbound_blocks));
+        R"(,"inbound_rows":{},"inbound_blocks":{},"inbound_bytes":{})",
+        inbound_rows,
+        inbound_blocks,
+        inbound_bytes);
 }
 
 bool FilterStatistics::hit(const String & executor_id)
@@ -26,30 +21,21 @@ bool FilterStatistics::hit(const String & executor_id)
     return startsWith(executor_id, "Selection_");
 }
 
-ExecutorStatisticsPtr FilterStatistics::buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context [[maybe_unused]])
+ExecutorStatisticsPtr FilterStatistics::buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context)
 {
     using FilterStatisticsPtr = std::shared_ptr<FilterStatistics>;
-    FilterStatisticsPtr statistics = std::make_shared<FilterStatistics>(executor_id);
+    FilterStatisticsPtr statistics = std::make_shared<FilterStatistics>(executor_id, context);
     visitBlockInputStreams(
         profile_streams_info.input_streams,
         [&](const BlockInputStreamPtr & stream_ptr) {
-            throwFailCastException(
-                castBlockInputStream<FilterBlockInputStream>(stream_ptr, [&](const FilterBlockInputStream & stream) {
-                    const auto & profile_info = stream.getProfileInfo();
-                    statistics->outbound_rows += profile_info.rows;
-                    statistics->outbound_blocks += profile_info.blocks;
-                    statistics->outbound_bytes += profile_info.bytes;
-                }),
-                stream_ptr->getName(),
-                "FilterBlockInputStream");
+            return castBlockInputStream<FilterBlockInputStream>(stream_ptr, [&](const FilterBlockInputStream & stream) {
+                collectBaseInfo(statistics, stream.getProfileInfo());
+            });
         },
         [&](const BlockInputStreamPtr & child_stream_ptr) {
             throwFailCastException(
                 castBlockInputStream<IProfilingBlockInputStream>(child_stream_ptr, [&](const IProfilingBlockInputStream & stream) {
-                    const auto & profile_info = stream.getProfileInfo();
-                    statistics->inbound_rows += profile_info.rows;
-                    statistics->inbound_blocks += profile_info.blocks;
-                    statistics->inbound_bytes += profile_info.bytes;
+                    collectInboundInfo(statistics, stream.getProfileInfo());
                 }),
                 child_stream_ptr->getName(),
                 "IProfilingBlockInputStream");

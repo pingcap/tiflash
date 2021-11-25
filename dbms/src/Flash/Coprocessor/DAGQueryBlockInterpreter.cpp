@@ -1016,6 +1016,8 @@ void DAGQueryBlockInterpreter::executeCastAndSelection(
     const ExpressionActionsPtr project_after_where,
     const String & filter_column_name)
 {
+    auto & filter_profile_streams_info = dag.getDAGContext().getProfileStreamsMap()[query_block.selection_name];
+    filter_profile_streams_info.qb_id = query_block.id;
     /// execute timezone cast and the selection
     ExpressionActionsPtr project_for_cop_read;
     for (auto & stream : pipeline.streams)
@@ -1031,6 +1033,7 @@ void DAGQueryBlockInterpreter::executeCastAndSelection(
                 }
                 stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log);
             }
+            filter_profile_streams_info.input_streams.push_back(stream);
         }
         else
         {
@@ -1041,9 +1044,13 @@ void DAGQueryBlockInterpreter::executeCastAndSelection(
             if (has_where)
             {
                 stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
-                recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, query_block.selection_name, query_block.id);
+                filter_profile_streams_info.input_streams.push_back(stream);
                 if (project_after_where)
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
+            }
+            else
+            {
+                filter_profile_streams_info.input_streams.push_back(stream);
             }
         }
     }
@@ -1053,9 +1060,13 @@ void DAGQueryBlockInterpreter::executeCastAndSelection(
         if (has_where)
         {
             stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
-            recordProfileStreams(dag.getDAGContext().getProfileStreamsMap(), pipeline, query_block.selection_name, query_block.id);
+            filter_profile_streams_info.input_streams.push_back(stream);
             if (project_after_where)
                 stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
+        }
+        else
+        {
+            filter_profile_streams_info.input_streams.push_back(stream);
         }
     }
 }

@@ -156,6 +156,7 @@ void MPPTunnelBase<Writer>::sendLoop()
                     throw Exception(tunnel_id + msg);
                 }
                 mpp_tunnel_profile_info->bytes += res->ByteSizeLong();
+                mpp_tunnel_profile_info->blocks += 1;
             }
         }
     }

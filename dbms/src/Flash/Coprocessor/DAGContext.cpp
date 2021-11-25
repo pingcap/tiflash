@@ -1,5 +1,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/traverseExecutorTree.h>
+#include <Flash/Statistics/collectExecutorStatistics.h>
 
 namespace DB
 {
@@ -172,7 +174,7 @@ double getThroughput(BlockInputStreams & block_input_streams)
     }
 
     if (0 == time_processed_ns)
-        return 0.0;
+        return static_cast<double>(num_produced_bytes);
 
     // convert to bytes per second
     return num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
@@ -219,18 +221,47 @@ double DAGContext::getOutputThroughput()
     return 0.0;
 }
 
-void DAGContext::setExecutorStatisticsVector(const std::vector<ExecutorStatisticsPtr> & executor_statistics_vec_)
+void DAGContext::collectExecutorStatistics(Context & context)
 {
-    if (!executor_statistics_vec.empty())
-    {
-        throw TiFlashException("Repeat to set executor_statistics_vec", Errors::Coprocessor::Internal);
-    }
-    executor_statistics_vec = executor_statistics_vec_;
+    assert(executor_statistics_map.empty());
+    executor_statistics_map = DB::collectExecutorStatistics(context);
 }
 
-const std::vector<ExecutorStatisticsPtr> & DAGContext::getExecutorStatisticsVector()
+std::map<String, ExecutorStatisticsPtr> & DAGContext::getExecutorStatisticsMap()
 {
-    return executor_statistics_vec;
+    return executor_statistics_map;
+}
+
+std::map<String, const tipb::Executor *> & DAGContext::getExecutorMap()
+{
+    return executor_map;
+}
+
+const tipb::Executor * DAGContext::getExecutor(const String & executor_id)
+{
+    auto it = executor_map.find(executor_id);
+    assert(it != executor_map.end());
+    return it->second;
+}
+
+void DAGContext::fillExecutorMap(const tipb::DAGRequest & dag_request)
+{
+    assert(dag_request.has_root_executor() || dag_request.executors_size() > 0);
+    if (dag_request.has_root_executor())
+    {
+        traverseExecutorTree(dag_request.root_executor(), [&](const tipb::Executor & executor) {
+            assert(executor.has_executor_id());
+            executor_map[executor.executor_id()] = &executor;
+        });
+    }
+    else
+    {
+        for (const auto & executor : dag_request.executors())
+        {
+            assert(executor.has_executor_id());
+            executor_map[executor.executor_id()] = &executor;
+        }
+    }
 }
 
 } // namespace DB

@@ -16,14 +16,16 @@ struct ExchangeSenderStatistics : public ExecutorStatistics
 
     tipb::ExchangeType exchange_type;
 
-    explicit ExchangeSenderStatistics(const String & executor_id_)
-        : ExecutorStatistics(executor_id_)
+    std::vector<Int64> sender_target_task_ids;
+
+    ExchangeSenderStatistics(const String & executor_id_, Context & context)
+        : ExecutorStatistics(executor_id_, context)
     {}
 
-    String toJson() const override;
+    String extraToJson() const override;
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context);
+    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
 };
 } // namespace DB

@@ -3,7 +3,6 @@
 #include <Common/FmtUtils.h>
 #include <Common/joinStr.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -68,8 +67,10 @@ inline void visitBlockInputStreams(const BlockInputStreams & input_streams, FF &
 {
     std::unordered_set<IBlockInputStream *> visited_set;
     visitBlockInputStreamsWithVisitedSet(visited_set, input_streams, [&](const BlockInputStreamPtr & stream_ptr) {
-        cur_f(stream_ptr);
-        visitBlockInputStreamsWithVisitedSet(visited_set, stream_ptr->getChildren(), child_f);
+        if (cur_f(stream_ptr))
+        {
+            visitBlockInputStreamsWithVisitedSet(visited_set, stream_ptr->getChildren(), child_f);
+        }
     });
 }
 
@@ -89,15 +90,6 @@ inline void visitBlockInputStreamsRecursive(const BlockInputStreams & input_stre
 {
     std::unordered_set<IBlockInputStream *> visited_set;
     visitBlockInputStreamsRecursiveWithVisitedSet(visited_set, input_streams, ff);
-}
-
-inline double divide(size_t value1, size_t value2)
-{
-    if (0 == value2)
-    {
-        return 0;
-    }
-    return 1.0 * value1 / value2;
 }
 
 template <bool is_ptr = true, typename Array>
@@ -122,5 +114,22 @@ String arrayToJson(const Array & array)
         ",");
     buffer.append("]");
     return buffer.toString();
+}
+
+template <typename StatisticsPtr>
+void collectBaseInfo(StatisticsPtr statistics_ptr, const BlockStreamProfileInfo & profile_info)
+{
+    statistics_ptr->outbound_rows += profile_info.rows;
+    statistics_ptr->outbound_blocks += profile_info.blocks;
+    statistics_ptr->outbound_bytes += profile_info.bytes;
+    statistics_ptr->execution_time_ns = std::max(statistics_ptr->execution_time_ns, profile_info.execution_time);
+}
+
+template <typename StatisticsPtr>
+void collectInboundInfo(StatisticsPtr statistics_ptr, const BlockStreamProfileInfo & profile_info)
+{
+    statistics_ptr->inbound_rows += profile_info.rows;
+    statistics_ptr->inbound_blocks += profile_info.blocks;
+    statistics_ptr->inbound_bytes += profile_info.bytes;
 }
 } // namespace DB

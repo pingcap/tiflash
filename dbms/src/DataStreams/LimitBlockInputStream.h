@@ -27,10 +27,6 @@ public:
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
 
-    size_t getLimit() const { return limit; }
-
-    size_t getOffset() const { return offset; }
-
 protected:
     Block readImpl() override;
 
