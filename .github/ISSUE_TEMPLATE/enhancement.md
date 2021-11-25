@@ -1,6 +1,6 @@
 ---
 name: "\U0001F680 Enhancement"
-about: As a TiDB developer, I want to make an enhancement.
+about: As a TiFlash developer, I want to make an enhancement.
 labels: type/enhancement
 ---
 

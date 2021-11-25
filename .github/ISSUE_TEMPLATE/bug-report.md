@@ -16,7 +16,4 @@ Please answer these questions before submitting your issue. Thanks!
 
 ### 3. What did you see instead (Required)
 
-### 4. What is your TiDB version? (Required)
-
-<!-- Paste the output of SELECT tidb_version() -->
-
+### 4. What is your TiFlash version? (Required)
