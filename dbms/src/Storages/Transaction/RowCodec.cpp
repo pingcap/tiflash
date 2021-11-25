@@ -370,12 +370,18 @@ bool appendRowV2ToBlockImpl(
             // extra column
             if (!force_decode)
                 return false;
+            if (is_null)
+                id_null++;
+            else
+                id_not_null++;
         }
         else if (column_ids_iter->first < next_datum_column_id)
         {
             const auto * column_info = column_infos[column_ids_iter->second];
             if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
                 return false;
+            column_ids_iter++;
+            block_column_pos++;
         }
         else
         {
@@ -406,15 +412,16 @@ bool appendRowV2ToBlockImpl(
                     return false;
                 id_not_null++;
             }
+            column_ids_iter++;
+            block_column_pos++;
         }
-        column_ids_iter++;
-        block_column_pos++;
     }
     while (column_ids_iter != column_ids_iter_end)
     {
         const auto * column_info = column_infos[column_ids_iter->second];
         if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
             return false;
+        column_ids_iter++;
     }
     return true;
 }
@@ -459,21 +466,25 @@ bool appendRowV1ToBlock(
             // extra column
             if (!force_decode)
                 return false;
+            decoded_field_iter++;
         }
         else if (column_ids_iter->first < next_field_column_id)
         {
             const auto * column_info = column_infos[column_ids_iter->second];
             if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
                 return false;
+            column_ids_iter++;
+            block_column_pos++;
         }
         else
         {
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             raw_column->insert(decoded_field_iter->second);
             decoded_field_iter++;
+            column_ids_iter++;
+            block_column_pos++;
         }
-        column_ids_iter++;
-        block_column_pos++;
+
     }
     while (column_ids_iter != column_ids_iter_end)
     {

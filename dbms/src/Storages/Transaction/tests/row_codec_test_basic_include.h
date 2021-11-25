@@ -208,6 +208,25 @@ std::tuple<DecodingStorageSchemaSnapshotConstPtr, TableInfo, std::vector<Field>>
         if (handle_ids[0] != EXTRA_HANDLE_COLUMN_ID)
             table_info.pk_is_handle = true;
     }
+    else
+    {
+        table_info.is_common_handle = true;
+        TiDB::IndexInfo index_info;
+        for (size_t i = 0; i < handle_ids.size(); i++)
+        {
+            TiDB::IndexColumnInfo index_column_info;
+            for (size_t pos = 0; pos < table_info.columns.size(); pos++)
+            {
+                if (table_info.columns[pos].id == handle_ids[i])
+                {
+                    index_column_info.offset = pos;
+                    break;
+                }
+            }
+            index_info.idx_cols.emplace_back(index_column_info);
+        }
+        table_info.index_infos.emplace_back(index_info);
+    }
 
     ColumnDefines store_columns;
     if (is_common_handle)
