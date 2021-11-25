@@ -1031,7 +1031,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                     res.aggregate_descriptions);
                 recordProfileStreams(pipeline, query_block.aggregation_name);
             });
-        chain.addStep();
 
         chain.finalize();
         chain.clear();
