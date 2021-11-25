@@ -7,7 +7,7 @@
 
 Instead of ti.sh, you can deploy a cluster with [TiUP](https://tiup.io/). But ti.sh is more easy to replace the binary for TiFlash/TiDB/PD, which is convenient for debugging.
 
-* For running mock test cases (defined in `./mutable-test`, `./delta-merge-test`), you should define a cluster with only one TiFlash node, and set standalone property for that node.
+* For running mock test cases (defined in `./delta-merge-test`), you should define a cluster with only one TiFlash node, and set standalone property for that node.
 
 * For running intergration test cases (defined in `./fullstack-test`, `./fullstack-test-dt`, `./new_collation_fullstack`), you should define a TiDB cluster with TiFlash node (1 PD, 1 TiKV, 1 TiDB, 1 TiFlash at least).
 
