@@ -74,9 +74,7 @@ using Poco::FileChannel;
 using Poco::FormattingChannel;
 using Poco::Logger;
 using Poco::Message;
-using Poco::Observer;
 using Poco::Path;
-using Poco::SplitterChannel;
 using Poco::Util::AbstractConfiguration;
 
 
@@ -577,7 +575,7 @@ static void terminate_handler()
         char const * name = t->name();
         {
             int status = -1;
-            char * dem = 0;
+            char * dem = nullptr;
 
             dem = abi::__cxa_demangle(name, 0, 0, &status);
 
@@ -735,7 +733,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         return;
     config_logger = current_logger;
 
-    bool is_daemon = config.getBool("application.runAsDaemon", false);
+    bool is_daemon = config.getBool("application.runAsDaemon", true);
 
     // Split log and error log.
     Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
@@ -757,7 +755,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
         log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
         log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
-        log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
+        log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
         log->setChannel(log_file);
@@ -781,7 +779,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         error_log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
         error_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
         error_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
-        error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "1"));
+        error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         error_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
         errorlog->setChannel(error_log_file);
@@ -1097,7 +1095,7 @@ void BaseDaemon::initialize(Application & self)
 
     logRevision();
 
-    signal_listener.reset(new SignalListener(*this));
+    signal_listener = std::make_unique<SignalListener>(*this);
     signal_listener_thread.start(*signal_listener);
 
     for (const auto & key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
@@ -1108,6 +1106,7 @@ void BaseDaemon::initialize(Application & self)
 
 void BaseDaemon::logRevision() const
 {
+    Logger::root().information("Welcome to TiFlash");
     Logger::root().information("Starting daemon with revision " + Poco::NumberFormatter::format(ClickHouseRevision::get()));
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
@@ -1159,9 +1158,7 @@ void BaseDaemon::defineOptions(Poco::Util::OptionSet & _options)
 
 bool isPidRunning(pid_t pid)
 {
-    if (getpgid(pid) >= 0)
-        return 1;
-    return 0;
+    return getpgid(pid) >= 0;
 }
 
 void BaseDaemon::PID::seed(const std::string & file_)

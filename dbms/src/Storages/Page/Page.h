@@ -4,20 +4,13 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefines.h>
-#include <common/likely.h>
 
-#include <functional>
 #include <map>
-#include <set>
 #include <unordered_map>
+
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-} // namespace ErrorCodes
-
 using MemHolder = std::shared_ptr<char>;
 inline MemHolder createMemHolder(char * memory, const std::function<void(char *)> & free)
 {
@@ -66,8 +59,12 @@ public:
         return ByteBuffer(data.begin() + beg, data.begin() + end);
     }
 
-    size_t fieldSize() const { return field_offsets.size(); }
+    size_t fieldSize() const
+    {
+        return field_offsets.size();
+    }
 };
+
 using Pages = std::vector<Page>;
 using PageMap = std::map<PageId, Page>;
 using PageHandler = std::function<void(PageId page_id, const Page &)>;
@@ -75,6 +72,7 @@ using PageHandler = std::function<void(PageId page_id, const Page &)>;
 // Indicate the page size && offset in PageFile.
 struct PageEntry
 {
+public:
     // if file_id == 0, means it is invalid
     PageFileId file_id = 0; // PageFile id
     PageSize size = 0; // Page data's size
@@ -90,9 +88,13 @@ struct PageEntry
 public:
     inline bool isValid() const { return file_id != 0; }
     inline bool isTombstone() const { return ref == 0; }
-    inline PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
 
-    inline size_t getFieldSize(size_t index) const
+    PageFileIdAndLevel fileIdLevel() const
+    {
+        return std::make_pair(file_id, level);
+    }
+
+    size_t getFieldSize(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))
             throw Exception("Try to getFieldData of PageEntry" + DB::toString(file_id) + " with invalid index: " + DB::toString(index)
@@ -105,7 +107,7 @@ public:
     }
 
     // Return field{index} offsets: [begin, end) of page data.
-    inline std::pair<size_t, size_t> getFieldOffsets(size_t index) const
+    std::pair<size_t, size_t> getFieldOffsets(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))
             throw Exception("Try to getFieldData with invalid index: " + DB::toString(index)
@@ -134,7 +136,6 @@ public:
         }
     }
 };
-
 using PageIdAndEntry = std::pair<PageId, PageEntry>;
 using PageIdAndEntries = std::vector<PageIdAndEntry>;
 

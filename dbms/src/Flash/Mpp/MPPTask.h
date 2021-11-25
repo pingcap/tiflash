@@ -5,6 +5,7 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
@@ -16,20 +17,10 @@
 #include <atomic>
 #include <boost/noncopyable.hpp>
 #include <memory>
+#include <unordered_map>
 
 namespace DB
 {
-// Identify a mpp task.
-struct MPPTaskId
-{
-    uint64_t start_ts;
-    int64_t task_id;
-
-    bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
-
-    String toString() const;
-};
-
 class MPPTaskManager;
 class MPPTask : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
@@ -82,28 +73,30 @@ private:
 
     bool switchStatus(TaskStatus from, TaskStatus to);
 
-    Context context;
-
     RegionInfoMap local_regions;
     RegionInfoList remote_regions;
 
-    std::unique_ptr<tipb::DAGRequest> dag_req;
-    std::unique_ptr<DAGContext> dag_context;
+    tipb::DAGRequest dag_req;
 
+    Context context;
     /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
-    /// BlockIO contains some information stored in Context and DAGContext, so need deconstruct it before Context and DAGContext
+    /// BlockIO contains some information stored in Context, so need deconstruct it before Context
     BlockIO io;
+    /// The inputStreams should be released in the destructor of BlockIO, since DAGContext contains
+    /// some reference to inputStreams, so it need to be destructed before BlockIO
+    std::unique_ptr<DAGContext> dag_context;
     MemoryTracker * memory_tracker = nullptr;
-
-    MPPTaskId id;
 
     std::atomic<TaskStatus> status{INITIALIZING};
 
     mpp::TaskMeta meta;
+
+    MPPTaskId id;
+
     MPPTunnelSetPtr tunnel_set;
 
     // which targeted task we should send data by which tunnel.
-    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
+    std::unordered_map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
     MPPTaskManager * manager = nullptr;
 
@@ -116,6 +109,6 @@ private:
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
-using MPPTaskMap = std::map<MPPTaskId, MPPTaskPtr>;
+using MPPTaskMap = std::unordered_map<MPPTaskId, MPPTaskPtr>;
 
 } // namespace DB

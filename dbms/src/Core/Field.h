@@ -538,7 +538,6 @@ private:
         new (ptr) JustT(std::forward<T>(x));
         which = TypeToEnum<JustT>::value;
     }
-#pragma GCC diagnostic pop
 
     /// Assuming same types.
     template <typename T>
@@ -596,6 +595,8 @@ private:
             throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
     }
+
+#pragma GCC diagnostic pop
 
     void create(const Field & x)
     {

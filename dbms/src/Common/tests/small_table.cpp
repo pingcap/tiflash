@@ -1,10 +1,8 @@
-#include <iostream>
-#include <iomanip>
-
+#include <Common/HashTable/SmallTable.h>
 #include <Interpreters/AggregationCommon.h>
 
-#include <Common/HashTable/SmallTable.h>
-
+#include <iomanip>
+#include <iostream>
 
 
 int main(int, char **)

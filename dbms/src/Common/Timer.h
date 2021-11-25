@@ -5,9 +5,9 @@
 
 namespace DB
 {
-struct Timer : Poco::Util::Timer
+struct Timer : public Poco::Util::Timer
 {
-    Timer(const char * name)
+    explicit Timer(const char * name)
         : thread_worker_name(name)
     {}
 

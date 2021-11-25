@@ -1,4 +1,5 @@
 #include <Core/ColumnNumbers.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -101,5 +102,26 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     return block.getByPosition(columns.size());
 }
 
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+{
+    auto & factory = FunctionFactory::instance();
+    Block block(columns);
+    ColumnsWithTypeAndName arguments;
+    for (size_t i = 0; i < argument_column_numbers.size(); ++i)
+        arguments.push_back(columns.at(i));
+    auto bp = factory.tryGet(func_name, context);
+    if (!bp)
+        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+    auto func = bp->build(arguments);
+    block.insert({nullptr, func->getReturnType(), "res"});
+    func->execute(block, argument_column_numbers, columns.size());
+    return block.getByPosition(columns.size());
+}
+
+ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
+{
+    DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
+    return {data_type->createColumnConst(size, Null()), data_type, name};
+}
 } // namespace tests
 } // namespace DB

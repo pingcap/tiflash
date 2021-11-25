@@ -1,13 +1,12 @@
 #pragma once
 
-#include <city.h>
-#include <Core/Defines.h>
-#include <Common/SipHash.h>
 #include <Columns/ColumnTuple.h>
+#include <Common/SipHash.h>
+#include <Core/Defines.h>
+#include <city.h>
 
 namespace DB
 {
-
 /** Hashes a set of arguments to the aggregate function
   *  to calculate the number of unique values
   *  and adds them to the set.
@@ -57,7 +56,7 @@ struct UniqVariadicHash<Data, false, false>
 template <typename Data>
 struct UniqVariadicHash<Data, false, true>
 {
-    static inline UInt64 apply(Data & , size_t num_args, const IColumn ** columns, size_t row_num)
+    static inline UInt64 apply(Data &, size_t num_args, const IColumn ** columns, size_t row_num)
     {
         UInt64 hash;
 
@@ -109,7 +108,7 @@ struct UniqVariadicHash<Data, true, false>
 template <typename Data>
 struct UniqVariadicHash<Data, true, true>
 {
-    static inline UInt128 apply(Data & , size_t num_args, const IColumn ** columns, size_t row_num)
+    static inline UInt128 apply(Data &, size_t num_args, const IColumn ** columns, size_t row_num)
     {
         const Columns & tuple_columns = static_cast<const ColumnTuple *>(columns[0])->getColumns();
 
@@ -130,4 +129,4 @@ struct UniqVariadicHash<Data, true, true>
     }
 };
 
-}
+} // namespace DB

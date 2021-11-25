@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 void encodeDAGInt64(Int64, WriteBuffer &);
 void encodeDAGUInt64(UInt64, WriteBuffer &);
 void encodeDAGFloat32(Float32, WriteBuffer &);

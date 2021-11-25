@@ -10,6 +10,7 @@
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -29,6 +30,7 @@ UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
     /// todo max_error_count is a system variable in mysql, TiDB should put it into dag request, now use the default value instead
     return 1024;
 }
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -48,32 +50,23 @@ public:
         return_executor_id = dag_request.has_root_executor() || dag_request.executors(0).has_executor_id();
     }
 
-    DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
+    DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
         , return_executor_id(true)
         , is_mpp_task(true)
+        , is_root_mpp_task(is_root_mpp_task_)
         , tunnel_set(nullptr)
         , flags(dag_request.flags())
         , sql_mode(dag_request.sql_mode())
         , mpp_task_meta(meta_)
+        , mpp_task_id(mpp_task_meta.start_ts(), mpp_task_meta.task_id())
         , max_recorded_error_count(getMaxErrorCount(dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
         assert(dag_request.has_root_executor());
-
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
-        const auto & exchange_sender = dag_request.root_executor().exchange_sender();
-        exchange_sender_execution_summary_key = exchange_sender.child().executor_id();
-        is_root_mpp_task = false;
-        if (exchange_sender.encoded_task_meta_size() == 1)
-        {
-            /// root mpp task always has 1 task_meta because there is only one TiDB
-            /// node for each mpp query
-            mpp::TaskMeta task_meta;
-            task_meta.ParseFromString(exchange_sender.encoded_task_meta(0));
-            is_root_mpp_task = task_meta.task_id() == -1;
-        }
+        exchange_sender_execution_summary_key = dag_request.root_executor().exchange_sender().child().executor_id();
     }
 
     explicit DAGContext(UInt64 max_error_count_)
@@ -126,18 +119,16 @@ public:
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
-    Int64 getMPPTaskId() const
+    const MPPTaskId & getMPPTaskId() const
     {
-        if (is_mpp_task)
-            return mpp_task_meta.task_id();
-        return 0;
+        return mpp_task_id;
     }
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
     std::pair<bool, double> getTableScanThroughput();
 
-    size_t final_concurrency;
+    size_t final_concurrency = 1;
     Int64 compile_time_ns;
     String table_scan_executor_id = "";
     String exchange_sender_executor_id = "";
@@ -166,6 +157,7 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
+    const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;

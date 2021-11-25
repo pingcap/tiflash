@@ -46,6 +46,8 @@ struct MigrateArgs
     size_t frame;
     DB::ChecksumAlgo algorithm;
     std::string workdir;
+    DB::CompressionMethod compression_method;
+    int compression_level;
 };
 int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_function);
 } // namespace DTTool::Migrate

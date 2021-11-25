@@ -231,7 +231,7 @@ protected:
             {
                 ColumnWithTypeAndName & ori_column = block.getByPosition(i);
 
-                if (std::string::npos != ori_column.name.find_first_of(UniqRawResName))
+                if (std::string::npos != ori_column.name.find_first_of(uniq_raw_res_name))
                 {
                     MutableColumnPtr mutable_holder = ori_column.column->cloneEmpty();
 
@@ -752,8 +752,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                 astToPB(input, child_ast, child, collator_id, context);
             }
             // for like need to add the third argument
-            tipb::Expr * constant_expr = expr->add_children();
-            constructInt64LiteralTiExpr(*constant_expr, 92);
+            *expr->add_children() = constructInt64LiteralTiExpr(92);
             return;
         }
         case tipb::ScalarFuncSig::FromUnixTime2Arg:
@@ -1257,6 +1256,8 @@ struct Aggregation : public Executor
                     throw Exception("udaf max only accept 1 argument");
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
+                ft->set_decimal(agg_func->children(0).field_type().decimal());
+                ft->set_flag(agg_func->children(0).field_type().flag());
                 ft->set_collate(collator_id);
             }
             else if (func->name == "min")
@@ -1266,9 +1267,11 @@ struct Aggregation : public Executor
                     throw Exception("udaf min only accept 1 argument");
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(agg_func->children(0).field_type().tp());
+                ft->set_decimal(agg_func->children(0).field_type().decimal());
+                ft->set_flag(agg_func->children(0).field_type().flag());
                 ft->set_collate(collator_id);
             }
-            else if (func->name == UniqRawResName)
+            else if (func->name == uniq_raw_res_name)
             {
                 agg_func->set_tp(tipb::ApproxCountDistinct);
                 auto ft = agg_func->mutable_field_type();
@@ -1928,7 +1931,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
             {
                 ci = children_ci[0];
             }
-            else if (func->name == UniqRawResName)
+            else if (func->name == uniq_raw_res_name)
             {
                 has_uniq_raw_res = true;
                 ci.tp = TiDB::TypeString;

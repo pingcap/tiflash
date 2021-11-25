@@ -26,14 +26,6 @@ public:
         return res;
     }
 
-    RSOperatorPtr applyNot() override
-    {
-        RSOperators new_children;
-        for (auto & child : children)
-            new_children.push_back(child->applyNot());
-        return createAnd(new_children);
-    };
-
     // TODO: override applyOptimize()
 };
 

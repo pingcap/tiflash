@@ -47,7 +47,7 @@ static void verifyChannelConfig(Poco::Channel & channel, Poco::Util::AbstractCon
     {
         Poco::TiFlashLogFileChannel * fileChannel = dynamic_cast<Poco::TiFlashLogFileChannel *>(&channel);
         ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_ROTATION), config.getRawString("logger.size", "100M"));
-        ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "1"));
+        ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "10"));
         return;
     }
     if (typeid(channel) == typeid(Poco::LevelFilterChannel))
@@ -68,6 +68,19 @@ try
 {
     DB::Strings tests = {
         R"(
+[application]
+runAsDaemon = false
+[profiles]
+[profiles.default]
+max_rows_in_set = 455
+dt_page_gc_low_write_prob = 0.2
+[logger]
+errorlog = "./tmp/log/tiflash_error.log"
+level = "debug"
+log = "./tmp/log/tiflash.log"
+size = "1K"
+        )",
+        R"(
 [profiles]
 [profiles.default]
 max_rows_in_set = 455
@@ -87,7 +100,6 @@ runAsDaemon = false
 max_rows_in_set = 455
 dt_page_gc_low_write_prob = 0.2
 [logger]
-count = 10
 errorlog = "./tmp/log/tiflash_error.log"
 level = "debug"
 log = "./tmp/log/tiflash.log"

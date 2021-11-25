@@ -125,13 +125,6 @@ struct DeltaMergeStoreStat
     UInt64 background_tasks_length = 0;
 };
 
-struct RegionSplitRes
-{
-    RowKeyValues split_points;
-    size_t exact_rows;
-    size_t exact_bytes;
-};
-
 // It is used to prevent hash conflict of file caches.
 static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
@@ -393,15 +386,6 @@ public:
 
     RowsAndBytes getRowsAndBytesInRange(const Context & db_context, const RowKeyRange & check_range, bool is_exact);
     RowsAndBytes getRowsAndBytesInRange(DMContext & dm_context, const RowKeyRange & check_range, bool is_exact);
-
-    /// Get the split point of region with check_range. Currently only do half split.
-    RegionSplitRes getRegionSplitPoint(
-        const Context & db_context,
-        const RowKeyRange & check_range,
-        size_t max_region_size,
-        size_t split_size);
-
-    RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

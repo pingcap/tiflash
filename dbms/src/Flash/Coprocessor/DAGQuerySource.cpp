@@ -1,10 +1,6 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
-#include <Interpreters/Context.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ParserQuery.h>
 #include <Parsers/makeDummyQuery.h>
-#include <Parsers/parseQuery.h>
 
 namespace DB
 {
@@ -13,12 +9,18 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, const RegionInfoMap & regions_, const RegionInfoList & regions_for_remote_read_, const tipb::DAGRequest & dag_request_, const LogWithPrefixPtr & log_, const bool is_batch_cop_)
+DAGQuerySource::DAGQuerySource(
+    Context & context_,
+    const RegionInfoMap & regions_,
+    const RegionInfoList & regions_for_remote_read_,
+    const tipb::DAGRequest & dag_request_,
+    const LogWithPrefixPtr & log_,
+    const bool is_batch_cop_or_mpp_)
     : context(context_)
     , regions(regions_)
     , regions_for_remote_read(regions_for_remote_read_)
     , dag_request(dag_request_)
-    , is_batch_cop(is_batch_cop_)
+    , is_batch_cop_or_mpp(is_batch_cop_or_mpp_)
     , log(log_)
 {
     if (dag_request.has_root_executor())

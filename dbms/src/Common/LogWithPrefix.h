@@ -25,7 +25,7 @@ class LogWithPrefix : private boost::noncopyable
 public:
     LogWithPrefix(Poco::Logger * log_, const String & prefix_)
         : log(log_)
-        , prefix(prefix_)
+        , prefix(addSuffixSpace(prefix_))
     {
         if (log == nullptr)
             throw Exception("LogWithPrefix receives nullptr");
@@ -73,11 +73,30 @@ public:
 
     Poco::Logger * getLog() const { return log; }
 
-    LogWithPrefixPtr append(const String & str) const { return std::make_shared<LogWithPrefix>(log, prefix + " " + str); }
+    LogWithPrefixPtr append(const String & str) const { return std::make_shared<LogWithPrefix>(log, prefix + str); }
 
 private:
     Poco::Logger * log;
+    // prefix must be ascii.
     const String prefix;
+
+    static String addSuffixSpace(const String & str)
+    {
+        if (str.empty() || std::isspace(str.back()))
+            return str;
+        else
+            return str + ' ';
+    }
 };
+
+inline LogWithPrefixPtr getLogWithPrefix(const LogWithPrefixPtr & log = nullptr, const String & name = "name: N/A")
+{
+    if (log == nullptr)
+    {
+        return std::make_shared<LogWithPrefix>(&Poco::Logger::get(name), "");
+    }
+
+    return log->append(name);
+}
 
 } // namespace DB

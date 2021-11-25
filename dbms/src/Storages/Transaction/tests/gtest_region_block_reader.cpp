@@ -394,7 +394,7 @@ TEST(RegionBlockReader_test, OverflowColumn)
         Block block = createBlockSortByColumnID(narrow_decoding_schema);
         bool ok = reader.read(block, data_list_read, false);
         ASSERT_EQ(ok, false);
-    }
+    }gtest_dm_delta_merge_store.cpp
     {
         RegionBlockReader reader{decoding_schema};
         Block block = createBlockSortByColumnID(decoding_schema);

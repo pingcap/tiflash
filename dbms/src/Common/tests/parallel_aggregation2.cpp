@@ -1,21 +1,19 @@
-#include <iostream>
-#include <iomanip>
-#include <mutex>
 #include <atomic>
+#include <iomanip>
+#include <iostream>
+#include <mutex>
 
 //#define DBMS_HASH_MAP_DEBUG_RESIZES
 
-#include <Interpreters/AggregationCommon.h>
-
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/TwoLevelHashMap.h>
+#include <Interpreters/AggregationCommon.h>
 //#include <Common/HashTable/HashTableWithSmallLocks.h>
 //#include <Common/HashTable/HashTableMerge.h>
 
-#include <IO/ReadBufferFromFile.h>
-#include <IO/CompressedReadBuffer.h>
-
 #include <Common/Stopwatch.h>
+#include <IO/CompressedReadBuffer.h>
+#include <IO/ReadBufferFromFile.h>
 #include <common/ThreadPool.h>
 
 
@@ -28,9 +26,7 @@ template <typename Map>
 struct AggregateIndependent
 {
     template <typename Creator, typename Updater>
-    static void NO_INLINE execute(const Source & data, size_t num_threads, std::vector<std::unique_ptr<Map>> & results,
-                        Creator && creator, Updater && updater,
-                        ThreadPool & pool)
+    static void NO_INLINE execute(const Source & data, size_t num_threads, std::vector<std::unique_ptr<Map>> & results, Creator && creator, Updater && updater, ThreadPool & pool)
     {
         results.reserve(num_threads);
         for (size_t i = 0; i < num_threads; ++i)
@@ -42,8 +38,7 @@ struct AggregateIndependent
             auto end = data.begin() + (data.size() * (i + 1)) / num_threads;
             auto & map = *results[i];
 
-            pool.schedule([&, begin, end]()
-            {
+            pool.schedule([&, begin, end]() {
                 for (auto it = begin; it != end; ++it)
                 {
                     typename Map::iterator place;
@@ -71,9 +66,7 @@ template <typename Map>
 struct AggregateIndependentWithSequentialKeysOptimization
 {
     template <typename Creator, typename Updater>
-    static void NO_INLINE execute(const Source & data, size_t num_threads, std::vector<std::unique_ptr<Map>> & results,
-                        Creator && creator, Updater && updater,
-                        ThreadPool & pool)
+    static void NO_INLINE execute(const Source & data, size_t num_threads, std::vector<std::unique_ptr<Map>> & results, Creator && creator, Updater && updater, ThreadPool & pool)
     {
         results.reserve(num_threads);
         for (size_t i = 0; i < num_threads; ++i)
@@ -85,10 +78,9 @@ struct AggregateIndependentWithSequentialKeysOptimization
             auto end = data.begin() + (data.size() * (i + 1)) / num_threads;
             auto & map = *results[i];
 
-            pool.schedule([&, begin, end]()
-            {
+            pool.schedule([&, begin, end]() {
                 typename Map::iterator place;
-                Key prev_key {};
+                Key prev_key{};
                 for (auto it = begin; it != end; ++it)
                 {
                     if (it != begin && *it == prev_key)
@@ -122,9 +114,7 @@ template <typename Map>
 struct MergeSequential
 {
     template <typename Merger>
-    static void NO_INLINE execute(Map ** source_maps, size_t num_maps, Map *& result_map,
-                        Merger && merger,
-                        ThreadPool &)
+    static void NO_INLINE execute(Map ** source_maps, size_t num_maps, Map *& result_map, Merger && merger, ThreadPool &)
     {
         for (size_t i = 1; i < num_maps; ++i)
         {
@@ -139,12 +129,10 @@ struct MergeSequential
 };
 
 template <typename Map>
-struct MergeSequentialTransposed    /// In practice not better than usual.
+struct MergeSequentialTransposed /// In practice not better than usual.
 {
     template <typename Merger>
-    static void NO_INLINE execute(Map ** source_maps, size_t num_maps, Map *& result_map,
-                        Merger && merger,
-                        ThreadPool &)
+    static void NO_INLINE execute(Map ** source_maps, size_t num_maps, Map *& result_map, Merger && merger, ThreadPool &)
     {
         std::vector<typename Map::iterator> iterators(num_maps);
         for (size_t i = 1; i < num_maps; ++i)
@@ -175,13 +163,10 @@ template <typename Map, typename ImplMerge>
 struct MergeParallelForTwoLevelTable
 {
     template <typename Merger>
-    static void NO_INLINE execute(Map ** source_maps, size_t num_maps, Map *& result_map,
-                        Merger && merger,
-                        ThreadPool & pool)
+    static void NO_INLINE execute(Map ** source_maps, size_t num_maps, Map *& result_map, Merger && merger, ThreadPool & pool)
     {
         for (size_t bucket = 0; bucket < Map::NUM_BUCKETS; ++bucket)
-            pool.schedule([&, bucket, num_maps]
-            {
+            pool.schedule([&, bucket, num_maps] {
                 std::vector<typename Map::Impl *> section(num_maps);
                 for (size_t i = 0; i < num_maps; ++i)
                     section[i] = &source_maps[i]->impls[bucket];
@@ -200,9 +185,7 @@ template <typename Map, typename Aggregate, typename Merge>
 struct Work
 {
     template <typename Creator, typename Updater, typename Merger>
-    static void NO_INLINE execute(const Source & data, size_t num_threads,
-                        Creator && creator, Updater && updater, Merger && merger,
-                        ThreadPool & pool)
+    static void NO_INLINE execute(const Source & data, size_t num_threads, Creator && creator, Updater && updater, Merger && merger, ThreadPool & pool)
     {
         std::vector<std::unique_ptr<Map>> intermediate_results;
 
@@ -229,7 +212,7 @@ struct Work
 
         watch.restart();
 
-        std::vector<Map*> intermediate_results_ptrs(num_maps);
+        std::vector<Map *> intermediate_results_ptrs(num_maps);
         for (size_t i = 0; i < num_maps; ++i)
             intermediate_results_ptrs[i] = intermediate_results[i].get();
 
@@ -248,7 +231,8 @@ struct Work
             << "Total in " << time_total
             << " (" << data.size() / time_total << " elem/sec.)"
             << std::endl;
-        std::cerr << "Size: " << result_map->size() << std::endl << std::endl;
+        std::cerr << "Size: " << result_map->size() << std::endl
+                  << std::endl;
     }
 };
 
@@ -283,7 +267,6 @@ struct Merger
 };
 
 
-
 int main(int argc, char ** argv)
 {
     size_t n = atoi(argv[1]);
@@ -301,14 +284,15 @@ int main(int argc, char ** argv)
         DB::ReadBufferFromFileDescriptor in1(STDIN_FILENO);
         DB::CompressedReadBuffer in2(in1);
 
-        in2.readStrict(reinterpret_cast<char*>(&data[0]), sizeof(data[0]) * n);
+        in2.readStrict(reinterpret_cast<char *>(&data[0]), sizeof(data[0]) * n);
 
         watch.stop();
         std::cerr << std::fixed << std::setprecision(2)
-            << "Vector. Size: " << n
-            << ", elapsed: " << watch.elapsedSeconds()
-            << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
-            << std::endl << std::endl;
+                  << "Vector. Size: " << n
+                  << ", elapsed: " << watch.elapsedSeconds()
+                  << " (" << n / watch.elapsedSeconds() << " elem/sec.)"
+                  << std::endl
+                  << std::endl;
     }
 
     Creator creator;
@@ -319,85 +303,73 @@ int main(int argc, char ** argv)
         Work<
             Map,
             AggregateIndependent<Map>,
-            MergeSequential<Map>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeSequential<Map>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 2)
         Work<
             Map,
             AggregateIndependentWithSequentialKeysOptimization<Map>,
-            MergeSequential<Map>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeSequential<Map>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 3)
         Work<
             Map,
             AggregateIndependent<Map>,
-            MergeSequentialTransposed<Map>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeSequentialTransposed<Map>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 4)
         Work<
             Map,
             AggregateIndependentWithSequentialKeysOptimization<Map>,
-            MergeSequentialTransposed<Map>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeSequentialTransposed<Map>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 5)
         Work<
             MapTwoLevel,
             AggregateIndependent<MapTwoLevel>,
-            MergeSequential<MapTwoLevel>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeSequential<MapTwoLevel>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 6)
         Work<
             MapTwoLevel,
             AggregateIndependentWithSequentialKeysOptimization<MapTwoLevel>,
-            MergeSequential<MapTwoLevel>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeSequential<MapTwoLevel>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 7)
         Work<
             MapTwoLevel,
             AggregateIndependent<MapTwoLevel>,
-            MergeSequentialTransposed<MapTwoLevel>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeSequentialTransposed<MapTwoLevel>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 8)
         Work<
             MapTwoLevel,
             AggregateIndependentWithSequentialKeysOptimization<MapTwoLevel>,
-            MergeSequentialTransposed<MapTwoLevel>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeSequentialTransposed<MapTwoLevel>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 9)
         Work<
             MapTwoLevel,
             AggregateIndependent<MapTwoLevel>,
-            MergeParallelForTwoLevelTable<MapTwoLevel, MergeSequential<MapTwoLevel::Impl>>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeParallelForTwoLevelTable<MapTwoLevel, MergeSequential<MapTwoLevel::Impl>>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 10)
         Work<
             MapTwoLevel,
             AggregateIndependentWithSequentialKeysOptimization<MapTwoLevel>,
-            MergeParallelForTwoLevelTable<MapTwoLevel, MergeSequential<MapTwoLevel::Impl>>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeParallelForTwoLevelTable<MapTwoLevel, MergeSequential<MapTwoLevel::Impl>>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 13)
         Work<
             MapTwoLevel,
             AggregateIndependent<MapTwoLevel>,
-            MergeParallelForTwoLevelTable<MapTwoLevel, MergeSequentialTransposed<MapTwoLevel::Impl>>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeParallelForTwoLevelTable<MapTwoLevel, MergeSequentialTransposed<MapTwoLevel::Impl>>>::execute(data, num_threads, creator, updater, merger, pool);
 
     if (!method || method == 14)
         Work<
             MapTwoLevel,
             AggregateIndependentWithSequentialKeysOptimization<MapTwoLevel>,
-            MergeParallelForTwoLevelTable<MapTwoLevel, MergeSequentialTransposed<MapTwoLevel::Impl>>
-        >::execute(data, num_threads, creator, updater, merger, pool);
+            MergeParallelForTwoLevelTable<MapTwoLevel, MergeSequentialTransposed<MapTwoLevel::Impl>>>::execute(data, num_threads, creator, updater, merger, pool);
 
     return 0;
 }

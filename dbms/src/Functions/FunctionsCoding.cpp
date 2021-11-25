@@ -3,9 +3,14 @@
 
 namespace DB
 {
-
-struct NameFunctionIPv4NumToString { static constexpr auto name = "IPv4NumToString"; };
-struct NameFunctionIPv4NumToStringClassC { static constexpr auto name = "IPv4NumToStringClassC"; };
+struct NameFunctionIPv4NumToString
+{
+    static constexpr auto name = "IPv4NumToString";
+};
+struct NameFunctionIPv4NumToStringClassC
+{
+    static constexpr auto name = "IPv4NumToStringClassC";
+};
 
 
 void registerFunctionsCoding(FunctionFactory & factory)
@@ -32,4 +37,4 @@ void registerFunctionsCoding(FunctionFactory & factory)
     factory.registerFunction<FunctionBitmaskToArray>();
 }
 
-}
+} // namespace DB

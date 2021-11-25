@@ -145,8 +145,9 @@ Block Aggregator::Params::getHeader(
 }
 
 
-Aggregator::Aggregator(const Params & params_)
+Aggregator::Aggregator(const Params & params_, const LogWithPrefixPtr & log_)
     : params(params_)
+    , log(getLogWithPrefix(log_, "Aggregator"))
     , isCancelled([]() { return false; })
 {
     if (current_memory_tracker)
@@ -1429,7 +1430,8 @@ public:
       *  which are all either single-level, or are two-level.
       */
     MergingAndConvertingBlockInputStream(const Aggregator & aggregator_, ManyAggregatedDataVariants & data_, bool final_, size_t threads_)
-        : aggregator(aggregator_)
+        : log(getLogWithPrefix(aggregator_.log, "MergingAndConvertingBlockInputStream"))
+        , aggregator(aggregator_)
         , data(data_)
         , final(final_)
         , threads(threads_)
@@ -1438,7 +1440,7 @@ public:
         if (!data.empty() && threads > data[0]->aggregates_pools.size())
         {
             Arenas & first_pool = data[0]->aggregates_pools;
-            for (size_t j = first_pool.size(); j < threads; j++)
+            for (size_t j = first_pool.size(); j < threads; ++j)
                 first_pool.emplace_back(std::make_shared<Arena>());
         }
     }
@@ -1545,6 +1547,7 @@ protected:
     }
 
 private:
+    const LogWithPrefixPtr log;
     const Aggregator & aggregator;
     ManyAggregatedDataVariants data;
     bool final;
