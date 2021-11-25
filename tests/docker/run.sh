@@ -69,7 +69,7 @@ rm -rf ./data ./log
 # run fullstack-tests (for engine DeltaTree)
 docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml up -d
 wait_env dt
-docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
+docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml exec -T tiflash0 bash -c 'export LANG=en_US.utf-8; export LC_ALL=en_US.utf-8; cd /tests ; ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
 docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml down
 rm -rf ./data ./log
 
