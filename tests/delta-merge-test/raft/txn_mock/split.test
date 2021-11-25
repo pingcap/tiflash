@@ -30,7 +30,7 @@
 │    14 │           3 │
 │    16 │           5 │
 └───────┴─────────────┘
-=> selraw (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+=> selraw *, _INTERNAL_VERSION, _INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    12 │           1 │                 1 │                 0 │
 │    10 │           2 │                 1 │                 0 │
@@ -39,12 +39,11 @@
 │     0 │           4 │                 4 │                 1 │
 │    16 │           5 │                 1 │                 0 │
 └───────┴─────────────┴───────────────────┴───────────────────┘
-=> selraw nokvstore (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 => DBGInvoke dump_all_mock_region(default, test)
-┌─dump_all_mock_region(default, test)────────────────────┐
-│ [region 4] ranges: [0, 100), state: Normal, [write 6 ] │
-│ total size: 1                                          │
-└────────────────────────────────────────────────────────┘
+┌─dump_all_mock_region(default, test)────────┐
+│ [region 4] ranges: [0, 100), state: Normal │
+│ total size: 1                              │
+└────────────────────────────────────────────┘
 => DBGInvoke region_split(4, default, test, 0, 4, 4, 100, 5)
 ┌─region_split(4, default, test, 0, 4, 4, 100, 5)─┐
 │ execute batch split, region 4 into (4,5)        │
@@ -58,7 +57,7 @@
 ┌─col_1─┬─_tidb_rowid─┐
 │    16 │           5 │
 └───────┴─────────────┘
-=> selraw (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+=> selraw (*), _INTERNAL_VERSION, _INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    12 │           1 │                 1 │                 0 │
 │    10 │           2 │                 1 │                 0 │
@@ -68,11 +67,11 @@
 │    16 │           5 │                 1 │                 0 │
 └───────┴─────────────┴───────────────────┴───────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
-┌─dump_all_mock_region(default, test)────────────────────┐
-│ [region 5] ranges: [4, 100), state: Normal, [write 3 ] │
-│ [region 4] ranges: [0, 4), state: Normal, [write 3 ]   │
-│ total size: 2                                          │
-└────────────────────────────────────────────────────────┘
+┌─dump_all_mock_region(default, test)────────┐
+│ [region 5] ranges: [4, 100), state: Normal │
+│ [region 4] ranges: [0, 4), state: Normal   │
+│ total size: 2                              │
+└────────────────────────────────────────────┘
 => DBGInvoke find_region_by_range('','',1)
 ┌─find_region_by_range("", "", 1)─┐
 │ 2                               │
