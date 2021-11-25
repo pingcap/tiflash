@@ -62,15 +62,6 @@ struct DAGExpressionActionsChain
         return steps.back();
     }
 
-    void setCallbackAndAddStep(String desc, Step::Callback callback)
-    {
-        if (steps.empty())
-            throw Exception("Empty ExpressionActionsChain", ErrorCodes::LOGICAL_ERROR);
-
-        steps.back().setCallback(desc, callback);
-        addStep();
-    }
-
     std::string dumpChain();
 };
 } // namespace DB

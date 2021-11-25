@@ -936,7 +936,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, chain, query_block))
         {
             auto original_source_columns = analyzer->getCurrentInputColumns();
-            chain.setCallbackAndAddStep(
+            chain.getLastStep().setCallback(
                 "appendExtraCast",
                 [&](const ExpressionActionsPtr & extra_cast) {
                     /// execute timezone cast and the selection
@@ -962,6 +962,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                         }
                     }
                 });
+            chain.addStep();
             size_t index = 0;
             for (const auto & col : analyzer->getCurrentInputColumns())
             {
@@ -974,7 +975,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (!conditions.empty())
     {
         res.filter_column_name = analyzer->appendWhere(chain, conditions);
-        chain.setCallbackAndAddStep(
+        chain.getLastStep().setCallback(
             "appendWhere",
             [&](const ExpressionActionsPtr & before_where) {
                 pipeline.transform([&](auto & stream) {
@@ -986,6 +987,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                     }
                 });
             });
+        chain.addStep();
 
         if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
         {
@@ -993,13 +995,14 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             for (const auto & col : analyzer->getCurrentInputColumns())
                 project_cols.emplace_back(col.name, col.name);
             chain.getLastActions()->add(ExpressionAction::project(project_cols));
-            chain.setCallbackAndAddStep(
+            chain.getLastStep().setCallback(
                 "projectAfterWhere",
                 [&](const ExpressionActionsPtr & project_after_where) {
                     pipeline.transform([&](auto & stream) {
                         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
                     });
                 });
+            chain.addStep();
         }
     }
 
@@ -1017,7 +1020,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
 
-        chain.setCallbackAndAddStep(
+        chain.getLastStep().setCallback(
             "beforeAggregation",
             [&](const ExpressionActionsPtr & before_aggregation) {
                 executeAggregation(
@@ -1028,6 +1031,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                     res.aggregate_descriptions);
                 recordProfileStreams(pipeline, query_block.aggregation_name);
             });
+        chain.addStep();
 
         chain.finalize();
         chain.clear();
@@ -1040,12 +1044,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             for (const auto & c : query_block.having->selection().conditions())
                 having_conditions.push_back(&c);
             res.having_column_name = analyzer->appendWhere(chain, having_conditions);
-            chain.setCallbackAndAddStep(
+            chain.getLastStep().setCallback(
                 "beforeHaving",
                 [&](const ExpressionActionsPtr & before_having) {
                     executeWhere(pipeline, before_having, res.having_column_name);
                     recordProfileStreams(pipeline, query_block.having_name);
                 });
+            chain.addStep();
         }
     }
 
@@ -1055,23 +1060,25 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         if (query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
         {
             res.order_columns = analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn());
-            chain.setCallbackAndAddStep(
+            chain.getLastStep().setCallback(
                 "beforeOrder",
                 [&](const ExpressionActionsPtr & before_order) {
                     executeExpression(pipeline, before_order);
                     executeOrder(pipeline, res.order_columns);
                     recordProfileStreams(pipeline, query_block.limitOrTopN_name);
                 });
+            chain.addStep();
         }
         else if (query_block.limitOrTopN->tp() == tipb::TypeLimit)
         {
-            chain.setCallbackAndAddStep(
+            chain.getLastStep().setCallback(
                 "beforeLimit",
                 [&](const ExpressionActionsPtr & before_limit) {
                     executeExpression(pipeline, before_limit);
                     executeLimit(pipeline);
                     recordProfileStreams(pipeline, query_block.limitOrTopN_name);
                 });
+            chain.addStep();
         }
         else
         {
@@ -1091,7 +1098,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             chain,
             query_block.qb_column_prefix);
 
-    chain.setCallbackAndAddStep(
+    chain.getLastStep().setCallback(
         "beforeFinalProject",
         [&](const ExpressionActionsPtr & before_final_project) {
             executeExpression(pipeline, before_final_project);
