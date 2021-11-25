@@ -91,14 +91,15 @@ public:
         const tipb::ExchangeReceiver & pb_exchange_receiver,
         const ::mpp::TaskMeta & task_meta) const;
 
-    std::shared_ptr<ExchangePacketReader> makeReader(const ExchangeRecvRequest & request, const std::string &recv_addr = "") const;
+    std::shared_ptr<ExchangePacketReader> makeReader(const ExchangeRecvRequest & request, const std::string & recv_addr = "") const;
 
     static StatusType getStatusOK()
     {
         return ::grpc::Status::OK;
     }
 
-    bool isLocalTunnelEnabled() {
+    bool isLocalTunnelEnabled()
+    {
         return enable_local_tunnel;
     }
 

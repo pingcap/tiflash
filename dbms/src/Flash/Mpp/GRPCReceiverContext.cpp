@@ -85,9 +85,9 @@ std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::
     return std::make_tuple(tunnel, grpc::Status::OK);
 }
 
-std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request, const std::string &recv_addr) const
+std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request, const std::string & recv_addr) const
 {
-    bool is_local =  enable_local_tunnel && request.req->sender_meta().address() == recv_addr;
+    bool is_local = enable_local_tunnel && request.req->sender_meta().address() == recv_addr;
     if (is_local)
     {
         auto [tunnel, status] = EstablishMPPConnectionLocal(request.req.get(), task_manager);
