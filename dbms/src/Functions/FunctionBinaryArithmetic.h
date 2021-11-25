@@ -1028,6 +1028,7 @@ public:
             using ExpectedResultType = typename Op<T0, T1>::ResultType;
             if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>)&&!std::is_same_v<ResultType, ExpectedResultType>)
             {
+                throw Exception("ywq check here1....", ErrorCodes::LOGICAL_ERROR);
                 return false;
             }
             else if constexpr (!std::is_same_v<ResultDataType, InvalidType>)
@@ -1079,6 +1080,7 @@ public:
                         }
                         else
                         {
+                            throw Exception("ywq check here2....", ErrorCodes::LOGICAL_ERROR);
                             return false;
                         }
                     }
@@ -1096,6 +1098,7 @@ public:
                         }
                         else
                         {
+                            throw Exception("ywq check here3....", ErrorCodes::LOGICAL_ERROR);
                             return false;
                         }
                     }
@@ -1214,7 +1217,10 @@ public:
                         }
                     }
                     else
+                    {
+                        throw Exception("ywq check here4....", ErrorCodes::LOGICAL_ERROR);
                         return false;
+                    }
                 }
                 else if (auto col_left = checkAndGetColumn<ColVecT0>(col_left_raw))
                 {
@@ -1277,10 +1283,16 @@ public:
                         }
                     }
                     else
+                    {
+                        throw Exception("ywq check here5....", ErrorCodes::LOGICAL_ERROR);
                         return false;
+                    }
                 }
                 else
+                {
+                    throw Exception("ywq check here6....", ErrorCodes::LOGICAL_ERROR);
                     return false;
+                }
 
                 if constexpr (default_impl_for_nulls)
                 {
@@ -1292,6 +1304,7 @@ public:
                 }
                 return true;
             }
+            throw Exception("ywq check here7....", ErrorCodes::LOGICAL_ERROR);
             return false;
         });
         if (!valid)
