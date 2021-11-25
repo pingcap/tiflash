@@ -1062,15 +1062,6 @@ void ExpressionActionsChain::finalize()
             && columns_from_previous > steps[i].actions->getRequiredColumnsWithTypes().size())
             steps[i].actions->prependProjectInput();
     }
-
-    for (const auto & step : steps)
-    {
-        if (!step.actions->getActions().empty() && !step.callback)
-            throw Exception("Forgot to handle actions", ErrorCodes::LOGICAL_ERROR);
-
-        if (step.callback)
-            step.callback(step.actions);
-    }
 }
 
 std::string ExpressionActionsChain::dumpChain()

@@ -502,7 +502,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
 
 void DAGExpressionAnalyzer::buildGroupConcat(
     const tipb::Expr & expr,
-    ExpressionActionsChain::Step & step,
+    DAGExpressionActionsChain::Step & step,
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
     bool result_is_nullable)
@@ -639,7 +639,7 @@ static String getAggFuncName(
 }
 
 std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnalyzer::appendAggregation(
-    ExpressionActionsChain & chain,
+    DAGExpressionActionsChain & chain,
     const tipb::Aggregation & agg,
     bool group_by_collation_sensitive)
 {
@@ -654,7 +654,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnaly
     AggregateDescriptions aggregate_descriptions;
 
     initChain(chain, getCurrentInputColumns());
-    ExpressionActionsChain::Step & step = chain.steps.back();
+    DAGExpressionActionsChain::Step & step = chain.steps.back();
     std::unordered_set<String> agg_key_set;
 
     for (const tipb::Expr & expr : agg.agg_func())
@@ -805,11 +805,11 @@ String DAGExpressionAnalyzer::applyFunction(
 }
 
 String DAGExpressionAnalyzer::appendWhere(
-    ExpressionActionsChain & chain,
+    DAGExpressionActionsChain & chain,
     const std::vector<const tipb::Expr *> & conditions)
 {
     initChain(chain, getCurrentInputColumns());
-    ExpressionActionsChain::Step & last_step = chain.steps.back();
+    DAGExpressionActionsChain::Step & last_step = chain.steps.back();
 
     String filter_column_name;
     if (conditions.size() == 1)
@@ -890,7 +890,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
 }
 
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
-    ExpressionActionsChain & chain,
+    DAGExpressionActionsChain & chain,
     const tipb::TopN & topN)
 {
     if (topN.order_by_size() == 0)
@@ -901,7 +901,7 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
     order_columns.reserve(topN.order_by_size());
 
     initChain(chain, getCurrentInputColumns());
-    ExpressionActionsChain::Step & step = chain.steps.back();
+    DAGExpressionActionsChain::Step & step = chain.steps.back();
     for (const tipb::ByItem & by_item : topN.order_by())
     {
         String name = getActions(by_item.expr(), step.actions);
@@ -938,7 +938,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 }
 
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
-    ExpressionActionsChain & chain,
+    DAGExpressionActionsChain & chain,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     const DAGQueryBlock & query_block)
 {
@@ -995,7 +995,7 @@ String DAGExpressionAnalyzer::appendDurationCast(
 }
 
 void DAGExpressionAnalyzer::appendJoin(
-    ExpressionActionsChain & chain,
+    DAGExpressionActionsChain & chain,
     SubqueryForSet & join_query,
     const NamesAndTypesList & columns_added_by_join) const
 {
@@ -1005,7 +1005,7 @@ void DAGExpressionAnalyzer::appendJoin(
 }
 
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
-    ExpressionActionsChain & chain,
+    DAGExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const DataTypes & key_types,
     Names & key_names,
@@ -1112,12 +1112,12 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     return ret;
 }
 
-void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & aggregation)
+void DAGExpressionAnalyzer::appendAggSelect(DAGExpressionActionsChain & chain, const tipb::Aggregation & aggregation)
 {
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
-    ExpressionActionsChain::Step & step = chain.steps.back();
+    DAGExpressionActionsChain::Step & step = chain.steps.back();
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
         String & name = aggregated_columns[i].name;
@@ -1165,7 +1165,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
 }
 
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
-    ExpressionActionsChain & chain,
+    DAGExpressionActionsChain & chain,
     const String & column_prefix)
 {
     const auto & current_columns = getCurrentInputColumns();
@@ -1181,7 +1181,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
 }
 
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
-    ExpressionActionsChain & chain,
+    DAGExpressionActionsChain & chain,
     const std::vector<tipb::FieldType> & schema,
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
@@ -1227,7 +1227,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
         /// for all the columns that need to be returned, if the type is timestamp, then convert
         /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         initChain(chain, current_columns);
-        ExpressionActionsChain::Step & step = chain.steps.back();
+        DAGExpressionActionsChain::Step & step = chain.steps.back();
 
         tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo(), false);
         String tz_col;
@@ -1297,7 +1297,7 @@ String DAGExpressionAnalyzer::alignReturnType(
     return updated_name;
 }
 
-void DAGExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const std::vector<NameAndTypePair> & columns) const
+void DAGExpressionAnalyzer::initChain(DAGExpressionActionsChain & chain, const std::vector<NameAndTypePair> & columns) const
 {
     if (chain.steps.empty())
     {

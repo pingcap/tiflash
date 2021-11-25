@@ -6,11 +6,11 @@
 #pragma GCC diagnostic pop
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGExpressionActionsChain.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/Transaction/TMTStorages.h>
 
@@ -47,38 +47,38 @@ public:
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
 
     String appendWhere(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
     std::vector<NameAndTypePair> appendOrderBy(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const tipb::TopN & topN);
 
     /// <aggregation_keys, collators, aggregate_descriptions>
     std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> appendAggregation(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
     void appendAggSelect(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
 
     void initChain(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const std::vector<NameAndTypePair> & columns) const;
 
     void appendJoin(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         SubqueryForSet & join_query,
         const NamesAndTypesList & columns_added_by_join) const;
 
     NamesWithAliases appendFinalProjectForNonRootQueryBlock(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const String & column_prefix);
 
     NamesWithAliases appendFinalProjectForRootQueryBlock(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const std::vector<tipb::FieldType> & schema,
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,
@@ -104,13 +104,13 @@ public:
     // TiFlash stores duration type in the form of Int64 in storage layer, and need the extra cast which convert
     // Int64 to duration.
     bool appendExtraCastsAfterTS(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const DAGQueryBlock & query_block);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
-        ExpressionActionsChain & chain,
+        DAGExpressionActionsChain & chain,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
         Names & key_names,
@@ -129,7 +129,7 @@ private:
 
     void buildGroupConcat(
         const tipb::Expr & expr,
-        ExpressionActionsChain::Step & step,
+        DAGExpressionActionsChain::Step & step,
         const String & agg_func_name,
         AggregateDescriptions & aggregate_descriptions,
         bool result_is_nullable);
