@@ -11,19 +11,45 @@
 
 namespace DB
 {
-class GRPCReceiverContext
+class ExchangePacketReader
 {
 public:
-    using StatusType = ::grpc::Status;
+    virtual ~ExchangePacketReader() {}
+    virtual void initialize() const = 0;
+    virtual bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const = 0;
+    virtual ::grpc::Status finish() const = 0;
+};
 
-    struct Request
-    {
-        Int64 send_task_id = -1;
-        std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
+struct ExchangeRecvRequest
+{
+    Int64 send_task_id = -1;
+    std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
 
-        String debugString() const;
-    };
+    String debugString() const;
+};
 
+class GrpcExchangePacketReader : public ExchangePacketReader
+{
+public:
+    std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
+    grpc::ClientContext client_context;
+    std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
+
+    explicit GrpcExchangePacketReader(const ExchangeRecvRequest & req);
+
+    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
+    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
+    ~GrpcExchangePacketReader() override;
+
+    void initialize() const override;
+    bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override;
+    ::grpc::Status finish() const override;
+};
+
+
+class LocalExchangePacketReader : public ExchangePacketReader
+{
+public:
     struct LocalEnv
     {
         LocalEnv()
@@ -35,44 +61,50 @@ public:
         MPPTunnelPtr tunnel;
     };
 
-    struct Reader
-    {
-        std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
-        grpc::ClientContext client_context;
-        std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
-        LocalEnv local_env;
-        bool is_local;
+    std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
+    grpc::ClientContext client_context;
+    std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
+    LocalEnv local_env;
 
-        explicit Reader(const Request & req);
-        explicit Reader(const LocalEnv & env)
-            : call(nullptr)
-            , local_env(env)
-            , is_local(true){};
-        /// put the implementation of dtor in .cpp so we don't need to put the specialization of
-        /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
-        ~Reader();
+    explicit LocalExchangePacketReader(const LocalEnv & env)
+        : call(nullptr)
+        , local_env(env){};
 
-        void initialize() const;
-        bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const;
-        StatusType finish() const;
-    };
+    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
+    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
+    ~LocalExchangePacketReader() override {}
 
-    explicit GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_ = nullptr);
+    void initialize() const override {}
+    bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override;
+    ::grpc::Status finish() const override;
+};
 
-    Request makeRequest(
+class GRPCReceiverContext
+{
+public:
+    using StatusType = ::grpc::Status;
+
+    explicit GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_ = nullptr, bool enable_local_tunnel_ = false);
+
+    ExchangeRecvRequest makeRequest(
         int index,
         const tipb::ExchangeReceiver & pb_exchange_receiver,
         const ::mpp::TaskMeta & task_meta) const;
 
-    std::shared_ptr<Reader> makeReader(const Request & request, bool is_local = false) const;
+    std::shared_ptr<ExchangePacketReader> makeReader(const ExchangeRecvRequest & request, const std::string &recv_addr = "") const;
 
     static StatusType getStatusOK()
     {
         return ::grpc::Status::OK;
     }
 
+    bool isLocalTunnelEnabled() {
+        return enable_local_tunnel;
+    }
+
 private:
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<MPPTaskManager> task_manager;
+    bool enable_local_tunnel;
 };
 } // namespace DB

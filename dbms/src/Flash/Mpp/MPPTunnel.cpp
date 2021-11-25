@@ -134,8 +134,7 @@ void MPPTunnelBase<Writer>::clearSendQueue()
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
-    if (is_local)
-        return; // sendLoop is useless in local environment
+    assert(!is_local);
     try
     {
         /// TODO(fzh) reuse it later

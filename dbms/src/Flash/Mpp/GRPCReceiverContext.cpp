@@ -35,13 +35,14 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
-GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_)
+GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_, bool enable_local_tunnel_)
     : cluster(cluster_)
     , task_manager(std::move(task_manager_))
+    , enable_local_tunnel(enable_local_tunnel_)
 {}
 
 
-GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
+ExchangeRecvRequest GRPCReceiverContext::makeRequest(
     int index,
     const tipb::ExchangeReceiver & pb_exchange_receiver,
     const ::mpp::TaskMeta & task_meta) const
@@ -51,7 +52,7 @@ GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
     if (!sender_task->ParseFromString(meta_raw))
         throw Exception("parse task meta error!");
 
-    Request req;
+    ExchangeRecvRequest req;
     req.send_task_id = sender_task->task_id();
     req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
     req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
@@ -84,8 +85,9 @@ std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::
     return std::make_tuple(tunnel, grpc::Status::OK);
 }
 
-std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(const GRPCReceiverContext::Request & request, bool is_local) const
+std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request, const std::string &recv_addr) const
 {
+    bool is_local =  enable_local_tunnel && request.req->sender_meta().address() == recv_addr;
     if (is_local)
     {
         auto [tunnel, status] = EstablishMPPConnectionLocal(request.req.get(), task_manager);
@@ -93,12 +95,12 @@ std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(con
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
         }
-        LocalEnv local_env(tunnel);
-        return std::make_shared<Reader>(local_env);
+        LocalExchangePacketReader::LocalEnv local_env(tunnel);
+        return std::make_shared<LocalExchangePacketReader>(local_env);
     }
     else
     {
-        auto reader = std::make_shared<Reader>(request);
+        auto reader = std::make_shared<GrpcExchangePacketReader>(request);
         reader->reader = cluster->rpc_client->sendStreamRequest(
             request.req->sender_meta().address(),
             &reader->client_context,
@@ -107,55 +109,48 @@ std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(con
     }
 }
 
-String GRPCReceiverContext::Request::debugString() const
+String ExchangeRecvRequest::debugString() const
 {
     return req->DebugString();
 }
 
 
-GRPCReceiverContext::Reader::Reader(const GRPCReceiverContext::Request & req)
-    : is_local(false)
+GrpcExchangePacketReader::GrpcExchangePacketReader(const ExchangeRecvRequest & req)
 {
     call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
 }
 
-GRPCReceiverContext::Reader::~Reader()
+GrpcExchangePacketReader::~GrpcExchangePacketReader()
 {}
 
-void GRPCReceiverContext::Reader::initialize() const
+void GrpcExchangePacketReader::initialize() const
 {
-    if (!is_local)
-    {
-        reader->WaitForInitialMetadata();
-    }
+    reader->WaitForInitialMetadata();
 }
 
-bool GRPCReceiverContext::Reader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
+bool GrpcExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
 {
-    if (is_local)
-    {
-        std::shared_ptr<mpp::MPPDataPacket> tmp_packet = local_env.tunnel->readForLocal();
-        bool success = tmp_packet != nullptr;
-        if (success)
-            packet = tmp_packet;
-        return success;
-    }
-    else
-    {
-        return reader->Read(packet.get());
-    }
+    return reader->Read(packet.get());
 }
 
-GRPCReceiverContext::StatusType GRPCReceiverContext::Reader::finish() const
+::grpc::Status GrpcExchangePacketReader::finish() const
 {
-    if (is_local)
-    {
-        return ::grpc::Status::OK;
-    }
-    else
-    {
-        return reader->Finish();
-    }
+    return reader->Finish();
+}
+
+
+bool LocalExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
+{
+    std::shared_ptr<mpp::MPPDataPacket> tmp_packet = local_env.tunnel->readForLocal();
+    bool success = tmp_packet != nullptr;
+    if (success)
+        packet = tmp_packet;
+    return success;
+}
+
+::grpc::Status LocalExchangePacketReader::finish() const
+{
+    return ::grpc::Status::OK;
 }
 
 } // namespace DB
