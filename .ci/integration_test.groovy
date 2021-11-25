@@ -58,10 +58,6 @@ catchError {
             def label = "fullstack-test2"
             util.runTest(label, "tics/tests/fullstack-test2", tidbBranch)
         },
-        "mutable test": {
-            def label = "mutable-test"
-            util.runTest(label, "tics/tests/mutable-test", tidbBranch)
-        },
     )
 }
 
