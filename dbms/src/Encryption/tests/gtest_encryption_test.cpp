@@ -220,6 +220,78 @@ try
 }
 CATCH
 
+
+TEST(PosixWriteReadableFileTest, WriteReadwithFileProvider)
+try
+{
+    size_t buff_size = 123;
+    size_t buff_offset = 20;
+    char buff_write[buff_size];
+    char buff_read[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_wr_file");
+
+    auto key_manager = std::make_shared<MockKeyManager>();
+    auto file_provider = std::make_shared<FileProvider>(key_manager, false);
+
+    WriteReadableFilePtr file = file_provider->newWriteReadableFile(file_path, EncryptionPath("encryption", ""));
+
+    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+
+    // Do it twice to ensure we can call close safely on a closed file
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+}
+CATCH
+
+TEST(PosixWriteReadableFileTest, EncWriteReadwithFileProvider)
+try
+{
+    size_t buff_size = 123;
+    size_t buff_offset = 20;
+    char buff_write[buff_size];
+    char buff_read[buff_size];
+    char buff_write_cpy[buff_size];
+
+    for (size_t i = 0; i < buff_size; i++)
+    {
+        buff_write[i] = i % 0xFF;
+    }
+
+    memcpy(buff_write_cpy, buff_write, buff_size);
+
+    String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
+
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
+    auto file_provider = std::make_shared<FileProvider>(key_manager, true);
+
+    WriteReadableFilePtr file = file_provider->newWriteReadableFile(file_path, EncryptionPath("encryption", ""));
+
+    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write_cpy, buff_read, buff_size), 0);
+
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+
+    // Do it twice to ensure we can call close safely on a closed file
+    file->close();
+    ASSERT_TRUE(file->isClosed());
+}
+CATCH
+
 TEST(PosixWriteReadableFileTest, EncryptedWriteRead)
 try
 {
