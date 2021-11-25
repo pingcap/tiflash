@@ -72,19 +72,11 @@ function run_dir()
 		fi
 	done
 
-	if [ $? != 0 ]; then
-		exit 1
-	fi
-
 	find "$path" -maxdepth 1 -type d | sort -r | while read dir; do
 		if [ -d "$dir" ] && [ "$dir" != "$path" ]; then
 			run_dir "$dbc" "$dir" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
 		fi
 	done
-
-	if [ $? != 0 ]; then
-		exit 1
-	fi
 }
 
 function run_path()
