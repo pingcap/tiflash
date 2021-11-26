@@ -18,8 +18,8 @@ namespace DB
 {
 void dbgFuncEcho(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
-    for (auto it = args.begin(); it != args.end(); ++it)
-        output((*it)->getColumnName());
+    for (const auto & arg : args)
+        output(arg->getColumnName());
 }
 
 void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
