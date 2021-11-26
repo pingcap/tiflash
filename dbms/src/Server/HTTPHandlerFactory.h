@@ -7,7 +7,6 @@
 
 #include "HTTPHandler.h"
 #include "IServer.h"
-#include "InterserverIOHTTPHandler.h"
 #include "NotFoundHandler.h"
 #include "PingRequestHandler.h"
 #include "RootRequestHandler.h"
@@ -68,6 +67,5 @@ public:
 };
 
 using HTTPHandlerFactory = HTTPRequestHandlerFactory<HTTPHandler>;
-using InterserverIOHTTPHandlerFactory = HTTPRequestHandlerFactory<InterserverIOHTTPHandler>;
 
 } // namespace DB
