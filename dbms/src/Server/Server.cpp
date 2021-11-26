@@ -216,12 +216,12 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
+    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     const String engine_store_version = "engine-version";
     const String engine_store_git_hash = "engine-git-hash";
     const String engine_store_address = "engine-addr";
     const String engine_store_advertise_address = "advertise-engine-addr";
     const String pd_endpoints = "pd-endpoints";
-    const String addr = "addr";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -240,7 +240,6 @@ struct TiFlashProxyConfig
             args_map[pd_endpoints] = config.getString("raft.pd_addr");
             args_map[engine_store_version] = TiFlashBuildInfo::getReleaseVersion();
             args_map[engine_store_git_hash] = TiFlashBuildInfo::getGitHash();
-            args_map[addr] = config.getString("flash.proxy.addr", DEFAULT_PROXY_ADDR);
             if (!args_map.count(engine_store_address))
                 args_map[engine_store_address] = config.getString("flash.service_addr");
             else
@@ -736,26 +735,6 @@ public:
                 /// At least one of TCP and HTTP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-                /// Interserver IO HTTP
-                if (config.has("interserver_http_port") && !security_config.has_tls_config)
-                {
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("interserver_http_port"));
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(new HTTPServer(
-                        new InterserverIOHTTPHandlerFactory(server, "InterserverIOHTTPHandler-factory"),
-                        server_pool,
-                        socket,
-                        http_params));
-
-                    LOG_INFO(log, "Listening interserver http: " + address.toString());
-                }
-                else if (security_config.has_tls_config)
-                {
-                    LOG_INFO(log, "internal http port is closed because tls config is set");
-                }
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -1080,27 +1059,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         std::string user_files_path = config().getString("user_files_path", path + "user_files/");
         global_context->setUserFilesPath(user_files_path);
         Poco::File(user_files_path).createDirectories();
-    }
-
-    if (config().has("interserver_http_port"))
-    {
-        String this_host = config().getString("interserver_http_host", "");
-
-        if (this_host.empty())
-        {
-            this_host = getFQDNOrHostName();
-            LOG_DEBUG(log,
-                      "Configuration parameter 'interserver_http_host' doesn't exist or exists and empty. Will use '" + this_host
-                          + "' as replica host.");
-        }
-
-        String port_str = config().getString("interserver_http_port");
-        int port = parse<int>(port_str);
-
-        if (port < 0 || port > 0xFFFF)
-            throw Exception("Out of range 'interserver_http_port': " + toString(port), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-        global_context->setInterserverIOAddress(this_host, port);
     }
 
     if (config().has("macros"))

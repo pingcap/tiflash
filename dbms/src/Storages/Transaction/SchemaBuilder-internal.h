@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 
@@ -10,8 +11,17 @@
 /// === Some Private struct / method for SchemaBuilder
 /// Notice that this file should only included by SchemaBuilder.cpp and unittest for this file.
 
+namespace Poco
+{
+class Logger;
+}
+namespace TiDB
+{
+struct TableInfo;
+}
 namespace DB
 {
+std::tuple<NamesAndTypes, Strings> parseColumnsFromTableInfo(const TiDB::TableInfo & table_info, Poco::Logger * log);
 
 constexpr char tmpNamePrefix[] = "_tiflash_tmp_";
 
@@ -32,7 +42,10 @@ struct ColumnNameWithID
     String name;
     ColumnID id;
 
-    explicit ColumnNameWithID(String name_ = "", ColumnID id_ = 0) : name(std::move(name_)), id(id_) {}
+    explicit ColumnNameWithID(String name_ = "", ColumnID id_ = 0)
+        : name(std::move(name_))
+        , id(id_)
+    {}
 
     bool equals(const ColumnNameWithID & rhs) const { return name == rhs.name && id == rhs.id; }
 

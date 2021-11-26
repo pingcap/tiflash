@@ -51,21 +51,6 @@ function run_dir()
 	local mysql_client="$6"
 	local verbose="$7"
 
-	find "$path" -maxdepth 1 -name "*.visual" -type f | sort | while read file; do
-		if [ -f "$file" ]; then
-			python2 mutable-test-gen-from-visual.py "$file" "$skip_raw_test"
-		fi
-		if [ $? != 0 ]; then
-			echo "Generate test files failed: $file" >&2
-			exit 1
-		fi
-	done
-
-	if [ $? != 0 ]; then
-		echo "Generate test files failed" >&2
-		exit 1
-	fi
-
 	find "$path" -maxdepth 1 -name "*.test" -type f | sort | while read file; do
 		if [ -f "$file" ]; then
 			run_file "$dbc" "$file" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
@@ -115,7 +100,7 @@ verbose="${verbose:-8}"
 source ./_env.sh
 
 if [ -z "$target" ]; then
-	target="mutable-test"
+	target="delta-merge-test"
 fi
 
 if [ -z "$debug" ]; then
