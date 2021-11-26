@@ -908,23 +908,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeTS(query_block.source->tbl_scan(), pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
         dag.getDAGContext().table_scan_executor_id = query_block.source_name;
-    }
 
-    // this log measures the concurrent degree in this mpp task
-    LOG_INFO(
-        log,
-        fmt::format("execution stream size for query block(before aggregation){} is {}", query_block.qb_column_prefix, pipeline.streams.size()));
-
-    dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
-
-    DAGExpressionActionsChain chain;
-
-    if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
-    {
+        DAGExpressionActionsChain chain;
+        NamesWithAliases project_after_ts_and_filter_for_remote_read;
         auto original_source_columns = analyzer->getCurrentInputColumns();
+        BoolVec need_project_after_remote(pipeline.streams.size(), false);
         if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, chain, query_block))
         {
-            NamesWithAliases project_after_ts_and_filter_for_remote_read;
             size_t index = 0;
             for (const auto & col : analyzer->getCurrentInputColumns())
             {
@@ -958,10 +948,33 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                     }
                 });
             chain.addStep();
+
+            NamesWithAliases project_cols;
+            for (const auto & col : analyzer->getCurrentInputColumns())
+                project_cols.emplace_back(col.name, col.name);
+            chain.getLastActions()->add(ExpressionAction::project(project_cols));
+            chain.getLastStep().setCallback(
+                "projectAfterWhere",
+                [&](const ExpressionActionsPtr & project_after_where) {
+                    pipeline.transform([&](auto & stream) {
+                        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
+                    });
+                });
+            chain.addStep();
         }
     }
 
-    if (!conditions.empty())
+    // this log measures the concurrent degree in this mpp task
+    LOG_INFO(
+        log,
+        fmt::format("execution stream size for query block(before aggregation){} is {}", query_block.qb_column_prefix, pipeline.streams.size()));
+
+    dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
+
+    DAGExpressionActionsChain chain;
+
+    /// Handled where above for TableScan
+    if (!conditions.empty() && query_block.source->tp() != tipb::ExecType::TypeTableScan)
     {
         String filter_column_name = analyzer->appendWhere(chain, conditions);
         chain.getLastStep().setCallback(
@@ -978,21 +991,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             });
         chain.addStep();
 
-        if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
-        {
-            NamesWithAliases project_cols;
-            for (const auto & col : analyzer->getCurrentInputColumns())
-                project_cols.emplace_back(col.name, col.name);
-            chain.getLastActions()->add(ExpressionAction::project(project_cols));
-            chain.getLastStep().setCallback(
-                "projectAfterWhere",
-                [&](const ExpressionActionsPtr & project_after_where) {
-                    pipeline.transform([&](auto & stream) {
-                        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
-                    });
-                });
-            chain.addStep();
-        }
     }
 
     if (query_block.aggregation)
