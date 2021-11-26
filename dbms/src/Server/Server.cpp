@@ -216,12 +216,12 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
+    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     const String engine_store_version = "engine-version";
     const String engine_store_git_hash = "engine-git-hash";
     const String engine_store_address = "engine-addr";
     const String engine_store_advertise_address = "advertise-engine-addr";
     const String pd_endpoints = "pd-endpoints";
-    const String addr = "addr";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -240,7 +240,6 @@ struct TiFlashProxyConfig
             args_map[pd_endpoints] = config.getString("raft.pd_addr");
             args_map[engine_store_version] = TiFlashBuildInfo::getReleaseVersion();
             args_map[engine_store_git_hash] = TiFlashBuildInfo::getGitHash();
-            args_map[addr] = config.getString("flash.proxy.addr", DEFAULT_PROXY_ADDR);
             if (!args_map.count(engine_store_address))
                 args_map[engine_store_address] = config.getString("flash.service_addr");
             else
