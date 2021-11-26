@@ -30,7 +30,7 @@ public:
 
     void close() override;
 
-    bool isClosed() override { return file->isClosed(); }
+    bool isClosed() const override { return file->isClosed(); }
 
     int fsync() override { return file->fsync(); }
 
