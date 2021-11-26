@@ -33,7 +33,10 @@ public:
         std::vector<TableID> getPartitionIDs()
         {
             std::vector<TableID> partition_ids;
-            std::for_each(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [&](const TiDB::PartitionDefinition & part_def) { partition_ids.emplace_back(part_def.id); });
+            std::for_each(
+                table_info.partition.definitions.begin(),
+                table_info.partition.definitions.end(),
+                [&](const TiDB::PartitionDefinition & part_def) { partition_ids.emplace_back(part_def.id); });
             return partition_ids;
         }
 
@@ -48,7 +51,13 @@ public:
     using TablePtr = std::shared_ptr<Table>;
 
 public:
-    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name, const String & engine_type);
+    TableID newTable(
+        const String & database_name,
+        const String & table_name,
+        const ColumnsDescription & columns,
+        Timestamp tso,
+        const String & handle_pk_name,
+        const String & engine_type);
 
     static TiDB::TableInfoPtr parseColumns(
         const String & tbl_name,

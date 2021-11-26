@@ -3,6 +3,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <Storages/ColumnsDescription.h>
+#include <Storages/Transaction/Types.h>
 
 #include <ctime>
 #include <functional>
@@ -14,7 +15,6 @@ class ThreadPool;
 
 namespace DB
 {
-
 class Context;
 
 class IStorage;
@@ -24,7 +24,6 @@ class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 
 struct Settings;
-using Timestamp = UInt64;
 
 
 /** Allows to iterate over tables.
@@ -96,7 +95,10 @@ public:
     /// Change the table structure in metadata.
     /// You must call under the TableStructureLock of the corresponding table . If engine_modifier is empty, then engine does not change.
     virtual void alterTable(
-        const Context & context, const String & name, const ColumnsDescription & columns, const ASTModifier & engine_modifier)
+        const Context & context,
+        const String & name,
+        const ColumnsDescription & columns,
+        const ASTModifier & engine_modifier)
         = 0;
 
     /// Returns time of table's metadata change, 0 if there is no corresponding metadata file.
