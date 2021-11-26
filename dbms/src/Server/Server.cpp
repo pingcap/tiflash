@@ -216,11 +216,12 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
-    const char * engine_store_version = "engine-version";
-    const char * engine_store_git_hash = "engine-git-hash";
-    const char * engine_store_address = "engine-addr";
-    const char * engine_store_advertise_address = "advertise-engine-addr";
-    const char * pd_endpoints = "pd-endpoints";
+    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
+    const String engine_store_version = "engine-version";
+    const String engine_store_git_hash = "engine-git-hash";
+    const String engine_store_address = "engine-addr";
+    const String engine_store_advertise_address = "advertise-engine-addr";
+    const String pd_endpoints = "pd-endpoints";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -627,23 +628,6 @@ public:
             /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
             try
             {
-                /// HTTP
-                if (config.has("http_port"))
-                {
-                    if (security_config.has_tls_config)
-                    {
-                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
-                    }
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("http_port"));
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(
-                        new HTTPServer(new HTTPHandlerFactory(server, "HTTPHandler-factory"), server_pool, socket, http_params));
-
-                    LOG_INFO(log, "Listening http://" + address.toString());
-                }
-
                 /// HTTPS
                 if (config.has("https_port"))
                 {
@@ -681,6 +665,23 @@ public:
                                     ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
+                else
+                {
+                    /// HTTP
+                    if (security_config.has_tls_config)
+                    {
+                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                    }
+                    Poco::Net::ServerSocket socket;
+                    auto address = socket_bind_listen(socket, listen_host, config.getInt("http_port", DEFAULT_HTTP_PORT));
+                    socket.setReceiveTimeout(settings.http_receive_timeout);
+                    socket.setSendTimeout(settings.http_send_timeout);
+                    servers.emplace_back(
+                        new HTTPServer(new HTTPHandlerFactory(server, "HTTPHandler-factory"), server_pool, socket, http_params));
+
+                    LOG_INFO(log, "Listening http://" + address.toString());
+                }
+
 
                 /// TCP
                 if (config.has("tcp_port"))
@@ -1159,7 +1160,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Settings & settings = global_context->getSettingsRef();
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size");
+    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 

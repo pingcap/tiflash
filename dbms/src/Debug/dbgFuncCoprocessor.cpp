@@ -702,8 +702,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                 astToPB(input, child_ast, child, collator_id, context);
             }
             // for like need to add the third argument
-            tipb::Expr * constant_expr = expr->add_children();
-            constructInt64LiteralTiExpr(*constant_expr, 92);
+            *expr->add_children() = constructInt64LiteralTiExpr(92);
             return;
         }
         case tipb::ScalarFuncSig::FromUnixTime2Arg:
