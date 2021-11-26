@@ -77,20 +77,6 @@ BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t m
 
 namespace
 {
-struct AnalysisResult
-{
-    NamesWithAliases project_after_ts_and_filter_for_remote_read;
-    String filter_column_name;
-    String having_column_name;
-    std::vector<NameAndTypePair> order_columns;
-    /// Columns from the SELECT list, before renaming them to aliases.
-    Names selected_columns;
-
-    Names aggregation_keys;
-    TiDB::TiDBCollators aggregation_collators;
-    AggregateDescriptions aggregate_descriptions;
-};
-
 // add timezone cast for timestamp type, this is used to support session level timezone
 bool addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
@@ -517,7 +503,10 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
-void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
+void DAGQueryBlockInterpreter::executeWhere(
+    DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expr,
+    const String & filter_column)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log); });
 }
@@ -929,22 +918,22 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
 
     DAGExpressionActionsChain chain;
-    AnalysisResult res;
 
     if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
     {
         auto original_source_columns = analyzer->getCurrentInputColumns();
         if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, chain, query_block))
         {
+            NamesWithAliases project_after_ts_and_filter_for_remote_read;
             size_t index = 0;
             for (const auto & col : analyzer->getCurrentInputColumns())
             {
-                res.project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
+                project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
                 ++index;
             }
             chain.getLastStep().setCallback(
                 "appendExtraCast",
-                [&](const ExpressionActionsPtr & extra_cast) {
+                [&, project_columns = std::move(project_after_ts_and_filter_for_remote_read)](const ExpressionActionsPtr & extra_cast) {
                     /// execute timezone cast and the selection
                     ExpressionActionsPtr project_for_cop_read;
                     for (auto & stream : pipeline.streams)
@@ -952,11 +941,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
                         if (dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) != nullptr)
                         {
                             /// for cop read, just execute the project is enough, because timezone cast and the selection are already done in remote TiFlash
-                            if (!res.project_after_ts_and_filter_for_remote_read.empty())
+                            if (!project_columns.empty())
                             {
                                 if (project_for_cop_read == nullptr)
                                 {
-                                    project_for_cop_read = generateProjectExpressionActions(stream, context, res.project_after_ts_and_filter_for_remote_read);
+                                    project_for_cop_read = generateProjectExpressionActions(stream, context, project_columns);
                                 }
                                 stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log);
                             }
@@ -974,15 +963,15 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     if (!conditions.empty())
     {
-        res.filter_column_name = analyzer->appendWhere(chain, conditions);
+        String filter_column_name = analyzer->appendWhere(chain, conditions);
         chain.getLastStep().setCallback(
             "appendWhere",
-            [&](const ExpressionActionsPtr & before_where) {
+            [&, filter_column_name = std::move(filter_column_name)](const ExpressionActionsPtr & before_where) {
                 pipeline.transform([&](auto & stream) {
                     /// CoprocessorBlockInputStream will push down filters
                     if (query_block.source->tp() != tipb::ExecType::TypeTableScan || dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) == nullptr)
                     {
-                        stream = std::make_shared<FilterBlockInputStream>(stream, before_where, res.filter_column_name, log);
+                        stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
                         recordProfileStream(stream, query_block.selection_name);
                     }
                 });
@@ -1015,20 +1004,23 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
             context.getDAGContext()->isMPPTask();
 
-        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions) = analyzer->appendAggregation(
+        auto [aggregation_keys, aggregation_collators, aggregate_descriptions] = analyzer->appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
 
         chain.getLastStep().setCallback(
             "beforeAggregation",
-            [&](const ExpressionActionsPtr & before_aggregation) {
+            [&,
+            aggregation_keys = std::move(aggregation_keys),
+            aggregation_collators = std::move(aggregation_collators),
+            aggregate_descriptions = std::move(aggregate_descriptions)] (const ExpressionActionsPtr & before_aggregation) mutable {
                 executeAggregation(
                     pipeline,
                     before_aggregation,
-                    res.aggregation_keys,
-                    res.aggregation_collators,
-                    res.aggregate_descriptions);
+                    aggregation_keys,
+                    aggregation_collators,
+                    aggregate_descriptions);
                 recordProfileStreams(pipeline, query_block.aggregation_name);
             });
 
@@ -1042,11 +1034,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             std::vector<const tipb::Expr *> having_conditions;
             for (const auto & c : query_block.having->selection().conditions())
                 having_conditions.push_back(&c);
-            res.having_column_name = analyzer->appendWhere(chain, having_conditions);
+            auto having_column_name = analyzer->appendWhere(chain, having_conditions);
             chain.getLastStep().setCallback(
                 "beforeHaving",
-                [&](const ExpressionActionsPtr & before_having) {
-                    executeWhere(pipeline, before_having, res.having_column_name);
+                [&, having_column_name = std::move(having_column_name)](const ExpressionActionsPtr & before_having) {
+                    executeWhere(pipeline, before_having, having_column_name);
                     recordProfileStreams(pipeline, query_block.having_name);
                 });
             chain.addStep();
@@ -1058,12 +1050,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         // Or TopN, not both.
         if (query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
         {
-            res.order_columns = analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn());
+            auto order_columns = analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn());
             chain.getLastStep().setCallback(
                 "beforeOrder",
-                [&](const ExpressionActionsPtr & before_order) {
+                [&, order_columns = std::move(order_columns)](const ExpressionActionsPtr & before_order) {
                     executeExpression(pipeline, before_order);
-                    executeOrder(pipeline, res.order_columns);
+                    executeOrder(pipeline, order_columns);
                     recordProfileStreams(pipeline, query_block.limitOrTopN_name);
                 });
             chain.addStep();
