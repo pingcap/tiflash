@@ -104,14 +104,15 @@ static void writeRegionDataToStorage(
         Stopwatch watch;
 
         Int64 block_schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+        BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
-            std::tie(decoding_schema_snapshot, block) = storage->getSchemaSnapshotAndBlockForDecoding(true);
+            std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(true);
             block_schema_version = decoding_schema_snapshot->schema_version;
 
             auto reader = RegionBlockReader(decoding_schema_snapshot);
-            ok = reader.read(block, data_list_read, force_decode);
+            ok = reader.read(*block_ptr, data_list_read, force_decode);
             if (!ok)
                 return false;
             region_decode_cost = watch.elapsedMilliseconds();
@@ -129,7 +130,10 @@ static void writeRegionDataToStorage(
         case ::TiDB::StorageEngine::DT:
         {
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            dm_storage->write(block, context.getSettingsRef());
+            if (need_decode)
+                dm_storage->write(*block_ptr, context.getSettingsRef());
+            else
+                dm_storage->write(block, context.getSettingsRef());
             break;
         }
         default:
@@ -138,7 +142,7 @@ static void writeRegionDataToStorage(
         write_part_cost = watch.elapsedMilliseconds();
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
         if (need_decode)
-            storage->releaseDecodingBlock(block_schema_version, std::move(block));
+            storage->releaseDecodingBlock(block_schema_version, std::move(block_ptr));
 
         LOG_TRACE(log,
                   FUNCTION_NAME << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost

@@ -145,12 +145,13 @@ public:
 
     virtual size_t getRowKeyColumnSize() const { return 1; }
 
-    virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, Block> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */)
+    using BlockUPtr = std::unique_ptr<Block>;
+    virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     };
 
-    virtual void releaseDecodingBlock(Int64 /* schema_version */, Block && /* block */)
+    virtual void releaseDecodingBlock(Int64 /* schema_version */, BlockUPtr /* block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

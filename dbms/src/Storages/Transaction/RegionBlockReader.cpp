@@ -100,7 +100,7 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
     /// so they must exists before all other columns, and we can get them before decoding other columns
     ColumnUInt8 * raw_delmark_col = nullptr;
     ColumnUInt64 * raw_version_col = nullptr;
-    const size_t invalid_column_pos = reinterpret_cast<size_t>(std::numeric_limits<size_t>::max);
+    const size_t invalid_column_pos = std::numeric_limits<size_t>::max();
     // we cannot figure out extra_handle's column type now, so we just remember it's pos here
     size_t extra_handle_column_pos = invalid_column_pos;
     while (raw_delmark_col == nullptr || raw_version_col == nullptr || extra_handle_column_pos == invalid_column_pos)
@@ -219,14 +219,6 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
             }
         }
         index++;
-    }
-    // TODO: remove it
-    size_t expected_rows = block.rows();
-    for (size_t i = 0; i < block.columns(); i++)
-    {
-        auto & ch_column = block.getByPosition(i);
-        if (ch_column.column->size() != expected_rows)
-            throw Exception("column " + ch_column.name + " rows " + std::to_string(ch_column.column->size()) + " but block rows " + std::to_string(expected_rows), ErrorCodes::LOGICAL_ERROR);
     }
     return true;
 }

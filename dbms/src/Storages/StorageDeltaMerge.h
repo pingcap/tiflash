@@ -126,9 +126,9 @@ public:
     // when `need_block` is true, it will try return a cached block corresponding to DecodingStorageSchemaSnapshotConstPtr,
     //     and `releaseDecodingBlock` need to be called when the block is free
     // when `need_block` is false, it will just return an empty block
-    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, Block> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */) override;
+    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */) override;
 
-    void releaseDecodingBlock(Int64 schema_version, Block && block) override;
+    void releaseDecodingBlock(Int64 schema_version, BlockUPtr block) override;
 
     bool initStoreIfDataDirExist() override;
 
@@ -210,7 +210,7 @@ private:
     mutable std::mutex decode_schema_mutex;
     DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
     // avoid creating block every time when decoding row
-    BlocksList cached_blocks;
+    std::vector<BlockUPtr> cache_blocks;
     // avoid creating too many cached blocks(the typical num should be less and equal than raft apply thread)
     static constexpr size_t max_cached_blocks_num = 16;
 
