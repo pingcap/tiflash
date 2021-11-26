@@ -10,6 +10,7 @@ gcovr --xml -r ${SRCPATH} \
     -e "/usr/include/*" -e "/usr/local/*" -e "/usr/lib/*" \
     -e "${SRCPATH}/contrib/*" \
     -e "${SRCPATH}/dbms/src/Debug/*" \
+    -e "${SRCPATH}/dbms/src/Client/*" \
     --object-directory=${BUILD_DIR} -o /tmp/tiflash_gcovr_coverage.xml -j ${NPROC} -s >/tmp/tiflash_gcovr_coverage.res
 
 cat /tmp/tiflash_gcovr_coverage.res
