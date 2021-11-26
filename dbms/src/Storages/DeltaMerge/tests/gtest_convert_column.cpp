@@ -1,5 +1,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadBufferFromString.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -13,7 +14,7 @@ namespace DM
 {
 namespace tests
 {
-TEST(ConvertColumnType_test, CastNumeric)
+TEST(ConvertColumnTypeTest, CastNumeric)
 {
     {
         const Strings to_types = {"UInt8", "UInt16", "UInt32", "UInt64"};
@@ -165,7 +166,7 @@ TEST(ConvertColumnType_test, CastNumeric)
     }
 }
 
-TEST(ConvertColumnType_test, CastNullableToNotNull)
+TEST(ConvertColumnTypeTest, CastNullableToNotNull)
 {
     const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
@@ -190,7 +191,7 @@ TEST(ConvertColumnType_test, CastNullableToNotNull)
     }
 }
 
-TEST(ConvertColumnType_test, CastNullableToNotNullWithNonZeroDefaultValue)
+TEST(ConvertColumnTypeTest, CastNullableToNotNullWithNonZeroDefaultValue)
 {
     const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
@@ -215,7 +216,7 @@ TEST(ConvertColumnType_test, CastNullableToNotNullWithNonZeroDefaultValue)
     }
 }
 
-TEST(ConvertColumnType_test, CastNullableToNullable)
+TEST(ConvertColumnTypeTest, CastNullableToNullable)
 {
     const Strings to_types = {"Nullable(Int8)", "Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
 
@@ -246,7 +247,7 @@ TEST(ConvertColumnType_test, CastNullableToNullable)
     }
 }
 
-TEST(ConvertColumnType_test, CastNotNullToNullable)
+TEST(ConvertColumnTypeTest, CastNotNullToNullable)
 {
     const Strings to_types = {"Nullable(Int8)", "Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
 
@@ -272,25 +273,39 @@ TEST(ConvertColumnType_test, CastNotNullToNullable)
     }
 }
 
-TEST(ConvertColumnType_test, GetDefaultValue)
+TEST(ConvertColumnTypeTest, GetDefaultValue)
 try
 {
     const String json_table_info
-        = R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":768,"Tp":15}},{"comment":"","default":"3.14","default_bit":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}},{"comment":"","default":"3.14","default_bit":null,"id":3,"name":{"L":"f2","O":"f2"},"offset":2,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}],"comment":"","id":627,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":252,"state":5,"tiflash_replica":{"Count":0},"update_timestamp":422031263342264329})json";
+        = R"json({
+"cols":[
+    {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":768,"Tp":15}}
+    ,{"comment":"","default":"3.14","default_bit":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}}
+    ,{"comment":"","default":"3.14","default_bit":null,"id":3,"name":{"L":"f2","O":"f2"},"offset":2,"origin_default":"3.14","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Elems":null,"Flag":1,"Flen":12,"Tp":4}}
+    ,{"comment":"","default":"-5.4999999","default_bit":null,"id":4,"name":{"L":"d","O":"d"},"offset":2,"origin_default":"-5.4999999","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":0,"Flen":1,"Tp":246}}
+    ,{"comment":"","default":"0.050000001","default_bit":null,"id":5,"name":{"L":"d2","O":"d2"},"offset":3,"origin_default":"0.050000001","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":1,"Elems":null,"Flag":0,"Flen":1,"Tp":246}}
+]
+,"comment":"","id":627,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":252,"state":5,"tiflash_replica":{"Count":0},"update_timestamp":422031263342264329
+})json";
 
     TiDB::TableInfo table_info(json_table_info);
     const auto & columns = table_info.columns;
-    EXPECT_EQ(columns.size(), 3UL);
+    EXPECT_EQ(columns.size(), 5);
 
     DM::ColumnDefine cd;
 
     size_t num_rows = 100;
     {
-        cd.id = 2;
-        cd.type = typeFromString("Nullable(Float32)");
+        const auto & table_col = columns[1]; // A nullable float32 column with default value 3.14
+        cd.id = table_col.id;
+        EXPECT_EQ(cd.id, 2);
+        cd.type = getDataTypeByColumnInfo(table_col);
+        ASSERT_TRUE(cd.type->equals(*typeFromString("Nullable(Float32)")));
+        // Get the default value in `ColumnDefine` set by table info
         DM::setColumnDefineDefaultValue(table_info, cd);
         EXPECT_EQ(cd.default_value.getType(), Field::Types::Float64);
         EXPECT_FLOAT_EQ(cd.default_value.safeGet<Float64>(), 3.14);
+        // Try to create column by the default value
         auto col = createColumnWithDefaultValue(cd, num_rows);
         ASSERT_EQ(col->size(), num_rows);
         for (size_t i = 0; i < num_rows; ++i)
@@ -309,11 +324,16 @@ try
     }
 
     {
-        cd.id = 3;
-        cd.type = typeFromString("Float32");
+        const auto & table_col = columns[2]; // A not-null float32 column with default value 3.14
+        cd.id = table_col.id;
+        EXPECT_EQ(cd.id, 3);
+        cd.type = getDataTypeByColumnInfo(table_col);
+        ASSERT_TRUE(cd.type->equals(*typeFromString("Float32")));
+        // Get the default value in `ColumnDefine` set by table info
         DM::setColumnDefineDefaultValue(table_info, cd);
         EXPECT_EQ(cd.default_value.getType(), Field::Types::Float64);
         EXPECT_FLOAT_EQ(cd.default_value.safeGet<double>(), 3.14);
+        // Try to create column by the default value
         auto col = createColumnWithDefaultValue(cd, num_rows);
         ASSERT_EQ(col->size(), num_rows);
         for (size_t i = 0; i < num_rows; ++i)
@@ -328,6 +348,78 @@ try
         {
             Field f = (*col2)[i];
             EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
+    }
+
+    {
+        const auto & table_col = columns[3]; // A nullable Decimal(1,0) column with default value '-5.4999999' -> -5
+        cd.id = table_col.id;
+        EXPECT_EQ(cd.id, 4);
+        cd.type = getDataTypeByColumnInfo(table_col);
+        ASSERT_TRUE(cd.type->equals(*typeFromString("Nullable(Decimal(1,0))")));
+        Decimal32 expected_default_value;
+        {
+            ReadBufferFromString buf(String("-5.4999999"));
+            readDecimalText(expected_default_value, buf, /*precision*/ 1, /*scale*/ 0);
+            DecimalField<Decimal32> expected_default_field(expected_default_value, /*scale*/ 0);
+            EXPECT_EQ(expected_default_field.toString(), "-5");
+        }
+        // Get the default value in `ColumnDefine` set by table info
+        DM::setColumnDefineDefaultValue(table_info, cd);
+        EXPECT_EQ(cd.default_value.getType(), Field::Types::Decimal32);
+        auto dec_field = cd.default_value.safeGet<DecimalField<Decimal32>>();
+        EXPECT_EQ(dec_field.toString(), "-5");
+        // Try to create column by the default value
+        auto col = createColumnWithDefaultValue(cd, num_rows);
+        ASSERT_EQ(col->size(), num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col)[i];
+            EXPECT_FLOAT_EQ(f.get<DecimalField<Decimal32>>(), expected_default_value);
+        }
+        // Try to copy using inserRangeFrom
+        auto col2 = cd.type->createColumn();
+        col2->insertRangeFrom(*col, 0, num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col2)[i];
+            EXPECT_FLOAT_EQ(f.get<DecimalField<Decimal32>>(), expected_default_value);
+        }
+    }
+
+    {
+        const auto & table_col = columns[4]; // A nullable Decimal(1,1) column with default value '0.050000001' -> 0.1
+        cd.id = table_col.id;
+        EXPECT_EQ(cd.id, 5);
+        cd.type = getDataTypeByColumnInfo(table_col);
+        ASSERT_TRUE(cd.type->equals(*typeFromString("Nullable(Decimal(1,1))")));
+        Decimal32 expected_default_value;
+        {
+            ReadBufferFromString buf(String("0.050000001"));
+            readDecimalText(expected_default_value, buf, /*precision*/ 1, /*scale*/ 1);
+            DecimalField<Decimal32> expected_default_field(expected_default_value, /*scale*/ 1);
+            EXPECT_EQ(expected_default_field.toString(), "0.1");
+        }
+        // Get the default value in `ColumnDefine` set by table info
+        DM::setColumnDefineDefaultValue(table_info, cd);
+        EXPECT_EQ(cd.default_value.getType(), Field::Types::Decimal32);
+        auto dec_field = cd.default_value.safeGet<DecimalField<Decimal32>>();
+        EXPECT_EQ(dec_field.toString(), "0.1");
+        // Try to create column by the default value
+        auto col = createColumnWithDefaultValue(cd, num_rows);
+        ASSERT_EQ(col->size(), num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col)[i];
+            EXPECT_FLOAT_EQ(f.get<DecimalField<Decimal32>>(), DecimalField(expected_default_value, /*scale*/ 1));
+        }
+        // Try to copy using inserRangeFrom
+        auto col2 = cd.type->createColumn();
+        col2->insertRangeFrom(*col, 0, num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col2)[i];
+            EXPECT_FLOAT_EQ(f.get<DecimalField<Decimal32>>(), DecimalField(expected_default_value, /*scale*/ 1));
         }
     }
 }
