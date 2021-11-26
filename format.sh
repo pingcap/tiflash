@@ -1,11 +1,9 @@
-#/usr/bin/env bash
+#!/bin/bash
 
-clang_format=`bash -c "compgen -c clang-format | grep 'clang-format-[[:digit:]]' | sort --version-sort --reverse | head -n1"`
-if [ ! -z $clang_format ]; then
-    find dbms libs utils -name *.cpp -or -name *.h -exec $clang_format -i {} + ;
+CLANG_FORMAT=${CLANG_FORMAT:-clang-format}
+command -v ${CLANG_FORMAT} >/dev/null 2>&1
+if [[ $? != 0 ]]; then
+    echo ${CLANG_FORMAT} missing. Try to install clang-format or set env variable CLANG_FORMAT
 else
-    echo clang-format missing. try to install:
-    echo sudo apt install clang-format
-    echo or
-    echo sudo apt install clang-format-3.9
+    find dbms libs -name "*.cpp" -or -name "*.h" -exec ${CLANG_FORMAT} -i {} +
 fi

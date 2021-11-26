@@ -1,9 +1,11 @@
+#include <Storages/Transaction/RowCodec.h>
+
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
 
+
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
