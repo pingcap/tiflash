@@ -39,7 +39,6 @@ class QuotaForIntervals;
 class EmbeddedDictionaries;
 class ExternalDictionaries;
 class ExternalModels;
-class InterserverIOHandler;
 class BackgroundProcessingPool;
 class MergeList;
 class Cluster;
@@ -278,11 +277,6 @@ public:
     BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, size_t max_block_size) const;
     BlockOutputStreamPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const;
 
-    InterserverIOHandler & getInterserverIOHandler();
-
-    /// How other servers can access this for downloading replicated data.
-    void setInterserverIOAddress(const String & host, UInt16 port);
-    std::pair<String, UInt16> getInterserverIOAddress() const;
     /// The port that the server listens for executing SQL queries.
     UInt16 getTCPPort() const;
 
