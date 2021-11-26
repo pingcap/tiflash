@@ -1,11 +1,12 @@
 #if !defined(__APPLE__) && !defined(__FreeBSD__)
 #include <malloc.h>
 #endif
-#include <ext/bit_cast.h>
 #include <Common/RadixSort.h>
 #include <Common/Stopwatch.h>
-#include <IO/ReadHelpers.h>
 #include <Core/Defines.h>
+#include <IO/ReadHelpers.h>
+
+#include <ext/bit_cast.h>
 
 using Key = double;
 
@@ -21,8 +22,7 @@ void NO_INLINE sort2(Key * data, size_t size)
 
 void NO_INLINE sort3(Key * data, size_t size)
 {
-    std::sort(data, data + size, [](Key a, Key b)
-    {
+    std::sort(data, data + size, [](Key a, Key b) {
         return RadixSortFloatTransform<uint32_t>::forward(ext::bit_cast<uint32_t>(a))
             < RadixSortFloatTransform<uint32_t>::forward(ext::bit_cast<uint32_t>(b));
     });
@@ -42,7 +42,7 @@ int main(int argc, char ** argv)
 
     std::vector<Key> data(n);
 
-//    srand(time(nullptr));
+    //    srand(time(nullptr));
 
     {
         Stopwatch watch;
@@ -71,9 +71,12 @@ int main(int argc, char ** argv)
     {
         Stopwatch watch;
 
-        if (method == 1)    sort1(&data[0], n);
-        if (method == 2)    sort2(&data[0], n);
-        if (method == 3)    sort3(&data[0], n);
+        if (method == 1)
+            sort1(&data[0], n);
+        if (method == 2)
+            sort2(&data[0], n);
+        if (method == 3)
+            sort3(&data[0], n);
 
         watch.stop();
         double elapsed = watch.elapsedSeconds();

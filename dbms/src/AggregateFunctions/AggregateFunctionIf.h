@@ -1,19 +1,18 @@
 #pragma once
 
-#include <DataTypes/DataTypesNumber.h>
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
-#include <AggregateFunctions/IAggregateFunction.h>
+#include <DataTypes/DataTypesNumber.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+} // namespace ErrorCodes
 
 /** Not an aggregate function, but an adapter of aggregate functions,
   * which any aggregate function `agg(x)` makes an aggregate function of the form `aggIf(x, cond)`.
@@ -29,7 +28,8 @@ private:
 
 public:
     AggregateFunctionIf(AggregateFunctionPtr nested, const DataTypes & types)
-        : nested_func(nested), num_arguments(types.size())
+        : nested_func(nested)
+        , num_arguments(types.size())
     {
         if (num_arguments == 0)
             throw Exception("Aggregate function " + getName() + " require at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -91,7 +91,11 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t) const override
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t) const override
     {
         nested_func->addBatchSinglePlace(batch_size, place, columns, arena, num_arguments - 1);
     }
@@ -112,7 +116,7 @@ public:
         nested_func->merge(place, rhs, arena);
     }
 
-     void mergeBatch(
+    void mergeBatch(
         size_t batch_size,
         AggregateDataPtr * places,
         size_t place_offset,
@@ -150,4 +154,4 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB

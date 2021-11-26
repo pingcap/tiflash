@@ -40,6 +40,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     Context & context_,
     const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_,
+    size_t max_streams_,
     bool keep_session_timezone_info_,
     const DAGQuerySource & dag_,
     std::vector<SubqueriesForSets> & subqueries_for_sets_,
@@ -50,6 +51,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , query_block(query_block_)
     , keep_session_timezone_info(keep_session_timezone_info_)
     , rqst(dag_.getDAGRequest())
+    , max_streams(max_streams_)
     , dag(dag_)
     , subqueries_for_sets(subqueries_for_sets_)
     , exchange_receiver_map(exchange_receiver_map_)
@@ -59,15 +61,6 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     {
         for (const auto & condition : query_block.selection->selection().conditions())
             conditions.push_back(&condition);
-    }
-    const Settings & settings = context.getSettingsRef();
-    if (dag.isBatchCop())
-        max_streams = settings.max_threads;
-    else
-        max_streams = 1;
-    if (max_streams > 1)
-    {
-        max_streams *= settings.max_streams_to_max_threads_ratio;
     }
 }
 
@@ -86,12 +79,6 @@ namespace
 {
 struct AnalysisResult
 {
-    bool need_extra_cast_after_tablescan = false;
-    bool has_where = false;
-    bool need_aggregate = false;
-    bool has_having = false;
-    bool has_order_by = false;
-
     ExpressionActionsPtr extra_cast;
     NamesWithAliases project_after_ts_and_filter_for_remote_read;
     ExpressionActionsPtr before_where;
@@ -145,7 +132,6 @@ AnalysisResult analyzeExpressions(
         auto original_source_columns = analyzer.getCurrentInputColumns();
         if (addExtraCastsAfterTs(analyzer, is_need_cast_column, chain, query_block))
         {
-            res.need_extra_cast_after_tablescan = true;
             res.extra_cast = chain.getLastActions();
             chain.addStep();
             size_t index = 0;
@@ -158,8 +144,7 @@ AnalysisResult analyzeExpressions(
     }
     if (!conditions.empty())
     {
-        analyzer.appendWhere(chain, conditions, res.filter_column_name);
-        res.has_where = true;
+        res.filter_column_name = analyzer.appendWhere(chain, conditions);
         res.before_where = chain.getLastActions();
         chain.addStep();
         if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
@@ -184,14 +169,10 @@ AnalysisResult analyzeExpressions(
             /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
             context.getDAGContext()->isMPPTask();
 
-        analyzer.appendAggregation(
+        std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions) = analyzer.appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
-            res.aggregation_keys,
-            res.aggregation_collators,
-            res.aggregate_descriptions,
             group_by_collation_sensitive);
-        res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
         chain.finalize();
@@ -204,8 +185,7 @@ AnalysisResult analyzeExpressions(
             std::vector<const tipb::Expr *> having_conditions;
             for (const auto & c : query_block.having->selection().conditions())
                 having_conditions.push_back(&c);
-            analyzer.appendWhere(chain, having_conditions, res.having_column_name);
-            res.has_having = true;
+            res.having_column_name = analyzer.appendWhere(chain, having_conditions);
             res.before_having = chain.getLastActions();
             chain.addStep();
         }
@@ -213,22 +193,19 @@ AnalysisResult analyzeExpressions(
     // Or TopN, not both.
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
     {
-        res.has_order_by = true;
-        analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
+        res.order_columns = analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn());
     }
 
-    analyzer.generateFinalProject(
+    // Append final project results if needed.
+    final_project = analyzer.appendFinalProject(
         chain,
         query_block.output_field_types,
         query_block.output_offsets,
         query_block.qb_column_prefix,
-        keep_session_timezone_info || !query_block.isRootQueryBlock(),
-        final_project);
-
-    // Append final project results if needed.
-    analyzer.appendFinalProject(chain, final_project);
+        keep_session_timezone_info);
 
     res.before_order_and_select = chain.getLastActions();
+
     chain.finalize();
     chain.clear();
     //todo need call prependProjectInput??
@@ -382,7 +359,7 @@ ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
         {
             condition_vector.push_back(&c);
         }
-        dag_analyzer.appendWhere(chain, condition_vector, filter_column_for_other_condition);
+        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
     }
     if (join.other_eq_conditions_from_in_size() > 0)
     {
@@ -391,7 +368,7 @@ ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
         {
             condition_vector.push_back(&c);
         }
-        dag_analyzer.appendWhere(chain, condition_vector, filter_column_for_other_eq_condition);
+        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
     }
     return chain.getLastActions();
 }
@@ -758,7 +735,7 @@ void DAGQueryBlockInterpreter::executeUnion(DAGPipeline & pipeline, size_t max_s
     }
 }
 
-void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns)
+void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
 {
     SortDescription order_descr = getSortDescription(order_columns, query_block.limitOrTopN->topn().order_by());
     const Settings & settings = context.getSettingsRef();
@@ -981,6 +958,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         executeJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
+
+        SubqueriesForSets subquries;
+        subquries[query_block.qb_join_subquery_alias] = right_query;
+        subqueries_for_sets.emplace_back(subquries);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
@@ -1047,7 +1028,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         keep_session_timezone_info,
         final_project);
 
-    if (res.need_extra_cast_after_tablescan || res.has_where)
+    if (res.extra_cast || res.before_where)
     {
         /// execute timezone cast and the selection
         ExpressionActionsPtr project_for_cop_read;
@@ -1068,10 +1049,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             else
             {
                 /// execute timezone cast or duration cast if needed
-                if (res.need_extra_cast_after_tablescan)
+                if (res.extra_cast)
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, res.extra_cast, log);
                 /// execute selection if needed
-                if (res.has_where)
+                if (res.before_where)
                 {
                     stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name, log);
                     if (res.project_after_where)
@@ -1082,7 +1063,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         for (auto & stream : pipeline.streams_with_non_joined_data)
         {
             /// execute selection if needed
-            if (res.has_where)
+            if (res.before_where)
             {
                 stream = std::make_shared<FilterBlockInputStream>(stream, res.before_where, res.filter_column_name, log);
                 if (res.project_after_where)
@@ -1090,7 +1071,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             }
         }
     }
-    if (res.has_where)
+    if (res.before_where)
     {
         recordProfileStreams(pipeline, query_block.selection_name);
     }
@@ -1100,13 +1081,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
              "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
 
     dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
-    if (res.need_aggregate)
+    if (res.before_aggregation)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
-    if (res.has_having)
+    if (res.before_having)
     {
         // execute having
         executeWhere(pipeline, res.before_having, res.having_column_name);
@@ -1117,7 +1098,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeExpression(pipeline, res.before_order_and_select);
     }
 
-    if (res.has_order_by)
+    if (!res.order_columns.empty())
     {
         // execute topN
         executeOrder(pipeline, res.order_columns);
@@ -1128,17 +1109,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     executeProject(pipeline, final_project);
 
     // execute limit
-    if (query_block.limitOrTopN != nullptr && query_block.limitOrTopN->tp() == tipb::TypeLimit)
+    if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
-    }
-
-    if (query_block.source->tp() == tipb::ExecType::TypeJoin)
-    {
-        SubqueriesForSets subquries;
-        subquries[query_block.qb_join_subquery_alias] = right_query;
-        subqueries_for_sets.emplace_back(subquries);
     }
 }
 

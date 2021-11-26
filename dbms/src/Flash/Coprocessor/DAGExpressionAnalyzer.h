@@ -46,35 +46,23 @@ public:
 
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
 
-    void appendWhere(
+    String appendWhere(
         ExpressionActionsChain & chain,
-        const std::vector<const tipb::Expr *> & conditions,
-        String & filter_column_name);
+        const std::vector<const tipb::Expr *> & conditions);
 
-    void appendOrderBy(
+    std::vector<NameAndTypePair> appendOrderBy(
         ExpressionActionsChain & chain,
-        const tipb::TopN & topN,
-        std::vector<NameAndTypePair> & order_columns);
+        const tipb::TopN & topN);
 
-    void appendAggregation(
+    /// <aggregation_keys, collators, aggregate_descriptions>
+    std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> appendAggregation(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg,
-        Names & aggregation_keys,
-        TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions,
         bool group_by_collation_sensitive);
 
     void appendAggSelect(
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
-
-    void generateFinalProject(
-        ExpressionActionsChain & chain,
-        const std::vector<tipb::FieldType> & schema,
-        const std::vector<Int32> & output_offsets,
-        const String & column_prefix,
-        bool keep_session_timezone_info,
-        NamesWithAliases & final_project);
 
     void initChain(
         ExpressionActionsChain & chain,
@@ -85,9 +73,12 @@ public:
         SubqueryForSet & join_query,
         const NamesAndTypesList & columns_added_by_join) const;
 
-    void appendFinalProject(
+    NamesWithAliases appendFinalProject(
         ExpressionActionsChain & chain,
-        const NamesWithAliases & final_project) const;
+        const std::vector<tipb::FieldType> & schema,
+        const std::vector<Int32> & output_offsets,
+        const String & column_prefix,
+        bool keep_session_timezone_info);
 
     String getActions(
         const tipb::Expr & expr,

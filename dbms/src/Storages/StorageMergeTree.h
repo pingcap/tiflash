@@ -22,7 +22,7 @@ namespace DB
 {
 /** See the description of the data structure in MergeTreeData.
   */
-class StorageMergeTree : public ext::shared_ptr_helper<StorageMergeTree>
+class StorageMergeTree : public ext::SharedPtrHelper<StorageMergeTree>
     , public IManageableStorage
 {
     friend class MergeTreeBlockOutputStream;

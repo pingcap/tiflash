@@ -1,13 +1,12 @@
 #pragma once
 
-#include <type_traits>
-
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnsNumber.h>
-
-#include <Functions/GatherUtils/IValueSource.h>
-#include <Functions/GatherUtils/IArraySource.h>
 #include <Functions/GatherUtils/IArraySink.h>
+#include <Functions/GatherUtils/IArraySource.h>
+#include <Functions/GatherUtils/IValueSource.h>
+
+#include <type_traits>
 
 /** These methods are intended for implementation of functions, that
   *  copy ranges from one or more columns to another column.
@@ -29,7 +28,6 @@
 
 namespace DB::GatherUtils
 {
-
 std::unique_ptr<IArraySource> createArraySource(const ColumnArray & col, bool is_const, size_t total_rows);
 std::unique_ptr<IValueSource> createValueSource(const IColumn & col, bool is_const, size_t total_rows);
 std::unique_ptr<IArraySink> createArraySink(ColumnArray & col, size_t column_size);
@@ -55,5 +53,4 @@ void push(IArraySource & array_source, IValueSource & value_source, IArraySink &
 void resizeDynamicSize(IArraySource & array_source, IValueSource & value_source, IArraySink & sink, const IColumn & size_column);
 
 void resizeConstantSize(IArraySource & array_source, IValueSource & value_source, IArraySink & sink, ssize_t size);
-}
-
+} // namespace DB::GatherUtils

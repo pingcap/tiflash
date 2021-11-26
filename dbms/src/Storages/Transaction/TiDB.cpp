@@ -1,4 +1,5 @@
 #include <Common/Decimal.h>
+#include <Common/Exception.h>
 #include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
 #include <Poco/Base64Decoder.h>
@@ -24,6 +25,7 @@ using DB::Decimal256;
 using DB::Decimal32;
 using DB::Decimal64;
 using DB::DecimalField;
+using DB::Exception;
 using DB::Field;
 using DB::SchemaNameMapper;
 

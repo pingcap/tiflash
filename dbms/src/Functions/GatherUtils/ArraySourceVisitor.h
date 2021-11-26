@@ -4,7 +4,6 @@
 
 namespace DB::GatherUtils
 {
-
 template <typename T>
 struct NumericArraySource;
 
@@ -23,9 +22,13 @@ using BasicAndNullableArraySources = typename TypeListConcat<BasicArraySources, 
 using ConstArraySources = typename TypeListMap<ConstSource, BasicAndNullableArraySources>::Type;
 using TypeListArraySources = typename TypeListConcat<BasicAndNullableArraySources, ConstArraySources>::Type;
 
-class ArraySourceVisitor : public ApplyTypeListForClass<Visitor, TypeListArraySources>::Type {};
+class ArraySourceVisitor : public ApplyTypeListForClass<Visitor, TypeListArraySources>::Type
+{
+};
 
 template <typename Derived>
-class ArraySourceVisitorImpl : public VisitorImpl<Derived, ArraySourceVisitor> {};
+class ArraySourceVisitorImpl : public VisitorImpl<Derived, ArraySourceVisitor>
+{
+};
 
-}
+} // namespace DB::GatherUtils
