@@ -51,7 +51,7 @@ public:
         Greater,
         GreaterEqual,
         Less,
-        LessEuqal,
+        LessEqual,
 
         In,
         NotIn,
