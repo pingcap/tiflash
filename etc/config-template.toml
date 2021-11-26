@@ -102,8 +102,8 @@
 # config = "/proxy.toml"
 # log-file = "/log/proxy.log"
 # log-level = "info"
-# status-addr = "0.0.0.0:20181"
-# advertise-status-addr = "tiflash0:20181"
+# status-addr = "0.0.0.0:20292"
+# advertise-status-addr = "tiflash0:20292"
 # engine-addr = "tiflash0:3930"
 
 [logger]
