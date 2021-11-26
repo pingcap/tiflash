@@ -1,5 +1,4 @@
 #include <DataStreams/StringStreamBlockInputStream.h>
-#include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncFailPoint.h>
@@ -17,7 +16,6 @@
 
 namespace DB
 {
-
 void dbgFuncEcho(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     for (auto it = args.begin(); it != args.end(); ++it)
@@ -70,8 +68,8 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
     regSchemalessFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
     regSchemalessFunc("remove_region", dbgFuncRemoveRegion);
-    regSchemalessFunc("find_region_by_range", ClusterManage::findRegionByRange);
-    regSchemalessFunc("check_table_optimize", ClusterManage::checkTableOptimize);
+    regSchemalessFunc("find_region_by_range", dbgFuncFindRegionByRange);
+    regSchemalessFunc("check_table_optimize", dbgFuncCheckTableOptimize);
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
@@ -156,7 +154,10 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
 }
 
 BlockInputStreamPtr DBGInvoker::invokeSchemaless(
-    Context & context, const std::string & name, const SchemalessDBGFunc & func, const ASTs & args)
+    Context & context,
+    const std::string & name,
+    const SchemalessDBGFunc & func,
+    const ASTs & args)
 {
     std::stringstream col_name;
     col_name << name << "(";
@@ -168,7 +169,9 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
     col_name << ")";
 
     std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(col_name.str());
-    Printer printer = [&](const std::string & s) { res->append(s); };
+    Printer printer = [&](const std::string & s) {
+        res->append(s);
+    };
 
     func(context, args, printer);
 
