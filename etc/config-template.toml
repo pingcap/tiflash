@@ -8,7 +8,6 @@
 # mark_cache_size = 5368709120
 ## The cache size limit of the min-max index of a data block. Generally, you do not need to change this value.
 # minmax_index_cache_size = 5368709120
-
 ## The path in which the TiFlash temporary files are stored. By default it is the first directory in storage.latest.dir appended with "/tmp".
 # tmp_path = "/tidb-data/tiflash-9000/tmp"
 
@@ -32,6 +31,7 @@
 # dir = [ "/tidb-data/tiflash-9000" ]
 ## or
 # dir = [ "/ssd0/tidb-data/tiflash", "/ssd1/tidb-data/tiflash" ]
+
 ## The maximum storage capacity of each directory in storage.main.dir.
 ## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
 ## Note that human-readable numbers such as "10GB" are not supported yet.
@@ -46,15 +46,9 @@
 ## metrics than those in storage.main.dir.
 ## If it is not set (by default), the values of storage.main.dir are used.
 # dir = [ ]
+
 ## The maximum storage capacity of each directory in storage.latest.dir.
 ## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
-# capacity = [ 10737418240, 10737418240 ]
-## The maximum storage capacity of each directory in storage.main.dir.
-## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
-## Note that human-readable numbers such as "10GB" are not supported yet.
-## Numbers are specified in bytes.
-## The size of the capacity list should be the same with the dir size.
-## For example:
 # capacity = [ 10737418240, 10737418240 ]
 
 [storage.raft]
@@ -121,10 +115,8 @@
 
 [raft]
 # pd_addr = "pd0:2379"
-# ignore_databases = "system,default"
-# specify which storage engine we use. tmt or dt 
+# specify which storage engine we use. tmt or dt TODO: Remove deprecated tmt engine
 # storage_engine = "dt"
-
 [raft.snapshot]
 # The way to apply snapshot data
 # The value is one of "block" / "file1"

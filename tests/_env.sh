@@ -42,3 +42,6 @@ export verbose="false"
 # Setup running env vars
 #source ../../_vars.sh
 #setup_dylib_path
+
+export LANG=en_US.utf-8
+export LC_ALL=en_US.utf-8
