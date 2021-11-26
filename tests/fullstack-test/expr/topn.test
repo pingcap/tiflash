@@ -1,0 +1,15 @@
+mysql> drop table if exists test.t
+mysql> create table test.t (a varchar(64), b int)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values ('ABC', 1), ('DEF', 2), ('', 3)
+
+func> wait_table test t
+
+mysql> set @@tidb_enforce_mpp=1; set @@tidb_isolation_read_engines='tiflash'; select substr(a, 2), b + 1 from test.t order by b + 2
++--------------+-------+
+| substr(a, 2) | b + 1 |
++--------------+-------+
+| BC           |     2 |
+| EF           |     3 |
+|              |     4 |
++--------------+-------+
