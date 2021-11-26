@@ -7,7 +7,6 @@
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/RegionBlockReaderHelper.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiDB.h>
 
