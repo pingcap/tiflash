@@ -4,10 +4,10 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 
 namespace TiDB
 {

@@ -1,12 +1,11 @@
+#include <Columns/IColumn.h>
 #include <IO/Endian.h>
 #include <IO/Operators.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/RowCodec.h>
-#include <Columns/IColumn.h>
 
 namespace DB
 {
-
 template <typename T>
 static T decodeUInt(size_t & cursor, const TiKVValue::Base & raw_value)
 {
@@ -84,46 +83,46 @@ TiKVValue::Base encodeNotNullColumn(const Field & field, const ColumnInfo & colu
 
     switch (column_info.tp)
     {
-        case TiDB::TypeLongLong:
-        case TiDB::TypeLong:
-        case TiDB::TypeInt24:
-        case TiDB::TypeShort:
-        case TiDB::TypeTiny:
-            column_info.hasUnsignedFlag() ? encodeIntWithLength(field.safeGet<UInt64>(), ss)
-                                          : encodeIntWithLength(field.safeGet<Int64>(), ss);
-            break;
-        case TiDB::TypeYear:
-            encodeIntWithLength(field.safeGet<Int64>(), ss);
-            break;
-        case TiDB::TypeFloat:
-        case TiDB::TypeDouble:
-            EncodeFloat64(field.safeGet<Float64>(), ss);
-            break;
-        case TiDB::TypeVarString:
-        case TiDB::TypeVarchar:
-        case TiDB::TypeString:
-        case TiDB::TypeBlob:
-        case TiDB::TypeTinyBlob:
-        case TiDB::TypeMediumBlob:
-        case TiDB::TypeLongBlob:
-        case TiDB::TypeJSON:
-            return field.safeGet<String>();
-        case TiDB::TypeNewDecimal:
-            EncodeDecimalForRow(field, ss, column_info);
-            break;
-        case TiDB::TypeTimestamp:
-        case TiDB::TypeDate:
-        case TiDB::TypeDatetime:
-        case TiDB::TypeBit:
-        case TiDB::TypeSet:
-        case TiDB::TypeEnum:
-            encodeIntWithLength(field.safeGet<UInt64>(), ss);
-            break;
-        case TiDB::TypeTime:
-            encodeIntWithLength(field.safeGet<Int64>(), ss);
-            break;
-        default:
-            throw Exception(std::string("Invalid TP ") + std::to_string(column_info.tp) + " of column " + column_info.name);
+    case TiDB::TypeLongLong:
+    case TiDB::TypeLong:
+    case TiDB::TypeInt24:
+    case TiDB::TypeShort:
+    case TiDB::TypeTiny:
+        column_info.hasUnsignedFlag() ? encodeIntWithLength(field.safeGet<UInt64>(), ss)
+                                      : encodeIntWithLength(field.safeGet<Int64>(), ss);
+        break;
+    case TiDB::TypeYear:
+        encodeIntWithLength(field.safeGet<Int64>(), ss);
+        break;
+    case TiDB::TypeFloat:
+    case TiDB::TypeDouble:
+        EncodeFloat64(field.safeGet<Float64>(), ss);
+        break;
+    case TiDB::TypeVarString:
+    case TiDB::TypeVarchar:
+    case TiDB::TypeString:
+    case TiDB::TypeBlob:
+    case TiDB::TypeTinyBlob:
+    case TiDB::TypeMediumBlob:
+    case TiDB::TypeLongBlob:
+    case TiDB::TypeJSON:
+        return field.safeGet<String>();
+    case TiDB::TypeNewDecimal:
+        EncodeDecimalForRow(field, ss, column_info);
+        break;
+    case TiDB::TypeTimestamp:
+    case TiDB::TypeDate:
+    case TiDB::TypeDatetime:
+    case TiDB::TypeBit:
+    case TiDB::TypeSet:
+    case TiDB::TypeEnum:
+        encodeIntWithLength(field.safeGet<UInt64>(), ss);
+        break;
+    case TiDB::TypeTime:
+        encodeIntWithLength(field.safeGet<Int64>(), ss);
+        break;
+    default:
+        throw Exception(std::string("Invalid TP ") + std::to_string(column_info.tp) + " of column " + column_info.name);
     }
 
     return ss.str();
@@ -139,8 +138,8 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
         column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
     if (table_info.columns.size() < fields.size() + column_in_key)
         throw Exception(std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
-                + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
-            ErrorCodes::LOGICAL_ERROR);
+                            + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
+                        ErrorCodes::LOGICAL_ERROR);
 
     size_t encoded_fields_idx = 0;
     for (auto & column_info : table_info.columns)
@@ -156,7 +155,10 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
 
 struct RowEncoderV2
 {
-    RowEncoderV2(const TableInfo & table_info_, const std::vector<Field> & fields_) : table_info(table_info_), fields(fields_) {}
+    RowEncoderV2(const TableInfo & table_info_, const std::vector<Field> & fields_)
+        : table_info(table_info_)
+        , fields(fields_)
+    {}
 
     void encode(WriteBuffer & ss) &&
     {
@@ -167,8 +169,8 @@ struct RowEncoderV2
             column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
         if (table_info.columns.size() < fields.size() + column_in_key)
             throw Exception(std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
-                    + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
-                ErrorCodes::LOGICAL_ERROR);
+                                + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
+                            ErrorCodes::LOGICAL_ERROR);
 
         bool is_big = false;
         size_t value_length = 0;
@@ -337,7 +339,8 @@ bool appendRowV2ToBlockImpl(
 {
     size_t cursor = 2; // Skip the initial codec ver and row flag.
     size_t num_not_null_columns = decodeUInt<UInt16>(cursor, raw_value);
-    size_t num_null_columns = decodeUInt<UInt16>(cursor, raw_value);;
+    size_t num_null_columns = decodeUInt<UInt16>(cursor, raw_value);
+    ;
     std::vector<ColumnID> not_null_column_ids;
     std::vector<ColumnID> null_column_ids;
     std::vector<size_t> value_offsets;
@@ -408,7 +411,7 @@ bool appendRowV2ToBlockImpl(
             {
                 size_t start = id_not_null ? value_offsets[id_not_null - 1] : 0;
                 size_t length = value_offsets[id_not_null] - start;
-                if(!raw_column->decodeData(values_start_pos + start, raw_value, length, force_decode))
+                if (!raw_column->decodeData(values_start_pos + start, raw_value, length, force_decode))
                     return false;
                 id_not_null++;
             }
@@ -484,7 +487,6 @@ bool appendRowV1ToBlock(
             column_ids_iter++;
             block_column_pos++;
         }
-
     }
     while (column_ids_iter != column_ids_iter_end)
     {

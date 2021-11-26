@@ -22,4 +22,4 @@ void clearBlockData(Block & block)
         raw_column->popBack(raw_column->size());
     }
 }
-}
+} // namespace DB

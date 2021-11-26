@@ -5,7 +5,6 @@
 
 namespace DB::tests
 {
-
 bool isBig(const TiKVValue::Base & encoded)
 {
     static constexpr UInt8 BigRowMask = 0x1;
@@ -77,26 +76,30 @@ TEST(RowV2Suite, DecimalValueLength)
     ASSERT_DECIMAL_VALUE(DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 2), 2));
 }
 
-#define ASSERT_ROW_VALUE(is_big, ...)                                               \
-    {                                                                               \
-        auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false, __VA_ARGS__);\
-        WriteBufferFromOwnString ss;                                                       \
-        encodeRowV2(table_info, fields, ss);                                        \
-        auto encoded = ss.str();                                                    \
-        ASSERT_EQ(is_big, isBig(encoded));                                          \
-        auto block = decodeRowToBlock(encoded, decoding_schema);                \
-        ASSERT_EQ(fields.size(), block.columns());                   \
-        for (size_t i = 0; i < fields.size(); i++)                                  \
-        {                                                                           \
-            ASSERT_EQ(fields[i], ((*block.getByPosition(i).column)[0]));                 \
-        }                                                                           \
+#define ASSERT_ROW_VALUE(is_big, ...)                                                                                                \
+    {                                                                                                                                \
+        auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false, __VA_ARGS__); \
+        WriteBufferFromOwnString ss;                                                                                                 \
+        encodeRowV2(table_info, fields, ss);                                                                                         \
+        auto encoded = ss.str();                                                                                                     \
+        ASSERT_EQ(is_big, isBig(encoded));                                                                                           \
+        auto block = decodeRowToBlock(encoded, decoding_schema);                                                                     \
+        ASSERT_EQ(fields.size(), block.columns());                                                                                   \
+        for (size_t i = 0; i < fields.size(); i++)                                                                                   \
+        {                                                                                                                            \
+            ASSERT_EQ(fields[i], ((*block.getByPosition(i).column)[0]));                                                             \
+        }                                                                                                                            \
     }
 
 TEST(RowV2Suite, SmallRow)
 {
     // Small row of nulls.
     ASSERT_ROW_VALUE(
-        false, ColumnIDValueNull<UInt8>(1), ColumnIDValueNull<Int16>(2), ColumnIDValueNull<UInt32>(4), ColumnIDValueNull<Int64>(3));
+        false,
+        ColumnIDValueNull<UInt8>(1),
+        ColumnIDValueNull<Int16>(2),
+        ColumnIDValueNull<UInt32>(4),
+        ColumnIDValueNull<Int64>(3));
     // Small row of integers.
     ASSERT_ROW_VALUE(false,
                      ColumnIDValue(1, std::numeric_limits<Int8>::min()),

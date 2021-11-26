@@ -8,7 +8,6 @@ using TableInfo = TiDB::TableInfo;
 
 namespace DB::tests
 {
-
 TEST(RegionBlockReader_test, PKIsNotHandle)
 {
     Int64 handle_value = 100;
@@ -16,14 +15,14 @@ TEST(RegionBlockReader_test, PKIsNotHandle)
     UInt64 version_value = 100;
     size_t rows = 3;
     auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields(
-        {EXTRA_HANDLE_COLUMN_ID}, false,
+        {EXTRA_HANDLE_COLUMN_ID},
+        false,
         ColumnIDValue(1, std::numeric_limits<Int8>::max()),
         ColumnIDValue(2, std::numeric_limits<UInt64>::min()),
         ColumnIDValue(3, std::numeric_limits<Float32>::min()),
         ColumnIDValue(4, String("aaa")),
         ColumnIDValue(5, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
-        ColumnIDValueNull<UInt64>(6)
-        );
+        ColumnIDValueNull<UInt64>(6));
 
     RegionDataReadInfoList data_list_read;
     // create PK
@@ -69,14 +68,14 @@ TEST(RegionBlockReader_test, PKIsHandle)
     size_t rows = 3;
     ColumnID handle_id = 2;
     auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields(
-        {handle_id}, false,
+        {handle_id},
+        false,
         ColumnIDValue(1, std::numeric_limits<Int8>::max()),
         ColumnIDValue(2, handle_value),
         ColumnIDValue(3, std::numeric_limits<Float32>::min()),
         ColumnIDValue(4, String("aaa")),
         ColumnIDValue(5, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
-        ColumnIDValueNull<UInt64>(6)
-    );
+        ColumnIDValueNull<UInt64>(6));
 
     std::vector<Field> value_fields;
     for (size_t i = 0; i < table_info.columns.size(); i++)
@@ -136,8 +135,7 @@ TEST(RegionBlockReader_test, CommonHandle)
         ColumnIDValue(3, std::numeric_limits<Float32>::min()),
         ColumnIDValue(4, String("aaa")),
         ColumnIDValue(5, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
-        ColumnIDValueNull<UInt64>(6)
-    );
+        ColumnIDValueNull<UInt64>(6));
 
     std::vector<Field> value_fields;
     std::vector<Field> pk_fields;
@@ -209,8 +207,7 @@ TEST(RegionBlockReader_test, MissingColumn)
         ColumnIDValue(4, std::numeric_limits<Float32>::min()),
         ColumnIDValue(9, String("aaa")),
         ColumnIDValue(10, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
-        ColumnIDValueNull<UInt64>(11)
-    );
+        ColumnIDValueNull<UInt64>(11));
     RegionDataReadInfoList data_list_read;
     // create PK
     WriteBufferFromOwnString pk_buf;
@@ -234,8 +231,7 @@ TEST(RegionBlockReader_test, MissingColumn)
         ColumnIDValue(9, String("aaa")),
         ColumnIDValue(10, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
         ColumnIDValueNull<UInt64>(11),
-        ColumnIDValue(13, String(""))
-    );
+        ColumnIDValue(13, String("")));
     // add default value for missing column
     std::vector<ColumnID> missing_column_ids{1, 8, 13};
     String missing_column_default_value = String("default");
@@ -302,8 +298,7 @@ TEST(RegionBlockReader_test, ExtraColumn)
         ColumnIDValue(4, std::numeric_limits<Float32>::min()),
         ColumnIDValue(9, String("aaa")),
         ColumnIDValue(10, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
-        ColumnIDValueNull<UInt64>(11)
-    );
+        ColumnIDValueNull<UInt64>(11));
     std::unordered_map<ColumnID, Field> fields_map;
     for (size_t i = 0; i < table_info.columns.size(); i++)
         fields_map.emplace(table_info.columns[i].id, fields[i]);
@@ -326,8 +321,7 @@ TEST(RegionBlockReader_test, ExtraColumn)
         ColumnIDValue(4, std::numeric_limits<Float32>::min()),
         ColumnIDValue(9, String("aaa")),
         ColumnIDValue(10, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
-        ColumnIDValueNull<UInt64>(11)
-    );
+        ColumnIDValueNull<UInt64>(11));
     std::vector<ColumnID> extra_column_ids{3};
 
     RegionBlockReader reader{decoding_schema};
@@ -366,9 +360,9 @@ TEST(RegionBlockReader_test, OverflowColumn)
     UInt64 version_value = 100;
     size_t rows = 3;
     auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields(
-        {EXTRA_HANDLE_COLUMN_ID}, false,
-        ColumnIDValue(1, std::numeric_limits<UInt64>::max())
-    );
+        {EXTRA_HANDLE_COLUMN_ID},
+        false,
+        ColumnIDValue(1, std::numeric_limits<UInt64>::max()));
 
     RegionDataReadInfoList data_list_read;
     // create PK
@@ -384,9 +378,9 @@ TEST(RegionBlockReader_test, OverflowColumn)
 
     DecodingStorageSchemaSnapshotConstPtr narrow_decoding_schema;
     std::tie(narrow_decoding_schema, std::ignore, std::ignore) = getDecodingSchemaTableInfoFields(
-        {EXTRA_HANDLE_COLUMN_ID}, false,
-        ColumnIDValue(1, std::numeric_limits<UInt8>::min())
-    );
+        {EXTRA_HANDLE_COLUMN_ID},
+        false,
+        ColumnIDValue(1, std::numeric_limits<UInt8>::min()));
 
     constexpr size_t MustHaveCount = 3;
     {
@@ -421,4 +415,4 @@ TEST(RegionBlockReader_test, OverflowColumn)
     }
 }
 
-}
+} // namespace DB::tests

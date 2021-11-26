@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Core/TMTPKType.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Core/TMTPKType.h>
 
 
 namespace DB
@@ -44,7 +44,9 @@ struct DecodingStorageSchemaSnapshot
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
 
     DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_, bool is_common_handle_)
-        : column_defines{std::move(column_defines_)}, is_common_handle{is_common_handle_}, schema_version{table_info_.schema_version}
+        : column_defines{std::move(column_defines_)}
+        , is_common_handle{is_common_handle_}
+        , schema_version{table_info_.schema_version}
     {
         std::unordered_map<ColumnID, size_t> column_lut;
         for (size_t i = 0; i < table_info_.columns.size(); i++)
@@ -123,4 +125,4 @@ Block createBlockSortByColumnID(DecodingStorageSchemaSnapshotConstPtr schema_sna
 
 void clearBlockData(Block & block);
 
-}
+} // namespace DB

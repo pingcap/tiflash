@@ -1,16 +1,15 @@
 #pragma once
 
+#include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
 #include <Core/Names.h>
 #include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
-#include <Storages/Transaction/RegionDataRead.h>
-#include <Storages/Transaction/RowCodec.h>
-
-#include <Columns/ColumnsNumber.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/Region.h>
-#include <Common/typeid_cast.h>
+#include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/RowCodec.h>
 
 namespace TiDB
 {
@@ -19,7 +18,6 @@ struct TableInfo;
 
 namespace DB
 {
-
 class IManageableStorage;
 using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 
@@ -57,8 +55,12 @@ class RegionScanFilter
 
 public:
     RegionScanFilter(
-        bool is_full_range_scan_, std::vector<HandleRange<Int64>> int64_ranges_, std::vector<HandleRange<UInt64>> uint64_ranges_)
-        : is_full_range_scan(is_full_range_scan_), int64_ranges(std::move(int64_ranges_)), uint64_ranges(std::move(uint64_ranges_))
+        bool is_full_range_scan_,
+        std::vector<HandleRange<Int64>> int64_ranges_,
+        std::vector<HandleRange<UInt64>> uint64_ranges_)
+        : is_full_range_scan(is_full_range_scan_)
+        , int64_ranges(std::move(int64_ranges_))
+        , uint64_ranges(std::move(uint64_ranges_))
     {}
     bool filter(UInt64 handle) { return !is_full_range_scan && !isValidHandle(handle); }
     bool filter(Int64 handle) { return !is_full_range_scan && !isValidHandle(handle); }

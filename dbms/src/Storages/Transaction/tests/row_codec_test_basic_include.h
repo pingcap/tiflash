@@ -5,10 +5,10 @@
 
 namespace DB::tests
 {
-using TiDB::ColumnInfo;
-using TiDB::TableInfo;
 using DM::ColumnDefine;
 using DM::ColumnDefines;
+using TiDB::ColumnInfo;
+using TiDB::TableInfo;
 using ColumnIDs = std::vector<ColumnID>;
 
 template <typename T>
@@ -73,25 +73,28 @@ struct ColumnTP<String>
 template <>
 struct ColumnTP<DecimalField<Decimal32>>
 {
-static const auto tp = TiDB::TypeNewDecimal;
+    static const auto tp = TiDB::TypeNewDecimal;
 };
 template <>
 struct ColumnTP<DecimalField<Decimal64>>
 {
-static const auto tp = TiDB::TypeNewDecimal;
+    static const auto tp = TiDB::TypeNewDecimal;
 };
 template <>
 struct ColumnTP<DecimalField<Decimal128>>
 {
-static const auto tp = TiDB::TypeNewDecimal;
+    static const auto tp = TiDB::TypeNewDecimal;
 };
 template <>
 struct ColumnTP<DecimalField<Decimal256>>
 {
-static const auto tp = TiDB::TypeNewDecimal;
+    static const auto tp = TiDB::TypeNewDecimal;
 };
 
-inline String getTestColumnName(ColumnID id) { return "column" + std::to_string(id); }
+inline String getTestColumnName(ColumnID id)
+{
+    return "column" + std::to_string(id);
+}
 
 template <typename T, bool nullable = false>
 ColumnInfo getColumnInfo(ColumnID id)
@@ -112,8 +115,14 @@ struct ColumnIDValue
 {
     static constexpr bool value_is_null = is_null;
     using ValueType = std::decay_t<T>;
-    ColumnIDValue(ColumnID id_, const T & value_) : id(id_), value(value_) {}
-    ColumnIDValue(ColumnID id_, T && value_) : id(id_), value(std::move(value_)) {}
+    ColumnIDValue(ColumnID id_, const T & value_)
+        : id(id_)
+        , value(value_)
+    {}
+    ColumnIDValue(ColumnID id_, T && value_)
+        : id(id_)
+        , value(std::move(value_))
+    {}
     ColumnID id;
     ValueType value;
 };
@@ -123,7 +132,9 @@ struct ColumnIDValue<T, true>
 {
     static constexpr bool value_is_null = true;
     using ValueType = std::decay_t<T>;
-    ColumnIDValue(ColumnID id_) : id(id_) {}
+    ColumnIDValue(ColumnID id_)
+        : id(id_)
+    {}
     ColumnID id;
 };
 
@@ -241,7 +252,7 @@ std::tuple<DecodingStorageSchemaSnapshotConstPtr, TableInfo, std::vector<Field>>
     }
     store_columns.emplace_back(VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
     store_columns.emplace_back(TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE);
-    for (auto & column_info: table_info.columns)
+    for (auto & column_info : table_info.columns)
     {
         store_columns.emplace_back(column_info.id, column_info.name, DB::getDataTypeByColumnInfo(column_info));
     }
@@ -307,4 +318,4 @@ T getValueByRowV1(const T & v)
     return static_cast<T>(std::move((*block.getByPosition(0).column)[0].template safeGet<NearestType>()));
 }
 
-}
+} // namespace DB::tests

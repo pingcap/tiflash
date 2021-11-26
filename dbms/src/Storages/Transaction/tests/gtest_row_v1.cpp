@@ -4,7 +4,6 @@
 
 namespace DB::tests
 {
-
 #define ASSERT_INT_VALUE(v) ASSERT_EQ(getValueByRowV1(v), v)
 
 TEST(RowV1Suite, IntValue)

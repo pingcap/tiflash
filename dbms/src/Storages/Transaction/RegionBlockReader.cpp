@@ -98,8 +98,8 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
     ///
     /// extra handle, del, version column is with column id smaller than other visible column id,
     /// so they must exists before all other columns, and we can get them before decoding other columns
-    ColumnUInt8 *raw_delmark_col = nullptr;
-    ColumnUInt64 *raw_version_col = nullptr;
+    ColumnUInt8 * raw_delmark_col = nullptr;
+    ColumnUInt64 * raw_version_col = nullptr;
     const size_t invalid_column_pos = reinterpret_cast<size_t>(std::numeric_limits<size_t>::max);
     // we cannot figure out extra_handle's column type now, so we just remember it's pos here
     size_t extra_handle_column_pos = invalid_column_pos;

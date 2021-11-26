@@ -1,12 +1,11 @@
 #pragma once
 
-#include <Storages/Transaction/TiKVKeyValue.h>
 #include <Core/Block.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
 
 namespace DB
 {
-
 using TiDB::ColumnInfo;
 using TiDB::TableInfo;
 

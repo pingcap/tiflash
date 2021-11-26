@@ -6,8 +6,8 @@
 #include <Common/SipHash.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteHelpers.h>
-#include <common/unaligned.h>
 #include <Storages/Transaction/DatumCodec.h>
+#include <common/unaligned.h>
 
 
 template <typename T>
