@@ -23,7 +23,6 @@
 #include <Interpreters/ExternalDictionaries.h>
 #include <Interpreters/ExternalModels.h>
 #include <Interpreters/ISecurityManager.h>
-#include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/PartLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
@@ -116,9 +115,6 @@ struct ContextShared
     mutable std::mutex external_dictionaries_mutex;
     mutable std::mutex external_models_mutex;
 
-    String interserver_io_host; /// The host name by which this server is available for other servers.
-    UInt16 interserver_io_port = 0; /// and port.
-
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
@@ -145,7 +141,6 @@ struct ContextShared
     MergeList merge_list; /// The list of executable merge (for (Replicated)?MergeTree)
     ViewDependencies view_dependencies; /// Current dependencies
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
-    InterserverIOHandler interserver_io_handler; /// Handler for interserver communication.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
@@ -309,11 +304,6 @@ Context::~Context()
     }
 }
 
-
-InterserverIOHandler & Context::getInterserverIOHandler()
-{
-    return shared->interserver_io_handler;
-}
 
 std::unique_lock<std::recursive_mutex> Context::getLock() const
 {
@@ -1626,22 +1616,6 @@ IORateLimiter & Context::getIORateLimiter() const
 ReadLimiterPtr Context::getReadLimiter() const
 {
     return getIORateLimiter().getReadLimiter();
-}
-
-void Context::setInterserverIOAddress(const String & host, UInt16 port)
-{
-    shared->interserver_io_host = host;
-    shared->interserver_io_port = port;
-}
-
-
-std::pair<String, UInt16> Context::getInterserverIOAddress() const
-{
-    if (shared->interserver_io_host.empty() || shared->interserver_io_port == 0)
-        throw Exception("Parameter 'interserver_http_port' required for replication is not specified in configuration file.",
-                        ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-    return {shared->interserver_io_host, shared->interserver_io_port};
 }
 
 UInt16 Context::getTCPPort() const
