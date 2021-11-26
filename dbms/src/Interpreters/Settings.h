@@ -363,7 +363,7 @@ struct Settings
     M(SettingUInt64, max_network_bandwidth_for_all_users, 0, "The maximum speed of data exchange over the network in bytes per second for all concurrently running queries. Zero means "                                                \
                                                              "unlimited.")                                                                                                                                                              \
                                                                                                                                                                                                                                         \
-    M(SettingBool, enable_local_tunnel, false, "Enable local data transfer between local MPP tasks.")
+    M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
     APPLY_FOR_SETTINGS(DECLARE)

@@ -50,25 +50,10 @@ public:
 class LocalExchangePacketReader : public ExchangePacketReader
 {
 public:
-    struct LocalEnv
-    {
-        LocalEnv()
-            : tunnel(nullptr)
-        {}
-        explicit LocalEnv(MPPTunnelPtr tunnel_)
-            : tunnel(std::move(tunnel_))
-        {}
-        MPPTunnelPtr tunnel;
-    };
+    MPPTunnelPtr tunnel;
 
-    std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
-    grpc::ClientContext client_context;
-    std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
-    LocalEnv local_env;
-
-    explicit LocalExchangePacketReader(const LocalEnv & env)
-        : call(nullptr)
-        , local_env(env){};
+    explicit LocalExchangePacketReader(const std::shared_ptr<MPPTunnel> & tunnel_)
+        : tunnel(tunnel_){};
 
     /// put the implementation of dtor in .cpp so we don't need to put the specialization of
     /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
@@ -96,11 +81,6 @@ public:
     static StatusType getStatusOK()
     {
         return ::grpc::Status::OK;
-    }
-
-    bool isLocalTunnelEnabled()
-    {
-        return enable_local_tunnel;
     }
 
 private:

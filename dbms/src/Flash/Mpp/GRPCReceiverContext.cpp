@@ -95,8 +95,7 @@ std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const Exch
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
         }
-        LocalExchangePacketReader::LocalEnv local_env(tunnel);
-        return std::make_shared<LocalExchangePacketReader>(local_env);
+        return std::make_shared<LocalExchangePacketReader>(tunnel);
     }
     else
     {
@@ -141,7 +140,7 @@ bool GrpcExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet
 
 bool LocalExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
 {
-    std::shared_ptr<mpp::MPPDataPacket> tmp_packet = local_env.tunnel->readForLocal();
+    std::shared_ptr<mpp::MPPDataPacket> tmp_packet = tunnel->readForLocal();
     bool success = tmp_packet != nullptr;
     if (success)
         packet = tmp_packet;
