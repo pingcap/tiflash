@@ -94,7 +94,7 @@ void PosixWriteReadableFile::close()
     }
 
 
-    metric_increment.changeTo(0); // Subtract metrics for `CurrentMetrics::OpenFileForWrite`
+    metric_increment.changeTo(0); // Subtract metrics for `CurrentMetrics::OpenFileForReadWrite`
 
     fd = -1;
 }
