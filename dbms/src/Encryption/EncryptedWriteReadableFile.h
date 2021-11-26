@@ -45,7 +45,7 @@ public:
     String getFileName() const override
     {
         return file->getFileName();
-    };
+    }
 
 private:
     WriteReadableFilePtr file;
