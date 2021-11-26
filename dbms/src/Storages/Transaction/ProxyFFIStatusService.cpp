@@ -1,24 +1,13 @@
-#include <Common/typeid_cast.h>
-#include <Debug/ClusterManage.h>
 #include <Interpreters/Context.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
-#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int BAD_ARGUMENTS;
-extern const int UNKNOWN_TABLE;
-} // namespace ErrorCodes
-
 HttpRequestRes HandleHttpRequestTestShow(
     EngineStoreServerWrap *,
     std::string_view path,
@@ -135,102 +124,6 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
         }
     }
     return HttpRequestRes{.status = HttpRequestStatus::ErrorParam, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
-}
-
-inline std::string ToPdKey(const char * key, const size_t len)
-{
-    std::string res(len * 2, 0);
-    size_t i = 0;
-    for (size_t k = 0; k < len; ++k)
-    {
-        uint8_t o = key[k];
-        res[i++] = o / 16;
-        res[i++] = o % 16;
-    }
-
-    for (char & re : res)
-    {
-        if (re < 10)
-            re = re + '0';
-        else
-            re = re - 10 + 'A';
-    }
-    return res;
-}
-
-inline std::string ToPdKey(const std::string & key)
-{
-    return ToPdKey(key.data(), key.size());
-}
-
-inline std::string FromPdKey(const char * key, const size_t len)
-{
-    std::string res(len / 2, 0);
-    for (size_t k = 0; k < len; k += 2)
-    {
-        int s[2];
-
-        for (size_t i = 0; i < 2; ++i)
-        {
-            char p = key[k + i];
-            if (p >= 'A')
-                s[i] = p - 'A' + 10;
-            else
-                s[i] = p - '0';
-        }
-
-        res[k / 2] = s[0] * 16 + s[1];
-    }
-    return res;
-}
-
-void ClusterManage::findRegionByRange(Context & context, const ASTs & args, Printer output)
-{
-    enum Mode : UInt64
-    {
-        DEFAULT = 0,
-        ID_LIST = 1,
-    };
-
-    if (args.size() < 2)
-        throw Exception("Args not matched, should be: start-key, end-key", ErrorCodes::BAD_ARGUMENTS);
-
-    Mode mode = DEFAULT;
-    const auto start_key = safeGet<std::string>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    const auto end_key = safeGet<std::string>(typeid_cast<const ASTLiteral &>(*args[1]).value);
-    if (args.size() > 2)
-        mode = static_cast<Mode>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
-
-    auto & tmt = context.getTMTContext();
-    auto & kvstore = tmt.getKVStore();
-
-    auto start = FromPdKey(start_key.data(), start_key.size());
-    auto end = FromPdKey(end_key.data(), end_key.size());
-    RegionMap regions;
-    kvstore->handleRegionsByRangeOverlap(RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end)),
-                                         [&regions](RegionMap regions_, const KVStoreTaskLock &) { regions = std::move(regions_); });
-
-    output(toString(regions.size()));
-    if (mode == ID_LIST)
-    {
-        std::stringstream ss;
-        if (!regions.empty())
-            ss << "regions: ";
-        for (const auto & region : regions)
-            ss << region.second->id() << ' ';
-        output(ss.str());
-    }
-}
-
-void ClusterManage::checkTableOptimize(DB::Context & context, const DB::ASTs & args, DB::Printer)
-{
-    if (args.size() < 2)
-        throw Exception("Args not matched, should be: table-id, threshold", ErrorCodes::BAD_ARGUMENTS);
-
-    auto & tmt = context.getTMTContext();
-    TableID table_id = static_cast<TableID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
-    auto a = typeid_cast<const ASTLiteral &>(*args[1]).value.safeGet<DecimalField<Decimal32>>();
-    tmt.getRegionTable().checkTableOptimize(table_id, a.getValue().toFloat<Float32>(a.getScale()));
 }
 
 } // namespace DB
