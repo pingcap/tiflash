@@ -73,7 +73,11 @@ public:
         SubqueryForSet & join_query,
         const NamesAndTypesList & columns_added_by_join) const;
 
-    NamesWithAliases appendFinalProject(
+    NamesWithAliases appendFinalProjectForNonRootQueryBlock(
+        ExpressionActionsChain & chain,
+        const String & column_prefix);
+
+    NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
         const std::vector<tipb::FieldType> & schema,
         const std::vector<Int32> & output_offsets,
