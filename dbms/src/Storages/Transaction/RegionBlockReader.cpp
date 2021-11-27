@@ -147,7 +147,7 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
             if (!pk_column_ids.empty())
             {
                 auto * raw_pk_column = const_cast<IColumn *>((block.getByPosition(pk_pos_map.at(pk_column_ids[0]))).column.get());
-                raw_extra_column->decodeTiDBRowV2Datum(0, *pk, sizeof(Int64), true);
+                raw_pk_column->decodeTiDBRowV2Datum(0, *pk, sizeof(Int64), true);
             }
         }
         else
