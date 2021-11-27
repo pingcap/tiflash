@@ -41,7 +41,7 @@ Field GenDefaultField(const TiDB::ColumnInfo & col_info)
         else
             return Field(DecimalField<Decimal256>(Decimal256(), col_info.decimal));
     }
-        break;
+    break;
     case TiDB::CodecFlagCompactBytes:
         return Field(String());
     case TiDB::CodecFlagFloat:
