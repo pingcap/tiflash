@@ -178,7 +178,7 @@ inline UInt32 readWord(int binIdx, const String & dec, int size)
 }
 
 template <typename T>
-inline T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, ScaleType frac)
+T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, ScaleType frac)
 {
     static_assert(IsDecimal<T>);
 

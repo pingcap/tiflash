@@ -6,8 +6,8 @@
 #include <Common/SipHash.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Transaction/DatumCodec.h>
 #include <common/unaligned.h>
+#include <DataTypes/DataTypeDecimal.h>
 
 
 template <typename T>
@@ -21,6 +21,9 @@ extern const int PARAMETER_OUT_OF_BOUND;
 extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
+
+template <typename T>
+T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, ScaleType frac);
 
 template <typename T>
 int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) const
@@ -234,9 +237,31 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
 }
 
 template <typename T>
-bool ColumnDecimal<T>::decodeData(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
+bool ColumnDecimal<T>::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
 {
-    insert(DecodeDecimal(cursor, raw_value));
+    PrecType prec_ = raw_value[cursor++];
+    ScaleType scale_ = raw_value[cursor++];
+    auto type = createDecimal(prec_, scale_);
+    if (checkDecimal<Decimal32>(*type))
+    {
+        auto res = DecodeDecimalImpl<Decimal32>(cursor, raw_value, prec_, scale_);
+        data.push_back(DecimalField<Decimal32>(res, scale_));
+    }
+    else if (checkDecimal<Decimal64>(*type))
+    {
+        auto res = DecodeDecimalImpl<Decimal64>(cursor, raw_value, prec_, scale_);
+        data.push_back(DecimalField<Decimal64>(res, scale_));
+    }
+    else if (checkDecimal<Decimal128>(*type))
+    {
+        auto res = DecodeDecimalImpl<Decimal128>(cursor, raw_value, prec_, scale_);
+        data.push_back(DecimalField<Decimal128>(res, scale_));
+    }
+    else
+    {
+        auto res = DecodeDecimalImpl<Decimal256>(cursor, raw_value, prec_, scale);
+        data.push_back(DecimalField<Decimal256>(res, scale_));
+    }
     return true;
 }
 

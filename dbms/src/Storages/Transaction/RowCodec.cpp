@@ -340,7 +340,6 @@ bool appendRowV2ToBlockImpl(
     size_t cursor = 2; // Skip the initial codec ver and row flag.
     size_t num_not_null_columns = decodeUInt<UInt16>(cursor, raw_value);
     size_t num_null_columns = decodeUInt<UInt16>(cursor, raw_value);
-    ;
     std::vector<ColumnID> not_null_column_ids;
     std::vector<ColumnID> null_column_ids;
     std::vector<size_t> value_offsets;
@@ -355,10 +354,7 @@ bool appendRowV2ToBlockImpl(
         if (column_ids_iter == column_ids_iter_end)
         {
             // extra column
-            if (!force_decode)
-                return false;
-            else
-                return true;
+            return force_decode;
         }
 
         bool is_null;
@@ -404,6 +400,7 @@ bool appendRowV2ToBlockImpl(
                                         ErrorCodes::LOGICAL_ERROR);
                     }
                 }
+                // ColumnNullable::insertDefault just insert a null value
                 raw_column->insertDefault();
                 id_null++;
             }
@@ -411,7 +408,7 @@ bool appendRowV2ToBlockImpl(
             {
                 size_t start = id_not_null ? value_offsets[id_not_null - 1] : 0;
                 size_t length = value_offsets[id_not_null] - start;
-                if (!raw_column->decodeData(values_start_pos + start, raw_value, length, force_decode))
+                if (!raw_column->decodeTiDBRowV2Datum(values_start_pos + start, raw_value, length, force_decode))
                     return false;
                 id_not_null++;
             }
@@ -458,10 +455,7 @@ bool appendRowV1ToBlock(
         if (column_ids_iter == column_ids_iter_end)
         {
             // extra column
-            if (!force_decode)
-                return false;
-            else
-                return true;
+            return force_decode;
         }
         auto next_field_column_id = decoded_field_iter->first;
         if (column_ids_iter->first > next_field_column_id)

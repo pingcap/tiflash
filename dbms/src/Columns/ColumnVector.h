@@ -199,7 +199,7 @@ public:
         data.push_back(*reinterpret_cast<const T *>(pos));
     }
 
-    bool decodeData(size_t cursor, const String & raw_value, size_t length, bool force_decode [[maybe_unused]]) override
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode [[maybe_unused]]) override
     {
         if constexpr (std::is_same_v<T, Float32> || std::is_same_v<T, Float64>)
         {

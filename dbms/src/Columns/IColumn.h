@@ -133,9 +133,9 @@ public:
     /// when the column failed to decoding value from `data`, it will either
     ///   1) return false if `force_decode` is false
     ///   2) throw exception to describe why the decoding fails if `force_decode` is true
-    virtual bool decodeData(size_t /* cursor */, const String & /* raw_value */, size_t /* length */, bool /* force_decode */)
+    virtual bool decodeTiDBRowV2Datum(size_t /* cursor */, const String & /* raw_value */, size_t /* length */, bool /* force_decode */)
     {
-        throw Exception("Method decodeData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Method decodeTiDBRowV2Datum is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /// Like getData, but has special behavior for columns that contain variable-length strings.

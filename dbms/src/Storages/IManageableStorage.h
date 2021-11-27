@@ -24,6 +24,7 @@ namespace DM
 {
 struct RowKeyRange;
 }
+using BlockUPtr = std::unique_ptr<Block>;
 
 /**
  * An interface for Storages synced from TiDB.
@@ -145,7 +146,6 @@ public:
 
     virtual size_t getRowKeyColumnSize() const { return 1; }
 
-    using BlockUPtr = std::unique_ptr<Block>;
     virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
