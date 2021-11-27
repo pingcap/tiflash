@@ -87,7 +87,6 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
     version_data.reserve(data_list.size());
     bool need_decode_value = block.columns() > MustHaveColCnt;
     size_t index = 0;
-    // TODO: reserve data_list.size() in every column
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
         // Ignore data after the start_ts.
@@ -126,7 +125,7 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
                     if (pk_pos_map.empty() || !ci->hasPriKeyFlag())
                     {
                         auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
-                        raw_column->insert(GenDefaultField(*ci));
+                        raw_column->insertDefault();
                     }
                     column_ids_iter_copy++;
                     next_column_pos_copy++;
@@ -144,16 +143,11 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
         {
             // extra handle column's type is always Int64
             auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
-            raw_extra_column->insert(Field(static_cast<Int64>(pk)));
+            raw_extra_column->decodeTiDBRowV2Datum(0, *pk, sizeof(Int64), true);
             if (!pk_column_ids.empty())
             {
                 auto * raw_pk_column = const_cast<IColumn *>((block.getByPosition(pk_pos_map.at(pk_column_ids[0]))).column.get());
-                if constexpr (pk_type == TMTPKType::INT64)
-                    raw_pk_column->insert(static_cast<Int64>(pk));
-                else if constexpr (pk_type == TMTPKType::UINT64)
-                    raw_pk_column->insert(static_cast<UInt64>(pk));
-                else
-                    raw_pk_column->insert(static_cast<Int64>(pk));
+                raw_extra_column->decodeTiDBRowV2Datum(0, *pk, sizeof(Int64), true);
             }
         }
         else
