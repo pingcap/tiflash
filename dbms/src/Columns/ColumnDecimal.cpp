@@ -5,9 +5,9 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
-#include <DataTypes/DataTypeDecimal.h>
 
 
 template <typename T>
