@@ -1,6 +1,7 @@
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <IO/ReadBufferFromString.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/MemoryStream.h>
@@ -13,9 +14,54 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
 extern const UInt8 TYPE_CODE_LITERAL;
 extern const UInt8 LITERAL_NIL;
-Field GenDefaultField(const TiDB::ColumnInfo & col_info);
+
+Field GenDefaultField(const TiDB::ColumnInfo & col_info)
+{
+    switch (col_info.getCodecFlag())
+    {
+    case TiDB::CodecFlagNil:
+        return Field();
+    case TiDB::CodecFlagBytes:
+        return Field(String());
+    case TiDB::CodecFlagDecimal:
+    {
+        auto type = createDecimal(col_info.flen, col_info.decimal);
+        if (checkDecimal<Decimal32>(*type))
+            return Field(DecimalField<Decimal32>(Decimal32(), col_info.decimal));
+        else if (checkDecimal<Decimal64>(*type))
+            return Field(DecimalField<Decimal64>(Decimal64(), col_info.decimal));
+        else if (checkDecimal<Decimal128>(*type))
+            return Field(DecimalField<Decimal128>(Decimal128(), col_info.decimal));
+        else
+            return Field(DecimalField<Decimal256>(Decimal256(), col_info.decimal));
+    }
+        break;
+    case TiDB::CodecFlagCompactBytes:
+        return Field(String());
+    case TiDB::CodecFlagFloat:
+        return Field(Float64(0));
+    case TiDB::CodecFlagUInt:
+        return Field(UInt64(0));
+    case TiDB::CodecFlagInt:
+        return Field(Int64(0));
+    case TiDB::CodecFlagVarInt:
+        return Field(Int64(0));
+    case TiDB::CodecFlagVarUInt:
+        return Field(UInt64(0));
+    case TiDB::CodecFlagJson:
+        return TiDB::genJsonNull();
+    case TiDB::CodecFlagDuration:
+        return Field(Int64(0));
+    default:
+        throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
+    }
+}
 } // namespace DB
 
 namespace TiDB
