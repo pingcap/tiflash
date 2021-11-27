@@ -143,16 +143,22 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
         {
             // extra handle column's type is always Int64
             auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
-            raw_extra_column->decodeTiDBRowV2Datum(0, *pk, sizeof(Int64), true);
+            static_cast<ColumnInt64 *>(raw_extra_column)->getData().push_back(Int64(pk));
             if (!pk_column_ids.empty())
             {
                 auto * raw_pk_column = const_cast<IColumn *>((block.getByPosition(pk_pos_map.at(pk_column_ids[0]))).column.get());
-                raw_pk_column->decodeTiDBRowV2Datum(0, *pk, sizeof(Int64), true);
+                if constexpr (pk_type == TMTPKType::INT64)
+                    static_cast<ColumnInt64 *>(raw_pk_column)->getData().push_back(Int64(pk));
+                else if constexpr (pk_type == TMTPKType::UINT64)
+                    static_cast<ColumnUInt64 *>(raw_pk_column)->getData().push_back(UInt64(pk));
+                else
+                    static_cast<ColumnInt64 *>(raw_pk_column)->getData().push_back(Int64(pk));
             }
         }
         else
         {
             auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
+            // TODO: use decodeTiDBRowV2Datum here?
             raw_extra_column->insertData(pk->data(), pk->size());
             /// decode key and insert pk columns if needed
             size_t cursor = 0, pos = 0;
