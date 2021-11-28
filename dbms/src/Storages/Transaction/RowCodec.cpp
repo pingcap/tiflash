@@ -465,8 +465,6 @@ bool appendRowV1ToBlock(
             // extra column
             return force_decode;
         }
-        if (unlikely(column_ids_iter->first) == pk_handle_id)
-            throw Exception("pk column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
 
         auto next_field_column_id = decoded_field_iter->first;
         if (column_ids_iter->first > next_field_column_id)
@@ -486,6 +484,9 @@ bool appendRowV1ToBlock(
         }
         else
         {
+            if (unlikely(column_ids_iter->first) == pk_handle_id)
+                throw Exception("pk column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
+
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             const auto * column_info = column_infos[column_ids_iter->second];
             DatumFlat datum(decoded_field_iter->second, column_info->tp);
