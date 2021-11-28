@@ -48,7 +48,9 @@ TEST(RegionBlockReader_test, PKIsNotHandle)
         {
             auto & column_element = block.getByPosition(pos);
             if (row == 0)
+            {
                 ASSERT_EQ(column_element.column->size(), rows);
+            }
             if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
                 ASSERT_EQ((*column_element.column)[row], Field(handle_value));
             else if (column_element.name == VERSION_COLUMN_NAME)
@@ -109,7 +111,9 @@ TEST(RegionBlockReader_test, PKIsHandle)
         {
             auto & column_element = block.getByPosition(pos);
             if (row == 0)
+            {
                 ASSERT_EQ(column_element.column->size(), rows);
+            }
             if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
                 ASSERT_EQ((*column_element.column)[row], Field(handle_value));
             else if (column_element.name == VERSION_COLUMN_NAME)
@@ -179,7 +183,9 @@ TEST(RegionBlockReader_test, CommonHandle)
             auto & column_element = block.getByPosition(pos);
 
             if (row == 0)
+            {
                 ASSERT_EQ(column_element.column->size(), rows);
+            }
             if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
                 ASSERT_EQ((*column_element.column)[row], Field(*pk));
             else if (column_element.name == VERSION_COLUMN_NAME)
@@ -261,7 +267,9 @@ TEST(RegionBlockReader_test, MissingColumn)
             auto & column_element = block.getByPosition(pos);
 
             if (row == 0)
+            {
                 ASSERT_EQ(column_element.column->size(), rows);
+            }
             std::cout << "checking column " << column_element.name << std::endl;
             if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
                 ASSERT_EQ((*column_element.column)[row], Field(handle_value));
@@ -336,7 +344,9 @@ TEST(RegionBlockReader_test, ExtraColumn)
             auto & column_element = block.getByPosition(pos);
 
             if (row == 0)
+            {
                 ASSERT_EQ(column_element.column->size(), rows);
+            }
             std::cout << "checking column " << column_element.name << std::endl;
             if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
                 ASSERT_EQ((*column_element.column)[row], Field(handle_value));
@@ -404,21 +414,13 @@ TEST(RegionBlockReader_test, OverflowColumn)
                     ASSERT_EQ(column_element.column->size(), rows);
                 }
                 if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
-                {
                     ASSERT_EQ((*column_element.column)[row], Field(handle_value));
-                }
                 else if (column_element.name == VERSION_COLUMN_NAME)
-                {
                     ASSERT_EQ((*column_element.column)[row], Field(version_value));
-                }
                 else if (column_element.name == TAG_COLUMN_NAME)
-                {
                     ASSERT_EQ((*column_element.column)[row], Field(NearestFieldType<UInt8>::Type(del_mark_value)));
-                }
                 else
-                {
                     ASSERT_EQ((*column_element.column)[row], fields[pos - MustHaveCount]);
-                }
             }
         }
     }
