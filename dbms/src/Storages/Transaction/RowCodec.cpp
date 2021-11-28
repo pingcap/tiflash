@@ -383,8 +383,8 @@ bool appendRowV2ToBlockImpl(
         }
         else
         {
-            if (unlikely(column_ids_iter->first) == pk_handle_id)
-                throw Exception("PK column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
+            if (unlikely(column_ids_iter->first == pk_handle_id))
+                throw Exception("pk column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
 
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             const auto * column_info = column_infos[column_ids_iter->second];
@@ -484,7 +484,7 @@ bool appendRowV1ToBlock(
         }
         else
         {
-            if (unlikely(column_ids_iter->first) == pk_handle_id)
+            if (unlikely(column_ids_iter->first == pk_handle_id))
                 throw Exception("pk column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
 
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
