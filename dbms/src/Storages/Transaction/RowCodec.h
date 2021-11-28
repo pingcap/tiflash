@@ -20,14 +20,15 @@ bool appendRowToBlock(
     Block & block,
     size_t block_column_pos,
     const ColumnInfos & column_infos,
-    ColumnID pk_handle_id,  // when pk is handle, we need skip pk column when decoding value
+    ColumnID pk_handle_id, // when pk is handle, we need skip pk column when decoding value
     bool force_decode);
 
 bool appendRowV2ToBlock(
     const TiKVValue::Base & raw_value,
     SortedColumnIDWithPosConstIter column_ids_iter,
     SortedColumnIDWithPosConstIter column_ids_iter_end,
-    Block & block, size_t block_column_pos,
+    Block & block,
+    size_t block_column_pos,
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool force_decode);

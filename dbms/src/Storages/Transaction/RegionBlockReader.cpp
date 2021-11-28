@@ -155,7 +155,6 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
                     if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, InvalidColumnID, force_decode))
                         return false;
                 }
-
             }
         }
 

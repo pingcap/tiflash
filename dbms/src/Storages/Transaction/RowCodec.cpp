@@ -499,7 +499,7 @@ bool appendRowV1ToBlock(
                 if (force_decode)
                 {
                     throw Exception("Detected overflow when decoding data " + std::to_string(unflattened.get<UInt64>()) + " of column "
-                                    + column_info->name + " with column " + raw_column->getName(),
+                                        + column_info->name + " with column " + raw_column->getName(),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
 
@@ -513,7 +513,7 @@ bool appendRowV1ToBlock(
                 if (force_decode)
                 {
                     throw Exception("Detected invalid null when decoding data " + std::to_string(unflattened.get<UInt64>())
-                                    + " of column " + column_info->name + " with type " + raw_column->getName(),
+                                        + " of column " + column_info->name + " with type " + raw_column->getName(),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
 
