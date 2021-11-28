@@ -353,7 +353,6 @@ bool appendRowV2ToBlockImpl(
         if (column_ids_iter == column_ids_iter_end)
         {
             // extra column
-            // TODO: add more comment
             return force_decode;
         }
 
@@ -421,12 +420,12 @@ bool appendRowV2ToBlockImpl(
     }
     while (column_ids_iter != column_ids_iter_end)
     {
-        if (unlikely(column_ids_iter->first) == pk_handle_id)
-            throw Exception("pk column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
-
-        const auto * column_info = column_infos[column_ids_iter->second];
-        if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
-            return false;
+        if (column_ids_iter->first != pk_handle_id)
+        {
+            const auto * column_info = column_infos[column_ids_iter->second];
+            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+                return false;
+        }
         column_ids_iter++;
         block_column_pos++;
     }
@@ -527,12 +526,12 @@ bool appendRowV1ToBlock(
     }
     while (column_ids_iter != column_ids_iter_end)
     {
-        if (unlikely(column_ids_iter->first) == pk_handle_id)
-            throw Exception("pk column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
-
-        const auto * column_info = column_infos[column_ids_iter->second];
-        if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
-            return false;
+        if (column_ids_iter->first != pk_handle_id)
+        {
+            const auto * column_info = column_infos[column_ids_iter->second];
+            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+                return false;
+        }
         column_ids_iter++;
         block_column_pos++;
     }
