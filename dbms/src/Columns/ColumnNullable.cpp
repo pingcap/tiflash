@@ -147,7 +147,7 @@ StringRef ColumnNullable::getDataAt(size_t /*n*/) const
     throw Exception{"Method getDataAt is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED};
 }
 
-void ColumnNullable::insertData(const char * pos, size_t length)
+void ColumnNullable::insertData(const char * /*pos*/, size_t /*length*/)
 {
     throw Exception{"Method insertData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED};
 }
