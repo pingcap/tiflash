@@ -39,13 +39,15 @@ struct DecodingStorageSchemaSnapshot
     // the pos in the column list which is sorted by column id
     std::map<ColumnID, size_t> pk_pos_map;
 
+    bool pk_is_handle;
     bool is_common_handle;
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
 
-    DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_, bool is_common_handle_)
+    DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_)
         : column_defines{std::move(column_defines_)}
-        , is_common_handle{is_common_handle_}
+        , pk_is_handle{table_info_.pk_is_handle}
+        , is_common_handle{table_info_.is_common_handle}
         , schema_version{table_info_.schema_version}
     {
         std::unordered_map<ColumnID, size_t> column_lut;

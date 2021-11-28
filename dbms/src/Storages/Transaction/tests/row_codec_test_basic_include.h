@@ -260,12 +260,12 @@ std::tuple<DecodingStorageSchemaSnapshotConstPtr, TableInfo, std::vector<Field>>
     if (table_info.pk_is_handle)
     {
         auto iter = std::find_if(store_columns.begin(), store_columns.end(), [&](const ColumnDefine & cd) { return cd.id == handle_ids[0]; });
-        auto decoding_schema = std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, *iter, is_common_handle);
+        auto decoding_schema = std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, *iter);
         return std::make_tuple(std::move(decoding_schema), std::move(table_info), std::move(fields));
     }
     else
     {
-        auto decoding_schema = std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, store_columns[0], is_common_handle);
+        auto decoding_schema = std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, store_columns[0]);
         return std::make_tuple(std::move(decoding_schema), std::move(table_info), std::move(fields));
     }
 }
@@ -286,7 +286,11 @@ inline Block decodeRowToBlock(const String & row_value, DecodingStorageSchemaSna
         iter++;
 
     Block block = createBlockSortByColumnID(decoding_schema);
-    appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, true);
+    if (decoding_schema->pk_is_handle)
+        appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, decoding_schema->pk_pos_map.at(0), true);
+    else
+        appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, InvalidColumnID, true);
+
     // remove first three column
     for (size_t i = 0; i < value_column_num; i++)
         block.erase(0);

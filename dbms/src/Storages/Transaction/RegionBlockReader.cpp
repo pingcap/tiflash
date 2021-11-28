@@ -41,6 +41,9 @@ bool RegionBlockReader::read(Block & block, RegionDataReadInfoList & data_list, 
 template <TMTPKType pk_type>
 bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_list, bool force_decode)
 {
+    if (unlikely(block.columns() != schema_snapshot->column_defines->size()))
+        throw Exception("block structure doesn't match schema_snapshot.", ErrorCodes::LOGICAL_ERROR);
+
     const auto & read_column_ids = schema_snapshot->sorted_column_id_with_pos;
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
@@ -86,6 +89,15 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
     delmark_data.reserve(data_list.size());
     version_data.reserve(data_list.size());
     bool need_decode_value = block.columns() > MustHaveColCnt;
+    if (need_decode_value)
+    {
+        size_t expected_rows = data_list.size();
+        for (size_t pos = next_column_pos; pos < block.columns(); pos++)
+        {
+            auto * raw_column = const_cast<IColumn *>((block.getByPosition(pos)).column.get());
+            raw_column->reserve(expected_rows);
+        }
+    }
     size_t index = 0;
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
@@ -121,8 +133,8 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
                 while (column_ids_iter_copy != read_column_ids.end())
                 {
                     const auto * ci = schema_snapshot->column_infos[column_ids_iter_copy->second];
-                    // !pk_pos_map.empty() means the table is common index, or pk is handle, so we can decode the pk from the key
-                    if (pk_pos_map.empty() || !ci->hasPriKeyFlag())
+                    // when pk is handle, we can decode the pk from the key
+                    if (!(schema_snapshot->pk_is_handle && ci->hasPriKeyFlag()))
                     {
                         auto * raw_column = const_cast<IColumn *>((block.getByPosition(next_column_pos_copy)).column.get());
                         raw_column->insertDefault();
@@ -133,8 +145,17 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
             }
             else
             {
-                if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, force_decode))
-                    return false;
+                if (schema_snapshot->pk_is_handle)
+                {
+                    if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, schema_snapshot->pk_pos_map.at(0), force_decode))
+                        return false;
+                }
+                else
+                {
+                    if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, InvalidColumnID, force_decode))
+                        return false;
+                }
+
             }
         }
 
@@ -152,13 +173,16 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
                 else if constexpr (pk_type == TMTPKType::UINT64)
                     static_cast<ColumnUInt64 *>(raw_pk_column)->getData().push_back(UInt64(pk));
                 else
-                    static_cast<ColumnInt64 *>(raw_pk_column)->getData().push_back(Int64(pk));
+                {
+                    // The pk_type must be Int32/Uint32 or more narrow type
+                    // so cannot tell its' exact type here, just use `insert(Field)`
+                    raw_pk_column->insert(Field(Int64(pk)));
+                }
             }
         }
         else
         {
             auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
-            // TODO: use decodeTiDBRowV2Datum here?
             raw_extra_column->insertData(pk->data(), pk->size());
             /// decode key and insert pk columns if needed
             size_t cursor = 0, pos = 0;
@@ -168,6 +192,9 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
                 if (pk_pos_map.find(pk_column_ids[pos]) != pk_pos_map.end())
                 {
                     /// for a pk col, if it does not exist in the value, then decode it from the key
+                    /// some examples that we must decode column value from value part
+                    ///   1) if collation is enabled, the extra key may be a transformation of the original value of pk cols
+                    ///   2) the primary key may just be a prefix of a column
                     auto * raw_pk_column = const_cast<IColumn *>(block.getByPosition(pk_pos_map.at(pk_column_ids[pos])).column.get());
                     if (raw_pk_column->size() == index)
                         raw_pk_column->insert(value);
@@ -176,6 +203,15 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
             }
         }
         index++;
+    }
+
+    // TODO: remove this check
+    size_t expected = block.rows();
+    for (size_t i = 0; i < block.columns(); i++)
+    {
+        auto & column_ptr = block.getByPosition(i).column;
+        if (column_ptr->size() != expected)
+            throw Exception("wrong rows: " + block.getByPosition(i).name + " expected " + std::to_string(expected) + " actual " + std::to_string(column_ptr->size()) + " total columns " + std::to_string(block.columns()), ErrorCodes::LOGICAL_ERROR);
     }
     return true;
 }

@@ -836,7 +836,7 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     if (!decoding_schema_snapshot || decoding_schema_snapshot->schema_version < tidb_table_info.schema_version)
     {
         auto & store = getAndMaybeInitStore();
-        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), is_common_handle);
+        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle());
         cache_blocks.clear();
     }
 
@@ -859,7 +859,7 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     }
 }
 
-
+// TODO: check unique pointer usage here
 void StorageDeltaMerge::releaseDecodingBlock(Int64 schema_version, BlockUPtr block_ptr)
 {
     std::lock_guard lock{decode_schema_mutex};

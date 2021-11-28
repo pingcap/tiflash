@@ -249,8 +249,7 @@ TEST(RegionBlockReader_test, MissingColumn)
     decoding_schema = std::make_shared<DecodingStorageSchemaSnapshot>(
         decoding_schema->column_defines,
         table_info,
-        extra_handle_column,
-        decoding_schema->is_common_handle);
+        extra_handle_column);
 
     RegionBlockReader reader{decoding_schema};
     Block block = createBlockSortByColumnID(decoding_schema);
