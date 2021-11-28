@@ -14,7 +14,7 @@ TEST(RegionBlockReader_test, PKIsNotHandle)
     UInt8 del_mark_value = 0;
     UInt64 version_value = 100;
     size_t rows = 3;
-    auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields(
+    auto [table_info, fields] = getTableInfoAndFields(
         {EXTRA_HANDLE_COLUMN_ID},
         false,
         ColumnIDValue(1, std::numeric_limits<Int8>::max()),
@@ -23,6 +23,7 @@ TEST(RegionBlockReader_test, PKIsNotHandle)
         ColumnIDValue(4, String("aaa")),
         ColumnIDValue(5, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
         ColumnIDValueNull<UInt64>(6));
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
 
     RegionDataReadInfoList data_list_read;
     // create PK
@@ -67,7 +68,7 @@ TEST(RegionBlockReader_test, PKIsHandle)
     UInt64 version_value = 100;
     size_t rows = 3;
     ColumnID handle_id = 2;
-    auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields(
+    auto [table_info, fields] = getTableInfoAndFields(
         {handle_id},
         false,
         ColumnIDValue(1, std::numeric_limits<Int8>::max()),
@@ -76,6 +77,7 @@ TEST(RegionBlockReader_test, PKIsHandle)
         ColumnIDValue(4, String("aaa")),
         ColumnIDValue(5, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
         ColumnIDValueNull<UInt64>(6));
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
 
     std::vector<Field> value_fields;
     for (size_t i = 0; i < table_info.columns.size(); i++)
@@ -127,7 +129,7 @@ TEST(RegionBlockReader_test, CommonHandle)
     size_t rows = 3;
 
     ColumnIDs handle_ids{2, 3, 4};
-    auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields(
+    auto [table_info, fields] = getTableInfoAndFields(
         handle_ids,
         true,
         ColumnIDValue(1, std::numeric_limits<Int8>::max()),
@@ -136,6 +138,7 @@ TEST(RegionBlockReader_test, CommonHandle)
         ColumnIDValue(4, String("aaa")),
         ColumnIDValue(5, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
         ColumnIDValueNull<UInt64>(6));
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
 
     std::vector<Field> value_fields;
     std::vector<Field> pk_fields;
@@ -196,10 +199,9 @@ TEST(RegionBlockReader_test, MissingColumn)
     UInt64 version_value = 100;
     size_t rows = 3;
 
-    DecodingStorageSchemaSnapshotConstPtr decoding_schema;
     TableInfo table_info;
     std::vector<Field> fields;
-    std::tie(std::ignore, table_info, fields) = getDecodingSchemaTableInfoFields(
+    std::tie(table_info, fields) = getTableInfoAndFields(
         {EXTRA_HANDLE_COLUMN_ID},
         false,
         ColumnIDValue(2, std::numeric_limits<Int8>::max()),
@@ -220,7 +222,7 @@ TEST(RegionBlockReader_test, MissingColumn)
     for (size_t i = 0; i < rows; i++)
         data_list_read.emplace_back(pk, del_mark_value, version_value, row_value);
 
-    std::tie(decoding_schema, table_info, std::ignore) = getDecodingSchemaTableInfoFields(
+    std::tie(table_info, std::ignore) = getTableInfoAndFields(
         {EXTRA_HANDLE_COLUMN_ID},
         false,
         ColumnIDValue(1, String("")),
@@ -244,12 +246,8 @@ TEST(RegionBlockReader_test, MissingColumn)
         else
             fields_map.emplace(table_info.columns[i].id, fields[next_field_index++]);
     }
-    // create a new decoding schema from the updated table_info
     DM::ColumnDefine extra_handle_column{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE};
-    decoding_schema = std::make_shared<DecodingStorageSchemaSnapshot>(
-        decoding_schema->column_defines,
-        table_info,
-        extra_handle_column);
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
 
     RegionBlockReader reader{decoding_schema};
     Block block = createBlockSortByColumnID(decoding_schema);
@@ -286,10 +284,9 @@ TEST(RegionBlockReader_test, ExtraColumn)
     UInt64 version_value = 100;
     size_t rows = 3;
 
-    DecodingStorageSchemaSnapshotConstPtr decoding_schema;
     TableInfo table_info;
     std::vector<Field> fields;
-    std::tie(std::ignore, table_info, fields) = getDecodingSchemaTableInfoFields(
+    std::tie(table_info, fields) = getTableInfoAndFields(
         {EXTRA_HANDLE_COLUMN_ID},
         false,
         ColumnIDValue(2, std::numeric_limits<Int8>::max()),
@@ -313,7 +310,7 @@ TEST(RegionBlockReader_test, ExtraColumn)
     for (size_t i = 0; i < rows; i++)
         data_list_read.emplace_back(pk, del_mark_value, version_value, row_value);
 
-    std::tie(decoding_schema, table_info, std::ignore) = getDecodingSchemaTableInfoFields(
+    std::tie(table_info, std::ignore) = getTableInfoAndFields(
         {EXTRA_HANDLE_COLUMN_ID},
         false,
         ColumnIDValue(2, std::numeric_limits<Int8>::max()),
@@ -321,6 +318,7 @@ TEST(RegionBlockReader_test, ExtraColumn)
         ColumnIDValue(9, String("aaa")),
         ColumnIDValue(10, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
         ColumnIDValueNull<UInt64>(11));
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     std::vector<ColumnID> extra_column_ids{3};
 
     RegionBlockReader reader{decoding_schema};
@@ -358,10 +356,11 @@ TEST(RegionBlockReader_test, OverflowColumn)
     UInt8 del_mark_value = 0;
     UInt64 version_value = 100;
     size_t rows = 3;
-    auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields(
+    auto [table_info, fields] = getTableInfoAndFields(
         {EXTRA_HANDLE_COLUMN_ID},
         false,
         ColumnIDValue(1, std::numeric_limits<UInt64>::max()));
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
 
     RegionDataReadInfoList data_list_read;
     // create PK
@@ -375,11 +374,12 @@ TEST(RegionBlockReader_test, OverflowColumn)
     for (size_t i = 0; i < rows; i++)
         data_list_read.emplace_back(pk, del_mark_value, version_value, row_value);
 
-    DecodingStorageSchemaSnapshotConstPtr narrow_decoding_schema;
-    std::tie(narrow_decoding_schema, std::ignore, std::ignore) = getDecodingSchemaTableInfoFields(
+    TableInfo narrow_table_info;
+    std::tie(narrow_table_info, std::ignore) = getTableInfoAndFields(
         {EXTRA_HANDLE_COLUMN_ID},
         false,
         ColumnIDValue(1, std::numeric_limits<UInt8>::min()));
+    auto narrow_decoding_schema = getDecodingStorageSchemaSnapshot(narrow_table_info);
 
     constexpr size_t MustHaveCount = 3;
     {

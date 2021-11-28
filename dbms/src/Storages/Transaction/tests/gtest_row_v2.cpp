@@ -78,7 +78,8 @@ TEST(RowV2Suite, DecimalValueLength)
 
 #define ASSERT_ROW_VALUE(is_big, ...)                                                                                                \
     {                                                                                                                                \
-        auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false, __VA_ARGS__); \
+        auto [table_info, fields] = getTableInfoAndFields({EXTRA_HANDLE_COLUMN_ID}, false, __VA_ARGS__); \
+        auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info); \
         WriteBufferFromOwnString ss;                                                                                                 \
         encodeRowV2(table_info, fields, ss);                                                                                         \
         auto encoded = ss.str();                                                                                                     \

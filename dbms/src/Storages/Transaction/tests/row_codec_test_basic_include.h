@@ -197,7 +197,7 @@ void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Ty
 }
 
 template <typename... Types>
-std::tuple<DecodingStorageSchemaSnapshotConstPtr, TableInfo, std::vector<Field>> getDecodingSchemaTableInfoFields(ColumnIDs handle_ids, bool is_common_handle, Types &&... column_value_ids)
+std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(ColumnIDs handle_ids, bool is_common_handle, Types &&... column_value_ids)
 {
     OrderedColumnInfoFields column_info_fields;
     getTableInfoFieldsInternal(column_info_fields, std::forward<Types>(column_value_ids)...);
@@ -239,8 +239,13 @@ std::tuple<DecodingStorageSchemaSnapshotConstPtr, TableInfo, std::vector<Field>>
         table_info.index_infos.emplace_back(index_info);
     }
 
+    return std::make_pair(std::move(table_info), std::move(fields));
+}
+
+inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(const TableInfo & table_info)
+{
     ColumnDefines store_columns;
-    if (is_common_handle)
+    if (table_info.is_common_handle)
     {
         DM::ColumnDefine extra_handle_column{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_STRING_TYPE};
         store_columns.emplace_back(extra_handle_column);
@@ -252,21 +257,25 @@ std::tuple<DecodingStorageSchemaSnapshotConstPtr, TableInfo, std::vector<Field>>
     }
     store_columns.emplace_back(VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
     store_columns.emplace_back(TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE);
+    ColumnID handle_id = EXTRA_HANDLE_COLUMN_ID;
     for (auto & column_info : table_info.columns)
     {
+        if (table_info.pk_is_handle)
+        {
+            if (column_info.hasPriKeyFlag())
+                handle_id = column_info.id;
+        }
         store_columns.emplace_back(column_info.id, column_info.name, DB::getDataTypeByColumnInfo(column_info));
     }
 
-    if (table_info.pk_is_handle)
+    if (handle_id != EXTRA_HANDLE_COLUMN_ID)
     {
-        auto iter = std::find_if(store_columns.begin(), store_columns.end(), [&](const ColumnDefine & cd) { return cd.id == handle_ids[0]; });
-        auto decoding_schema = std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, *iter);
-        return std::make_tuple(std::move(decoding_schema), std::move(table_info), std::move(fields));
+        auto iter = std::find_if(store_columns.begin(), store_columns.end(), [&](const ColumnDefine & cd) { return cd.id == handle_id; });
+        return std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, *iter);
     }
     else
     {
-        auto decoding_schema = std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, store_columns[0]);
-        return std::make_tuple(std::move(decoding_schema), std::move(table_info), std::move(fields));
+        return std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, store_columns[0]);
     }
 }
 
@@ -301,7 +310,8 @@ template <bool is_big, typename T>
 std::tuple<T, size_t> getValueLengthByRowV2(const T & v)
 {
     using NearestType = typename NearestFieldType<T>::Type;
-    auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false, ColumnIDValue(1, v));
+    auto [table_info, fields] = getTableInfoAndFields({EXTRA_HANDLE_COLUMN_ID}, false, ColumnIDValue(1, v));
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     WriteBufferFromOwnString ss;
     encodeRowV2(table_info, fields, ss);
     auto encoded = ss.str();
@@ -314,7 +324,8 @@ template <typename T>
 T getValueByRowV1(const T & v)
 {
     using NearestType = typename NearestFieldType<T>::Type;
-    auto [decoding_schema, table_info, fields] = getDecodingSchemaTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false, ColumnIDValue(1, v));
+    auto [table_info, fields] = getTableInfoAndFields({EXTRA_HANDLE_COLUMN_ID}, false, ColumnIDValue(1, v));
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     WriteBufferFromOwnString ss;
     encodeRowV1(table_info, fields, ss);
     auto encoded = ss.str();
