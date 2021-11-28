@@ -147,7 +147,7 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
             {
                 if (schema_snapshot->pk_is_handle)
                 {
-                    if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, schema_snapshot->pk_pos_map.at(0), force_decode))
+                    if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, schema_snapshot->pk_column_ids[0], force_decode))
                         return false;
                 }
                 else

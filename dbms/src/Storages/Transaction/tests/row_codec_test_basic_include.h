@@ -287,7 +287,7 @@ inline Block decodeRowToBlock(const String & row_value, DecodingStorageSchemaSna
 
     Block block = createBlockSortByColumnID(decoding_schema);
     if (decoding_schema->pk_is_handle)
-        appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, decoding_schema->pk_pos_map.at(0), true);
+        appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, decoding_schema->pk_column_ids[0], true);
     else
         appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, InvalidColumnID, true);
 
