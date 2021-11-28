@@ -400,15 +400,25 @@ TEST(RegionBlockReader_test, OverflowColumn)
             {
                 auto & column_element = block.getByPosition(pos);
                 if (row == 0)
+                {
                     ASSERT_EQ(column_element.column->size(), rows);
+                }
                 if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
+                {
                     ASSERT_EQ((*column_element.column)[row], Field(handle_value));
+                }
                 else if (column_element.name == VERSION_COLUMN_NAME)
+                {
                     ASSERT_EQ((*column_element.column)[row], Field(version_value));
+                }
                 else if (column_element.name == TAG_COLUMN_NAME)
+                {
                     ASSERT_EQ((*column_element.column)[row], Field(NearestFieldType<UInt8>::Type(del_mark_value)));
+                }
                 else
+                {
                     ASSERT_EQ((*column_element.column)[row], fields[pos - MustHaveCount]);
+                }
             }
         }
     }

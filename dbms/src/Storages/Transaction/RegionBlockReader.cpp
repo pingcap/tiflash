@@ -203,15 +203,6 @@ bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_li
         }
         index++;
     }
-
-    // TODO: remove this check
-    size_t expected = block.rows();
-    for (size_t i = 0; i < block.columns(); i++)
-    {
-        auto & column_ptr = block.getByPosition(i).column;
-        if (column_ptr->size() != expected)
-            throw Exception("wrong rows: " + block.getByPosition(i).name + " expected " + std::to_string(expected) + " actual " + std::to_string(column_ptr->size()) + " total columns " + std::to_string(block.columns()), ErrorCodes::LOGICAL_ERROR);
-    }
     return true;
 }
 
