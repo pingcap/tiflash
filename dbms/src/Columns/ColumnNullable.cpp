@@ -149,16 +149,7 @@ StringRef ColumnNullable::getDataAt(size_t /*n*/) const
 
 void ColumnNullable::insertData(const char * pos, size_t length)
 {
-    if (pos == nullptr)
-    {
-        getNestedColumn().insertDefault();
-        getNullMapData().push_back(1);
-    }
-    else
-    {
-        getNestedColumn().insertData(pos, length);
-        getNullMapData().push_back(0);
-    }
+    throw Exception{"Method insertData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED};
 }
 
 bool ColumnNullable::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode)

@@ -123,9 +123,6 @@ public:
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
 
-    // when `need_block` is true, it will try return a cached block corresponding to DecodingStorageSchemaSnapshotConstPtr,
-    //     and `releaseDecodingBlock` need to be called when the block is free
-    // when `need_block` is false, it will just return an empty block
     std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */) override;
 
     void releaseDecodingBlock(Int64 schema_version, BlockUPtr block) override;

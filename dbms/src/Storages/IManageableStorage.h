@@ -146,6 +146,9 @@ public:
 
     virtual size_t getRowKeyColumnSize() const { return 1; }
 
+    // when `need_block` is true, it will try return a cached block corresponding to DecodingStorageSchemaSnapshotConstPtr,
+    //     and `releaseDecodingBlock` need to be called when the block is free
+    // when `need_block` is false, it will just return an nullptr
     virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);

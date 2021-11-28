@@ -168,7 +168,6 @@ public:
 
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
     {
-        // Todo: check the implementation difference between insert(Field) and insertData
         insertData(raw_value.c_str() + cursor, length);
         return true;
     }

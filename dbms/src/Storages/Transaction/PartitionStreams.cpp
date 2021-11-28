@@ -374,10 +374,9 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
                           [&](RegionDataReadInfoList & data_list_read) -> ReadBlockByRegionRes {
                               /// Read region data as block.
                               Block block;
-                              // TODO: whether we need to support this function
+                              // FIXME: remove this deprecated function
                               assert(0);
                               {
-                                  // TODO: remove this deprecated function
                                   auto reader = RegionBlockReader(nullptr);
                                   bool ok = reader.setStartTs(start_ts)
                                                 .setFilter(scan_filter)

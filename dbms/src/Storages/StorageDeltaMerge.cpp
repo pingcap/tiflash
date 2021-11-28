@@ -859,7 +859,6 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     }
 }
 
-// TODO: check unique pointer usage here
 void StorageDeltaMerge::releaseDecodingBlock(Int64 schema_version, BlockUPtr block_ptr)
 {
     std::lock_guard lock{decode_schema_mutex};
