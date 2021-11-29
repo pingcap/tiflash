@@ -30,12 +30,6 @@
     M(PersistedMarksFileMisses)                 \
     M(PersistedMarksFileBusy)                   \
     M(PersistedMarksFileUpdate)                 \
-    M(PersistedCacheFileHits)                   \
-    M(PersistedCacheFileMisses)                 \
-    M(PersistedCacheFileExpectedMisses)         \
-    M(PersistedCacheFileBusy)                   \
-    M(PersistedCacheFileUpdate)                 \
-    M(PersistedCachePartBusy)                   \
     M(IOBufferAllocs)                           \
     M(IOBufferAllocBytes)                       \
     M(ArenaAllocChunks)                         \

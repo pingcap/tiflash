@@ -288,7 +288,6 @@ try
     if (uncompressed_cache_size)
         context->setUncompressedCache(uncompressed_cache_size);
 
-    /// Quota size in bytes of persisted mapping cache. 0 means unlimited.
     size_t persisted_cache_size = config().getUInt64("persisted_mapping_cache_size", 0);
     /// Path of persisted cache in fast(er) disk device. Empty means disabled.
     std::string persisted_cache_path = config().getString("persisted_mapping_cache_path", "");

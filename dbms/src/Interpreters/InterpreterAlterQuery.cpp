@@ -15,7 +15,6 @@
 #include <Parsers/parseQuery.h>
 
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageMergeTree.h>
 
 #include <Poco/FileStream.h>
 

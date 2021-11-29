@@ -970,7 +970,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
-    global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+    // global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
     /// ===== Paths related configuration initialized end ===== ///
 
@@ -978,10 +978,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Redact::setRedactLog(security_config.redact_info_log);
 
     /// Create directories for 'path' and for default database, if not exist.
-    for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
-    {
-        Poco::File(candidate_path + "data/" + default_database).createDirectories();
-    }
+    // for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
+    // {
+    //     Poco::File(candidate_path + "data/" + default_database).createDirectories();
+    // }
     Poco::File(path + "metadata/" + default_database).createDirectories();
 
     StatusFile status{path + "status"};
@@ -1104,13 +1104,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
     if (uncompressed_cache_size)
         global_context->setUncompressedCache(uncompressed_cache_size);
-
-    /// Quota size in bytes of persisted mapping cache. 0 means unlimited.
-    size_t persisted_cache_size = config().getUInt64("persisted_mapping_cache_size", 0);
-    /// Path of persisted cache in fast(er) disk device. Empty means disabled.
-    std::string persisted_cache_path = config().getString("persisted_mapping_cache_path", "");
-    if (!persisted_cache_path.empty())
-        global_context->setPersistedCache(persisted_cache_size, persisted_cache_path);
 
     bool use_l0_opt = config().getBool("l0_optimize", false);
     global_context->setUseL0Opt(use_l0_opt);

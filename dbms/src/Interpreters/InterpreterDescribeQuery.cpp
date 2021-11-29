@@ -14,7 +14,6 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 
-#include <Storages/StorageMergeTree.h>
 #include <Storages/MutableSupport.h>
 
 

@@ -9,7 +9,6 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/StorageMergeTree.h>
 #include <common/config_common.h>
 
 #include <chrono>
@@ -157,10 +156,6 @@ void AsynchronousMetrics::update()
                     calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
                     calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
                     calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
-                }
-                else if (StorageMergeTree * table_merge_tree = dynamic_cast<StorageMergeTree *>(table.get()); table_merge_tree)
-                {
-                    calculateMax(max_part_count_for_partition, table_merge_tree->getData().getMaxPartsCountForPartition());
                 }
             }
         }
