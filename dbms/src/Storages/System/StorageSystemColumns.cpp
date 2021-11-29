@@ -1,11 +1,13 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Databases/IDatabase.h>
+#include <Interpreters/Context.h>
 #include <Parsers/queryToString.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/ColumnDefault.h>
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/VirtualColumnUtils.h>
 
@@ -113,7 +115,6 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
 
         NamesAndTypesList columns;
         ColumnDefaults column_defaults;
-        MergeTreeData::ColumnSizeByName column_sizes;
 
         {
             StoragePtr storage = storages.at(std::make_pair(database_name, table_name));
@@ -165,19 +166,9 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
             }
 
             {
-                const auto it = column_sizes.find(column.name);
-                if (it == std::end(column_sizes))
-                {
-                    res_columns[i++]->insertDefault();
-                    res_columns[i++]->insertDefault();
-                    res_columns[i++]->insertDefault();
-                }
-                else
-                {
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.data_compressed));
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.data_uncompressed));
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.marks));
-                }
+                res_columns[i++]->insertDefault();
+                res_columns[i++]->insertDefault();
+                res_columns[i++]->insertDefault();
             }
         }
     }
