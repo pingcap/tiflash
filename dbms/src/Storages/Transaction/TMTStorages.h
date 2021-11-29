@@ -10,9 +10,7 @@ namespace DB
 {
 
 class IManageableStorage;
-class StorageMergeTree;
 class StorageDeltaMerge;
-using StorageMergeTreePtr = std::shared_ptr<StorageMergeTree>;
 using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
 using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 

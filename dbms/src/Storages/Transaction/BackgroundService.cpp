@@ -3,7 +3,6 @@
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
 
 namespace DB
@@ -18,10 +17,6 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
 
     single_thread_task_handle = background_pool.addTask(
         [this] {
-            {
-                RegionTable & region_table = tmt.getRegionTable();
-                region_table.checkTableOptimize();
-            }
             tmt.getKVStore()->gcRegionPersistedCache();
             return false;
         },
@@ -32,13 +27,6 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
         table_flush_handle = background_pool.addTask([this] {
             RegionTable & region_table = tmt.getRegionTable();
 
-            // if all regions of table is removed, try to optimize data.
-            if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
-            {
-                LOG_INFO(log, "try to final optimize table " << table_id);
-                tryOptimizeStorageFinal(tmt.getContext(), table_id);
-                LOG_INFO(log, "finish final optimize table " << table_id);
-            }
             return region_table.tryFlushRegions();
         });
 
