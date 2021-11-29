@@ -4,7 +4,7 @@
 #include <Core/TMTPKType.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataMerger.h>

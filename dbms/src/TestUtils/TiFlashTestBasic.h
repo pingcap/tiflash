@@ -10,6 +10,7 @@
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>

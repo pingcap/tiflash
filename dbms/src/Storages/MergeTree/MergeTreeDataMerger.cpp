@@ -23,7 +23,7 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <Poco/File.h>
 #include <Storages/MergeTree/AllMergeSelector.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeBlockInputStream.h>

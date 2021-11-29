@@ -9,7 +9,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
 
