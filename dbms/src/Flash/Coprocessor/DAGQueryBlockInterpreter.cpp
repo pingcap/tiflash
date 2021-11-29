@@ -1030,9 +1030,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         chain.getLastStep().setCallback(
             "beforeAggregation",
             [&,
-            aggregation_keys = std::move(aggregation_keys),
-            aggregation_collators = std::move(aggregation_collators),
-            aggregate_descriptions = std::move(aggregate_descriptions)] (const ExpressionActionsPtr & before_aggregation) mutable {
+             aggregation_keys = std::move(aggregation_keys),
+             aggregation_collators = std::move(aggregation_collators),
+             aggregate_descriptions = std::move(aggregate_descriptions)](const ExpressionActionsPtr & before_aggregation) mutable {
                 executeAggregation(
                     pipeline,
                     before_aggregation,
