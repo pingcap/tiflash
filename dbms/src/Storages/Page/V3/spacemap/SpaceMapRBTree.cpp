@@ -1,35 +1,7 @@
-#include "bits.h"
-#include "rb_tree.h"
-#include "space_map.h"
+#include "SpaceMapRBTree.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-struct smap_rb_entry
+namespace DB::PS::V3 
 {
-    struct rb_node node;
-    UInt64 start;
-    UInt64 count;
-};
-
-struct rb_private
-{
-    struct rb_root root;
-    // Cache the index for write
-    struct smap_rb_entry * write_index;
-    // Cache the index for read
-    struct smap_rb_entry * read_index;
-    struct smap_rb_entry * read_index_next;
-};
-
-// convert rb_node to smap_rb_entry
-inline static struct smap_rb_entry * node_to_entry(struct rb_node * node)
-{
-    struct smap_rb_entry * rb_ex;
-    rb_ex = container_of(node, struct smap_rb_entry, node);
-    return rb_ex;
-}
 
 static int rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * private_data);
 static int rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * private_data);
@@ -111,7 +83,7 @@ inline static void rb_free_entry(struct rb_private * private_data, struct smap_r
 static int rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * private_data)
 {
     struct rb_root * root = &private_data->root;
-    struct rb_node *parent = NULL, **n = &root->rb_node;
+    struct rb_node * parent = NULL, **n = &root->rb_node;
     struct rb_node * node;
     struct smap_rb_entry * entry;
     UInt64 new_start, new_count;
@@ -204,7 +176,7 @@ static int rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priva
     return retval;
 }
 
-static int rb_alloc_private_data(struct spacemap * smap)
+static int rb_alloc_private_data(SpaceMap * smap)
 {
     struct rb_private * private_data;
 
@@ -224,7 +196,7 @@ static int rb_alloc_private_data(struct spacemap * smap)
     return 0;
 }
 
-static int rb_new_smap(struct spacemap * smap)
+int RBTreeSpaceMapOps::newSmap(SpaceMap * smap)
 {
     int ret;
     struct rb_private * private_data;
@@ -262,7 +234,7 @@ static void rb_free_tree(struct rb_root * root)
     }
 }
 
-static void rb_free_smap(struct spacemap * smap)
+void RBTreeSpaceMapOps::freeSmap(SpaceMap * smap)
 {
     struct rb_private * private_data;
 
@@ -272,7 +244,7 @@ static void rb_free_smap(struct spacemap * smap)
     free(private_data);
 }
 
-static void rb_clear_smap(struct spacemap * smap)
+void RBTreeSpaceMapOps::clearSmap(SpaceMap * smap)
 {
     struct rb_private * private_data;
 
@@ -285,7 +257,7 @@ static void rb_clear_smap(struct spacemap * smap)
     rb_tree_debug(&private_data->root, __func__);
 }
 
-static void rb_print_stats(struct spacemap * smap)
+void RBTreeSpaceMapOps::smapStats(SpaceMap * smap)
 {
     struct rb_private * private_data;
     struct rb_node * node = NULL;
@@ -302,9 +274,14 @@ static void rb_print_stats(struct spacemap * smap)
         printf("range %lld : start=%lld , count=%lld \n", count, entry->start, entry->count);
         count++;
         if (entry->count > max_size)
+        {
             max_size = entry->count;
+        }
+            
         if (entry->count < min_size)
+        {
             min_size = entry->count;
+        }
     }
 }
 
@@ -385,7 +362,7 @@ search_tree:
     return 0;
 }
 
-inline static int rb_test_smap_bit(struct spacemap * smap, UInt64 arg)
+int RBTreeSpaceMapOps::testSmapBit(SpaceMap * smap, UInt64 arg)
 {
     struct rb_private * private_data;
 
@@ -396,7 +373,7 @@ inline static int rb_test_smap_bit(struct spacemap * smap, UInt64 arg)
 }
 
 
-static int rb_test_smap_range(struct spacemap * smap,
+int RBTreeSpaceMapOps::testSmapRange(SpaceMap * smap,
                               UInt64 start,
                               unsigned int len)
 {
@@ -582,7 +559,7 @@ no_need_insert:
     return retval;
 }
 
-static int rb_mark_smap(struct spacemap * smap, UInt64 arg)
+int RBTreeSpaceMapOps::markSmapBit(SpaceMap * smap, UInt64 arg)
 {
     struct rb_private * private_data;
     int retval;
@@ -595,7 +572,7 @@ static int rb_mark_smap(struct spacemap * smap, UInt64 arg)
     return retval;
 }
 
-static int rb_unmark_smap(struct spacemap * smap, UInt64 arg)
+int RBTreeSpaceMapOps::unmarkSmapBit(SpaceMap * smap, UInt64 arg)
 {
     struct rb_private * private_data;
     int retval;
@@ -609,7 +586,7 @@ static int rb_unmark_smap(struct spacemap * smap, UInt64 arg)
     return retval;
 }
 
-static int rb_mark_smap_entry(struct spacemap * smap, UInt64 arg, unsigned int num)
+int RBTreeSpaceMapOps::markSmapRange(SpaceMap * smap, UInt64 arg, unsigned int num)
 {
     struct rb_private * private_data;
     int retval;
@@ -622,7 +599,7 @@ static int rb_mark_smap_entry(struct spacemap * smap, UInt64 arg, unsigned int n
     return retval;
 }
 
-static int rb_unmark_smap_entry(struct spacemap * smap, UInt64 arg, unsigned int num)
+int RBTreeSpaceMapOps::unmarkSmapRange(SpaceMap * smap, UInt64 arg, unsigned int num)
 {
     struct rb_private * private_data;
     int retval;
@@ -635,32 +612,4 @@ static int rb_unmark_smap_entry(struct spacemap * smap, UInt64 arg, unsigned int
     return retval;
 }
 
-struct spacemap_ops smap_rbtree = {
-    .type = SMAP64_RBTREE,
-
-    .new_smap = rb_new_smap,
-    .clear_smap = rb_clear_smap,
-    .free_smap = rb_free_smap,
-    .copy_smap = NULL,
-    .resize_smap = NULL,
-    .print_stats = rb_print_stats,
-
-    .test_smap_bit = rb_test_smap_bit,
-    .test_smap_range = rb_test_smap_range,
-
-    // TBD : may need remove search_smap_range
-    .search_smap_range = NULL,
-
-    .find_smap_first_zero = NULL,
-    .find_smap_first_set = NULL,
-
-    .mark_smap_bit = rb_mark_smap,
-    .unmark_smap_bit = rb_unmark_smap,
-
-    .mark_smap_range = rb_mark_smap_entry,
-    .unmark_smap_range = rb_unmark_smap_entry,
-};
-
-#ifdef __cplusplus
-} // extern "C"
-#endif
+}
