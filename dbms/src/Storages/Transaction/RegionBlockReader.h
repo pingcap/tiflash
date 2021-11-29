@@ -105,11 +105,11 @@ public:
     ///
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
     /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
-    bool read(Block & block, RegionDataReadInfoList & data_list, bool force_decode);
+    bool read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
 
 private:
     template <TMTPKType pk_type>
-    bool readImpl(Block & block, RegionDataReadInfoList & data_list, bool force_decode);
+    bool readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
 
 private:
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;

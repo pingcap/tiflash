@@ -23,7 +23,7 @@ RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schem
     : schema_snapshot{std::move(schema_snapshot_)}
 {}
 
-bool RegionBlockReader::read(Block & block, RegionDataReadInfoList & data_list, bool force_decode)
+bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
 {
     switch (schema_snapshot->pk_type)
     {
@@ -39,7 +39,7 @@ bool RegionBlockReader::read(Block & block, RegionDataReadInfoList & data_list, 
 }
 
 template <TMTPKType pk_type>
-bool RegionBlockReader::readImpl(Block & block, RegionDataReadInfoList & data_list, bool force_decode)
+bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
 {
     if (unlikely(block.columns() != schema_snapshot->column_defines->size()))
         throw Exception("block structure doesn't match schema_snapshot.", ErrorCodes::LOGICAL_ERROR);
