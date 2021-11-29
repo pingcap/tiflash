@@ -277,7 +277,7 @@ TEST_F(RegionBlockReaderTestFixture, OverflowColumnRowV2)
     auto new_table_info = getTableInfoWithMoreNarrowIntType({EXTRA_HANDLE_COLUMN_ID}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
-    EXPECT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
+    ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
 
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
@@ -290,7 +290,7 @@ TEST_F(RegionBlockReaderTestFixture, OverflowColumnRowV1)
     auto new_table_info = getTableInfoWithMoreNarrowIntType({EXTRA_HANDLE_COLUMN_ID}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
-    EXPECT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
+    ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
 
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
