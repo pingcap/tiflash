@@ -197,12 +197,16 @@ AnalysisResult analyzeExpressions(
     }
 
     // Append final project results if needed.
-    final_project = analyzer.appendFinalProject(
-        chain,
-        query_block.output_field_types,
-        query_block.output_offsets,
-        query_block.qb_column_prefix,
-        keep_session_timezone_info);
+    final_project = query_block.isRootQueryBlock()
+        ? analyzer.appendFinalProjectForRootQueryBlock(
+            chain,
+            query_block.output_field_types,
+            query_block.output_offsets,
+            query_block.qb_column_prefix,
+            keep_session_timezone_info)
+        : analyzer.appendFinalProjectForNonRootQueryBlock(
+            chain,
+            query_block.qb_column_prefix);
 
     res.before_order_and_select = chain.getLastActions();
 
@@ -1081,18 +1085,21 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
              "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
 
     dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
+
     if (res.before_aggregation)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
+
     if (res.before_having)
     {
         // execute having
         executeWhere(pipeline, res.before_having, res.having_column_name);
         recordProfileStreams(pipeline, query_block.having_name);
     }
+
     if (res.before_order_and_select)
     {
         executeExpression(pipeline, res.before_order_and_select);
