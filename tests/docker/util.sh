@@ -70,6 +70,7 @@ function wait_tiflash_env() {
     exit 1
   else
     echo "   available"
+    cat ./log/tiflash/server.log
   fi
 }
 
