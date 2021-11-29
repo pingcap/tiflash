@@ -10,4 +10,4 @@ TODO: need docs like [Get Started](https://pingcap.github.io/tidb-dev-guide/get-
 * [Code Complete](https://en.wikipedia.org/wiki/Code_Complete)
 * [Clean Code: A Handbook of Agile Software Craftsmanship](https://en.wikipedia.org/wiki/Robert_C._Martin)
 
-TODO: need docs for different modules
+TODO: need docs for each module
