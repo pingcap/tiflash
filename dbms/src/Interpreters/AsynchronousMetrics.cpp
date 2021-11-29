@@ -33,7 +33,6 @@ struct MallocExtensionInitializer
 
 namespace DB
 {
-
 AsynchronousMetrics::~AsynchronousMetrics()
 {
     try

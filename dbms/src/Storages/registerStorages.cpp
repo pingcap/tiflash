@@ -1,12 +1,10 @@
 #include <Common/config.h>
-
-#include <Storages/registerStorages.h>
 #include <Storages/StorageFactory.h>
+#include <Storages/registerStorages.h>
 
 
 namespace DB
 {
-
 void registerStorageLog(StorageFactory & factory);
 void registerStorageTinyLog(StorageFactory & factory);
 void registerStorageDeltaMerge(StorageFactory & factory);
@@ -45,4 +43,4 @@ void registerStorages()
     registerStorageMaterializedView(factory);
 }
 
-}
+} // namespace DB

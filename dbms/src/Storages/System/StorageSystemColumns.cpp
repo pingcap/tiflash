@@ -19,7 +19,8 @@ namespace ErrorCodes
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
-StorageSystemColumns::StorageSystemColumns(const std::string & name_) : name(name_)
+StorageSystemColumns::StorageSystemColumns(const std::string & name_)
+    : name(name_)
 {
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
@@ -36,11 +37,11 @@ StorageSystemColumns::StorageSystemColumns(const std::string & name_) : name(nam
 
 
 BlockInputStreams StorageSystemColumns::read(const Names & column_names,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+                                             const SelectQueryInfo & query_info,
+                                             const Context & context,
+                                             QueryProcessingStage::Enum & processed_stage,
+                                             const size_t /*max_block_size*/,
+                                             const unsigned /*num_streams*/)
 {
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
@@ -80,7 +81,9 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
             {
                 const String & table_name = iterator->name();
                 storages.emplace(
-                    std::piecewise_construct, std::forward_as_tuple(database_name, table_name), std::forward_as_tuple(iterator->table()));
+                    std::piecewise_construct,
+                    std::forward_as_tuple(database_name, table_name),
+                    std::forward_as_tuple(iterator->table()));
                 table_column_mut->insert(table_name);
                 offsets[i] += 1;
             }
@@ -139,7 +142,6 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
 
             columns = storage->getColumns().getAll();
             column_defaults = storage->getColumns().defaults;
-
         }
 
         for (const auto & column : columns)
