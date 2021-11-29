@@ -127,14 +127,13 @@ void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
 
 } // namespace
 
-ExpressionActionsPtr generateProjectExpressionActions(
-    const BlockInputStreamPtr & stream,
+static ExpressionActionsPtr generateProjectExpressionActions(
+    const Block & header,
     const Context & context,
     const NamesWithAliases & project_cols)
 {
-    auto columns = stream->getHeader();
     NamesAndTypesList input_column;
-    for (const auto & column : columns.getColumnsWithTypeAndName())
+    for (const auto & column : header.getColumnsWithTypeAndName())
     {
         input_column.emplace_back(column.name, column.type);
     }
@@ -158,6 +157,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
 
     DAGStorageInterpreter storage_interpreter(context, dag, query_block, ts, conditions, max_streams, log);
     storage_interpreter.execute(pipeline);
+    is_remote_table_scan.assign(pipeline.streams.size(), false);
 
     analyzer = std::move(storage_interpreter.analyzer);
     need_add_cast_column_flag_for_tablescan = std::move(storage_interpreter.is_need_add_cast_column);
@@ -822,9 +822,28 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log);
         pipeline.streams.push_back(input);
+        is_remote_table_scan.push_back(true);
         dag.getDAGContext().getRemoteInputStreams().push_back(input);
         task_start = task_end;
     }
+}
+
+static ExpressionActionsPtr getProjectionAfterCastForRemoteRead(
+    const Context & context,
+    const NamesAndTypes & old_schema,
+    const NamesAndTypes & new_schema)
+{
+    if (old_schema.size() != new_schema.size())
+        throw Exception("Schema size mismatch after extra cast!", ErrorCodes::LOGICAL_ERROR);
+
+    NamesWithAliases projection;
+    ColumnsWithTypeAndName columns;
+    for (size_t i = 0; i < old_schema.size(); ++i)
+    {
+        columns.emplace_back(old_schema[i].type, old_schema[i].name);
+        projection.emplace_back(old_schema[i].name, new_schema[i].name);
+    }
+    return generateProjectExpressionActions(Block{columns}, context, projection);
 }
 
 // To execute a query block, you have to:
@@ -839,6 +858,8 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 {
+    DAGExpressionActionsChain chain;
+
     if (query_block.isRemoteQuery())
     {
         executeRemoteQuery(pipeline);
@@ -908,6 +929,66 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeTS(query_block.source->tbl_scan(), pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
         dag.getDAGContext().table_scan_executor_id = query_block.source_name;
+
+        auto old_ts_schema = analyzer->getCurrentInputColumns();
+        if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, chain, query_block))
+        {
+            auto projection_after_cast_for_remote_read = getProjectionAfterCastForRemoteRead(context, old_ts_schema, analyzer->getCurrentInputColumns());
+            chain.getLastStep().setCallback(
+                "appendExtraCast",
+                [&, projection = std::move(projection_after_cast_for_remote_read)](const ExpressionActionsPtr & extra_cast) {
+                    if (pipeline.streams.size() != is_remote_table_scan.size())
+                        throw Exception("Size mismatch between streams and is_remote_table_scan!", ErrorCodes::LOGICAL_ERROR);
+                    for (size_t i = 0; i < pipeline.streams.size(); ++i)
+                    {
+                        auto & stream = pipeline.streams[i];
+                        if (is_remote_table_scan[i])
+                            stream = std::make_shared<ExpressionBlockInputStream>(stream, projection, log);
+                        else
+                            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log);
+                    }
+                });
+            chain.addStep();
+        }
+
+        if (!conditions.empty())
+        {
+            String filter_column_name = analyzer->appendWhere(chain, conditions);
+            chain.getLastStep().setCallback(
+                "appendWhere",
+                [&, filter_column_name = std::move(filter_column_name)](const ExpressionActionsPtr & before_where) {
+                    if (pipeline.streams.size() != is_remote_table_scan.size())
+                        throw Exception("Size mismatch between streams and is_remote_table_scan!", ErrorCodes::LOGICAL_ERROR);
+                    if (!pipeline.streams_with_non_joined_data.empty())
+                        throw Exception("Should not have streams_with_non_joined_data after table scan!", ErrorCodes::LOGICAL_ERROR);
+                    for (size_t i = 0; i < pipeline.streams.size(); ++i)
+                    {
+                        auto & stream = pipeline.streams[i];
+                        if (!is_remote_table_scan[i])
+                        {
+                            stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
+                            recordProfileStream(stream, query_block.selection_name);
+                        }
+                    }
+                });
+            chain.addStep();
+
+            NamesWithAliases project_cols;
+            for (const auto & col : analyzer->getCurrentInputColumns())
+                project_cols.emplace_back(col.name, col.name);
+            chain.getLastActions()->add(ExpressionAction::project(project_cols));
+            chain.getLastStep().setCallback(
+                "projectAfterWhere",
+                [&](const ExpressionActionsPtr & project_after_where) {
+                    for (size_t i = 0; i < pipeline.streams.size(); ++i)
+                    {
+                        auto & stream = pipeline.streams[i];
+                        if (!is_remote_table_scan[i])
+                            stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
+                    }
+                });
+            chain.addStep();
+        }
     }
 
     // this log measures the concurrent degree in this mpp task
@@ -917,82 +998,19 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     dag.getDAGContext().final_concurrency = std::max(dag.getDAGContext().final_concurrency, pipeline.streams.size());
 
-    DAGExpressionActionsChain chain;
-
-    if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
-    {
-        auto original_source_columns = analyzer->getCurrentInputColumns();
-        if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, chain, query_block))
-        {
-            NamesWithAliases project_after_ts_and_filter_for_remote_read;
-            size_t index = 0;
-            for (const auto & col : analyzer->getCurrentInputColumns())
-            {
-                project_after_ts_and_filter_for_remote_read.emplace_back(original_source_columns[index].name, col.name);
-                ++index;
-            }
-            chain.getLastStep().setCallback(
-                "appendExtraCast",
-                [&, project_columns = std::move(project_after_ts_and_filter_for_remote_read)](const ExpressionActionsPtr & extra_cast) {
-                    /// execute timezone cast and the selection
-                    ExpressionActionsPtr project_for_cop_read;
-                    for (auto & stream : pipeline.streams)
-                    {
-                        if (dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) != nullptr)
-                        {
-                            /// for cop read, just execute the project is enough, because timezone cast and the selection are already done in remote TiFlash
-                            if (!project_columns.empty())
-                            {
-                                if (project_for_cop_read == nullptr)
-                                {
-                                    project_for_cop_read = generateProjectExpressionActions(stream, context, project_columns);
-                                }
-                                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log);
-                            }
-                        }
-                        else
-                        {
-                            /// execute timezone cast or duration cast if needed
-                            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log);
-                        }
-                    }
-                });
-            chain.addStep();
-        }
-    }
-
-    if (!conditions.empty())
+    /// Selection is handled for TableScan.
+    if (!conditions.empty() && query_block.source->tp() != tipb::ExecType::TypeTableScan)
     {
         String filter_column_name = analyzer->appendWhere(chain, conditions);
         chain.getLastStep().setCallback(
             "appendWhere",
             [&, filter_column_name = std::move(filter_column_name)](const ExpressionActionsPtr & before_where) {
                 pipeline.transform([&](auto & stream) {
-                    /// CoprocessorBlockInputStream will push down filters
-                    if (query_block.source->tp() != tipb::ExecType::TypeTableScan || dynamic_cast<CoprocessorBlockInputStream *>(stream.get()) == nullptr)
-                    {
-                        stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
-                        recordProfileStream(stream, query_block.selection_name);
-                    }
+                    stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
+                    recordProfileStream(stream, query_block.selection_name);
                 });
             });
         chain.addStep();
-
-        if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
-        {
-            NamesWithAliases project_cols;
-            for (const auto & col : analyzer->getCurrentInputColumns())
-                project_cols.emplace_back(col.name, col.name);
-            chain.getLastActions()->add(ExpressionAction::project(project_cols));
-            chain.getLastStep().setCallback(
-                "projectAfterWhere",
-                [&](const ExpressionActionsPtr & project_after_where) {
-                    pipeline.transform([&](auto & stream) {
-                        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
-                    });
-                });
-            chain.addStep();
-        }
     }
 
     if (query_block.aggregation)
@@ -1104,7 +1122,7 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
 {
     if (project_cols.empty())
         return;
-    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
+    ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream()->getHeader(), context, project_cols);
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project, log); });
 }
 
