@@ -8,7 +8,6 @@
 
 namespace DB
 {
-
 class IManageableStorage;
 class StorageDeltaMerge;
 using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
