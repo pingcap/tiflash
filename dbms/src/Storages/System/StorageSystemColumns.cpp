@@ -6,7 +6,6 @@
 #include <Databases/IDatabase.h>
 #include <Parsers/queryToString.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/VirtualColumnUtils.h>
 
@@ -140,13 +139,6 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
             columns = storage->getColumns().getAll();
             column_defaults = storage->getColumns().defaults;
 
-            /** Info about sizes of columns for tables of MergeTree family.
-              * NOTE: It is possible to add getter for this info to IStorage interface.
-              */
-            if (auto storage_concrete = dynamic_cast<StorageMergeTree *>(storage.get()))
-            {
-                column_sizes = storage_concrete->getData().getColumnSizes();
-            }
         }
 
         for (const auto & column : columns)
