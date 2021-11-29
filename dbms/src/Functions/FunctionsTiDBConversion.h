@@ -803,7 +803,7 @@ struct TiDBConvertToFloat
     }
 };
 
-/// cast int/real/decimal/time/string as decimal
+/// cast int/real/decimal/enum/string/time/string as decimal
 // todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
 template <typename FromDataType, typename ToFieldType, bool return_nullable>
 struct TiDBConvertToDecimal
