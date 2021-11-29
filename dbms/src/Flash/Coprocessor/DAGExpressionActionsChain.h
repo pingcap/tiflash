@@ -30,6 +30,7 @@ struct DAGExpressionActionsChain
         {}
 
         void setCallback(String desc_, Callback callback_);
+        bool empty() const;
     };
 
     using Steps = std::vector<Step>;
@@ -40,6 +41,8 @@ struct DAGExpressionActionsChain
     void addStep();
 
     void finalize();
+
+    void removeEmptySteps();
 
     void clear()
     {

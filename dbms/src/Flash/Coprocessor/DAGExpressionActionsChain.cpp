@@ -19,6 +19,11 @@ void DAGExpressionActionsChain::Step::setCallback(String desc_, DAGExpressionAct
     callback = std::move(callback_);
 }
 
+bool DAGExpressionActionsChain::Step::empty() const
+{
+    return (!actions || actions->getActions().empty()) && required_output.empty() && !callback;
+}
+
 void DAGExpressionActionsChain::addStep()
 {
     if (steps.empty())
@@ -30,6 +35,8 @@ void DAGExpressionActionsChain::addStep()
 
 void DAGExpressionActionsChain::finalize()
 {
+    removeEmptySteps();
+
     /// Finalize all steps. Right to left to define unnecessary input columns.
     for (int i = static_cast<int>(steps.size()) - 1; i >= 0; --i)
     {
@@ -70,6 +77,15 @@ void DAGExpressionActionsChain::finalize()
         if (step.callback)
             step.callback(step.actions);
     }
+}
+
+void DAGExpressionActionsChain::removeEmptySteps()
+{
+    Steps new_steps;
+    for (auto & step : steps)
+        if (!step.empty())
+            new_steps.push_back(std::move(step));
+    steps.swap(new_steps);
 }
 
 std::string DAGExpressionActionsChain::dumpChain()
