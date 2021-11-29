@@ -77,7 +77,7 @@ void MPPTaskStats::setSenderExecutorId(DAGContext & dag_context)
 String MPPTaskStats::toJson() const
 {
     return fmt::format(
-        R"({{"query_tso":{},"task_id":{},"sender_executor_id":{},"executors":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_throughput":{},"remote_input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}}})",
+        R"({{"query_tso":{},"task_id":{},"sender_executor_id":{},"executors":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_bytes":{},"remote_input_bytes":{},"output_bytes":{},"cpu_usage":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         sender_executor_id,
@@ -92,9 +92,9 @@ String MPPTaskStats::toJson() const
         toMicroseconds(task_end_timestamp),
         taskStatusToString(status),
         error_message,
-        local_input_throughput,
-        remote_input_throughput,
-        output_throughput,
+        local_input_bytes,
+        remote_input_bytes,
+        output_bytes,
         cpu_usage,
         memory_peak);
 }

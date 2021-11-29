@@ -48,9 +48,9 @@ struct MPPTaskStats
     TaskStatus status;
     String error_message;
 
-    double local_input_throughput = 0.0;
-    double remote_input_throughput = 0.0;
-    double output_throughput = 0.0;
+    UInt64 local_input_bytes = 0;
+    UInt64 remote_input_bytes = 0;
+    UInt64 output_bytes = 0;
 
     /// resource
     Int64 cpu_usage = 0;

@@ -137,9 +137,9 @@ public:
 
     std::pair<bool, double> getTableScanThroughput();
 
-    double getRemoteInputThroughput();
-    double getLocalInputThroughput();
-    double getOutputThroughput();
+    UInt64 getRemoteInputBytes();
+    UInt64 getLocalInputBytes();
+    UInt64 getOutputBytes();
 
     void collectExecutorStatistics(Context & context);
 

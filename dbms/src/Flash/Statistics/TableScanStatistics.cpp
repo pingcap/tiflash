@@ -55,8 +55,6 @@ ExecutorStatisticsPtr TableScanStatistics::buildStatistics(const String & execut
                         return castBlockInputStream<IProfilingBlockInputStream>(stream_ptr, [&](const IProfilingBlockInputStream & stream) {
                             const auto & profile_info = stream.getProfileInfo();
                             collectBaseInfo(statistics, profile_info);
-                            local_read_info->rows += profile_info.rows;
-                            local_read_info->blocks += profile_info.blocks;
                             local_read_info->bytes += profile_info.bytes;
                         });
                     }),

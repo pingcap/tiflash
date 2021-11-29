@@ -3,13 +3,11 @@
 
 namespace DB
 {
-String MPPTunnelProfileInfo::toJson() const
+String MPPTunnelProfileInfo::extraToJson() const
 {
     return fmt::format(
-        R"({{"connection_type":"{}","packets":{},"bytes":{},"tunnel_id":"{}"}})",
-        connection_type,
-        blocks,
-        bytes,
-        tunnel_id);
+        R"(,"tunnel_id":"{}","sender_target_task_id":{})",
+        tunnel_id,
+        sender_target_task_id);
 }
 } // namespace DB

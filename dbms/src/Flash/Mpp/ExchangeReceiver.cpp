@@ -239,18 +239,17 @@ DecodeChunksDetail ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_pt
     if (chunk_size == 0)
         return detail;
 
+    detail.packet_bytes = recv_msg->packet->ByteSizeLong();
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
     for (int i = 0; i < chunk_size; i++)
     {
         Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
         detail.rows += block.rows();
-        detail.bytes += block.bytes();
         if (unlikely(block.rows() == 0))
             continue;
         assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
         block_queue.push(std::move(block));
     }
-    detail.blocks = chunk_size;
     return detail;
 }
 
@@ -309,8 +308,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                     assert(recv_msg->packet->chunks().empty());
                     auto detail = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
                     result.rows = detail.rows;
-                    result.blocks = detail.blocks;
-                    result.bytes = detail.bytes;
+                    result.packet_bytes = detail.packet_bytes;
                 }
             }
         }
@@ -323,8 +321,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
             assert(result.rows == 0);
             auto detail = decodeChunks(recv_msg, block_queue, expected_types);
             result.rows = detail.rows;
-            result.blocks = detail.blocks;
-            result.bytes = detail.bytes;
+            result.packet_bytes = detail.packet_bytes;
         }
     }
     returnEmptyMsg(recv_msg);

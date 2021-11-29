@@ -22,10 +22,11 @@ struct TableScanStatistics : public ExecutorStatistics
         : ExecutorStatistics(executor_id_, context)
     {}
 
-    String extraToJson() const override;
-
     static bool hit(const String & executor_id);
 
     static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
+
+protected:
+    String extraToJson() const override;
 };
 } // namespace DB

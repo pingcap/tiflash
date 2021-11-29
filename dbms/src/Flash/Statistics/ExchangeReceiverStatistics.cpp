@@ -72,8 +72,7 @@ ExecutorStatisticsPtr ExchangeReceiverStatistics::buildStatistics(const String &
                         for (size_t i = 0; i < statistics->partition_num; ++i)
                         {
                             const auto & connection_profile_info = statistics->connection_profile_infos[i];
-                            connection_profile_info->rows += er_profile_infos[i]->rows;
-                            connection_profile_info->blocks += er_profile_infos[i]->blocks;
+                            connection_profile_info->packets += er_profile_infos[i]->packets;
                             connection_profile_info->bytes += er_profile_infos[i]->bytes;
                         }
                     }),

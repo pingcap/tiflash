@@ -33,7 +33,8 @@ struct CoprocessorReadProfileInfo : public ConnectionProfileInfo
         cop_task_infos = cop_task_infos_;
     }
 
-    String toJson() const override;
+protected:
+    String extraToJson() const override;
 };
 
 using CoprocessorReadProfileInfoPtr = std::shared_ptr<CoprocessorReadProfileInfo>;

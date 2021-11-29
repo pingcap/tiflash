@@ -179,6 +179,19 @@ double getThroughput(BlockInputStreams & block_input_streams)
     // convert to bytes per second
     return num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL);
 }
+
+UInt64 getBytes(BlockInputStreams & block_input_streams)
+{
+    UInt64 num_produced_bytes = 0;
+    for (auto & block_input_stream : block_input_streams)
+    {
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(block_input_stream.get()))
+        {
+            num_produced_bytes += p_stream->getProfileInfo().bytes;
+        }
+    }
+    return num_produced_bytes;
+}
 } // namespace
 
 std::pair<bool, double> DAGContext::getTableScanThroughput()
@@ -197,28 +210,28 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     return std::make_pair(true, throughput);
 }
 
-double DAGContext::getRemoteInputThroughput()
+UInt64 DAGContext::getRemoteInputBytes()
 {
-    return getThroughput(remote_block_input_streams);
+    return getBytes(remote_block_input_streams);
 }
 
-double DAGContext::getLocalInputThroughput()
+UInt64 DAGContext::getLocalInputBytes()
 {
-    return getThroughput(local_block_input_streams);
+    return getBytes(local_block_input_streams);
 }
 
-double DAGContext::getOutputThroughput()
+UInt64 DAGContext::getOutputBytes()
 {
     if (!return_executor_id || root_executor_id.empty())
-        return 0.0;
+        return 0;
 
     auto it = profile_streams_map.find(root_executor_id);
     if (it != profile_streams_map.end())
     {
-        return getThroughput(it->second.input_streams);
+        return getBytes(it->second.input_streams);
     }
 
-    return 0.0;
+    return 0;
 }
 
 void DAGContext::collectExecutorStatistics(Context & context)

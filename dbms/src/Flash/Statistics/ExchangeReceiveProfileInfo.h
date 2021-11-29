@@ -18,7 +18,8 @@ struct ExchangeReceiveProfileInfo : public ConnectionProfileInfo
         , receiver_source_task_id(receiver_source_task_id_)
     {}
 
-    String toJson() const override;
+protected:
+    String extraToJson() const override;
 };
 
 using ExchangeReceiveProfileInfoPtr = std::shared_ptr<ExchangeReceiveProfileInfo>;

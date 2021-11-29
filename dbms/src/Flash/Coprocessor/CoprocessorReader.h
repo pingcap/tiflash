@@ -35,8 +35,7 @@ struct CoprocessorReaderResult
     bool eof;
     String req_info = "cop request";
     UInt64 rows;
-    UInt64 blocks;
-    UInt64 bytes;
+    UInt64 packet_bytes;
 
     CoprocessorReaderResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
@@ -44,15 +43,13 @@ struct CoprocessorReaderResult
         const String & error_msg_ = "",
         bool eof_ = false,
         UInt64 rows_ = 0,
-        UInt64 blocks_ = 0,
-        UInt64 bytes_ = 0)
+        UInt64 packet_bytes_ = 0)
         : resp(resp_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
         , rows(rows_)
-        , blocks(blocks_)
-        , bytes(bytes_)
+        , packet_bytes(packet_bytes_)
     {}
 };
 
@@ -99,6 +96,7 @@ public:
         if (chunk_size == 0)
             return detail;
 
+        detail.packet_bytes = resp->ByteSizeLong();
         for (int i = 0; i < chunk_size; i++)
         {
             Block block;
@@ -119,14 +117,12 @@ public:
             }
 
             detail.rows += block.rows();
-            detail.bytes += block.bytes();
 
             if (unlikely(block.rows() == 0))
                 continue;
             assertBlockSchema(expected_types, block, "CoprocessorReader decode chunks");
             block_queue.push(std::move(block));
         }
-        detail.blocks = chunk_size;
         return detail;
     }
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
@@ -149,7 +145,7 @@ public:
                                        "maybe the version of some TiFlash node in the cluster is not match with this one",
                         false};
             auto detail = decodeChunks(resp, block_queue, expected_types, schema);
-            return {resp, false, "", false, detail.rows, detail.blocks, detail.bytes};
+            return {resp, false, "", false, detail.rows, detail.packet_bytes};
         }
         else
         {
