@@ -16,7 +16,7 @@ namespace DB
 {
 namespace tests
 {
-namespace tidb_conversion
+namespace
 {
 auto getDatetimeColumn(bool single_field = false)
 {
@@ -28,20 +28,6 @@ auto getDatetimeColumn(bool single_field = false)
     if (!single_field)
         col_datetime->insert(Field(datetime_frac.toPackedUInt()));
     return col_datetime;
-}
-
-auto createNullableDateTimeColumn(std::initializer_list<std::optional<MyDateTime>> init, int fraction)
-{
-    auto data_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(fraction));
-    auto col = data_type_ptr->createColumn();
-    for (const auto dt : init)
-    {
-        if (dt.has_value())
-            col->insert(Field(dt->toPackedUInt()));
-        else
-            col->insert(Null());
-    }
-    return ColumnWithTypeAndName(std::move(col), data_type_ptr, "datetime");
 }
 
 auto createCastTypeConstColumn(String str)
@@ -81,86 +67,86 @@ try
         createColumn<Nullable<UInt64>>({0, 1, MAX_UINT8, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt8>>({0, 1, MAX_UINT8, {}}),
-                         createCastTypeConstColumn("UInt64")}));
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({0, 1, MAX_UINT16, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt16>>({0, 1, MAX_UINT16, {}}),
-                         createCastTypeConstColumn("UInt64")}));
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({0, 1, MAX_UINT32, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt32>>({0, 1, MAX_UINT32, {}}),
-                         createCastTypeConstColumn("UInt64")}));
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({0, 1, MAX_UINT64, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({0, 1, MAX_UINT64, {}}),
-                         createCastTypeConstColumn("UInt64")}));
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
     // int8/16/32/64 -> uint64, no overflow
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({0, MAX_INT8, MAX_UINT64, MAX_UINT64 - MAX_INT8, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int8>>({0, MAX_INT8, -1, MIN_INT8, {}}),
-                         createCastTypeConstColumn("UInt64")}));
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({0, MAX_INT16, MAX_UINT64, MAX_UINT64 - MAX_INT16, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int16>>({0, MAX_INT16, -1, MIN_INT16, {}}),
-                         createCastTypeConstColumn("UInt64")}));
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({0, MAX_INT32, MAX_UINT64, MAX_UINT64 - MAX_INT32, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({0, MAX_INT32, -1, MIN_INT32, {}}),
-                         createCastTypeConstColumn("UInt64")}));
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({0, MAX_INT64, MAX_UINT64, MAX_UINT64 - MAX_INT64, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({0, MAX_INT64, -1, MIN_INT64, {}}),
-                         createCastTypeConstColumn("UInt64")}));
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
     // uint8/16/32 -> int64, no overflow
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({0, MAX_INT8, MAX_UINT8, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt8>>({0, MAX_INT8, MAX_UINT8, {}}),
-                         createCastTypeConstColumn("Int64")}));
+                         createCastTypeConstColumn("Nullable(Int64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({0, MAX_INT16, MAX_UINT16, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt16>>({0, MAX_INT16, MAX_UINT16, {}}),
-                         createCastTypeConstColumn("Int64")}));
+                         createCastTypeConstColumn("Nullable(Int64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({0, MAX_INT32, MAX_UINT32, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt32>>({0, MAX_INT32, MAX_UINT32, {}}),
-                         createCastTypeConstColumn("Int64")}));
+                         createCastTypeConstColumn("Nullable(Int64)")}));
     //  uint64 -> int64, overflow may happen
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({0, MAX_INT64, -1, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({0, MAX_INT64, MAX_UINT64, {}}),
-                         createCastTypeConstColumn("Int64")}));
+                         createCastTypeConstColumn("Nullable(Int64)")}));
     // int8/16/32/64 -> int64, no overflow
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({0, MAX_INT8, -1, MIN_INT8, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int8>>({0, MAX_INT8, -1, MIN_INT8, {}}),
-                         createCastTypeConstColumn("Int64")}));
+                         createCastTypeConstColumn("Nullable(Int64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({0, MAX_INT16, -1, MIN_INT16, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int16>>({0, MAX_INT16, -1, MIN_INT16, {}}),
-                         createCastTypeConstColumn("Int64")}));
+                         createCastTypeConstColumn("Nullable(Int64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({0, MAX_INT32, -1, MIN_INT32, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({0, MAX_INT32, -1, MIN_INT32, {}}),
-                         createCastTypeConstColumn("Int64")}));
+                         createCastTypeConstColumn("Nullable(Int64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({0, MAX_INT64, -1, MIN_INT64, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({0, MAX_INT64, -1, MIN_INT64, {}}),
-                         createCastTypeConstColumn("Int64")}));
+                         createCastTypeConstColumn("Nullable(Int64)")}));
 }
 CATCH
 
@@ -178,7 +164,7 @@ try
                              {1234567890, // this is fine
                               123456789012345678,
                               {}}), // but this cannot be represented precisely in the IEEE 754 64-bit float format
-                         createCastTypeConstColumn("Float64")}));
+                         createCastTypeConstColumn("Nullable(Float64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>(
             {1234567890.0,
@@ -189,38 +175,38 @@ try
                              {1234567890, // this is fine
                               123456789012345678,
                               {}}), // but this cannot be represented precisely in the IEEE 754 64-bit float format
-                         createCastTypeConstColumn("Float64")}));
+                         createCastTypeConstColumn("Nullable(Float64)")}));
     // uint32/16/8 and int32/16/8 -> float64, precise
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>({MAX_UINT32, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt32>>({MAX_UINT32, {}}),
-                         createCastTypeConstColumn("Float64")}));
+                         createCastTypeConstColumn("Nullable(Float64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>({MAX_UINT16, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt16>>({MAX_UINT16, {}}),
-                         createCastTypeConstColumn("Float64")}));
+                         createCastTypeConstColumn("Nullable(Float64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>({MAX_UINT8, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt8>>({MAX_UINT8, {}}),
-                         createCastTypeConstColumn("Float64")}));
+                         createCastTypeConstColumn("Nullable(Float64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>({MAX_INT32, MIN_INT32, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({MAX_INT32, MIN_INT32, {}}),
-                         createCastTypeConstColumn("Float64")}));
+                         createCastTypeConstColumn("Nullable(Float64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>({MAX_INT16, MIN_INT16, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int16>>({MAX_INT16, MIN_INT16, {}}),
-                         createCastTypeConstColumn("Float64")}));
+                         createCastTypeConstColumn("Nullable(Float64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>({MAX_INT8, MIN_INT8, {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int8>>({MAX_INT8, MIN_INT8, {}}),
-                         createCastTypeConstColumn("Float64")}));
+                         createCastTypeConstColumn("Nullable(Float64)")}));
 }
 CATCH
 
@@ -232,43 +218,43 @@ try
         createColumn<Nullable<String>>({"18446744073709551615", {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({MAX_UINT64, {}}),
-                         createCastTypeConstColumn("String")}));
+                         createCastTypeConstColumn("Nullable(String)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"4294967295", {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt32>>({MAX_UINT32, {}}),
-                         createCastTypeConstColumn("String")}));
+                         createCastTypeConstColumn("Nullable(String)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"65535", {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt16>>({MAX_UINT16, {}}),
-                         createCastTypeConstColumn("String")}));
+                         createCastTypeConstColumn("Nullable(String)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"255", {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt8>>({MAX_UINT8, {}}),
-                         createCastTypeConstColumn("String")}));
+                         createCastTypeConstColumn("Nullable(String)")}));
     // int64/32/16/8 -> string
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"9223372036854775807", "-9223372036854775808", {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({MAX_INT64, MIN_INT64, {}}),
-                         createCastTypeConstColumn("String")}));
+                         createCastTypeConstColumn("Nullable(String)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"2147483647", "-2147483648", {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({MAX_INT32, MIN_INT32, {}}),
-                         createCastTypeConstColumn("String")}));
+                         createCastTypeConstColumn("Nullable(String)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"32767", "-32768", {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int16>>({MAX_INT16, MIN_INT16, {}}),
-                         createCastTypeConstColumn("String")}));
+                         createCastTypeConstColumn("Nullable(String)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"127", "-128", {}}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int8>>({MAX_INT8, MIN_INT8, {}}),
-                         createCastTypeConstColumn("String")}));
+                         createCastTypeConstColumn("Nullable(String)")}));
 }
 CATCH
 
@@ -710,6 +696,6 @@ try
 }
 CATCH
 
-} // namespace tidb_conversion
+} // namespace
 } // namespace tests
 } // namespace DB

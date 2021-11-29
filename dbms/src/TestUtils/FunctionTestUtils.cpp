@@ -123,5 +123,20 @@ ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
     DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
     return {data_type->createColumnConst(size, Null()), data_type, name};
 }
+
+ColumnWithTypeAndName createNullableDateTimeColumn(std::initializer_list<std::optional<MyDateTime>> init, int fraction)
+{
+    auto data_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(fraction));
+    auto col = data_type_ptr->createColumn();
+    for (const auto dt : init)
+    {
+        if (dt.has_value())
+            col->insert(Field(dt->toPackedUInt()));
+        else
+            col->insert(Null());
+    }
+    return ColumnWithTypeAndName(std::move(col), data_type_ptr, "datetime");
+}
+
 } // namespace tests
 } // namespace DB
