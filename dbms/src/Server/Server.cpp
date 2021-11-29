@@ -41,6 +41,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
