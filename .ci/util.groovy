@@ -142,7 +142,8 @@ def runTest(label, testPath, tidbBranch) {
                             sh "pwd"
                             sh "TAG=${params.ghprbActualCommit} BRANCH=${tidbBranch} bash -xe ./run.sh"
                         } catch (e) {
-                            archiveArtifacts(artifacts: "log/**/*.log", allowEmptyArchive: true)
+                            sh "mv log ${label}-log"
+                            archiveArtifacts(artifacts: "${label}-log/**/*.log", allowEmptyArchive: true)
                             sh "find log -name '*.log' | xargs tail -n 500"
                             sh "docker ps -a"
                             throw e
