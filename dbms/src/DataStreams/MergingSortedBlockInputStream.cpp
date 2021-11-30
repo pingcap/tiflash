@@ -157,7 +157,6 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
         ++total_merged_rows;
         if (limit && total_merged_rows == limit)
         {
-            //        std::cerr << "Limit reached\n";
             cancel(false);
             finished = true;
             return true;
@@ -166,7 +165,6 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
         ++merged_rows;
         if (merged_rows == max_block_size)
         {
-            //        std::cerr << "max_block_size reached\n";
             return true;
         }
 
@@ -186,12 +184,10 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
               */
             if (current.impl->isFirst() && (queue.empty() || current.totallyLessOrEquals(queue.top())))
             {
-                //            std::cerr << "current block is totally less or equals\n";
 
                 /// If there are already data in the current block, we first return it. We'll get here again the next time we call the merge function.
                 if (merged_rows != 0)
                 {
-                    //                std::cerr << "merged rows is non-zero\n";
                     queue.push(current);
                     return;
                 }
@@ -204,8 +200,6 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
 
                 for (size_t i = 0; i < num_columns; ++i)
                     merged_columns[i] = (*std::move(source_blocks[source_num]->getByPosition(i).column)).mutate();
-
-                //            std::cerr << "copied columns\n";
 
                 size_t merged_rows = merged_columns.at(0)->size();
 
@@ -229,15 +223,11 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
                         out_row_sources_buf->write(row_source.data);
                 }
 
-                //            std::cerr << "fetching next block\n";
-
                 total_merged_rows += merged_rows;
                 fetchNextBlock(current, queue);
                 return;
             }
 
-            //        std::cerr << "total_merged_rows: " << total_merged_rows << ", merged_rows: " << merged_rows << "\n";
-            //        std::cerr << "Inserting row\n";
             for (size_t i = 0; i < num_columns; ++i)
                 merged_columns[i]->insertFrom(*current->all_columns[i], current->pos);
 
@@ -250,32 +240,27 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
 
             if (!current->isLast())
             {
-                //            std::cerr << "moving to next row\n";
                 current->next();
 
                 if (queue.empty() || !(current.greater(queue.top())))
                 {
                     if (count_row_and_check_limit())
                     {
-                        //                    std::cerr << "pushing back to queue\n";
                         queue.push(current);
                         return;
                     }
 
                     /// Do not put the cursor back in the queue, but continue to work with the current cursor.
-                    //                std::cerr << "current is still on top, using current row\n";
                     continue;
                 }
                 else
                 {
-                    //                std::cerr << "next row is not least, pushing back to queue\n";
                     queue.push(current);
                 }
             }
             else
             {
                 /// We get the next block from the corresponding source, if there is one.
-                //            std::cerr << "It was last row, fetching next block\n";
                 fetchNextBlock(current, queue);
             }
 

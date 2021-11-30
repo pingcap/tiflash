@@ -26,10 +26,6 @@
     M(UncompressedCacheHits)                    \
     M(UncompressedCacheMisses)                  \
     M(UncompressedCacheWeightLost)              \
-    M(PersistedMarksFileHits)                   \
-    M(PersistedMarksFileMisses)                 \
-    M(PersistedMarksFileBusy)                   \
-    M(PersistedMarksFileUpdate)                 \
     M(IOBufferAllocs)                           \
     M(IOBufferAllocBytes)                       \
     M(ArenaAllocChunks)                         \

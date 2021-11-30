@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Common/Timer.h>
-#include <Storages/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>

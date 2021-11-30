@@ -23,16 +23,13 @@
 #include <Storages/StorageMemory.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
+#include <fmt/format.h>
 
 #include <ext/scope_guard.h>
 #include <iomanip>
 
 namespace ProfileEvents
 {
-extern const Event PersistedMarksFileHits;
-extern const Event PersistedMarksFileMisses;
-extern const Event PersistedMarksFileBusy;
-extern const Event PersistedMarksFileUpdate;
 } // namespace ProfileEvents
 
 
@@ -296,8 +293,7 @@ void TCPHandler::runImpl()
 
         watch.stop();
 
-        LOG_INFO(log, std::fixed << std::setprecision(3) << "Processed in " << watch.elapsedSeconds() << " sec. "
-                                 << "Global persisted cache hit|miss|busy|update|miss(ok): mark index files = " << ProfileEvents::counters[ProfileEvents::PersistedMarksFileHits].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileMisses].load() << "|" << 0 << "+" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileBusy].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileUpdate].load() << ", mark ranges = " << 0 << "|" << 0 << "|" << 0 << "+" << 0 << "|" << 0 << "|" << 0);
+        LOG_INFO(log, fmt::format("Processed in {.3} sec.", watch.elapsedSeconds()));
 
         if (network_error)
             break;

@@ -140,8 +140,6 @@ void AsynchronousMetrics::update()
         double max_dt_meta_oldest_snapshot_lifetime = 0.0;
         size_t max_dt_background_tasks_length = 0;
 
-        size_t max_part_count_for_partition = 0;
-
         for (const auto & db : databases)
         {
             for (auto iterator = db.second->getIterator(context); iterator->isValid(); iterator->next())
@@ -163,7 +161,6 @@ void AsynchronousMetrics::update()
         set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
         set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
-        set("MaxPartCountForPartition", max_part_count_for_partition);
     }
 
 #if USE_TCMALLOC
