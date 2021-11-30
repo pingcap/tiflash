@@ -19,11 +19,33 @@ public:
         NUM_COUNTER_TYPES
     };
 
-    static constexpr Int64 time_slice = 100'000'000; // 100 ms
-    static constexpr size_t num_buckets = 128;
+    static String typeToString(CounterType type)
+    {
+        switch (type)
+        {
+        case NONE:
+            return "none";
+        case PULL:
+            return "pull";
+        case SELF:
+            return "self";
+        case PUSH:
+            return "push";
+        default:
+            return "<unknown>";
+        }
+    }
+
     static constexpr size_t num_counters = static_cast<size_t>(NUM_COUNTER_TYPES);
 
-    Float64 count[num_counters][num_buckets];
+    struct Event
+    {
+        Int64 begin_ts, end_ts;
+        CounterType type;
+    };
+
+    UInt64 count[num_counters];
+    std::list<Event> events;
 
     Timeline();
 
@@ -43,8 +65,8 @@ public:
         explicit Timer(Timeline & parent_, CounterType type_, bool running_);
         ~Timer();
 
-        void pause();
-        void resume();
+        void pause(bool do_track = true);
+        void resume(bool do_track = true);
         void switchTo(CounterType type_);
 
         bool isRunning() const

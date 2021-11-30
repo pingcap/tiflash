@@ -57,16 +57,16 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
     if (!limit_exceeded_need_break)
     {
-        if (return_filter)
-            res = readImpl(res_filter, return_filter);
-        else
-            res = readImpl();
-
         if (info.is_first)
         {
             info.is_first = false;
             info.first_ts = info.now();
         }
+
+        if (return_filter)
+            res = readImpl(res_filter, return_filter);
+        else
+            res = readImpl();
 
         if (res)
         {
@@ -145,8 +145,8 @@ void IProfilingBlockInputStream::recursiveDumpProfileInfo(FmtBuffer & buf, std::
     buf.append("{");
 
     buf.fmtAppend("\"id\":{},", info.signature)
-        .fmtAppend("\"name\":\"{}\",", getName())
-        .fmtAppend("\"executor\":\"{}\",", info.executor.empty() ? "<unknown>" : info.executor);
+        .fmtAppend(R"("name":"{}",)", getName())
+        .fmtAppend(R"("executor":"{}",)", info.executor.empty() ? "<unknown>" : info.executor);
 
     buf.append("\"children\":[");
     joinStr(
@@ -175,7 +175,8 @@ void IProfilingBlockInputStream::dumpProfileInfoImpl(FmtBuffer & buf)
 {
     buf.append("{");
 
-    buf.fmtAppend("\"prefix_duration_ns\":{},", info.prefix_duration)
+    buf.fmtAppend(R"("schema":"{}",)", getHeader().dumpStructure())
+        .fmtAppend("\"prefix_duration_ns\":{},", info.prefix_duration)
         .fmtAppend("\"suffix_duration_ns\":{},", info.suffix_duration)
         .fmtAppend("\"pull_duration_ns\":{},", info.timeline.sum(Timeline::PULL))
         .fmtAppend("\"self_duration_ns\":{},", info.timeline.sum(Timeline::SELF))
