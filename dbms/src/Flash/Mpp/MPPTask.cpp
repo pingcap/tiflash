@@ -88,7 +88,11 @@ void MPPTask::run()
     memory_tracker = current_memory_tracker;
     if (glb_thd_pool) {
 //        runfg = false;
-        glb_thd_pool->schedule([this] {MpptaskRunImpl(this->shared_from_this());});
+        glb_thd_pool->schedule(
+            ThreadFactory(true, "MergingAggregtd").newJob(
+            [this] {MpptaskRunImpl(this->shared_from_this());}
+            )
+            );
 //        while(!runfg) {
 //            usleep(1);
 //        }

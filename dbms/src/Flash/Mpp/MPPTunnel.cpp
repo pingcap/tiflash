@@ -218,9 +218,11 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
         if (glb_thd_pool) {
 //            loop = false;
             glb_thd_pool->schedule(
+                ThreadFactory(true, "MergingAggregtd").newJob(
                 [this] {
                     tunnelSendLoop(this);
                 }
+                )
             );
             send_thread = nullptr;
 //            while(!loop) usleep(1);

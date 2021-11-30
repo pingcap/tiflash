@@ -109,7 +109,9 @@ public:
         if (glb_thd_pool) {
             for (size_t i = 0; i < max_threads; ++i)
             {
-                glb_thd_pool->schedule([this, i] { this->thread(i); });
+                glb_thd_pool->schedule(
+                    ThreadFactory(true, "MergingAggregtd").newJob(
+                    [this, i] { this->thread(i); }));
             }
         } else
         {
