@@ -946,20 +946,7 @@ String createTableStmt(
     }
 
     // storage engine type
-    if (table_info.engine_type == TiDB::StorageEngine::TMT)
-    {
-        writeString(") Engine = TxnMergeTree((", stmt_buf);
-        for (size_t i = 0; i < pks.size(); i++)
-        {
-            if (i > 0)
-                writeString(", ", stmt_buf);
-            writeBackQuotedString(pks[i], stmt_buf);
-        }
-        writeString("), 8192, '", stmt_buf);
-        writeEscapedString(table_info.serialize(), stmt_buf);
-        writeString("')", stmt_buf);
-    }
-    else if (table_info.engine_type == TiDB::StorageEngine::DT)
+    if (table_info.engine_type == TiDB::StorageEngine::DT)
     {
         writeString(") Engine = DeltaMerge((", stmt_buf);
         for (size_t i = 0; i < pks.size(); i++)

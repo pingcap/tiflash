@@ -20,7 +20,6 @@
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TypeMapping.h>
 

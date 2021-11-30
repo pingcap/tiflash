@@ -7,14 +7,12 @@
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -98,34 +96,6 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         {
             switch (storage->engineType())
             {
-            case TiDB::StorageEngine::TMT:
-            {
-                auto & context = tmt.getContext();
-                // Traverse all table in storage and update `new_region`.
-                if (storage->getTableInfo().is_common_handle)
-                    throw Exception("TMT table does not support clustered index", ErrorCodes::NOT_IMPLEMENTED);
-                HandleMap handle_map;
-                const auto handle_range = getHandleRangeByTable(new_region->getRange()->rawKeys(), table_id);
-
-                auto table_lock = storage->lockStructureForShare(getThreadName());
-
-                auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-                const bool pk_is_uint64 = getTMTPKType(*tmt_storage->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
-
-                if (pk_is_uint64)
-                {
-                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                    getHandleMapByRange<UInt64>(context, *tmt_storage, new_range[0], handle_map);
-                    if (n > 1)
-                        getHandleMapByRange<UInt64>(context, *tmt_storage, new_range[1], handle_map);
-                }
-                else
-                    getHandleMapByRange<Int64>(context, *tmt_storage, handle_range, handle_map);
-
-                Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient(), /* ignore_cache= */ true);
-                new_region->compareAndCompleteSnapshot(handle_map, safe_point);
-                break;
-            }
             case TiDB::StorageEngine::DT:
             {
                 break;
