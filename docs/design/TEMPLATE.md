@@ -37,7 +37,7 @@ It's better to describe the pseudo-code of the key algorithm, API interfaces, th
 Compatibility is important, please also take into consideration, a checklist:
 - Compatibility with other features, like partition table, security&privilege, collation&charset, clustered index, async commit, etc.
 - Compatibility with other internal components, like parser, DDL, planner, statistics, executor, etc.
-- Compatibility with other external components, like PD, TiKV, TiFlash, BR, TiCDC, Dumpling, TiUP, K8s, etc.
+- Compatibility with other external components, like PD, TiKV, TiDB, BR, TiCDC, Dumpling, TiUP, K8s, etc.
 - Upgrade compatibility
 - Downgrade compatibility
 
@@ -58,7 +58,7 @@ It's used to ensure this feature works as expected in some common scenarios.
 A checklist to test compatibility:
 - Compatibility with other features, like partition table, security & privilege, charset & collation, clustered index, async commit, etc.
 - Compatibility with other internal components, like parser, DDL, planner, statistics, executor, etc.
-- Compatibility with other external components, like PD, TiKV, TiFlash, BR, TiCDC, Dumpling, TiUP, K8s, etc.
+- Compatibility with other external components, like PD, TiKV, TiDB, BR, TiCDC, Dumpling, TiUP, K8s, etc.
 - Upgrade compatibility
 - Downgrade compatibility
 
