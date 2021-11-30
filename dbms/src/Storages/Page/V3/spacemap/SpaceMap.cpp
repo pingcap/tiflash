@@ -13,31 +13,7 @@ namespace DB::PS::V3
 
 void SpaceMap::printf()
 {
-    spacemap_ops->smapStats(this);
-}
-
-int SpaceMap::unmark(UInt64 arg)
-{
-    arg >>= cluster_bits;
-
-    if ((arg < start) || (arg > end))
-    {
-        return -1;
-    }
-
-    return spacemap_ops->unmarkSmapBit(this, arg);
-}
-
-int SpaceMap::mark(UInt64 arg)
-{
-    arg >>= cluster_bits;
-
-    if ((arg < start) || (arg > end))
-    {
-        return -1;
-    }
-
-    return spacemap_ops->markSmapBit(this, arg);
+    smapStats();
 }
 
 int SpaceMap::unmarkRange(UInt64 block, unsigned int num)
@@ -56,7 +32,7 @@ int SpaceMap::unmarkRange(UInt64 block, unsigned int num)
         return -1;
     }
 
-    return spacemap_ops->unmarkSmapRange(this, block, num);
+    return unmarkSmapRange(block, num);
 }
 
 int SpaceMap::markRange(UInt64 block, unsigned int num)
@@ -74,19 +50,7 @@ int SpaceMap::markRange(UInt64 block, unsigned int num)
         return -1;
     }
 
-    return spacemap_ops->markSmapRange(this, block, num);
-}
-
-int SpaceMap::test(UInt64 arg)
-{
-    arg >>= cluster_bits;
-
-    if ((arg < start) || (arg > end))
-    {
-        return -1;
-    }
-
-    return spacemap_ops->testSmapBit(this, arg);
+    return markSmapRange(block, num);
 }
 
 int SpaceMap::testRange(UInt64 block, unsigned int num)
@@ -106,10 +70,10 @@ int SpaceMap::testRange(UInt64 block, unsigned int num)
         return -1;
     }
 
-    return spacemap_ops->testSmapRange(this, block, num);
+    return testSmapRange(block, num);
 }
 
-SpaceMap::SpaceMap(SpaceMapOpsPtr ops, UInt64 start_, UInt64 end_, UInt64 real_end_)
+SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, UInt64 real_end_)
     : spacemap_ops(ops),
     start(start_),
     end(end_),
