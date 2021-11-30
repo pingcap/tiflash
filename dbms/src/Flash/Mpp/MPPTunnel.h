@@ -29,7 +29,7 @@ public:
         TaskCancelledCallback callback,
         int input_steams_num_);
 
-    ~MPPTunnelBase();
+    virtual ~MPPTunnelBase();
 
     const String & id() const { return tunnel_id; }
 

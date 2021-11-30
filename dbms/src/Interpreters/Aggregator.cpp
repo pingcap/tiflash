@@ -1508,7 +1508,7 @@ protected:
         {
             if (!parallel_merge_data)
             {
-                parallel_merge_data = std::make_unique<ParallelMergeData>(threads);
+                parallel_merge_data = std::make_unique<ParallelMergeData>();
                 for (size_t i = 0; i < threads; ++i)
                     scheduleThreadForNextBucket();
             }
@@ -1562,7 +1562,7 @@ private:
         std::condition_variable condvar;
         ThreadPool* pool;
 
-        explicit ParallelMergeData(size_t threads)
+        explicit ParallelMergeData()
             : pool(glb_thd_pool)
         {}
     };

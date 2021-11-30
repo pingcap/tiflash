@@ -86,7 +86,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
       *  then merge them and place result in a queue (in fact, ordered map), from where we will read ready result blocks.
       */
     if (merging_threads > 1)
-        parallel_merge_data = std::make_unique<ParallelMergeData>(merging_threads);
+        parallel_merge_data = std::make_unique<ParallelMergeData>();
 }
 
 

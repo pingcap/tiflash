@@ -1,4 +1,4 @@
-#include <common/ThreadPool.h>
+#include <Common/ScalableThreadPool.h>
 
 #include <exception>
 #include <iostream>
@@ -19,9 +19,9 @@ void handle_eptr(std::exception_ptr eptr) // passing by value is ok
     }
 }
 
-ThreadPool * glb_thd_pool = nullptr;
+ScalableThreadPool * global_thd_pool = nullptr;
 
-ThreadPool::ThreadPool(size_t m_size, Job pre_worker)
+ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker)
     : m_size(m_size)
 {
     threads.reserve(m_size);
@@ -32,7 +32,7 @@ ThreadPool::ThreadPool(size_t m_size, Job pre_worker)
         });
 }
 
-void ThreadPool::schedule(Job job)
+void ScalableThreadPool::schedule(Job job)
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
@@ -46,7 +46,7 @@ void ThreadPool::schedule(Job job)
     has_new_job_or_shutdown.notify_one();
 }
 
-void ThreadPool::wait()
+void ScalableThreadPool::wait()
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
@@ -61,7 +61,7 @@ void ThreadPool::wait()
     }
 }
 
-ThreadPool::~ThreadPool()
+ScalableThreadPool::~ScalableThreadPool()
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
@@ -74,14 +74,14 @@ ThreadPool::~ThreadPool()
         thread.join();
 }
 
-size_t ThreadPool::active() const
+size_t ScalableThreadPool::active() const
 {
     std::unique_lock<std::mutex> lock(mutex);
     return active_jobs;
 }
 
 
-void ThreadPool::worker()
+void ScalableThreadPool::worker()
 {
     while (true)
     {
