@@ -1,4 +1,4 @@
-#include "rb_tree.h"
+#include "RBTree.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,11 +35,6 @@ static inline void node_set_parent(struct rb_node * node, struct rb_node * p)
 static inline void node_set_color(struct rb_node * node, int color)
 {
     node->parent = (node->parent & ~COLOR_BLACK) | color;
-}
-
-static inline void node_clear(struct rb_node * node)
-{
-    node_set_parent(node, node);
 }
 
 static void node_rotate_left(struct rb_node * node, struct rb_root * root)
@@ -358,9 +353,15 @@ struct rb_node * rb_tree_first(const struct rb_root * root)
 
     n = root->rb_node;
     if (!n)
+    {
         return NULL;
+    }
+
     while (n->node_left)
+    {
         n = n->node_left;
+    }
+
     return n;
 }
 
@@ -370,9 +371,15 @@ struct rb_node * rb_tree_last(const struct rb_root * root)
 
     n = root->rb_node;
     if (!n)
+    {
         return NULL;
+    }
+
     while (n->node_right)
+    {
         n = n->node_right;
+    }
+
     return n;
 }
 
@@ -456,7 +463,9 @@ struct rb_node * rb_tree_prev(struct rb_node * current)
     // So the `prev` node must in parent node,Then we need go up into the parent node.
     // If `current` node is the left-node child of its parent, Then it still need go up for upper layer.
     while ((parent = node_parent(current)) && current == parent->node_left)
+    {
         current = parent;
+    }
 
     return parent;
 }
