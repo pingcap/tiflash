@@ -106,14 +106,15 @@ public:
     void process()
     {
         active_threads = max_threads;
-        if (glb_thd_pool) {
+        if (glb_thd_pool)
+        {
             for (size_t i = 0; i < max_threads; ++i)
             {
                 glb_thd_pool->schedule(
-                    ThreadFactory(true, "MergingAggregtd").newJob(
-                    [this, i] { this->thread(i); }));
+                    ThreadFactory(true, "MergingAggregtd").newJob([this, i] { this->thread(i); }));
             }
-        } else
+        }
+        else
         {
             threads.reserve(max_threads);
             for (size_t i = 0; i < max_threads; ++i)
@@ -154,12 +155,12 @@ public:
 
         {
             std::unique_lock<std::mutex> lk(thd_mu);
-            end_cv.wait(lk, [&]{return end_threads == max_threads;});
+            end_cv.wait(lk, [&] { return end_threads == max_threads; });
         }
-//        for (auto & thread : threads)
-//            thread.join();
+        //        for (auto & thread : threads)
+        //            thread.join();
 
-//        threads.clear();
+        //        threads.clear();
         joined_threads = true;
     }
 

@@ -42,9 +42,11 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         if (nullptr != send_thread && send_thread->joinable())
         {
             send_thread->join();
-        } else {
+        }
+        else
+        {
             std::unique_lock<std::mutex> lk(end_mu);
-            end_cv.wait(lk, [&] {return send_end.load();});
+            end_cv.wait(lk, [&] { return send_end.load(); });
         }
         /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
         MPPDataPacketPtr res;
@@ -201,7 +203,8 @@ void MPPTunnelBase<Writer>::writeDone()
 }
 
 template <typename Writer>
-static void tunnelSendLoop(MPPTunnelBase<Writer> * tunnel) {
+static void tunnelSendLoop(MPPTunnelBase<Writer> * tunnel)
+{
     tunnel->sendLoop();
 }
 
@@ -214,23 +217,23 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
-//    if (!is_local) {
-        if (glb_thd_pool) {
-//            loop = false;
-            glb_thd_pool->schedule(
-                ThreadFactory(true, "MergingAggregtd").newJob(
-                [this] {
-                    tunnelSendLoop(this);
-                }
-                )
-            );
-            send_thread = nullptr;
-//            while(!loop) usleep(1);
-        } else {
-            send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
-        }
-//    }
-//    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+    //    if (!is_local) {
+    if (glb_thd_pool)
+    {
+        //            loop = false;
+        glb_thd_pool->schedule(
+            ThreadFactory(true, "MergingAggregtd").newJob([this] {
+                tunnelSendLoop(this);
+            }));
+        send_thread = nullptr;
+        //            while(!loop) usleep(1);
+    }
+    else
+    {
+        send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+    }
+    //    }
+    //    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
 
     connected = true;
     cv_for_connected.notify_all();

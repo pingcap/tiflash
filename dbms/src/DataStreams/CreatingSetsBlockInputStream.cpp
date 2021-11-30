@@ -122,22 +122,21 @@ void CreatingSetsBlockInputStream::createAll()
                         return;
                     start_thds++;
                     glb_thd_pool->schedule(
-                        ThreadFactory(true, "MergingAggregtd").newJob(
-                        [this, &item = elem.second] {this->createOne(item);}));
-                //    createOne(elem.second);
-//                    workers.emplace_back(ThreadFactory(true, "CreatingSets").newThread([this, &subquery = elem.second] { createOne(subquery); }));
+                        ThreadFactory(true, "MergingAggregtd").newJob([this, &item = elem.second] { this->createOne(item); }));
+                    //    createOne(elem.second);
+                    //                    workers.emplace_back(ThreadFactory(true, "CreatingSets").newThread([this, &subquery = elem.second] { createOne(subquery); }));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
         {
             std::unique_lock<std::mutex> lk(thd_mu);
-            end_cv.wait(lk, [&]{return start_thds.load() == end_thds.load();});
+            end_cv.wait(lk, [&] { return start_thds.load() == end_thds.load(); });
         }
-//        for (auto & work : workers)
-//        {
-//            work.join();
-//        }
+        //        for (auto & work : workers)
+        //        {
+        //            work.join();
+        //        }
 
         if (!exception_from_workers.empty())
             std::rethrow_exception(exception_from_workers.front());

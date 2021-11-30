@@ -79,24 +79,24 @@ void MPPTask::finishWrite()
     }
 }
 
-static void MpptaskRunImpl(std::shared_ptr<MPPTask> mpptask) {
+static void MpptaskRunImpl(std::shared_ptr<MPPTask> mpptask)
+{
     mpptask->runImpl();
 }
 
 void MPPTask::run()
 {
     memory_tracker = current_memory_tracker;
-    if (glb_thd_pool) {
-//        runfg = false;
+    if (glb_thd_pool)
+    {
+        //        runfg = false;
         glb_thd_pool->schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob(
-            [this] {MpptaskRunImpl(this->shared_from_this());}
-            )
-            );
-//        while(!runfg) {
-//            usleep(1);
-//        }
-    } else
+            ThreadFactory(true, "MergingAggregtd").newJob([this] { MpptaskRunImpl(this->shared_from_this()); }));
+        //        while(!runfg) {
+        //            usleep(1);
+        //        }
+    }
+    else
     {
         auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
         worker.detach();

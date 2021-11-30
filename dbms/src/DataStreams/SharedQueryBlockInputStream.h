@@ -49,7 +49,7 @@ public:
             return;
         read_prefixed = true;
         is_end = 0;
-        glb_thd_pool->schedule(ThreadFactory(true, "MergingAggregtd").newJob([this] {this->fetchBlocks();}));               
+        glb_thd_pool->schedule(ThreadFactory(true, "MergingAggregtd").newJob([this] { this->fetchBlocks(); }));
         /// Start reading thread.
         // thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
     }
@@ -62,9 +62,9 @@ public:
             return;
         read_suffixed = true;
         {
-        std::unique_lock<std::mutex> lk(end_mu);
-        // is_end++;
-        end_cv.wait(lk, [&] {return is_end.load();});
+            std::unique_lock<std::mutex> lk(end_mu);
+            // is_end++;
+            end_cv.wait(lk, [&] { return is_end.load(); });
         }
 
         // if (thread.joinable())
@@ -147,7 +147,7 @@ private:
     std::mutex mutex;
     std::mutex end_mu;
     std::atomic<int> is_end;
-     std::condition_variable end_cv;
+    std::condition_variable end_cv;
 
     std::string exception_msg;
 
