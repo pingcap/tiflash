@@ -27,7 +27,7 @@ TODO: need docs like [Get Started](https://pingcap.github.io/tidb-dev-guide/get-
 - Value the design of test cases. Find corner cases as more as possible.
 - Scope down pull request to specific issue.
 - Ensure each issue contains enough context.
-- Design documents must be reviewed before developing features.
+- [Design documents](/docs/design) is necessary for feature development.
 
 TODO: need more docs
 
