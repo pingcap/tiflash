@@ -6,6 +6,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
