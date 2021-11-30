@@ -293,7 +293,7 @@ void TCPHandler::runImpl()
 
         watch.stop();
 
-        LOG_INFO(log, fmt::format("Processed in {.3} sec.", watch.elapsedSeconds()));
+        LOG_INFO(log, fmt::format("Processed in {:.3} sec.", watch.elapsedSeconds()));
 
         if (network_error)
             break;
