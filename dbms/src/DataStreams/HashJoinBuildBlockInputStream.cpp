@@ -11,6 +11,8 @@ Block HashJoinBuildBlockInputStream::readImpl()
 
     if (!block)
         return block;
+
+    // TODO: remove this line after testing.
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     join->insertFromBlock(block, stream_index);
