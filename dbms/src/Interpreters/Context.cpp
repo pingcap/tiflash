@@ -38,12 +38,12 @@
 #include <Poco/Mutex.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/CompressionSettingsSelector.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/PartPathSelector.h>

@@ -5,9 +5,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/Region.h>
@@ -120,13 +118,6 @@ static void writeRegionDataToStorage(
         // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
         switch (storage->engineType())
         {
-        case ::TiDB::StorageEngine::TMT:
-        {
-            auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-            TxnMergeTreeBlockOutputStream output(*tmt_storage);
-            output.write(std::move(block));
-            break;
-        }
         case ::TiDB::StorageEngine::DT:
         {
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
