@@ -16,14 +16,26 @@
 
 ### Code Review Guidelines
 
+#### Basic Code Review Guidelines
+
 - [The Code Reviewer’s Guide](https://google.github.io/eng-practices/review/reviewer/)
 - [The Change Author’s Guide](https://google.github.io/eng-practices/review/developer/)
+- [Contribute to TiDB / Review a Pull Request](https://pingcap.github.io/tidb-dev-guide/contribute-to-tidb/review-a-pr.html)
+
+#### Rules for Reviewer
+
+- Code coverage about unit tests cannot be reduced in most cases.
+- Ensure `Labels` and `Release note` conform to the specification.
+- Value the design of test cases. Find corner cases as more as possible.
+- Scope down pull request to specific issue.
+- Ensure each issue contains full context.
+- Design documents must be reviewed before developing features.
+
+TODO: for more cases
 
 ### Development Guide
 
-#### TODO
-
-- need docs for each module
+TODO: for more cases
 
 #### General rules
 
@@ -33,7 +45,7 @@
 
 #### Design rules
 
-- Test First Development. Design `unit tests` and `integration tests` before functions.
+- Test First Development. Design unit tests and integration tests before functions.
 - Keep configurable data at high levels.
 - Prefer polymorphism to if/else or switch/case.
 - Separate multi-threading code.
