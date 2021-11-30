@@ -22,7 +22,7 @@ public:
 
 struct ExchangeRecvRequest
 {
-    Int64 send_task_id = -1;
+    Int64 send_task_id = -2;
     std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
 
     String debugString() const;

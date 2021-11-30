@@ -60,7 +60,7 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(
     return req;
 }
 
-std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager)
+static std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
     std::string err_msg;

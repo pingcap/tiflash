@@ -92,7 +92,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
     bool meet_error = false;
     String local_err_msg;
 
-    Int64 send_task_id = -1;
+    Int64 send_task_id = -2;
     Int64 recv_task_id = task_meta.task_id();
     try
     {
