@@ -188,11 +188,6 @@ static std::string getCanonicalPath(std::string path)
     return path;
 }
 
-static String getNormalizedPath(const String & s)
-{
-    return getCanonicalPath(Poco::Path{s}.toString());
-}
-
 void Server::uninitialize()
 {
     logger().information("shutting down");

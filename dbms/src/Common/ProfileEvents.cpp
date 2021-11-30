@@ -39,15 +39,6 @@
     M(CreatedWriteBufferOrdinary)               \
     M(CreatedWriteBufferAIO)                    \
                                                 \
-    M(ReplicatedPartFetches)                    \
-    M(ReplicatedPartFailedFetches)              \
-    M(ObsoleteReplicatedParts)                  \
-    M(ReplicatedPartMerges)                     \
-    M(ReplicatedPartFetchesOfMerged)            \
-    M(ReplicatedPartChecks)                     \
-    M(ReplicatedPartChecksFailed)               \
-    M(ReplicatedDataLoss)                       \
-                                                \
     M(InsertedRows)                             \
     M(InsertedBytes)                            \
     M(DelayedInserts)                           \
@@ -72,27 +63,6 @@
                                                 \
     M(SlowRead)                                 \
     M(ReadBackoff)                              \
-                                                \
-    M(ReplicaYieldLeadership)                   \
-    M(ReplicaPartialShutdown)                   \
-                                                \
-    M(SelectedParts)                            \
-    M(SelectedRanges)                           \
-    M(SelectedMarks)                            \
-                                                \
-    M(MergedRows)                               \
-    M(MergedUncompressedBytes)                  \
-    M(MergesTimeMilliseconds)                   \
-                                                \
-    M(MergeTreeDataWriterRows)                  \
-    M(MergeTreeDataWriterUncompressedBytes)     \
-    M(MergeTreeDataWriterCompressedBytes)       \
-    M(MergeTreeDataWriterBlocks)                \
-    M(MergeTreeDataWriterBlocksAlreadySorted)   \
-                                                \
-    M(ObsoleteEphemeralNode)                    \
-    M(CannotRemoveEphemeralNode)                \
-    M(LeaderElectionAcquiredLeadership)         \
                                                 \
     M(RegexpCreated)                            \
     M(ContextLock)                              \
