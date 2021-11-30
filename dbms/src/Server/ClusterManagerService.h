@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Common/Timer.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
@@ -18,7 +17,7 @@ public:
     ~ClusterManagerService();
 
 private:
-    static void run(const std::string & command, const std::vector<std::string> & args);
+    static void run(const std::string & bin_path, const std::vector<std::string> & args);
     Context & context;
     Timer timer;
     Poco::Logger * log;

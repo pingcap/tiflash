@@ -40,6 +40,5 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
 void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 void dbgFuncFindRegionByRange(Context & context, const ASTs & args, DBGInvoker::Printer);
-void dbgFuncCheckTableOptimize(DB::Context & context, const DB::ASTs & args, DBGInvoker::Printer);
 
 } // namespace DB
