@@ -184,7 +184,6 @@ void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
               */
             if (current.impl->isFirst() && (queue.empty() || current.totallyLessOrEquals(queue.top())))
             {
-
                 /// If there are already data in the current block, we first return it. We'll get here again the next time we call the merge function.
                 if (merged_rows != 0)
                 {

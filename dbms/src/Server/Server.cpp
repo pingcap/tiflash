@@ -921,24 +921,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // 2. path pool
     // 3. TMTContext
 
-
-    // TODO: remove this configuration left by ClickHouse
-    std::vector<String> all_fast_path;
-    if (config().has("fast_path"))
-    {
-        String fast_paths = config().getString("fast_path");
-        Poco::trimInPlace(fast_paths);
-        if (!fast_paths.empty())
-        {
-            Poco::StringTokenizer string_tokens(fast_paths, ",");
-            for (const auto & string_token : string_tokens)
-            {
-                all_fast_path.emplace_back(getNormalizedPath(std::string(string_token)));
-                LOG_DEBUG(log, "Fast data part candidate path: " << all_fast_path.back());
-            }
-        }
-    }
-
     // Deprecated settings.
     // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
     // "0" by default, means no quota, the actual disk capacity is used.
@@ -970,18 +952,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
-    // global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
     /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);
     Redact::setRedactLog(security_config.redact_info_log);
 
-    /// Create directories for 'path' and for default database, if not exist.
-    // for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
-    // {
-    //     Poco::File(candidate_path + "data/" + default_database).createDirectories();
-    // }
+    // Create directories for 'path' and for default database, if not exist.
+    for (const String & candidate_path : all_normal_path)
+    {
+        Poco::File(candidate_path + "data/" + default_database).createDirectories();
+    }
     Poco::File(path + "metadata/" + default_database).createDirectories();
 
     StatusFile status{path + "status"};
@@ -1223,13 +1204,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         users_config_reloader->start();
 
         {
-            std::stringstream message;
-            message << "Available RAM = " << formatReadableSizeWithBinarySuffix(getMemoryAmount()) << ";"
-                    << " physical cores = " << getNumberOfPhysicalCPUCores()
-                    << ";"
-                    // on ARM processors it can show only enabled at current moment cores
-                    << " threads = " << std::thread::hardware_concurrency() << ".";
-            LOG_INFO(log, message.str());
+            // on ARM processors it can show only enabled at current moment cores
+            LOG_INFO(
+                log,
+                fmt::format(
+                    "Available RAM = {}; physical cores = {}; threads = {}.",
+                    formatReadableSizeWithBinarySuffix(getMemoryAmount()),
+                    getNumberOfPhysicalCPUCores(),
+                    std::thread::hardware_concurrency()));
         }
 
         LOG_INFO(log, "Ready for connections.");
