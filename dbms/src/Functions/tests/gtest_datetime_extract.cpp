@@ -3,8 +3,8 @@
 #include <Common/Exception.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsDateTime.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
@@ -20,20 +20,9 @@ namespace DB
 {
 namespace tests
 {
-class TestDateTimeExtract : public ::testing::Test
+// TODO: rewrite using executeFunction()
+class TestDateTimeExtract : public DB::tests::FunctionTest
 {
-protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
 };
 
 // Disabled for now, since we haven't supported ExtractFromString yet
@@ -69,31 +58,28 @@ try
         col_units = ColumnConst::create(col_units->getPtr(), 1);
 
         auto col_datetime = ColumnString::create();
-        {
-            col_datetime->insert(Field(datetime_value.data(), datetime_value.size()));
-        }
+        col_datetime->insert(Field(datetime_value.data(), datetime_value.size()));
         ColumnWithTypeAndName unit_ctn = ColumnWithTypeAndName(std::move(col_units), std::make_shared<DataTypeString>(), "unit");
         ColumnWithTypeAndName datetime_ctn
             = ColumnWithTypeAndName(std::move(col_datetime), std::make_shared<DataTypeString>(), "datetime_value");
-        ColumnsWithTypeAndName ctns{unit_ctn, datetime_ctn};
         block.insert(unit_ctn);
-        // for result from extract
         block.insert(datetime_ctn);
+        // for result from extract
         block.insert({});
 
-        ColumnNumbers cns{0, 1};
-
         // test extract
-        auto bp = factory.tryGet("extractMyDateTime", context);
-        ASSERT_TRUE(bp != nullptr);
+        auto func_builder_ptr = factory.tryGet("extractMyDateTime", context);
+        ASSERT_TRUE(func_builder_ptr != nullptr);
 
-        bp->build(ctns)->execute(block, cns, 2);
-        const IColumn * res = block.getByPosition(2).column.get();
-        const ColumnInt64 * col_res = checkAndGetColumn<ColumnInt64>(res);
+        ColumnNumbers arg_cols_idx{0, 1};
+        size_t res_col_idx = 2;
+        func_builder_ptr->build({unit_ctn, datetime_ctn})->execute(block, arg_cols_idx, res_col_idx);
+        const IColumn * ctn_res = block.getByPosition(res_col_idx).column.get();
+        const ColumnInt64 * col_res = checkAndGetColumn<ColumnInt64>(ctn_res);
 
-        Field resField;
-        col_res->get(0, resField);
-        Int64 s = resField.get<Int64>();
+        Field res_field;
+        col_res->get(0, res_field);
+        Int64 s = res_field.get<Int64>();
         EXPECT_EQ(results[i], s);
     }
 }
@@ -131,31 +117,29 @@ try
         col_units = ColumnConst::create(col_units->getPtr(), 1);
 
         auto col_datetime = ColumnUInt64::create();
-        {
-            col_datetime->insert(Field(datetime_value.toPackedUInt()));
-        }
+        col_datetime->insert(Field(datetime_value.toPackedUInt()));
         ColumnWithTypeAndName unit_ctn = ColumnWithTypeAndName(std::move(col_units), std::make_shared<DataTypeString>(), "unit");
         ColumnWithTypeAndName datetime_ctn
             = ColumnWithTypeAndName(std::move(col_datetime), std::make_shared<DataTypeMyDateTime>(), "datetime_value");
-        ColumnsWithTypeAndName ctns{unit_ctn, datetime_ctn};
+
         block.insert(unit_ctn);
-        // for result from extract
         block.insert(datetime_ctn);
+        // for result from extract
         block.insert({});
 
-        ColumnNumbers cns{0, 1};
-
         // test extract
-        auto bp = factory.tryGet("extractMyDateTime", context);
-        ASSERT_TRUE(bp != nullptr);
+        auto func_builder_ptr = factory.tryGet("extractMyDateTime", context);
+        ASSERT_TRUE(func_builder_ptr != nullptr);
 
-        bp->build(ctns)->execute(block, cns, 2);
-        const IColumn * res = block.getByPosition(2).column.get();
-        const ColumnInt64 * col_res = checkAndGetColumn<ColumnInt64>(res);
+        ColumnNumbers arg_cols_idx{0, 1};
+        size_t res_col_idx = 2;
+        func_builder_ptr->build({unit_ctn, datetime_ctn})->execute(block, arg_cols_idx, res_col_idx);
+        const IColumn * ctn_res = block.getByPosition(res_col_idx).column.get();
+        const ColumnInt64 * col_res = checkAndGetColumn<ColumnInt64>(ctn_res);
 
-        Field resField;
-        col_res->get(0, resField);
-        Int64 s = resField.get<Int64>();
+        Field res_field;
+        col_res->get(0, res_field);
+        Int64 s = res_field.get<Int64>();
         EXPECT_EQ(results[i], s);
     }
 }

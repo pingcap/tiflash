@@ -1,15 +1,13 @@
 
 #pragma once
 
-#include <DataTypes/DataTypeAggregateFunction.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
 
 
 namespace DB
 {
-
-
 /** Not an aggregate function, but an adapter of aggregate functions,
   * Aggregate functions with the `State` suffix differ from the corresponding ones in that their states are not finalized.
   * Return type - DataTypeAggregateFunction.
@@ -24,7 +22,10 @@ private:
 
 public:
     AggregateFunctionState(AggregateFunctionPtr nested, const DataTypes & arguments, const Array & params)
-        : nested_func(nested), arguments(arguments), params(params) {}
+        : nested_func(nested)
+        , arguments(arguments)
+        , params(params)
+    {}
 
     String getName() const override
     {
@@ -96,4 +97,4 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB

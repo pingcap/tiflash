@@ -1,11 +1,10 @@
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -24,23 +23,10 @@ namespace DB
 {
 namespace tests
 {
-
-class TestInetAtonNtoa: public ::testing::Test
+class TestInetAtonNtoa : public DB::tests::FunctionTest
 {
 protected:
     using DataVectorString = std::vector<std::optional<String>>;
-
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
 
     static String toBinary(UInt32 v)
     {
@@ -107,20 +93,17 @@ try
     // normal valid cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364}),
-        executeFunction(func_name, createColumn<Nullable<String>>(
-            {"1.2.3.4", "0.1.0.1", "0.255.0.255", "0000.1.2.3", "00000.0000.0000.000", "1.0.1.0", "111.0.21.012"})));
+        executeFunction(func_name, createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "0.255.0.255", "0000.1.2.3", "00000.0000.0000.000", "1.0.1.0", "111.0.21.012"})));
 
     // valid but weird cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt32>>({255, 255, 255, 255, 65535, 16711935, 16711935, 1, 16777218, 16908291}),
-        executeFunction(func_name, createColumn<Nullable<String>>(
-            {"255", ".255", "..255", "...255", "..255.255", ".255.255", ".255..255", "1", "1.2", "1.2.3"})));
+        executeFunction(func_name, createColumn<Nullable<String>>({"255", ".255", "..255", "...255", "..255.255", ".255.255", ".255..255", "1", "1.2", "1.2.3"})));
 
     // invalid cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt32>>({{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}),
-        executeFunction(func_name, createColumn<Nullable<String>>(
-            {{}, "", ".", "....255", "...255.255", ".255...255", ".255.255.", "1.0.a", "1.a", "a.1"})));
+        executeFunction(func_name, createColumn<Nullable<String>>({{}, "", ".", "....255", "...255.255", ".255...255", ".255.255.", "1.0.a", "1.a", "a.1"})));
 }
 CATCH
 
@@ -151,8 +134,7 @@ try
     // normal cases
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"1.2.3.4", "0.1.0.1", "0.255.0.255", "0.1.2.3", "0.0.0.0", "1.0.1.0", "111.0.21.12"}),
-        executeFunction(func_name, createColumn<Nullable<UInt32>>(
-            {16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
+        executeFunction(func_name, createColumn<Nullable<UInt32>>({16909060, 65537, 16711935, 66051, 0, 16777472, 1862276364})));
 }
 CATCH
 
@@ -291,7 +273,7 @@ try
 
     // const non-null ipv6
     ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<String>>(1, "fdfe::5a55:caff:fefa:9089"),
+        createConstColumn<Nullable<String>>(1, "fdfe::5a55:caff:fefa:9089"),
         executeFunction(
             func_name,
             createConstColumn<Nullable<String>>(1, toBinary({{0xFDFE'0000, 0x0000'0000, 0x5A55'CAFF, 0xFEFA'9089}}))));
@@ -335,10 +317,10 @@ try
         executeFunction(
             func_name,
             createColumn<Nullable<String>>(toBinariesV6({
-            {0x0001'0002, 0x0003'0004},
-            {0x0001'0002, 0x0003'0004, 0x0005'0006},
-            {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000, 0x0000'0000},
-        }))));
+                {0x0001'0002, 0x0003'0004},
+                {0x0001'0002, 0x0003'0004, 0x0005'0006},
+                {0x0001'0002, 0x0003'0004, 0x0005'0000, 0x0000'0000, 0x0000'0000},
+            }))));
 }
 CATCH
 
@@ -385,4 +367,3 @@ CATCH
 
 } // namespace tests
 } // namespace DB
-

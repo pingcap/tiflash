@@ -8,6 +8,9 @@
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
 
+// to make GCC 11 happy
+#include <cassert>
+
 namespace DB
 {
 /// Central place to define metrics across all subsystems.

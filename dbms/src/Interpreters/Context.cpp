@@ -1,5 +1,6 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
+#include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -22,7 +23,6 @@
 #include <Interpreters/ExternalDictionaries.h>
 #include <Interpreters/ExternalModels.h>
 #include <Interpreters/ISecurityManager.h>
-#include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/PartLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
@@ -54,6 +54,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <boost/functional/hash/hash.hpp>
 #include <map>
@@ -92,6 +93,10 @@ extern const int SESSION_NOT_FOUND;
 extern const int SESSION_IS_LOCKED;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char force_context_path[];
+} // namespace FailPoints
 
 
 /** Set of known objects (environment), that could be used in query.
@@ -109,9 +114,6 @@ struct ContextShared
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
     mutable std::mutex external_models_mutex;
-
-    String interserver_io_host; /// The host name by which this server is available for other servers.
-    UInt16 interserver_io_port = 0; /// and port.
 
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
@@ -139,7 +141,6 @@ struct ContextShared
     MergeList merge_list; /// The list of executable merge (for (Replicated)?MergeTree)
     ViewDependencies view_dependencies; /// Current dependencies
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
-    InterserverIOHandler interserver_io_handler; /// Handler for interserver communication.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
@@ -303,11 +304,6 @@ Context::~Context()
     }
 }
 
-
-InterserverIOHandler & Context::getInterserverIOHandler()
-{
-    return shared->interserver_io_handler;
-}
 
 std::unique_lock<std::recursive_mutex> Context::getLock() const
 {
@@ -503,6 +499,8 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
 String Context::getPath() const
 {
     auto lock = getLock();
+    // Now we only make this failpoint for gtest_database.
+    fiu_return_on(FailPoints::force_context_path, fmt::format("{}{}/", shared->path, "DatabaseTiFlashTest"));
     return shared->path;
 }
 
@@ -1618,22 +1616,6 @@ IORateLimiter & Context::getIORateLimiter() const
 ReadLimiterPtr Context::getReadLimiter() const
 {
     return getIORateLimiter().getReadLimiter();
-}
-
-void Context::setInterserverIOAddress(const String & host, UInt16 port)
-{
-    shared->interserver_io_host = host;
-    shared->interserver_io_port = port;
-}
-
-
-std::pair<String, UInt16> Context::getInterserverIOAddress() const
-{
-    if (shared->interserver_io_host.empty() || shared->interserver_io_port == 0)
-        throw Exception("Parameter 'interserver_http_port' required for replication is not specified in configuration file.",
-                        ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-    return {shared->interserver_io_host, shared->interserver_io_port};
 }
 
 UInt16 Context::getTCPPort() const

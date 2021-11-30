@@ -1,9 +1,11 @@
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 
 #include <boost/program_options.hpp>
 #include <iostream>
+#include <random>
 namespace bpo = boost::program_options;
 
 namespace DTTool::Inspect
@@ -22,91 +24,115 @@ static constexpr char INSPECT_HELP[] =
 
 int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 {
+    // from this part, the base daemon is running, so we use logger instead
+    auto * logger = &Poco::Logger::get("DTToolInspect");
+
+    // black_hole is used to consume data manually.
+    // we use SCOPE_EXIT to ensure the release of memory area.
     auto black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
     SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
     auto consume = [&](DB::ReadBuffer & t) {
         while (t.readBig(black_hole, DBMS_DEFAULT_BUFFER_SIZE) != 0) {}
     };
+
+    // Open the DMFile at `workdir/dmf_<file-id>`
     auto fp = context.getFileProvider();
     auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-    std::cout << "bytes on disk: " << dmfile->getBytesOnDisk() << std::endl;
-    std::cout << "single file: " << dmfile->isSingleFileMode() << std::endl;
+
+    LOG_INFO(logger, "bytes on disk: " << dmfile->getBytesOnDisk());
+    LOG_INFO(logger, "single file: " << dmfile->isSingleFileMode());
+
+    // if the DMFile has a config file, there may be additional debugging information
+    // we also log the content of dmfile checksum config
     if (auto conf = dmfile->getConfiguration())
     {
-        std::cout << "with new checksum: true" << std::endl;
+        LOG_INFO(logger, "with new checksum: true" << std::endl);
         switch (conf->getChecksumAlgorithm())
         {
         case DB::ChecksumAlgo::None:
-            std::cout << "checksum algorithm: none" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: none");
             break;
         case DB::ChecksumAlgo::CRC32:
-            std::cout << "checksum algorithm: crc32" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: crc32");
             break;
         case DB::ChecksumAlgo::CRC64:
-            std::cout << "checksum algorithm: crc64" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: crc64");
             break;
         case DB::ChecksumAlgo::City128:
-            std::cout << "checksum algorithm: city128" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: city128");
             break;
         case DB::ChecksumAlgo::XXH3:
-            std::cout << "checksum algorithm: xxh3" << std::endl;
+            LOG_INFO(logger, "checksum algorithm: xxh3");
             break;
         }
         for (const auto & [name, msg] : conf->getDebugInfo())
         {
-            std::cout << name << ": " << msg << std::endl;
+            LOG_INFO(logger, name << ": " << msg);
         }
     }
-    if (args.check && dmfile->isSingleFileMode())
-    {
-        std::cerr << "single file integrity checking is not yet supported" << std::endl;
-        return -EINVAL;
-    }
+
     if (args.check)
     {
-        auto prefix = args.workdir + "/dmf_" + DB::toString(args.file_id);
-        auto file = Poco::File{prefix};
-        std::vector<std::string> sub;
-        file.list(sub);
-        for (auto & i : sub)
+        // for directory mode file, we can consume each file to check its integrity.
+        if (!dmfile->isSingleFileMode())
         {
-            if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
+            auto prefix = args.workdir + "/dmf_" + DB::toString(args.file_id);
+            auto file = Poco::File{prefix};
+            std::vector<std::string> sub;
+            file.list(sub);
+            for (auto & i : sub)
             {
-                auto full_path = prefix;
-                full_path += "/";
-                full_path += i;
-                std::cout << "checking " << i << ": ";
-                std::cout.flush();
-                if (dmfile->getConfiguration())
+                if (endsWith(i, ".mrk") || endsWith(i, ".dat") || endsWith(i, ".idx") || i == "pack")
                 {
-                    consume(*DB::createReadBufferFromFileBaseByFileProvider(
-                        fp,
-                        full_path,
-                        DB::EncryptionPath(full_path, i),
-                        dmfile->getConfiguration()->getChecksumFrameLength(),
-                        nullptr,
-                        dmfile->getConfiguration()->getChecksumAlgorithm(),
-                        dmfile->getConfiguration()->getChecksumFrameLength()));
+                    auto full_path = prefix;
+                    full_path += "/";
+                    full_path += i;
+                    LOG_INFO(logger, "checking " << i << ": ");
+                    if (dmfile->getConfiguration())
+                    {
+                        consume(*DB::createReadBufferFromFileBaseByFileProvider(
+                            fp,
+                            full_path,
+                            DB::EncryptionPath(full_path, i),
+                            dmfile->getConfiguration()->getChecksumFrameLength(),
+                            nullptr,
+                            dmfile->getConfiguration()->getChecksumAlgorithm(),
+                            dmfile->getConfiguration()->getChecksumFrameLength()));
+                    }
+                    else
+                    {
+                        consume(*DB::createReadBufferFromFileBaseByFileProvider(
+                            fp,
+                            full_path,
+                            DB::EncryptionPath(full_path, i),
+                            DBMS_DEFAULT_BUFFER_SIZE,
+                            0,
+                            nullptr));
+                    }
+                    LOG_INFO(logger, "[success]");
                 }
-                else
-                {
-                    consume(*DB::createReadBufferFromFileBaseByFileProvider(
-                        fp,
-                        full_path,
-                        DB::EncryptionPath(full_path, i),
-                        DBMS_DEFAULT_BUFFER_SIZE,
-                        0,
-                        nullptr));
-                }
-                std::cout << "[success]" << std::endl;
             }
+        }
+        // for both directory file and single mode file, we can read out all blocks from the file.
+        // this procedure will also trigger the checksum checking in the compression buffer.
+        LOG_INFO(logger, "examine all data blocks: ");
+        {
+            auto stream = DB::DM::createSimpleBlockInputStream(context, dmfile);
+            size_t counter = 0;
+            stream->readPrefix();
+            while (stream->read())
+            {
+                counter++;
+            }
+            stream->readSuffix();
+            LOG_INFO(logger, "[success] ( " << counter << " blocks )");
         }
     }
     return 0;
 }
 
 
-int inspectEntry(const std::vector<std::string> & opts)
+int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_function)
 {
     bpo::options_description options{"Delta Merge Inspect"};
     bpo::variables_map vm;
@@ -140,7 +166,7 @@ int inspectEntry(const std::vector<std::string> & opts)
         auto file_id = vm["file-id"].as<size_t>();
         auto config_file = vm["config-file"].as<std::string>();
         auto args = InspectArgs{check, file_id, workdir};
-        CLIService service(inspectServiceMain, args, config_file);
+        CLIService service(inspectServiceMain, args, config_file, ffi_function);
         return service.run({""});
     }
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)

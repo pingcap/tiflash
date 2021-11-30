@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -18,7 +17,11 @@ void encodeLittleEndian(const T & value, WriteBuffer & ss)
     ss.write(reinterpret_cast<const char *>(&v), sizeof(v));
 }
 
-TiDBColumn::TiDBColumn(Int8 element_len_) : length(0), null_cnt(0), current_data_size(0), fixed_size(element_len_)
+TiDBColumn::TiDBColumn(Int8 element_len_)
+    : length(0)
+    , null_cnt(0)
+    , current_data_size(0)
+    , fixed_size(element_len_)
 {
     data = std::make_unique<WriteBufferFromOwnString>();
     if (fixed_size != VAR_SIZE)

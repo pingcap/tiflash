@@ -134,7 +134,7 @@ void loadMiConfig(Logger * log)
 #endif
 namespace
 {
-[[maybe_unused]] void loadBooleanConfig(Poco::Logger * log, bool & target, const char * name)
+[[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
 {
     auto * config = getenv(name);
     if (config)
@@ -216,11 +216,12 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
-    const char * engine_store_version = "engine-version";
-    const char * engine_store_git_hash = "engine-git-hash";
-    const char * engine_store_address = "engine-addr";
-    const char * engine_store_advertise_address = "advertise-engine-addr";
-    const char * pd_endpoints = "pd-endpoints";
+    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
+    const String engine_store_version = "engine-version";
+    const String engine_store_git_hash = "engine-git-hash";
+    const String engine_store_address = "engine-addr";
+    const String engine_store_advertise_address = "advertise-engine-addr";
+    const String pd_endpoints = "pd-endpoints";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -629,23 +630,6 @@ public:
             /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
             try
             {
-                /// HTTP
-                if (config.has("http_port"))
-                {
-                    if (security_config.has_tls_config)
-                    {
-                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
-                    }
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("http_port"));
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(
-                        new HTTPServer(new HTTPHandlerFactory(server, "HTTPHandler-factory"), server_pool, socket, http_params));
-
-                    LOG_INFO(log, "Listening http://" + address.toString());
-                }
-
                 /// HTTPS
                 if (config.has("https_port"))
                 {
@@ -683,6 +667,23 @@ public:
                                     ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
+                else
+                {
+                    /// HTTP
+                    if (security_config.has_tls_config)
+                    {
+                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                    }
+                    Poco::Net::ServerSocket socket;
+                    auto address = socket_bind_listen(socket, listen_host, config.getInt("http_port", DEFAULT_HTTP_PORT));
+                    socket.setReceiveTimeout(settings.http_receive_timeout);
+                    socket.setSendTimeout(settings.http_send_timeout);
+                    servers.emplace_back(
+                        new HTTPServer(new HTTPHandlerFactory(server, "HTTPHandler-factory"), server_pool, socket, http_params));
+
+                    LOG_INFO(log, "Listening http://" + address.toString());
+                }
+
 
                 /// TCP
                 if (config.has("tcp_port"))
@@ -736,26 +737,6 @@ public:
                 /// At least one of TCP and HTTP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-                /// Interserver IO HTTP
-                if (config.has("interserver_http_port") && !security_config.has_tls_config)
-                {
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("interserver_http_port"));
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(new HTTPServer(
-                        new InterserverIOHTTPHandlerFactory(server, "InterserverIOHTTPHandler-factory"),
-                        server_pool,
-                        socket,
-                        http_params));
-
-                    LOG_INFO(log, "Listening interserver http: " + address.toString());
-                }
-                else if (security_config.has_tls_config)
-                {
-                    LOG_INFO(log, "internal http port is closed because tls config is set");
-                }
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -843,19 +824,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     UpdateMallocConfig(log);
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
 #endif
 
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
 #endif
 
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 
     registerFunctions();
@@ -1082,27 +1063,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         Poco::File(user_files_path).createDirectories();
     }
 
-    if (config().has("interserver_http_port"))
-    {
-        String this_host = config().getString("interserver_http_host", "");
-
-        if (this_host.empty())
-        {
-            this_host = getFQDNOrHostName();
-            LOG_DEBUG(log,
-                      "Configuration parameter 'interserver_http_host' doesn't exist or exists and empty. Will use '" + this_host
-                          + "' as replica host.");
-        }
-
-        String port_str = config().getString("interserver_http_port");
-        int port = parse<int>(port_str);
-
-        if (port < 0 || port > 0xFFFF)
-            throw Exception("Out of range 'interserver_http_port': " + toString(port), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-        global_context->setInterserverIOAddress(this_host, port);
-    }
-
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
@@ -1161,7 +1121,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Settings & settings = global_context->getSettingsRef();
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size");
+    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 

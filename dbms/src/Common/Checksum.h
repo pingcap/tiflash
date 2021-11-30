@@ -36,8 +36,8 @@ public:
     using HashType = std::byte;
     static constexpr size_t hash_size = sizeof(HashType);
     static constexpr auto algorithm = ::DB::ChecksumAlgo::None;
-    void update(const void *, size_t length) { ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length); }
-    [[nodiscard]] HashType checksum() const { return std::byte{0}; }
+    static void update(const void *, size_t length) { ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length); }
+    [[nodiscard]] static HashType checksum() { return std::byte{0}; }
 };
 
 class CRC32
@@ -114,7 +114,7 @@ struct ChecksumFrame
 {
     size_t bytes;
     typename Algorithm::HashType checksum;
-    uint8_t _pad[alignof(size_t) > alignof(typename Algorithm::HashType) ? alignof(size_t) - sizeof(typename Algorithm::HashType) : 0];
+    uint8_t pad[alignof(size_t) > alignof(typename Algorithm::HashType) ? alignof(size_t) - sizeof(typename Algorithm::HashType) : 0];
     uint8_t data[0];
 };
 
@@ -189,8 +189,8 @@ public:
     bool compareFrame(const FrameUnion & frame) override
     {
         auto checksum = backend.checksum();
-        auto realFrame = reinterpret_cast<const ChecksumFrame<Backend> &>(frame);
-        return checksum == realFrame.checksum;
+        auto real_frame = reinterpret_cast<const ChecksumFrame<Backend> &>(frame);
+        return checksum == real_frame.checksum;
     }
 
     [[nodiscard]] std::string raw() const override

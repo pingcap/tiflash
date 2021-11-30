@@ -5,7 +5,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -22,38 +21,26 @@
 
 namespace DB::tests
 {
-class StringUpper : public ::testing ::Test
+class StringUpper : public DB::tests::FunctionTest
 {
 protected:
-    static void SetUpTestCase()
-    {
-        try
-        {
-            registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registed, ignore exception here.
-        }
-    }
-
-    ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
+    static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
     {
         return createColumn<Nullable<String>>(v);
     }
 
-    ColumnWithTypeAndName toVec(const std::vector<String> & v)
+    static ColumnWithTypeAndName toVec(const std::vector<String> & v)
     {
         return createColumn<String>(v);
     }
 
-    ColumnWithTypeAndName toConst(const String & s)
+    static ColumnWithTypeAndName toConst(const String & s)
     {
         return createConstColumn<String>(1, s);
     }
 };
 
-TEST_F(StringUpper, string_upper_all_unit_Test)
+TEST_F(StringUpper, upperAll)
 {
     ASSERT_COLUMN_EQ(
         toNullableVec({"ONE WEEK’S TIME TEST", "ABC测试DEF", "ABCテストABC", "ЀЁЂЃЄЅІЇЈЉЊЋЌЍЎЏ", "+Ѐ-Ё*Ђ/Ѓ!Є@Ѕ#І$@Ї%Ј……Љ&Њ（Ћ）Ќ￥Ѝ#Ў@Џ！^", "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩΣ", "▲Α▼ΒΓ➨ΔΕ☎ΖΗ✂ΘΙ€ΚΛ♫ΜΝ✓ΞΟ✚ΠΡ℉ΣΤ♥ΥΦ♖ΧΨ♘Ω★Σ✕", "ԹՓՁՋՐՉՃԺԾՔՈԵՌՏԸՒԻՕՊԱՍԴՖԳՀՅԿԼԽԶՂՑՎԲՆՄՇ"}),

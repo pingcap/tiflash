@@ -18,7 +18,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , source_num(pb_exchange_receiver.encoded_task_meta_size())
     , task_meta(meta)
     , max_streams(max_streams_)
-    , max_buffer_size(max_streams_ * 2)
+    , max_buffer_size(std::max(source_num, max_streams_) * 2)
     , res_buffer(max_buffer_size)
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
     , state(ExchangeReceiverState::NORMAL)
@@ -136,7 +136,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = source_index;
                 bool success = reader->read(recv_msg->packet.get());
-                if (!success) {
+                if (!success)
+                {
+                    /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.
                     returnEmptyMsg(recv_msg);
                     break;
                 }
@@ -231,7 +233,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg)
 {
-    recv_msg->packet->Clear();
+    if (recv_msg == nullptr)
+        return;
+    if (recv_msg->packet != nullptr)
+        recv_msg->packet->Clear();
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
     res_buffer.pushEmpty(std::move(recv_msg));

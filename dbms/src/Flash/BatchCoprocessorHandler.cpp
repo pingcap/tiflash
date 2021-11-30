@@ -42,11 +42,7 @@ grpc::Status BatchCoprocessorHandler::execute()
             SCOPE_EXIT(
                 { GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
 
-            const auto dag_request = ({
-                tipb::DAGRequest dag_req;
-                dag_req.ParseFromString(cop_request->data());
-                std::move(dag_req);
-            });
+            auto dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
             RegionInfoMap regions;
             RegionInfoList retry_regions;
             for (auto & r : cop_request->regions())

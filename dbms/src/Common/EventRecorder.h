@@ -10,7 +10,6 @@ public:
     EventRecorder(ProfileEvents::Event event_, ProfileEvents::Event event_elapsed_)
         : event(event_)
         , event_elapsed(event_elapsed_)
-        , watch()
     {
         watch.start();
     }

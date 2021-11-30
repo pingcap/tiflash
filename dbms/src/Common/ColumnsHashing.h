@@ -41,7 +41,7 @@ struct HashMethodOneNumber
         vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
     }
 
-    HashMethodOneNumber(const IColumn * column)
+    explicit HashMethodOneNumber(const IColumn * column)
     {
         vec = &static_cast<const ColumnVector<FieldType> *>(column)->getData()[0];
     }

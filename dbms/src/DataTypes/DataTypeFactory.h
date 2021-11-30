@@ -19,7 +19,7 @@ using ASTPtr = std::shared_ptr<IAST>;
 
 /** Creates a data type by name of data type family and parameters.
   */
-class DataTypeFactory final : public ext::singleton<DataTypeFactory>
+class DataTypeFactory final : public ext::Singleton<DataTypeFactory>
 {
 private:
     using Creator = std::function<DataTypePtr(const ASTPtr & parameters)>;
@@ -51,7 +51,7 @@ private:
     DataTypesDictionary case_insensitive_data_types;
 
     DataTypeFactory();
-    friend class ext::singleton<DataTypeFactory>;
+    friend class ext::Singleton<DataTypeFactory>;
 };
 
 } // namespace DB

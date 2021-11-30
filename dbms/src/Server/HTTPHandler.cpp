@@ -171,7 +171,7 @@ HTTPHandler::HTTPHandler(IServer & server_)
     : server(server_)
     , log(&Poco::Logger::get("HTTPHandler"))
 {
-    server_display_name = server.config().getString("display_name", getFQDNOrHostName());
+    server_display_name = server.config().getString("display_name", "TiFlash");
 }
 
 

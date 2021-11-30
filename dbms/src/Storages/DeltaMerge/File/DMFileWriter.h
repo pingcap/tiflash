@@ -5,9 +5,7 @@
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
-#include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
-#include <IO/WriteBufferProxy.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -54,11 +52,9 @@ public:
                     .with_checksum_algorithm(detail::getAlgorithmOrNone(*dmfile))
                     .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
                     .build())
-            , plain_layer(*plain_file)
             , compressed_buf(dmfile->configuration
-                                 ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(plain_layer, compression_settings))
-                                 : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(plain_layer, compression_settings)))
-            , original_layer(*compressed_buf)
+                                 ? std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<false>(*plain_file, compression_settings))
+                                 : std::unique_ptr<WriteBuffer>(new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
             , mark_file(WriteBufferByFileProviderBuilder(
                             dmfile->configuration.has_value(),
@@ -76,9 +72,7 @@ public:
         void flush()
         {
             // Note that this method won't flush minmaxes.
-            original_layer.next();
             compressed_buf->next();
-            plain_layer.next();
             plain_file->next();
 
             plain_file->sync();
@@ -90,11 +84,9 @@ public:
         // bytes of `minmaxes` won't be counted in this method.
         size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file->getPositionInFile(); }
 
-        /// original_layer -> compressed_buf -> plain_layer -> plain_file
+        // compressed_buf -> plain_file
         WriteBufferFromFileBasePtr plain_file;
-        WriteBufferProxy plain_layer;
         WriteBufferPtr compressed_buf;
-        WriteBufferProxy original_layer;
 
         MinMaxIndexPtr minmaxes;
         WriteBufferFromFileBasePtr mark_file;

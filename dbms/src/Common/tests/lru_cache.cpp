@@ -1,42 +1,41 @@
-#include <Common/LRUCache.h>
 #include <Common/Exception.h>
+#include <Common/LRUCache.h>
 
+#include <chrono>
+#include <functional>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <chrono>
-#include <functional>
 
 
 namespace
 {
-
 void run();
 void runTest(unsigned int num, const std::function<bool()> & func);
 bool test1();
 bool test2();
 bool test_concurrent();
 
-#define ASSERT_CHECK(cond, res) \
-do \
-{ \
-    if (!(cond)) \
-    { \
-        std::cout << __FILE__ << ":" << __LINE__ << ":" \
-            << "Assertion " << #cond << " failed.\n"; \
-        if ((res)) { (res) = false; } \
-    } \
-} \
-while (0)
+#define ASSERT_CHECK(cond, res)                                 \
+    do                                                          \
+    {                                                           \
+        if (!(cond))                                            \
+        {                                                       \
+            std::cout << __FILE__ << ":" << __LINE__ << ":"     \
+                      << "Assertion " << #cond << " failed.\n"; \
+            if ((res))                                          \
+            {                                                   \
+                (res) = false;                                  \
+            }                                                   \
+        }                                                       \
+    } while (0)
 
 void run()
 {
-    const std::vector<std::function<bool()>> tests =
-    {
+    const std::vector<std::function<bool()>> tests = {
         test1,
         test2,
-        test_concurrent
-    };
+        test_concurrent};
 
     unsigned int num = 0;
     for (const auto & test : tests)
@@ -89,8 +88,7 @@ bool test1()
     using Cache = DB::LRUCache<std::string, std::string, std::hash<std::string>, Weight>;
     using MappedPtr = Cache::MappedPtr;
 
-    auto ptr = [](const std::string & s)
-    {
+    auto ptr = [](const std::string & s) {
         return MappedPtr(new std::string(s));
     };
 
@@ -132,8 +130,7 @@ bool test2()
     using Cache = DB::LRUCache<std::string, std::string, std::hash<std::string>, Weight>;
     using MappedPtr = Cache::MappedPtr;
 
-    auto ptr = [](const std::string & s)
-    {
+    auto ptr = [](const std::string & s) {
         return MappedPtr(new std::string(s));
     };
 
@@ -190,8 +187,7 @@ bool test_concurrent()
 
     bool res = true;
 
-    auto load_func = [](const std::string& result, std::chrono::seconds sleep_for, bool throw_exc)
-    {
+    auto load_func = [](const std::string & result, std::chrono::seconds sleep_for, bool throw_exc) {
         std::this_thread::sleep_for(sleep_for);
         if (throw_exc)
             throw std::runtime_error("Exception!");
@@ -201,14 +197,12 @@ bool test_concurrent()
     /// Case 1: Both threads are able to load the value.
 
     std::pair<Cache::MappedPtr, bool> result1;
-    std::thread thread1([&]()
-    {
+    std::thread thread1([&]() {
         result1 = cache.getOrSet("key", [&]() { return load_func("val1", 1s, false); });
     });
 
     std::pair<Cache::MappedPtr, bool> result2;
-    std::thread thread2([&]()
-    {
+    std::thread thread2([&]() {
         result2 = cache.getOrSet("key", [&]() { return load_func("val2", 1s, false); });
     });
 
@@ -223,8 +217,7 @@ bool test_concurrent()
     cache.reset();
 
     bool thrown = false;
-    thread1 = std::thread([&]()
-    {
+    thread1 = std::thread([&]() {
         try
         {
             cache.getOrSet("key", [&]() { return load_func("val1", 2s, true); });
@@ -235,8 +228,7 @@ bool test_concurrent()
         }
     });
 
-    thread2 = std::thread([&]()
-    {
+    thread2 = std::thread([&]() {
         std::this_thread::sleep_for(1s);
         result2 = cache.getOrSet("key", [&]() { return load_func("val2", 1s, false); });
     });
@@ -254,8 +246,7 @@ bool test_concurrent()
     cache.reset();
 
     bool thrown1 = false;
-    thread1 = std::thread([&]()
-    {
+    thread1 = std::thread([&]() {
         try
         {
             cache.getOrSet("key", [&]() { return load_func("val1", 1s, true); });
@@ -267,8 +258,7 @@ bool test_concurrent()
     });
 
     bool thrown2 = false;
-    thread2 = std::thread([&]()
-    {
+    thread2 = std::thread([&]() {
         try
         {
             cache.getOrSet("key", [&]() { return load_func("val1", 1s, true); });
@@ -290,8 +280,7 @@ bool test_concurrent()
 
     cache.reset();
 
-    thread1 = std::thread([&]()
-    {
+    thread1 = std::thread([&]() {
         result1 = cache.getOrSet("key", [&]() { return load_func("val1", 2s, false); });
     });
 
@@ -307,11 +296,10 @@ bool test_concurrent()
     return res;
 }
 
-}
+} // namespace
 
 int main()
 {
     run();
     return 0;
 }
-

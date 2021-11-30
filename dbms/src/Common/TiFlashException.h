@@ -175,15 +175,15 @@ ERROR_CLASS_LIST
 
 
 /// TiFlashErrorRegistry will registers and checks all errors when TiFlash startup
-class TiFlashErrorRegistry : public ext::singleton<TiFlashErrorRegistry>
+class TiFlashErrorRegistry : public ext::Singleton<TiFlashErrorRegistry>
 {
 public:
-    friend ext::singleton<TiFlashErrorRegistry>;
+    friend ext::Singleton<TiFlashErrorRegistry>;
 
     static TiFlashError simpleGet(const std::string & error_class, const std::string & error_code)
     {
-        auto & _instance = instance();
-        auto error = _instance.get(error_class, error_code);
+        auto & m_instance = instance();
+        auto error = m_instance.get(error_class, error_code);
         if (error.has_value())
         {
             return error.value();
@@ -221,7 +221,7 @@ public:
     {
         std::vector<TiFlashError> res;
         res.reserve(all_errors.size());
-        for (auto error : all_errors)
+        for (const auto & error : all_errors)
         {
             res.push_back(error.second);
         }

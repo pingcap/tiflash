@@ -26,12 +26,12 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const BlockInputStreamPtr & input,
     std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
     const SizeLimits & network_transfer_limits,
-    Int64 mpp_task_id_,
+    const MPPTaskId & mpp_task_id_,
     const LogWithPrefixPtr & log_)
     : subqueries_for_sets_list(std::move(subqueries_for_sets_list_))
     , network_transfer_limits(network_transfer_limits)
     , mpp_task_id(mpp_task_id_)
-    , log(getMPPTaskLog(log_, getName(), mpp_task_id))
+    , log(getMPPTaskLog(log_, name, mpp_task_id))
 {
     init(input);
 }
@@ -42,7 +42,7 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const SizeLimits & network_transfer_limits,
     const LogWithPrefixPtr & log_)
     : network_transfer_limits(network_transfer_limits)
-    , log(getMPPTaskLog(log_, getName(), mpp_task_id))
+    , log(getMPPTaskLog(log_, name, mpp_task_id))
 {
     subqueries_for_sets_list.push_back(subqueries_for_sets);
     init(input);
@@ -89,7 +89,7 @@ void CreatingSetsBlockInputStream::readPrefixImpl()
 
 Block CreatingSetsBlockInputStream::getTotals()
 {
-    auto input = dynamic_cast<IProfilingBlockInputStream *>(children.back().get());
+    auto * input = dynamic_cast<IProfilingBlockInputStream *>(children.back().get());
 
     if (input)
         return input->getTotals();
@@ -152,7 +152,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         LOG_DEBUG(log,
                   (subquery.set ? "Creating set. " : "")
                       << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
-                      << std::to_string(mpp_task_id));
+                      << mpp_task_id.toString());
         Stopwatch watch;
 
         BlockOutputStreamPtr table_out;
@@ -263,7 +263,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         }
         else
         {
-            LOG_DEBUG(log, "Subquery has empty result for task " << std::to_string(mpp_task_id) << ".");
+            LOG_DEBUG(log, "Subquery has empty result for task " << mpp_task_id.toString() << ".");
         }
     }
     catch (std::exception & e)

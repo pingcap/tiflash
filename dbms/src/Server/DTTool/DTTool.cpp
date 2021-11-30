@@ -17,6 +17,10 @@ static constexpr char MAIN_HELP[] =
     "  bench       Benchmark dmfile IO performance.";
 // clang-format on
 
+extern "C" {
+void run_raftstore_proxy_ffi(int argc, const char * const * argv, const DB::EngineStoreServerHelper *);
+}
+
 int mainEntryTiFlashDTTool(int argc, char ** argv)
 {
     bpo::options_description options{"Delta Merge Tools"};
@@ -57,13 +61,13 @@ int mainEntryTiFlashDTTool(int argc, char ** argv)
         {
             std::vector<std::string> opts = bpo::collect_unrecognized(parsed.options, bpo::include_positional);
             opts.erase(opts.begin());
-            return Migrate::migrateEntry(opts);
+            return Migrate::migrateEntry(opts, run_raftstore_proxy_ffi);
         }
         else if (command == "inspect")
         {
             std::vector<std::string> opts = bpo::collect_unrecognized(parsed.options, bpo::include_positional);
             opts.erase(opts.begin());
-            return Inspect::inspectEntry(opts);
+            return Inspect::inspectEntry(opts, run_raftstore_proxy_ffi);
         }
         else
         {

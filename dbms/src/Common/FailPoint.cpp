@@ -62,7 +62,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_page_data_compact_batch)                     \
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
-    M(force_remote_read_for_batch_cop)
+    M(force_remote_read_for_batch_cop)                       \
+    M(force_context_path)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \
@@ -82,7 +83,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 namespace FailPoints
 {
-#define M(NAME) extern const char NAME[] = #NAME "";
+#define M(NAME) extern const char(NAME)[] = #NAME "";
 APPLY_FOR_FAILPOINTS_ONCE(M)
 APPLY_FOR_FAILPOINTS(M)
 APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
@@ -95,7 +96,7 @@ class FailPointChannel : private boost::noncopyable
 {
 public:
     // wake up all waiting threads when destroy
-    ~FailPointChannel() { notify_all(); }
+    ~FailPointChannel() { notifyAll(); }
 
     void wait()
     {
@@ -103,7 +104,7 @@ public:
         cv.wait(lock);
     }
 
-    void notify_all()
+    void notifyAll()
     {
         std::unique_lock lock(m);
         cv.notify_all();
@@ -159,7 +160,7 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
     {
         /// can not rely on deconstruction to do the notify_all things, because
         /// if someone wait on this, the deconstruct will never be called.
-        iter->second->notify_all();
+        iter->second->notifyAll();
         fail_point_wait_channels.erase(iter);
     }
     fiu_disable(fail_point_name.c_str());
