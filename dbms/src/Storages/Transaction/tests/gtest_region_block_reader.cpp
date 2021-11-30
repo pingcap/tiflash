@@ -206,6 +206,21 @@ protected:
             ColumnIDValueNull<UInt64>(11));
         return table_info;
     }
+
+    TableInfo getTableInfoFieldsForInvalidNULLTest(const ColumnIDs & handle_ids, bool is_common_handle) const
+    {
+        TableInfo table_info;
+        std::tie(table_info, std::ignore) = getTableInfoAndFields(
+            handle_ids,
+            is_common_handle,
+            ColumnIDValue(2, handle_value_),
+            ColumnIDValue(3, std::numeric_limits<UInt64>::max()),
+            ColumnIDValue(4, std::numeric_limits<Float32>::min()),
+            ColumnIDValue(9, String("aaa")),
+            ColumnIDValue(10, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)),
+            ColumnIDValue(11, std::numeric_limits<UInt64>::min()));
+        return table_info;
+    }
 };
 
 TEST_F(RegionBlockReaderTestFixture, PKIsNotHandle)
@@ -294,6 +309,26 @@ TEST_F(RegionBlockReaderTestFixture, OverflowColumnRowV1)
 
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
+}
+
+TEST_F(RegionBlockReaderTestFixture, InvalidNULLRowV2)
+{
+    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+    auto new_table_info = getTableInfoFieldsForInvalidNULLTest({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
+    ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
+}
+
+TEST_F(RegionBlockReaderTestFixture, InvalidNULLRowV1)
+{
+    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
+    auto new_table_info = getTableInfoFieldsForInvalidNULLTest({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
+    ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
 }
 
 } // namespace DB::tests
