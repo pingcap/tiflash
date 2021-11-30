@@ -33,7 +33,7 @@
 
 #### Design rules
 
-- Test First Development.
+- Test First Development. Design `unit tests` and `integration tests` before functions.
 - Keep configurable data at high levels.
 - Prefer polymorphism to if/else or switch/case.
 - Separate multi-threading code.
