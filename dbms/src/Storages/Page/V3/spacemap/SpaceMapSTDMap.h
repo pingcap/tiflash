@@ -1,86 +1,91 @@
 #pragma once
+#include <Common/Exception.h>
+
 #include <map>
 
 #include "SpaceMap.h"
 
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
-namespace DB::PS::V3
+namespace PS::V3
 {
 class STDMapSpaceMap : public SpaceMap
 {
 public:
-    STDMapSpaceMap()
+    STDMapSpaceMap(UInt64 start, UInt64 end, int cluster_bits = 0)
+        : SpaceMap(start, end, cluster_bits)
     {
         type = SMAP64_STD_MAP;
     };
 
-    virtual ~STDMapSpaceMap() override = default;
+    ~STDMapSpaceMap() override{
 
-    /* Generic space map operators */
+    };
+#ifndef DBMS_PUBLIC_GTEST
+protected:
+#endif
     int newSmap() override
     {
-        /*
-        std::map<UInt64, UInt64> * private_data;
-
-        private_data = new std::map<UInt64, UInt64>();
-        if (private_data == nullptr)
-        {
-            return -1;
-        }
-
-        smap->_private = (void *)private_data;
-*/
+        map.insert({start, end});
         return 0;
     }
 
     void clearSmap() override
     {
         map.clear();
+        map.insert({start, end});
     }
 
     void freeSmap() override
     {
-        map.clear();
+        clearSmap();
     }
 
     int copySmap([[maybe_unused]] SpaceMap * dest) override
     {
-        // TBD : no implement
-        return -1;
+        throw Exception("Unimplement here. After need use, then implement it.", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     int resizeSmap([[maybe_unused]] UInt64 new_end, [[maybe_unused]] UInt64 new_real_end) override
     {
-        // TBD : no implement
-        return -1;
+        throw Exception("Unimplement here. After need use, then implement it.", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     void smapStats() override
     {
         UInt64 count = 0;
 
-        printf("entry status :\n");
+        LOG_DEBUG(log, "entry status :");
         for (auto it = map.begin(); it != map.end(); it++)
         {
-            printf("range %lld : start=%lld , count=%lld \n", count, it->first, it->second);
+            LOG_DEBUG(log, "  range : " << count << " start:" << it->first << " size : " << it->second);
             count++;
         }
     }
 
-    int testSmapRange(UInt64 block, unsigned int num) override
+    int testSmapRange(UInt64 block, size_t num) override
     {
         for (auto it = map.begin(); it != map.end(); it++)
         {
-            // If the range contain the search
-            if (it->first < block && (it->first + it->second) > (block + num))
+            // block in the range
+            if (it->first <= block && (it->first + it->second) > block)
             {
-                return 0;
+                // end of block still in the range
+                return (it->first + it->second) >= (num + block);
             }
 
-            // TBD
+            if (it->first >= block)
+            {
+                break;
+            }
         }
 
-        return 1;
+        return 0;
     }
 
     void searchSmapRange([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] size_t num, [[maybe_unused]] UInt64 * ret) override
@@ -88,22 +93,109 @@ public:
         // TBD
     }
 
-    int findSmapFirstZero([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] UInt64 * out) override
+    int markSmapRange(UInt64 block, size_t num) override
     {
-        return -1;
+        auto it = map.find(block);
+        if (it == map.end())
+        {
+            // can't found , check the near one.
+            for (it = map.begin(); it != map.end(); it++)
+            {
+                // In the range, jump to range.
+                if (it->first <= block && (it->first + it->second) > block)
+                {
+                    goto found_range;
+                }
+
+                // Counld not found, break.
+                if (it->first > block)
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+        found_range:
+            // match
+            if (it->first == block)
+            {
+                map.erase(it);
+
+                // in the range
+            }
+            else
+            {
+                // In the mid, and not match the left or right.
+                // Split to two range
+                if (((it->first + it->second) - block) > num)
+                {
+                    map.insert({block + num, it->first + it->second - block - num});
+                    map[it->first] = block - it->first;
+                }
+                else
+                { // < num
+                    map[it->first] = it->first + it->second - block;
+                }
+            }
+        }
+        return 1;
     }
 
-    int findSmapFirstSet([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] UInt64 * out) override
+    int unmarkSmapRange(UInt64 block, size_t num) override
     {
-        return -1;
+        auto it = map.find(block);
+
+        // already unmarked
+        if (it != map.end())
+        {
+            return 0;
+        }
+
+        bool meanless = false;
+        std::tie(it, meanless) = map.insert({block, num});
+
+        auto it_prev = it;
+        it_prev--;
+
+        if (it == map.begin())
+        {
+            goto only_do_right;
+        }
+
+        // Prev range can merge
+        if (it_prev->first + it_prev->second >= it->first)
+        {
+            map[it_prev->first] = it->first + it->second - it_prev->first;
+            map.erase(it);
+            it = it_prev;
+        }
+
+    only_do_right:
+        if (it == map.end())
+        {
+            return 0;
+        }
+
+        auto it_next = it;
+        it_next++;
+
+        // next range can merge
+        if (it->first + it->second >= it_next->first)
+        {
+            map[it->first] = it_next->first + it_next->second - it->first;
+            map.erase(it_next);
+        }
+
+        return 0;
     }
-
-    int markSmapRange(UInt64 block, unsigned int num) override;
-
-    int unmarkSmapRange(UInt64 block, unsigned int num) override;
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     std::map<UInt64, UInt64> map;
 };
 
-} // namespace DB::PS::V3
+using STDMapSpaceMapPtr = std::shared_ptr<STDMapSpaceMap>;
+
+} // namespace PS::V3
+} // namespace DB

@@ -1,9 +1,17 @@
 #pragma once
+#include <Common/Exception.h>
+
 #include "RBTree.h"
 #include "SpaceMap.h"
 
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
 
-namespace DB::PS::V3
+namespace PS::V3
 {
 struct smap_rb_entry
 {
@@ -38,15 +46,20 @@ inline static struct smap_rb_entry * node_to_entry(struct rb_node * node)
 
 class RBTreeSpaceMap : public SpaceMap
 {
-    public:
-    RBTreeSpaceMap()
+public:
+    RBTreeSpaceMap(UInt64 start, UInt64 end, int cluster_bits = 0)
+        : SpaceMap(start, end, cluster_bits)
     {
         type = SMAP64_RBTREE;
     };
 
-    ~RBTreeSpaceMap() override = default;
-
+    ~RBTreeSpaceMap() override
+    {
+        freeSmap();
+    };
+#ifndef DBMS_PUBLIC_GTEST
 protected:
+#endif
     /* Generic space map operators */
     int newSmap() override;
 
@@ -57,48 +70,37 @@ protected:
 
     int copySmap([[maybe_unused]] SpaceMap * dest) override
     {
-        // TBD : no implement
-        return -1;
+        throw Exception("Unimplement here. After need use, then implement it.", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     int resizeSmap([[maybe_unused]] UInt64 new_end, [[maybe_unused]] UInt64 new_real_end) override
     {
-        // TBD : no implement
-        return -1;
+        throw Exception("NOT_IMPLEMENTED. After need use, then implement it.", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /* Print space maps status  */
     void smapStats() override;
 
     /* Space map bit/bits test operators */
-    int testSmapRange(UInt64 block, unsigned int num) override;
+    int testSmapRange(UInt64 block, size_t num) override;
 
     /* Search range , return the free bits */
-    void searchSmapRange([[maybe_unused]], [[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] size_t num, [[maybe_unused]] UInt64 * ret) override
+    void searchSmapRange([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] size_t num, [[maybe_unused]] UInt64 * ret) override
     {
         // TBD
     }
 
-    /* Find the first zero/set bit between start and end, inclusive.
-     * May be NULL, in which case a generic function is used. */
-    int findSmapFirstZero([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] UInt64 * out) override
-    {
-        return -1;
-    }
+    int markSmapRange(UInt64 block, size_t num) override;
 
-    int findSmapFirstSet([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] UInt64 * out) override
-    {
-        return -1;
-    }
+    int unmarkSmapRange(UInt64 block, size_t num) override;
 
-    /* Space map range set/unset operators */
-    int markSmapRange(UInt64 block, unsigned int num) override;
-
-    int unmarkSmapRange(UInt64 block, unsigned int num) override;
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     struct rb_private * rb_tree;
 };
 
+using RBTreeSpaceMapPtr = std::shared_ptr<RBTreeSpaceMap>;
 
-} // namespace DB::PS::V3
+} // namespace PS::V3
+} // namespace DB

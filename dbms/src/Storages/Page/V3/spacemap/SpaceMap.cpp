@@ -1,95 +1,109 @@
+#include "SpaceMap.h"
+
 #include <Core/Types.h>
 #include <common/likely.h>
-
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "SpaceMap.h"
 #include "SpaceMapRBTree.h"
+#include "SpaceMapSTDMap.h"
 
-namespace DB::PS::V3 
+namespace DB::PS::V3
 {
+SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end, int cluster_bits)
+{
+    SpaceMapPtr smap;
+    switch (type)
+    {
+    case SMAP64_RBTREE:
+        smap = std::make_shared<RBTreeSpaceMap>(start, end, cluster_bits);
+        break;
+    case SMAP64_STD_MAP:
+        smap = std::make_shared<STDMapSpaceMap>(start, end, cluster_bits);
+        break;
+    default:
+        return nullptr;
+    }
 
-void SpaceMap::printf()
+    int rc = smap->newSmap();
+    if (rc != 0)
+    {
+        smap->freeSmap();
+        return nullptr;
+    }
+
+    return smap;
+}
+
+std::pair<UInt64, size_t> SpaceMap::shiftBlock(UInt64 block, size_t size)
+{
+    UInt64 block_end = block + size;
+
+    block >>= cluster_bits;
+    block_end += (1 << cluster_bits) - 1;
+    block_end >>= cluster_bits;
+    size = block_end - block;
+    return std::make_pair(block, size);
+}
+
+
+bool SpaceMap::checkRange(UInt64 block, size_t size)
+{
+    return (block < start) || (block > end) || (block + size - 1 > end);
+}
+
+void SpaceMap::logStats()
 {
     smapStats();
 }
 
-int SpaceMap::unmarkRange(UInt64 block, unsigned int num)
+
+int SpaceMap::unmarkRange(UInt64 block, size_t size)
 {
-    UInt64 end = block + num;
+    std::tie(block, size) = shiftBlock(block, size);
 
-
-    /* convert to clusters if necessary */
-    block >>= cluster_bits;
-    end += (1 << cluster_bits) - 1;
-    end >>= cluster_bits;
-    num = end - block;
-
-    if ((block < start) || (block > end) || (block + num - 1 > end))
+    if (checkRange(block, size))
     {
+        LOG_ERROR(log, "unMark range out of the limit range.[type=" << type << "] [block=" << block << "], [size = " << size << "]");
         return -1;
     }
 
-    return unmarkSmapRange(block, num);
+    return unmarkSmapRange(block, size);
 }
 
-int SpaceMap::markRange(UInt64 block, unsigned int num)
+int SpaceMap::markRange(UInt64 block, size_t size)
 {
-    UInt64 end = block + num;
+    std::tie(block, size) = shiftBlock(block, size);
 
-    /* convert to clusters if necessary */
-    block >>= cluster_bits;
-    end += (1 << cluster_bits) - 1;
-    end >>= cluster_bits;
-    num = end - block;
-
-    if ((block < start) || (block > end) || (block + num - 1 > end))
+    if (checkRange(block, size))
     {
+        LOG_ERROR(log, "Mark range out of the limit range.[type=" << type << "] [block=" << block << "], [size = " << size << "]");
         return -1;
     }
 
-    return markSmapRange(block, num);
+    return markSmapRange(block, size);
 }
 
-int SpaceMap::testRange(UInt64 block, unsigned int num)
+int SpaceMap::testRange(UInt64 block, size_t size)
 {
-    UInt64 end = block + num;
+    std::tie(block, size) = shiftBlock(block, size);
 
-    if (unlikely(num == 1))
-        return !test(block);
-
-    block >>= cluster_bits;
-    end += (1 << cluster_bits) - 1;
-    end >>= cluster_bits;
-    num = end - block;
-
-    if ((block < start) || (block > end) || (block + num - 1 > end))
+    if (checkRange(block, size))
     {
+        LOG_ERROR(log, "Test range out of the limit range.[type=" << type << "] [block=" << block << "], [size = " << size << "]");
         return -1;
     }
 
-    return testSmapRange(block, num);
+    return testSmapRange(block, size);
 }
 
-SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, UInt64 real_end_)
-    : spacemap_ops(ops),
-    start(start_),
-    end(end_),
-    real_end(real_end_),
-    cluster_bits(0)
+SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, int cluster_bits)
+    : start(start_)
+    , end(end_)
+    , log(&Poco::Logger::get("RBTreeSpaceMap"))
+    , cluster_bits(cluster_bits)
 {
-    int rc = spacemap_ops->newSmap(this);
-    if (rc != 0)
-    {
-        spacemap_ops->freeSmap(this);
-    }
 }
 
-SpaceMap::~SpaceMap()
-{
-    spacemap_ops->freeSmap(this);
-}
-
-}
+} // namespace DB::PS::V3
