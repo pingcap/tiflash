@@ -2,9 +2,7 @@
 
 ## To start developing TiFlash
 
-### TODO
-
-- need docs like [Get Started](https://pingcap.github.io/tidb-dev-guide/get-started/introduction.html) chapter of [TiDB Dev Guide](https://pingcap.github.io/tidb-dev-guide/index.html).
+TODO: need docs like [Get Started](https://pingcap.github.io/tidb-dev-guide/get-started/introduction.html) chapter of [TiDB Dev Guide](https://pingcap.github.io/tidb-dev-guide/index.html).
 
 ## TiFlash Engineering Practices Documentation
 
@@ -16,7 +14,7 @@
 
 ### Code Review Guidelines
 
-#### Basic Code Review Guidelines
+#### Basic Guidelines
 
 - [The Code Reviewer’s Guide](https://google.github.io/eng-practices/review/reviewer/)
 - [The Change Author’s Guide](https://google.github.io/eng-practices/review/developer/)
@@ -24,18 +22,18 @@
 
 #### Rules for Reviewer
 
-- Code coverage about unit tests cannot be reduced in most cases.
+- Modifications should not reduce code coverage of unit-tests in most cases.
 - Ensure `Labels` and `Release note` conform to the specification.
 - Value the design of test cases. Find corner cases as more as possible.
 - Scope down pull request to specific issue.
-- Ensure each issue contains full context.
+- Ensure each issue contains enough context.
 - Design documents must be reviewed before developing features.
 
-TODO: for more cases
+TODO: need more docs
 
 ### Development Guide
 
-TODO: for more cases
+TODO: need more docs
 
 #### General rules
 
@@ -45,7 +43,7 @@ TODO: for more cases
 
 #### Design rules
 
-- Test First Development. Design unit tests and integration tests before functions.
+- Test First Development. Design unit-tests and integration-tests before functions.
 - Keep configurable data at high levels.
 - Prefer polymorphism to if/else or switch/case.
 - Separate multi-threading code.
