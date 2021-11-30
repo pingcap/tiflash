@@ -1,7 +1,10 @@
+#include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/dbgFuncSchema.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -10,7 +13,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_TABLE;
@@ -97,7 +99,6 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
     }
     else if (args.size() == 2)
     {
-
         const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
         auto storage = context.getTable(database_name, table_name);
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);

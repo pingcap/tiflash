@@ -6,7 +6,7 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Poco/Timespan.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
 
 #include <pcg_random.hpp>
