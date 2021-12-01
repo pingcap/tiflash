@@ -1,4 +1,5 @@
 #include <Storages/GCManager.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 
 namespace DB
@@ -7,6 +8,12 @@ namespace ErrorCodes
 {
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
+
+GCManager::GCManager(Context & context)
+    : global_context{context.getGlobalContext()}
+    , log(&Poco::Logger::get("GCManager"))
+{
+}
 
 bool GCManager::work()
 {
