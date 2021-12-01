@@ -69,7 +69,7 @@ class GRPCReceiverContext
 public:
     using StatusType = ::grpc::Status;
 
-    explicit GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_ = nullptr, bool enable_local_tunnel_ = false);
+    explicit GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_, bool enable_local_tunnel_);
 
     ExchangeRecvRequest makeRequest(
         int index,
