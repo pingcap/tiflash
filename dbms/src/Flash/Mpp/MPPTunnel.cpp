@@ -195,7 +195,14 @@ void MPPTunnelBase<Writer>::writeDone()
     /// in normal cases, send nullptr to notify finish
     send_queue.push(nullptr);
     LOG_TRACE(log, "waitForFinish");
-    waitForFinish();
+    if (is_local) //local tunnel should not wait for finish, but finish himself. Since there is no sendloop background thread for queue consumption.
+    {
+        finishWithLock();
+    }
+    else
+    {
+        waitForFinish();
+    }
     LOG_TRACE(log, "done to finish");
 }
 
