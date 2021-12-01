@@ -35,10 +35,9 @@ struct LeastBaseImpl<A, B, true>
     {
         Result x, y;
         if constexpr (IsDecimal<A>) {
-            std::cout << "here..." << std::endl;
+            std::cout << __LINE__ << std::endl;
             x = static_cast<Result>(a.value);
         }
-            
         else
             x = static_cast<Result>(a);
         if constexpr (IsDecimal<B>)

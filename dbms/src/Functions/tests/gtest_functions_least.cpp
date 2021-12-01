@@ -76,6 +76,32 @@ try
     
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal128>>(
+            std::make_tuple(21, 16),
+            {"10.0000000000000000"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Decimal128>>(
+                std::make_tuple(20, 16),
+                {"10.0000000000000000"}),
+            createColumn<Nullable<Decimal128>>(
+                std::make_tuple(21, 15),
+                {"12.000000000000000"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal128>>(
+            std::make_tuple(21, 16),
+            {"10.0000000000000000"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Decimal128>>(
+                std::make_tuple(21, 16),
+                {"10.0000000000000000"}),
+            createColumn<Nullable<Decimal32>>(
+                std::make_tuple(7, 3),
+                {"12.000"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal128>>(
             std::make_tuple(20, 16),
             {DecimalField128(1300, 3), DecimalField128(-3300, 3), DecimalField128(-1300, 3), DecimalField128(-3300, 3), DecimalField128(0, 3), {}, {}, {}}),
         executeFunction(
@@ -83,9 +109,9 @@ try
             createColumn<Nullable<Decimal128>>(
                 std::make_tuple(20, 16),
                 {DecimalField128(3300, 3), DecimalField128(-3300, 3), DecimalField128(3300, 3), DecimalField128(-3300, 3), DecimalField128(1000, 3), {}, DecimalField128(0, 3), {}}),
-            createColumn<Nullable<Decimal32>>(
-                std::make_tuple(7, 3),
-                {DecimalField32(1300, 3), DecimalField32(1300, 3), DecimalField32(-1300, 3), DecimalField32(-1300, 3), DecimalField32(0, 3), DecimalField32(0, 3), {}, {}})));    
+            createColumn<Nullable<Decimal128>>(
+                std::make_tuple(20, 16),
+                {DecimalField128(1300, 3), DecimalField128(1300, 3), DecimalField128(-1300, 3), DecimalField128(-1300, 3), DecimalField128(0, 3), DecimalField128(0, 3), {}, {}})));    
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(
