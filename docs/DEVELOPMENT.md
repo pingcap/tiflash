@@ -29,12 +29,11 @@ TODO: need docs like [Get Started](https://pingcap.github.io/tidb-dev-guide/get-
 - Scope down pull request to specific issue.
 - Ensure each issue contains enough context.
 - [Design documents](/docs/design) is necessary for feature development.
-
-TODO: need more details
+- TODO: need more details for each module
 
 ### Development Guide
 
-TODO: need more details
+TODO: need more details for each module
 
 #### Coding Style
 
