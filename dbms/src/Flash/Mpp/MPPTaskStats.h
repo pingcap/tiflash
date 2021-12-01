@@ -27,6 +27,8 @@ struct MPPTaskStats
 
     String toJson() const;
 
+    void logStats();
+
     void setSenderExecutorId(DAGContext & dag_context);
 
     void setWaitIndexTimestamp(const Timestamp & wait_index_start_timestamp_, const Timestamp & wait_index_end_timestamp_);
@@ -53,7 +55,7 @@ struct MPPTaskStats
     UInt64 output_bytes = 0;
 
     /// resource
-    Int64 cpu_usage = 0;
+    Int64 working_time = 0;
     Int64 memory_peak = 0;
 };
 

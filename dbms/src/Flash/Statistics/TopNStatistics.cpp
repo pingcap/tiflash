@@ -13,12 +13,20 @@ namespace DB
 String TopNStatistics::extraToJson() const
 {
     return fmt::format(
-        R"(,"limit":{},"sort_desc":"{}","inbound_rows":{},"inbound_blocks":{},"inbound_bytes":{})",
+        R"(,"limit":{},"inbound_rows":{},"inbound_blocks":{},"inbound_bytes":{})",
         limit,
-        sort_desc,
         inbound_rows,
         inbound_blocks,
         inbound_bytes);
+}
+
+TopNStatistics::TopNStatistics(const tipb::Executor * executor, Context & context_)
+    : ExecutorStatistics(executor, context_)
+{
+    assert(executor->tp() == tipb::ExecType::TypeTopN);
+    const auto & top_n_executor = executor->topn();
+    assert(top_n_executor.has_limit());
+    limit = top_n_executor.limit();
 }
 
 bool TopNStatistics::hit(const String & executor_id)
@@ -26,50 +34,31 @@ bool TopNStatistics::hit(const String & executor_id)
     return startsWith(executor_id, "TopN_");
 }
 
-ExecutorStatisticsPtr TopNStatistics::buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context)
+void TopNStatistics::collectRuntimeDetail()
 {
+    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
     if (profile_streams_info.input_streams.size() != 1)
         throw TiFlashException(
             fmt::format("Count of MergeSortingBlockInputStream should be 1 or not {}", profile_streams_info.input_streams.size()),
             Errors::Coprocessor::Internal);
 
-    using TopNStatisticsPtr = std::shared_ptr<TopNStatistics>;
-    TopNStatisticsPtr statistics = std::make_shared<TopNStatistics>(executor_id, context);
     visitBlockInputStreams(
         profile_streams_info.input_streams,
         [&](const BlockInputStreamPtr & stream_ptr) {
             throwFailCastException(
                 castBlockInputStream<MergeSortingBlockInputStream>(stream_ptr, [&](const MergeSortingBlockInputStream & stream) {
-                    FmtBuffer buffer;
-                    const auto & sort_description = stream.getSortDescription();
-                    joinStr(
-                        sort_description.cbegin(),
-                        sort_description.cend(),
-                        buffer,
-                        [](const auto & s, FmtBuffer & fb) { fb.template fmtAppend("[{}]", s.getID()); });
-                    statistics->sort_desc = buffer.toString();
-
-                    collectBaseInfo(statistics, stream.getProfileInfo());
+                    collectBaseInfo(this, stream.getProfileInfo());
                 }),
                 stream_ptr->getName(),
                 "MergeSortingBlockInputStream");
-            return true;
         },
         [&](const BlockInputStreamPtr & child_stream_ptr) {
             throwFailCastException(
                 castBlockInputStream<IProfilingBlockInputStream>(child_stream_ptr, [&](const IProfilingBlockInputStream & stream) {
-                    collectInboundInfo(statistics, stream.getProfileInfo());
+                    collectInboundInfo(this, stream.getProfileInfo());
                 }),
                 child_stream_ptr->getName(),
                 "IProfilingBlockInputStream");
         });
-
-    const auto * executor = context.getDAGContext()->getExecutor(executor_id);
-    assert(executor->tp() == tipb::ExecType::TypeTopN);
-    const auto & top_n_executor = executor->topn();
-    assert(top_n_executor.has_limit());
-    statistics->limit = top_n_executor.limit();
-
-    return statistics;
 }
 } // namespace DB

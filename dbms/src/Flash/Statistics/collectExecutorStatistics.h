@@ -6,5 +6,5 @@
 
 namespace DB
 {
-std::map<String, ExecutorStatisticsPtr> collectExecutorStatistics(Context & context);
+std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(Context & context);
 } // namespace DB

@@ -2,6 +2,7 @@
 
 #include <Flash/Coprocessor/ProfileStreamsInfo.h>
 #include <common/types.h>
+#include <tipb/executor.pb.h>
 
 #include <memory>
 #include <vector>
@@ -13,6 +14,7 @@ class DAGContext;
 
 struct ExecutorStatistics
 {
+    String executor_id;
     Int64 id;
     String type;
 
@@ -24,9 +26,13 @@ struct ExecutorStatistics
 
     UInt64 execution_time_ns = 0;
 
-    ExecutorStatistics(const String & executor_id, Context & context);
+    Context & context;
+
+    ExecutorStatistics(const tipb::Executor * executor, Context & context_);
 
     virtual String toJson() const final;
+
+    virtual void collectRuntimeDetail() = 0;
 
     virtual ~ExecutorStatistics() = default;
 

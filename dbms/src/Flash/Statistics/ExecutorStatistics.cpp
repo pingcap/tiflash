@@ -10,33 +10,37 @@ namespace DB
 {
 namespace
 {
-Int64 parseId(const String & executor_id)
+inline Int64 parseId(const String & executor_id, String::size_type split_index)
+{
+    return std::stoi(executor_id.substr(split_index + 1, executor_id.size()));
+}
+
+inline auto getExecutorIdSplitIndex(const String & executor_id)
 {
     auto split_index = executor_id.find('_');
     if (split_index == String::npos || split_index == (executor_id.size() - 1))
     {
         throw TiFlashException("Illegal executor_id: " + executor_id, Errors::Coprocessor::Internal);
     }
-    return std::stoi(executor_id.substr(split_index + 1, executor_id.size()));
+    return split_index;
 }
 } // namespace
 
-ExecutorStatistics::ExecutorStatistics(const String & executor_id, Context & context)
+ExecutorStatistics::ExecutorStatistics(const tipb::Executor * executor, Context & context_)
+    : context(context_)
 {
-    auto split_index = executor_id.find('_');
-    if (split_index == String::npos || split_index == (executor_id.size() - 1))
-    {
-        throw TiFlashException("Illegal executor_id: " + executor_id, Errors::Coprocessor::Internal);
-    }
+    assert(executor->has_executor_id());
+    executor_id = executor->executor_id();
 
+    auto split_index = getExecutorIdSplitIndex(executor_id);
     type = executor_id.substr(0, split_index);
-    id = std::stoi(executor_id.substr(split_index + 1, executor_id.size()));
+    id = parseId(executor_id, split_index);
 
-    const auto * executor = context.getDAGContext()->getExecutor(executor_id);
     for (const auto * child : getChildren(*executor))
     {
         assert(child->has_executor_id());
-        children.push_back(parseId(child->executor_id()));
+        auto child_split_index = getExecutorIdSplitIndex(child->executor_id());
+        children.push_back(parseId(child->executor_id(), child_split_index));
     }
 }
 

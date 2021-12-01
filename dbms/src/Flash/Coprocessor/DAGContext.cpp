@@ -90,6 +90,13 @@ std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap()
     return profile_streams_map;
 }
 
+const ProfileStreamsInfo & DAGContext::getProfileStreams(const String & executor_id)
+{
+    auto it = profile_streams_map.find(executor_id);
+    assert(it != profile_streams_map.end());
+    return it->second;
+}
+
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMapForJoinBuildSide()
 {
     return profile_streams_map_for_join_build_side;
@@ -234,10 +241,19 @@ UInt64 DAGContext::getOutputBytes()
     return 0;
 }
 
-void DAGContext::collectExecutorStatistics(Context & context)
+void DAGContext::initExecutorStatistics(Context & context)
 {
     assert(executor_statistics_map.empty());
-    executor_statistics_map = DB::collectExecutorStatistics(context);
+    executor_statistics_map = DB::initExecutorStatistics(context);
+}
+
+void DAGContext::collectExecutorRuntimeDetails()
+{
+    assert(executor_statistics_map.size() == executor_map.size());
+    for (const auto & statistics_entry : executor_statistics_map)
+    {
+        statistics_entry.second->collectRuntimeDetail();
+    }
 }
 
 std::map<String, ExecutorStatisticsPtr> & DAGContext::getExecutorStatisticsMap()

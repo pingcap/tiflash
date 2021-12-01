@@ -17,13 +17,11 @@ struct JoinStatistics : public ExecutorStatistics
 
     UInt64 process_time_ns_for_build = 0;
 
-    JoinStatistics(const String & executor_id_, Context & context)
-        : ExecutorStatistics(executor_id_, context)
-    {}
+    JoinStatistics(const tipb::Executor * executor, Context & context_);
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
+    void collectRuntimeDetail() override;
 
 protected:
     String extraToJson() const override;

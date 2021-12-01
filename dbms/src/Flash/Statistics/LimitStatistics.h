@@ -15,13 +15,11 @@ struct LimitStatistics : public ExecutorStatistics
     size_t inbound_blocks = 0;
     size_t inbound_bytes = 0;
 
-    LimitStatistics(const String & executor_id_, Context & context)
-        : ExecutorStatistics(executor_id_, context)
-    {}
+    LimitStatistics(const tipb::Executor * executor, Context & context);
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
+    void collectRuntimeDetail() override;
 
 protected:
     String extraToJson() const override;

@@ -13,13 +13,11 @@ struct FilterStatistics : public ExecutorStatistics
     size_t inbound_blocks = 0;
     size_t inbound_bytes = 0;
 
-    FilterStatistics(const String & executor_id_, Context & context)
-        : ExecutorStatistics(executor_id_, context)
-    {}
+    FilterStatistics(const tipb::Executor * executor, Context & context_);
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
+    void collectRuntimeDetail() override;
 
 protected:
     String extraToJson() const override;

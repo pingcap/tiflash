@@ -38,52 +38,57 @@ String ExchangeSenderStatistics::extraToJson() const
         exchangeTypeToString(exchange_type));
 }
 
-bool ExchangeSenderStatistics::hit(const String & executor_id)
-{
-    return startsWith(executor_id, "ExchangeSender_");
-}
-
-ExecutorStatisticsPtr ExchangeSenderStatistics::buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context)
+ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * executor, Context & context_)
+    : ExecutorStatistics(executor, context_)
 {
     auto & dag_context = *context.getDAGContext();
     assert(dag_context.is_mpp_task);
-    if (profile_streams_info.input_streams.empty())
-        throw TiFlashException(
-            fmt::format("Count of ExchangeSender should not be zero"),
-            Errors::Coprocessor::Internal);
 
-    using ExchangeSenderStatisticsPtr = std::shared_ptr<ExchangeSenderStatistics>;
-    ExchangeSenderStatisticsPtr statistics = std::make_shared<ExchangeSenderStatistics>(executor_id, context);
-
-    const auto & tunnel_set = dag_context.tunnel_set;
-    statistics->partition_num = tunnel_set->getPartitionNum();
-    statistics->connection_profile_infos = tunnel_set->getConnectionProfileInfos();
-
-    visitBlockInputStreams(
-        profile_streams_info.input_streams,
-        [&](const BlockInputStreamPtr & stream_ptr) {
-            throwFailCastException(
-                castBlockInputStream<ExchangeSender>(stream_ptr, [&](const ExchangeSender & stream) {
-                    collectBaseInfo(statistics, stream.getProfileInfo());
-                }),
-                stream_ptr->getName(),
-                "ExchangeSender");
-        });
-
-    const auto * executor = context.getDAGContext()->getExecutor(executor_id);
     assert(executor->tp() == tipb::ExecType::TypeExchangeSender);
     const auto & exchange_sender_executor = executor->exchange_sender();
     assert(exchange_sender_executor.has_tp());
-    statistics->exchange_type = exchange_sender_executor.tp();
+    exchange_type = exchange_sender_executor.tp();
+    partition_num = exchange_sender_executor.encoded_task_meta_size();
 
     for (int i = 0; i < exchange_sender_executor.encoded_task_meta_size(); ++i)
     {
         mpp::TaskMeta task_meta;
         if (!task_meta.ParseFromString(exchange_sender_executor.encoded_task_meta(i)))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
-        statistics->sender_target_task_ids.push_back(task_meta.task_id());
+        sender_target_task_ids.push_back(task_meta.task_id());
     }
+}
 
-    return statistics;
+bool ExchangeSenderStatistics::hit(const String & executor_id)
+{
+    return startsWith(executor_id, "ExchangeSender_");
+}
+
+void ExchangeSenderStatistics::collectRuntimeDetail()
+{
+    auto & dag_context = *context.getDAGContext();
+    assert(dag_context.is_mpp_task);
+
+    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
+    if (profile_streams_info.input_streams.empty())
+        throw TiFlashException(
+            fmt::format("Count of ExchangeSender should not be zero"),
+            Errors::Coprocessor::Internal);
+
+    const auto & tunnel_set = dag_context.tunnel_set;
+    assert(partition_num == tunnel_set->getPartitionNum());
+    connection_profile_infos = tunnel_set->getConnectionProfileInfos();
+    assert(partition_num == connection_profile_infos.size());
+
+    visitBlockInputStreams(
+        profile_streams_info.input_streams,
+        [&](const BlockInputStreamPtr & stream_ptr) {
+            throwFailCastException(
+                castBlockInputStream<ExchangeSender>(stream_ptr, [&](const ExchangeSender & stream) {
+                    collectBaseInfo(this, stream.getProfileInfo());
+                }),
+                stream_ptr->getName(),
+                "ExchangeSender");
+        });
 }
 } // namespace DB
