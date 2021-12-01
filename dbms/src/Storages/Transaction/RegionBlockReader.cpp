@@ -175,7 +175,20 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                 {
                     // The pk_type must be Int32/Uint32 or more narrow type
                     // so cannot tell its' exact type here, just use `insert(Field)`
-                    raw_pk_column->insert(Field(Int64(pk)));
+                    HandleID handle_value(static_cast<Int64>(pk));
+                    raw_pk_column->insert(Field(handle_value));
+                    if (unlikely(raw_pk_column->getInt(index) != handle_value))
+                    {
+                        if (!force_decode)
+                        {
+                            return false;
+                        }
+                        else
+                        {
+                            throw Exception("Detected overflow value when decoding pk column of type " + raw_pk_column->getName(),
+                                            ErrorCodes::LOGICAL_ERROR);
+                        }
+                    }
                 }
             }
         }
@@ -188,15 +201,14 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
             while (cursor < pk->size() && pos < pk_column_ids.size())
             {
                 Field value = DecodeDatum(cursor, *pk);
-                if (pk_pos_map.find(pk_column_ids[pos]) != pk_pos_map.end())
+                /// for a pk col, if it does not exist in the value, then decode it from the key
+                /// some examples that we must decode column value from value part
+                ///   1) if collation is enabled, the extra key may be a transformation of the original value of pk cols
+                ///   2) the primary key may just be a prefix of a column
+                auto * raw_pk_column = const_cast<IColumn *>(block.getByPosition(pk_pos_map.at(pk_column_ids[pos])).column.get());
+                if (raw_pk_column->size() == index)
                 {
-                    /// for a pk col, if it does not exist in the value, then decode it from the key
-                    /// some examples that we must decode column value from value part
-                    ///   1) if collation is enabled, the extra key may be a transformation of the original value of pk cols
-                    ///   2) the primary key may just be a prefix of a column
-                    auto * raw_pk_column = const_cast<IColumn *>(block.getByPosition(pk_pos_map.at(pk_column_ids[pos])).column.get());
-                    if (raw_pk_column->size() == index)
-                        raw_pk_column->insert(value);
+                    raw_pk_column->insert(value);
                 }
                 pos++;
             }
