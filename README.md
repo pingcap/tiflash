@@ -62,6 +62,4 @@ You can download the `clang-format` from [muttleyxd/clang-tools-static-binaries]
 
 ## Development
 
-[TiFlash Development Guide](/docs/DEVELOPMENT.md)
-
-[Design documents](/docs/design)
+To start developing TiFlash, see [TiFlash Development Guide](/docs/DEVELOPMENT.md) and [TiFlash Design documents](/docs/design).
