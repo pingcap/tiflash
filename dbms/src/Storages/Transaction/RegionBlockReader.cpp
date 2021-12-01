@@ -271,7 +271,7 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
                 break;
         }
 
-        if (!func(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list, start_ts, scan_filter))
+        if (!func(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list, start_ts, scan_filter, force_decode))
             return std::make_tuple(Block(), false);
     }
 
