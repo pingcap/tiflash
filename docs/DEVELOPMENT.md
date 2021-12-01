@@ -19,6 +19,7 @@ TODO: need docs like [Get Started](https://pingcap.github.io/tidb-dev-guide/get-
 - [The Code Reviewer’s Guide](https://google.github.io/eng-practices/review/reviewer/)
 - [The Change Author’s Guide](https://google.github.io/eng-practices/review/developer/)
 - [Contribute to TiDB / Review a Pull Request](https://pingcap.github.io/tidb-dev-guide/contribute-to-tidb/review-a-pr.html)
+- [ClickHouse Development](https://clickhouse.com/docs/en/development/)
 
 #### Rules for Reviewer
 
@@ -29,11 +30,15 @@ TODO: need docs like [Get Started](https://pingcap.github.io/tidb-dev-guide/get-
 - Ensure each issue contains enough context.
 - [Design documents](/docs/design) is necessary for feature development.
 
-TODO: need more docs
+TODO: need more details
 
 ### Development Guide
 
-TODO: need more docs
+TODO: need more details
+
+#### Coding Style
+
+- [C++ Guide | ClickHouse Documentation](https://clickhouse.com/docs/en/development/style/)
 
 #### General rules
 
