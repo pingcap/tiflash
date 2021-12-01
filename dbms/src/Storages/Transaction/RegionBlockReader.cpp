@@ -383,7 +383,208 @@ std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_re
             }
         }
 
+<<<<<<< HEAD
         decoded_data.checkValid();
+=======
+        if constexpr (pk_type == TMTPKType::INT64)
+            typeid_cast<ColumnVector<Int64> &>(*(column_map.getMutableColumnPtr(pk_column_ids[0]))).insert(static_cast<Int64>(pk));
+        else if constexpr (pk_type == TMTPKType::UINT64)
+            typeid_cast<ColumnVector<UInt64> &>(*(column_map.getMutableColumnPtr(pk_column_ids[0]))).insert(static_cast<UInt64>(pk));
+        else if constexpr (pk_type == TMTPKType::STRING)
+        {
+            column_map.getMutableColumnPtr(pk_column_ids[0])->insert(Field(pk->data(), pk->size()));
+            /// decode key and insert pk columns if needed
+            size_t cursor = 0, pos = 0;
+            while (cursor < pk->size() && pk_column_ids.size() > pos + 1)
+            {
+                Field value = DecodeDatum(cursor, *pk);
+                /// for a pk col, if it does not exist in the value, then decode it from the key
+                if (pk_column_ids[pos + 1] != EmptyColumnID && column_map.getMutableColumnPtr(pk_column_ids[pos + 1])->size() == index)
+                    column_map.getMutableColumnPtr(pk_column_ids[pos + 1])->insert(value);
+                pos++;
+            }
+        }
+        else
+        {
+            // The pk_type must be Int32/Uint32 or more narrow type
+            // so cannot tell its' exact type here, just use `insert(Field)`
+            HandleID handle_value(static_cast<Int64>(pk));
+            auto & pk_column = column_map.getMutableColumnPtr(pk_column_ids[0]);
+            pk_column->insert(Field(handle_value));
+            if (unlikely(pk_column->getInt(index) != handle_value))
+            {
+                if (!force_decode)
+                {
+                    return false;
+                }
+                else
+                {
+                    throw Exception("Detected overflow value when decoding pk column of type " + pk_column->getName(),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+        }
+        index++;
+    }
+    decoded_data.checkValid();
+    return true;
+}
+
+RegionBlockReader::RegionBlockReader(const ManageableStoragePtr & storage)
+    : RegionBlockReader(storage->getTableInfo(), storage->getColumns())
+{
+    // For delta-tree, we don't need to reorder for uint64_pk
+    do_reorder_for_uint64_pk = (storage->engineType() != TiDB::StorageEngine::DT);
+}
+
+RegionBlockReader::RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_)
+    : table_info(table_info_)
+    , columns(columns_)
+    , scan_filter(nullptr)
+{}
+
+std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode)
+{
+    auto delmark_col = ColumnUInt8::create();
+    auto version_col = ColumnUInt64::create();
+
+    /// use map to avoid linear search
+    std::unordered_map<String, DataTypePtr> column_type_map;
+    for (const auto & p : columns.getAllPhysical())
+        column_type_map[p.name] = p.type;
+
+    /// use map to avoid linear search
+    std::unordered_map<String, ColumnID> read_column_name_and_ids;
+    for (const auto & name : column_names_to_read)
+        read_column_name_and_ids[name] = InvalidColumnID;
+    if (read_column_name_and_ids.find(MutableSupport::tidb_pk_column_name) != read_column_name_and_ids.end())
+        read_column_name_and_ids[MutableSupport::tidb_pk_column_name] = TiDBPkColumnID;
+
+
+    ColumnID handle_col_id = TiDBPkColumnID;
+
+    constexpr size_t must_have_col_cnt = 3; // pk, del, version
+
+    // column_map contains required columns except del and version.
+    /// column_id => NameAndType/MutableColumnPtr
+    ColumnDataInfoMap column_map(column_names_to_read.size() - must_have_col_cnt + 1, EmptyColumnID);
+
+    // visible_column_to_read_lut contains required columns except pk, del and version.
+    std::vector<std::pair<ColumnID, size_t>> visible_column_to_read_lut;
+    visible_column_to_read_lut.reserve(table_info.columns.size());
+
+    // column_lut contains all columns in the table except pk, del and version.
+    /// column_id => column pos in table_info
+    ColumnIdToIndex column_lut;
+    column_lut.set_empty_key(EmptyColumnID);
+    column_lut.set_deleted_key(DeleteColumnID);
+
+    std::vector<ColumnID> readed_primary_key_column_ids;
+    /// column name => primary key offset
+    std::unordered_map<String, size_t> primary_key_column_pos_map;
+    if (table_info.is_common_handle)
+    {
+        const auto & primary_index_info = table_info.getPrimaryIndexInfo();
+        readed_primary_key_column_ids.resize(primary_index_info.idx_cols.size(), EmptyColumnID);
+        for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
+        {
+            const auto & col = primary_index_info.idx_cols[i];
+            primary_key_column_pos_map[col.name] = i;
+        }
+    }
+
+    for (size_t i = 0; i < table_info.columns.size(); i++)
+    {
+        const auto & column_info = table_info.columns[i];
+        ColumnID col_id = column_info.id;
+        const String & col_name = column_info.name;
+        if (!(table_info.pk_is_handle && column_info.hasPriKeyFlag()))
+        {
+            column_lut.insert({col_id, i});
+        }
+        if (read_column_name_and_ids.find(col_name) == read_column_name_and_ids.end())
+        {
+            continue;
+        }
+        read_column_name_and_ids[col_name] = col_id;
+        const auto & it = primary_key_column_pos_map.find(col_name);
+        if (it != primary_key_column_pos_map.end())
+        {
+            readed_primary_key_column_ids[it->second] = col_id;
+        }
+
+        {
+            auto ch_col = NameAndTypePair(col_name, column_type_map[col_name]);
+            auto mut_col = ch_col.type->createColumn();
+            column_map.insert(col_id, std::move(mut_col), std::move(ch_col), i, data_list.size());
+        }
+
+        if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
+            handle_col_id = col_id;
+        else
+            visible_column_to_read_lut.emplace_back(col_id, i);
+    }
+
+    if (column_names_to_read.size() - must_have_col_cnt != visible_column_to_read_lut.size())
+        throw Exception("schema doesn't contain needed columns.", ErrorCodes::LOGICAL_ERROR);
+
+    std::sort(visible_column_to_read_lut.begin(), visible_column_to_read_lut.end());
+
+    if (!table_info.pk_is_handle)
+    {
+        auto ch_col = NameAndTypePair(MutableSupport::tidb_pk_column_name,
+                                      table_info.is_common_handle ? MutableSupport::tidb_pk_column_string_type : MutableSupport::tidb_pk_column_int_type);
+        auto mut_col = ch_col.type->createColumn();
+        column_map.insert(handle_col_id, std::move(mut_col), std::move(ch_col), -1, data_list.size());
+    }
+
+    const TMTPKType pk_type = getTMTPKType(*column_map.getNameAndTypePair(handle_col_id).type);
+
+    if (do_reorder_for_uint64_pk && pk_type == TMTPKType::UINT64)
+        ReorderRegionDataReadList(data_list);
+
+    {
+        auto func = setColumnValues<TMTPKType::UNSPECIFIED>;
+
+        switch (pk_type)
+        {
+        case TMTPKType::INT64:
+            func = setColumnValues<TMTPKType::INT64>;
+            break;
+        case TMTPKType::UINT64:
+            func = setColumnValues<TMTPKType::UINT64>;
+            break;
+        case TMTPKType::STRING:
+            func = setColumnValues<TMTPKType::STRING>;
+            break;
+        default:
+            break;
+        }
+
+        std::vector<ColumnID> pk_column_ids;
+        pk_column_ids.emplace_back(handle_col_id);
+        if (table_info.is_common_handle)
+        {
+            for (const auto & readed_primary_key_column_id : readed_primary_key_column_ids)
+            {
+                pk_column_ids.emplace_back(readed_primary_key_column_id);
+            }
+        }
+        if (!func(
+                *delmark_col,
+                *version_col,
+                pk_column_ids,
+                visible_column_to_read_lut,
+                column_lut,
+                column_map,
+                data_list,
+                start_ts,
+                column_names_to_read.size() > must_have_col_cnt,
+                table_info,
+                force_decode,
+                scan_filter))
+            return std::make_tuple<Block, bool>({}, false);
+>>>>>>> 830c10624c (Fix potential data inconsistency when widen pk column type if pk is handle (#3568))
     }
 
     Block block;
