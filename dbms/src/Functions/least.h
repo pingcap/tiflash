@@ -1,8 +1,8 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
+
 #include "DataTypes/NumberTraits.h"
 #include "Functions/IsOperation.h"
-#include <iostream>
 
 namespace DB
 {
@@ -34,8 +34,8 @@ struct LeastBaseImpl<A, B, true>
     static Result apply(A a, B b)
     {
         Result x, y;
-        if constexpr (IsDecimal<A>) {
-            std::cout << __LINE__ << std::endl;
+        if constexpr (IsDecimal<A>)
+        {
             x = static_cast<Result>(a.value);
         }
         else
