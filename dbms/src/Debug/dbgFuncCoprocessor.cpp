@@ -27,7 +27,6 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>

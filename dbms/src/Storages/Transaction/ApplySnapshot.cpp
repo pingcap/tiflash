@@ -1,7 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
-#include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
