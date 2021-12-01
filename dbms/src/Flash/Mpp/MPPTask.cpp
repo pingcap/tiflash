@@ -336,7 +336,7 @@ void MPPTask::runImpl()
         FmtBuffer buf;
         auto & profile_ptr = dynamic_cast<IProfilingBlockInputStream &>(*from);
         profile_ptr.dumpProfileInfo(buf);
-        LOG_DEBUG(log, "runtime info: \n" + buf.toString());
+        LOG_DEBUG(log, "input stream profile info: \n" + buf.toString());
     }
     catch (Exception & e)
     {

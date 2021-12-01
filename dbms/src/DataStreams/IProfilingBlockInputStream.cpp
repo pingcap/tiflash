@@ -176,17 +176,18 @@ void IProfilingBlockInputStream::dumpProfileInfoImpl(FmtBuffer & buf)
     buf.append("{");
 
     buf.fmtAppend(R"("schema":"{}",)", getHeader().dumpStructure())
-        .fmtAppend("\"prefix_duration_ns\":{},", info.prefix_duration)
-        .fmtAppend("\"suffix_duration_ns\":{},", info.suffix_duration)
-        .fmtAppend("\"pull_duration_ns\":{},", info.timeline.sum(Timeline::PULL))
-        .fmtAppend("\"self_duration_ns\":{},", info.timeline.sum(Timeline::SELF))
-        .fmtAppend("\"push_duration_ns\":{},", info.timeline.sum(Timeline::PUSH))
-        .fmtAppend("\"first_ts_ns\":{},", info.toNanoseconds(info.first_ts))
-        .fmtAppend("\"last_ts_ns\":{},", info.toNanoseconds(info.last_ts))
+        .fmtAppend("\"prefix_duration\":{},", info.prefix_duration)
+        .fmtAppend("\"suffix_duration\":{},", info.suffix_duration)
+        .fmtAppend("\"pull_duration\":{},", info.timeline.getCounter(Timeline::PULL))
+        .fmtAppend("\"self_duration\":{},", info.timeline.getCounter(Timeline::SELF))
+        .fmtAppend("\"push_duration\":{},", info.timeline.getCounter(Timeline::PUSH))
+        .fmtAppend("\"first_ts\":{},", info.toNanoseconds(info.first_ts))
+        .fmtAppend("\"last_ts\":{},", info.toNanoseconds(info.last_ts))
         .fmtAppend("\"total_rows\":{},", info.total_rows)
         .fmtAppend("\"total_bytes\":{},", info.total_bytes);
 
     buf.append("\"timeline\":");
+    info.timeline.flushBuffer();
     info.timeline.dump(buf);
 
     buf.append("}");

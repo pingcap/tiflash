@@ -38,30 +38,24 @@ public:
 
     static constexpr size_t num_counters = static_cast<size_t>(NUM_COUNTER_TYPES);
 
-    struct Event
-    {
-        Int64 begin_ts, end_ts;
-        CounterType type;
-    };
-
-    UInt64 count[num_counters];
-    std::list<Event> events;
-
     Timeline();
+    ~Timeline();
 
-    void track(CounterType type, Int64 begin_ts, Int64 end_ts, Float64 value);
+    void track(CounterType type, Int64 ts, Int64 value);
 
     template <typename TimePoint>
-    void track(CounterType type, const TimePoint & begin_tp, const TimePoint & end_tp, Float64 value)
+    void track(CounterType type, const TimePoint & tp, Int64 value)
     {
-        Int64 begin_ts = toTimestamp(begin_tp);
-        Int64 end_ts = toTimestamp(end_tp);
-        track(type, begin_ts, end_ts, value);
+        track(type, toTimestamp(tp), value);
     }
+
+    void flushBuffer();
 
     class Timer
     {
     public:
+        using Clock = std::chrono::high_resolution_clock;
+
         explicit Timer(Timeline & parent_, CounterType type_, bool running_);
         ~Timer();
 
@@ -75,8 +69,6 @@ public:
         }
 
     private:
-        using Clock = std::chrono::high_resolution_clock;
-
         Timeline & parent;
         CounterType type;
         bool running;
@@ -85,9 +77,9 @@ public:
 
     Timer newTimer(CounterType type, bool running = true);
 
-    Float64 sum(CounterType type) const;
-
     void dump(FmtBuffer & buf) const;
+
+    Int64 getCounter(CounterType type) const;
 
 private:
     friend class Timer;
@@ -103,6 +95,20 @@ private:
     {
         return toNanoseconds(tp.time_since_epoch());
     }
+
+    void checkAndAddEvent(bool is_final = false);
+
+    struct Event
+    {
+        Int64 ts;
+        Int64 count[num_counters];
+    };
+
+    Int64 last_ts = 0;
+    Int64 batch_threshold = 100'000'000;
+    Int64 batched = 0;
+    Int64 count[num_counters] = {0}, sum[num_counters] = {0};
+    std::list<Event> events;
 };
 
 } // namespace DB
