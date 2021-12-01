@@ -1214,11 +1214,21 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     }
     if (!need_append_timezone_cast && !need_append_type_cast)
     {
-        for (auto i : output_offsets)
+        if (!output_offsets.empty())
         {
-            final_project.emplace_back(
-                current_columns[i].name,
-                unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
+            for (auto i : output_offsets)
+            {
+                final_project.emplace_back(
+                    current_columns[i].name,
+                    unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
+            }
+        }
+        else
+        {
+            for (const auto & element : current_columns)
+            {
+                final_project.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
+            }
         }
     }
     else
