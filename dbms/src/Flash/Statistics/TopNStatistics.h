@@ -17,18 +17,14 @@ struct TopNStatistics : public ExecutorStatistics
     size_t inbound_blocks = 0;
     size_t inbound_bytes = 0;
 
-    size_t outbound_rows = 0;
-    size_t outbound_blocks = 0;
-    size_t outbound_bytes = 0;
-
-    explicit TopNStatistics(const String & executor_id_)
-        : ExecutorStatistics(executor_id_)
+    TopNStatistics(const String & executor_id_, Context & context)
+        : ExecutorStatistics(executor_id_, context)
     {}
 
-    String toJson() const override;
+    String extraToJson() const override;
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, DAGContext & dag_context);
+    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
 };
 } // namespace DB

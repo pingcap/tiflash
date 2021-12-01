@@ -6,9 +6,8 @@ namespace DB
 String MPPTunnelProfileInfo::toJson() const
 {
     return fmt::format(
-        R"({{"connection_type":"{}","rows":{},"blocks":{},"bytes":{},"tunnel_id":"{}"}})",
+        R"({{"connection_type":"{}","packets":{},"bytes":{},"tunnel_id":"{}"}})",
         connection_type,
-        rows,
         blocks,
         bytes,
         tunnel_id);

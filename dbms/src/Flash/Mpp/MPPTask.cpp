@@ -210,6 +210,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     dag_context->mpp_task_log = log;
     context.setDAGContext(dag_context.get());
 
+    task_stats->setSenderExecutorId(*dag_context);
+
     if (dag_context->isRootMPPTask())
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
@@ -242,7 +244,6 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
         }
-        task_stats->upstream_task_ids.push_back(task_meta.task_id());
     }
     dag_context->tunnel_set = tunnel_set;
 
@@ -270,7 +271,6 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     DAGQuerySource dag(context, local_regions, remote_regions, dag_req, log, true);
-    task_stats->setExecutorsStructure(dag_req);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -368,13 +368,13 @@ void MPPTask::runImpl()
         task_stats->local_input_throughput = dag_context->getLocalInputThroughput();
         task_stats->remote_input_throughput = dag_context->getRemoteInputThroughput();
         task_stats->output_throughput = dag_context->getOutputThroughput();
-
-        task_stats->executor_statistics_vec = dag_context->getExecutorStatisticsVector();
     }
     else
     {
         writeErrToAllTunnels(err_msg);
     }
+    dag_context->collectExecutorStatistics(context);
+    task_stats->executor_statistics_map = &dag_context->getExecutorStatisticsMap();
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     unregisterTask();
 

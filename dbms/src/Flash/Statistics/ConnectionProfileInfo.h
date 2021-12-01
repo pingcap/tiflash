@@ -13,7 +13,9 @@ struct ConnectionProfileInfo
     size_t blocks = 0;
     size_t bytes = 0;
 
-    explicit ConnectionProfileInfo(const String & connection_type_): connection_type(connection_type_) {}
+    explicit ConnectionProfileInfo(const String & connection_type_)
+        : connection_type(connection_type_)
+    {}
 
     virtual String toJson() const = 0;
 

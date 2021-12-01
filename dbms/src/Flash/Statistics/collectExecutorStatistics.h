@@ -2,9 +2,9 @@
 
 #include <Flash/Statistics/ExecutorStatistics.h>
 
-#include <vector>
+#include <map>
 
 namespace DB
 {
-std::vector<ExecutorStatisticsPtr> collectExecutorStatistics(DAGContext & dag_context);
+std::map<String, ExecutorStatisticsPtr> collectExecutorStatistics(Context & context);
 } // namespace DB

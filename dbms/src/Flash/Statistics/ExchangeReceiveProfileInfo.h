@@ -10,12 +10,12 @@ namespace DB
 struct ExchangeReceiveProfileInfo : public ConnectionProfileInfo
 {
     Int64 partition_id;
-    Int64 sender_task_id;
+    Int64 receiver_source_task_id;
 
-    explicit ExchangeReceiveProfileInfo(Int64 partition_id_, Int64 sender_task_id_)
+    explicit ExchangeReceiveProfileInfo(Int64 partition_id_, Int64 receiver_source_task_id_)
         : ConnectionProfileInfo("ExchangeReceive")
         , partition_id(partition_id_)
-        , sender_task_id(sender_task_id_)
+        , receiver_source_task_id(receiver_source_task_id_)
     {}
 
     String toJson() const override;

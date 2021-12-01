@@ -6,12 +6,12 @@ namespace DB
 String ExchangeReceiveProfileInfo::toJson() const
 {
     return fmt::format(
-        R"({{"connection_type":"{}","rows":{},"blocks":{},"bytes":{},"partition_id":{},"sender_task_id":{}}})",
+        R"({{"connection_type":"{}","rows":{},"blocks":{},"bytes":{},"partition_id":{},"receiver_source_task_id":{}}})",
         connection_type,
         rows,
         blocks,
         bytes,
         partition_id,
-        sender_task_id);
+        receiver_source_task_id);
 }
 } // namespace DB

@@ -5,6 +5,22 @@
 
 namespace DB
 {
+namespace
+{
+inline String storeTypeToString(const pingcap::kv::StoreType & store_type)
+{
+    switch (store_type)
+    {
+    case pingcap::kv::StoreType::TiKV:
+        return "TiKV";
+    case pingcap::kv::StoreType::TiFlash:
+        return "TiFlash";
+    default:
+        throw TiFlashException("unknown store type", Errors::Coprocessor::BadRequest);
+    }
+}
+} // namespace
+
 String CoprocessorTaskInfo::toJson() const
 {
     FmtBuffer buffer;
@@ -15,18 +31,7 @@ String CoprocessorTaskInfo::toJson() const
         buffer,
         [](const pingcap::coprocessor::KeyRange & r, FmtBuffer & fb) { fb.fmtAppend("\"[{},{})\"", r.start_key, r.end_key); },
         ",");
-    buffer.append(R"(],"store_type":")");
-    switch (store_type)
-    {
-    case pingcap::kv::StoreType::TiKV:
-        buffer.append(R"(TiKV"})");
-        break;
-        case pingcap::kv::StoreType::TiFlash:
-            buffer.append(R"(TiFlash"})");
-            break;
-            default:
-                throw TiFlashException("unknown store type", Errors::Coprocessor::BadRequest);
-    }
+    buffer.fmtAppend(R"(],"store_type":"{}"}})", storeTypeToString(store_type));
     return buffer.toString();
 }
 
