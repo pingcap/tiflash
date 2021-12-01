@@ -60,7 +60,7 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(
     return req;
 }
 
-static std::tuple<MPPTunnelPtr, grpc::Status> EstablishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager)
+static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
     std::string err_msg;
@@ -90,7 +90,7 @@ std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const Exch
     bool is_local = enable_local_tunnel && request.req->sender_meta().address() == recv_addr;
     if (is_local)
     {
-        auto [tunnel, status] = EstablishMPPConnectionLocal(request.req.get(), task_manager);
+        auto [tunnel, status] = establishMPPConnectionLocal(request.req.get(), task_manager);
         if (!status.ok())
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());

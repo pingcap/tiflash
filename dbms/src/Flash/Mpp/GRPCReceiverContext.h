@@ -22,7 +22,7 @@ public:
 
 struct ExchangeRecvRequest
 {
-    Int64 send_task_id = -2;
+    Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
 
     String debugString() const;
