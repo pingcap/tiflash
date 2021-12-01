@@ -1,14 +1,12 @@
-#include <Parsers/ASTTruncateQuery.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterTruncateQuery.h>
-#include <Common/typeid_cast.h>
-
-#include <Storages/StorageMergeTree.h>
+#include <Parsers/ASTTruncateQuery.h>
+#include <Storages/IStorage.h>
 
 
 namespace DB
 {
-
 BlockIO InterpreterTruncateQuery::execute()
 {
     auto & truncate = typeid_cast<ASTTruncateQuery &>(*query_ptr);
@@ -20,4 +18,4 @@ BlockIO InterpreterTruncateQuery::execute()
     return {};
 }
 
-}
+} // namespace DB

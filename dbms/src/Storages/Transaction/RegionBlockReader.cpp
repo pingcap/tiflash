@@ -1,5 +1,5 @@
 #include <Columns/ColumnsNumber.h>
-#include <Core/TMTPKType.h>
+#include <DataTypes/DataTypeString.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -20,6 +20,32 @@ extern const int LOGICAL_ERROR;
 
 using TiDB::DatumFlat;
 using TiDB::TableInfo;
+
+namespace
+{
+enum TMTPKType
+{
+    INT64,
+    UINT64,
+    STRING,
+    UNSPECIFIED,
+};
+
+TMTPKType getTMTPKType(const IDataType & rhs)
+{
+    static const DataTypeInt64 & dataTypeInt64 = {};
+    static const DataTypeUInt64 & dataTypeUInt64 = {};
+    static const DataTypeString & dataTypeString = {};
+
+    if (rhs.equals(dataTypeInt64))
+        return TMTPKType::INT64;
+    else if (rhs.equals(dataTypeUInt64))
+        return TMTPKType::UINT64;
+    else if (rhs.equals(dataTypeString))
+        return TMTPKType::STRING;
+    return TMTPKType::UNSPECIFIED;
+}
+} // namespace
 
 Field GenDefaultField(const ColumnInfo & col_info)
 {
