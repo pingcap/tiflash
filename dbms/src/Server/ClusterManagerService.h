@@ -17,7 +17,6 @@ public:
     ~ClusterManagerService();
 
 private:
-    static void run(const std::string & bin_path, const std::vector<std::string> & args);
     Context & context;
     Timer timer;
     Poco::Logger * log;
