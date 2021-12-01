@@ -234,6 +234,10 @@ struct ResultOfModulo
 };
 
 
+
+template <typename A, typename B>
+constexpr bool TiDBLeastGreatestSpecialCase = (8 == sizeof(A) || 8 == sizeof(B))
+    && (std::is_unsigned_v<A> || std::is_unsigned_v<B>);
 template <typename A, typename B>
 struct ResultOfTiDBLeast
 {
@@ -244,7 +248,7 @@ struct ResultOfTiDBLeast
      */
     using Type = std::conditional_t<std::is_floating_point_v<A> || std::is_floating_point_v<B>,
                                     Float64,
-                                    Int64>;
+                                    std::conditional_t<TiDBLeastGreatestSpecialCase<A, B>, UInt64, Int64>>;
 };
 
 template <typename A>

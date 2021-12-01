@@ -105,7 +105,6 @@ struct BinaryOperationImplBase
 
     static void NO_INLINE vector_constant(const ArrayA & a, typename NearestFieldType<B>::Type b, PaddedPODArray<ResultType> & c)
     {
-        std::cout << "check here..." << std::endl;
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
             if constexpr (IsDecimal<A>)

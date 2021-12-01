@@ -90,7 +90,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal128>>(
             std::make_tuple(21, 16),
-            {"10.0000000000000000"}),
+            {"5.0000000000000000"}),
         executeFunction(
             func_name,
             createColumn<Nullable<Decimal128>>(
@@ -98,7 +98,10 @@ try
                 {"10.0000000000000000"}),
             createColumn<Nullable<Decimal32>>(
                 std::make_tuple(7, 3),
-                {"12.000"})));
+                {"12.000"}),
+            createColumn<Nullable<Decimal64>>(
+                std::make_tuple(6, 3),
+                {"5.000"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal128>>(
@@ -125,6 +128,19 @@ try
             createColumn<Nullable<Decimal32>>(
                 std::make_tuple(7, 3),
                 {DecimalField32(1300, 3), DecimalField32(1300, 3), DecimalField32(-1300, 3), DecimalField32(-1300, 3), DecimalField32(0, 3), DecimalField32(0, 3), {}, {}})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal64>>(
+            std::make_tuple(15, 5),
+            {DecimalField64(924400, 5)}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Decimal32>>(
+                std::make_tuple(7, 5),
+                {DecimalField32(3223456, 5)}),
+            createColumn<Nullable<Decimal64>>(
+                std::make_tuple(15, 3),
+                {DecimalField64(9244, 3)})));
 
     // real least
     ASSERT_COLUMN_EQ(
@@ -188,8 +204,16 @@ try
             func_name,
             createConstColumn<Nullable<Int64>>(1, 5),
             createConstColumn<Nullable<Int64>>(1, -3)));
-}
 
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt64>>({9223372036854775818U}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt64>>({9223372036854775818U}),
+            createColumn<Nullable<UInt64>>({9223372036854775820U})));
+}
 CATCH
+
+
 
 } // namespace DB::tests
