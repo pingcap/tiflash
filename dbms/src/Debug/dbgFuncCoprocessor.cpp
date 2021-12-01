@@ -25,8 +25,8 @@
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/StringTokenizer.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -42,6 +42,7 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
+extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
 
 using TiDB::DatumFlat;
