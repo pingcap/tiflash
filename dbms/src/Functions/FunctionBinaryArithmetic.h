@@ -236,7 +236,7 @@ struct DecimalBinaryOperation
     static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus)
         {
             if (scale_a != 1)
             {
@@ -303,7 +303,7 @@ struct DecimalBinaryOperation
     static void NO_INLINE vector_constant(const ArrayA & a, B b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus)
         {
             if (scale_a != 1)
             {
@@ -370,7 +370,7 @@ struct DecimalBinaryOperation
     static void NO_INLINE constant_vector(A a, const ArrayB & b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = b.size();
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus)
         {
             if (scale_a != 1)
             {
@@ -436,7 +436,7 @@ struct DecimalBinaryOperation
 
     static ResultType constant_constant(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus)
         {
             if (scale_a != 1)
                 return applyScaled<true>(a, b, scale_a);
@@ -521,7 +521,7 @@ private:
     template <bool scale_left>
     static NativeResultType applyScaled(InputType a, InputType b, InputType scale)
     {
-        if constexpr (is_plus_minus_compare || is_division || is_modulo)
+        if constexpr (is_plus_minus || is_division || is_modulo)
         {
             InputType res;
 
@@ -748,7 +748,7 @@ private:
             auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
             auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
             Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, rightScale, result_prec, result_scale);
-
+            std::cout << "ywqq..." << std::endl;
             return createDecimal(result_prec, result_scale);
         }
     }
@@ -765,6 +765,7 @@ private:
         {
             if (typeid_cast<const RightDataType *>(right_type.get()))
             {
+                std::cout << "check here...." << std::endl;
                 type_res = getDecimalReturnType<LeftDataType, RightDataType>(arguments);
                 return true;
             }
@@ -1030,7 +1031,6 @@ public:
             using ExpectedResultType = typename Op<T0, T1>::ResultType;
             if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>)&&!std::is_same_v<ResultType, ExpectedResultType>)
             {
-                throw Exception("ywq check here1....", ErrorCodes::LOGICAL_ERROR);
                 return false;
             }
             else if constexpr (!std::is_same_v<ResultDataType, InvalidType>)
@@ -1081,10 +1081,7 @@ public:
                                 is_left_null_constant = true;
                         }
                         else
-                        {
-                            throw Exception("ywq check here2....", ErrorCodes::LOGICAL_ERROR);
                             return false;
-                        }
                     }
                     if (is_right_nullable)
                     {
@@ -1099,10 +1096,7 @@ public:
                                 is_right_null_constant = true;
                         }
                         else
-                        {
-                            throw Exception("ywq check here3....", ErrorCodes::LOGICAL_ERROR);
                             return false;
-                        }
                     }
                     if (is_left_null_constant || is_right_null_constant)
                     {
@@ -1219,10 +1213,7 @@ public:
                         }
                     }
                     else
-                    {
-                        throw Exception("ywq check here4....", ErrorCodes::LOGICAL_ERROR);
                         return false;
-                    }
                 }
                 else if (auto col_left = checkAndGetColumn<ColVecT0>(col_left_raw))
                 {
@@ -1285,16 +1276,10 @@ public:
                         }
                     }
                     else
-                    {
-                        throw Exception("ywq check here5....", ErrorCodes::LOGICAL_ERROR);
                         return false;
-                    }
                 }
                 else
-                {
-                    throw Exception("ywq check here6....", ErrorCodes::LOGICAL_ERROR);
                     return false;
-                }
 
                 if constexpr (default_impl_for_nulls)
                 {
@@ -1306,7 +1291,6 @@ public:
                 }
                 return true;
             }
-            throw Exception("ywq check here7....", ErrorCodes::LOGICAL_ERROR);
             return false;
         });
         if (!valid)
