@@ -107,7 +107,7 @@ bool setPKVersionDel(ColumnUInt8 & delmark_col,
     const RegionDataReadInfoList & data_list,
     const Timestamp tso,
     RegionScanFilterPtr scan_filter,
-    bool force_decode)
+    bool force_decode[[maybe_unused]])
 {
     ColumnUInt8::Container & delmark_data = delmark_col.getData();
     ColumnUInt64::Container & version_data = version_col.getData();
