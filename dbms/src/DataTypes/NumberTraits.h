@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Common/Decimal.h>
 #include <type_traits>
+#include "common/types.h"
 
 
 namespace DB
@@ -131,6 +132,19 @@ template <typename A, typename B> struct ResultOfModulo
     using Type = std::conditional_t<std::is_floating_point_v<A> || std::is_floating_point_v<B>,
         Float64,
         std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
+};
+
+
+template <typename A, typename B> struct ResultOfTiDBLeast
+{
+    /**
+     * in TiDB:
+     * * if A or B is floating-point, least(A, B) evalutes to Float64.
+     * * if A or B is Integer, least(A, B) evalutes to Int64.
+     */
+    using Type = std::conditional_t<std::is_floating_point_v<A> || std::is_floating_point_v<B>,
+        Float64, 
+        Int64>;
 };
 
 template <typename A> struct ResultOfNegate

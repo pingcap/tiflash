@@ -1,12 +1,15 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
+#include "DataTypes/NumberTraits.h"
+#include "Functions/IsOperation.h"
+#include <iostream>
 
 namespace DB
 {
 template <typename A, typename B>
 struct LeastBaseImpl<A, B, false>
 {
-    using ResultType = NumberTraits::ResultOfLeast<A, B>;
+    using ResultType = typename NumberTraits::ResultOfTiDBLeast<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -25,12 +28,25 @@ template <typename A, typename B>
 struct LeastBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
-    using ResultPrecInferer = PlusDecimalInferer;
+    using ResultPrecInferer = ModDecimalInferer;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return static_cast<Result>(a) < static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            std::cout << "here..." << std::endl;
+            x = static_cast<Result>(a.value);
+        }
+            
+        else
+            x = static_cast<Result>(a);
+        if constexpr (IsDecimal<B>)
+            y = static_cast<Result>(b.value);
+        else
+            y = static_cast<Result>(b);
+
+        return LeastBaseImpl<Result, Result, false>::apply(x, y);
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)

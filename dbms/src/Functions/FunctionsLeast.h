@@ -47,7 +47,7 @@ public:
     {
         if (arguments.size() < 2)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 1.",
+                                + ", should be at least 2.",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         DataTypePtr type_res = arguments[0];
@@ -57,13 +57,21 @@ public:
             auto res = FunctionLeast{context}.getReturnTypeImpl(args);
             type_res = std::move(res);
         }
+
         if (!(checkType<DataTypeInt8>(type_res)
+              || checkType<DataTypeUInt8>(type_res)
               || checkType<DataTypeInt16>(type_res)
+              || checkType<DataTypeUInt16>(type_res)
               || checkType<DataTypeInt32>(type_res)
+              || checkType<DataTypeUInt32>(type_res)
               || checkType<DataTypeInt64>(type_res)
+              || checkType<DataTypeUInt64>(type_res)
               || checkType<DataTypeFloat32>(type_res)
-              || checkType<DataTypeFloat64>(type_res)))
-            // todo add decimal and unsigned..
+              || checkType<DataTypeFloat64>(type_res)
+              || checkType<DataTypeDecimal32>(type_res)
+              || checkType<DataTypeDecimal64>(type_res)
+              || checkType<DataTypeDecimal128>(type_res)
+              || checkType<DataTypeDecimal256>(type_res)))
             throw Exception(
                 "Illegal types " + type_res->getName() + " of arguments of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
