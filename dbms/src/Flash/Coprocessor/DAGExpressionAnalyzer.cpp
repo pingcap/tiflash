@@ -1186,7 +1186,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     const String & column_prefix,
     bool keep_session_timezone_info)
 {
-    if (unlikely(output_offsets.empty()))
+    if (unlikely(!keep_session_timezone_info && output_offsets.empty()))
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
     NamesWithAliases final_project;
