@@ -57,8 +57,10 @@ public:
 
     /// put the implementation of dtor in .cpp so we don't need to put the specialization of
     /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
-    ~LocalExchangePacketReader() override {
-        if (tunnel) { // In case that ExchangeReceiver throw error before finish reading from mpptunnel
+    ~LocalExchangePacketReader() override
+    {
+        if (tunnel)
+        { // In case that ExchangeReceiver throw error before finish reading from mpptunnel
             tunnel->finishWithLock();
         }
     }
