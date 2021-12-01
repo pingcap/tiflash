@@ -1,5 +1,4 @@
 #include <Columns/ColumnsNumber.h>
-#include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/Datum.h>

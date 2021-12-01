@@ -1,12 +1,21 @@
 #pragma once
 
-#include <Core/TMTPKType.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
 
 
 namespace DB
 {
+enum TMTPKType
+{
+    INT64,
+    UINT64,
+    STRING,
+    UNSPECIFIED,
+};
+
+TMTPKType getTMTPKType(const IDataType & rhs);
+
 /**
  * A snapshot of the table structure of a storage(just support DeltaTree storage now). We use it to decode Raft snapshot
  * data with a consistent table structure.

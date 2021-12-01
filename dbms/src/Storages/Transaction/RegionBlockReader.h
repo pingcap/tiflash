@@ -3,7 +3,6 @@
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
 #include <Core/Names.h>
-#include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>

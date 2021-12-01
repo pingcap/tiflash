@@ -6,9 +6,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/Region.h>
