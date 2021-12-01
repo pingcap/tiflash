@@ -1,181 +1,111 @@
 #pragma once
 
-#include <mutex>
 #include <Common/Exception.h>
 #include <Storages/Page/V3/BlobFile.h>
+#include <Storages/Page/V3/spacemap/SpaceMap.h>
 
-namespace DB 
+#include <mutex>
+
+namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
+
 
 namespace PS::V3
 {
+// TBD : need add these into config
+#define BLOBFILE_NAME_PRE "blobfile_"
+#define BLOBFILE_LIMIT_SIZE 512 * DB::MB
+#define BLOBFILE_CACHED_FD_SIZE 20
+#define BLOBFILE_SMAP_TYPE SpaceMap::SpaceMapType::SMAP64_RBTREE
+
 class BlobStore
 {
 public:
-
-    std::list<BlobFile> getAllBlobFiles();
-
-    write(char * buffer,size_t size)
-    {
-        // 
-    }
-
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
-
-    class BlobStats2
-    {
-        public:
-            void addStat(UInt64 blob_file_id)
-            {
-                
-            }
-
-            void rmStat(UInt64 blob_file_id)
-            {
-
-            }
-
-            void chooseSpaceMap(size_t buf_size)
-            {
-                // using idle using ...
-            }
-
-
-        #ifndef DBMS_PUBLIC_GTEST
-        private:
-        #endif
-            class BlobStat
-            {
-                UInt64 sm_max_caps;
-                UInt64 sm_min_caps;
-
-                UInt64 sm_total_size;
-                UInt64 sm_valid_size;
-
-                std::mutex sm_lock;
-            };
-        #ifndef DBMS_PUBLIC_GTEST
-        private:
-        #endif
-            std::map<UInt64, std::shared_ptr<BlobStat>> sms;
-
-            std::atomic<ull> total_sm_used;
-            std::atomic<ull> total_sm_size;
-
-            // todo
-            std::atomic<ull> minimal_file_id;
-
-            std::condition_variable write_mutex_cv;
-            std::
-    };
-
+    using BlobFileId = UInt16;
 
     class BlobStats
     {
-        public:
-        using ull = unsigned long long;
-        using atomic_ull = std::atomic<ull>;
-        using atomic_ptr_t = std::shared_ptr<atomic_ull>;
-        using atomic_map = std::map<UInt64, atomic_ptr_t>;
-
-        BlobStats(size_t max_blob_file_size)
-            : limit_space_size(max_blob_file_size)
+    public:
+        struct BlobStat
         {
-            
-        }
+            SpaceMapPtr smap;
 
-        // TBD : replace it with template
-        void addSMMaxCaps(UInt64 blob_file_id)
-        {
-            std::lock_guard<std::mutex> guard(stats_cm_lock);
+            BlobFileId id;
 
-            auto sm_max_cpa_it = sm_max_caps.find(blob_file_id);
-            if (sm_max_cpa_it != sm_max_caps.end()) 
-            {
-                throw Exception("Found current blob [blobid=" +  DB::toString(blob_file_id) +"] existed in BlobStats.", 
-                    ErrorCodes::LOGICAL_ERROR);
-            }
+            /**
+                 * If no any data inside. It shoule be same as space map `biggest_cap`
+                 */
+            UInt64 sm_max_caps = BLOBFILE_LIMIT_SIZE;
 
-            sm_max_caps.insert({blob_file_id, std::make_shared<atomic_ull>(limit_space_size)});
-        }
+            UInt64 sm_total_size = 0;
+            UInt64 sm_valid_size = 0;
+            UInt64 sm_valid_rate = 1;
 
-        void delSMMaxCaps(UInt64 blob_file_id)
-        {
-            std::lock_guard<std::mutex> guard(stats_cm_lock);
-
-            auto sm_max_cpa_it = sm_max_caps.find(blob_file_id);
-            if (sm_max_cpa_it == sm_max_caps.end()) 
-            {
-                throw Exception("Can't found current Blob [blobid=" +  DB::toString(blob_file_id) +"] in BlobStats.", 
-                    ErrorCodes::LOGICAL_ERROR);
-            }
-
-            sm_max_caps.erase(sm_max_cpa_it);
-        }
-
-        // TBD : replace it with template
-        void updateSMMaxCaps(size_t new_value, UInt64 blob_file_id)
-        {
-            if (new_value == 0)
-            {
-                return;
-            }
-
-            auto sm_max_cpa_it = sm_max_caps.find(blob_file_id);
-            if (sm_max_cpa_it == sm_max_caps.end()) 
-            {
-                throw Exception("Can't found current Blob [blobid=" +  DB::toString(blob_file_id) +"] in BlobStats.", 
-                    ErrorCodes::LOGICAL_ERROR);
-            }
-
-            auto sm_max_cpa = sm_max_cpa_it->second;
-            sm_max_cpa->store(new_value, std::memory_order_seq_cst);
+            std::mutex sm_lock;
         };
 
-        ull getSMMaxCaps(UInt64 blob_file_id)
-        {
-            auto sm_max_cpa_it = sm_max_caps.find(blob_file_id);
-            if (sm_max_cpa_it == sm_max_caps.end()) 
-            {
-                throw Exception("Can't found current Blob [blobid=" +  DB::toString(blob_file_id) +"] in BlobStats.", 
-                    ErrorCodes::LOGICAL_ERROR);
-            }
+        using BlobStatPtr = std::shared_ptr<BlobStat>;
 
-            auto sm_max_cpa = sm_max_cpa_it->second;
-            return sm_max_cpa->load(std::memory_order_seq_cst);
-        }
+    public:
+        BlobStats(Poco::Logger * log_);
 
-        #ifndef DBMS_PUBLIC_GTEST
-        private:
-        #endif
-            // RO , The max limit size of blobfile.
-            size_t limit_space_size;
+        void lock();
 
-            atomic_map sm_max_caps;
-            atomic_map sm_min_caps;
+        void unlock();
 
-            atomic_map sm_total_sizes;
-            atomic_map sm_valid_sizes;
+        void statLock(BlobStatPtr stat);
 
-            std::atomic<ull> total_sm_used;
-            std::atomic<ull> total_sm_size;
-            std::map<UInt64, std::mutex> sm_locks;
+        void statUnlock(BlobStatPtr stat);
 
-            std::mutex stats_cm_lock;
-            
+        BlobStatPtr createStat(BlobFileId blob_file_id);
+
+        void earseStat(BlobFileId blob_file_id);
+
+        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size);
+
+        UInt64 getPosFromStat(BlobStatPtr stat, size_t buf_size);
+
+    private:
+        Poco::Logger * log;
+
+        BlobFileId roll_id = 0;
+        std::list<BlobFileId> old_ids;
+        std::list<BlobStatPtr> stats_map;
+
+        /**
+             * TBD : not sure we need total
+             *  For now these two value are not update and unused.
+             */
+        UInt64 total_sm_used;
+        UInt64 total_sm_size;
+
+        std::mutex lock_stats;
     };
 
-private:
+    void recover();
 
+    BlobStats getAllBlobStats();
+
+    void write(char * buffer, size_t size);
+
+    void read(BlobFileId file, UInt64 offset, char * buffer, size_t size);
+
+private:
     // TBD: after single path work, do the multi-path
     // String choosePath();
+
+    std::pair<BlobFileId, BlobStats::BlobStat> chooseFile();
+
+private:
+    std::map<BlobFileId, BlobFile> cached_writer;
+
+    BlobStats blob_stats;
+
+    Poco::Logger * log;
 };
 
 } // namespace PS::V3

@@ -1,26 +1,24 @@
+#include <Encryption/WriteReadableFile.h>
 #include <Storages/Page/V3/BlobFile.h>
-
 
 namespace DB::PS::V3
 {
-BlobFile::BlobFile(String path_, FileProviderPtr file_provider_)
+BlobFile::BlobFile(String path_, FileProviderPtr file_provider_, bool truncate_if_exists)
     : file_provider{file_provider_}
     , path(path_)
-    , log(&Poco::Logger::get("PageStorage V3"))
+    , log(&Poco::Logger::get("BlobFile"))
 {
-    smap = (struct spacemap *)calloc(1, sizeof(struct spacemap));
-    if (smap == nullptr){
-
-    }
+    wrPtr = file_provider->newWriteReadableFile(
+        getPath(),
+        getEncryptionPath(),
+        truncate_if_exists,
+        /*create_new_encryption_info_*/ truncate_if_exists);
 }
 
 BlobFile::~BlobFile()
 {
-    free(smap);
+    wrPtr->close();
 }
-
-
-
 
 
 } // namespace DB::PS::V3

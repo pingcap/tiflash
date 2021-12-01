@@ -452,6 +452,104 @@ no_need_insert:
     return retval;
 }
 
+void RBTreeSpaceMap::searchRange(size_t size, UInt64 * ret, UInt64 * max_cap)
+{
+    struct rb_node * node = NULL;
+    struct smap_rb_entry * entry;
+
+    UInt64 _biggest_cap = 0;
+    UInt64 _biggest_range = 0;
+    for (node = rb_tree_first(&rb_tree->root); node != NULL; node = rb_tree_next(node))
+    {
+        entry = node_to_entry(node);
+        if (entry->count >= size)
+        {
+            break;
+        }
+        else
+        {
+            if (entry->count > _biggest_cap)
+            {
+                _biggest_cap = entry->count;
+                _biggest_range = entry->start;
+            }
+        }
+    }
+
+    // not place found.
+    if (!node)
+    {
+        LOG_ERROR(log, "Not sure why can't found any place to insert.[old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
+        biggest_range = _biggest_range;
+        biggest_cap = _biggest_cap;
+
+        *ret = UINT64_MAX;
+        *max_cap = 0;
+        return;
+    }
+
+    // Update return start
+    *ret = entry->start;
+
+    if (entry->count == size)
+    {
+        // It is champion, need update
+        if (entry->start == biggest_range)
+        {
+            struct rb_node * old_node = node;
+            node = rb_tree_next(node);
+            rb_node_remove(old_node, &rb_tree->root);
+            rb_free_entry(rb_tree, entry);
+            goto go_on_update_biggest;
+        }
+        else // It not champion, just return
+        {
+            rb_node_remove(node, &rb_tree->root);
+            rb_free_entry(rb_tree, entry);
+            *max_cap = biggest_cap;
+            return;
+        }
+    }
+    else // must be entry->count > size
+    {
+        // Resize this node, no need update
+        entry->start += size;
+        entry->count -= size;
+
+        // It is champion, need update
+        if (entry->start - size == biggest_range)
+        {
+            if (entry->count > _biggest_cap)
+            {
+                _biggest_cap = entry->count;
+                _biggest_range = entry->start;
+            }
+            node = rb_tree_next(node);
+            goto go_on_update_biggest;
+        }
+        else // It not champion, just return
+        {
+            *max_cap = biggest_cap;
+            return;
+        }
+    }
+
+go_on_update_biggest:
+
+    for (; node != NULL; node = rb_tree_next(node))
+    {
+        entry = node_to_entry(node);
+        if (entry->count > _biggest_cap)
+        {
+            _biggest_cap = entry->count;
+            _biggest_range = entry->start;
+        }
+    }
+    biggest_range = _biggest_range;
+    biggest_cap = _biggest_cap;
+    *max_cap = biggest_cap;
+}
+
 int RBTreeSpaceMap::markSmapRange(UInt64 block, size_t size)
 {
     int rc;

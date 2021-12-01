@@ -44,7 +44,7 @@ public:
     /**
      * Search range, return the free bits 
      */
-    void searchRange(UInt64 start, UInt64 end, size_t size, UInt64 * ret);
+    virtual void searchRange(size_t size, UInt64 * ret, UInt64 * max_cap) = 0;
 
     /**
      * Clear all ranges
@@ -86,9 +86,6 @@ protected:
 
     /* Space map bit/bits test operators */
     virtual int testSmapRange(UInt64 offset, size_t size) = 0;
-
-    /* Search range, return the free bits */
-    virtual void searchSmapRange(UInt64 start, UInt64 end, size_t size, UInt64 * ret) = 0;
 
     /* Space map range set/unset operators */
     virtual int markSmapRange(UInt64 offset, size_t size) = 0;

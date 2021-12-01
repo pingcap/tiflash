@@ -19,6 +19,8 @@ class STDMapSpaceMap : public SpaceMap
 public:
     STDMapSpaceMap(UInt64 start, UInt64 end, int cluster_bits = 0)
         : SpaceMap(start, end, cluster_bits)
+        , biggest_range(start)
+        , biggest_cap(end - start)
     {
         type = SMAP64_STD_MAP;
     };
@@ -88,9 +90,8 @@ protected:
         return 0;
     }
 
-    void searchSmapRange([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] size_t num, [[maybe_unused]] UInt64 * ret) override
+    void searchRange([[maybe_unused]] size_t size, [[maybe_unused]] UInt64 * ret, [[maybe_unused]] UInt64 * max_cap) override
     {
-        // TBD
     }
 
     int markSmapRange(UInt64 block, size_t num) override
@@ -121,10 +122,8 @@ protected:
             if (it->first == block)
             {
                 map.erase(it);
-
-                // in the range
             }
-            else
+            else // in the range
             {
                 // In the mid, and not match the left or right.
                 // Split to two range
@@ -193,6 +192,8 @@ protected:
 private:
 #endif
     std::map<UInt64, UInt64> map;
+    UInt64 biggest_range = 0;
+    UInt64 biggest_cap = 0;
 };
 
 using STDMapSpaceMapPtr = std::shared_ptr<STDMapSpaceMap>;

@@ -49,6 +49,8 @@ class RBTreeSpaceMap : public SpaceMap
 public:
     RBTreeSpaceMap(UInt64 start, UInt64 end, int cluster_bits = 0)
         : SpaceMap(start, end, cluster_bits)
+        , biggest_range(start)
+        , biggest_cap(end - start)
     {
         type = SMAP64_RBTREE;
     };
@@ -85,10 +87,7 @@ protected:
     int testSmapRange(UInt64 block, size_t num) override;
 
     /* Search range , return the free bits */
-    void searchSmapRange([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] size_t num, [[maybe_unused]] UInt64 * ret) override
-    {
-        // TBD
-    }
+    void searchRange(size_t size, UInt64 * ret, UInt64 * max_cap) override;
 
     int markSmapRange(UInt64 block, size_t num) override;
 
@@ -98,6 +97,8 @@ protected:
 private:
 #endif
     struct rb_private * rb_tree;
+    UInt64 biggest_range = 0;
+    UInt64 biggest_cap = 0;
 };
 
 using RBTreeSpaceMapPtr = std::shared_ptr<RBTreeSpaceMap>;
