@@ -26,16 +26,6 @@
     M(UncompressedCacheHits)                    \
     M(UncompressedCacheMisses)                  \
     M(UncompressedCacheWeightLost)              \
-    M(PersistedMarksFileHits)                   \
-    M(PersistedMarksFileMisses)                 \
-    M(PersistedMarksFileBusy)                   \
-    M(PersistedMarksFileUpdate)                 \
-    M(PersistedCacheFileHits)                   \
-    M(PersistedCacheFileMisses)                 \
-    M(PersistedCacheFileExpectedMisses)         \
-    M(PersistedCacheFileBusy)                   \
-    M(PersistedCacheFileUpdate)                 \
-    M(PersistedCachePartBusy)                   \
     M(IOBufferAllocs)                           \
     M(IOBufferAllocBytes)                       \
     M(ArenaAllocChunks)                         \
@@ -48,15 +38,6 @@
     M(CreatedReadBufferAIO)                     \
     M(CreatedWriteBufferOrdinary)               \
     M(CreatedWriteBufferAIO)                    \
-                                                \
-    M(ReplicatedPartFetches)                    \
-    M(ReplicatedPartFailedFetches)              \
-    M(ObsoleteReplicatedParts)                  \
-    M(ReplicatedPartMerges)                     \
-    M(ReplicatedPartFetchesOfMerged)            \
-    M(ReplicatedPartChecks)                     \
-    M(ReplicatedPartChecksFailed)               \
-    M(ReplicatedDataLoss)                       \
                                                 \
     M(InsertedRows)                             \
     M(InsertedBytes)                            \
@@ -82,27 +63,6 @@
                                                 \
     M(SlowRead)                                 \
     M(ReadBackoff)                              \
-                                                \
-    M(ReplicaYieldLeadership)                   \
-    M(ReplicaPartialShutdown)                   \
-                                                \
-    M(SelectedParts)                            \
-    M(SelectedRanges)                           \
-    M(SelectedMarks)                            \
-                                                \
-    M(MergedRows)                               \
-    M(MergedUncompressedBytes)                  \
-    M(MergesTimeMilliseconds)                   \
-                                                \
-    M(MergeTreeDataWriterRows)                  \
-    M(MergeTreeDataWriterUncompressedBytes)     \
-    M(MergeTreeDataWriterCompressedBytes)       \
-    M(MergeTreeDataWriterBlocks)                \
-    M(MergeTreeDataWriterBlocksAlreadySorted)   \
-                                                \
-    M(ObsoleteEphemeralNode)                    \
-    M(CannotRemoveEphemeralNode)                \
-    M(LeaderElectionAcquiredLeadership)         \
                                                 \
     M(RegexpCreated)                            \
     M(ContextLock)                              \
