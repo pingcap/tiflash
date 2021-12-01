@@ -184,15 +184,17 @@ void MPPTunnelBase<Writer>::sendLoop()
 template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
-    LOG_TRACE(log, "ready to finish");
+    LOG_TRACE(log, "ready to finish, is_local: " << is_local);
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
         throw Exception("has finished, " + send_loop_msg);
     /// make sure to finish the tunnel after it is connected
+    LOG_TRACE(log, "waitUntilConnectedOrCancelled");
     waitUntilConnectedOrCancelled(lk);
     lk.unlock();
     /// in normal cases, send nullptr to notify finish
     send_queue.push(nullptr);
+    LOG_TRACE(log, "waitForFinish");
     waitForFinish();
     LOG_TRACE(log, "done to finish");
 }
