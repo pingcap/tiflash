@@ -6,7 +6,6 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
-#include <Storages/PartPathSelector.h>
 #include <common/MultiVersion.h>
 #include <grpc++/grpc++.h>
 
@@ -45,7 +44,6 @@ class Cluster;
 class Compiler;
 class MarkCache;
 class UncompressedCache;
-class PersistedCache;
 class DBGInvoker;
 class TMTContext;
 using TMTContextPtr = std::shared_ptr<TMTContext>;
@@ -55,8 +53,6 @@ class Macros;
 struct Progress;
 class Clusters;
 class QueryLog;
-class PartLog;
-struct MergeTreeSettings;
 class IDatabase;
 class DDLGuard;
 class IStorage;
@@ -341,17 +337,10 @@ public:
     ProcessList & getProcessList();
     const ProcessList & getProcessList() const;
 
-    MergeList & getMergeList();
-    const MergeList & getMergeList() const;
-
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);
     std::shared_ptr<UncompressedCache> getUncompressedCache() const;
     void dropUncompressedCache() const;
-
-    /// Create a persisted cache written in fast(er) disk device.
-    void setPersistedCache(size_t max_size_in_bytes, const std::string & persisted_path);
-    std::shared_ptr<PersistedCache> getPersistedCache() const;
 
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
@@ -398,9 +387,6 @@ public:
         const std::vector<size_t> & latest_capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
-    void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
-    PartPathSelector & getPartPathSelector();
-
     void initializeTiFlashMetrics();
 
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
@@ -426,12 +412,6 @@ public:
 
     /// Nullptr if the query log is not ready for this moment.
     QueryLog * getQueryLog();
-
-    /// Returns an object used to log opertaions with parts if it possible.
-    /// Provide table name to make required cheks.
-    PartLog * getPartLog(const String & part_database);
-
-    const MergeTreeSettings & getMergeTreeSettings();
 
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
     void setMaxTableSizeToDrop(size_t max_size);
