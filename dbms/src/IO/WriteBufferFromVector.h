@@ -99,6 +99,19 @@ public:
     {
         finalize();
     }
+
+    ssize_t hintBuffer(const DB::Buffer::HintInfo & info) override
+    {
+        if (auto const * write_hint = std::get_if<DB::Buffer::IncommingWrite::Index>(&info))
+        {
+            this->vector.reserve(write_hint->length);
+            return this->vector.capacity();
+        }
+        else
+        {
+            return -EINVAL;
+        }
+    }
 };
 
 } // namespace DB

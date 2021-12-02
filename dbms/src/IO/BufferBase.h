@@ -3,10 +3,40 @@
 #include <Core/Defines.h>
 
 #include <algorithm>
-
+#include <variant>
 
 namespace DB
 {
+
+namespace Buffer
+{
+
+struct IncommingRead
+{
+    inline static constexpr size_t Index = 0;
+    size_t length;
+};
+
+struct IncommingWrite
+{
+    inline static constexpr size_t Index = 1;
+    size_t length;
+};
+
+struct ColdBuffer
+{
+    inline static constexpr size_t Index = 2;
+};
+
+struct HotBuffer
+{
+    inline static constexpr size_t Index = 3;
+};
+
+using HintInfo = std::variant<IncommingRead, IncommingWrite, ColdBuffer, HotBuffer>;
+
+} // namespace Buffer
+
 /** Base class for ReadBuffer and WriteBuffer.
   * Contains common types, variables, and functions.
   *
@@ -93,6 +123,15 @@ public:
     {
         return pos != working_buffer.end();
     }
+
+    virtual ssize_t hintBuffer(const DB::Buffer::HintInfo & info)
+    {
+        // do nothing on default
+        UNUSED(info);
+        return 0;
+    };
+
+    virtual ~BufferBase() = default;
 
 protected:
     /// Read/write position.

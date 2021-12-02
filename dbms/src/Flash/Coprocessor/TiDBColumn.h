@@ -28,10 +28,17 @@ public:
     void append(const TiDBBit & bit);
     void append(const TiDBEnum & ti_enum);
     void encodeColumn(WriteBuffer & ss);
+    size_t expectEncodeSpace() const noexcept
+    {
+        return sizeof(UInt8) * (null_cnt > 0 ? null_bitmap.size() : 0)
+            + sizeof(UInt32) * 2
+            + sizeof(Int64) * (isFixed() ? 0 : var_offsets.size())
+            + sizeof(std::string::value_type) * data->str().size();
+    }
     void clear();
 
 private:
-    bool isFixed() { return fixed_size != VAR_SIZE; };
+    bool isFixed() const noexcept { return fixed_size != VAR_SIZE; };
     void finishAppendFixed();
     void finishAppendVar(UInt32 size);
     void appendNullBitMap(bool value);

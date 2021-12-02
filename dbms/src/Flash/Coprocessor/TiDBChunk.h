@@ -17,6 +17,10 @@ public:
 
     void encodeChunk(WriteBuffer & ss)
     {
+        DB::Buffer::IncommingWrite hint{0};
+        for (auto & c : columns)
+            hint.length += c.expectEncodeSpace();
+        ss.hintBuffer(hint);
         for (auto & c : columns)
             c.encodeColumn(ss);
     }
