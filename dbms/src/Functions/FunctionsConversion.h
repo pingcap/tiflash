@@ -1783,7 +1783,7 @@ public:
         const ColumnString * input_raw_col = nullptr;
         if (input_column->isColumnNullable())
         {
-            auto null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
+            const auto * null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
             input_raw_col = checkAndGetColumn<ColumnString>(null_input_column->getNestedColumnPtr().get());
         }
         else
@@ -1833,7 +1833,7 @@ public:
             const ColumnString * format_raw_col = nullptr;
             if (format_column->isColumnNullable())
             {
-                auto null_format_column = checkAndGetColumn<ColumnNullable>(format_column.get());
+                const auto * null_format_column = checkAndGetColumn<ColumnNullable>(format_column.get());
                 format_raw_col = checkAndGetColumn<ColumnString>(null_format_column->getNestedColumnPtr().get());
             }
             else
