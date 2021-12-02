@@ -46,6 +46,6 @@ private:
 
     WriteReadableFilePtr wrfile;
 };
-
+using BlobFilePtr = std::shared_ptr<BlobFile>;
 
 } // namespace DB::PS::V3

@@ -18,15 +18,15 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_)
     : file_provider(file_provider_)
     , log(&Poco::Logger::get("RBTreeSpaceMap"))
     , blob_stats(log)
+    , cached_file(BLOBSTORE_CACHED_FD_SIZE)
 {
 }
 
-void BlobStore::write(char * buffer, size_t size)
+std::pair<BlobStore::BlobFileId, UInt64> BlobStore::write(char * buffer, size_t size, const WriteLimiterPtr & write_limiter)
 {
     UInt16 blob_file_id = INVAILD_BLOBFILE_ID;
     BlobStatPtr stat;
 
-find_stat:
     blob_stats.lock();
     std::tie(stat, blob_file_id) = blob_stats.chooseStat(size);
 
@@ -40,15 +40,76 @@ find_stat:
     // blobfile write
     blob_stats.statLock(stat);
     UInt64 offset = blob_stats.getPosFromStat(stat, size);
+
+    // Can't insert into this spacemap
     if (offset == UINT64_MAX)
     {
         blob_stats.statUnlock(stat);
-        goto find_stat;
+        throw Exception("Get postion from BlobStat Failed, it may caused by `sm_max_caps` is no corrent.",
+                        ErrorCodes::LOGICAL_ERROR);
     }
     blob_stats.statUnlock(stat);
 
-    // TBD: do write
-    (void)buffer;
+    auto blob_file = getBlobFile(stat->id);
+
+    blob_file->write(buffer, offset, size, write_limiter);
+    return std::make_pair(stat->id, offset);
+}
+
+void BlobStore::read(std::vector<std::tuple<BlobStore::BlobFileId, UInt64, size_t>> req_list, std::vector<char *> buffers, const ReadLimiterPtr & read_limiter)
+{
+    assert(req_list.size() == buffers.size());
+
+    if (req_list.empty())
+    {
+        return;
+    }
+
+    if (req_list.size() == 1)
+    {
+        read(std::get<0>(req_list.front()), std::get<1>(req_list.front()), buffers.front(), std::get<2>(req_list.front()));
+        return;
+    }
+
+    std::sort(req_list.begin(), req_list.end(), [](const std::tuple<BlobStore::BlobFileId, UInt64, size_t> & l, const std::tuple<BlobStore::BlobFileId, UInt64, size_t> & r) {
+        return std::get<1>(l) < std::get<1>(r);
+    });
+
+    size_t buf_size = 0;
+    for (const auto & p : req_list)
+    {
+        buf_size += std::get<2>(p);
+    }
+
+    size_t index = 0;
+    for (const auto & [blob_id, offset, size] : req_list)
+    {
+        BlobStore::read(blob_id, offset, buffers[index++], size, read_limiter);
+    }
+}
+
+void BlobStore::read(BlobStore::BlobFileId blob_id, UInt64 offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
+{
+    getBlobFile(blob_id)->read(buffers, offset, size, read_limiter);
+}
+
+
+String getBlobFilePath(BlobStore::BlobFileId blob_id)
+{
+    return (String)BLOBSTORE_TEST_PATH + BLOBFILE_NAME_PRE + DB::toString(blob_id);
+}
+
+BlobFilePtr BlobStore::getBlobFile(BlobStore::BlobFileId blob_id)
+{
+    auto blob_file = cached_file.get(blob_id);
+    if (blob_file)
+    {
+        return blob_file;
+    }
+
+    blob_file = std::make_shared<BlobFile>(getBlobFilePath(blob_id), file_provider);
+    cached_file.set(blob_id, blob_file);
+    return blob_file;
 }
 
 BlobStore::BlobStats::BlobStats(Poco::Logger * log_)
@@ -95,7 +156,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
 
     LOG_DEBUG(log, "Created a new BlobStat which [BlobFileId= " << blob_file_id << "]");
     stat->id = blob_file_id;
-    stat->smap = SpaceMap::createSpaceMap(BLOBFILE_SMAP_TYPE, 0, BLOBFILE_LIMIT_SIZE);
+    stat->smap = SpaceMap::createSpaceMap(BLOBSTORE_SMAP_TYPE, 0, BLOBFILE_LIMIT_SIZE);
 
     stats_map.emplace_back(std::move(stat));
 
@@ -184,13 +245,23 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
     stat->sm_max_caps = max_cap;
     if (offset != UINT64_MAX)
     {
-        // TBD
+        if (offset + buf_size > stat->sm_total_size)
+        {
+            // This file must be expanded
+            auto expand_size = buf_size - (stat->sm_total_size - offset);
+            stat->sm_total_size += expand_size;
+            stat->sm_valid_size += (buf_size - expand_size);
+        }
+        else
+        {
+            /**
+             * All in old place, no expand.
+             * Just update valid size
+             */
+            stat->sm_valid_size += buf_size;
+        }
 
-        // Int64 size_update = offset - stat->sm_total_size;
-        // if (size_update > 0) {
-
-        //     stat->sm_total_size += size_update
-        // }
+        stat->sm_valid_rate = stat->sm_total_size / stat->sm_valid_size;
     }
     return offset;
 }

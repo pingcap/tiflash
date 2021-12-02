@@ -1,10 +1,20 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/LRUCache.h>
 #include <Storages/Page/V3/BlobFile.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 
 #include <mutex>
+
+
+// TBD : need add these into config
+#define BLOBSTORE_TEST_PATH "./BlobStore/"
+#define BLOBSTORE_CACHED_FD_SIZE 100
+#define BLOBSTORE_SMAP_TYPE SpaceMap::SpaceMapType::SMAP64_RBTREE
+#define BLOBFILE_NAME_PRE "blobfile_"
+#define BLOBFILE_LIMIT_SIZE 512 * DB::MB
+
 
 namespace DB
 {
@@ -16,13 +26,7 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-// TBD : need add these into config
-#define BLOBFILE_NAME_PRE "blobfile_"
-#define BLOBFILE_LIMIT_SIZE 512 * DB::MB
-#define BLOBFILE_CACHED_FD_SIZE 20
-#define BLOBFILE_SMAP_TYPE SpaceMap::SpaceMapType::SMAP64_RBTREE
-
-class BlobStore
+class BlobStore : public Allocator<false>
 {
 public:
     using BlobFileId = UInt16;
@@ -92,23 +96,31 @@ public:
 
     BlobStats getAllBlobStats();
 
-    void write(char * buffer, size_t size);
+    std::pair<BlobFileId, UInt64> write(char * buffer,
+                                        size_t size,
+                                        const WriteLimiterPtr & write_limiter = nullptr);
 
-    void read(BlobFileId file, UInt64 offset, char * buffer, size_t size);
+    // TBD : may replace std::vector<char *> with a align buffer.
+    void read(std::vector<std::tuple<BlobFileId, UInt64, size_t>>, std::vector<char *> buffers, const ReadLimiterPtr & read_limiter = nullptr);
+
+    void read(BlobFileId blob_id, UInt64 offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
 
 private:
     // TBD: after single path work, do the multi-path
     // String choosePath();
 
+    String getBlobFilePath(BlobFileId blob_id);
+
+    BlobFilePtr getBlobFile(BlobFileId blob_id);
 
 private:
-    std::map<BlobFileId, BlobFile> cached_writer;
-
     FileProviderPtr file_provider;
 
     Poco::Logger * log;
 
     BlobStats blob_stats;
+
+    DB::LRUCache<BlobFileId, BlobFile> cached_file;
 };
 
 } // namespace PS::V3
