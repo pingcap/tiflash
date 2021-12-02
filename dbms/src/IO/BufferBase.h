@@ -7,10 +7,8 @@
 
 namespace DB
 {
-
 namespace Buffer
 {
-
 struct IncommingRead
 {
     inline static constexpr size_t Index = 0;
