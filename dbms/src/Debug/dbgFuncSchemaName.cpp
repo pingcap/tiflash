@@ -12,9 +12,10 @@
 
 #include <boost/algorithm/string/replace.hpp>
 
+#include "Common/FmtUtils.h"
+
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
@@ -51,13 +52,13 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
 
-    std::stringstream ss;
+    FmtBuffer fmt_buf;
     auto mapped = mappedDatabase(context, database_name);
     if (mapped == std::nullopt)
-        ss << "Database " << database_name << " not found.";
+        fmt_buf.fmtAppend("Database {} not found.", database_name);
     else
-        ss << mapped.value();
-    output(ss.str());
+        fmt_buf.append(mapped.value());
+    output(fmt_buf.toString());
 }
 
 void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -71,15 +72,15 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
     if (args.size() == 3)
         qualify = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value) == "true";
 
-    std::stringstream ss;
+    FmtBuffer fmt_buf;
     auto mapped = mappedTable(context, database_name, table_name);
     if (mapped == std::nullopt)
-        ss << "Table " << database_name << "." << table_name << " not found.";
+        fmt_buf.fmtAppend("Table {}.{} not found.", database_name, table_name);
     else if (qualify)
-        ss << mapped->first << "." << mapped->second;
+        fmt_buf.fmtAppend("{}.{}", mapped->first, mapped->second);
     else
-        ss << mapped->second;
-    output(ss.str());
+        fmt_buf.append(mapped->second);
+    output(fmt_buf.toString());
 }
 
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)

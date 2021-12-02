@@ -14,6 +14,8 @@
 #include <cstring>
 #include <thread>
 
+#include "Common/FmtUtils.h"
+
 namespace DB
 {
 void dbgFuncEcho(Context &, const ASTs & args, DBGInvoker::Printer output)
@@ -26,9 +28,9 @@ void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     const Int64 t = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     std::this_thread::sleep_for(std::chrono::milliseconds(t));
-    std::stringstream res;
-    res << "sleep " << t << " ms.";
-    output(res.str());
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("sleep {} ms.", t);
+    output(fmt_buf.toString());
 }
 
 DBGInvoker::DBGInvoker()
@@ -158,16 +160,16 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
     const SchemalessDBGFunc & func,
     const ASTs & args)
 {
-    std::stringstream col_name;
-    col_name << name << "(";
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("{}(", name);
     for (size_t i = 0; i < args.size(); ++i)
     {
         std::string arg = args[i]->getColumnName();
-        col_name << normalizeArg(arg) << ((i + 1 == args.size()) ? "" : ", ");
+        fmt_buf.fmtAppend("{}{}", normalizeArg(arg), ((i + 1 == args.size()) ? "" : ", "));
     }
-    col_name << ")";
+    fmt_buf.append(")");
 
-    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(col_name.str());
+    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
     Printer printer = [&](const std::string & s) {
         res->append(s);
     };
