@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockTiDB.h>
@@ -34,7 +35,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
     size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
     if (4 + handle_column_size * 4 != args.size())
         throw Exception("Args not matched, should be: region-id1, database-name, table-name, start1, end1, start2, end2, region-id2",
-            ErrorCodes::BAD_ARGUMENTS);
+                        ErrorCodes::BAD_ARGUMENTS);
     RegionID region_id2 = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args.size() - 1]).value);
 
     auto table_id = table->id();
@@ -114,15 +115,15 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
     }
 
     kvstore->handleAdminRaftCmd(std::move(request),
-        std::move(response),
-        region_id,
-        MockTiKV::instance().getRaftIndex(region_id),
-        MockTiKV::instance().getRaftTerm(region_id),
-        tmt);
+                                std::move(response),
+                                region_id,
+                                MockTiKV::instance().getRaftIndex(region_id),
+                                MockTiKV::instance().getRaftTerm(region_id),
+                                tmt);
 
-    std::stringstream ss;
-    ss << "execute batch split, region " << region_id << " into (" << region_id << "," << region_id2 << ")";
-    output(ss.str());
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("execute batch split, region {} into ({},{})", region_id, region_id, region_id2);
+    output(fmt_buf.toString());
 }
 
 void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -156,15 +157,15 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
     }
 
     kvstore->handleAdminRaftCmd(std::move(request),
-        std::move(response),
-        region_id,
-        MockTiKV::instance().getRaftIndex(region_id),
-        MockTiKV::instance().getRaftTerm(region_id),
-        tmt);
+                                std::move(response),
+                                region_id,
+                                MockTiKV::instance().getRaftIndex(region_id),
+                                MockTiKV::instance().getRaftTerm(region_id),
+                                tmt);
 
-    std::stringstream ss;
-    ss << "execute prepare merge, source " << region_id << " target " << target_id;
-    output(ss.str());
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("execute prepare merge, source {} target {}", region_id, target_id);
+    output(fmt_buf.toString());
 }
 
 void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -194,15 +195,15 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
     }
 
     kvstore->handleAdminRaftCmd(std::move(request),
-        std::move(response),
-        current_id,
-        MockTiKV::instance().getRaftIndex(current_id),
-        MockTiKV::instance().getRaftTerm(current_id),
-        tmt);
+                                std::move(response),
+                                current_id,
+                                MockTiKV::instance().getRaftIndex(current_id),
+                                MockTiKV::instance().getRaftTerm(current_id),
+                                tmt);
 
-    std::stringstream ss;
-    ss << "execute commit merge, source " << source_id << " current " << current_id;
-    output(ss.str());
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("execute commit merge, source {} current {}", source_id, current_id);
+    output(fmt_buf.toString());
 }
 
 void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -231,15 +232,15 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
     }
 
     kvstore->handleAdminRaftCmd(std::move(request),
-        std::move(response),
-        region_id,
-        MockTiKV::instance().getRaftIndex(region_id),
-        MockTiKV::instance().getRaftTerm(region_id),
-        tmt);
+                                std::move(response),
+                                region_id,
+                                MockTiKV::instance().getRaftIndex(region_id),
+                                MockTiKV::instance().getRaftTerm(region_id),
+                                tmt);
 
-    std::stringstream ss;
-    ss << "execute rollback merge, region " << region_id;
-    output(ss.str());
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("execute rollback merge, region {}", region_id);
+    output(fmt_buf.toString());
 }
 
 } // namespace DB
