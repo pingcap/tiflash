@@ -1,33 +1,31 @@
-#include <Storages/getStructureOfRemoteTable.h>
-#include <Storages/StorageDistributed.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
-#include <Interpreters/evaluateConstantExpression.h>
-#include <Interpreters/Cluster.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/getClusterName.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
-#include <TableFunctions/TableFunctionShardByHash.h>
+#include <Interpreters/Cluster.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/getClusterName.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Storages/getStructureOfRemoteTable.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <TableFunctions/TableFunctionShardByHash.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 StoragePtr TableFunctionShardByHash::executeImpl(const ASTPtr & ast_function, const Context & context) const
 {
     ASTs & args_func = typeid_cast<ASTFunction &>(*ast_function).children;
 
     const char * err = "Table function 'shardByHash' requires 4 parameters: "
-        "cluster name, key string to hash, name of remote database, name of remote table.";
+                       "cluster name, key string to hash, name of remote database, name of remote table.";
 
     if (args_func.size() != 1)
         throw Exception(err, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -42,8 +40,7 @@ StoragePtr TableFunctionShardByHash::executeImpl(const ASTPtr & ast_function, co
     String remote_database;
     String remote_table;
 
-    auto getStringLiteral = [](const IAST & node, const char * description)
-    {
+    auto getStringLiteral = [](const IAST & node, const char * description) {
         const ASTLiteral * lit = typeid_cast<const ASTLiteral *>(&node);
         if (!lit)
             throw Exception(description + String(" must be string literal (in single quotes)."), ErrorCodes::BAD_ARGUMENTS);
@@ -73,15 +70,8 @@ StoragePtr TableFunctionShardByHash::executeImpl(const ASTPtr & ast_function, co
 
     std::shared_ptr<Cluster> shard(cluster->getClusterWithSingleShard(shard_index).release());
 
-    auto res = StorageDistributed::createWithOwnCluster(
-        getName(),
-        getStructureOfRemoteTable(*shard, remote_database, remote_table, context),
-        remote_database,
-        remote_table,
-        shard,
-        context);
-    res->startup();
-    return res;
+    throw Exception("StorageDistributed has been disabled");
+    return {};
 }
 
 
@@ -90,4 +80,4 @@ void registerTableFunctionShardByHash(TableFunctionFactory & factory)
     factory.registerFunction<TableFunctionShardByHash>();
 }
 
-}
+} // namespace DB

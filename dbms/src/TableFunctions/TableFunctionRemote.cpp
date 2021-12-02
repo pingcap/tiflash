@@ -1,26 +1,23 @@
-#include <Storages/getStructureOfRemoteTable.h>
-#include <Storages/StorageDistributed.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Interpreters/evaluateConstantExpression.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/Context.h>
-#include <Common/typeid_cast.h>
-
-#include <TableFunctions/TableFunctionRemote.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Storages/getStructureOfRemoteTable.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <TableFunctions/TableFunctionRemote.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 /// The Cartesian product of two sets of rows, the result is written in place of the first argument
@@ -51,7 +48,7 @@ static void append(std::vector<String> & to, const std::vector<String> & what, s
 static bool parseNumber(const String & description, size_t l, size_t r, size_t & res)
 {
     res = 0;
-    for (size_t pos = l; pos < r; pos ++)
+    for (size_t pos = l; pos < r; pos++)
     {
         if (!isNumericASCII(description[pos]))
             return false;
@@ -61,7 +58,6 @@ static bool parseNumber(const String & description, size_t l, size_t r, size_t &
     }
     return true;
 }
-
 
 
 /* Parse a string that generates shards and replicas. Separator - one of two characters | or ,
@@ -102,11 +98,16 @@ static std::vector<String> parseDescription(const String & description, size_t l
             /// Look for the corresponding closing bracket
             for (m = i + 1; m < r; ++m)
             {
-                if (description[m] == '{') ++cnt;
-                if (description[m] == '}') --cnt;
-                if (description[m] == '.' && description[m-1] == '.') last_dot = m;
-                if (description[m] == separator) have_splitter = true;
-                if (cnt == 0) break;
+                if (description[m] == '{')
+                    ++cnt;
+                if (description[m] == '}')
+                    --cnt;
+                if (description[m] == '.' && description[m - 1] == '.')
+                    last_dot = m;
+                if (description[m] == separator)
+                    have_splitter = true;
+                if (cnt == 0)
+                    break;
             }
             if (cnt != 0)
                 throw Exception("Table function 'remote': incorrect brace sequence in first argument",
@@ -120,22 +121,22 @@ static std::vector<String> parseDescription(const String & description, size_t l
                                     ErrorCodes::BAD_ARGUMENTS);
                 if (!parseNumber(description, i + 1, last_dot - 1, left))
                     throw Exception("Table function 'remote': incorrect argument in braces (Incorrect left number): "
-                                    + description.substr(i, m - i + 1),
+                                        + description.substr(i, m - i + 1),
                                     ErrorCodes::BAD_ARGUMENTS);
                 if (!parseNumber(description, last_dot + 1, m, right))
                     throw Exception("Table function 'remote': incorrect argument in braces (Incorrect right number): "
-                                    + description.substr(i, m - i + 1),
+                                        + description.substr(i, m - i + 1),
                                     ErrorCodes::BAD_ARGUMENTS);
                 if (left > right)
                     throw Exception("Table function 'remote': incorrect argument in braces (left number is greater then right): "
-                                    + description.substr(i, m - i + 1),
+                                        + description.substr(i, m - i + 1),
                                     ErrorCodes::BAD_ARGUMENTS);
-                if (right - left + 1 >  max_addresses)
+                if (right - left + 1 > max_addresses)
                     throw Exception("Table function 'remote': first argument generates too many result addresses",
-                        ErrorCodes::BAD_ARGUMENTS);
+                                    ErrorCodes::BAD_ARGUMENTS);
                 bool add_leading_zeroes = false;
                 size_t len = last_dot - 1 - (i + 1);
-                 /// If the left and right borders have equal numbers, then you must add leading zeros.
+                /// If the left and right borders have equal numbers, then you must add leading zeros.
                 if (last_dot - 1 - (i + 1) == m - (last_dot + 1))
                     add_leading_zeroes = true;
                 for (size_t id = left; id <= right; ++id)
@@ -151,7 +152,7 @@ static std::vector<String> parseDescription(const String & description, size_t l
             }
             else if (have_splitter) /// If there is a current delimiter inside, then generate a set of resulting rows
                 buffer = parseDescription(description, i + 1, m, separator, max_addresses);
-            else                     /// Otherwise just copy, spawn will occur when you call with the correct delimiter
+            else /// Otherwise just copy, spawn will occur when you call with the correct delimiter
                 buffer.push_back(description.substr(i, m - i + 1));
             /// Add all possible received extensions to the current set of lines
             append(cur, buffer, max_addresses);
@@ -175,7 +176,7 @@ static std::vector<String> parseDescription(const String & description, size_t l
     res.insert(res.end(), cur.begin(), cur.end());
     if (res.size() > max_addresses)
         throw Exception("Table function 'remote': first argument generates too many result addresses",
-            ErrorCodes::BAD_ARGUMENTS);
+                        ErrorCodes::BAD_ARGUMENTS);
 
     return res;
 }
@@ -203,8 +204,7 @@ StoragePtr TableFunctionRemote::executeImpl(const ASTPtr & ast_function, const C
 
     size_t arg_num = 0;
 
-    auto getStringLiteral = [](const IAST & node, const char * description)
-    {
+    auto getStringLiteral = [](const IAST & node, const char * description) {
         const ASTLiteral * lit = typeid_cast<const ASTLiteral *>(&node);
         if (!lit)
             throw Exception(description + String(" must be string literal (in single quotes)."), ErrorCodes::BAD_ARGUMENTS);
@@ -299,15 +299,8 @@ StoragePtr TableFunctionRemote::executeImpl(const ASTPtr & ast_function, const C
         cluster = std::make_shared<Cluster>(context.getSettings(), names, username, password, context.getTCPPort(), false);
     }
 
-    auto res = StorageDistributed::createWithOwnCluster(
-        getName(),
-        getStructureOfRemoteTable(*cluster, remote_database, remote_table, context),
-        remote_database,
-        remote_table,
-        cluster,
-        context);
-    res->startup();
-    return res;
+    throw Exception("StorageDistributed has been disabled");
+    return {};
 }
 
 
@@ -326,8 +319,8 @@ TableFunctionRemote::TableFunctionRemote(const std::string & name_)
 
 void registerTableFunctionRemote(TableFunctionFactory & factory)
 {
-    factory.registerFunction("remote", [] () -> TableFunctionPtr { return std::make_shared<TableFunctionRemote>("remote"); });
-    factory.registerFunction("cluster", [] () -> TableFunctionPtr { return std::make_shared<TableFunctionRemote>("cluster"); });
+    factory.registerFunction("remote", []() -> TableFunctionPtr { return std::make_shared<TableFunctionRemote>("remote"); });
+    factory.registerFunction("cluster", []() -> TableFunctionPtr { return std::make_shared<TableFunctionRemote>("cluster"); });
 }
 
-}
+} // namespace DB

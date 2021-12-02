@@ -1,26 +1,23 @@
-#include <Interpreters/InJoinSubqueriesPreprocessor.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/Context.h>
-#include <Storages/StorageDistributed.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Interpreters/InJoinSubqueriesPreprocessor.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Common/typeid_cast.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED;
-    extern const int LOGICAL_ERROR;
-}
+extern const int DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 namespace
 {
-
 /** Call a function for each non-GLOBAL subquery in IN or JOIN.
   * Pass to function: AST node with subquery, and AST node with corresponding IN function or JOIN.
   * Consider only first-level subqueries (do not go recursively into subqueries).
@@ -117,7 +114,7 @@ void replaceDatabaseAndTable(ASTPtr & database_and_table, const String & databas
     }
 }
 
-}
+} // namespace
 
 
 void InJoinSubqueriesPreprocessor::process(ASTSelectQuery * query) const
@@ -152,10 +149,8 @@ void InJoinSubqueriesPreprocessor::process(ASTSelectQuery * query) const
     if (!storage || !hasAtLeastTwoShards(*storage))
         return;
 
-    forEachNonGlobalSubquery(query, [&] (IAST * subquery, IAST * function, IAST * table_join)
-    {
-         forEachTable(subquery, [&] (ASTPtr & database_and_table)
-        {
+    forEachNonGlobalSubquery(query, [&](IAST * subquery, IAST * function, IAST * table_join) {
+        forEachTable(subquery, [&](ASTPtr & database_and_table) {
             StoragePtr storage = tryGetTable(database_and_table, context);
 
             if (!storage || !hasAtLeastTwoShards(*storage))
@@ -164,8 +159,8 @@ void InJoinSubqueriesPreprocessor::process(ASTSelectQuery * query) const
             if (distributed_product_mode == DistributedProductMode::DENY)
             {
                 throw Exception("Double-distributed IN/JOIN subqueries is denied (distributed_product_mode = 'deny')."
-                    " You may rewrite query to use local tables in subqueries, or use GLOBAL keyword, or set distributed_product_mode to suitable value.",
-                    ErrorCodes::DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED);
+                                " You may rewrite query to use local tables in subqueries, or use GLOBAL keyword, or set distributed_product_mode to suitable value.",
+                                ErrorCodes::DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED);
             }
             else if (distributed_product_mode == DistributedProductMode::GLOBAL)
             {
@@ -206,22 +201,17 @@ void InJoinSubqueriesPreprocessor::process(ASTSelectQuery * query) const
 }
 
 
-bool InJoinSubqueriesPreprocessor::hasAtLeastTwoShards(const IStorage & table) const
+bool InJoinSubqueriesPreprocessor::hasAtLeastTwoShards(const IStorage & /*table*/) const
 {
-    const StorageDistributed * distributed = dynamic_cast<const StorageDistributed *>(&table);
-    if (!distributed)
-        return false;
-
-    return distributed->getShardCount() >= 2;
+    return false;
 }
 
 
 std::pair<std::string, std::string>
-InJoinSubqueriesPreprocessor::getRemoteDatabaseAndTableName(const IStorage & table) const
+InJoinSubqueriesPreprocessor::getRemoteDatabaseAndTableName(const IStorage & /*table*/) const
 {
-    const StorageDistributed & distributed = dynamic_cast<const StorageDistributed &>(table);
-    return { distributed.getRemoteDatabaseName(), distributed.getRemoteTableName() };
+    throw Exception("StorageDistributed has been disabled!");
 }
 
 
-}
+} // namespace DB
