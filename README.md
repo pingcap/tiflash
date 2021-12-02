@@ -30,7 +30,7 @@ $ git clone --recursive https://github.com/pingcap/tics.git
 ```
 # WORKSPACE/tics
 $ pushd contrib/tiflash-proxy
-$ ./release
+$ ./release.sh
 $ popd
 $ mkdir -p libs/libtiflash-proxy 
 $ cp contrib/tiflash-proxy/target/release/libtiflash_proxy* libs/libtiflash-proxy
