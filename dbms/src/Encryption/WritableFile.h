@@ -7,8 +7,6 @@ namespace DB
 class WritableFile
 {
 public:
-    WritableFile() = default;
-
     virtual ~WritableFile() = default;
 
     virtual ssize_t write(char * buf, size_t size) = 0;
@@ -23,7 +21,7 @@ public:
 
     virtual void close() = 0;
 
-    virtual bool isClosed() = 0;
+    virtual bool isClosed() const = 0;
 
     virtual int fsync() = 0;
 

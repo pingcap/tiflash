@@ -44,7 +44,6 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageJoin.h>
 #include <Storages/StorageMemory.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/StorageSet.h>
 
 #include <ext/range.h>

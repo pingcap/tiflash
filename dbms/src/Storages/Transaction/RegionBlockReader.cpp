@@ -1,5 +1,5 @@
 #include <Columns/ColumnsNumber.h>
-#include <Core/TMTPKType.h>
+#include <DataTypes/DataTypeString.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -7,10 +7,9 @@
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
+#include <Storages/Transaction/RegionBlockReaderHelper.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiDB.h>
-
-#include <Storages/Transaction/RegionBlockReaderHelper.hpp>
 
 namespace DB
 {
@@ -21,6 +20,32 @@ extern const int LOGICAL_ERROR;
 
 using TiDB::DatumFlat;
 using TiDB::TableInfo;
+
+namespace
+{
+enum TMTPKType
+{
+    INT64,
+    UINT64,
+    STRING,
+    UNSPECIFIED,
+};
+
+TMTPKType getTMTPKType(const IDataType & rhs)
+{
+    static const DataTypeInt64 & dataTypeInt64 = {};
+    static const DataTypeUInt64 & dataTypeUInt64 = {};
+    static const DataTypeString & dataTypeString = {};
+
+    if (rhs.equals(dataTypeInt64))
+        return TMTPKType::INT64;
+    else if (rhs.equals(dataTypeUInt64))
+        return TMTPKType::UINT64;
+    else if (rhs.equals(dataTypeString))
+        return TMTPKType::STRING;
+    return TMTPKType::UNSPECIFIED;
+}
+} // namespace
 
 Field GenDefaultField(const ColumnInfo & col_info)
 {
@@ -350,7 +375,25 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
             }
         }
         else
-            column_map.getMutableColumnPtr(pk_column_ids[0])->insert(Field(static_cast<Int64>(pk)));
+        {
+            // The pk_type must be Int32/Uint32 or more narrow type
+            // so cannot tell its' exact type here, just use `insert(Field)`
+            HandleID handle_value(static_cast<Int64>(pk));
+            auto & pk_column = column_map.getMutableColumnPtr(pk_column_ids[0]);
+            pk_column->insert(Field(handle_value));
+            if (unlikely(pk_column->getInt(index) != handle_value))
+            {
+                if (!force_decode)
+                {
+                    return false;
+                }
+                else
+                {
+                    throw Exception("Detected overflow value when decoding pk column of type " + pk_column->getName(),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+        }
         index++;
     }
     decoded_data.checkValid();
