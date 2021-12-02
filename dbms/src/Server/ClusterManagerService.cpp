@@ -1,10 +1,9 @@
-#include "ClusterManagerService.h"
-
 #include <Common/FunctionTimerTask.h>
 #include <Common/ShellCommand.h>
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Server/ClusterManagerService.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -14,24 +13,26 @@ const std::string CLUSTER_MANAGER_PATH_KEY = TIFLASH_PREFIX + ".flash_cluster.cl
 const std::string BIN_NAME = "flash_cluster_manager";
 const std::string TASK_INTERVAL_KEY = TIFLASH_PREFIX + ".flash_cluster.update_rule_interval";
 
-constexpr long MILLISECOND = 1000;
-constexpr long INIT_DELAY = 5;
+constexpr Int64 MILLISECOND = 1000;
+constexpr Int64 INIT_DELAY = 5;
 
-void ClusterManagerService::run(const std::string & bin_path, const std::vector<std::string> & args)
-try
+static void runService(const std::string & bin_path, const std::vector<std::string> & args)
 {
-    auto proc = ShellCommand::executeDirect(bin_path, args);
-    proc->wait();
-}
-catch (DB::Exception & e)
-{
-    std::stringstream ss;
-    ss << bin_path;
-    for (const auto & arg : args)
+    try
     {
-        ss << " " << arg;
+        auto proc = ShellCommand::executeDirect(bin_path, args);
+        proc->wait();
     }
-    e.addMessage("(while running `" + ss.str() + "`)");
+    catch (DB::Exception & e)
+    {
+        std::stringstream ss;
+        ss << bin_path;
+        for (const auto & arg : args)
+        {
+            ss << " " << arg;
+        }
+        e.addMessage("(while running `" + ss.str() + "`)");
+    }
 }
 
 ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::string & config_path)
@@ -69,7 +70,10 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 
     LOG_INFO(log, "Registered timed cluster manager task at rate " << task_interval << " seconds");
 
-    timer.scheduleAtFixedRate(FunctionTimerTask::create(std::bind(&ClusterManagerService::run, bin_path, args)), INIT_DELAY * MILLISECOND, task_interval * MILLISECOND);
+    timer.scheduleAtFixedRate(
+        FunctionTimerTask::create([bin_path, args] { return runService(bin_path, args); }),
+        INIT_DELAY * MILLISECOND,
+        task_interval * MILLISECOND);
 }
 
 ClusterManagerService::~ClusterManagerService()

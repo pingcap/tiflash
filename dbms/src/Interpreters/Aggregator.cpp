@@ -1579,7 +1579,7 @@ private:
             return;
 
         parallel_merge_data->pool->schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this, num] { thread(num); }));
+            ThreadFactory(true, "ParallelMergeAgg").newJob([this, num] { thread(num); }));
     }
 
     void thread(Int32 bucket_num)

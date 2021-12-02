@@ -49,7 +49,7 @@ public:
             return;
         read_prefixed = true;
         is_end = 0;
-        glb_thd_pool->schedule(ThreadFactory(true, "MergingAggregtd").newJob([this] { this->fetchBlocks(); }));
+        glb_thd_pool->schedule(ThreadFactory(true, "SharedQuery").newJob([this] { this->fetchBlocks(); }));
         /// Start reading thread.
         // thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
     }

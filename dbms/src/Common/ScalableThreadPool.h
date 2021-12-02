@@ -21,22 +21,24 @@ public:
 
     /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
-    virtual void schedule(Job job);
+    void schedule(Job job);
+
+    void scheduleWithMemTracker(Job job);
 
     /// Wait for all currently active jobs to be done.
     /// You may call schedule and wait many times in arbitary order.
     /// If any thread was throw an exception, first exception will be rethrown from this method,
     ///  and exception will be cleared.
-    virtual void wait();
+    void wait();
 
     /// Waits for all threads. Doesn't rethrow exceptions (use 'wait' method to rethrow exceptions).
     /// You should not destroy object while calling schedule or wait methods from another threads.
-    virtual ~ScalableThreadPool();
+    ~ScalableThreadPool();
 
-    virtual size_t size() const { return m_size; }
+    size_t size() const { return m_size; }
 
     /// Returns number of active jobs.
-    virtual size_t active() const;
+    size_t active() const;
 
 protected:
     mutable std::mutex mutex;
@@ -53,6 +55,9 @@ protected:
 
 
     void worker();
+
+    template <typename F, typename... Args>
+    std::function<void()> newJobWithMemTracker(F && f, Args &&... args);
 };
 
 extern ScalableThreadPool * global_thd_pool;

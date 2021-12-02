@@ -2,6 +2,7 @@
 #include <Common/ThreadFactory.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/MPPTunnel.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -98,9 +99,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
     bool meet_error = false;
     String local_err_msg;
 
-    Int64 send_task_id = -1;
+    Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = task_meta.task_id();
-
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
@@ -110,7 +110,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         auto status = RPCContext::getStatusOK();
         for (int i = 0; i < 10; i++)
         {
-            auto reader = rpc_context->makeReader(req);
+            auto reader = rpc_context->makeReader(req, task_meta.address());
             reader->initialize();
             std::shared_ptr<ReceivedMessage> recv_msg;
             bool has_data = false;
@@ -135,7 +135,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 }
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = source_index;
-                bool success = reader->read(recv_msg->packet.get());
+                bool success = reader->read(recv_msg->packet);
                 if (!success)
                 {
                     /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.

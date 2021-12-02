@@ -83,7 +83,7 @@ void MPPTask::run()
     {
         //        runfg = false;
         glb_thd_pool->schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this] { MpptaskRunImpl(this->shared_from_this()); }));
+            ThreadFactory(true, "MPPTask").newJob([this] { MpptaskRunImpl(this->shared_from_this()); }));
         //        while(!runfg) {
         //            usleep(1);
         //        }
@@ -251,7 +251,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         mpp::TaskMeta task_meta;
         if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, log);
+        bool is_local = context.getSettings().enable_local_tunnel && meta.address() == task_meta.address();
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, is_local, log);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);

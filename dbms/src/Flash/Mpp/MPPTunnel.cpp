@@ -20,9 +20,11 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     const std::chrono::seconds timeout_,
     TaskCancelledCallback callback,
     int input_steams_num_,
+    bool is_local_,
     const LogWithPrefixPtr & log_)
     : connected(false)
     , finished(false)
+    , is_local(is_local_)
     , timeout(timeout_)
     , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
@@ -41,14 +43,17 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         if (!finished)
             writeDone();
-        if (nullptr != send_thread && send_thread->joinable())
+        if (!is_local)
         {
-            send_thread->join();
-        }
-        else
-        {
-            std::unique_lock<std::mutex> lk(end_mu);
-            end_cv.wait(lk, [&] { return send_end.load(); });
+            if (nullptr != send_thread && send_thread->joinable())
+            {
+                send_thread->join();
+            }
+            else
+            {
+                std::unique_lock<std::mutex> lk(end_mu);
+                end_cv.wait(lk, [&] { return send_end.load(); });
+            }
         }
         /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
         clearSendQueue();
@@ -138,6 +143,7 @@ void MPPTunnelBase<Writer>::clearSendQueue()
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendLoop()
 {
+    assert(!is_local);
     try
     {
         /// TODO(fzh) reuse it later
@@ -198,15 +204,17 @@ void MPPTunnelBase<Writer>::sendLoop()
 template <typename Writer>
 void MPPTunnelBase<Writer>::writeDone()
 {
-    LOG_TRACE(log, "ready to finish");
+    LOG_TRACE(log, "ready to finish, is_local: " << is_local);
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
         throw Exception("has finished, " + send_loop_msg);
     /// make sure to finish the tunnel after it is connected
+    LOG_TRACE(log, "waitUntilConnectedOrCancelled");
     waitUntilConnectedOrCancelled(lk);
     lk.unlock();
     /// in normal cases, send nullptr to notify finish
     send_queue.push(nullptr);
+    LOG_TRACE(log, "waitForFinish");
     waitForFinish();
     LOG_TRACE(log, "done to finish");
 }
@@ -218,6 +226,25 @@ static void tunnelSendLoop(MPPTunnelBase<Writer> * tunnel)
 }
 
 template <typename Writer>
+std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
+{
+    assert(is_local);
+    if (!finished)
+    {
+        MPPDataPacketPtr res;
+        send_queue.pop(res);
+        if (nullptr == res)
+        {
+            finishWithLock();
+        }
+
+        return res;
+    }
+    return nullptr;
+}
+
+
+template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
     std::lock_guard<std::mutex> lk(mu);
@@ -226,23 +253,21 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
-    //    if (!is_local) {
-    if (glb_thd_pool)
+    if (!is_local)
     {
-        //            loop = false;
-        glb_thd_pool->schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this] {
-                tunnelSendLoop(this);
-            }));
-        send_thread = nullptr;
-        //            while(!loop) usleep(1);
+        if (glb_thd_pool)
+        {
+            glb_thd_pool->schedule(
+                ThreadFactory(true, "MPPTunnel").newJob([this] {
+                    tunnelSendLoop(this);
+                }));
+            send_thread = nullptr;
+        }
+        else
+        {
+            send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
+        }
     }
-    else
-    {
-        send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
-    }
-    //    }
-    //    send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
     connected = true;
     cv_for_connected.notify_all();
 }

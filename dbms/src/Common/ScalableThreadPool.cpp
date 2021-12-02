@@ -4,6 +4,8 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "MemoryTracker.h"
+
 void handle_eptr(std::exception_ptr eptr) // passing by value is ok
 {
     try
@@ -17,6 +19,22 @@ void handle_eptr(std::exception_ptr eptr) // passing by value is ok
     {
         std::cerr << "Caught exception \"" << e.what() << "\"\n";
     }
+}
+
+template <typename F, typename... Args>
+std::function<void()> ScalableThreadPool::newJobWithMemTracker(F && f, Args &&... args)
+{
+    auto memory_tracker = current_memory_tracker;
+    /// Use std::tuple to workaround the limit on the lambda's init-capture of C++17.
+    /// See https://stackoverflow.com/questions/47496358/c-lambdas-how-to-capture-variadic-parameter-pack-from-the-upper-scope
+    return [memory_tracker, f = std::move(f), args = std::make_tuple(std::move(args)...)] {
+        if (!current_memory_tracker)
+        {
+            current_memory_tracker = memory_tracker;
+        }
+        std::apply(f, std::move(args));
+        current_memory_tracker = nullptr;
+    };
 }
 
 ScalableThreadPool * global_thd_pool = nullptr;
@@ -44,6 +62,11 @@ void ScalableThreadPool::schedule(Job job)
         ++active_jobs;
     }
     has_new_job_or_shutdown.notify_one();
+}
+
+void ScalableThreadPool::scheduleWithMemTracker(Job job)
+{
+    schedule(newJobWithMemTracker(job));
 }
 
 void ScalableThreadPool::wait()

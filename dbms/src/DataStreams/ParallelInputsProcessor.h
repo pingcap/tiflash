@@ -111,7 +111,7 @@ public:
             for (size_t i = 0; i < max_threads; ++i)
             {
                 glb_thd_pool->schedule(
-                    ThreadFactory(true, "MergingAggregtd").newJob([this, i] { this->thread(i); }));
+                    ThreadFactory(true, handler.getName()).newJob([this, i] { this->thread(i); }));
             }
         }
         else
