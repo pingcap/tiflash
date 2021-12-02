@@ -1,11 +1,10 @@
 #include <Common/config.h>
-#include <TableFunctions/registerTableFunctions.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <TableFunctions/registerTableFunctions.h>
 
 
 namespace DB
 {
-
 void registerTableFunctionMerge(TableFunctionFactory & factory);
 void registerTableFunctionNumbers(TableFunctionFactory & factory);
 void registerTableFunctionCatBoostPool(TableFunctionFactory & factory);
@@ -20,4 +19,4 @@ void registerTableFunctions()
     registerTableFunctionFile(factory);
 }
 
-}
+} // namespace DB
