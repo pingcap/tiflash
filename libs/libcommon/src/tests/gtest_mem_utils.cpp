@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <common/StringRef.h>
 #include <gtest/gtest.h>
 
@@ -10,7 +11,8 @@ struct AlignedCharArray
     char * data;
 
     AlignedCharArray(size_t size_, std::align_val_t alignment_)
-        : alignment(alignment_), data(static_cast<char *>(operator new(size_, alignment)))
+        : alignment(alignment_)
+        , data(static_cast<char *>(operator new(size_, alignment)))
     {}
 
     ~AlignedCharArray() { ::operator delete(data, alignment); }
@@ -45,13 +47,19 @@ TEST_P(MemUtilsTest, CompareTrivial)
 {
     TempOption _option(GetParam().first, GetParam().second);
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123", "123"}, {"abc", "abc"}, {"\v\a\t\n213@3213", "\v\a\t\n213@3213"}, {std::string(1024, '@'), std::string(1024, '@')}})
+             {"123", "123"},
+             {"abc", "abc"},
+             {"\v\a\t\n213@3213", "\v\a\t\n213@3213"},
+             {std::string(1024, '@'), std::string(1024, '@')}})
     {
         ASSERT_EQ(StringRef(a), StringRef(b));
     }
 
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123-", "-123"}, {"ab", "abc"}, {"\a\t\n213#3213", "\v\a\t\n213@3213"}, {std::string(1024, '@'), std::string(1024, '!')}})
+             {"123-", "-123"},
+             {"ab", "abc"},
+             {"\a\t\n213#3213", "\v\a\t\n213@3213"},
+             {std::string(1024, '@'), std::string(1024, '!')}})
     {
         ASSERT_NE(StringRef(a), StringRef(b));
     }
@@ -121,13 +129,12 @@ using Parm = std::pair<bool, bool>;
 
 std::string parmToName(const ::testing::TestParamInfo<Parm> & info)
 {
-    std::stringstream ss;
-    ss << "avx_" << info.param.first << "_avx512_" << info.param.second;
-    return ss.str();
+    DB::FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("avx_{}_avx512_{}", info.param.first, info.param.second);
+    return fmt_buf.toString();
 }
 
-INSTANTIATE_TEST_CASE_P(Parm, MemUtilsTest,
-    testing::Values(MAKE_PAIR(false, false), MAKE_PAIR(false, true), MAKE_PAIR(true, false), MAKE_PAIR(true, true)), parmToName);
+INSTANTIATE_TEST_CASE_P(Parm, MemUtilsTest, testing::Values(MAKE_PAIR(false, false), MAKE_PAIR(false, true), MAKE_PAIR(true, false), MAKE_PAIR(true, true)), parmToName);
 
 #endif
 
@@ -248,13 +255,19 @@ TEST_P(MemUtilsTest, CompareTrivial)
 {
     TempOption _option(GetParam());
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123", "123"}, {"abc", "abc"}, {"\v\a\t\n213@3213", "\v\a\t\n213@3213"}, {std::string(1024, '@'), std::string(1024, '@')}})
+             {"123", "123"},
+             {"abc", "abc"},
+             {"\v\a\t\n213@3213", "\v\a\t\n213@3213"},
+             {std::string(1024, '@'), std::string(1024, '@')}})
     {
         ASSERT_EQ(StringRef(a), StringRef(b));
     }
 
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123-", "-123"}, {"ab", "abc"}, {"\a\t\n213#3213", "\v\a\t\n213@3213"}, {std::string(1024, '@'), std::string(1024, '!')}})
+             {"123-", "-123"},
+             {"ab", "abc"},
+             {"\a\t\n213#3213", "\v\a\t\n213@3213"},
+             {std::string(1024, '@'), std::string(1024, '!')}})
     {
         ASSERT_NE(StringRef(a), StringRef(b));
     }
