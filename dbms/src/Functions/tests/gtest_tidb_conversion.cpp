@@ -184,23 +184,23 @@ try
         "result");
     ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
 
-    //    Arg1 is ColumnConst(ColumnNullable(non-null value))
-    //    arg1_column = createConstColumn<Nullable<String>>(2, {"1/12/2020"});
-    //    arg2_column = createColumn<Nullable<String>>({"%d/%c/%Y", "%d/%c/%Y"});
-    //    result_column = ColumnWithTypeAndName(
-    //        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt(), MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt()}).column,
-    //        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
-    //        "result");
-    //    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+    // Arg1 is ColumnConst(ColumnNullable(non-null value))
+    arg1_column = createConstColumn<Nullable<String>>(2, {"1/12/2020"});
+    arg2_column = createColumn<Nullable<String>>({"%d/%c/%Y", "%d/%c/%Y"});
+    result_column = ColumnWithTypeAndName(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt(), MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt()}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
 
-    //    // Arg1 is ColumnConst(ColumnNullable(null value))
-    //    arg1_column = createConstColumn<Nullable<String>>(2, {});
-    //    arg2_column = createColumn<Nullable<String>>({"%d/%c/%Y", "%d/%c/%Y"});
-    //    result_column = ColumnWithTypeAndName(
-    //        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
-    //        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
-    //        "result");
-    //    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+    // Arg1 is ColumnConst(ColumnNullable(null value))
+    arg1_column = createConstColumn<Nullable<String>>(2, {});
+    arg2_column = createColumn<Nullable<String>>({"%d/%c/%Y", "%d/%c/%Y"});
+    result_column = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
 
     // Arg2 is ColumnConst(ColumnNullable(non-null value))
     arg1_column = createColumn<Nullable<String>>({"1/12/2020", "1/12/2020"});
@@ -212,6 +212,15 @@ try
     ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
     // Arg2 is ColumnConst(ColumnNullable(null value))
     arg1_column = createColumn<Nullable<String>>({"1/12/2020", "1/12/2020"});
+    arg2_column = createConstColumn<Nullable<String>>(2, {});
+    result_column = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 and Arg2 are both ColumnConst
+    arg1_column = createConstColumn<Nullable<String>>(2, {});
     arg2_column = createConstColumn<Nullable<String>>(2, {});
     result_column = ColumnWithTypeAndName(
         createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
