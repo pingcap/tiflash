@@ -4,8 +4,8 @@
 #include <Common/RedactHelpers.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
-#include <Storages/Page/V3/LogFormat.h>
-#include <Storages/Page/V3/LogReader.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
+#include <Storages/Page/V3/LogFile/LogReader.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 

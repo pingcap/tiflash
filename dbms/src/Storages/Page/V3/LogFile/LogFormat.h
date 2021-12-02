@@ -1,8 +1,9 @@
 #pragma once
 
+#include <cstdint>
 namespace DB::PS::V3::Format
 {
-enum RecordType
+enum RecordType : uint8_t
 {
     // Zero is reserved for preallocated files
     ZeroType = 0,

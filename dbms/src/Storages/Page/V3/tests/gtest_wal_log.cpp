@@ -20,9 +20,9 @@
 #include <IO/WriteBufferFromFileBase.h>
 #include <IO/WriteHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
-#include <Storages/Page/V3/LogFormat.h>
-#include <Storages/Page/V3/LogReader.h>
-#include <Storages/Page/V3/LogWriter.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
+#include <Storages/Page/V3/LogFile/LogReader.h>
+#include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 #include <sys/types.h>

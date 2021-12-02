@@ -5,7 +5,7 @@
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Logger.h>
-#include <Storages/Page/V3/LogWriter.h>
+#include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 

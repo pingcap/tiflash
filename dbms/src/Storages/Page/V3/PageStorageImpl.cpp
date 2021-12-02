@@ -59,7 +59,6 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
 {
     // Persist Page data to BlobStore
     PageEntriesEdit edit(write_batch.getWrites().size());
-
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
