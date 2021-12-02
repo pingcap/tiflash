@@ -18,21 +18,19 @@
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromFileBase.h>
+#include <IO/WriteHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Storages/Page/V3/LogFormat.h>
 #include <Storages/Page/V3/LogReader.h>
 #include <Storages/Page/V3/LogWriter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
-#include <gtest/gtest.h>
 #include <sys/types.h>
 
 #include <cstring>
 #include <memory>
 #include <pcg_random.hpp>
 #include <random>
-
-#include "IO/WriteHelpers.h"
 
 
 using DB::tests::TiFlashTestEnv;
@@ -143,7 +141,7 @@ private:
 // Param type is tuple<int, bool>
 // get<0>(tuple): non-zero if recycling log, zero if regular log
 // get<1>(tuple): true if allow retry after read EOF, false otherwise
-class WALLogTest : public ::testing::TestWithParam<std::tuple<bool, bool>>
+class LogFileRWTest : public ::testing::TestWithParam<std::tuple<bool, bool>>
 {
 private:
     class ReportCollector : public LogReader::Reporter
@@ -189,7 +187,7 @@ private:
         {
             if (fail_after_read_partial)
             {
-                EXPECT_FALSE(returned_partial) << "must not Read() after eof/error";
+                EXPECT_FALSE(returned_partial) << "must not read() after eof/error";
             }
 
             // EOF
@@ -221,14 +219,14 @@ protected:
     const int log_file_num = 123;
 
 public:
-    WALLogTest()
-        : log(&Poco::Logger::get("WALLogTest"))
+    LogFileRWTest()
+        : log(&Poco::Logger::get("LogFileRWTest"))
         , recyclable_log(std::get<0>(GetParam()))
         , allow_retry_read(std::get<1>(GetParam()))
     {
         auto ctx = TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
-        auto filename = TiFlashTestEnv::getTemporaryPath("WALLogTest");
+        auto filename = TiFlashTestEnv::getTemporaryPath("LogFileRWTest");
 
         std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<StringSink>(reader_contents);
         writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
@@ -247,12 +245,14 @@ public:
         return reader_contents.size();
     }
 
-    std::string Read(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
+    String read(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
     {
         if (auto [ok, scratch] = reader->readRecord(wal_recovery_mode); ok)
             return scratch;
         return "EOF";
     }
+
+    /// Some methods to break to written bytes
 
     void incrementByte(int offset, char delta)
     {
@@ -269,11 +269,6 @@ public:
         reader_contents.resize(reader_contents.size() - bytes);
     }
 
-    String & getReaderContents()
-    {
-        return reader_contents;
-    }
-
     void fixChecksum(int header_offset, int len, bool recyclable)
     {
         // Compute crc of type/len/data
@@ -285,55 +280,62 @@ public:
         writeIntBinary(checksum, buff);
     }
 
+    /// Some methods to check the error reporter
+
     size_t droppedBytes() const
     {
         return report.dropped_bytes;
     }
 
-    std::string reportMessage() const
+    String reportMessage() const
     {
         return report.message;
     }
 
     // Returns OK iff recorded error message contains "msg"
-    std::string matchError(const std::string & msg) const
+    String matchError(const std::string & msg) const
     {
         if (report.message.find(msg) == std::string::npos)
             return report.message;
         return "OK";
     }
+
+    String & getReaderContents()
+    {
+        return reader_contents;
+    }
 };
 
-TEST_P(WALLogTest, Empty)
+TEST_P(LogFileRWTest, Empty)
 {
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
 }
 
-TEST_P(WALLogTest, ReadWrite)
+TEST_P(LogFileRWTest, ReadWrite)
 {
     write("foo");
     write("bar");
     write("");
     write("xxxx");
-    ASSERT_EQ("foo", Read());
-    ASSERT_EQ("bar", Read());
-    ASSERT_EQ("", Read());
-    ASSERT_EQ("xxxx", Read());
-    ASSERT_EQ("EOF", Read());
-    ASSERT_EQ("EOF", Read()); // Make sure reads at eof work
+    ASSERT_EQ("foo", read());
+    ASSERT_EQ("bar", read());
+    ASSERT_EQ("", read());
+    ASSERT_EQ("xxxx", read());
+    ASSERT_EQ("EOF", read());
+    ASSERT_EQ("EOF", read()); // Make sure reads at eof work
 }
 
-TEST_P(WALLogTest, BlockBoundary)
+TEST_P(LogFileRWTest, BlockBoundary)
 {
     const auto big_str = BigString("A", PS::V3::Format::BLOCK_SIZE - Format::HEADER_SIZE - 4);
     write(big_str);
     write("small");
-    ASSERT_EQ(big_str, Read());
-    ASSERT_EQ("small", Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ(big_str, read());
+    ASSERT_EQ("small", read());
+    ASSERT_EQ("EOF", read());
 }
 
-TEST_P(WALLogTest, ManyBlocks)
+TEST_P(LogFileRWTest, ManyBlocks)
 {
     const size_t num_blocks_test = 100000;
     for (size_t i = 0; i < num_blocks_test; i++)
@@ -342,24 +344,24 @@ TEST_P(WALLogTest, ManyBlocks)
     }
     for (size_t i = 0; i < num_blocks_test; i++)
     {
-        auto res = Read();
+        auto res = read();
         ASSERT_EQ(DB::toString(i), res);
     }
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
 }
 
-TEST_P(WALLogTest, Fragmentation)
+TEST_P(LogFileRWTest, Fragmentation)
 {
     write("small");
     write(BigString("medium", 50000));
     write(BigString("large", 100000));
-    ASSERT_EQ("small", Read());
-    ASSERT_EQ(BigString("medium", 50000), Read());
-    ASSERT_EQ(BigString("large", 100000), Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("small", read());
+    ASSERT_EQ(BigString("medium", 50000), read());
+    ASSERT_EQ(BigString("large", 100000), read());
+    ASSERT_EQ("EOF", read());
 }
 
-TEST_P(WALLogTest, MarginalTrailer)
+TEST_P(LogFileRWTest, MarginalTrailer)
 {
     // Make a trailer that is exactly the same length as an empty record.
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
@@ -368,13 +370,13 @@ TEST_P(WALLogTest, MarginalTrailer)
     ASSERT_EQ(static_cast<size_t>(PS::V3::Format::BLOCK_SIZE - header_size), writtenBytes());
     write("");
     write("bar");
-    ASSERT_EQ(BigString("foo", n), Read());
-    ASSERT_EQ("", Read());
-    ASSERT_EQ("bar", Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ(BigString("foo", n), read());
+    ASSERT_EQ("", read());
+    ASSERT_EQ("bar", read());
+    ASSERT_EQ("EOF", read());
 }
 
-TEST_P(WALLogTest, MarginalTrailer2)
+TEST_P(LogFileRWTest, MarginalTrailer2)
 {
     // Make a trailer that is exactly the same length as an empty record.
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
@@ -382,14 +384,14 @@ TEST_P(WALLogTest, MarginalTrailer2)
     write(BigString("foo", n));
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size), writtenBytes());
     write("bar");
-    ASSERT_EQ(BigString("foo", n), Read());
-    ASSERT_EQ("bar", Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ(BigString("foo", n), read());
+    ASSERT_EQ("bar", read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ(0, droppedBytes());
     ASSERT_EQ("", reportMessage());
 }
 
-TEST_P(WALLogTest, ShortTrailer)
+TEST_P(LogFileRWTest, ShortTrailer)
 {
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
     const int n = PS::V3::Format::BLOCK_SIZE - 2 * header_size + 4;
@@ -397,23 +399,23 @@ TEST_P(WALLogTest, ShortTrailer)
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size + 4), writtenBytes());
     write("");
     write("bar");
-    ASSERT_EQ(BigString("foo", n), Read());
-    ASSERT_EQ("", Read());
-    ASSERT_EQ("bar", Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ(BigString("foo", n), read());
+    ASSERT_EQ("", read());
+    ASSERT_EQ("bar", read());
+    ASSERT_EQ("EOF", read());
 }
 
-TEST_P(WALLogTest, AlignedEof)
+TEST_P(LogFileRWTest, AlignedEof)
 {
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
     const int n = PS::V3::Format::BLOCK_SIZE - 2 * header_size + 4;
     write(BigString("foo", n));
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size + 4), writtenBytes());
-    ASSERT_EQ(BigString("foo", n), Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ(BigString("foo", n), read());
+    ASSERT_EQ("EOF", read());
 }
 
-TEST_P(WALLogTest, RandomRead)
+TEST_P(LogFileRWTest, RandomRead)
 {
     constexpr int n = 500;
     constexpr int rand_seed = 301;
@@ -425,23 +427,23 @@ TEST_P(WALLogTest, RandomRead)
     std::mt19937 read_rd(rand_seed);
     for (int i = 0; i < n; i++)
     {
-        ASSERT_EQ(RandomSkewedString(i, read_rd), Read());
+        ASSERT_EQ(RandomSkewedString(i, read_rd), read());
     }
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
 }
 
 /// Tests of all the error paths in LogReader.cpp follow:
 
-TEST_P(WALLogTest, ReadError)
+TEST_P(LogFileRWTest, ReadError)
 {
     write("foo");
     FailPointHelper::enableFailPoint(::DB::FailPoints::exception_when_read_from_log);
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ(PS::V3::Format::BLOCK_SIZE, droppedBytes());
     ASSERT_EQ("OK", matchError("exception_when_read_from_log"));
 }
 
-TEST_P(WALLogTest, BadRecordType)
+TEST_P(LogFileRWTest, BadRecordType)
 {
     write("foo");
     // Type is stored in header[6], break the type
@@ -449,22 +451,22 @@ TEST_P(WALLogTest, BadRecordType)
     // Meeting a unknown type, consider its header size as `Format::HEADER_SIZE`
     fixChecksum(0, 3, /*recyclable*/ false);
     // Can not successfully read the BadRecord, and get dropped bytes, message reported
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("unknown record type"));
 }
 
-TEST_P(WALLogTest, TruncatedTrailingRecordIsIgnored)
+TEST_P(LogFileRWTest, TruncatedTrailingRecordIsIgnored)
 {
     write("foo");
     shrinkSize(4); // Drop all payload as well as a header byte
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     // Truncated last record is ignored, not treated as an error
     ASSERT_EQ(0, droppedBytes());
     ASSERT_EQ("", reportMessage());
 }
 
-TEST_P(WALLogTest, TruncatedTrailingRecordIsNotIgnored)
+TEST_P(LogFileRWTest, TruncatedTrailingRecordIsNotIgnored)
 {
     if (allow_retry_read)
     {
@@ -474,13 +476,13 @@ TEST_P(WALLogTest, TruncatedTrailingRecordIsNotIgnored)
     }
     write("foo");
     shrinkSize(4); // Drop all payload as well as a header byte
-    ASSERT_EQ("EOF", Read(WALRecoveryMode::AbsoluteConsistency));
+    ASSERT_EQ("EOF", read(WALRecoveryMode::AbsoluteConsistency));
     // Truncated last record is ignored, not treated as an error
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated header"));
 }
 
-TEST_P(WALLogTest, BadLength)
+TEST_P(LogFileRWTest, BadLength)
 {
     if (allow_retry_read)
     {
@@ -497,17 +499,17 @@ TEST_P(WALLogTest, BadLength)
     incrementByte(4, 1);
     if (!recyclable_log)
     {
-        ASSERT_EQ("foo", Read());
+        ASSERT_EQ("foo", read());
         ASSERT_EQ(PS::V3::Format::BLOCK_SIZE, droppedBytes());
         ASSERT_EQ("OK", matchError("bad record length"));
     }
     else
     {
-        ASSERT_EQ("EOF", Read());
+        ASSERT_EQ("EOF", read());
     }
 }
 
-TEST_P(WALLogTest, BadLengthAtEndIsIgnored)
+TEST_P(LogFileRWTest, BadLengthAtEndIsIgnored)
 {
     if (allow_retry_read)
     {
@@ -518,12 +520,12 @@ TEST_P(WALLogTest, BadLengthAtEndIsIgnored)
     }
     write("foo");
     shrinkSize(1);
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ(0, droppedBytes());
     ASSERT_EQ("", reportMessage());
 }
 
-TEST_P(WALLogTest, BadLengthAtEndIsNotIgnored)
+TEST_P(LogFileRWTest, BadLengthAtEndIsNotIgnored)
 {
     if (allow_retry_read)
     {
@@ -534,16 +536,16 @@ TEST_P(WALLogTest, BadLengthAtEndIsNotIgnored)
     }
     write("foo");
     shrinkSize(1);
-    ASSERT_EQ("EOF", Read(WALRecoveryMode::AbsoluteConsistency));
+    ASSERT_EQ("EOF", read(WALRecoveryMode::AbsoluteConsistency));
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated record body"));
 }
 
-TEST_P(WALLogTest, ChecksumMismatch)
+TEST_P(LogFileRWTest, ChecksumMismatch)
 {
     write("foooooo");
     incrementByte(0, 14);
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     if (!recyclable_log)
     {
         ASSERT_EQ(14, droppedBytes());
@@ -556,61 +558,61 @@ TEST_P(WALLogTest, ChecksumMismatch)
     }
 }
 
-TEST_P(WALLogTest, UnexpectedMiddleType)
+TEST_P(LogFileRWTest, UnexpectedMiddleType)
 {
     write("foo");
     setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableMiddleType : Format::MiddleType));
     fixChecksum(0, 3, !!recyclable_log);
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("missing start"));
 }
 
-TEST_P(WALLogTest, UnexpectedLastType)
+TEST_P(LogFileRWTest, UnexpectedLastType)
 {
     write("foo");
     setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableLastType : Format::LastType));
     fixChecksum(0, 3, recyclable_log);
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("missing start"));
 }
 
-TEST_P(WALLogTest, UnexpectedFullType)
+TEST_P(LogFileRWTest, UnexpectedFullType)
 {
     write("foo");
     write("bar");
     setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
     fixChecksum(0, 3, recyclable_log);
-    ASSERT_EQ("bar", Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("bar", read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("partial record without end"));
 }
 
-TEST_P(WALLogTest, UnexpectedFirstType)
+TEST_P(LogFileRWTest, UnexpectedFirstType)
 {
     write("foo");
     write(BigString("bar", 100000));
     setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
     fixChecksum(0, 3, recyclable_log);
-    ASSERT_EQ(BigString("bar", 100000), Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ(BigString("bar", 100000), read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("partial record without end"));
 }
 
-TEST_P(WALLogTest, MissingLastIsIgnored)
+TEST_P(LogFileRWTest, MissingLastIsIgnored)
 {
     write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
     shrinkSize(14);
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ("", reportMessage());
     ASSERT_EQ(0, droppedBytes());
 }
 
-TEST_P(WALLogTest, MissingLastIsNotIgnored)
+TEST_P(LogFileRWTest, MissingLastIsNotIgnored)
 {
     if (allow_retry_read)
     {
@@ -621,22 +623,22 @@ TEST_P(WALLogTest, MissingLastIsNotIgnored)
     write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
     shrinkSize(14);
-    ASSERT_EQ("EOF", Read(WALRecoveryMode::AbsoluteConsistency));
+    ASSERT_EQ("EOF", read(WALRecoveryMode::AbsoluteConsistency));
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: error reading trailing data"));
 }
 
-TEST_P(WALLogTest, PartialLastIsIgnored)
+TEST_P(LogFileRWTest, PartialLastIsIgnored)
 {
     write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
     // Cause a bad record length in the LAST block.
     shrinkSize(1);
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
     ASSERT_EQ("", reportMessage());
     ASSERT_EQ(0, droppedBytes());
 }
 
-TEST_P(WALLogTest, PartialLastIsNotIgnored)
+TEST_P(LogFileRWTest, PartialLastIsNotIgnored)
 {
     if (allow_retry_read)
     {
@@ -647,12 +649,12 @@ TEST_P(WALLogTest, PartialLastIsNotIgnored)
     write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
     // Cause a bad record length in the LAST block.
     shrinkSize(1);
-    ASSERT_EQ("EOF", Read(WALRecoveryMode::AbsoluteConsistency));
+    ASSERT_EQ("EOF", read(WALRecoveryMode::AbsoluteConsistency));
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated record body"));
 }
 
-TEST_P(WALLogTest, ErrorJoinsRecords)
+TEST_P(LogFileRWTest, ErrorJoinsRecords)
 {
     // Consider two fragmented records:
     //    first(R1) last(R1) first(R2) last(R2)
@@ -672,19 +674,19 @@ TEST_P(WALLogTest, ErrorJoinsRecords)
 
     if (!recyclable_log)
     {
-        ASSERT_EQ("correct", Read());
-        ASSERT_EQ("EOF", Read());
+        ASSERT_EQ("correct", read());
+        ASSERT_EQ("EOF", read());
         size_t dropped = droppedBytes();
         ASSERT_LE(dropped, 2 * PS::V3::Format::BLOCK_SIZE + 100);
         ASSERT_GE(dropped, 2 * PS::V3::Format::BLOCK_SIZE);
     }
     else
     {
-        ASSERT_EQ("EOF", Read());
+        ASSERT_EQ("EOF", read());
     }
 }
 
-TEST_P(WALLogTest, Recycle)
+TEST_P(LogFileRWTest, Recycle)
 {
     if (!recyclable_log)
     {
@@ -714,12 +716,12 @@ TEST_P(WALLogTest, Recycle)
     // Check that we should only read new records overwrited (with the same log number)
     ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
     ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
-    ASSERT_EQ("foooo", Read());
-    ASSERT_EQ("bar", Read());
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("foooo", read());
+    ASSERT_EQ("bar", read());
+    ASSERT_EQ("EOF", read());
 }
 
-TEST_P(WALLogTest, RecycleWithAnotherLogNum)
+TEST_P(LogFileRWTest, RecycleWithAnotherLogNum)
 {
     if (!recyclable_log)
     {
@@ -749,12 +751,12 @@ TEST_P(WALLogTest, RecycleWithAnotherLogNum)
 
     ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
     ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
-    // Read with old log number
-    ASSERT_EQ("EOF", Read());
-    // TODO: Read with new log number
+    // read with old log number
+    ASSERT_EQ("EOF", read());
+    // TODO: read with new log number
 }
 
-TEST_P(WALLogTest, RecycleWithSameBoundaryLogNum)
+TEST_P(LogFileRWTest, RecycleWithSameBoundaryLogNum)
 {
     if (!recyclable_log)
     {
@@ -783,25 +785,25 @@ TEST_P(WALLogTest, RecycleWithSameBoundaryLogNum)
 
     ASSERT_GE(getReaderContents().size(), PS::V3::Format::BLOCK_SIZE * 2);
     ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
-    // Read with old log number
-    ASSERT_EQ(text_to_write, Read());
-    ASSERT_EQ("baz", Read());
-    ASSERT_EQ("bif", Read());
-    ASSERT_EQ("blitz", Read());
+    // read with old log number
+    ASSERT_EQ(text_to_write, read());
+    ASSERT_EQ("baz", read());
+    ASSERT_EQ("bif", read());
+    ASSERT_EQ("blitz", read());
     while (num_writes_stuff--)
     {
-        ASSERT_EQ("xxxxxxxxxxxxxxxx", Read());
+        ASSERT_EQ("xxxxxxxxxxxxxxxx", read());
     }
-    ASSERT_EQ("EOF", Read());
+    ASSERT_EQ("EOF", read());
 }
 
 INSTANTIATE_TEST_CASE_P(
     Recycle_AllowRetryRead,
-    WALLogTest,
+    LogFileRWTest,
     ::testing::Combine(
         ::testing::Bool(),
         ::testing::Bool()),
-    [](const ::testing::TestParamInfo<WALLogTest::ParamType> & info) -> String {
+    [](const ::testing::TestParamInfo<LogFileRWTest::ParamType> & info) -> String {
         const auto [recycle_log, allow_retry_read] = info.param;
         return fmt::format("{}_{}", recycle_log, allow_retry_read);
     });
