@@ -41,7 +41,7 @@ struct ExchangeReceiverResult
     bool eof;
     UInt64 rows;
     UInt64 blocks;
-    UInt64 bytes;
+    UInt64 packet_bytes;
 
     ExchangeReceiverResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
@@ -57,8 +57,7 @@ struct ExchangeReceiverResult
         , error_msg(error_msg_)
         , eof(eof_)
         , rows(0)
-        , blocks(0)
-        , bytes(0)
+        , packet_bytes(0)
     {}
 
     ExchangeReceiverResult()

@@ -210,7 +210,12 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     dag_context->mpp_task_log = log;
     context.setDAGContext(dag_context.get());
 
+    dag_context->initExecutorStatistics(context);
+    task_stats->executor_statistics_map = &dag_context->getExecutorStatisticsMap();
+
     task_stats->setSenderExecutorId(*dag_context);
+
+    task_stats->logStats();
 
     if (dag_context->isRootMPPTask())
     {
@@ -365,16 +370,15 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
         task_stats->memory_peak = peak_memory;
 
-        task_stats->local_input_throughput = dag_context->getLocalInputThroughput();
-        task_stats->remote_input_throughput = dag_context->getRemoteInputThroughput();
-        task_stats->output_throughput = dag_context->getOutputThroughput();
+        task_stats->local_input_bytes = dag_context->getLocalInputBytes();
+        task_stats->remote_input_bytes = dag_context->getRemoteInputBytes();
+        task_stats->output_bytes = dag_context->getOutputBytes();
     }
     else
     {
         writeErrToAllTunnels(err_msg);
     }
-    dag_context->collectExecutorStatistics(context);
-    task_stats->executor_statistics_map = &dag_context->getExecutorStatisticsMap();
+    dag_context->collectExecutorRuntimeDetails();
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     unregisterTask();
 
@@ -388,6 +392,7 @@ void MPPTask::runImpl()
     }
 
     task_stats->end(status.load(), err_msg);
+    task_stats->logStats();
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)

@@ -21,30 +21,32 @@ String JoinStatistics::extraToJson() const
         process_time_ns_for_build);
 }
 
+JoinStatistics::JoinStatistics(const tipb::Executor * executor, Context & context_)
+    : ExecutorStatistics(executor, context_)
+{}
+
 bool JoinStatistics::hit(const String & executor_id)
 {
     return startsWith(executor_id, "HashJoin_");
 }
 
-ExecutorStatisticsPtr JoinStatistics::buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context)
+void JoinStatistics::collectRuntimeDetail()
 {
-    using JoinStatisticsPtr = std::shared_ptr<JoinStatistics>;
-    JoinStatisticsPtr statistics = std::make_shared<JoinStatistics>(executor_id, context);
+    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
     visitBlockInputStreams(
         profile_streams_info.input_streams,
         [&](const BlockInputStreamPtr & stream_ptr) {
             throwFailCastException(
                 castBlockInputStream<ExpressionBlockInputStream>(stream_ptr, [&](const ExpressionBlockInputStream & stream) {
-                    collectBaseInfo(statistics, stream.getProfileInfo());
+                    collectBaseInfo(this, stream.getProfileInfo());
                 }),
                 stream_ptr->getName(),
                 "ExpressionBlockInputStream");
-            return true;
         },
         [&](const BlockInputStreamPtr & child_stream_ptr) {
             throwFailCastException(
                 castBlockInputStream<IProfilingBlockInputStream>(child_stream_ptr, [&](const IProfilingBlockInputStream & stream) {
-                    collectInboundInfo(statistics, stream.getProfileInfo());
+                    collectInboundInfo(this, stream.getProfileInfo());
                 }),
                 child_stream_ptr->getName(),
                 "IProfilingBlockInputStream");
@@ -61,14 +63,12 @@ ExecutorStatisticsPtr JoinStatistics::buildStatistics(const String & executor_id
                 context.getDAGContext()->getProfileStreamsMapForJoinBuildSide()[join_alias],
                 [&](const BlockInputStreamPtr & stream_ptr) {
                     return castBlockInputStream<HashJoinBuildBlockInputStream>(stream_ptr, [&](const HashJoinBuildBlockInputStream & stream) {
-                        statistics->hash_table_bytes += stream.getJoinPtr()->getTotalByteCount();
+                        hash_table_bytes += stream.getJoinPtr()->getTotalByteCount();
                         const auto & profile_info = stream.getProfileInfo();
-                        statistics->process_time_ns_for_build = std::max(statistics->process_time_ns_for_build, profile_info.execution_time);
+                        process_time_ns_for_build = std::max(process_time_ns_for_build, profile_info.execution_time);
                     });
                 });
         }
     }
-
-    return statistics;
 }
 } // namespace DB

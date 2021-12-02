@@ -1,7 +1,6 @@
 #include <Common/FmtUtils.h>
 #include <Common/joinStr.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/traverseExecutorTree.h>
 #include <Flash/Mpp/MPPTaskStats.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <fmt/core.h>
@@ -28,14 +27,18 @@ void MPPTaskStats::end(const TaskStatus & status_, StringRef error_message_)
     task_end_timestamp = Clock::now();
     status = status_;
     error_message.assign(error_message_.data, error_message_.size);
+}
+
+void MPPTaskStats::logStats()
+{
     log->debug(toJson());
 }
 
 namespace
 {
-Int64 toMicroseconds(MPPTaskStats::Timestamp timestamp)
+Int64 toNanoseconds(MPPTaskStats::Timestamp timestamp)
 {
-    return std::chrono::duration_cast<std::chrono::microseconds>(timestamp.time_since_epoch()).count();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp.time_since_epoch()).count();
 }
 
 Int64 parseId(const String & executor_id)
@@ -77,31 +80,31 @@ void MPPTaskStats::setSenderExecutorId(DAGContext & dag_context)
 String MPPTaskStats::toJson() const
 {
     return fmt::format(
-        R"({{"query_tso":{},"task_id":{},"sender_executor_id":{},"executors":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_throughput":{},"remote_input_throughput":{},"output_throughput":{},"cpu_usage":{},"memory_peak":{}}})",
+        R"({{"query_tso":{},"task_id":{},"sender_executor_id":{},"executors":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"wait_index_start_timestamp":{},"wait_index_end_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","local_input_bytes":{},"remote_input_bytes":{},"output_bytes":{},"working_time":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         sender_executor_id,
         executorsToJson(executor_statistics_map),
         host,
-        toMicroseconds(task_init_timestamp),
-        toMicroseconds(compile_start_timestamp),
-        toMicroseconds(wait_index_start_timestamp),
-        toMicroseconds(wait_index_end_timestamp),
-        toMicroseconds(compile_end_timestamp),
-        toMicroseconds(task_start_timestamp),
-        toMicroseconds(task_end_timestamp),
+        toNanoseconds(task_init_timestamp),
+        toNanoseconds(compile_start_timestamp),
+        toNanoseconds(wait_index_start_timestamp),
+        toNanoseconds(wait_index_end_timestamp),
+        toNanoseconds(compile_end_timestamp),
+        toNanoseconds(task_start_timestamp),
+        toNanoseconds(task_end_timestamp),
         taskStatusToString(status),
         error_message,
-        local_input_throughput,
-        remote_input_throughput,
-        output_throughput,
-        cpu_usage,
+        local_input_bytes,
+        remote_input_bytes,
+        output_bytes,
+        working_time,
         memory_peak);
 }
 
 void MPPTaskStats::setWaitIndexTimestamp(const Timestamp & wait_index_start_timestamp_, const Timestamp & wait_index_end_timestamp_)
 {
-    if (toMicroseconds(wait_index_start_timestamp_) == 0 && toMicroseconds(wait_index_end_timestamp_) == 0)
+    if (toNanoseconds(wait_index_start_timestamp_) == 0 && toNanoseconds(wait_index_end_timestamp_) == 0)
     {
         wait_index_start_timestamp = compile_start_timestamp;
         wait_index_end_timestamp = compile_start_timestamp;

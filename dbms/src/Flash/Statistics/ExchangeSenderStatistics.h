@@ -18,14 +18,13 @@ struct ExchangeSenderStatistics : public ExecutorStatistics
 
     std::vector<Int64> sender_target_task_ids;
 
-    ExchangeSenderStatistics(const String & executor_id_, Context & context)
-        : ExecutorStatistics(executor_id_, context)
-    {}
-
-    String extraToJson() const override;
+    ExchangeSenderStatistics(const tipb::Executor * executor, Context & context_);
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
+    void collectRuntimeDetail() override;
+
+protected:
+    String extraToJson() const override;
 };
 } // namespace DB

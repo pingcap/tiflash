@@ -134,15 +134,13 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         }
         if constexpr (is_streaming_reader)
         {
-            connection_profile_infos[result.call_index]->rows += result.rows;
-            connection_profile_infos[result.call_index]->blocks += result.blocks;
-            connection_profile_infos[result.call_index]->bytes += result.bytes;
+            ++connection_profile_infos[result.call_index]->packets;
+            connection_profile_infos[result.call_index]->bytes += result.packet_bytes;
         }
         else
         {
-            connection_profile_infos.back()->rows += result.rows;
-            connection_profile_infos.back()->blocks += result.blocks;
-            connection_profile_infos.back()->bytes += result.bytes;
+            ++connection_profile_infos.back()->packets;
+            connection_profile_infos.back()->bytes += result.packet_bytes;
         }
         total_rows += result.rows;
         LOG_TRACE(

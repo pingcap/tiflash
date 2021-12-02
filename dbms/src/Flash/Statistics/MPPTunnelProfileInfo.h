@@ -9,12 +9,16 @@ struct MPPTunnelProfileInfo : public ConnectionProfileInfo
 {
     String tunnel_id;
 
-    explicit MPPTunnelProfileInfo(const String & tunnel_id_)
+    Int64 sender_target_task_id;
+
+    explicit MPPTunnelProfileInfo(const String & tunnel_id_, Int64 sender_target_task_id_)
         : ConnectionProfileInfo("MPPTunnel")
         , tunnel_id(tunnel_id_)
+        , sender_target_task_id(sender_target_task_id_)
     {}
 
-    String toJson() const override;
+protected:
+    String extraToJson() const override;
 };
 
 using MPPTunnelProfileInfoPtr = std::shared_ptr<MPPTunnelProfileInfo>;

@@ -31,7 +31,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
-    , mpp_tunnel_profile_info(std::make_shared<MPPTunnelProfileInfo>(tunnel_id))
+    , mpp_tunnel_profile_info(std::make_shared<MPPTunnelProfileInfo>(tunnel_id, receiver_meta_.task_id()))
     , log(getMPPTaskLog(log_, tunnel_id))
 {
 }
@@ -156,7 +156,7 @@ void MPPTunnelBase<Writer>::sendLoop()
                     throw Exception(tunnel_id + msg);
                 }
                 mpp_tunnel_profile_info->bytes += res->ByteSizeLong();
-                mpp_tunnel_profile_info->blocks += 1;
+                mpp_tunnel_profile_info->packets += 1;
             }
         }
     }

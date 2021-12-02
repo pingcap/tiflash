@@ -9,12 +9,10 @@ namespace DB
 {
 struct ProjectionStatistics : public ExecutorStatistics
 {
-    ProjectionStatistics(const String & executor_id_, Context & context)
-        : ExecutorStatistics(executor_id_, context)
-    {}
+    ProjectionStatistics(const tipb::Executor * executor, Context & context_);
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
+    void collectRuntimeDetail() override;
 };
 } // namespace DB

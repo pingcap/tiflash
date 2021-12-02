@@ -67,10 +67,8 @@ inline void visitBlockInputStreams(const BlockInputStreams & input_streams, FF &
 {
     std::unordered_set<IBlockInputStream *> visited_set;
     visitBlockInputStreamsWithVisitedSet(visited_set, input_streams, [&](const BlockInputStreamPtr & stream_ptr) {
-        if (cur_f(stream_ptr))
-        {
-            visitBlockInputStreamsWithVisitedSet(visited_set, stream_ptr->getChildren(), child_f);
-        }
+        cur_f(stream_ptr);
+        visitBlockInputStreamsWithVisitedSet(visited_set, stream_ptr->getChildren(), child_f);
     });
 }
 

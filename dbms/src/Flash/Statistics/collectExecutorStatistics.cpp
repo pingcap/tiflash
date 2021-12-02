@@ -25,12 +25,20 @@ struct ExecutorStatisticsCollector
         : context(context_)
     {}
 
+    template <typename... Ts>
+    inline bool append(const String & executor_id, const tipb::Executor * executor)
+    {
+        assert(res.find(executor_id) == res.end());
+        return (doAppend<Ts>(executor_id, executor) || ...);
+    }
+
+private:
     template <typename T>
-    bool append(const String & executor_id, const ProfileStreamsInfo & profile_streams_info)
+    inline bool doAppend(const String & executor_id, const tipb::Executor * executor)
     {
         if (T::hit(executor_id))
         {
-            res[executor_id] = T::buildStatistics(executor_id, profile_streams_info, context);
+            res[executor_id] = std::make_shared<T>(executor, context);
             return true;
         }
         else
@@ -41,33 +49,30 @@ struct ExecutorStatisticsCollector
 };
 } // namespace
 
-std::map<String, ExecutorStatisticsPtr> collectExecutorStatistics(Context & context)
+std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(Context & context)
 {
     ExecutorStatisticsCollector collector{context};
     auto & dag_context = *context.getDAGContext();
-    for (const auto & profile_streams_info_entry : dag_context.getProfileStreamsMap())
+    for (const auto & executor_entry : dag_context.getExecutorMap())
     {
-        const auto & executor_id = profile_streams_info_entry.first;
-        const auto & profile_streams_info = profile_streams_info_entry.second;
+        const auto & executor_id = executor_entry.first;
+        const auto * executor = executor_entry.second;
 
-        // clang-format off
-        if (collector.append<AggStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<ExchangeReceiverStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<ExchangeSenderStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<FilterStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<JoinStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<LimitStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<ProjectionStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<TableScanStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<TopNStatistics>(executor_id, profile_streams_info)) {}
-        else if (collector.append<ExchangeReceiverStatistics>(executor_id, profile_streams_info)) {}
-        else
+        if (!collector.append<
+                AggStatistics,
+                ExchangeReceiverStatistics,
+                ExchangeSenderStatistics,
+                FilterStatistics,
+                JoinStatistics,
+                LimitStatistics,
+                ProjectionStatistics,
+                TableScanStatistics,
+                TopNStatistics>(executor_id, executor))
         {
             throw TiFlashException(
-                fmt::format("Unknown executor_id: {}", executor_id),
+                fmt::format("Unknown executor type, executor_id: {}", executor_id),
                 Errors::Coprocessor::Internal);
         }
-        // clang-format on
     }
     return collector.res;
 }

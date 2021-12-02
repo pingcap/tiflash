@@ -14,18 +14,15 @@ struct TableScanStatistics : public ExecutorStatistics
     String db;
     String table;
 
-    std::vector<tipb::KeyRange> ranges;
-
     std::vector<ConnectionProfileInfoPtr> connection_profile_infos;
 
-    TableScanStatistics(const String & executor_id_, Context & context)
-        : ExecutorStatistics(executor_id_, context)
-    {}
-
-    String extraToJson() const override;
+    TableScanStatistics(const tipb::Executor * executor, Context & context_);
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
+    void collectRuntimeDetail() override;
+
+protected:
+    String extraToJson() const override;
 };
 } // namespace DB

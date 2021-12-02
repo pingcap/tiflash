@@ -15,14 +15,13 @@ struct AggStatistics : public ExecutorStatistics
 
     size_t hash_table_rows = 0;
 
-    AggStatistics(const String & executor_id_, Context & context)
-        : ExecutorStatistics(executor_id_, context)
-    {}
-
-    String extraToJson() const override;
+    AggStatistics(const tipb::Executor * executor, Context & context_);
 
     static bool hit(const String & executor_id);
 
-    static ExecutorStatisticsPtr buildStatistics(const String & executor_id, const ProfileStreamsInfo & profile_streams_info, Context & context);
+    void collectRuntimeDetail() override;
+
+protected:
+    String extraToJson() const override;
 };
 } // namespace DB

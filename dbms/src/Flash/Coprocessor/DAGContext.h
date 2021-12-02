@@ -89,6 +89,7 @@ public:
     {}
 
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
+    const ProfileStreamsInfo & getProfileStreams(const String & executor_id);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     void handleTruncateError(const String & msg);
@@ -137,11 +138,12 @@ public:
 
     std::pair<bool, double> getTableScanThroughput();
 
-    double getRemoteInputThroughput();
-    double getLocalInputThroughput();
-    double getOutputThroughput();
+    UInt64 getRemoteInputBytes();
+    UInt64 getLocalInputBytes();
+    UInt64 getOutputBytes();
 
-    void collectExecutorStatistics(Context & context);
+    void initExecutorStatistics(Context & context);
+    void collectExecutorRuntimeDetails();
 
     std::map<String, ExecutorStatisticsPtr> & getExecutorStatisticsMap();
 

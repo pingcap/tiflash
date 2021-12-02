@@ -27,6 +27,8 @@ struct MPPTaskStats
 
     String toJson() const;
 
+    void logStats();
+
     void setSenderExecutorId(DAGContext & dag_context);
 
     void setWaitIndexTimestamp(const Timestamp & wait_index_start_timestamp_, const Timestamp & wait_index_end_timestamp_);
@@ -48,12 +50,12 @@ struct MPPTaskStats
     TaskStatus status;
     String error_message;
 
-    double local_input_throughput = 0.0;
-    double remote_input_throughput = 0.0;
-    double output_throughput = 0.0;
+    UInt64 local_input_bytes = 0;
+    UInt64 remote_input_bytes = 0;
+    UInt64 output_bytes = 0;
 
     /// resource
-    Int64 cpu_usage = 0;
+    Int64 working_time = 0;
     Int64 memory_peak = 0;
 };
 

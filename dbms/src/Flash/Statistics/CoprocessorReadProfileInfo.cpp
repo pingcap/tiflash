@@ -35,14 +35,10 @@ String CoprocessorTaskInfo::toJson() const
     return buffer.toString();
 }
 
-String CoprocessorReadProfileInfo::toJson() const
+String CoprocessorReadProfileInfo::extraToJson() const
 {
     return fmt::format(
-        R"({{"connection_type":"{}","rows":{},"blocks":{},"bytes":{},"cop_task_infos":{}}})",
-        connection_type,
-        rows,
-        blocks,
-        bytes,
+        R"(,"cop_task_infos":{})",
         arrayToJson<false>(cop_task_infos));
 }
 } // namespace DB
