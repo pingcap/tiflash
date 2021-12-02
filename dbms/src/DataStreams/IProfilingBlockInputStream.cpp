@@ -134,17 +134,17 @@ void IProfilingBlockInputStream::dumpProfileInfo(FmtBuffer & buf)
 
 void IProfilingBlockInputStream::recursiveDumpProfileInfo(FmtBuffer & buf, std::unordered_set<Int64> & dumped)
 {
-    if (dumped.count(info.signature))
+    if (dumped.count(info.id))
         return;
 
     bool first = dumped.empty();
-    dumped.insert(info.signature);
+    dumped.insert(info.id);
 
     if (!first)
         buf.append(",");
     buf.append("{");
 
-    buf.fmtAppend("\"id\":{},", info.signature)
+    buf.fmtAppend("\"id\":{},", info.id)
         .fmtAppend(R"("name":"{}",)", getName())
         .fmtAppend(R"("executor":"{}",)", info.executor.empty() ? "<unknown>" : info.executor);
 
@@ -155,7 +155,7 @@ void IProfilingBlockInputStream::recursiveDumpProfileInfo(FmtBuffer & buf, std::
         buf,
         [](const std::shared_ptr<IBlockInputStream> & child, FmtBuffer & buf) {
             auto * child_ptr = dynamic_cast<IProfilingBlockInputStream *>(child.get());
-            buf.fmtAppend("{}", child_ptr->info.signature);
+            buf.fmtAppend("{}", child_ptr->info.id);
         },
         ",");
     buf.append("],");

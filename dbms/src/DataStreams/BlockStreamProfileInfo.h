@@ -39,7 +39,7 @@ struct BlockStreamProfileInfo
     // parent streams
     UInt64 execution_time = 0;
 
-    Int64 signature = -1;
+    Int64 id = -1;
     String executor;
     UInt64 prefix_duration = 0;
     UInt64 suffix_duration = 0;

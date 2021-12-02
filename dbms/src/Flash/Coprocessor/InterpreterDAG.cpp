@@ -175,9 +175,9 @@ BlockIO InterpreterDAG::execute()
 
     {
         auto & stream = dynamic_cast<IProfilingBlockInputStream &>(*res.in);
-        Int64 counter = 0;
-        stream.assignSignature([counter]() mutable {
-            return counter++;
+        Int64 id = 0;
+        stream.assignId([id]() mutable {
+            return id++;
         });
     }
 

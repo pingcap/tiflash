@@ -41,14 +41,14 @@ public:
     IProfilingBlockInputStream();
 
     template <typename Assigner>
-    void assignSignature(Assigner && assign)
+    void assignId(Assigner && assign)
     {
-        if (info.signature < 0)
-            info.signature = assign();
+        if (info.id < 0)
+            info.id = assign();
 
         forEachProfilingChild([&](IProfilingBlockInputStream & child) {
             child.assignExecutor(info.executor);
-            child.assignSignature(assign);
+            child.assignId(assign);
             return false;
         });
     }
