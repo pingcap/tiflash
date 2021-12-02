@@ -240,7 +240,6 @@ unsigned int LogReader::readPhysicalRecord(std::string_view * result, size_t * d
     while (true)
     {
         // We need at least the minimum header size
-        // LOG_DEBUG(&Poco::Logger::get("fff"), fmt::format("offset: {} buffer.size(): {} contents: {}", file->offset(), buffer.size(), Redact::keyToHexString(buffer.data(), std::min(buffer.size(), 20))));
         if (buffer.size() < static_cast<size_t>(Format::HEADER_SIZE))
         {
             // the default value of r is meaningless because ReadMore will overwrite it if it
@@ -258,7 +257,6 @@ unsigned int LogReader::readPhysicalRecord(std::string_view * result, size_t * d
         readIntBinary(expected_crc, *file);
         readIntBinary(length, *file);
         readChar(type, *file);
-        // LOG_DEBUG(&Poco::Logger::get("fff"), fmt::format("Read crc: {:0X} length: {} type: {}", expected_crc, length, static_cast<int>(type)));
         int header_size = Format::HEADER_SIZE;
         if (type >= Format::RecyclableFullType && type <= Format::RecyclableLastType)
         {

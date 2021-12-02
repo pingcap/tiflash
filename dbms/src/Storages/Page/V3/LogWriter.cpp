@@ -144,13 +144,6 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     writeString(header_buff.buffer().begin(), header_buff.count(), *dest);
     writeString(payload.position(), length, *dest);
 
-    // LOG_DEBUG(
-    //     &Poco::Logger::get("fff"),
-    //     fmt::format("CRC: {:08X} header: {} payload: {}",
-    //                 crc,
-    //                 Redact::keyToHexString(header_buff.buffer().begin(), header_buff.count()),
-    //                 Redact::keyToHexString(payload.position(), length)));
-
     block_offset += header_size + length;
 }
 } // namespace DB::PS::V3
