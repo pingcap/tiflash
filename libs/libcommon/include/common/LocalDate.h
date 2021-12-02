@@ -4,7 +4,6 @@
 #include <string.h>
 
 #include <exception>
-#include <sstream>
 #include <string>
 
 #include "Common/FmtUtils.h"
