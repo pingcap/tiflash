@@ -14,6 +14,13 @@ using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
 
 #define INVAILD_BLOBFILE_ID UINT16_MAX
 
+BlobStore::BlobStore(const FileProviderPtr & file_provider_)
+    : file_provider(file_provider_)
+    , log(&Poco::Logger::get("RBTreeSpaceMap"))
+    , blob_stats(log)
+{
+}
+
 void BlobStore::write(char * buffer, size_t size)
 {
     UInt16 blob_file_id = INVAILD_BLOBFILE_ID;
@@ -175,6 +182,16 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
 
     // Whatever request success or not, it still need update.
     stat->sm_max_caps = max_cap;
+    if (offset != UINT64_MAX)
+    {
+        // TBD
+
+        // Int64 size_update = offset - stat->sm_total_size;
+        // if (size_update > 0) {
+
+        //     stat->sm_total_size += size_update
+        // }
+    }
     return offset;
 }
 

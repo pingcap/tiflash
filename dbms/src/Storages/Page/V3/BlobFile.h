@@ -16,7 +16,9 @@ class BlobFile
 public:
     using BlobFileId = UInt16;
 
-    BlobFile(String path_, FileProviderPtr file_provider_, bool truncate_if_exists);
+    BlobFile(String path_,
+             FileProviderPtr file_provider_,
+             bool truncate_if_exists = true);
 
     ~BlobFile();
 
@@ -32,9 +34,9 @@ public:
 
     BlobFileId getBlobFileId();
 
-    void read(char * buffer, size_t offset, size_t size);
+    void read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter);
 
-    void write(char * buffer, size_t offset, size_t size);
+    void write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter);
 
 private:
     FileProviderPtr file_provider;
@@ -42,7 +44,7 @@ private:
 
     Poco::Logger * log;
 
-    WriteReadableFilePtr wrPtr;
+    WriteReadableFilePtr wrfile;
 };
 
 
