@@ -106,28 +106,5 @@ private:
     };
 };
 
-class FragmentBufferedLogReader : public LogReader
-{
-public:
-    FragmentBufferedLogReader(
-        std::unique_ptr<ReadBufferFromFileProvider> && file_,
-        Reporter * reporter_,
-        bool verify_checksum_,
-        uint64_t log_num_,
-        Poco::Logger * log_)
-        : LogReader(std::move(file_), reporter_, verify_checksum_, log_num_, log_)
-    {}
-
-    ~FragmentBufferedLogReader() override = default;
-
-    std::tuple<bool, String> readRecord(WALRecoveryMode wal_recovery_mode) override;
-
-    FragmentBufferedLogReader(const FragmentBufferedLogReader &) = delete;
-    FragmentBufferedLogReader & operator=(const FragmentBufferedLogReader &) = delete;
-
-private:
-    String fragments;
-    bool in_fragmented_record;
-};
 } // namespace PS::V3
 } // namespace DB

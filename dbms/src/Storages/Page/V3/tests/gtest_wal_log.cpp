@@ -32,6 +32,8 @@
 #include <pcg_random.hpp>
 #include <random>
 
+#include "IO/WriteHelpers.h"
+
 
 using DB::tests::TiFlashTestEnv;
 
@@ -55,15 +57,7 @@ static std::string BigString(const std::string & partial_string, size_t n)
     return result;
 }
 
-// Construct a string from a number
-static std::string NumberString(int n)
-{
-    char buf[50];
-    snprintf(buf, sizeof(buf), "%d.", n);
-    return std::string(buf);
-}
-
-static uint32_t getSkewedNum(int max_log, std::mt19937 & rd)
+static UInt32 getSkewedNum(int max_log, std::mt19937 & rd)
 {
     pcg64 gen(rd());
     std::uniform_int_distribution<> d(0, max_log + 1);
@@ -72,9 +66,9 @@ static uint32_t getSkewedNum(int max_log, std::mt19937 & rd)
 }
 
 // Return a skewed potentially long string
-static std::string RandomSkewedString(int i, std::mt19937 & rd)
+static String RandomSkewedString(int i, std::mt19937 & rd)
 {
-    return BigString(NumberString(i), getSkewedNum(17, rd));
+    return BigString(DB::toString(i), getSkewedNum(17, rd));
 }
 
 class StringSink : public DB::WriteBufferFromFileBase
@@ -168,16 +162,6 @@ private:
         }
     };
 
-#if 0
-    void reset_source_contents() { source_->contents_ = dest_contents(); }
-#endif
-
-    const String & destContents() const
-    {
-        return reader_contents;
-    }
-
-
     class StringSouce : public DB::ReadBufferFromFileBase
     {
     public:
@@ -185,10 +169,6 @@ private:
         size_t read_pos;
         bool fail_after_read_partial;
         bool returned_partial;
-        bool force_error;
-        size_t force_error_position;
-        bool force_eof;
-        size_t force_eof_position;
 
         explicit StringSouce(String & contents_, bool fail_after_read_partial_)
             : DB::ReadBufferFromFileBase(PS::V3::Format::BLOCK_SIZE, nullptr, 0)
@@ -196,10 +176,6 @@ private:
             , read_pos(0)
             , fail_after_read_partial(fail_after_read_partial_)
             , returned_partial(false)
-            , force_error(false)
-            , force_error_position(0)
-            , force_eof(false)
-            , force_eof_position(0)
         {}
 
         off_t getPositionInFile() override { return count(); }
@@ -214,10 +190,6 @@ private:
             if (fail_after_read_partial)
             {
                 EXPECT_FALSE(returned_partial) << "must not Read() after eof/error";
-            }
-
-            if (force_error)
-            {
             }
 
             // EOF
@@ -238,10 +210,9 @@ private:
 
 
     String reader_contents;
-    // StringSource * source_;
     ReportCollector report;
-    std::unique_ptr<LogWriter> writer_;
-    std::unique_ptr<LogReader> reader_;
+    std::unique_ptr<LogWriter> writer;
+    std::unique_ptr<LogReader> reader;
     Poco::Logger * log;
 
 protected:
@@ -260,40 +231,25 @@ public:
         auto filename = TiFlashTestEnv::getTemporaryPath("WALLogTest");
 
         std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<StringSink>(reader_contents);
-        writer_ = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
+        writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
         std::unique_ptr<ReadBufferFromFileBase> file_reader = std::make_unique<StringSouce>(reader_contents, /*fail_after_read_partial_*/ !allow_retry_read);
-#if 0
-        if (allow_retry_read_)
-        {
-            reader_.reset(new FragmentBufferedReader(nullptr, std::move(file_reader), &report_, true /* checksum */, log_file_num /* log_number */));
-        }
-        else
-        {
-#endif
-        reader_ = std::make_unique<LogReader>(std::move(file_reader), &report, /* verify_checksum */ true, /* log_number */ log_file_num, log);
-#if 0
-        }
-#endif
+        reader = std::make_unique<LogReader>(std::move(file_reader), &report, /* verify_checksum */ true, /* log_number */ log_file_num, log);
     }
 
     void write(const std::string & msg)
     {
         ReadBufferFromString buff(msg);
-        ASSERT_NO_THROW(writer_->addRecord(buff, msg.size()));
+        ASSERT_NO_THROW(writer->addRecord(buff, msg.size()));
     }
-
-#if 0
-    Slice * get_reader_contents() { return &reader_contents_; }
-#endif
 
     size_t writtenBytes() const
     {
-        return destContents().size();
+        return reader_contents.size();
     }
 
     std::string Read(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
     {
-        if (auto [ok, scratch] = reader_->readRecord(wal_recovery_mode); ok)
+        if (auto [ok, scratch] = reader->readRecord(wal_recovery_mode); ok)
             return scratch;
         return "EOF";
     }
@@ -329,39 +285,16 @@ public:
         writeIntBinary(checksum, buff);
     }
 
-    void forceErrorAt(size_t /*position*/)
-    {
-        // source_->force_error_ = true;
-        // source_->force_error_position_ = position;
-        FailPointHelper::enableFailPoint(::DB::FailPoints::exception_when_read_from_log);
-    }
-
-    size_t DroppedBytes() const
+    size_t droppedBytes() const
     {
         return report.dropped_bytes;
     }
 
-    std::string ReportMessage() const
+    std::string reportMessage() const
     {
         return report.message;
     }
 
-#if 0
-    void ForceEOF(size_t position = 0)
-    {
-        source_->force_eof_ = true;
-        source_->force_eof_position_ = position;
-    }
-
-    void UnmarkEOF()
-    {
-        source_->returned_partial_ = false;
-        reader_->UnmarkEOF();
-    }
-
-    bool IsEOF() { return reader_->IsEOF(); }
-
-#endif
     // Returns OK iff recorded error message contains "msg"
     std::string matchError(const std::string & msg) const
     {
@@ -405,12 +338,12 @@ TEST_P(WALLogTest, ManyBlocks)
     const size_t num_blocks_test = 100000;
     for (size_t i = 0; i < num_blocks_test; i++)
     {
-        write(NumberString(i));
+        write(DB::toString(i));
     }
     for (size_t i = 0; i < num_blocks_test; i++)
     {
         auto res = Read();
-        ASSERT_EQ(NumberString(i), res);
+        ASSERT_EQ(DB::toString(i), res);
     }
     ASSERT_EQ("EOF", Read());
 }
@@ -452,8 +385,8 @@ TEST_P(WALLogTest, MarginalTrailer2)
     ASSERT_EQ(BigString("foo", n), Read());
     ASSERT_EQ("bar", Read());
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ(0, DroppedBytes());
-    ASSERT_EQ("", ReportMessage());
+    ASSERT_EQ(0, droppedBytes());
+    ASSERT_EQ("", reportMessage());
 }
 
 TEST_P(WALLogTest, ShortTrailer)
@@ -497,14 +430,14 @@ TEST_P(WALLogTest, RandomRead)
     ASSERT_EQ("EOF", Read());
 }
 
-// Tests of all the error paths in log_reader.cc follow:
+/// Tests of all the error paths in LogReader.cpp follow:
 
 TEST_P(WALLogTest, ReadError)
 {
     write("foo");
-    forceErrorAt(0);
+    FailPointHelper::enableFailPoint(::DB::FailPoints::exception_when_read_from_log);
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ(PS::V3::Format::BLOCK_SIZE, DroppedBytes());
+    ASSERT_EQ(PS::V3::Format::BLOCK_SIZE, droppedBytes());
     ASSERT_EQ("OK", matchError("exception_when_read_from_log"));
 }
 
@@ -517,7 +450,7 @@ TEST_P(WALLogTest, BadRecordType)
     fixChecksum(0, 3, /*recyclable*/ false);
     // Can not successfully read the BadRecord, and get dropped bytes, message reported
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ(3, DroppedBytes());
+    ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("unknown record type"));
 }
 
@@ -527,8 +460,8 @@ TEST_P(WALLogTest, TruncatedTrailingRecordIsIgnored)
     shrinkSize(4); // Drop all payload as well as a header byte
     ASSERT_EQ("EOF", Read());
     // Truncated last record is ignored, not treated as an error
-    ASSERT_EQ(0, DroppedBytes());
-    ASSERT_EQ("", ReportMessage());
+    ASSERT_EQ(0, droppedBytes());
+    ASSERT_EQ("", reportMessage());
 }
 
 TEST_P(WALLogTest, TruncatedTrailingRecordIsNotIgnored)
@@ -543,7 +476,7 @@ TEST_P(WALLogTest, TruncatedTrailingRecordIsNotIgnored)
     shrinkSize(4); // Drop all payload as well as a header byte
     ASSERT_EQ("EOF", Read(WALRecoveryMode::AbsoluteConsistency));
     // Truncated last record is ignored, not treated as an error
-    ASSERT_GT(DroppedBytes(), 0U);
+    ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated header"));
 }
 
@@ -565,7 +498,7 @@ TEST_P(WALLogTest, BadLength)
     if (!recyclable_log)
     {
         ASSERT_EQ("foo", Read());
-        ASSERT_EQ(PS::V3::Format::BLOCK_SIZE, DroppedBytes());
+        ASSERT_EQ(PS::V3::Format::BLOCK_SIZE, droppedBytes());
         ASSERT_EQ("OK", matchError("bad record length"));
     }
     else
@@ -586,8 +519,8 @@ TEST_P(WALLogTest, BadLengthAtEndIsIgnored)
     write("foo");
     shrinkSize(1);
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ(0, DroppedBytes());
-    ASSERT_EQ("", ReportMessage());
+    ASSERT_EQ(0, droppedBytes());
+    ASSERT_EQ("", reportMessage());
 }
 
 TEST_P(WALLogTest, BadLengthAtEndIsNotIgnored)
@@ -602,7 +535,7 @@ TEST_P(WALLogTest, BadLengthAtEndIsNotIgnored)
     write("foo");
     shrinkSize(1);
     ASSERT_EQ("EOF", Read(WALRecoveryMode::AbsoluteConsistency));
-    ASSERT_GT(DroppedBytes(), 0);
+    ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated record body"));
 }
 
@@ -613,13 +546,13 @@ TEST_P(WALLogTest, ChecksumMismatch)
     ASSERT_EQ("EOF", Read());
     if (!recyclable_log)
     {
-        ASSERT_EQ(14, DroppedBytes());
+        ASSERT_EQ(14, droppedBytes());
         ASSERT_EQ("OK", matchError("checksum mismatch"));
     }
     else
     {
-        ASSERT_EQ(0, DroppedBytes());
-        ASSERT_EQ("", ReportMessage());
+        ASSERT_EQ(0, droppedBytes());
+        ASSERT_EQ("", reportMessage());
     }
 }
 
@@ -629,7 +562,7 @@ TEST_P(WALLogTest, UnexpectedMiddleType)
     setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableMiddleType : Format::MiddleType));
     fixChecksum(0, 3, !!recyclable_log);
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ(3, DroppedBytes());
+    ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("missing start"));
 }
 
@@ -639,7 +572,7 @@ TEST_P(WALLogTest, UnexpectedLastType)
     setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableLastType : Format::LastType));
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ(3, DroppedBytes());
+    ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("missing start"));
 }
 
@@ -651,7 +584,7 @@ TEST_P(WALLogTest, UnexpectedFullType)
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ("bar", Read());
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ(3U, DroppedBytes());
+    ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("partial record without end"));
 }
 
@@ -663,7 +596,7 @@ TEST_P(WALLogTest, UnexpectedFirstType)
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ(BigString("bar", 100000), Read());
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ(3U, DroppedBytes());
+    ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("partial record without end"));
 }
 
@@ -673,8 +606,8 @@ TEST_P(WALLogTest, MissingLastIsIgnored)
     // Remove the LAST block, including header.
     shrinkSize(14);
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ("", ReportMessage());
-    ASSERT_EQ(0U, DroppedBytes());
+    ASSERT_EQ("", reportMessage());
+    ASSERT_EQ(0, droppedBytes());
 }
 
 TEST_P(WALLogTest, MissingLastIsNotIgnored)
@@ -689,7 +622,7 @@ TEST_P(WALLogTest, MissingLastIsNotIgnored)
     // Remove the LAST block, including header.
     shrinkSize(14);
     ASSERT_EQ("EOF", Read(WALRecoveryMode::AbsoluteConsistency));
-    ASSERT_GT(DroppedBytes(), 0);
+    ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: error reading trailing data"));
 }
 
@@ -699,8 +632,8 @@ TEST_P(WALLogTest, PartialLastIsIgnored)
     // Cause a bad record length in the LAST block.
     shrinkSize(1);
     ASSERT_EQ("EOF", Read());
-    ASSERT_EQ("", ReportMessage());
-    ASSERT_EQ(0, DroppedBytes());
+    ASSERT_EQ("", reportMessage());
+    ASSERT_EQ(0, droppedBytes());
 }
 
 TEST_P(WALLogTest, PartialLastIsNotIgnored)
@@ -715,7 +648,7 @@ TEST_P(WALLogTest, PartialLastIsNotIgnored)
     // Cause a bad record length in the LAST block.
     shrinkSize(1);
     ASSERT_EQ("EOF", Read(WALRecoveryMode::AbsoluteConsistency));
-    ASSERT_GT(DroppedBytes(), 0);
+    ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated record body"));
 }
 
@@ -741,7 +674,7 @@ TEST_P(WALLogTest, ErrorJoinsRecords)
     {
         ASSERT_EQ("correct", Read());
         ASSERT_EQ("EOF", Read());
-        size_t dropped = DroppedBytes();
+        size_t dropped = droppedBytes();
         ASSERT_LE(dropped, 2 * PS::V3::Format::BLOCK_SIZE + 100);
         ASSERT_GE(dropped, 2 * PS::V3::Format::BLOCK_SIZE);
     }
@@ -750,44 +683,6 @@ TEST_P(WALLogTest, ErrorJoinsRecords)
         ASSERT_EQ("EOF", Read());
     }
 }
-
-#if 0
-TEST_P(WALLogTest, ClearEofSingleBlock)
-{
-    write("foo");
-    write("bar");
-    int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
-    ForceEOF(3 + header_size + 2);
-    ASSERT_EQ("foo", Read());
-    UnmarkEOF();
-    ASSERT_EQ("bar", Read());
-    ASSERT_TRUE(IsEOF());
-    ASSERT_EQ("EOF", Read());
-    write("xxx");
-    UnmarkEOF();
-    ASSERT_EQ("xxx", Read());
-    ASSERT_TRUE(IsEOF());
-}
-
-TEST_P(WALLogTest, ClearEofMultiBlock)
-{
-    size_t num_full_blocks = 5;
-    int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
-    size_t n = (PS::V3::Format::BLOCK_SIZE - header_size) * num_full_blocks + 25;
-    write(BigString("foo", n));
-    write(BigString("bar", n));
-    ForceEOF(n + num_full_blocks * header_size + header_size + 3);
-    ASSERT_EQ(BigString("foo", n), Read());
-    ASSERT_TRUE(IsEOF());
-    UnmarkEOF();
-    ASSERT_EQ(BigString("bar", n), Read());
-    ASSERT_TRUE(IsEOF());
-    write(BigString("xxx", n));
-    UnmarkEOF();
-    ASSERT_EQ(BigString("xxx", n), Read());
-    ASSERT_TRUE(IsEOF());
-}
-#endif
 
 TEST_P(WALLogTest, Recycle)
 {
@@ -910,241 +805,5 @@ INSTANTIATE_TEST_CASE_P(
         const auto [recycle_log, allow_retry_read] = info.param;
         return fmt::format("{}_{}", recycle_log, allow_retry_read);
     });
-
-#if 0
-class RetriableWALLogTest : public ::testing::TestWithParam<int>
-{
-private:
-    class ReportCollector : public Reader::Reporter
-    {
-    public:
-        size_t dropped_bytes_;
-        std::string message_;
-
-        ReportCollector()
-            : dropped_bytes_(0)
-        {}
-        void Corruption(size_t bytes, const Status & status) override
-        {
-            dropped_bytes_ += bytes;
-            message_.append(status.ToString());
-        }
-    };
-
-    Slice contents_;
-    test::StringSink * sink_;
-    std::unique_ptr<Writer> log_writer_;
-    Env * env_;
-    const std::string test_dir_;
-    const std::string log_file_;
-    std::unique_ptr<WritableFileWriter> writer_;
-    std::unique_ptr<SequentialFileReader> reader_;
-    ReportCollector report_;
-    std::unique_ptr<FragmentBufferedReader> log_reader_;
-
-public:
-    RetriableWALLogTest()
-        : contents_()
-        , sink_(new test::StringSink(&contents_))
-        , log_writer_(nullptr)
-        , env_(Env::Default())
-        , test_dir_(test::PerThreadDBPath("retriable_log_test"))
-        , log_file_(test_dir_ + "/log")
-        , writer_(nullptr)
-        , reader_(nullptr)
-        , log_reader_(nullptr)
-    {
-        std::unique_ptr<FSWritableFile> sink_holder(sink_);
-        std::unique_ptr<WritableFileWriter> wfw(new WritableFileWriter(
-            std::move(sink_holder),
-            "" /* file name */,
-            FileOptions()));
-        log_writer_.reset(new Writer(std::move(wfw), 123, GetParam()));
-    }
-
-    Status SetupTestEnv()
-    {
-        Status s;
-        FileOptions fopts;
-        auto fs = env_->GetFileSystem();
-        s = fs->CreateDirIfMissing(test_dir_, IOOptions(), nullptr);
-        std::unique_ptr<FSWritableFile> writable_file;
-        if (s.ok())
-        {
-            s = fs->NewWritableFile(log_file_, fopts, &writable_file, nullptr);
-        }
-        if (s.ok())
-        {
-            writer_.reset(
-                new WritableFileWriter(std::move(writable_file), log_file_, fopts));
-            EXPECT_NE(writer_, nullptr);
-        }
-        std::unique_ptr<FSSequentialFile> seq_file;
-        if (s.ok())
-        {
-            s = fs->NewSequentialFile(log_file_, fopts, &seq_file, nullptr);
-        }
-        if (s.ok())
-        {
-            reader_.reset(new SequentialFileReader(std::move(seq_file), log_file_));
-            EXPECT_NE(reader_, nullptr);
-            log_reader_.reset(new FragmentBufferedReader(
-                nullptr,
-                std::move(reader_),
-                &report_,
-                true /* checksum */,
-                123 /* log_number */));
-            EXPECT_NE(log_reader_, nullptr);
-        }
-        return s;
-    }
-
-    std::string contents() { return sink_->contents_; }
-
-    void Encode(const std::string & msg)
-    {
-        ASSERT_OK(log_writer_->AddRecord(Slice(msg)));
-    }
-
-    void write(const Slice & data)
-    {
-        ASSERT_OK(writer_->Append(data));
-        ASSERT_OK(writer_->Sync(true));
-    }
-
-    bool TryRead(std::string * result)
-    {
-        assert(result != nullptr);
-        result->clear();
-        std::string scratch;
-        Slice record;
-        bool r = log_reader_->ReadRecord(&record, &scratch);
-        if (r)
-        {
-            result->assign(record.data(), record.size());
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
-};
-
-TEST_P(RetriableWALLogTest, TailLog_PartialHeader)
-{
-    ASSERT_OK(SetupTestEnv());
-    std::vector<int> remaining_bytes_in_last_record;
-    size_t header_size = GetParam() ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
-    bool eof = false;
-    SyncPoint::GetInstance()->DisableProcessing();
-    SyncPoint::GetInstance()->LoadDependency(
-        {{"RetriableWALLogTest::TailLog:AfterPart1",
-          "RetriableWALLogTest::TailLog:BeforeReadRecord"},
-         {"FragmentBufferedLogReader::TryReadMore:FirstEOF",
-          "RetriableWALLogTest::TailLog:BeforePart2"}});
-    SyncPoint::GetInstance()->ClearAllCallBacks();
-    SyncPoint::GetInstance()->SetCallBack(
-        "FragmentBufferedLogReader::TryReadMore:FirstEOF",
-        [&](void * /*arg*/) { eof = true; });
-    SyncPoint::GetInstance()->EnableProcessing();
-
-    size_t delta = header_size - 1;
-    port::Thread log_writer_thread([&]() {
-        size_t old_sz = contents().size();
-        Encode("foo");
-        size_t new_sz = contents().size();
-        std::string part1 = contents().substr(old_sz, delta);
-        std::string part2 = contents().substr(old_sz + delta, new_sz - old_sz - delta);
-        write(Slice(part1));
-        TEST_SYNC_POINT("RetriableWALLogTest::TailLog:AfterPart1");
-        TEST_SYNC_POINT("RetriableWALLogTest::TailLog:BeforePart2");
-        write(Slice(part2));
-    });
-
-    std::string record;
-    port::Thread log_reader_thread([&]() {
-        TEST_SYNC_POINT("RetriableWALLogTest::TailLog:BeforeReadRecord");
-        while (!TryRead(&record))
-        {
-        }
-    });
-    log_reader_thread.join();
-    log_writer_thread.join();
-    ASSERT_EQ("foo", record);
-    ASSERT_TRUE(eof);
-}
-
-TEST_P(RetriableWALLogTest, TailLog_FullHeader)
-{
-    ASSERT_OK(SetupTestEnv());
-    std::vector<int> remaining_bytes_in_last_record;
-    size_t header_size = GetParam() ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
-    bool eof = false;
-    SyncPoint::GetInstance()->DisableProcessing();
-    SyncPoint::GetInstance()->LoadDependency(
-        {{"RetriableWALLogTest::TailLog:AfterPart1",
-          "RetriableWALLogTest::TailLog:BeforeReadRecord"},
-         {"FragmentBufferedLogReader::TryReadMore:FirstEOF",
-          "RetriableWALLogTest::TailLog:BeforePart2"}});
-    SyncPoint::GetInstance()->ClearAllCallBacks();
-    SyncPoint::GetInstance()->SetCallBack(
-        "FragmentBufferedLogReader::TryReadMore:FirstEOF",
-        [&](void * /*arg*/) { eof = true; });
-    SyncPoint::GetInstance()->EnableProcessing();
-
-    size_t delta = header_size + 1;
-    port::Thread log_writer_thread([&]() {
-        size_t old_sz = contents().size();
-        Encode("foo");
-        size_t new_sz = contents().size();
-        std::string part1 = contents().substr(old_sz, delta);
-        std::string part2 = contents().substr(old_sz + delta, new_sz - old_sz - delta);
-        write(Slice(part1));
-        TEST_SYNC_POINT("RetriableWALLogTest::TailLog:AfterPart1");
-        TEST_SYNC_POINT("RetriableWALLogTest::TailLog:BeforePart2");
-        write(Slice(part2));
-        ASSERT_TRUE(eof);
-    });
-
-    std::string record;
-    port::Thread log_reader_thread([&]() {
-        TEST_SYNC_POINT("RetriableWALLogTest::TailLog:BeforeReadRecord");
-        while (!TryRead(&record))
-        {
-        }
-    });
-    log_reader_thread.join();
-    log_writer_thread.join();
-    ASSERT_EQ("foo", record);
-}
-
-TEST_P(RetriableWALLogTest, NonBlockingReadFullRecord)
-{
-    // Clear all sync point callbacks even if this test does not use sync point.
-    // It is necessary, otherwise the execute of this test may hit a sync point
-    // with which a callback is registered. The registered callback may access
-    // some dead variable, causing segfault.
-    SyncPoint::GetInstance()->DisableProcessing();
-    SyncPoint::GetInstance()->ClearAllCallBacks();
-    ASSERT_OK(SetupTestEnv());
-    size_t header_size = GetParam() ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
-    size_t delta = header_size - 1;
-    size_t old_sz = contents().size();
-    Encode("foo-bar");
-    size_t new_sz = contents().size();
-    std::string part1 = contents().substr(old_sz, delta);
-    std::string part2 = contents().substr(old_sz + delta, new_sz - old_sz - delta);
-    write(Slice(part1));
-    std::string record;
-    ASSERT_FALSE(TryRead(&record));
-    ASSERT_TRUE(record.empty());
-    write(Slice(part2));
-    ASSERT_TRUE(TryRead(&record));
-    ASSERT_EQ("foo-bar", record);
-}
-
-INSTANTIATE_TEST_CASE_P(bool, RetriableWALLogTest, ::testing::Values(0, 2));
-#endif
 
 } // namespace DB::PS::V3::tests
