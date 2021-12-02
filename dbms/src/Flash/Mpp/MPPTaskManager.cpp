@@ -70,7 +70,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     std::vector<std::thread> cancel_workers;
     for (const auto & task : task_set.task_map)
     {
-        fmt_buf.fmtAppend("{} ", task.first);
+        fmt_buf.fmtAppend("{} ", task.first.toString());
         std::thread t(&MPPTask::cancel, task.second, std::ref(reason));
         cancel_workers.push_back(std::move(t));
     }
