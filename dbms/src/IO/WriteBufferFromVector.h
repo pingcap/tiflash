@@ -104,7 +104,7 @@ public:
     {
         if (auto const * write_hint = std::get_if<DB::Buffer::IncommingWrite::Index>(&info))
         {
-            this->vector.reserve(write_hint->length);
+            this->vector.reserve(vector.size() + write_hint->length);
             return this->vector.capacity();
         }
         else
