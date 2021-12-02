@@ -1584,9 +1584,9 @@ MyDateTimeParser::MyDateTimeParser(String format_)
                         time.micro_second = 0;
                         return true;
                     }
-                    // The siffix '0' can be ignored.
+                    // The suffix '0' can be ignored.
                     // "9" means 900000
-                    while (ms > 0 && ms * 10 < 1000000)
+                    for (size_t i = step; i < 6; i++)
                     {
                         ms *= 10;
                     }

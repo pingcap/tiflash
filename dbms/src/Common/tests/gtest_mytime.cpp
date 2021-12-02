@@ -406,7 +406,6 @@ try
         {"10/NOV/2010", "%d/%b/%Y", MyDateTime{2010, 11, 10, 0, 0, 0, 0}},
         {"10/DEC/2010", "%d/%b/%Y", MyDateTime{2010, 12, 10, 0, 0, 0, 0}},
         {"10/January/2010", "%d/%b/%Y", std::nullopt}, // Test full spilling
-        // {"10/Ja/2010", "%d/%b/%Y", MyDateTime{2010, 1, 10, 0, 0, 0, 0}}, // TODO: add issue
 
         // Test cases for %M
         {"10/January/2010", "%d/%M/%Y", MyDateTime{2010, 1, 10, 0, 0, 0, 0}}, // Test full spilling
@@ -421,10 +420,9 @@ try
         {"10/October/2010", "%d/%M/%Y", MyDateTime{2010, 10, 10, 0, 0, 0, 0}},
         {"10/November/2010", "%d/%M/%Y", MyDateTime{2010, 11, 10, 0, 0, 0, 0}},
         {"10/December/2010", "%d/%M/%Y", MyDateTime{2010, 12, 10, 0, 0, 0, 0}},
-        // {"10/Decem/2010", "%d/%M/%Y", MyDateTime{2010, 12, 10, 0, 0, 0, 0}}, // TODO: add issue
 
         // Test cases for %c
-        // {"10/0/2010", "%d/%c/%Y", std::nullopt},  // TODO: add issue
+        // {"10/0/2010", "%d/%c/%Y", MyDateTime{2010, 0, 10, 0, 0, 0, 0}},   // TODO: Need Check NO_ZERO_DATE
         {"10/1/2010", "%d/%c/%Y", MyDateTime{2010, 1, 10, 0, 0, 0, 0}},
         {"10/01/2010", "%d/%c/%Y", MyDateTime{2010, 1, 10, 0, 0, 0, 0}},
         {"10/001/2010", "%d/%c/%Y", std::nullopt},
@@ -432,17 +430,24 @@ try
         {"10/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 10, 0, 0, 0, 0}},
 
         // Test cases for %d, %e
-        // {"0/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 0, 0, 0, 0, 0}},  // TODO: Need Check NO_ZERO_DATE, ALLOW_INVALID_DATES
+        // {"0/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 0, 0, 0, 0, 0}},  // TODO: Need Check NO_ZERO_DATE
         {"1/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 1, 0, 0, 0, 0}},
         {"05/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 5, 0, 0, 0, 0}},
         {"05/12/2010", "%e/%c/%Y", MyDateTime{2010, 12, 5, 0, 0, 0, 0}},
         {"31/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 31, 0, 0, 0, 0}},
         {"32/12/2010", "%d/%c/%Y", std::nullopt},
         {"30/11/2010", "%d/%c/%Y", MyDateTime{2010, 11, 30, 0, 0, 0, 0}},
-        {"31/11/2010", "%e/%c/%Y", MyDateTime{2010, 11, 31, 0, 0, 0, 0}}, // TODO: Need Check NO_ZERO_DATE, ALLOW_INVALID_DATES
+        {"31/11/2010", "%e/%c/%Y", MyDateTime{2010, 11, 31, 0, 0, 0, 0}},
         {"28/2/2010", "%e/%c/%Y", MyDateTime{2010, 2, 28, 0, 0, 0, 0}},
         {"29/2/2010", "%e/%c/%Y", MyDateTime{2010, 2, 29, 0, 0, 0, 0}},
-        {"29/2/2020", "%e/%c/%Y", MyDateTime{2020, 2, 29, 0, 0, 0, 0}}, // TODO: Need Check NO_ZERO_DATE, ALLOW_INVALID_DATES
+        {"29/2/2020", "%e/%c/%Y", MyDateTime{2020, 2, 29, 0, 0, 0, 0}},
+
+        // Test cases for %Y
+        // {"1/12/0000", "%d/%c/%Y", MyDateTime{0000, 12, 1, 0, 0, 0, 0}}, // TODO: Need Check NO_ZERO_DATE
+        {"1/12/01", "%d/%c/%Y", MyDateTime{2001, 12, 1, 0, 0, 0, 0}},
+        {"1/12/0001", "%d/%c/%Y", MyDateTime{0001, 12, 1, 0, 0, 0, 0}},
+        {"1/12/2020", "%d/%c/%Y", MyDateTime{2020, 12, 1, 0, 0, 0, 0}},
+        {"1/12/9999", "%d/%c/%Y", MyDateTime{9999, 12, 1, 0, 0, 0, 0}},
 
         // Test cases for %f
         {"01,5,2013 999999", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 999999}},
@@ -450,7 +455,7 @@ try
         {"01,5,2013 9999990000000", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 999999}},
         {"01,5,2013 1", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 100000}},
         {"01,5,2013 1230", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 123000}},
-        // {"01,5,2013 01", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 10000}}, // TODO: issue 3556
+        {"01,5,2013 01", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 10000}}, // issue 3556
 
         // Test cases for %h, %I, %l
         {"00:11:12 ", "%h:%i:%S ", std::nullopt}, // 0 is not a valid number of %h
@@ -474,13 +479,6 @@ try
         {"00:01:01 ", "%H:%i:%s ", MyDateTime{0, 0, 0, 00, 01, 01, 0}},
         {"00:59:59 ", "%H:%i:%S ", MyDateTime{0, 0, 0, 00, 59, 59, 0}},
         {"00:59:60 ", "%H:%i:%S ", std::nullopt},
-
-        // Test cases for %Y
-        //{"1/12/0000", "%d/%c/%Y", MyDateTime{0000, 12, 1, 0, 0, 0, 0}}, // TODO
-        {"1/12/01", "%d/%c/%Y", MyDateTime{2001, 12, 1, 0, 0, 0, 0}},
-        {"1/12/0001", "%d/%c/%Y", MyDateTime{0001, 12, 1, 0, 0, 0, 0}},
-        {"1/12/2020", "%d/%c/%Y", MyDateTime{2020, 12, 1, 0, 0, 0, 0}},
-        {"1/12/9999", "%d/%c/%Y", MyDateTime{9999, 12, 1, 0, 0, 0, 0}},
     };
 
     auto result_formatter = MyDateTimeFormatter("%Y/%m/%d %T.%f");
