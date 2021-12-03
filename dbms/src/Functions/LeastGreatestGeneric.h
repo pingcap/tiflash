@@ -10,16 +10,14 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsConditional.h>
 #include <Functions/IFunction.h>
-#include <Functions/least.h>
-#include <openssl/ec.h>
 
-#include <cstddef>
 #include <ext/range.h>
+#include <memory>
 
 #include "Columns/IColumn.h"
 #include "DataTypes/IDataType.h"
+#include "Interpreters/Context.h"
 
 namespace DB
 {
@@ -28,15 +26,22 @@ namespace ErrorCodes
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
-class FunctionTiDBLeast : public IFunction
+enum class LeastGreatest
+{
+    Least,
+    Greatest
+};
+
+template <LeastGreatest kind, typename SpecializedFunction>
+class FunctionTiDBLeastGreatest : public IFunction
 {
 public:
-    static constexpr auto name = "tidbLeast";
-    explicit FunctionTiDBLeast(const Context & context)
+    static constexpr auto name = kind == LeastGreatest::Least ? "tidbLeast" : "tidbGreatest";
+    explicit FunctionTiDBLeastGreatest(const Context & context)
         : context(context){};
     static FunctionPtr create(const Context & context)
     {
-        return std::make_shared<FunctionTiDBLeast>(context);
+        return std::make_shared<FunctionTiDBLeastGreatest<kind, SpecializedFunction>>(context);
     }
 
     String getName() const override { return name; }
@@ -54,27 +59,9 @@ public:
         for (size_t i = 1; i < arguments.size(); ++i)
         {
             DataTypes args{type_res, arguments[i]};
-            auto res = FunctionLeast{context}.getReturnTypeImpl(args);
+            auto res = SpecializedFunction{context}.getReturnTypeImpl(args);
             type_res = std::move(res);
         }
-
-        if (!(checkType<DataTypeInt8>(type_res)
-              || checkType<DataTypeUInt8>(type_res)
-              || checkType<DataTypeInt16>(type_res)
-              || checkType<DataTypeUInt16>(type_res)
-              || checkType<DataTypeInt32>(type_res)
-              || checkType<DataTypeUInt32>(type_res)
-              || checkType<DataTypeInt64>(type_res)
-              || checkType<DataTypeUInt64>(type_res)
-              || checkType<DataTypeFloat32>(type_res)
-              || checkType<DataTypeFloat64>(type_res)
-              || checkType<DataTypeDecimal32>(type_res)
-              || checkType<DataTypeDecimal64>(type_res)
-              || checkType<DataTypeDecimal128>(type_res)
-              || checkType<DataTypeDecimal256>(type_res)))
-            throw Exception(
-                "Illegal types " + type_res->getName() + " of arguments of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return type_res;
     }
 
@@ -110,13 +97,13 @@ private:
                 pre_col,
                 block.getByPosition(arguments[i])};
 
-            auto least_builder = DefaultFunctionBuilder(std::make_shared<FunctionLeast>(context));
+            auto least_builder = DefaultFunctionBuilder(std::make_shared<SpecializedFunction>(context));
             res_type = least_builder.getReturnTypeImpl({pre_col.type, block.getByPosition(arguments[i]).type});
 
             temp_block.insert({nullptr,
                                res_type,
                                "res_col"});
-            DefaultExecutable(std::make_shared<FunctionLeast>(context)).execute(temp_block, {0, 1}, 2);
+            DefaultExecutable(std::make_shared<SpecializedFunction>(context)).execute(temp_block, {0, 1}, 2);
             pre_col = temp_block.getByPosition(2);
         }
         block.getByPosition(result).column = std::move(pre_col.column);

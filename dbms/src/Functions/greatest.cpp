@@ -1,12 +1,14 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
+#include <Functions/LeastGreatestGeneric.h>
+#include "Functions/IsOperation.h"
 
 namespace DB
 {
 template <typename A, typename B>
 struct GreatestBaseImpl<A, B, false>
 {
-    using ResultType = NumberTraits::ResultOfGreatest<A, B>;
+    using ResultType = typename NumberTraits::ResultOfTiDBLeast<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -24,12 +26,24 @@ template <typename A, typename B>
 struct GreatestBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
-    using ResultPrecInferer = PlusDecimalInferer;
+    using ResultPrecInferer = ModDecimalInferer;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        return static_cast<Result>(a) > static_cast<Result>(b) ? static_cast<Result>(a) : static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>)
+        {
+            x = static_cast<Result>(a.value);
+        }
+        else
+            x = static_cast<Result>(a);
+        if constexpr (IsDecimal<B>)
+            y = static_cast<Result>(b.value);
+        else
+            y = static_cast<Result>(b);
+
+        return GreatestBaseImpl<Result, Result, false>::apply(x, y);
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
@@ -63,12 +77,17 @@ struct NameGreatest             { static constexpr auto name = "greatest"; };
 // clang-format on
 
 using FunctionGreatest = FunctionBinaryArithmetic<GreatestImpl, NameGreatest>;
+using FunctionTiDBGreatest = FunctionTiDBLeastGreatest<LeastGreatest::Greatest, FunctionGreatest>;
 
 } // namespace
+
+void registerFunctionTiDBGreatest(FunctionFactory & factory)
+{
+    factory.registerFunction<FunctionTiDBGreatest>();
+}
 
 void registerFunctionGreatest(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionGreatest>();
 }
-
 } // namespace DB

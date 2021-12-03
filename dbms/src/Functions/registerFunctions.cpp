@@ -41,8 +41,6 @@ void registerFunctionsNull(FunctionFactory &);
 void registerFunctionsFindCluster(FunctionFactory &);
 void registerFunctionsStringMath(FunctionFactory &);
 void registerFunctionsDuration(FunctionFactory &);
-void registerFunctionsTiDBLeast(FunctionFactory &);
-
 
 void registerFunctions()
 {
@@ -82,7 +80,6 @@ void registerFunctions()
     registerFunctionsFindCluster(factory);
     registerFunctionsStringMath(factory);
     registerFunctionsDuration(factory);
-    registerFunctionsTiDBLeast(factory);
 }
 
 } // namespace DB
