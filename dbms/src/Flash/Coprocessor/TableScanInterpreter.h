@@ -2,7 +2,6 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
@@ -21,24 +20,22 @@ class Context;
 class DAGQuerySource;
 class DAGQueryBlock;
 class ExchangeReceiver;
+class DAGExpressionAnalyzer;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
-class DAGQueryBlockInterpreter
+class TableScanInterpreter
 {
 public:
-    DAGQueryBlockInterpreter(
+    TableScanInterpreter(
         Context & context_,
-        const std::vector<DAGPipelinePtr> & input_pipelines_,
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
         const DAGQuerySource & dag_,
-        std::vector<SubqueriesForSets> & subqueries_for_sets_,
-        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map,
         const LogWithPrefixPtr & log_);
 
-    ~DAGQueryBlockInterpreter() = default;
+    ~TableScanInterpreter() = default;
 
     DAGPipelinePtr execute();
 
@@ -46,21 +43,6 @@ private:
     void executeRemoteQuery(DAGPipeline & pipeline);
     void executeImpl(DAGPipelinePtr & pipeline);
     void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
-    void executeJoin(const tipb::Join & join, DAGPipelinePtr & pipeline, SubqueryForSet & right_query);
-    void prepareJoin(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
-        DAGPipeline & pipeline,
-        Names & key_names,
-        bool left,
-        bool is_right_out_join,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-        String & filter_column_name);
-    ExpressionActionsPtr genJoinOtherConditionAction(
-        const tipb::Join & join,
-        std::vector<NameAndTypePair> & source_columns,
-        String & filter_column_for_other_condition,
-        String & filter_column_for_other_eq_condition);
     void executeWhere(
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expressionActionsPtr,
@@ -83,7 +65,6 @@ private:
         const DAGSchema & schema);
 
     Context & context;
-    std::vector<DAGPipelinePtr> input_pipelines;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
     const tipb::DAGRequest & rqst;
@@ -102,8 +83,6 @@ private:
 
     std::vector<const tipb::Expr *> conditions;
     const DAGQuerySource & dag;
-    std::vector<SubqueriesForSets> & subqueries_for_sets;
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
     std::vector<ExtraCastAfterTSMode> need_add_cast_column_flag_for_tablescan;
     BoolVec is_remote_table_scan;
 

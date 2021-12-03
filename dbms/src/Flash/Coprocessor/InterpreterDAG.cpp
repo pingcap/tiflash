@@ -5,11 +5,14 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
+#include <Flash/Coprocessor/ExchangeReceiverInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Coprocessor/TableScanInterpreter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -44,17 +47,40 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
     for (auto & child : query_block.children)
         input_pipelines.push_back(executeQueryBlock(*child, subqueries_for_sets));
 
-    DAGQueryBlockInterpreter query_block_interpreter(
-        context,
-        input_pipelines,
-        query_block,
-        max_streams,
-        keep_session_timezone_info || !query_block.isRootQueryBlock(),
-        dag,
-        subqueries_for_sets,
-        mpp_exchange_receiver_maps,
-        log);
-    return query_block_interpreter.execute();
+    switch (query_block.source->tp())
+    {
+    case tipb::ExecType::TypeTableScan:
+        return TableScanInterpreter(
+                   context,
+                   query_block,
+                   max_streams,
+                   keep_session_timezone_info || !query_block.isRootQueryBlock(),
+                   dag,
+                   log)
+            .execute();
+    case tipb::ExecType::TypeExchangeReceiver:
+        return ExchangeReceiverInterpreter(
+                   context,
+                   query_block,
+                   max_streams,
+                   keep_session_timezone_info || !query_block.isRootQueryBlock(),
+                   dag,
+                   mpp_exchange_receiver_maps,
+                   log)
+            .execute();
+    default:
+        return DAGQueryBlockInterpreter(
+                   context,
+                   input_pipelines,
+                   query_block,
+                   max_streams,
+                   keep_session_timezone_info || !query_block.isRootQueryBlock(),
+                   dag,
+                   subqueries_for_sets,
+                   mpp_exchange_receiver_maps,
+                   log)
+            .execute();
+    }
 }
 
 void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block)
@@ -142,7 +168,7 @@ BlockIO InterpreterDAG::execute()
     }
 
     /// add union to run in parallel if needed
-    DAGQueryBlockInterpreter::executeUnion(*pipeline, max_streams, log);
+    executeUnion(*pipeline, max_streams, log);
     if (!subqueries_for_sets.empty())
     {
         const Settings & settings = context.getSettingsRef();

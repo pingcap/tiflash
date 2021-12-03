@@ -8,7 +8,7 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
@@ -23,6 +23,7 @@ namespace DB
 class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
+class ExchangeReceiver;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
