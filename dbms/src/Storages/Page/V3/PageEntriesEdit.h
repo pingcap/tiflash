@@ -4,7 +4,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
 
-namespace DB::PS::V2
+namespace DB::PS::V3
 {
 /// Page entries change to apply to version set.
 class PageEntriesEdit
@@ -12,7 +12,12 @@ class PageEntriesEdit
 public:
     PageEntriesEdit() = default;
 
-    void put(PageId page_id, const PageEntry & entry)
+    explicit PageEntriesEdit(size_t capacity)
+    {
+        records.reserve(capacity);
+    }
+
+    void put(PageId page_id, const PageEntryV2 & entry)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::PUT;
@@ -21,7 +26,7 @@ public:
         records.emplace_back(record);
     }
 
-    void upsertPage(PageId page_id, const PageEntry & entry)
+    void upsertPage(PageId page_id, const PageEntryV2 & entry)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::UPSERT;
@@ -47,10 +52,10 @@ public:
         records.emplace_back(record);
     }
 
-    void concate(PageEntriesEdit & edit)
+    void concate(PageEntriesEdit & rhs)
     {
-        auto rhs = edit.getRecords();
-        records.insert(records.end(), rhs.begin(), rhs.end());
+        auto rhs_records = rhs.getRecords();
+        records.insert(records.end(), rhs_records.begin(), rhs_records.end());
     }
 
     void clear() { records.clear(); }
@@ -64,7 +69,7 @@ public:
         WriteBatch::WriteType type;
         PageId page_id;
         PageId ori_page_id;
-        PageEntry entry;
+        PageEntryV2 entry;
     };
     using EditRecords = std::vector<EditRecord>;
 
@@ -94,4 +99,4 @@ public:
     }
 };
 
-} // namespace DB::PS::V2
+} // namespace DB::PS::V3

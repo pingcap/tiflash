@@ -6,6 +6,7 @@
 #include <Storages/Page/PageDefines.h>
 
 #include <map>
+#include <set>
 #include <unordered_map>
 
 
@@ -25,7 +26,7 @@ public:
         size_t index;
         size_t offset;
 
-        FieldOffset(size_t index_)
+        explicit FieldOffset(size_t index_)
             : index(index_)
             , offset(0)
         {}
@@ -46,7 +47,7 @@ public:
 public:
     ByteBuffer getFieldData(size_t index) const
     {
-        auto iter = field_offsets.find(index);
+        auto iter = field_offsets.find(FieldOffset(index));
         if (unlikely(iter == field_offsets.end()))
             throw Exception("Try to getFieldData of Page" + DB::toString(page_id) + " with invalid field index: " + DB::toString(index),
                             ErrorCodes::LOGICAL_ERROR);
@@ -69,6 +70,7 @@ using Pages = std::vector<Page>;
 using PageMap = std::map<PageId, Page>;
 using PageHandler = std::function<void(PageId page_id, const Page &)>;
 
+// TODO: Move it into V2
 // Indicate the page size && offset in PageFile.
 struct PageEntry
 {
@@ -121,22 +123,21 @@ public:
 
     bool operator==(const PageEntry & rhs) const
     {
-        bool isOk = file_id == rhs.file_id && size == rhs.size && offset == rhs.offset && tag == rhs.tag && checksum == rhs.checksum
+        bool is_ok = file_id == rhs.file_id && size == rhs.size && offset == rhs.offset && tag == rhs.tag && checksum == rhs.checksum
             && level == rhs.level && ref == rhs.ref && field_offsets.size() == rhs.field_offsets.size();
-        if (!isOk)
-            return isOk;
-        else
+        if (!is_ok)
+            return is_ok;
+        // compare the fields offsets
+        for (size_t i = 0; i < field_offsets.size(); ++i)
         {
-            for (size_t i = 0; i < field_offsets.size(); ++i)
-            {
-                if (field_offsets[i] != rhs.field_offsets[i])
-                    return false;
-            }
-            return true;
+            if (field_offsets[i] != rhs.field_offsets[i])
+                return false;
         }
+        return true;
     }
 };
 using PageIdAndEntry = std::pair<PageId, PageEntry>;
 using PageIdAndEntries = std::vector<PageIdAndEntry>;
+
 
 } // namespace DB
