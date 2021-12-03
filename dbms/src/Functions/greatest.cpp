@@ -1,6 +1,7 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/LeastGreatestGeneric.h>
+
 #include "Functions/IsOperation.h"
 
 namespace DB

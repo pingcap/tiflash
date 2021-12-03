@@ -2,7 +2,6 @@
 #include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/LeastGreatestGeneric.h>
 
-
 #include "DataTypes/NumberTraits.h"
 #include "Functions/IsOperation.h"
 
@@ -74,7 +73,8 @@ struct LeastSpecialImpl
     }
 };
 
-namespace {
+namespace
+{
 // clang-format off
 struct NameLeast                { static constexpr auto name = "least"; };
 // clang-format on
