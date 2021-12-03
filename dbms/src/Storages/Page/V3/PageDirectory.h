@@ -22,8 +22,8 @@ class PageDirectory
 public:
     PageDirectorySnapshotPtr createSnapshot() const;
 
-    PageIDAndEntriesV2 get(const PageId & read_id, const PageDirectorySnapshotPtr & snap) const;
-    PageIDAndEntriesV2 get(const PageIds & read_ids, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntriesV3 get(const PageId & read_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntriesV3 get(const PageIds & read_ids, const PageDirectorySnapshotPtr & snap) const;
 
     void apply(PageEntriesEdit && edit);
 
@@ -38,7 +38,7 @@ private:
     struct VersionedPageEntry
     {
         VersionType ver;
-        PageEntryV2 entry;
+        PageEntryV3 entry;
     };
     class VersionedPageEntries
     {

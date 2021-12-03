@@ -26,7 +26,7 @@ public:
         size_t index;
         size_t offset;
 
-        explicit FieldOffset(size_t index_)
+        FieldOffset(size_t index_) // NOLINT(google-explicit-constructor)
             : index(index_)
             , offset(0)
         {}

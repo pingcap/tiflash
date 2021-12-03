@@ -70,7 +70,7 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
     //     // persist data to BlobFile
     //     }
     //
-    //     PageEntryV2 entry;
+    //     PageEntryV3 entry;
     //     size_t offset_in_allocated = 0;
     //     for (const auto & w : write_batch.getWrites())
     //     {
@@ -108,7 +108,7 @@ DB::PageEntry PageStorageImpl::getEntry(PageId page_id, SnapshotPtr snapshot)
 
 DB::Page PageStorageImpl::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
-    // PageEntryV2 entry = page_directory.get(page_id, snapshot);
+    // PageEntryV3 entry = page_directory.get(page_id, snapshot);
     // DB::Page page = blob_store.read(entry, read_limiter);
     // return page;
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);

@@ -18,7 +18,7 @@ public:
         records.reserve(capacity);
     }
 
-    void put(PageId page_id, const PageEntryV2 & entry)
+    void put(PageId page_id, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::PUT;
@@ -27,7 +27,7 @@ public:
         records.emplace_back(record);
     }
 
-    void upsertPage(PageId page_id, const PageEntryV2 & entry)
+    void upsertPage(PageId page_id, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = WriteBatch::WriteType::UPSERT;
@@ -70,7 +70,7 @@ public:
         WriteBatch::WriteType type;
         PageId page_id;
         PageId ori_page_id;
-        PageEntryV2 entry;
+        PageEntryV3 entry;
     };
     using EditRecords = std::vector<EditRecord>;
 
