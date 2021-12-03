@@ -15,14 +15,12 @@
 #define BLOBFILE_NAME_PRE "blobfile_"
 #define BLOBFILE_LIMIT_SIZE 512 * DB::MB
 
-
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
-
 
 namespace PS::V3
 {
@@ -47,7 +45,7 @@ public:
 
             UInt64 sm_total_size = 0;
             UInt64 sm_valid_size = 0;
-            UInt64 sm_valid_rate = 1;
+            double sm_valid_rate = 1.0;
 
             std::mutex sm_lock;
         };
@@ -73,7 +71,11 @@ public:
 
         UInt64 getPosFromStat(BlobStatPtr stat, size_t buf_size);
 
+        void removePosFromStat(BlobStatPtr stat, UInt64 offset, size_t buf_size);
+
+#ifndef DBMS_PUBLIC_GTEST
     private:
+#endif
         Poco::Logger * log;
 
         BlobFileId roll_id = 0;
@@ -81,7 +83,7 @@ public:
         std::list<BlobStatPtr> stats_map;
 
         /**
-             * TBD : not sure we need total
+            * TBD : not sure we need total
              *  For now these two value are not update and unused.
              */
         UInt64 total_sm_used;
@@ -101,11 +103,15 @@ public:
                                         const WriteLimiterPtr & write_limiter = nullptr);
 
     // TBD : may replace std::vector<char *> with a align buffer.
-    void read(std::vector<std::tuple<BlobFileId, UInt64, size_t>>, std::vector<char *> buffers, const ReadLimiterPtr & read_limiter = nullptr);
+    void read(std::vector<std::tuple<BlobFileId, UInt64, size_t>>,
+              std::vector<char *> buffers,
+              const ReadLimiterPtr & read_limiter = nullptr);
 
     void read(BlobFileId blob_id, UInt64 offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     // TBD: after single path work, do the multi-path
     // String choosePath();
 
@@ -113,7 +119,10 @@ private:
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+
     FileProviderPtr file_provider;
 
     Poco::Logger * log;

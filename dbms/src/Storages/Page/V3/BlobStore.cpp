@@ -94,7 +94,7 @@ void BlobStore::read(BlobStore::BlobFileId blob_id, UInt64 offset, char * buffer
 }
 
 
-String getBlobFilePath(BlobStore::BlobFileId blob_id)
+String BlobStore::getBlobFilePath(BlobStore::BlobFileId blob_id)
 {
     return (String)BLOBSTORE_TEST_PATH + BLOBFILE_NAME_PRE + DB::toString(blob_id);
 }
@@ -152,13 +152,22 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
                         ErrorCodes::LOGICAL_ERROR);
     }
 
+    for (auto & stat : stats_map)
+    {
+        if (stat->id == blob_file_id)
+        {
+            throw Exception("BlobStats won't create [BlobFileId=" + DB::toString(blob_file_id) + "] which is exist",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
     stat = std::make_shared<BlobStat>();
 
     LOG_DEBUG(log, "Created a new BlobStat which [BlobFileId= " << blob_file_id << "]");
     stat->id = blob_file_id;
     stat->smap = SpaceMap::createSpaceMap(BLOBSTORE_SMAP_TYPE, 0, BLOBFILE_LIMIT_SIZE);
 
-    stats_map.emplace_back(std::move(stat));
+    stats_map.emplace_back(stat);
 
     // Roll to the next new blob id
     if (blob_file_id == roll_id)
@@ -172,8 +181,10 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
 void BlobStore::BlobStats::earseStat(BlobFileId blob_file_id)
 {
     BlobStatPtr stat;
-    for (auto stat : stats_map)
+
+    for (auto it = stats_map.begin(); it != stats_map.end(); it++)
     {
+        stat = *it;
         if (stat->id == blob_file_id)
             break;
     }
@@ -183,6 +194,8 @@ void BlobStore::BlobStats::earseStat(BlobFileId blob_file_id)
         LOG_ERROR(log, "No exist BlobStat which [BlobFileId= " << blob_file_id << "]");
         return;
     }
+
+    LOG_DEBUG(log, "Eease BlobStat from maps which [BlobFileId= " << blob_file_id << "]");
 
     stats_map.remove(stat);
     old_ids.emplace_back(blob_file_id);
@@ -250,7 +263,7 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
             // This file must be expanded
             auto expand_size = buf_size - (stat->sm_total_size - offset);
             stat->sm_total_size += expand_size;
-            stat->sm_valid_size += (buf_size - expand_size);
+            stat->sm_valid_size += buf_size;
         }
         else
         {
@@ -261,9 +274,29 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
             stat->sm_valid_size += buf_size;
         }
 
-        stat->sm_valid_rate = stat->sm_total_size / stat->sm_valid_size;
+        stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
     }
     return offset;
+}
+
+void BlobStore::BlobStats::removePosFromStat(BlobStatPtr stat, UInt64 offset, size_t buf_size)
+{
+    auto rc = stat->smap->unmarkRange(offset, buf_size);
+
+    if (rc == -1)
+    {
+        throw Exception("[offset=" + DB::toString(offset) + " , buf_size=" + DB::toString(buf_size) + "] is invalid.",
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (rc == 1)
+    {
+        LOG_WARNING(log, "[offset=" << offset << ", buf_size=" << buf_size << "], have already been removed");
+        return;
+    }
+
+    stat->sm_valid_size -= buf_size;
+    stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
 }
 
 } // namespace PS::V3
