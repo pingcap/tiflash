@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>

@@ -2,11 +2,12 @@
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace DB::PS::V3
 {
-/// Page entries change to apply to version set.
+/// Page entries change to apply to PageDirectory
 class PageEntriesEdit
 {
 public:

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Storages/Page/PageDefines.h>
 
 namespace DB::PS::V3
