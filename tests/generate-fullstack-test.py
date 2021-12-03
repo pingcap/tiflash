@@ -14,7 +14,6 @@ class ColumnType(object):
     typeUInt = "int unsigned"
     typeBigInt = "bigint"
     typeUBigInt = "bigint unsigned"
-    typeBit1 = "bit(1)"
     typeBit64 = "bit(64)"
     typeBoolean = "boolean"
     typeFloat = "float"
@@ -106,6 +105,8 @@ class ColumnTypeManager(object):
 
 
 def register_all_types(column_type_manager):
+    # column_type_manager.register_type(ColumnType, values)
+    # the first three value in values should be different for some primary key tests
     column_type_manager.register_type(ColumnType.typeTinyInt, [-128, 127, 100, 0])
     column_type_manager.register_type(ColumnType.typeUTinyInt, [0, 255, 68, 0])
     column_type_manager.register_type(ColumnType.typeSmallInt, [-32768, 32767, 11100, 0])
@@ -116,12 +117,6 @@ def register_all_types(column_type_manager):
     column_type_manager.register_type(ColumnType.typeUInt, [0, 4294967295, 4239013, 0])
     column_type_manager.register_type(ColumnType.typeBigInt, [-9223372036854775808, 9223372036854775807, 68, 0])
     column_type_manager.register_type(ColumnType.typeUBigInt, [0, 18446744073709551615, 68, 0])
-    column_type_manager.register_type(
-        ColumnType.typeBit1,
-        [0, 1, 1, 0],
-        None,
-        lambda name: "bin({})".format(name),
-        lambda value: "{0:b}".format(int(value)))
     column_type_manager.register_type(
         ColumnType.typeBit64,
         [0, (1 << 64) - 1, 79, 0],
@@ -260,6 +255,16 @@ class StmtWriter(object):
             self.db_name, self.table_name, update_part, filter_part)
         self.file.write(command)
 
+    def write_delete_stmt(self, column_names, values):
+        assert len(column_names) == len(values)
+        filter_part = ""
+        for i in range(len(column_names)):
+            filter_part += "{}={}".format(column_names[i], values[i])
+
+        command = "mysql> delete from {}.{} where {}\n".format(
+            self.db_name, self.table_name, filter_part)
+        self.file.write(command)
+
     def write_select_stmt(self, column_select_exprs):
         command = "mysql> set SESSION tidb_isolation_read_engines='tiflash'; select {} from {}.{}\n".format(
             ", ".join(column_select_exprs), self.db_name, self.table_name)
@@ -379,6 +384,7 @@ class TestCaseWriter(object):
             self._build_formatted_values(column_elements, column_values2))
         new_filter_value1 = 30000
         writer.write_newline()
+        # update
         writer.write_update_stmt([filter_column_name], [filter_value1], [new_filter_value1])
         column_values1[len(column_values1) - 1] = new_filter_value1
         writer.write_select_stmt(column_select_exprs)
@@ -386,6 +392,12 @@ class TestCaseWriter(object):
             column_select_exprs,
             self._build_formatted_values(column_elements, column_values1),
             self._build_formatted_values(column_elements, column_values2))
+        # delete
+        writer.write_delete_stmt([filter_column_name], [filter_value2])
+        writer.write_select_stmt(column_select_exprs)
+        writer.write_result(
+            column_select_exprs,
+            self._build_formatted_values(column_elements, column_values1))
 
     def _write_pk_is_handle_test(self, writer, pk_column_element):
         column_elements = self.column_type_manager.get_all_column_elements()
@@ -421,6 +433,7 @@ class TestCaseWriter(object):
             self._build_formatted_values(column_elements, column_values2))
         new_filter_value1 = 30000
         writer.write_newline()
+        # update
         writer.write_update_stmt([filter_column_name], [filter_value1], [new_filter_value1])
         column_values1[len(column_values1) - 1] = new_filter_value1
         writer.write_select_stmt(column_select_exprs)
@@ -428,12 +441,18 @@ class TestCaseWriter(object):
             column_select_exprs,
             self._build_formatted_values(column_elements, column_values1),
             self._build_formatted_values(column_elements, column_values2))
+        # delete
+        writer.write_delete_stmt([filter_column_name], [filter_value2])
+        writer.write_select_stmt(column_select_exprs)
+        writer.write_result(
+            column_select_exprs,
+            self._build_formatted_values(column_elements, column_values1))
 
     def _write_cluster_index_test(self, writer, primary_key_columns):
         column_elements = primary_key_columns
         column_names = [c.name for c in column_elements]
         column_values1 = [self.column_type_manager.get_normal_value(c.column_type) for c in column_elements]
-        column_values2 = [self.column_type_manager.get_max_value(c.column_type) for c in column_elements]
+        column_values2 = [self.column_type_manager.get_min_value(c.column_type) for c in column_elements]
 
         filter_column_name = "myfilter"
         filter_value1 = 10000
@@ -456,6 +475,7 @@ class TestCaseWriter(object):
             self._build_formatted_values(column_elements, column_values2))
         new_filter_value1 = 30000
         writer.write_newline()
+        # update
         writer.write_update_stmt([filter_column_name], [filter_value1], [new_filter_value1])
         column_values1[len(column_values1) - 1] = new_filter_value1
         writer.write_select_stmt(column_select_exprs)
@@ -463,8 +483,14 @@ class TestCaseWriter(object):
             column_select_exprs,
             self._build_formatted_values(column_elements, column_values1),
             self._build_formatted_values(column_elements, column_values2))
+        # delete
+        writer.write_delete_stmt([filter_column_name], [filter_value2])
+        writer.write_select_stmt(column_select_exprs)
+        writer.write_result(
+            column_select_exprs,
+            self._build_formatted_values(column_elements, column_values1))
 
-    def write_update_delete_test(self, file, db_name, table_name):
+    def write_update_delete_test1(self, file, db_name, table_name):
         writer = StmtWriter(file, db_name, table_name)
         self._write_non_cluster_index_test(writer)
         file.write("# pk_is_handle test\n")
@@ -472,12 +498,17 @@ class TestCaseWriter(object):
                             ColumnType.typeMediumInt, ColumnType.typeUMediumInt, ColumnType.typeInt, ColumnType.typeUInt,
                             ColumnType.typeBigInt, ColumnType.typeUInt]:
             self._write_pk_is_handle_test(writer, ColumnElement("mypk", column_type, False, True))
+
+    def write_update_delete_test2(self, file, db_name, table_name):
+        writer = StmtWriter(file, db_name, table_name)
         file.write("# cluster index test\n")
         file.write("mysql> set global tidb_enable_clustered_index=ON\n")
         primary_key_elements = self.column_type_manager.get_all_primary_key_elements()
         for primary_key_element in primary_key_elements:
             self._write_cluster_index_test(writer, [primary_key_element])
-        self._write_cluster_index_test(writer, primary_key_elements)
+        # the max column num in primary key is 16
+        max_columns_in_primary_key = 16
+        self._write_cluster_index_test(writer, primary_key_elements[:max_columns_in_primary_key])
         # TODO: INT_ONLY may be removed in future release
         file.write("mysql> set global tidb_enable_clustered_index=INT_ONLY\n")
 
@@ -495,7 +526,8 @@ def run(db_name, table_name, test_dir):
     # case: decode min/max/normal/default/null values of different type
     write_case(test_dir + "/basic_codec.test", db_name, table_name, case_writer.write_basic_type_codec_test)
     # case: update/delete for different kinds of primary key
-    write_case(test_dir + "/update_delete.test", db_name, table_name, case_writer.write_update_delete_test)
+    write_case(test_dir + "/update_delete1.test", db_name, table_name, case_writer.write_update_delete_test1)
+    write_case(test_dir + "/update_delete2.test", db_name, table_name, case_writer.write_update_delete_test2)
 
 
 def main():
