@@ -39,42 +39,43 @@ std::string getUTCBuildTime()
 }
 std::string getEnabledFeatures()
 {
-    std::vector<std::string> features
-    {
+    static constexpr std::string_view features[] = {
 // allocator
 #if USE_JEMALLOC
         "jemalloc",
 #elif USE_MIMALLOC
         "mimalloc",
+#elif USE_SNMALLOC
+        "snmalloc",
 #elif USE_TCMALLOC
         "tcmalloc",
 #endif
 
 // mem-profiling
 #if USE_JEMALLOC_PROF
-            "mem-profiling",
+        "mem-profiling",
 #endif
 
 // failpoints
 #if ENABLE_FAILPOINTS
-            "failpoints",
+        "failpoints",
 #endif
 
 // SIMD related
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            "avx",
+        "avx",
 #endif
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-            "avx512",
+        "avx512",
 #endif
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
-            "asimd",
+        "asimd",
 #endif
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
-            "sve",
+        "sve",
 #endif
     };
-    return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
+    return fmt::format("{}", fmt::join(std::begin(features), std::end(features), " "));
 }
 std::string getProfile()
 {

@@ -8,6 +8,7 @@
 #include <Common/MemoryTracker.h>
 #include <Common/formatReadable.h>
 #include <IO/WriteHelpers.h>
+#include <common/config_common.h>
 #include <common/mremap.h>
 #include <sys/mman.h>
 
@@ -17,6 +18,10 @@
 /// Required for older Darwin builds, that lack definition of MAP_ANONYMOUS
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
+#endif
+
+#if USE_SNMALLOC
+#include <snmalloc.h>
 #endif
 
 
@@ -31,8 +36,6 @@ extern const int CANNOT_MUNMAP;
 extern const int CANNOT_MREMAP;
 } // namespace ErrorCodes
 } // namespace DB
-
-
 /** Many modern allocators (for example, tcmalloc) do not do a mremap for realloc,
   *  even in case of large enough chunks of memory.
   * Although this allows you to increase performance and reduce memory consumption during realloc.
@@ -42,15 +45,17 @@ extern const int CANNOT_MREMAP;
   * We expect that the set of operations mmap/something to do/mremap can only be performed about 1000 times per second.
   *
   * PS. This is also required, because tcmalloc can not allocate a chunk of memory greater than 16 GB.
+  *
   */
 static constexpr size_t MMAP_THRESHOLD = 64 * (1ULL << 30);
 static constexpr size_t MMAP_MIN_ALIGNMENT = 4096;
 static constexpr size_t MALLOC_MIN_ALIGNMENT = 8;
-
-
 template <bool clear_memory_>
 void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
 {
+#if USE_SNMALLOC
+    using namespace snmalloc;
+#endif
     CurrentMemoryTracker::alloc(size);
 
     void * buf;
@@ -74,16 +79,31 @@ void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
     {
         if (alignment <= MALLOC_MIN_ALIGNMENT)
         {
-            if (clear_memory)
+            if constexpr (clear_memory_)
+            {
+#if USE_SNMALLOC
+                buf = ThreadAlloc::get().template alloc<YesZero>(size);
+#else
                 buf = ::calloc(size, 1);
+#endif
+            }
             else
+            {
+#if USE_SNMALLOC
+                buf = ThreadAlloc::get().template alloc<NoZero>(size);
+#else
                 buf = ::malloc(size);
+#endif
+            }
 
             if (nullptr == buf)
                 DB::throwFromErrno("Allocator: Cannot malloc " + formatReadableSizeWithBinarySuffix(size) + ".", DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
         }
         else
         {
+#if USE_SNMALLOC
+            buf = ThreadAlloc::get().template alloc < clear_memory_ ? YesZero : NoZero > (aligned_size(alignment, size));
+#else
             buf = nullptr;
             int res = posix_memalign(&buf, alignment, size);
 
@@ -92,6 +112,7 @@ void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
 
             if (clear_memory)
                 memset(buf, 0, size);
+#endif
         }
     }
 
@@ -110,7 +131,11 @@ void Allocator<clear_memory_>::free(void * buf, size_t size)
     }
     else
     {
+#if USE_SNMALLOC
+        snmalloc::ThreadAlloc::get().dealloc(buf);
+#else
         ::free(buf);
+#endif
     }
 
     CurrentMemoryTracker::free(size);
@@ -120,21 +145,101 @@ void Allocator<clear_memory_>::free(void * buf, size_t size)
 template <bool clear_memory_>
 void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new_size, size_t alignment)
 {
+#if USE_SNMALLOC
+    using namespace snmalloc;
+    auto snmalloc_realloc_aligned = [](void * buf, size_t old_size, size_t new_size, size_t alignment) {
+        size_t aligned_old_size = aligned_size(alignment, old_size),
+               aligned_new_size = aligned_size(alignment, new_size);
+        if (size_to_sizeclass_full(aligned_old_size).raw() == size_to_sizeclass_full(aligned_new_size).raw())
+        {
+            if constexpr (clear_memory_)
+            {
+                if (new_size > old_size)
+                {
+                    std::memset(static_cast<std::byte *>(buf) + old_size, 0, new_size - old_size);
+                }
+            }
+            return buf;
+        }
+        void * p = ThreadAlloc::get().template alloc < clear_memory_ ? YesZero : NoZero > (aligned_new_size);
+        if (p)
+        {
+            std::memcpy(p, buf, old_size < new_size ? old_size : new_size);
+            ThreadAlloc::get().dealloc(buf, aligned_old_size);
+        }
+        return p;
+    };
+    auto snmalloc_realloc = [](void * buf, size_t old_size, size_t new_size) {
+        if (round_size(old_size) == round_size(new_size))
+        {
+            if constexpr (clear_memory_)
+            {
+                if (new_size > old_size)
+                {
+                    std::memset(static_cast<std::byte *>(buf) + old_size, 0, new_size - old_size);
+                }
+            }
+            return buf;
+        }
+        void * p = ThreadAlloc::get().template alloc < clear_memory_ ? YesZero : NoZero > (new_size);
+        if (p)
+        {
+            std::memcpy(p, buf, old_size < new_size ? old_size : new_size);
+            ThreadAlloc::get().dealloc(buf, old_size);
+        }
+        return p;
+    };
+#endif
     if (old_size == new_size)
     {
         /// nothing to do.
     }
+#if USE_SNMALLOC
+    else if (old_size < MMAP_THRESHOLD && new_size < MMAP_THRESHOLD && alignment > MALLOC_MIN_ALIGNMENT)
+    {
+        CurrentMemoryTracker::realloc(old_size, new_size);
+        buf = snmalloc_realloc_aligned(buf, old_size, new_size, alignment);
+        if (nullptr == buf)
+            DB::throwFromErrno("Allocator: Cannot realloc from "
+                                   + formatReadableSizeWithBinarySuffix(old_size)
+                                   + DB::toString(old_size)
+                                   + " to "
+                                   + formatReadableSizeWithBinarySuffix(new_size)
+                                   + DB::toString(new_size)
+                                   + ".",
+                               DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+    }
+#endif
     else if (old_size < MMAP_THRESHOLD && new_size < MMAP_THRESHOLD && alignment <= MALLOC_MIN_ALIGNMENT)
     {
         CurrentMemoryTracker::realloc(old_size, new_size);
-
+#if USE_SNMALLOC
+        buf = snmalloc_realloc(buf, old_size, new_size);
+        if (nullptr == buf)
+            DB::throwFromErrno("Allocator: Cannot realloc from "
+                                   + formatReadableSizeWithBinarySuffix(old_size)
+                                   + DB::toString(old_size)
+                                   + " to "
+                                   + formatReadableSizeWithBinarySuffix(new_size)
+                                   + DB::toString(new_size)
+                                   + ".",
+                               DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+#else
         buf = ::realloc(buf, new_size);
 
         if (nullptr == buf)
-            DB::throwFromErrno("Allocator: Cannot realloc from " + formatReadableSizeWithBinarySuffix(old_size) + DB::toString(old_size) + " to " + formatReadableSizeWithBinarySuffix(new_size) + DB::toString(new_size) + ".", DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+            DB::throwFromErrno("Allocator: Cannot realloc from "
+                                   + formatReadableSizeWithBinarySuffix(old_size)
+                                   + DB::toString(old_size)
+                                   + " to "
+                                   + formatReadableSizeWithBinarySuffix(new_size)
+                                   + DB::toString(new_size)
+                                   + ".",
+                               DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
 
         if (clear_memory && new_size > old_size)
             memset(reinterpret_cast<char *>(buf) + old_size, 0, new_size - old_size);
+#endif
     }
     else if (old_size >= MMAP_THRESHOLD && new_size >= MMAP_THRESHOLD)
     {
@@ -150,11 +255,22 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
     }
     else if (old_size >= MMAP_THRESHOLD && new_size < MMAP_THRESHOLD)
     {
+#if USE_SNMALLOC
+        void * new_buf = ThreadAlloc::get().alloc(
+            alignment > MALLOC_MIN_ALIGNMENT ? aligned_size(alignment, new_size) : new_size);
+#else
         void * new_buf = alloc(new_size, alignment);
+#endif
         memcpy(new_buf, buf, new_size);
         if (0 != munmap(buf, old_size))
         {
+#if USE_SNMALLOC
+            ThreadAlloc::get().dealloc(
+                new_buf,
+                alignment > MALLOC_MIN_ALIGNMENT ? aligned_size(alignment, new_size) : new_size);
+#else
             ::free(new_buf);
+#endif
             DB::throwFromErrno("Allocator: Cannot munmap " + formatReadableSizeWithBinarySuffix(old_size) + ".", DB::ErrorCodes::CANNOT_MUNMAP);
         }
         buf = new_buf;
@@ -171,7 +287,6 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
 
     return buf;
 }
-
 
 /// Explicit template instantiations.
 template class Allocator<true>;

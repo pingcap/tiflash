@@ -7,6 +7,7 @@
 #cmakedefine01 USE_JEMALLOC
 #cmakedefine01 USE_JEMALLOC_PROF
 #cmakedefine01 USE_MIMALLOC
+#cmakedefine01 USE_SNMALLOC
 #cmakedefine01 USE_READLINE
 #cmakedefine01 USE_LIBEDIT
 #cmakedefine01 HAVE_READLINE_HISTORY

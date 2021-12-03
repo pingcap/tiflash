@@ -5,7 +5,7 @@ if (ENABLE_MIMALLOC)
     set (USE_MIMALLOC 1)
     message (STATUS "Using mimalloc=${USE_MIMALLOC}: ${MIMALLOC_LIBRARIES}")
 
-    if (ENABLE_JEMALLOC OR ENABLE_TCMALLOC)
+    if (ENABLE_JEMALLOC OR ENABLE_TCMALLOC OR ENABLE_SNMALLOC)
         message(FATAL_ERROR "multiple global allocator detected!")
     endif()
 endif ()

@@ -1,8 +1,6 @@
 #include <Common/Allocator.h>
-#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
-#include <Common/typeid_cast.h>
 #include <Databases/IDatabase.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -29,6 +27,10 @@ struct MallocExtensionInitializer
 
 #if USE_MIMALLOC
 #include <mimalloc.h>
+#endif
+
+#if USE_SNMALLOC
+#include <snmalloc.h>
 #endif
 
 namespace DB
@@ -241,6 +243,15 @@ void AsynchronousMetrics::update()
 
 #undef GET_METRIC
 #undef FOR_EACH_METRIC
+    }
+#endif
+
+#if USE_SNMALLOC
+    {
+        auto unused_chunks = snmalloc::Globals::get_chunk_allocator_state().unused_memory();
+        auto peak = snmalloc::Globals::get_chunk_allocator_state().peak_memory_usage();
+        set("snmalloc.current_memory_usage", peak - unused_chunks);
+        set("snmalloc.peak_memory_usage", peak);
     }
 #endif
 

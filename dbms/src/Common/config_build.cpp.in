@@ -53,6 +53,8 @@ const char * auto_config_build[]{
     "@USE_TCMALLOC@",
     "USE_MIMALLOC",
     "@USE_MIMALLOC@",
+    "USE_SNMALLOC",
+    "@USE_SNMALLOC@",
     "USE_UNWIND",
     "@USE_UNWIND@",
     "USE_ICU",
