@@ -51,17 +51,15 @@ namespace DB
 
 class Context;
 class QueryLog;
-class PartLog;
 
 
 /// System logs should be destroyed in destructor of last Context and before tables,
 ///  because SystemLog destruction makes insert query while flushing data into underlying tables
 struct SystemLogs
 {
-    ~SystemLogs();
+    ~SystemLogs() = default;
 
     std::unique_ptr<QueryLog> query_log; /// Used to log queries.
-    std::unique_ptr<PartLog> part_log; /// Used to log operations with parts
 };
 
 

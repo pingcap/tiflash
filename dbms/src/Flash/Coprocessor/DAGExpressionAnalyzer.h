@@ -64,14 +64,6 @@ public:
         ExpressionActionsChain & chain,
         const tipb::Aggregation & agg);
 
-    void generateFinalProject(
-        ExpressionActionsChain & chain,
-        const std::vector<tipb::FieldType> & schema,
-        const std::vector<Int32> & output_offsets,
-        const String & column_prefix,
-        bool keep_session_timezone_info,
-        NamesWithAliases & final_project);
-
     void initChain(
         ExpressionActionsChain & chain,
         const std::vector<NameAndTypePair> & columns) const;
@@ -81,9 +73,16 @@ public:
         SubqueryForSet & join_query,
         const NamesAndTypesList & columns_added_by_join) const;
 
-    void appendFinalProject(
+    NamesWithAliases appendFinalProjectForNonRootQueryBlock(
         ExpressionActionsChain & chain,
-        const NamesWithAliases & final_project) const;
+        const String & column_prefix);
+
+    NamesWithAliases appendFinalProjectForRootQueryBlock(
+        ExpressionActionsChain & chain,
+        const std::vector<tipb::FieldType> & schema,
+        const std::vector<Int32> & output_offsets,
+        const String & column_prefix,
+        bool keep_session_timezone_info);
 
     String getActions(
         const tipb::Expr & expr,

@@ -2,6 +2,7 @@
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
+#include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockSchemaGetter.h>
@@ -26,6 +27,7 @@
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <boost/algorithm/string/join.hpp>
+#include <tuple>
 
 namespace DB
 {
@@ -888,6 +890,36 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
     LOG_INFO(log, "Tombstoned database " << db_name);
 }
 
+std::tuple<NamesAndTypes, Strings>
+parseColumnsFromTableInfo(const TiDB::TableInfo & table_info, Poco::Logger * log)
+{
+    NamesAndTypes columns;
+    std::vector<String> primary_keys;
+    for (const auto & column : table_info.columns)
+    {
+        LOG_DEBUG(log, fmt::format("Analyzing column: {}, type: {}", column.name, static_cast<int>(column.tp)));
+        DataTypePtr type = getDataTypeByColumnInfo(column);
+        columns.emplace_back(column.name, type);
+        if (column.hasPriKeyFlag())
+        {
+            primary_keys.emplace_back(column.name);
+        }
+    }
+
+    if (!table_info.pk_is_handle)
+    {
+        // Make primary key as a column, and make the handle column as the primary key.
+        if (table_info.is_common_handle)
+            columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeString>());
+        else
+            columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>());
+        primary_keys.clear();
+        primary_keys.emplace_back(MutableSupport::tidb_pk_column_name);
+    }
+
+    return std::make_tuple(std::move(columns), std::move(primary_keys));
+}
+
 String createTableStmt(
     const DBInfo & db_info,
     const TableInfo & table_info,
@@ -895,29 +927,7 @@ String createTableStmt(
     Poco::Logger * log)
 {
     LOG_DEBUG(log, "Analyzing table info :" << table_info.serialize());
-    NamesAndTypes columns;
-    std::vector<String> pks;
-    for (const auto & column : table_info.columns)
-    {
-        LOG_DEBUG(log, "Analyzing column :" + column.name + " type " + std::to_string((int)column.tp));
-        DataTypePtr type = getDataTypeByColumnInfo(column);
-        columns.emplace_back(NameAndTypePair(column.name, type));
-
-        if (column.hasPriKeyFlag())
-        {
-            pks.emplace_back(column.name);
-        }
-    }
-
-    if (!table_info.pk_is_handle)
-    {
-        if (table_info.is_common_handle)
-            columns.emplace_back(NameAndTypePair(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeString>()));
-        else
-            columns.emplace_back(NameAndTypePair(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>()));
-        pks.clear();
-        pks.emplace_back(MutableSupport::tidb_pk_column_name);
-    }
+    auto [columns, pks] = parseColumnsFromTableInfo(table_info, log);
 
     String stmt;
     WriteBufferFromString stmt_buf(stmt);
@@ -936,20 +946,7 @@ String createTableStmt(
     }
 
     // storage engine type
-    if (table_info.engine_type == TiDB::StorageEngine::TMT)
-    {
-        writeString(") Engine = TxnMergeTree((", stmt_buf);
-        for (size_t i = 0; i < pks.size(); i++)
-        {
-            if (i > 0)
-                writeString(", ", stmt_buf);
-            writeBackQuotedString(pks[i], stmt_buf);
-        }
-        writeString("), 8192, '", stmt_buf);
-        writeEscapedString(table_info.serialize(), stmt_buf);
-        writeString("')", stmt_buf);
-    }
-    else if (table_info.engine_type == TiDB::StorageEngine::DT)
+    if (table_info.engine_type == TiDB::StorageEngine::DT)
     {
         writeString(") Engine = DeltaMerge((", stmt_buf);
         for (size_t i = 0; i < pks.size(); i++)

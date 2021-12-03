@@ -5,6 +5,7 @@
 #include <Encryption/KeyManager.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/WritableFile.h>
+#include <Encryption/WriteReadableFile.h>
 
 #include <string>
 
@@ -37,6 +38,16 @@ public:
         bool truncate_if_exists_ = true,
         bool create_new_encryption_info_ = true,
         const WriteLimiterPtr & write_limiter_ = nullptr,
+        int flags = -1,
+        mode_t mode = 0666) const;
+
+    WriteReadableFilePtr newWriteReadableFile(
+        const String & file_path_,
+        const EncryptionPath & encryption_path_,
+        bool truncate_if_exists_ = true,
+        bool create_new_encryption_info_ = true,
+        const WriteLimiterPtr & write_limiter_ = nullptr,
+        const ReadLimiterPtr & read_limiter = nullptr,
         int flags = -1,
         mode_t mode = 0666) const;
 

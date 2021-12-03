@@ -137,7 +137,7 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
 
 std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    getDAGRequestFromStringWithRetry(dag_req, task_request.encoded_plan());
+    dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
     TMTContext & tmt_context = context.getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
     /// will never be used and can be removed later.
@@ -233,7 +233,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         mpp::TaskMeta task_meta;
         if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, log);
+        bool is_local = context.getSettings().enable_local_tunnel && meta.address() == task_meta.address();
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, is_local, log);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);

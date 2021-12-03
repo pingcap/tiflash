@@ -1,35 +1,30 @@
-#include <Functions/FunctionFactory.h>
-
-#include <Interpreters/Context.h>
-
 #include <Common/Exception.h>
-
+#include <Functions/FunctionFactory.h>
+#include <Interpreters/Context.h>
 #include <Poco/String.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_FUNCTION;
-    extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_FUNCTION;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
-void FunctionFactory::registerFunction(const
-    std::string & name,
-    Creator creator,
-    CaseSensitiveness case_sensitiveness)
+void FunctionFactory::registerFunction(const std::string & name,
+                                       Creator creator,
+                                       CaseSensitiveness case_sensitiveness)
 {
     if (!functions.emplace(name, creator).second)
         throw Exception("FunctionFactory: the function name '" + name + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR);
 
     if (case_sensitiveness == CaseInsensitive
         && !case_insensitive_functions.emplace(Poco::toLower(name), creator).second)
         throw Exception("FunctionFactory: the case insensitive function name '" + name + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR);
 }
 
 
@@ -59,4 +54,4 @@ FunctionBuilderPtr FunctionFactory::tryGet(
     return {};
 }
 
-}
+} // namespace DB

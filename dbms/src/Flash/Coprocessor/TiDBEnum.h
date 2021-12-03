@@ -10,11 +10,13 @@
 
 namespace DB
 {
-
 class TiDBEnum
 {
 public:
-    TiDBEnum(UInt64 value_, const StringRef & name_) : value(value_), name(name_) {}
+    TiDBEnum(UInt64 value_, const StringRef & name_)
+        : value(value_)
+        , name(name_)
+    {}
     UInt64 value;
     const StringRef & name;
 };

@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 void registerFunctionsReinterpret(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionReinterpretAsUInt8>();
@@ -22,4 +21,4 @@ void registerFunctionsReinterpret(FunctionFactory & factory)
     factory.registerFunction<FunctionReinterpretAsFixedString>();
 }
 
-}
+} // namespace DB

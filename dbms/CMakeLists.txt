@@ -240,8 +240,6 @@ target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE
 # https://cmake.org/pipermail/cmake/2016-May/063400.html
 target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
 
-add_subdirectory (tests)
-
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
 

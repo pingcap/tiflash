@@ -1,17 +1,15 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionGroupUniqArray.h>
-#include <AggregateFunctions/Helpers.h>
 #include <AggregateFunctions/FactoryHelpers.h>
+#include <AggregateFunctions/Helpers.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 
 
 namespace DB
 {
-
 namespace
 {
-
 /// Substitute return type for Date and DateTime
 class AggregateFunctionGroupUniqArrayDate : public AggregateFunctionGroupUniqArray<DataTypeDate::FieldType>
 {
@@ -26,8 +24,10 @@ class AggregateFunctionGroupUniqArrayDateTime : public AggregateFunctionGroupUni
 
 static IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_type)
 {
-         if (typeid_cast<const DataTypeDate *>(argument_type.get())) return new AggregateFunctionGroupUniqArrayDate;
-    else if (typeid_cast<const DataTypeDateTime *>(argument_type.get())) return new AggregateFunctionGroupUniqArrayDateTime;
+    if (typeid_cast<const DataTypeDate *>(argument_type.get()))
+        return new AggregateFunctionGroupUniqArrayDate;
+    else if (typeid_cast<const DataTypeDateTime *>(argument_type.get()))
+        return new AggregateFunctionGroupUniqArrayDateTime;
     else
     {
         /// Check that we can use plain version of AggregateFunctionGroupUniqArrayGeneric
@@ -49,17 +49,16 @@ AggregateFunctionPtr createAggregateFunctionGroupUniqArray(const std::string & n
         res = AggregateFunctionPtr(createWithExtraTypes(argument_types[0]));
 
     if (!res)
-        throw Exception("Illegal type " + argument_types[0]->getName() +
-            " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
 }
 
-}
+} // namespace
 
 void registerAggregateFunctionGroupUniqArray(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("groupUniqArray", createAggregateFunctionGroupUniqArray);
 }
 
-}
+} // namespace DB

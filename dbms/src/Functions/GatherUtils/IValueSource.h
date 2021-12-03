@@ -1,10 +1,9 @@
 #pragma once
-#include <Functions/GatherUtils/ValueSourceVisitor.h>
 #include <Common/Exception.h>
+#include <Functions/GatherUtils/ValueSourceVisitor.h>
 
 namespace DB::GatherUtils
 {
-
 struct IValueSource
 {
     virtual ~IValueSource() = default;
@@ -18,6 +17,8 @@ struct IValueSource
 };
 
 template <typename Derived>
-class ValueSourceImpl : public Visitable<Derived, IValueSource, ValueSourceVisitor> {};
+class ValueSourceImpl : public Visitable<Derived, IValueSource, ValueSourceVisitor>
+{
+};
 
-}
+} // namespace DB::GatherUtils

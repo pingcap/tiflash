@@ -88,6 +88,12 @@
 
 #define PLATFORM_NOT_SUPPORTED "The only supported platforms are x86_64 and AArch64 (work in progress)"
 
+#define DEFAULT_MARK_CACHE_SIZE (5ULL * 1024 * 1024 * 1024)
+
+#define DEFAULT_METRICS_PORT 8234
+
+#define DEFAULT_HTTP_PORT 8123
+
 #if !defined(__x86_64__) && !defined(__aarch64__)
 //    #error PLATFORM_NOT_SUPPORTED
 #endif
