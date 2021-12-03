@@ -5,7 +5,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>

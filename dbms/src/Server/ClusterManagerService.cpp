@@ -16,21 +16,23 @@ const std::string TASK_INTERVAL_KEY = TIFLASH_PREFIX + ".flash_cluster.update_ru
 constexpr Int64 MILLISECOND = 1000;
 constexpr Int64 INIT_DELAY = 5;
 
-void ClusterManagerService::run(const std::string & bin_path, const std::vector<std::string> & args)
-try
+static void runService(const std::string & bin_path, const std::vector<std::string> & args)
 {
-    auto proc = ShellCommand::executeDirect(bin_path, args);
-    proc->wait();
-}
-catch (DB::Exception & e)
-{
-    std::stringstream ss;
-    ss << bin_path;
-    for (const auto & arg : args)
+    try
     {
-        ss << " " << arg;
+        auto proc = ShellCommand::executeDirect(bin_path, args);
+        proc->wait();
     }
-    e.addMessage("(while running `" + ss.str() + "`)");
+    catch (DB::Exception & e)
+    {
+        std::stringstream ss;
+        ss << bin_path;
+        for (const auto & arg : args)
+        {
+            ss << " " << arg;
+        }
+        e.addMessage("(while running `" + ss.str() + "`)");
+    }
 }
 
 ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::string & config_path)
@@ -69,7 +71,7 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
     LOG_INFO(log, "Registered timed cluster manager task at rate " << task_interval << " seconds");
 
     timer.scheduleAtFixedRate(
-        FunctionTimerTask::create([this, bin_path, args] { return ClusterManagerService::run(bin_path, args); }),
+        FunctionTimerTask::create([bin_path, args] { return runService(bin_path, args); }),
         INIT_DELAY * MILLISECOND,
         task_interval * MILLISECOND);
 }

@@ -27,7 +27,6 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -325,7 +324,9 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         root_tm.set_partition_id(-1);
         std::shared_ptr<ExchangeReceiver> exchange_receiver
             = std::make_shared<ExchangeReceiver>(
-                std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
+                std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
+                                                      context.getTMTContext().getMPPTaskManager(),
+                                                      context.getSettings().enable_local_tunnel),
                 tipb_exchange_receiver,
                 root_tm,
                 10,

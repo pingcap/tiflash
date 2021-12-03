@@ -163,7 +163,6 @@ public:
 
 private:
     friend class MockTiDB;
-    friend class StorageMergeTree;
     friend class StorageDeltaMerge;
 
     Table & getOrCreateTable(const TableID table_id);
