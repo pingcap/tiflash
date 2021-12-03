@@ -34,7 +34,7 @@ class DAGQueryBlockInterpreter
 public:
     DAGQueryBlockInterpreter(
         Context & context_,
-        const std::vector<BlockInputStreams> & input_streams_vec_,
+        const std::vector<DAGPipelinePtr> & input_pipelines_,
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
@@ -45,15 +45,15 @@ public:
 
     ~DAGQueryBlockInterpreter() = default;
 
-    BlockInputStreams execute();
+    DAGPipelinePtr execute();
 
     static void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log);
 
 private:
     void executeRemoteQuery(DAGPipeline & pipeline);
-    void executeImpl(DAGPipeline & pipeline);
+    void executeImpl(DAGPipelinePtr & pipeline);
     void executeTS(const tipb::TableScan & ts, DAGPipeline & pipeline);
-    void executeJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    void executeJoin(const tipb::Join & join, DAGPipelinePtr & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
@@ -93,7 +93,7 @@ private:
         const DAGSchema & schema);
 
     Context & context;
-    std::vector<BlockInputStreams> input_streams_vec;
+    std::vector<DAGPipelinePtr> input_pipelines;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
     const tipb::DAGRequest & rqst;

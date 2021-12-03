@@ -1,11 +1,13 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGExpressionActionsChain.h>
 
 namespace DB
 {
 struct DAGPipeline
 {
+    DAGExpressionActionsChain chain;
     BlockInputStreams streams;
     /** When executing FULL or RIGHT JOIN, there will be a data stream from which you can read "not joined" rows.
       * It has a special meaning, since reading from it should be done after reading from the main streams.
@@ -26,4 +28,6 @@ struct DAGPipeline
 
     bool hasMoreThanOneStream() const { return streams.size() + streams_with_non_joined_data.size() > 1; }
 };
+using DAGPipelinePtr = std::shared_ptr<DAGPipeline>;
+
 } // namespace DB

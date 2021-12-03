@@ -38,17 +38,15 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, 
 /** executeQueryBlock recursively converts all the children of the DAGQueryBlock and itself (Coprocessor DAG request)
   * into an array of IBlockInputStream (element of physical executing plan of TiFlash)
   */
-BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets)
+DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets)
 {
-    std::vector<BlockInputStreams> input_streams_vec;
+    std::vector<DAGPipelinePtr> input_pipelines;
     for (auto & child : query_block.children)
-    {
-        BlockInputStreams child_streams = executeQueryBlock(*child, subqueries_for_sets);
-        input_streams_vec.push_back(child_streams);
-    }
+        input_pipelines.push_back(executeQueryBlock(*child, subqueries_for_sets));
+
     DAGQueryBlockInterpreter query_block_interpreter(
         context,
-        input_streams_vec,
+        input_pipelines,
         query_block,
         max_streams,
         keep_session_timezone_info || !query_block.isRootQueryBlock(),
@@ -62,15 +60,15 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
 void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block)
 {
     for (const auto & child_qb : dag_query_block.children)
-    {
         initMPPExchangeReceiver(*child_qb);
-    }
+
     if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
-                                                  context.getTMTContext().getMPPTaskManager(),
-                                                  context.getSettings().enable_local_tunnel),
+            std::make_shared<GRPCReceiverContext>(
+                context.getTMTContext().getKVCluster(),
+                context.getTMTContext().getMPPTaskManager(),
+                context.getSettings().enable_local_tunnel),
             dag_query_block.source->exchange_receiver(),
             dag.getDAGContext().getMPPTaskMeta(),
             max_streams,
@@ -88,9 +86,7 @@ BlockIO InterpreterDAG::execute()
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
     std::vector<SubqueriesForSets> subqueries_for_sets;
-    BlockInputStreams streams = executeQueryBlock(*dag.getRootQueryBlock(), subqueries_for_sets);
-    DAGPipeline pipeline;
-    pipeline.streams = streams;
+    DAGPipelinePtr pipeline = executeQueryBlock(*dag.getRootQueryBlock(), subqueries_for_sets);
 
     /// only run in MPP
     if (context.getDAGContext()->tunnel_set != nullptr)
@@ -125,9 +121,9 @@ BlockIO InterpreterDAG::execute()
                 collators.emplace_back(nullptr);
             }
         }
-        restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
+        restoreConcurrency(*pipeline, dag.getDAGContext().final_concurrency, log);
         int stream_id = 0;
-        pipeline.transform([&](auto & stream) {
+        pipeline->transform([&](auto & stream) {
             // construct writer
             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
                 context.getDAGContext()->tunnel_set,
@@ -146,12 +142,12 @@ BlockIO InterpreterDAG::execute()
     }
 
     /// add union to run in parallel if needed
-    DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
+    DAGQueryBlockInterpreter::executeUnion(*pipeline, max_streams, log);
     if (!subqueries_for_sets.empty())
     {
         const Settings & settings = context.getSettingsRef();
-        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
-            pipeline.firstStream(),
+        pipeline->firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
+            pipeline->firstStream(),
             std::move(subqueries_for_sets),
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
             dag.getDAGContext().getMPPTaskId(),
@@ -159,7 +155,7 @@ BlockIO InterpreterDAG::execute()
     }
 
     BlockIO res;
-    res.in = pipeline.firstStream();
+    res.in = pipeline->firstStream();
     return res;
 }
 } // namespace DB
