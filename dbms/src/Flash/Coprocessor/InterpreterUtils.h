@@ -2,6 +2,7 @@
 
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 
 namespace DB
