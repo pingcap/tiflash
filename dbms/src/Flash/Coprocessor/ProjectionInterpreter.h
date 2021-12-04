@@ -15,6 +15,7 @@ public:
         bool keep_session_timezone_info_,
         const DAGQuerySource & dag_,
         const LogWithPrefixPtr & log_);
+
 private:
     void executeImpl(DAGPipelinePtr & pipeline) override;
 

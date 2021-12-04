@@ -5,9 +5,9 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/JoinInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/JoinInterpreter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -30,12 +30,12 @@ JoinInterpreter::JoinInterpreter(
     std::vector<SubqueriesForSets> & subqueries_for_sets_,
     const LogWithPrefixPtr & log_)
     : DAGInterpreterBase(
-            context_,
-            query_block_,
-            max_streams_,
-            keep_session_timezone_info_, 
-            dag_,
-            log_)
+        context_,
+        query_block_,
+        max_streams_,
+        keep_session_timezone_info_,
+        dag_,
+        log_)
     , input_pipelines(input_pipelines_)
     , subqueries_for_sets(subqueries_for_sets_)
 {

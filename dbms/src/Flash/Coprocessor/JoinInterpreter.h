@@ -18,6 +18,7 @@ public:
         const DAGQuerySource & dag_,
         std::vector<SubqueriesForSets> & subqueries_for_sets_,
         const LogWithPrefixPtr & log_);
+
 private:
     void executeImpl(DAGPipelinePtr & pipeline) override;
     void executeJoin(const tipb::Join & join, DAGPipelinePtr & pipeline, SubqueryForSet & right_query);

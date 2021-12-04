@@ -1,7 +1,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/ProjectionInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/ProjectionInterpreter.h>
 
 namespace DB
 {

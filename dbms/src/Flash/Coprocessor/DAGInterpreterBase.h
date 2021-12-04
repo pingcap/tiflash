@@ -20,6 +20,7 @@ public:
     virtual ~DAGInterpreterBase() = default;
 
     DAGPipelinePtr execute();
+
 protected:
     DAGInterpreterBase(
         Context & context_,
