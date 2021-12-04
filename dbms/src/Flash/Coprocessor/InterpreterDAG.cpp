@@ -5,12 +5,13 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/ExchangeReceiverInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/JoinInterpreter.h>
+#include <Flash/Coprocessor/ProjectionInterpreter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/TableScanInterpreter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -68,8 +69,19 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
                    mpp_exchange_receiver_maps,
                    log)
             .execute();
-    default:
-        return DAGQueryBlockInterpreter(
+    case tipb::ExecType::TypeProjection:
+        assert(input_pipelines.size() == 1);
+        return ProjectionInterpreter(
+                   context,
+                   input_pipelines[0],
+                   query_block,
+                   max_streams,
+                   keep_session_timezone_info || !query_block.isRootQueryBlock(),
+                   dag,
+                   log)
+            .execute();
+    case tipb::ExecType::TypeJoin:
+        return JoinInterpreter(
                    context,
                    input_pipelines,
                    query_block,
@@ -77,9 +89,10 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
                    keep_session_timezone_info || !query_block.isRootQueryBlock(),
                    dag,
                    subqueries_for_sets,
-                   mpp_exchange_receiver_maps,
                    log)
             .execute();
+    default:
+        throw Exception("Can't reach here!", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
