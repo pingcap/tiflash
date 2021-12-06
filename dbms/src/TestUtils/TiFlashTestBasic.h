@@ -10,11 +10,14 @@
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
+
+#include <string>
 
 #if !__clang__
 #pragma GCC diagnostic push
@@ -41,29 +44,23 @@ namespace tests
     catch (const DB::tests::TiFlashTestException & e)                                \
     {                                                                                \
         std::string text = e.displayText();                                          \
-                                                                                     \
         text += "\n\n";                                                              \
         if (text.find("Stack trace") == std::string::npos)                           \
             text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString()); \
-                                                                                     \
         FAIL() << text;                                                              \
     }                                                                                \
     catch (const DB::Exception & e)                                                  \
     {                                                                                \
         std::string text = e.displayText();                                          \
-                                                                                     \
+        fmt::print(stderr, "Code: {}. {}\n\n", e.code(), text);                      \
         auto embedded_stack_trace_pos = text.find("Stack trace");                    \
-        std::cerr << "Code: " << e.code() << ". " << text << std::endl               \
-                  << std::endl;                                                      \
         if (std::string::npos == embedded_stack_trace_pos)                           \
-            std::cerr << "Stack trace:" << std::endl                                 \
-                      << e.getStackTrace().toString() << std::endl;                  \
-                                                                                     \
+            fmt::print(stderr, "Stack trace:\n{}\n", e.getStackTrace().toString());  \
         throw;                                                                       \
     }
 
 /// helper functions for comparing DataType
-::testing::AssertionResult DataTypeCompare( //
+::testing::AssertionResult DataTypeCompare(
     const char * lhs_expr,
     const char * rhs_expr,
     const DataTypePtr & lhs,
@@ -93,13 +90,28 @@ inline DataTypes typesFromString(const String & str)
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath(const char * test_case = nullptr)
+    static String getTemporaryPath(const std::string_view test_case = "")
     {
         String path = "./tmp/";
-        if (test_case)
+        if (!test_case.empty())
             path += std::string(test_case);
 
         return Poco::Path(path).absolute().toString();
+    }
+
+    static void tryRemovePath(const std::string & path)
+    {
+        try
+        {
+            if (Poco::File p(path); p.exists())
+            {
+                p.remove(true);
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+        }
     }
 
     static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})
@@ -113,9 +125,9 @@ public:
         return std::make_pair(result, result);
     }
 
-    static void setupLogger(const String & level = "trace")
+    static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr)
     {
-        Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
+        Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(os);
         Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
         formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
@@ -148,7 +160,7 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
-    static void initializeGlobalContext();
+    static void initializeGlobalContext(Strings testdata_path = {});
     static Context & getGlobalContext() { return *global_context; }
     static void shutdown();
 
@@ -159,13 +171,16 @@ private:
     TiFlashTestEnv() = delete;
 };
 
-#define CHECK_TESTS_WITH_DATA_ENABLED                                                                             \
-    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                                \
-    {                                                                                                             \
-        LOG_INFO(&Poco::Logger::get("GTEST"),                                                                     \
-                 "Test: " << ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() << "."     \
-                          << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
-        return;                                                                                                   \
+#define CHECK_TESTS_WITH_DATA_ENABLED                                                     \
+    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                        \
+    {                                                                                     \
+        const auto * test_info = ::testing::UnitTest::GetInstance()->current_test_info(); \
+        LOG_INFO(&Poco::Logger::get("GTEST"),                                             \
+                 fmt::format(                                                             \
+                     "Test: {}.{} is disabled.",                                          \
+                     test_info->test_case_name(),                                         \
+                     test_info->name()));                                                 \
+        return;                                                                           \
     }
 
 } // namespace tests

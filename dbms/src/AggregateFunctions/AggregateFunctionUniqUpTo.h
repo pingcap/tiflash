@@ -1,19 +1,17 @@
 #pragma once
 
-#include <Common/FieldVisitors.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/UniqVariadicHash.h>
-#include <DataTypes/DataTypesNumber.h>
+#include <Columns/ColumnsNumber.h>
+#include <Common/FieldVisitors.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
-#include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <IO/ReadHelpers.h>
-#include <Common/typeid_cast.h>
 
 namespace DB
 {
-
-
 /** Counts the number of unique values up to no more than specified in the parameter.
   *
   * Example: uniqUpTo(3)(UserID)
@@ -25,14 +23,14 @@ namespace DB
 template <typename T>
 struct __attribute__((__packed__)) AggregateFunctionUniqUpToData : AggregationCollatorsWrapper<false>
 {
-/** If count == threshold + 1 - this means that it is "overflowed" (values greater than threshold).
+    /** If count == threshold + 1 - this means that it is "overflowed" (values greater than threshold).
   * In this case (for example, after calling the merge function), the `data` array does not necessarily contain the initialized values
   * - example: combine a state in which there are few values, with another state that has overflowed;
   *   then set count to `threshold + 1`, and values from another state are not copied.
   */
     UInt8 count = 0;
 
-    T *data;
+    T * data;
 
 
     size_t size() const
@@ -67,7 +65,7 @@ struct __attribute__((__packed__)) AggregateFunctionUniqUpToData : AggregationCo
 
         if (rhs.count > threshold)
         {
-        /// If `rhs` is overflowed, then set `count` too also overflowed for the current state.
+            /// If `rhs` is overflowed, then set `count` too also overflowed for the current state.
             count = rhs.count;
             return;
         }
@@ -242,4 +240,4 @@ public:
 };
 
 
-}
+} // namespace DB

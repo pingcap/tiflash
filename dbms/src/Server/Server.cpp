@@ -41,6 +41,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
@@ -134,7 +135,7 @@ void loadMiConfig(Logger * log)
 #endif
 namespace
 {
-[[maybe_unused]] void loadBooleanConfig(Poco::Logger * log, bool & target, const char * name)
+[[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
 {
     auto * config = getenv(name);
     if (config)
@@ -187,11 +188,6 @@ static std::string getCanonicalPath(std::string path)
     return path;
 }
 
-static String getNormalizedPath(const String & s)
-{
-    return getCanonicalPath(Poco::Path{s}.toString());
-}
-
 void Server::uninitialize()
 {
     logger().information("shutting down");
@@ -216,11 +212,12 @@ struct TiFlashProxyConfig
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
-    const char * engine_store_version = "engine-version";
-    const char * engine_store_git_hash = "engine-git-hash";
-    const char * engine_store_address = "engine-addr";
-    const char * engine_store_advertise_address = "advertise-engine-addr";
-    const char * pd_endpoints = "pd-endpoints";
+    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
+    const String engine_store_version = "engine-version";
+    const String engine_store_git_hash = "engine-git-hash";
+    const String engine_store_address = "engine-addr";
+    const String engine_store_advertise_address = "advertise-engine-addr";
+    const String pd_endpoints = "pd-endpoints";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -627,23 +624,6 @@ public:
             /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
             try
             {
-                /// HTTP
-                if (config.has("http_port"))
-                {
-                    if (security_config.has_tls_config)
-                    {
-                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
-                    }
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("http_port"));
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(
-                        new HTTPServer(new HTTPHandlerFactory(server, "HTTPHandler-factory"), server_pool, socket, http_params));
-
-                    LOG_INFO(log, "Listening http://" + address.toString());
-                }
-
                 /// HTTPS
                 if (config.has("https_port"))
                 {
@@ -681,6 +661,23 @@ public:
                                     ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
+                else
+                {
+                    /// HTTP
+                    if (security_config.has_tls_config)
+                    {
+                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                    }
+                    Poco::Net::ServerSocket socket;
+                    auto address = socket_bind_listen(socket, listen_host, config.getInt("http_port", DEFAULT_HTTP_PORT));
+                    socket.setReceiveTimeout(settings.http_receive_timeout);
+                    socket.setSendTimeout(settings.http_send_timeout);
+                    servers.emplace_back(
+                        new HTTPServer(new HTTPHandlerFactory(server, "HTTPHandler-factory"), server_pool, socket, http_params));
+
+                    LOG_INFO(log, "Listening http://" + address.toString());
+                }
+
 
                 /// TCP
                 if (config.has("tcp_port"))
@@ -734,26 +731,6 @@ public:
                 /// At least one of TCP and HTTP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-                /// Interserver IO HTTP
-                if (config.has("interserver_http_port") && !security_config.has_tls_config)
-                {
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("interserver_http_port"));
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(new HTTPServer(
-                        new InterserverIOHTTPHandlerFactory(server, "InterserverIOHTTPHandler-factory"),
-                        server_pool,
-                        socket,
-                        http_params));
-
-                    LOG_INFO(log, "Listening interserver http: " + address.toString());
-                }
-                else if (security_config.has_tls_config)
-                {
-                    LOG_INFO(log, "internal http port is closed because tls config is set");
-                }
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -841,19 +818,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     UpdateMallocConfig(log);
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
 #endif
 
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
 #endif
 
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
-    loadBooleanConfig(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
+    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 
     registerFunctions();
@@ -939,24 +916,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // 2. path pool
     // 3. TMTContext
 
-
-    // TODO: remove this configuration left by ClickHouse
-    std::vector<String> all_fast_path;
-    if (config().has("fast_path"))
-    {
-        String fast_paths = config().getString("fast_path");
-        Poco::trimInPlace(fast_paths);
-        if (!fast_paths.empty())
-        {
-            Poco::StringTokenizer string_tokens(fast_paths, ",");
-            for (const auto & string_token : string_tokens)
-            {
-                all_fast_path.emplace_back(getNormalizedPath(std::string(string_token)));
-                LOG_DEBUG(log, "Fast data part candidate path: " << all_fast_path.back());
-            }
-        }
-    }
-
     // Deprecated settings.
     // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
     // "0" by default, means no quota, the actual disk capacity is used.
@@ -988,15 +947,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
-    global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
     /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);
     Redact::setRedactLog(security_config.redact_info_log);
 
-    /// Create directories for 'path' and for default database, if not exist.
-    for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
+    // Create directories for 'path' and for default database, if not exist.
+    for (const String & candidate_path : all_normal_path)
     {
         Poco::File(candidate_path + "data/" + default_database).createDirectories();
     }
@@ -1080,27 +1038,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         Poco::File(user_files_path).createDirectories();
     }
 
-    if (config().has("interserver_http_port"))
-    {
-        String this_host = config().getString("interserver_http_host", "");
-
-        if (this_host.empty())
-        {
-            this_host = getFQDNOrHostName();
-            LOG_DEBUG(log,
-                      "Configuration parameter 'interserver_http_host' doesn't exist or exists and empty. Will use '" + this_host
-                          + "' as replica host.");
-        }
-
-        String port_str = config().getString("interserver_http_port");
-        int port = parse<int>(port_str);
-
-        if (port < 0 || port > 0xFFFF)
-            throw Exception("Out of range 'interserver_http_port': " + toString(port), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-        global_context->setInterserverIOAddress(this_host, port);
-    }
-
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
@@ -1144,13 +1081,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (uncompressed_cache_size)
         global_context->setUncompressedCache(uncompressed_cache_size);
 
-    /// Quota size in bytes of persisted mapping cache. 0 means unlimited.
-    size_t persisted_cache_size = config().getUInt64("persisted_mapping_cache_size", 0);
-    /// Path of persisted cache in fast(er) disk device. Empty means disabled.
-    std::string persisted_cache_path = config().getString("persisted_mapping_cache_path", "");
-    if (!persisted_cache_path.empty())
-        global_context->setPersistedCache(persisted_cache_size, persisted_cache_path);
-
     bool use_l0_opt = config().getBool("l0_optimize", false);
     global_context->setUseL0Opt(use_l0_opt);
 
@@ -1159,7 +1089,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Settings & settings = global_context->getSettingsRef();
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size");
+    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 
@@ -1269,13 +1199,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         users_config_reloader->start();
 
         {
-            std::stringstream message;
-            message << "Available RAM = " << formatReadableSizeWithBinarySuffix(getMemoryAmount()) << ";"
-                    << " physical cores = " << getNumberOfPhysicalCPUCores()
-                    << ";"
-                    // on ARM processors it can show only enabled at current moment cores
-                    << " threads = " << std::thread::hardware_concurrency() << ".";
-            LOG_INFO(log, message.str());
+            // on ARM processors it can show only enabled at current moment cores
+            LOG_INFO(
+                log,
+                fmt::format(
+                    "Available RAM = {}; physical cores = {}; threads = {}.",
+                    formatReadableSizeWithBinarySuffix(getMemoryAmount()),
+                    getNumberOfPhysicalCPUCores(),
+                    std::thread::hardware_concurrency()));
         }
 
         LOG_INFO(log, "Ready for connections.");

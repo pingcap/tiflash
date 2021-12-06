@@ -5,7 +5,6 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Storages/IStorage.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -67,8 +66,7 @@ grpc::Status CoprocessorHandler::execute()
             GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_dag).Increment();
             SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_dag).Decrement(); });
 
-            tipb::DAGRequest dag_request;
-            dag_request.ParseFromString(cop_request->data());
+            tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
             if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
                 throw TiFlashException(

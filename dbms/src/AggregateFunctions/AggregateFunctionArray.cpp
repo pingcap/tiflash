@@ -4,12 +4,11 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+} // namespace ErrorCodes
 
 class AggregateFunctionCombinatorArray final : public IAggregateFunctionCombinator
 {
@@ -24,15 +23,20 @@ public:
             if (const DataTypeArray * array = typeid_cast<const DataTypeArray *>(type.get()))
                 nested_arguments.push_back(array->getNestedType());
             else
-                throw Exception("Illegal type " + type->getName() + " of argument"
-                    " for aggregate function with " + getName() + " suffix. Must be array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(
+                    "Illegal type " + type->getName() + " of argument"
+                                                        " for aggregate function with "
+                        + getName() + " suffix. Must be array.",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return nested_arguments;
     }
 
     AggregateFunctionPtr transformAggregateFunction(
-        const AggregateFunctionPtr & nested_function, const DataTypes & arguments, const Array &) const override
+        const AggregateFunctionPtr & nested_function,
+        const DataTypes & arguments,
+        const Array &) const override
     {
         return std::make_shared<AggregateFunctionArray>(nested_function, arguments);
     }
@@ -43,4 +47,4 @@ void registerAggregateFunctionCombinatorArray(AggregateFunctionCombinatorFactory
     factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorArray>());
 }
 
-}
+} // namespace DB

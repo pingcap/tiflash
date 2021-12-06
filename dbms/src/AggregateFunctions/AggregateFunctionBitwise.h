@@ -1,18 +1,14 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnVector.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <Columns/ColumnVector.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
-
 template <typename T>
 struct AggregateFunctionGroupBitOrData
 {
@@ -79,4 +75,4 @@ public:
 };
 
 
-}
+} // namespace DB

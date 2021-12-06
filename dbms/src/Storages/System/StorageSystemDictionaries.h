@@ -1,16 +1,17 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
-class StorageSystemDictionaries : public ext::shared_ptr_helper<StorageSystemDictionaries>, public IStorage
+class StorageSystemDictionaries : public ext::SharedPtrHelper<StorageSystemDictionaries>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemDictionaries"; }
@@ -31,4 +32,4 @@ protected:
     StorageSystemDictionaries(const std::string & name);
 };
 
-}
+} // namespace DB

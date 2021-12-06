@@ -23,22 +23,13 @@
 #include <Storages/StorageMemory.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
+#include <fmt/format.h>
 
 #include <ext/scope_guard.h>
 #include <iomanip>
 
 namespace ProfileEvents
 {
-extern const Event PersistedMarksFileHits;
-extern const Event PersistedMarksFileMisses;
-extern const Event PersistedMarksFileBusy;
-extern const Event PersistedMarksFileUpdate;
-extern const Event PersistedCacheFileHits;
-extern const Event PersistedCacheFileMisses;
-extern const Event PersistedCacheFileExpectedMisses;
-extern const Event PersistedCacheFileBusy;
-extern const Event PersistedCacheFileUpdate;
-extern const Event PersistedCachePartBusy;
 } // namespace ProfileEvents
 
 
@@ -302,8 +293,7 @@ void TCPHandler::runImpl()
 
         watch.stop();
 
-        LOG_INFO(log, std::fixed << std::setprecision(3) << "Processed in " << watch.elapsedSeconds() << " sec. "
-                                 << "Global persisted cache hit|miss|busy|update|miss(ok): mark index files = " << ProfileEvents::counters[ProfileEvents::PersistedMarksFileHits].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileMisses].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedCachePartBusy].load() << "+" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileBusy].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileUpdate].load() << ", mark ranges = " << ProfileEvents::counters[ProfileEvents::PersistedCacheFileHits].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileMisses].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedCachePartBusy].load() << "+" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileBusy].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileUpdate].load() << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileExpectedMisses].load());
+        LOG_INFO(log, fmt::format("Processed in {:.3} sec.", watch.elapsedSeconds()));
 
         if (network_error)
             break;

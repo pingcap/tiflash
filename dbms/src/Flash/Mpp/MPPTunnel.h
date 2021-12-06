@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/LogWithPrefix.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -27,7 +28,9 @@ public:
         const mpp::TaskMeta & sender_meta_,
         const std::chrono::seconds timeout_,
         TaskCancelledCallback callback,
-        int input_steams_num_);
+        int input_steams_num_,
+        bool is_local_,
+        const LogWithPrefixPtr & log_ = nullptr);
 
     ~MPPTunnelBase();
 
@@ -41,6 +44,8 @@ public:
     // finish the writing.
     void writeDone();
 
+    std::shared_ptr<mpp::MPPDataPacket> readForLocal();
+
     /// close() finishes the tunnel, if the tunnel is connected already, it will
     /// write the error message to the tunnel, otherwise it just close the tunnel
     void close(const String & reason);
@@ -51,11 +56,15 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
-private:
-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
+    bool isLocal() const { return is_local; }
+
+    const LogWithPrefixPtr & getLogger() const { return log; }
 
     // must under mu's protection
     void finishWithLock();
+
+private:
+    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
@@ -70,6 +79,8 @@ private:
     bool connected; // if the exchange in has connected this tunnel.
 
     std::atomic<bool> finished; // if the tunnel has finished its connection.
+
+    bool is_local; // if this tunnel used for local environment
 
     Writer * writer;
 
@@ -89,7 +100,7 @@ private:
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
 
-    Poco::Logger * log;
+    const LogWithPrefixPtr log;
 };
 
 class MPPTunnel : public MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>

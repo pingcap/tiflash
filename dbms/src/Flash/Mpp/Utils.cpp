@@ -1,9 +1,9 @@
 #include <Flash/Mpp/Utils.h>
+
 #include <memory>
 
 namespace DB
 {
-
 mpp::MPPDataPacket getPacketWithError(String reason)
 {
     mpp::MPPDataPacket data;
@@ -14,4 +14,3 @@ mpp::MPPDataPacket getPacketWithError(String reason)
 }
 
 } // namespace DB
-

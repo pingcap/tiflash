@@ -77,7 +77,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     {
         if (config.has(disable_bg_flush_conf) && config.getBool(disable_bg_flush_conf))
             throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
-                ErrorCodes::INVALID_CONFIG_PARAMETER);
+                            ErrorCodes::INVALID_CONFIG_PARAMETER);
         res.disable_bg_flush = false;
     }
     else if (res.engine == ::TiDB::StorageEngine::DT)
@@ -86,7 +86,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         /// Which means that we may get the wrong result with outdated schema.
         if (config.has(disable_bg_flush_conf) && !config.getBool(disable_bg_flush_conf))
             throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
-                ErrorCodes::INVALID_CONFIG_PARAMETER);
+                            ErrorCodes::INVALID_CONFIG_PARAMETER);
         res.disable_bg_flush = true;
     }
 
@@ -108,31 +108,32 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         {
             res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
         }
+#if 0
+        // Not generally available for this file format
         else if (snapshot_method == "file2")
         {
             res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
         }
+#endif
     }
     switch (res.snapshot_apply_method)
     {
-        case TiDB::SnapshotApplyMethod::DTFile_Directory:
-        case TiDB::SnapshotApplyMethod::DTFile_Single:
-            if (res.engine != TiDB::StorageEngine::DT)
-            {
-                throw Exception(
-                    "Illegal arguments: can not use DTFile to store snapshot data when the storage engine is not DeltaTree, [engine="
-                        + DB::toString(static_cast<Int32>(res.engine))
-                        + "] [snapshot method=" + applyMethodToString(res.snapshot_apply_method) + "]",
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            }
-            break;
-        default:
-            break;
+    case TiDB::SnapshotApplyMethod::DTFile_Directory:
+    case TiDB::SnapshotApplyMethod::DTFile_Single:
+        if (res.engine != TiDB::StorageEngine::DT)
+        {
+            throw Exception(
+                "Illegal arguments: can not use DTFile to store snapshot data when the storage engine is not DeltaTree, [engine="
+                    + DB::toString(static_cast<Int32>(res.engine))
+                    + "] [snapshot method=" + applyMethodToString(res.snapshot_apply_method) + "]",
+                ErrorCodes::INVALID_CONFIG_PARAMETER);
+        }
+        break;
+    default:
+        break;
     }
 
-    LOG_INFO(log,
-        "Default storage engine [type=" << static_cast<Int64>(res.engine)
-                                        << "] [snapshot.method=" << applyMethodToString(res.snapshot_apply_method) << "]");
+    LOG_INFO(log, fmt::format("Default storage engine [type={}] [snapshot.method={}]", static_cast<Int64>(res.engine), applyMethodToString(res.snapshot_apply_method)));
 
     return res;
 }

@@ -31,7 +31,7 @@ public:
     /// Get the main function name.
     virtual String getName() const = 0;
 
-    void execute(Block & block, const ColumnNumbers & arguments, size_t result) const;
+    void execute(Block & block, const ColumnNumbers & args, size_t result) const;
 
 protected:
     virtual void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const = 0;
@@ -78,7 +78,6 @@ public:
     /// sample_block should contain data types of arguments and values of constants, if relevant.
     virtual ExecutableFunctionPtr prepare(const Block & sample_block) const = 0;
 
-    /// TODO: make const
     /// both arguments and result are column positions in block.
     virtual void execute(Block & block, const ColumnNumbers & arguments, size_t result) const
     {

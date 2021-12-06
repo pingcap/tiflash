@@ -1,18 +1,19 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+
+#include <ext/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
 /** System table "build_options" with many params used for clickhouse building
   */
-class StorageSystemBuildOptions : public ext::shared_ptr_helper<StorageSystemBuildOptions>, public IStorage
+class StorageSystemBuildOptions : public ext::SharedPtrHelper<StorageSystemBuildOptions>
+    , public IStorage
 {
 public:
     std::string getName() const override { return "SystemBuildOptions"; }
@@ -33,4 +34,4 @@ protected:
     StorageSystemBuildOptions(const std::string & name_);
 };
 
-}
+} // namespace DB

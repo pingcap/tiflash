@@ -7,6 +7,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
+#include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <Interpreters/Context.h>
@@ -14,9 +15,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <pingcap/Exception.h>
-#include <pingcap/kv/LockResolver.h>
 
 namespace DB
 {
@@ -117,6 +116,7 @@ try
             tipb::ExchangeType::PassThrough,
             context.getSettings().dag_records_per_chunk,
             context.getSettings().batch_send_min_limit,
+            true,
             dag.getEncodeType(),
             dag.getResultFieldTypes(),
             dag_context,
@@ -129,15 +129,18 @@ try
     if (throughput.first)
         GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
 
-    auto process_info = context.getProcessListElement()->getInfo();
-    auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-    if constexpr (!batch)
+    if (context.getProcessListElement())
     {
-        GET_METRIC(tiflash_coprocessor_request_memory_usage, type_cop).Observe(peak_memory);
-    }
-    else
-    {
-        GET_METRIC(tiflash_coprocessor_request_memory_usage, type_super_batch).Observe(peak_memory);
+        auto process_info = context.getProcessListElement()->getInfo();
+        auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+        if constexpr (!batch)
+        {
+            GET_METRIC(tiflash_coprocessor_request_memory_usage, type_cop).Observe(peak_memory);
+        }
+        else
+        {
+            GET_METRIC(tiflash_coprocessor_request_memory_usage, type_super_batch).Observe(peak_memory);
+        }
     }
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))

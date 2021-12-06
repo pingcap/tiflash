@@ -297,7 +297,7 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
     case TiDB::TypeLongLong:
     case TiDB::TypeYear:
     case TiDB::TypeTime:
-        if (!type->isInteger())
+        if (!type->isInteger() && !type->isMyTime())
             throw TiFlashException(
                 "Type un-matched during arrow encode, target col type is integer and source column type is " + type->getName(),
                 Errors::Coprocessor::Internal);

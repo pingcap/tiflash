@@ -43,9 +43,8 @@ public:
             res = res || rsindex.minmax->checkEqual(pack_id, values[i], rsindex.type);
         return res;
     }
-
-    RSOperatorPtr applyNot() override { return createNotIn(attr, values); };
 };
+
 
 } // namespace DM
 

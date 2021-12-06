@@ -5,11 +5,11 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -122,13 +122,6 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_max_page_id = 0;
 
     UInt64 background_tasks_length = 0;
-};
-
-struct RegionSplitRes
-{
-    RowKeyValues split_points;
-    size_t exact_rows;
-    size_t exact_bytes;
 };
 
 // It is used to prevent hash conflict of file caches.
@@ -392,15 +385,6 @@ public:
 
     RowsAndBytes getRowsAndBytesInRange(const Context & db_context, const RowKeyRange & check_range, bool is_exact);
     RowsAndBytes getRowsAndBytesInRange(DMContext & dm_context, const RowKeyRange & check_range, bool is_exact);
-
-    /// Get the split point of region with check_range. Currently only do half split.
-    RegionSplitRes getRegionSplitPoint(
-        const Context & db_context,
-        const RowKeyRange & check_range,
-        size_t max_region_size,
-        size_t split_size);
-
-    RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

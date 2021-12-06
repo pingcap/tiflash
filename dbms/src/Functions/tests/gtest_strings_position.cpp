@@ -96,10 +96,10 @@ TEST_F(StringPosition, str_and_fixed_str_Test)
             csp1 = ColumnString::create();
         }
 
-        for (size_t i = 0; i < c0_strs.size(); i++)
+        for (size_t j = 0; j < c0_strs.size(); j++)
         {
-            csp0->insert(Field(c0_strs[i].c_str(), c0_strs[i].size()));
-            csp1->insert(Field(c1_strs[i].c_str(), c1_strs[i].size()));
+            csp0->insert(Field(c0_strs[j].c_str(), c0_strs[j].size()));
+            csp1->insert(Field(c1_strs[j].c_str(), c1_strs[j].size()));
         }
 
         Block testBlock;

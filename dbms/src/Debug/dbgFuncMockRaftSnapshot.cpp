@@ -16,7 +16,6 @@
 #include <Poco/Path.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
@@ -26,7 +25,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char force_set_sst_to_dtfile_block_size[];
@@ -171,7 +169,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
     size_t handle_column_size = table_info.is_common_handle ? table_info.getPrimaryIndexInfo().idx_cols.size() : 1;
     if (args_size < 3 + 2 * handle_column_size || args_size > 3 + 2 * handle_column_size + 1)
         throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
-            ErrorCodes::BAD_ARGUMENTS);
+                        ErrorCodes::BAD_ARGUMENTS);
 
     TMTContext & tmt = context.getTMTContext();
 
@@ -216,7 +214,12 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
 
     // Mock to apply an empty snapshot for region[region-id]
     tmt.getKVStore()->handleApplySnapshot(
-        std::move(region_info), peer_id, SSTViewVec{nullptr, 0}, MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
+        std::move(region_info),
+        peer_id,
+        SSTViewVec{nullptr, 0},
+        MockTiKV::instance().getRaftIndex(region_id),
+        RAFT_INIT_LOG_TERM,
+        tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key) << ", "
@@ -236,7 +239,11 @@ struct MockSSTReader
         Data() = default;
     };
 
-    MockSSTReader(const Data & data_) : iter(data_.begin()), end(data_.end()), remained(iter != end) {}
+    MockSSTReader(const Data & data_)
+        : iter(data_.begin())
+        , end(data_.end())
+        , remained(iter != end)
+    {}
 
     static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_) { return SSTReaderPtr{new MockSSTReader(data_)}; }
 
@@ -298,7 +305,9 @@ void fn_gc(SSTReaderPtr ptr, ColumnFamilyType)
 class RegionMockTest
 {
 public:
-    RegionMockTest(KVStorePtr kvstore_, RegionPtr region_) : kvstore(kvstore_), region(region_)
+    RegionMockTest(KVStorePtr kvstore_, RegionPtr region_)
+        : kvstore(kvstore_)
+        , region(region_)
     {
         std::memset(&mock_proxy_helper, 0, sizeof(mock_proxy_helper));
         mock_proxy_helper.sst_reader_interfaces = SSTReaderInterfaces{
@@ -325,12 +334,12 @@ private:
 };
 
 void GenMockSSTData(const TiDB::TableInfo & table_info,
-    TableID table_id,
-    const String & store_key,
-    UInt64 start_handle,
-    UInt64 end_handle,
-    UInt64 num_fields = 1,
-    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
+                    TableID table_id,
+                    const String & store_key,
+                    UInt64 start_handle,
+                    UInt64 end_handle,
+                    UInt64 num_fields = 1,
+                    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
 {
     MockSSTReader::Data write_kv_list, default_kv_list;
     size_t num_rows = end_handle - start_handle;
@@ -387,11 +396,11 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
 
 // TODO: make it a more generic testing function
 void GenMockSSTDataByHandles(const TiDB::TableInfo & table_info,
-    TableID table_id,
-    const String & store_key,
-    const std::vector<UInt64> & handles,
-    UInt64 num_fields = 1,
-    const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
+                             TableID table_id,
+                             const String & store_key,
+                             const std::vector<UInt64> & handles,
+                             UInt64 num_fields = 1,
+                             const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default})
 {
     MockSSTReader::Data write_kv_list, default_kv_list;
     size_t num_rows = handles.size();
@@ -429,7 +438,7 @@ void GenMockSSTDataByHandles(const TiDB::TableInfo & table_info,
             TiKVValue prewrite_value(ss.releaseStr());
 
             UInt64 prewrite_ts = 100000 + num_rows - index; // make it to be timestamp desc in SSTFiles
-            UInt64 commit_ts = prewrite_ts + 100;           // Assume that commit_ts is larger that prewrite_ts
+            UInt64 commit_ts = prewrite_ts + 100; // Assume that commit_ts is larger that prewrite_ts
 
             TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
             default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
@@ -483,10 +492,10 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
             BaseBuffView{region_id_str.data(), region_id_str.length()},
         });
         kvstore->handleIngestSST(region_id,
-            SSTViewVec{sst_views.data(), sst_views.size()},
-            MockTiKV::instance().getRaftIndex(region_id),
-            MockTiKV::instance().getRaftTerm(region_id),
-            tmt);
+                                 SSTViewVec{sst_views.data(), sst_views.size()},
+                                 MockTiKV::instance().getRaftIndex(region_id),
+                                 MockTiKV::instance().getRaftTerm(region_id),
+                                 tmt);
     }
 
     {
@@ -497,10 +506,10 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
             BaseBuffView{region_id_str.data(), region_id_str.length()},
         });
         kvstore->handleIngestSST(region_id,
-            SSTViewVec{sst_views.data(), sst_views.size()},
-            MockTiKV::instance().getRaftIndex(region_id),
-            MockTiKV::instance().getRaftTerm(region_id),
-            tmt);
+                                 SSTViewVec{sst_views.data(), sst_views.size()},
+                                 MockTiKV::instance().getRaftIndex(region_id),
+                                 MockTiKV::instance().getRaftTerm(region_id),
+                                 tmt);
     }
 }
 
@@ -604,7 +613,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     if (args.size() < 7 || args.size() > 9)
         throw Exception("Args not matched, should be: database_name, table_name, region_id, start, end, schema_string, pk_name"
                         " [, test-fields, cfs=\"write,default\"]",
-            ErrorCodes::BAD_ARGUMENTS);
+                        ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -684,7 +693,11 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
     auto ingest_ids = kvstore->preHandleSnapshotToFiles(
-        new_region, SSTViewVec{sst_views.data(), sst_views.size()}, index, MockTiKV::instance().getRaftTerm(region_id), tmt);
+        new_region,
+        SSTViewVec{sst_views.data(), sst_views.size()},
+        index,
+        MockTiKV::instance().getRaftTerm(region_id),
+        tmt);
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 
     FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
@@ -779,7 +792,11 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
     FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
     auto ingest_ids = kvstore->preHandleSnapshotToFiles(
-        new_region, SSTViewVec{sst_views.data(), sst_views.size()}, index, MockTiKV::instance().getRaftTerm(region_id), tmt);
+        new_region,
+        SSTViewVec{sst_views.data(), sst_views.size()},
+        index,
+        MockTiKV::instance().getRaftTerm(region_id),
+        tmt);
     GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
 
     FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
@@ -802,7 +819,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const
     auto [new_region, ingest_ids] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
-        RegionPtrWithSnapshotFiles{new_region, std::move(ingest_ids)}, tmt);
+        RegionPtrWithSnapshotFiles{new_region, std::move(ingest_ids)},
+        tmt);
 
     std::stringstream ss;
     ss << "success apply region " << new_region->id() << " with dt files";

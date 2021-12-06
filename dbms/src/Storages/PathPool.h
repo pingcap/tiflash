@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Storages/Page/PageDefines.h>
 
+#include <mutex>
 #include <unordered_map>
 
 namespace Poco

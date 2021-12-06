@@ -11,6 +11,7 @@
 #include <Storages/PrimaryKeyNotMatchException.h>
 #include <Storages/StorageFactory.h>
 #include <common/ThreadPool.h>
+#include <common/logger_useful.h>
 
 #include <sstream>
 

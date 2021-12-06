@@ -25,10 +25,10 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , region_table(context)
     , background_service(nullptr)
     , gc_manager(context)
-    , cluster(raft_config.pd_addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
-                                               : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
+    , cluster(raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
+                                           : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
     , ignore_databases(raft_config.ignore_databases)
-    , schema_syncer(raft_config.pd_addrs.size() == 0
+    , schema_syncer(raft_config.pd_addrs.empty()
                         ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ true>>(cluster))
                         : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ false>>(cluster)))
     , mpp_task_manager(std::make_shared<MPPTaskManager>())
@@ -44,7 +44,11 @@ void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
     region_table.restore();
     store_status = StoreStatus::Ready;
 
-    background_service = std::make_unique<BackgroundService>(*this);
+    if (proxy_helper != nullptr)
+    {
+        // Only create when running with Raft threads
+        background_service = std::make_unique<BackgroundService>(*this);
+    }
 }
 
 KVStorePtr & TMTContext::getKVStore()
@@ -97,6 +101,11 @@ Context & TMTContext::getContext()
     return context;
 }
 
+const Context & TMTContext::getContext() const
+{
+    return context;
+}
+
 bool TMTContext::isInitialized() const
 {
     return getStoreStatus() != StoreStatus::Idle;
@@ -141,7 +150,6 @@ const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
 
 void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    static constexpr const char * TABLE_OVERLAP_THRESHOLD = "flash.overlap_threshold";
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
@@ -150,7 +158,6 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
 
-    getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
     getKVStore()->setRegionCompactLogConfig(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1),
                                             std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
