@@ -90,8 +90,97 @@ protected:
         return 0;
     }
 
-    void searchRange([[maybe_unused]] size_t size, [[maybe_unused]] UInt64 * ret, [[maybe_unused]] UInt64 * max_cap) override
+    void searchRange(size_t size, UInt64 * ret, UInt64 * max_cap) override
     {
+        UInt64 _biggest_cap = 0;
+        UInt64 _biggest_range = 0;
+
+        auto it = map.begin();
+        for (; it != map.end(); it++)
+        {
+            if (it->second >= size)
+            {
+                break;
+            }
+            else
+            {
+                if (it->second > _biggest_cap)
+                {
+                    _biggest_cap = it->second;
+                    _biggest_range = it->first;
+                }
+            }
+        }
+
+        // not place found.
+        if (it == map.end())
+        {
+            LOG_ERROR(log, "Not sure why can't found any place to insert.[old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
+            biggest_range = _biggest_range;
+            biggest_cap = _biggest_cap;
+
+            *ret = UINT64_MAX;
+            *max_cap = 0;
+            return;
+        }
+
+        // Update return start
+        *ret = it->first;
+
+        if (it->second == size)
+        {
+            // It is champion, need update
+            if (it->first == biggest_range)
+            {
+                auto it_cur = it++;
+                map.erase(it_cur);
+                goto go_on_update_biggest;
+            }
+            else // It not champion, just return
+            {
+                map.erase(it);
+                *max_cap = biggest_cap;
+                return;
+            }
+        }
+        else
+        {
+            auto k = it->first + size;
+            auto v = it->second - size;
+
+            map.erase(it);
+            map.insert({k, v});
+
+            // It is champion, need update
+            if (k - size == biggest_range)
+            {
+                if (v > _biggest_cap)
+                {
+                    _biggest_cap = v;
+                    _biggest_range = k;
+                }
+                it = map.find(k);
+                goto go_on_update_biggest;
+            }
+            else // It not champion, just return
+            {
+                *max_cap = biggest_cap;
+                return;
+            }
+        }
+
+    go_on_update_biggest:
+        for (; it != map.end(); it++)
+        {
+            if (it->second > _biggest_cap)
+            {
+                _biggest_cap = it->second;
+                _biggest_range = it->first;
+            }
+        }
+        biggest_range = _biggest_range;
+        biggest_cap = _biggest_cap;
+        *max_cap = biggest_cap;
     }
 
     int markSmapRange(UInt64 block, size_t num) override
@@ -145,7 +234,11 @@ protected:
     {
         auto it = map.find(block);
 
-        // already unmarked
+        /**
+         * already unmarked.
+         * The `block` won't be mid of free range.
+         * Because we alloc space from left to right.
+         */
         if (it != map.end())
         {
             return 0;
@@ -154,13 +247,22 @@ protected:
         bool meanless = false;
         std::tie(it, meanless) = map.insert({block, num});
 
+        /**
+         * Not sure why clang got warning 
+         * If init `it_prev` after `goto` op
+         */
         auto it_prev = it;
-        it_prev--;
 
         if (it == map.begin())
         {
             goto only_do_right;
         }
+
+        /**
+         * but don't make this line upper, 
+         * it make no sense to upper it.
+         */
+        it_prev--;
 
         // Prev range can merge
         if (it_prev->first + it_prev->second >= it->first)
