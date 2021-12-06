@@ -286,10 +286,15 @@ std::vector<std::string> DTWorkload::Statistics::toStrings(uint64_t i) const
     v.push_back(fmt::format("[{}]{}", i, localTime()));
     v.push_back(fmt::format("init_store_sec {}", init_store_sec));
     v.push_back(fmt::format("total_read_count {} total_read_sec {}", total_read_count, total_read_usec / 1000000.0));
+    uint64_t total_write_count = 0;
+    double total_do_write_sec = 0.0;
     for (size_t k = 0; k < write_stats.size(); k++)
     {
         v.push_back(fmt::format("Thread[{}] {}", k, write_stats[k].toString()));
+        total_write_count += write_stats[k].write_count;
+        total_do_write_sec += write_stats[k].total_do_write_sec;
     }
+    v.push_back(fmt::format("total_write_count {} total_do_write_sec {}", total_write_count, total_do_write_sec));
     v.push_back(fmt::format("verify_count {} verify_sec {}", verify_count, verify_sec));
     return v;
 }
