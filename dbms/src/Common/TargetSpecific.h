@@ -450,7 +450,7 @@ struct SimdImpl<Generic::WORD_SIZE>
         return _mm_movemask_epi8(val) == 0;
 #else
         auto coerced_value = vreinterpretq_u64_u8(val);
-        return (coerced_value[0] & coerced_value[1]) == 0;
+        return (coerced_value[0] | coerced_value[1]) == 0;
 #endif
     }
 
