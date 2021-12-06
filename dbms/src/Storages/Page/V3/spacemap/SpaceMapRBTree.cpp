@@ -3,8 +3,8 @@
 
 namespace DB::PS::V3
 {
-static int rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * private_data);
-static int rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * private_data);
+static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * private_data);
+static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * private_data);
 
 static inline void rb_link_node(struct rb_node * node,
                                 struct rb_node * parent,
@@ -31,7 +31,7 @@ static void rb_tree_debug(struct rb_root * root, const char * method_call)
     for (node = rb_tree_first(root); node != NULL; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
-        printf(" range - (%llu -> %llu)\n", entry->start, entry->start + entry->count);
+        printf(" Space - (%llu -> %llu)\n", entry->start, entry->start + entry->count);
     }
 }
 
@@ -81,19 +81,19 @@ inline static void rb_free_entry(struct rb_private * private_data, struct smap_r
     free(entry);
 }
 
-static int rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * private_data)
+static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * private_data)
 {
     struct rb_root * root = &private_data->root;
     struct rb_node *parent = NULL, **n = &root->rb_node;
     struct rb_node * node;
     struct smap_rb_entry * entry;
     UInt64 new_start, new_count;
-    int retval = 0;
+    bool marked = false;
 
     // Root node have not been init
     if (private_data->root.rb_node == NULL)
     {
-        return 0;
+        assert(false);
     }
 
     while (*n)
@@ -120,13 +120,13 @@ static int rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priva
             entry->count = start - entry->start;
 
             rb_insert_entry(new_start, new_count, private_data);
-            return 1;
+            return true;
         }
 
         if ((start + count) >= (entry->start + entry->count))
         {
             entry->count = start - entry->start;
-            retval = 1;
+            marked = true;
         }
 
         if (0 == entry->count)
@@ -141,11 +141,11 @@ static int rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priva
         {
             entry->start += count;
             entry->count -= count;
-            return 1;
+            return true;
         }
     }
 
-    // Check the right node
+    // Checking the right node
     for (; parent != NULL; parent = node)
     {
         node = rb_tree_next(parent);
@@ -157,32 +157,36 @@ static int rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priva
             break;
 
         // Merge the nearby node
-        //  TBD : If there are a small range inside two range, Then it should be ignored
         if ((start + count) >= (entry->start + entry->count))
         {
             rb_node_remove(parent, root);
             rb_free_entry(private_data, entry);
-            retval = 1;
+            marked = true;
             continue;
         }
         else
         {
+            if (((start + count) - entry->start) == 0
+                && (start + count == entry->start))
+            {
+                break;
+            }
             entry->count -= ((start + count) - entry->start);
             entry->start = start + count;
-            retval = 1;
+            marked = true;
             break;
         }
     }
 
-    return retval;
+    return marked;
 }
 
-int RBTreeSpaceMap::newSmap()
+bool RBTreeSpaceMap::newSmap()
 {
     rb_tree = (struct rb_private *)calloc(1, sizeof(struct rb_private));
     if (rb_tree == NULL)
     {
-        return -1;
+        return false;
     }
 
     rb_tree->root = {
@@ -194,12 +198,12 @@ int RBTreeSpaceMap::newSmap()
 
     if (rb_insert_entry(start, end, rb_tree) != 0)
     {
-        LOG_ERROR(log, "Erorr happend, when mark all range to free.  [start=" << start << "] , [end = " << end << "]");
+        LOG_ERROR(log, "Erorr happend, when mark all space free.  [start=" << start << "] , [end = " << end << "]");
         free(rb_tree);
-        return -1;
+        return false;
     }
 
-    return 0;
+    return true;
 }
 
 static void rb_free_tree(struct rb_root * root)
@@ -218,8 +222,11 @@ static void rb_free_tree(struct rb_root * root)
 
 void RBTreeSpaceMap::freeSmap()
 {
-    rb_free_tree(&rb_tree->root);
-    free(rb_tree);
+    if (rb_tree)
+    {
+        rb_free_tree(&rb_tree->root);
+        free(rb_tree);
+    }
 }
 
 void RBTreeSpaceMap::smapStats()
@@ -240,7 +247,7 @@ void RBTreeSpaceMap::smapStats()
     for (node = rb_tree_first(&rb_tree->root); node != NULL; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
-        LOG_DEBUG(log, "  range : " << count << " start:" << entry->start << " size : " << entry->count);
+        LOG_DEBUG(log, "  Space : " << count << " start:" << entry->start << " size : " << entry->count);
         count++;
         if (entry->count > max_size)
         {
@@ -254,22 +261,21 @@ void RBTreeSpaceMap::smapStats()
     }
 }
 
-int RBTreeSpaceMap::testSmapRange(UInt64 _start,
-                                  size_t len)
+bool RBTreeSpaceMap::isSmapMarkUsed(UInt64 _start,
+                                    size_t len)
 {
     struct rb_node *parent = NULL, **n;
     struct rb_node *node, *next;
     struct smap_rb_entry * entry;
-    int retval = 0;
+    bool retval = false;
 
     n = &rb_tree->root.rb_node;
     _start -= start;
 
     if (len == 0 || rb_tree->root.rb_node == NULL)
     {
-        return -1;
+        assert(0);
     }
-
 
     while (*n)
     {
@@ -287,7 +293,7 @@ int RBTreeSpaceMap::testSmapRange(UInt64 _start,
         {
             // the tree -> entry is not clear
             // so just return
-            return 1;
+            return true;
         }
     }
 
@@ -305,20 +311,20 @@ int RBTreeSpaceMap::testSmapRange(UInt64 _start,
         if ((_start + len) <= entry->start)
             break;
 
-        retval = 1;
+        retval = true;
         break;
     }
     return retval;
 }
 
-static int rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * private_data)
+static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * private_data)
 {
     struct rb_root * root = &private_data->root;
     struct rb_node *parent = NULL, **n = &root->rb_node;
     struct rb_node *new_node, *node, *next;
     struct smap_rb_entry * new_entry;
     struct smap_rb_entry * entry;
-    int retval = 0;
+    bool retval = false;
 
     if (count == 0)
     {
@@ -354,17 +360,17 @@ static int rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priva
         got_entry:
             if ((start + count) <= (entry->start + entry->count))
             {
-                retval = 1;
+                retval = true;
                 return retval;
             }
 
             if ((entry->start + entry->count) == start)
             {
-                retval = 0;
+                retval = false;
             }
             else
             {
-                retval = 1;
+                retval = true;
             }
 
             count += (start - entry->start);
@@ -408,9 +414,7 @@ no_need_insert:
             continue;
         }
 
-
         // not match
-        // TBD : same as comment in remove
         if ((start + count) < entry->start)
             break;
 
@@ -423,7 +427,6 @@ no_need_insert:
         else
         {
             // merge entry
-            // TBD : same as comment in remove
             count += ((entry->start + entry->count) - (start + count));
             rb_node_remove(node, root);
             rb_free_entry(private_data, entry);
@@ -437,9 +440,106 @@ no_need_insert:
     return retval;
 }
 
-int RBTreeSpaceMap::markSmapRange(UInt64 block, size_t size)
+std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
 {
-    int rc;
+    UInt64 offset = UINT64_MAX;
+    UInt64 max_cap = 0;
+    struct rb_node * node = NULL;
+    struct smap_rb_entry * entry;
+
+    UInt64 _biggest_cap = 0;
+    UInt64 _biggest_range = 0;
+    for (node = rb_tree_first(&rb_tree->root); node != NULL; node = rb_tree_next(node))
+    {
+        entry = node_to_entry(node);
+        if (entry->count >= size)
+        {
+            break;
+        }
+        else
+        {
+            if (entry->count > _biggest_cap)
+            {
+                _biggest_cap = entry->count;
+                _biggest_range = entry->start;
+            }
+        }
+    }
+
+    // not place found.
+    if (!node)
+    {
+        LOG_ERROR(log, "Not sure why can't found any place to insert. [old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
+        biggest_range = _biggest_range;
+        biggest_cap = _biggest_cap;
+
+        return std::make_pair(offset, max_cap);
+    }
+
+    // Update return start
+    offset = entry->start;
+
+    if (entry->count == size)
+    {
+        // It is champion, need update
+        if (entry->start == biggest_range)
+        {
+            struct rb_node * old_node = node;
+            node = rb_tree_next(node);
+            rb_node_remove(old_node, &rb_tree->root);
+            rb_free_entry(rb_tree, entry);
+            // still need update max_cap
+        }
+        else // It not champion, just return
+        {
+            rb_node_remove(node, &rb_tree->root);
+            rb_free_entry(rb_tree, entry);
+            max_cap = biggest_cap;
+            return std::make_pair(offset, max_cap);
+        }
+    }
+    else // must be entry->count > size
+    {
+        // Resize this node, no need update
+        entry->start += size;
+        entry->count -= size;
+
+        // It is champion, need update
+        if (entry->start - size == biggest_range)
+        {
+            if (entry->count > _biggest_cap)
+            {
+                _biggest_cap = entry->count;
+                _biggest_range = entry->start;
+            }
+            node = rb_tree_next(node);
+            // still need update max_cap
+        }
+        else // It not champion, just return
+        {
+            max_cap = biggest_cap;
+            return std::make_pair(offset, max_cap);
+        }
+    }
+
+    for (; node != NULL; node = rb_tree_next(node))
+    {
+        entry = node_to_entry(node);
+        if (entry->count > _biggest_cap)
+        {
+            _biggest_cap = entry->count;
+            _biggest_range = entry->start;
+        }
+    }
+    biggest_range = _biggest_range;
+    biggest_cap = _biggest_cap;
+    max_cap = biggest_cap;
+    return std::make_pair(offset, max_cap);
+}
+
+bool RBTreeSpaceMap::markSmapUsed(UInt64 block, size_t size)
+{
+    bool rc;
 
     block -= start;
 
@@ -448,9 +548,9 @@ int RBTreeSpaceMap::markSmapRange(UInt64 block, size_t size)
     return rc;
 }
 
-int RBTreeSpaceMap::unmarkSmapRange(UInt64 block, size_t size)
+bool RBTreeSpaceMap::markSmapFree(UInt64 block, size_t size)
 {
-    int rc;
+    bool rc;
 
     block -= start;
 

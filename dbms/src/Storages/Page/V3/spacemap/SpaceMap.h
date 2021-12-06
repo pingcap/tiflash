@@ -17,69 +17,59 @@ public:
     };
 
     /**
-     * Create a SpaceMapPtr.
+     * Create a SpaceMap that manages space address [start, end).
      *  - type : 
-     *      - SMAP64_RBTREE : red-black tree Implementation
-     *      - SMAP64_STD_MAP: std::map Implementation
-     *  - start : begin of the range
-     *  - end : end if the range
-     *  - cluster_bits : the shift mask.
-     *      final range will Divide 2^cluster_bits in all public api
-     *      ex. request [offset=100,size=500]
-     *      cluster_bits=0: [offset=100,size=500]
-     *      cluster_bits=1: [offset=100,size=500]
-     * 
+     *      - SMAP64_RBTREE : red-black tree implementation
+     *      - SMAP64_STD_MAP: std::map implementation
+     *  - start : begin of the space
+     *  - end : end if the space
      */
-    static SpaceMapPtr createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end, int cluster_bits = 0);
+    static SpaceMapPtr createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end);
 
     /**
-     * Unmark a range [offset,offset + length) of the space map.
-     * It means this range will be marked as freed.
-     * After unmark this range. 
-     * When user use `searchRange` to get a range.
-     * Then this range may be selected(If request size fit range size).
+     * Mark a space [offset,offset + length) free of the space map.
+     * After mark this space freed.
+     * When user use `searchInsertOffset` to get a space.
+     * Then this space may been selected(If request size fit space size
+     * and it is the first freed space).
      * 
-     * ret value :
-     *  -1: Invalid args
-     *   0: Unmark the marked node
-     *   1: Unmark the unmarked node
+     * ret value:
+     *   true: mark the space which is used.
+     *   false: mark the space which is freed.
      */
-    int unmarkRange(UInt64 offset, size_t length);
+    bool markFree(UInt64 offset, size_t length);
 
     /**
-     * Mark a range [offset,offset + length) of the space map.
-     * It means this range will be marked as used.
-     * After this range been marked. 
-     * When user use `searchRange` to get a range. 
-     * This range won't be selected.
-     * 
-     * ret value :
-     *  -1: Invalid args
-     *   1: Mark success
+     * Mark a space [offset,offset + length) of the space map.
+     * After this space been marked.
+     * When user use `searchInsertOffset` to get a space. 
+     * This space won't be selected.
+     * ret value:
+     *   false: This space is freed, marked all space used.
+     *   true: This space is used, or some sub space is used.
      */
-    int markRange(UInt64 offset, size_t length);
+    bool markUsed(UInt64 offset, size_t length);
 
     /**
-     * Test a range [offset,offset + length) have been used or not.
+     * Test a space [offset,offset + length) have been used or not.
      * 
-     * ret value :
-     *  -1: Invalid args
-     *   0: This range have been marked, or some sub range have been marked
-     *   1: This range have not been marked, all of range is free for use.
+     * ret value:
+     *   true: This space is used, or some sub space is used
+     *   false: This space is freed, all of space is freed for use.  
      */
-    int testRange(UInt64 offset, size_t length);
+    bool isMarkUsed(UInt64 offset, size_t length);
 
     /**
-     * Search an range that can fit in `size`
+     * Search a space that can fit in `size`
      * SpaceMap will loop the range from start.
      * After it found a range which can fit this `size`.
-     * It will decide if there needs to keep traverse for find `max_cap`.
+     * It will decide if there needs to keep traverse to update `max_cap`.
      * 
-     * return val:
-     *  ret : offset of the range
-     *  max_cap : Current SpaceMap can hold the largest size
+     * Return value is <insert_offset, max_cap>:
+     *  insert_offset : start offset for the inserted space
+     *  max_cap : The largest available space this SpaceMap can hold. 
      */
-    void searchRange(size_t size, UInt64 * ret, UInt64 * max_cap);
+    std::pair<UInt64, UInt64> searchInsertOffset(size_t size);
 
     /**
      * Log the status of space map
@@ -91,46 +81,50 @@ public:
         return type;
     }
 
+    String typeToString(SpaceMapType type)
+    {
+        switch (type)
+        {
+        case SMAP64_RBTREE:
+            return "RB-Tree";
+        case SMAP64_STD_MAP:
+            return "STD Map";
+        default:
+            return "Invalid";
+        }
+    }
+
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
 
-    SpaceMap(UInt64 start, UInt64 end, int cluster_bits = 0);
+    SpaceMap(UInt64 start, UInt64 end);
 
     virtual ~SpaceMap(){};
 
     /* Generic space map operators */
-    virtual int newSmap() = 0;
+    virtual bool newSmap() = 0;
 
     /* Free the space map if necessary */
     virtual void freeSmap() = 0;
-
-    virtual int copySmap(SpaceMap * dest) = 0;
-
-    virtual int resizeSmap(UInt64 new_end, UInt64 new_real_end) = 0;
 
     /* Print space maps status  */
     virtual void smapStats() = 0;
 
     /* Space map bit/bits test operators */
-    virtual int testSmapRange(UInt64 offset, size_t size) = 0;
+    virtual bool isSmapMarkUsed(UInt64 offset, size_t size) = 0;
 
-    /* Space map range set/unset operators */
-    virtual int markSmapRange(UInt64 offset, size_t size) = 0;
+    /* Space map mark used/free operators */
+    virtual bool markSmapUsed(UInt64 offset, size_t size) = 0;
 
-    virtual int unmarkSmapRange(UInt64 offset, size_t size) = 0;
+    virtual bool markSmapFree(UInt64 offset, size_t size) = 0;
 
-    virtual void searchSmapRange(size_t size, UInt64 * ret, UInt64 * max_cap) = 0;
+    virtual std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) = 0;
 
 private:
-    /* shift block to the right range */
-    std::pair<UInt64, size_t> shiftBlock(UInt64 offset, size_t num);
-
     /* Check the range */
-    bool checkRange(UInt64 offset, size_t num);
+    bool checkSpace(UInt64 offset, size_t num);
 
-    /* Check Space Map have been inited or not*/
-    bool checkInited();
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #else
@@ -143,12 +137,6 @@ public:
     UInt64 end;
 
     Poco::Logger * log;
-
-private:
-    /* shift */
-    int cluster_bits;
-
-    char * description;
 };
 
 

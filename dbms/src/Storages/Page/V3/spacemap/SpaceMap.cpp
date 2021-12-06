@@ -1,6 +1,7 @@
 #include "SpaceMap.h"
 
 #include <Core/Types.h>
+#include <IO/WriteHelpers.h>
 #include <common/likely.h>
 #include <limits.h>
 #include <stdio.h>
@@ -9,25 +10,31 @@
 #include "SpaceMapRBTree.h"
 #include "SpaceMapSTDMap.h"
 
-namespace DB::PS::V3
+namespace DB
 {
-SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end, int cluster_bits)
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
+namespace PS::V3
+{
+SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end)
 {
     SpaceMapPtr smap;
     switch (type)
     {
     case SMAP64_RBTREE:
-        smap = std::make_shared<RBTreeSpaceMap>(start, end, cluster_bits);
+        smap = std::make_shared<RBTreeSpaceMap>(start, end);
         break;
     case SMAP64_STD_MAP:
-        smap = std::make_shared<STDMapSpaceMap>(start, end, cluster_bits);
+        smap = std::make_shared<STDMapSpaceMap>(start, end);
         break;
     default:
         return nullptr;
     }
 
-    int rc = smap->newSmap();
-    if (rc != 0)
+    if (!smap->newSmap())
     {
         smap->freeSmap();
         return nullptr;
@@ -36,19 +43,7 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
     return smap;
 }
 
-std::pair<UInt64, size_t> SpaceMap::shiftBlock(UInt64 block, size_t size)
-{
-    UInt64 block_end = block + size;
-
-    block >>= cluster_bits;
-    block_end += (1 << cluster_bits) - 1;
-    block_end >>= cluster_bits;
-    size = block_end - block;
-    return std::make_pair(block, size);
-}
-
-
-bool SpaceMap::checkRange(UInt64 block, size_t size)
+bool SpaceMap::checkSpace(UInt64 block, size_t size)
 {
     return (block < start) || (block > end) || (block + size - 1 > end);
 }
@@ -58,61 +53,53 @@ void SpaceMap::logStats()
     smapStats();
 }
 
-
-int SpaceMap::unmarkRange(UInt64 block, size_t size)
+bool SpaceMap::markFree(UInt64 offset, size_t length)
 {
-    std::tie(block, size) = shiftBlock(block, size);
-
-    if (checkRange(block, size))
+    if (checkSpace(offset, length))
     {
-        LOG_ERROR(log, "unMark range out of the limit range.[type=" << type << "] [block=" << block << "], [size = " << size << "]");
-        return -1;
+        throw Exception("Unmark space out of the limit space.[type=" + typeToString(getType())
+                            + "] [block=" + DB::toString(offset) + "], [size = " + DB::toString(length) + "]",
+                        ErrorCodes::LOGICAL_ERROR);
     }
 
-    return unmarkSmapRange(block, size);
+    return markSmapFree(offset, length);
 }
 
-int SpaceMap::markRange(UInt64 block, size_t size)
+bool SpaceMap::markUsed(UInt64 offset, size_t length)
 {
-    std::tie(block, size) = shiftBlock(block, size);
-
-    if (checkRange(block, size))
+    if (checkSpace(offset, length))
     {
-        LOG_ERROR(log, "Mark range out of the limit range.[type=" << type << "] [block=" << block << "], [size = " << size << "]");
-        return -1;
+        throw Exception("Mark space out of the limit space.[type=" + typeToString(getType())
+                            + "] [block=" + DB::toString(offset) + "], [size = " + DB::toString(length) + "]",
+                        ErrorCodes::LOGICAL_ERROR);
     }
 
-    return markSmapRange(block, size);
+    return markSmapUsed(offset, length);
 }
 
-int SpaceMap::testRange(UInt64 block, size_t size)
+bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
 {
-    std::tie(block, size) = shiftBlock(block, size);
-
-    if (checkRange(block, size))
+    if (checkSpace(offset, length))
     {
-        LOG_ERROR(log, "Test range out of the limit range.[type=" << type << "] [block=" << block << "], [size = " << size << "]");
-        return -1;
+        throw Exception("Test space out of the limit space.[type=" + typeToString(getType())
+                            + "] [block=" + DB::toString(offset) + "], [size = " + DB::toString(length) + "]",
+                        ErrorCodes::LOGICAL_ERROR);
     }
 
-    return testSmapRange(block, size);
+    return isSmapMarkUsed(offset, length);
 }
 
-void SpaceMap::searchRange(size_t size, UInt64 * ret, UInt64 * max_cap)
+std::pair<UInt64, UInt64> SpaceMap::searchInsertOffset(size_t size)
 {
-    UInt64 meanless;
-    std::tie(meanless, size) = shiftBlock(0, size);
-
-    searchSmapRange(size, ret, max_cap);
-    *max_cap = *max_cap * (2 ^ cluster_bits);
+    return searchSmapInsertOffset(size);
 }
 
-SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, int cluster_bits)
+SpaceMap::SpaceMap(UInt64 start_, UInt64 end_)
     : start(start_)
     , end(end_)
     , log(&Poco::Logger::get("RBTreeSpaceMap"))
-    , cluster_bits(cluster_bits)
 {
 }
 
-} // namespace DB::PS::V3
+} // namespace PS::V3
+} // namespace DB
