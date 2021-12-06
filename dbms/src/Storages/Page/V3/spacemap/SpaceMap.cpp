@@ -101,7 +101,6 @@ int SpaceMap::testRange(UInt64 block, size_t size)
 void SpaceMap::searchRange(size_t size, UInt64 * ret, UInt64 * max_cap)
 {
     UInt64 meanless;
-    UInt64 shift_cap;
     std::tie(meanless, size) = shiftBlock(0, size);
 
     searchSmapRange(size, ret, max_cap);
