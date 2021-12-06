@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
 #include <Common/MemoryTracker.h>
 #include <Common/formatReadable.h>
 #include <IO/WriteHelpers.h>
@@ -68,30 +69,33 @@ void MemoryTracker::alloc(Int64 size)
     {
         free(size);
 
-        std::stringstream message;
-        message << "Memory tracker";
+        DB::FmtBuffer fmt_buf;
+        fmt_buf.append("Memory tracker");
         if (description)
-            message << " " << description;
-        message << ": fault injected. Would use " << formatReadableSizeWithBinarySuffix(will_be) << " (attempt to allocate chunk of "
-                << size << " bytes)"
-                << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
+            fmt_buf.fmtAppend(" {}", description);
+        fmt_buf.fmtAppend(": fault injected. Would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
+                          formatReadableSizeWithBinarySuffix(will_be),
+                          size,
+                          formatReadableSizeWithBinarySuffix(current_limit));
 
-        throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+        throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
     }
 
     if (unlikely(current_limit && will_be > current_limit))
     {
         free(size);
 
-        std::stringstream message;
-        message << "Memory limit";
+        DB::FmtBuffer fmt_buf;
+        fmt_buf.append("Memory limit");
         if (description)
-            message << " " << description;
-        message << " exceeded: would use " << formatReadableSizeWithBinarySuffix(will_be) << " (attempt to allocate chunk of " << size
-                << " bytes)"
-                << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
+            fmt_buf.fmtAppend(" {}", description);
 
-        throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+        fmt_buf.fmtAppend(" exceeded: would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
+                          formatReadableSizeWithBinarySuffix(will_be),
+                          size,
+                          formatReadableSizeWithBinarySuffix(current_limit));
+
+        throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
     }
 
     if (will_be > peak.load(std::memory_order_relaxed)) /// Races doesn't matter. Could rewrite with CAS, but not worth.
