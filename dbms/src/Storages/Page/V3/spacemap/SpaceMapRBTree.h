@@ -60,11 +60,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
-    /* Generic space map operators */
     int newSmap() override;
-
-    /* The difference between clear and free is that after you clear, you can still use this spacemap. */
-    void clearSmap() override;
 
     void freeSmap() override;
 

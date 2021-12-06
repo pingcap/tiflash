@@ -54,7 +54,7 @@ bool check_nodes(std::map<UInt64, UInt64> & map, range * ranges, size_t size)
 }
 
 
-TEST(space_map_test, InitAndDestory)
+TEST(SpaceMapTest, InitAndDestory)
 {
     SpaceMapPtr smap = SpaceMap::createSpaceMap(SpaceMap::SpaceMapType::SMAP64_RBTREE, 0, 100);
 
@@ -62,7 +62,7 @@ TEST(space_map_test, InitAndDestory)
 }
 
 
-TEST(space_map_test, MarkUnmarkBitRBTree)
+TEST(SpaceMapTest, MarkUnmarkBitRBTree)
 {
     RBTreeSpaceMapPtr smap = std::make_shared<RBTreeSpaceMap>(0, 100);
     ASSERT_EQ(smap->newSmap(), 0);
@@ -89,7 +89,7 @@ TEST(space_map_test, MarkUnmarkBitRBTree)
     ASSERT_EQ(smap->testRange(50, 1), 1);
 }
 
-TEST(space_map_test, MarkUnmarkRangeRBTree)
+TEST(SpaceMapTest, MarkUnmarkRangeRBTree)
 {
     RBTreeSpaceMapPtr smap = std::make_shared<RBTreeSpaceMap>(0, 100);
     ASSERT_EQ(smap->newSmap(), 0);
@@ -121,7 +121,7 @@ TEST(space_map_test, MarkUnmarkRangeRBTree)
     ASSERT_TRUE(check_nodes(&bp->root, ranges, 2));
 }
 
-TEST(space_map_test, MarkUnmarkRangeSTDMap)
+TEST(SpaceMapTest, MarkUnmarkRangeSTDMap)
 {
     STDMapSpaceMapPtr smap = std::make_shared<STDMapSpaceMap>(0, 100);
     ASSERT_EQ(smap->newSmap(), 0);
@@ -170,5 +170,49 @@ TEST(space_map_test, MarkUnmarkRangeSTDMap)
     smap->unmarkRange(55, 5);
     ASSERT_TRUE(check_nodes(smap->map, ranges, 2));
 }
+
+TEST(SpaceMapTest, TestMarginsRBTree)
+{
+    RBTreeSpaceMapPtr smap = std::make_shared<RBTreeSpaceMap>(0, 100);
+    ASSERT_EQ(smap->newSmap(), 0);
+
+    struct rb_private * bp = (struct rb_private *)smap->rb_tree;
+
+    range ranges[] = {{.start = 0,
+                       .end = 100}};
+    ASSERT_TRUE(check_nodes(&bp->root, ranges, 1));
+    ASSERT_TRUE(smap->markRange(50, 10));
+
+    range ranges1[] = {{.start = 0,
+                        .end = 50},
+                       {.start = 60,
+                        .end = 100}};
+    ASSERT_TRUE(check_nodes(&bp->root, ranges1, 2));
+
+    ASSERT_EQ(smap->testRange(50, 5), 0);
+    ASSERT_EQ(smap->testRange(60, 1), 1);
+}
+
+
+TEST(SpaceMapTest, TestMarginsSTDMap)
+{
+    STDMapSpaceMapPtr smap = std::make_shared<STDMapSpaceMap>(0, 100);
+    ASSERT_EQ(smap->newSmap(), 0);
+
+    range ranges[] = {{.start = 0,
+                       .end = 100}};
+    ASSERT_TRUE(check_nodes(smap->map, ranges, 1));
+    ASSERT_TRUE(smap->markRange(50, 10));
+
+    range ranges1[] = {{.start = 0,
+                        .end = 50},
+                       {.start = 60,
+                        .end = 100}};
+    ASSERT_TRUE(check_nodes(smap->map, ranges1, 2));
+
+    ASSERT_EQ(smap->testRange(50, 1), 0);
+    ASSERT_EQ(smap->testRange(60, 1), 1);
+}
+
 
 } // namespace DB::PS::V3::tests

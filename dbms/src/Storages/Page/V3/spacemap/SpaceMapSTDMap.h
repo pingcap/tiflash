@@ -35,15 +35,9 @@ protected:
         return 0;
     }
 
-    void clearSmap() override
-    {
-        map.clear();
-        map.insert({start, end});
-    }
-
     void freeSmap() override
     {
-        clearSmap();
+        // no need clear
     }
 
     int copySmap([[maybe_unused]] SpaceMap * dest) override
@@ -146,7 +140,11 @@ protected:
     {
         auto it = map.find(block);
 
-        // already unmarked
+        /**
+         * already unmarked.
+         * The `block` won't be mid of free range.
+         * Because we alloc space from left to right.
+         */
         if (it != map.end())
         {
             return 0;
@@ -156,22 +154,21 @@ protected:
         std::tie(it, meanless) = map.insert({block, num});
 
         auto it_prev = it;
-        it_prev--;
 
-        if (it == map.begin())
+        if (it != map.begin())
         {
-            goto only_do_right;
+            it_prev--;
+
+            // Prev range can merge
+            if (it_prev->first + it_prev->second >= it->first)
+            {
+                map[it_prev->first] = it->first + it->second - it_prev->first;
+                map.erase(it);
+                it = it_prev;
+            }
         }
 
-        // Prev range can merge
-        if (it_prev->first + it_prev->second >= it->first)
-        {
-            map[it_prev->first] = it->first + it->second - it_prev->first;
-            map.erase(it);
-            it = it_prev;
-        }
-
-    only_do_right:
+        // Check right
         if (it == map.end())
         {
             return 0;

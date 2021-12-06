@@ -222,21 +222,6 @@ void RBTreeSpaceMap::freeSmap()
     free(rb_tree);
 }
 
-void RBTreeSpaceMap::clearSmap()
-{
-    if (rb_tree == nullptr)
-    {
-        LOG_ERROR(log, "SpaceMap have not been inited.");
-        return;
-    }
-
-    rb_free_tree(&rb_tree->root);
-    rb_tree->read_index = NULL;
-    rb_tree->read_index_next = NULL;
-    rb_tree->write_index = NULL;
-    rb_tree_debug(&rb_tree->root, __func__);
-}
-
 void RBTreeSpaceMap::smapStats()
 {
     struct rb_node * node = NULL;

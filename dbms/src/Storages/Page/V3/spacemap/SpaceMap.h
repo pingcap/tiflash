@@ -72,9 +72,7 @@ protected:
     /* Generic space map operators */
     virtual int newSmap() = 0;
 
-    /* The difference between clear and free is that after you clear, you can still use this spacemap. */
-    virtual void clearSmap() = 0;
-
+    /* Free the space map if necessary */
     virtual void freeSmap() = 0;
 
     virtual int copySmap(SpaceMap * dest) = 0;

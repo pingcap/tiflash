@@ -393,16 +393,19 @@ struct rb_node * rb_tree_next(struct rb_node * current)
         return NULL;
     }
 
-    // If tree looks like:
-    //        A
-    //      /   \
-    //     B     C
-    //    / \   /
-    //   D   E F    ...
-    //      /   \
-    //     G     H
-    // Then the node is `B` , it should return `G`
-    // Because `G` will bigger than `B` but small than `E`
+    /**
+     *  If tree looks like:
+     *        A
+     *      /   \
+     *     B     C
+     *    / \   /
+     *   D   E F    ...
+     *      /   \
+     *     G     H
+     *
+     * Then the node is `B` , it should return `G`
+     * Because `G` will bigger than `B` but small than `E`
+     */
     if (current->node_right)
     {
         current = current->node_right;
@@ -414,10 +417,13 @@ struct rb_node * rb_tree_next(struct rb_node * current)
         return current;
     }
 
-    // In this situation, there are left-node exist.
-    // And all of left node is smaller than `current` node
-    // So the `next` node must in parent node,Then we need go up into the parent node.
-    // If `current` node is the right-node child of its parent, Then it still need go up for upper layer.
+    /**
+     * In this situation, there are left-node exist.
+     * And all of left node is smaller than `current` node
+     * So the `next` node must in parent node,Then we need go up into the parent node.
+     * If `current` node is the right-node child of its parent, Then it still need go up for upper layer.
+     * 
+     */
     while ((parent = node_parent(current)) && current == parent->node_right)
     {
         current = parent;
@@ -436,17 +442,19 @@ struct rb_node * rb_tree_prev(struct rb_node * current)
         return NULL;
     }
 
-    // Same as `rb_tree_next`
-    // If tree looks like:
-    //        A
-    //      /   \
-    //     B     C
-    //      \   / \
-    // ...   D E   F
-    //     /     \
-    //    G       H
-    // Then the node is `C` , it should return `H`
-    // Because `H` smaller than `C` but small than `E`
+    /**
+     * Same as `rb_tree_next`
+     * If tree looks like:
+     *        A
+     *      /   \
+     *     B     C
+     *      \   / \
+     * ...   D E   F
+     *     /     \
+     *    G       H
+     * Then the node is `C` , it should return `H`
+     * Because `H` smaller than `C` but small than `E`
+     */
     if (current->node_left)
     {
         current = current->node_left;
@@ -457,11 +465,13 @@ struct rb_node * rb_tree_prev(struct rb_node * current)
         return current;
     }
 
-    // Same as `rb_tree_next`
-    // In this situation, there are left-node exist.
-    // And all of left node is bigger than `current` node
-    // So the `prev` node must in parent node,Then we need go up into the parent node.
-    // If `current` node is the left-node child of its parent, Then it still need go up for upper layer.
+    /** 
+     * Same as `rb_tree_next`
+     * In this situation, there are left-node exist.
+     * And all of left node is bigger than `current` node
+     * So the `prev` node must in parent node,Then we need go up into the parent node.
+     * If `current` node is the left-node child of its parent, Then it still need go up for upper layer.
+     */
     while ((parent = node_parent(current)) && current == parent->node_left)
     {
         current = parent;
@@ -494,8 +504,10 @@ void rb_tree_update_node(struct rb_node * old_node, struct rb_node * new_node, s
     }
     else
     {
-        // No find parent, tree is empty
-        // Just update the root
+        /**
+         * No find parent, tree is empty
+         * Just update the root
+         */
         root->rb_node = new_node;
     }
 
