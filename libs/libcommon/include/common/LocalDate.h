@@ -4,8 +4,6 @@
 #include <fmt/format.h>
 
 #include <exception>
-
-
 /** Stores a calendar date in broken-down form (year, month, day-in-month).
   * Could be initialized from date in text form, like '2011-01-01' or from time_t with rounding to date.
   * Also could be initialized from date in text form like '20110101... (only first 8 symbols are used).
