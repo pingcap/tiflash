@@ -1,13 +1,9 @@
 #pragma once
 
 #include <common/DateLUT.h>
-#include <string.h>
+#include <fmt/format.h>
 
 #include <exception>
-#include <sstream>
-#include <string>
-
-#include "Common/FmtUtils.h"
 
 
 /** Stores a calendar date in broken-down form (year, month, day-in-month).
@@ -152,13 +148,10 @@ public:
     /// NOTE Inefficient.
     std::string toString(char separator = '-') const
     {
-        DB::FmtBuffer fmt_buf;
         if (separator)
-            fmt_buf.fmtAppend("{}{}{}{}{}{}{}", year(), separator, month() / 10, month() % 10, separator, day() / 10, day() % 10);
-
+            fmt::format("{}{}{}{}{}{}{}", year(), separator, month() / 10, month() % 10, separator, day() / 10, day() % 10);
         else
-            fmt_buf.fmtAppend("{}{}{}{}{}", year(), month() / 10, month() % 10, day() / 10, day() % 10);
-        return fmt_buf.toString();
+            return fmt::format("{}{}{}{}{}", year(), month() / 10, month() % 10, day() / 10, day() % 10);
     }
 };
 

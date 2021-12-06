@@ -1,5 +1,5 @@
-#include <Common/FmtUtils.h>
 #include <common/StringRef.h>
+#include <fmt/core.h>
 #include <gtest/gtest.h>
 
 #include <random>
@@ -129,9 +129,7 @@ using Parm = std::pair<bool, bool>;
 
 std::string parmToName(const ::testing::TestParamInfo<Parm> & info)
 {
-    DB::FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("avx_{}_avx512_{}", info.param.first, info.param.second);
-    return fmt_buf.toString();
+    return fmt::format("avx_{}_avx512_{}", info.param.first, info.param.second);
 }
 
 INSTANTIATE_TEST_CASE_P(Parm, MemUtilsTest, testing::Values(MAKE_PAIR(false, false), MAKE_PAIR(false, true), MAKE_PAIR(true, false), MAKE_PAIR(true, true)), parmToName);
