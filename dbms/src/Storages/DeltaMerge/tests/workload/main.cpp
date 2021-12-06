@@ -4,6 +4,7 @@
 #include <Storages/DeltaMerge/tests/workload/Utils.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include <fstream>
 #include <random>
