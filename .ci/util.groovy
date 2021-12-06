@@ -142,7 +142,8 @@ def runTest(label, testPath, tidbBranch) {
                             sh "pwd"
                             sh "TAG=${params.ghprbActualCommit} BRANCH=${tidbBranch} bash -xe ./run.sh"
                         } catch (e) {
-                            archiveArtifacts(artifacts: "log/**/*.log", allowEmptyArchive: true)
+                            sh "mv log ${label}-log"
+                            archiveArtifacts(artifacts: "${label}-log/**/*.log", allowEmptyArchive: true)
                             sh "find log -name '*.log' | xargs tail -n 500"
                             sh "docker ps -a"
                             throw e
@@ -176,9 +177,23 @@ def runUTCoverTICS(CURWS, NPROC) {
                 timeout(time: 5, unit: 'MINUTES') {
                     container("builder") {
                         sh "NPROC=${NPROC} /build/tics/release-centos7/build/upload-ut-coverage.sh"
-                        sh "cp /tmp/tiflash_gcovr_coverage.xml ./"
+                        sh """
+                        cp /tmp/tiflash_gcovr_coverage.xml ./
+                        cp /tmp/tiflash_gcovr_coverage.res ./
+                        chown -R 1000:1000 tiflash_gcovr_coverage.xml tiflash_gcovr_coverage.res
+                        """
+                        ut_coverage_result = sh(script: "cat tiflash_gcovr_coverage.res", returnStdout: true).trim()
+                        sh """
+                        rm -f comment-pr
+                        curl -O http://fileserver.pingcap.net/download/comment-pr
+                        chmod +x comment-pr
+                        set +x
+                        ./comment-pr --token=$TOKEN --owner=pingcap --repo=tics --number=${ghprbPullId} --comment="Coverage detail: ${CI_COVERAGE_BASE_URL}/${BUILD_NUMBER}/cobertura/  \n(Coverage detail url is limited office network access)   \n\n ${ut_coverage_result}"
+                        set -x
+                        """
                     }
                 }
+
                 cobertura autoUpdateHealth: false, autoUpdateStability: false, 
                     coberturaReportFile: "tiflash_gcovr_coverage.xml", 
                     lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 

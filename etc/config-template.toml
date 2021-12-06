@@ -1,16 +1,13 @@
-# display_name = "TiFlash"
-
 ## The listening host for supporting services such as TPC/HTTP. It is recommended to configure it as "0.0.0.0", which means to listen on all IP addresses of this machine.
 # listen_host = "0.0.0.0"
-## The cache size limit of the metadata of a data block. Generally, you do not need to change this value.
-# mark_cache_size = 5368709120
-## The cache size limit of the min-max index of a data block. Generally, you do not need to change this value.
-# minmax_index_cache_size = 5368709120
 ## The TiFlash TCP service port.
 # tcp_port = 9000
 ## The TiFlash HTTP service port.
 # http_port = 8123
-
+## The cache size limit of the metadata of a data block. Generally, you do not need to change this value.
+# mark_cache_size = 5368709120
+## The cache size limit of the min-max index of a data block. Generally, you do not need to change this value.
+# minmax_index_cache_size = 5368709120
 ## The path in which the TiFlash temporary files are stored. By default it is the first directory in storage.latest.dir appended with "/tmp".
 # tmp_path = "/tidb-data/tiflash-9000/tmp"
 
@@ -34,6 +31,7 @@
 # dir = [ "/tidb-data/tiflash-9000" ]
 ## or
 # dir = [ "/ssd0/tidb-data/tiflash", "/ssd1/tidb-data/tiflash" ]
+
 ## The maximum storage capacity of each directory in storage.main.dir.
 ## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
 ## Note that human-readable numbers such as "10GB" are not supported yet.
@@ -48,15 +46,9 @@
 ## metrics than those in storage.main.dir.
 ## If it is not set (by default), the values of storage.main.dir are used.
 # dir = [ ]
+
 ## The maximum storage capacity of each directory in storage.latest.dir.
 ## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
-# capacity = [ 10737418240, 10737418240 ]
-## The maximum storage capacity of each directory in storage.main.dir.
-## If it is not set, or is set to multiple 0, the actual disk (the disk where the directory is located) capacity is used.
-## Note that human-readable numbers such as "10GB" are not supported yet.
-## Numbers are specified in bytes.
-## The size of the capacity list should be the same with the dir size.
-## For example:
 # capacity = [ 10737418240, 10737418240 ]
 
 [storage.raft]
@@ -90,45 +82,50 @@
 [flash]
 # tidb_status_addr = "tidb0:10080"
 # service_addr = "0.0.0.0:3930"
-# compact_log_min_period = "120"
-# compact_log_min_rows = "40960"
-# compact_log_min_bytes = "33554432"
-# replica_read_max_thread = "1"
-# batch_read_index_timeout_ms = "10000"
-# wait_index_timeout_ms = "300000"
-# wait_region_ready_timeout_sec = "1200"
+# compact_log_min_period = 120
+# overlap_threshold = 0.6
+# compact_log_min_rows = 40960
+# compact_log_min_bytes = 33554432
+# replica_read_max_thread = 1
+# batch_read_index_timeout_ms = 10000
+# wait_index_timeout_ms = 300000
+# wait_region_ready_timeout_sec = 1200
 [flash.flash_cluster]
-# update_rule_interval = 5
+# update_rule_interval = 10
+# master_ttl = 60
+# cluster_manager_path = "./flash_cluster_manager"
+# log = "[tmp_path]/flash_cluster_manager.log"
 [flash.proxy]
 # addr = "0.0.0.0:20170"
 # advertise-addr = "tiflash0:20170"
 # data-dir = "/data"
 # config = "/proxy.toml"
 # log-file = "/log/proxy.log"
+# log-level = "info"
+# status-addr = "0.0.0.0:20292"
+# advertise-status-addr = "tiflash0:20292"
 # engine-addr = "tiflash0:3930"
-# status-addr = "0.0.0.0:20181"
-# advertise-status-addr = "tiflash0:20181"
 
 [logger]
-# count = 10
-# errorlog = "/tmp/tiflash/log/error.log"
-# size = "1000M"
 # log = "/tmp/tiflash/log/server.log"
-# level = "trace"
-
-[application]
-# runAsDaemon = true
+# level = "debug"
+# errorlog = "/tmp/tiflash/log/error.log"
+# size = "100M"
+# count = 10
 
 [raft]
 # pd_addr = "pd0:2379"
-# ignore_databases = "system,default"
-# specify which storage engine we use. tmt or dt 
+# specify which storage engine we use. tmt or dt TODO: Remove deprecated tmt engine
 # storage_engine = "dt"
-
 [raft.snapshot]
 # The way to apply snapshot data
-# The value is one of "block" / "file1" / "file2".
+# The value is one of "block" / "file1"
 # method = "file1"
+
+[status]
+# The port through which Prometheus pulls metrics information.
+# metrics_port = 8234
+# metrics_interval = 15
 
 [profiles]
 [profiles.default]
@@ -147,8 +144,8 @@
 # cop_pool_size = 0
 ## New in v5.0. This item specifies the maximum number of batch requests that TiFlash Coprocessor executes at the same time. If the number of requests exceeds the specified value, the exceeded requests will queue. If the configuration value is set to 0 or not set, the default value is used, which is twice the number of physical cores.
 # batch_cop_pool_size = 0
-## Security settings take effect starting from v4.0.5.
 
+## Security settings take effect starting from v4.0.5.
 [security]
 ## Path of the file that contains a list of trusted SSL CAs. If set, the following settings
 ## cert_path and key_path are also needed.

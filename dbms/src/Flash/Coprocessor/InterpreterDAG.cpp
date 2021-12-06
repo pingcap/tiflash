@@ -12,21 +12,11 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <pingcap/coprocessor/Client.h>
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int UNKNOWN_TABLE;
-extern const int TOO_MANY_COLUMNS;
-extern const int SCHEMA_VERSION_ERROR;
-extern const int UNKNOWN_EXCEPTION;
-extern const int COP_BAD_DAG_REQUEST;
-} // namespace ErrorCodes
-
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const LogWithPrefixPtr & log_)
     : context(context_)
     , dag(dag_)
@@ -35,7 +25,7 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, 
     , log(log_)
 {
     const Settings & settings = context.getSettingsRef();
-    if (dag.isBatchCop())
+    if (dag.isBatchCopOrMpp())
         max_streams = settings.max_threads;
     else
         max_streams = 1;
@@ -60,7 +50,8 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         context,
         input_streams_vec,
         query_block,
-        keep_session_timezone_info,
+        max_streams,
+        keep_session_timezone_info || !query_block.isRootQueryBlock(),
         dag,
         subqueries_for_sets,
         mpp_exchange_receiver_maps,
@@ -77,7 +68,9 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
+            std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
+                                                  context.getTMTContext().getMPPTaskManager(),
+                                                  context.getSettings().enable_local_tunnel),
             dag_query_block.source->exchange_receiver(),
             dag.getDAGContext().getMPPTaskMeta(),
             max_streams,

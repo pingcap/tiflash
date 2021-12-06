@@ -268,11 +268,11 @@ struct NameSum
 {
     static constexpr auto name = "sum";
 };
+
 struct NameCountSecondStage
 {
     static constexpr auto name = "countSecondStage";
 };
-extern const String CountSecondStage;
 
 /// Counts the sum of the numbers.
 template <typename T, typename TResult, typename Data, typename Name = NameSum>

@@ -1,12 +1,13 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Databases/IDatabase.h>
+#include <Interpreters/Context.h>
 #include <Parsers/queryToString.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/StorageMergeTree.h>
+#include <Storages/ColumnDefault.h>
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/VirtualColumnUtils.h>
 
@@ -18,7 +19,8 @@ namespace ErrorCodes
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
-StorageSystemColumns::StorageSystemColumns(const std::string & name_) : name(name_)
+StorageSystemColumns::StorageSystemColumns(const std::string & name_)
+    : name(name_)
 {
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
@@ -35,11 +37,11 @@ StorageSystemColumns::StorageSystemColumns(const std::string & name_) : name(nam
 
 
 BlockInputStreams StorageSystemColumns::read(const Names & column_names,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+                                             const SelectQueryInfo & query_info,
+                                             const Context & context,
+                                             QueryProcessingStage::Enum & processed_stage,
+                                             const size_t /*max_block_size*/,
+                                             const unsigned /*num_streams*/)
 {
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
@@ -79,7 +81,9 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
             {
                 const String & table_name = iterator->name();
                 storages.emplace(
-                    std::piecewise_construct, std::forward_as_tuple(database_name, table_name), std::forward_as_tuple(iterator->table()));
+                    std::piecewise_construct,
+                    std::forward_as_tuple(database_name, table_name),
+                    std::forward_as_tuple(iterator->table()));
                 table_column_mut->insert(table_name);
                 offsets[i] += 1;
             }
@@ -114,7 +118,6 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
 
         NamesAndTypesList columns;
         ColumnDefaults column_defaults;
-        MergeTreeData::ColumnSizeByName column_sizes;
 
         {
             StoragePtr storage = storages.at(std::make_pair(database_name, table_name));
@@ -139,14 +142,6 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
 
             columns = storage->getColumns().getAll();
             column_defaults = storage->getColumns().defaults;
-
-            /** Info about sizes of columns for tables of MergeTree family.
-              * NOTE: It is possible to add getter for this info to IStorage interface.
-              */
-            if (auto storage_concrete = dynamic_cast<StorageMergeTree *>(storage.get()))
-            {
-                column_sizes = storage_concrete->getData().getColumnSizes();
-            }
         }
 
         for (const auto & column : columns)
@@ -173,19 +168,9 @@ BlockInputStreams StorageSystemColumns::read(const Names & column_names,
             }
 
             {
-                const auto it = column_sizes.find(column.name);
-                if (it == std::end(column_sizes))
-                {
-                    res_columns[i++]->insertDefault();
-                    res_columns[i++]->insertDefault();
-                    res_columns[i++]->insertDefault();
-                }
-                else
-                {
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.data_compressed));
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.data_uncompressed));
-                    res_columns[i++]->insert(static_cast<UInt64>(it->second.marks));
-                }
+                res_columns[i++]->insertDefault();
+                res_columns[i++]->insertDefault();
+                res_columns[i++]->insertDefault();
             }
         }
     }
