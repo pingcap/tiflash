@@ -26,7 +26,9 @@ std::string WorkloadOptions::toString() const
         fmt::format("random_kill {}\n", random_kill) + //
         fmt::format("max_sleep_sec {}\n", max_sleep_sec) + //
         fmt::format("work_dirs {}\n", work_dirs) + //
-        fmt::format("config_file {}\n", config_file);
+        fmt::format("config_file {}\n", config_file) + //
+        fmt::format("read_thread_count {}\n", read_thread_count) + //
+        fmt::format("read_stream_count {}\n", read_stream_count);
 }
 
 std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv[])
@@ -57,9 +59,11 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("random_kill", value<uint64_t>()->default_value(0), "") //
         ("max_sleep_sec", value<uint64_t>()->default_value(600), "") //
         //
-        // std::vector<std::string>{"tmp1", "tmp2", "tmp3"}
         ("work_dirs", value<std::vector<std::string>>()->multitoken()->default_value(std::vector<std::string>{"tmp1", "tmp2", "tmp3"}, "tmp1 tmp2 tmp3"), "dir1 dir2 dir3...") //
         ("config_file", value<std::string>()->default_value(""), "Configuation file of DeltaTree") //
+        //
+        ("read_thread_count", value<uint64_t>()->default_value(1), "") //
+        ("read_stream_count", value<uint64_t>()->default_value(4), "") //
         ;
 
     boost::program_options::variables_map vm;
@@ -111,6 +115,9 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     {
         log_file = fmt::format("{}/dt_workload_{}.log", work_dirs[0], localTime());
     }
+
+    read_thread_count = vm["read_thread_count"].as<uint64_t>();
+    read_stream_count = vm["read_stream_count"].as<uint64_t>();
 
     return {true, toString()};
 }

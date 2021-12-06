@@ -13,6 +13,7 @@
 #include <Storages/DeltaMerge/tests/workload/ReadColumnsGenerator.h>
 #include <Storages/DeltaMerge/tests/workload/TableGenerator.h>
 #include <Storages/DeltaMerge/tests/workload/TimestampGenerator.h>
+#include <Storages/DeltaMerge/tests/workload/Utils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <cpptoml.h>
 namespace DB::DM::tests
@@ -173,20 +174,24 @@ void DTWorkload::verifyHandle(uint64_t r)
     int stream_count = read_cols_gen->streamCount();
 
     std::atomic<uint64_t> read_count = 0;
-    auto verify = [r, &read_count, &columns, &handle_table = handle_table](BlockInputStreamPtr in) {
+    auto verify = [r, &read_count, &columns, &handle_table = handle_table, &log = log](BlockInputStreamPtr in) {
         while (Block block = in->read())
         {
             read_count.fetch_add(block.rows(), std::memory_order_relaxed);
             auto & cols = block.getColumnsWithTypeAndName();
             if (cols.size() != 2)
             {
-                throw std::out_of_range(fmt::format("loadHandle: block has {} columns, but 2 is required.", cols.size()));
+                auto s = fmt::format("loadHandle: block has {} columns, but 2 is required.", cols.size());
+                LOG_ERROR(log, s);
+                throw std::logic_error(s);
             }
             auto & handle_col = cols[0].column;
             auto & ts_col = cols[1].column;
             if (handle_col->size() != ts_col->size())
             {
-                throw std::out_of_range(fmt::format("loadHandle: handle_col size {} ts_col size {}, they should be equal.", handle_col->size(), ts_col->size()));
+                auto s = fmt::format("loadHandle: handle_col size {} ts_col size {}, they should be equal.", handle_col->size(), ts_col->size());
+                LOG_ERROR(log, s);
+                throw std::logic_error(s);
             }
             for (size_t i = 0; i < handle_col->size(); i++)
             {
@@ -197,7 +202,9 @@ void DTWorkload::verifyHandle(uint64_t r)
                 auto table_ts = handle_table->read(h);
                 if (store_ts != table_ts)
                 {
-                    throw std::logic_error(fmt::format("round {} handle {} ts in store {} ts in table {}", r, h, store_ts, table_ts));
+                    auto s = fmt::format("round {} handle {} ts in store {} ts in table {}", r, h, store_ts, table_ts);
+                    LOG_ERROR(log, s);
+                    throw std::logic_error(s);
                 }
             }
         }
@@ -210,19 +217,20 @@ void DTWorkload::verifyHandle(uint64_t r)
     auto handle_count = handle_table->count();
     if (read_count.load(std::memory_order_relaxed) != handle_count)
     {
-        throw std::logic_error(fmt::format("Handle count from store {} handle count from table {}", read_count, handle_count));
+        auto s = fmt::format("Handle count from store {} handle count from table {}", read_count, handle_count);
+        LOG_ERROR(log, s);
+        throw std::logic_error(s);
     }
     stat.verify_count = handle_count;
     LOG_INFO(log, fmt::format("verifyHandle: round {} columns {} streams {} read_count {} read_sec {} handle_count {}", r, columns.size(), stream_count, read_count.load(std::memory_order_relaxed), stat.verify_sec, handle_count));
 }
 
-void DTWorkload::randomRead()
+void DTWorkload::scanAll(uint64_t i)
 {
-    auto read_cols_gen = ReadColumnsGenerator::create(*table_info);
     while (writing_threads.load(std::memory_order_relaxed) > 0)
     {
         auto & columns = store->getTableColumns();
-        int stream_count = read_cols_gen->streamCount();
+        int stream_count = opts->read_stream_count;
 
         std::atomic<uint64_t> read_count = 0;
         auto countRow = [&read_count](BlockInputStreamPtr in) {
@@ -235,10 +243,10 @@ void DTWorkload::randomRead()
         read(columns, stream_count, countRow);
         double read_sec = sw.elapsedSeconds();
 
-        stat.total_read_sec += read_sec;
-        stat.total_read_count += read_count.load(std::memory_order_relaxed);
+        stat.total_read_usec.fetch_add(read_sec * 1000000, std::memory_order_relaxed);
+        stat.total_read_count.fetch_add(read_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
 
-        LOG_INFO(log, fmt::format("randomRead: columns {} streams {} read_count {} read_sec {} handle_count {}", columns.size(), stream_count, read_count.load(std::memory_order_relaxed), read_sec, handle_table->count()));
+        LOG_INFO(log, fmt::format("scanAll[{}]: columns {} streams {} read_count {} read_sec {} handle_count {}", i, columns.size(), stream_count, read_count.load(std::memory_order_relaxed), read_sec, handle_table->count()));
     }
 }
 
@@ -251,8 +259,18 @@ void DTWorkload::run(uint64_t r)
     {
         write_threads.push_back(std::thread(&DTWorkload::write, this, std::ref(stat.write_stats[i])));
     }
-    randomRead();
+
+    std::vector<std::thread> read_threads;
+    for (uint64_t i = 0; i < opts->read_thread_count; i++)
+    {
+        read_threads.push_back(std::thread(&DTWorkload::scanAll, this, i));
+    }
+
     for (auto & t : write_threads)
+    {
+        t.join();
+    }
+    for (auto & t : read_threads)
     {
         t.join();
     }
@@ -260,5 +278,19 @@ void DTWorkload::run(uint64_t r)
     {
         verifyHandle(r);
     }
+}
+
+std::vector<std::string> DTWorkload::Statistics::toStrings(uint64_t i) const
+{
+    std::vector<std::string> v;
+    v.push_back(fmt::format("[{}]{}", i, localTime()));
+    v.push_back(fmt::format("init_store_sec {}", init_store_sec));
+    v.push_back(fmt::format("total_read_count {} total_read_sec {}", total_read_count, total_read_usec / 1000000.0));
+    for (size_t k = 0; k < write_stats.size(); k++)
+    {
+        v.push_back(fmt::format("Thread[{}] {}", k, write_stats[k].toString()));
+    }
+    v.push_back(fmt::format("verify_count {} verify_sec {}", verify_count, verify_sec));
+    return v;
 }
 } // namespace DB::DM::tests

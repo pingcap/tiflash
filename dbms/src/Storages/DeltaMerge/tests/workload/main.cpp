@@ -2,6 +2,7 @@
 #include <Storages/DeltaMerge/tests/workload/Handle.h>
 #include <Storages/DeltaMerge/tests/workload/Options.h>
 #include <Storages/DeltaMerge/tests/workload/Utils.h>
+#include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <fstream>
@@ -27,16 +28,24 @@ void shutdown()
     TiFlashTestEnv::shutdown();
 }
 
-void print(uint64_t i, const DTWorkload::Statistics & stat)
+void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
 {
-    std::cerr << fmt::format("[{}]{}\n", i, localTime());
-    std::cerr << fmt::format("init_store_sec {}\n", stat.init_store_sec);
-    std::cerr << fmt::format("total_read_count {} total_read_sec {}\n", stat.total_read_count, stat.total_read_sec);
-    for (size_t k = 0; k < stat.write_stats.size(); k++)
+    for (const auto & dir : data_dirs)
     {
-        std::cerr << fmt::format("Thread[{}] {}\n", k, stat.write_stats[k].toString());
+        auto cmd = fmt::format("rm -rf {}", dir);
+        LOG_ERROR(log, cmd);
+        system(cmd.c_str());
     }
-    std::cerr << fmt::format("verify_count {} verify_sec {}\n", stat.verify_count, stat.verify_sec);
+}
+
+void print(Poco::Logger * log, uint64_t i, const DTWorkload::Statistics & stat)
+{
+    auto v = stat.toStrings(i);
+    for (const auto & s : v)
+    {
+        std::cerr << s << std::endl;
+        LOG_INFO(log, s);
+    }
 }
 
 std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
@@ -46,9 +55,11 @@ std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
 
 void run(WorkloadOptions & opts)
 {
+    init(opts);
+    auto * log = &Poco::Logger::get("DTWorkload_main");
+    auto data_dirs = DB::tests::TiFlashTestEnv::getGlobalContext().getPathPool().listPaths();
     try
     {
-        init(opts);
         // HandleTable is a unordered_map that stores handle->timestamp for data verified.
         auto handle_table = createHandleTable(opts);
         // In this for loop, destory DeltaMergeStore gracefully and recreate it.
@@ -56,23 +67,23 @@ void run(WorkloadOptions & opts)
         {
             DTWorkload workload(opts, handle_table);
             workload.run(i);
-            auto stat = workload.getStat();
-            print(i, stat);
+            auto & stat = workload.getStat();
+            print(log, i, stat);
         }
         shutdown();
+        removeData(log, data_dirs);
     }
     catch (const DB::Exception & e)
     {
-        std::cerr << localTime() << e.message() << std::endl;
+        LOG_ERROR(log, e.message());
     }
     catch (const std::exception & e)
     {
-        std::cerr << localTime() << " " << e.what() << std::endl;
+        LOG_ERROR(log, e.what());
     }
     catch (...)
     {
-        std::cerr << localTime() << " "
-                  << "Unknow Exception" << std::endl;
+        LOG_ERROR(log, "Unknow Exception");
     }
 }
 

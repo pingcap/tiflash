@@ -54,14 +54,16 @@ public:
     {
         double init_store_sec = 0.0;
         std::vector<ThreadWriteStat> write_stats;
-        uint64_t total_read_count = 0;
-        double total_read_sec = 0.0;
+        std::atomic<uint64_t> total_read_count = 0;
+        std::atomic<uint64_t> total_read_usec = 0;
 
         double verify_sec = 0.0;
         uint64_t verify_count = 0;
+
+        std::vector<std::string> toStrings(uint64_t i) const;
     };
 
-    Statistics getStat() const
+    const Statistics & getStat() const
     {
         return stat;
     }
@@ -69,7 +71,7 @@ public:
 private:
     void write(ThreadWriteStat & write_stat);
     void verifyHandle(uint64_t r);
-    void randomRead();
+    void scanAll(uint64_t i);
     template <typename T>
     void read(const ColumnDefines & columns, int stream_count, T func);
 

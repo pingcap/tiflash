@@ -32,6 +32,9 @@ struct WorkloadOptions
     std::vector<std::string> work_dirs;
     std::string config_file;
 
+    uint64_t read_thread_count;
+    uint64_t read_stream_count;
+
     std::string toString() const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
     void initFailpoints() const;

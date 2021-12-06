@@ -8,7 +8,7 @@ std::string localTime()
     time_t t = ::time(nullptr);
     std::stringstream ss;
     struct tm local_tm;
-    ss << std::put_time(localtime_r(&t, &local_tm), "%Y-%m-%d@%X");
+    ss << std::put_time(localtime_r(&t, &local_tm), "%Y%m%d_%X");
     return ss.str();
 }
 
