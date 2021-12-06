@@ -1,3 +1,4 @@
+#include <Common/TargetSpecific.h>
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -137,14 +138,52 @@ void UnifiedLogPatternFormatter::writeEscapedString(DB::WriteBuffer & wb, const 
     }
 }
 
+namespace
+{
+TIFLASH_DECLARE_MULTITARGET_FUNCTION(
+    /* return type */ bool,
+    /* name */ needJsonEncodeScan,
+    /* argument names */ (data, length),
+    /* argument list */ (const char * __restrict data, size_t length),
+    /* body */ {
+        while (length >= WORD_SIZE)
+        {
+            auto chk1 = SimdWord::fromSingle(0x20);
+            auto chk2 = SimdWord::fromSingle(0x22);
+            auto chk3 = SimdWord::fromSingle(0x3D);
+            auto chk4 = SimdWord::fromSingle(0x58);
+            auto chk5 = SimdWord::fromSingle(0x5D);
+            auto word = SimdWord::fromUnaligned(data);
+            chk1.as_uint8 = word.as_uint8 <= chk1.as_uint8;
+            chk2.as_uint8 = word.as_uint8 == chk2.as_uint8;
+            chk3.as_uint8 = word.as_uint8 == chk3.as_uint8;
+            chk4.as_uint8 = word.as_uint8 == chk4.as_uint8;
+            chk5.as_uint8 = word.as_uint8 == chk5.as_uint8;
+            auto res = SimdWord{};
+            res.as_uint8 = chk1.as_uint8 | chk2.as_uint8 | chk3.as_uint8 | chk4.as_uint8 | chk5.as_uint8;
+            if (!res.isByteAllCleared())
+            {
+                return true;
+            }
+            length -= WORD_SIZE;
+            data += WORD_SIZE;
+        }
+
+        while (length != 0)
+        {
+            auto byte = *data;
+            if (byte <= 0x20 || byte == 0x22 || byte == 0x3D || byte == 0x5B || byte == 0x5D)
+                return true;
+            length--;
+            data++;
+        }
+        return false;
+    })
+}
+
 bool UnifiedLogPatternFormatter::needJsonEncode(const std::string & src)
 {
-    for (const uint8_t byte : src)
-    {
-        if (byte <= 0x20 || byte == 0x22 || byte == 0x3D || byte == 0x5B || byte == 0x5D)
-            return true;
-    }
-    return false;
+    return needJsonEncodeScan(src.data(), src.length());
 }
 
 /// Copied from `IO/WriteHelpers.h`, without escaping `/`

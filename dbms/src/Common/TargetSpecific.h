@@ -362,6 +362,11 @@ struct SimdImpl<AVX512::WORD_SIZE>
         return _mm512_movepi8_mask(val) == 0xFFFF'FFFF'FFFF'FFFFu;
     }
 
+    __attribute__((always_inline, target("avx512bw"))) static bool isByteAllCleared(InternalType val)
+    {
+        return _mm512_movepi8_mask(val) == 0;
+    }
+
     __attribute__((always_inline, target("avx512f"))) static InternalType fromAligned(const void * val)
     {
         return _mm512_load_si512(reinterpret_cast<ConstAddressType>(val));
@@ -393,6 +398,11 @@ struct SimdImpl<AVX::WORD_SIZE>
     __attribute__((always_inline, target("avx2"))) static bool isByteAllMarked(InternalType val)
     {
         return static_cast<unsigned>(_mm256_movemask_epi8(val)) == 0xFFFF'FFFF; //0xFFFF'FFFF
+    }
+
+    __attribute__((always_inline, target("avx2"))) static bool isByteAllCleared(InternalType val)
+    {
+        return _mm256_movemask_epi8(val) == 0;
     }
 
     __attribute__((always_inline, target("avx2"))) static InternalType fromAligned(const void * val)
@@ -431,6 +441,16 @@ struct SimdImpl<Generic::WORD_SIZE>
 #else
         auto coerced_value = vreinterpretq_u64_u8(val);
         return (coerced_value[0] & coerced_value[1]) == 0xFFFF'FFFF'FFFF'FFFFu;
+#endif
+    }
+
+    __attribute__((always_inline)) static bool isByteAllCleared(InternalType val)
+    {
+#ifdef __x86_64__
+        return _mm_movemask_epi8(val) == 0;
+#else
+        auto coerced_value = vreinterpretq_u64_u8(val);
+        return (coerced_value[0] & coerced_value[1]) == 0;
 #endif
     }
 
@@ -594,6 +614,11 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         [[nodiscard]] __attribute__((always_inline)) bool isByteAllMarked() const
         {
             return Detail::SimdImpl<LENGTH>::isByteAllMarked(as_internal);
+        }
+
+        [[nodiscard]] __attribute__((always_inline)) bool isByteAllCleared() const
+        {
+            return Detail::SimdImpl<LENGTH>::isByteAllCleared(as_internal);
         }
 
         __attribute__((always_inline)) static Word fromAligned(const void * src)
