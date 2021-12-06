@@ -623,6 +623,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({" 123", "12312", "ab", "def    "}),
         executeFunction("rpadUTF8", createColumn<Nullable<String>>({" ", "", "abc", "def"}), createColumn<Nullable<UInt64>>({4, 5, 2, 7}), createColumn<Nullable<String>>({"123", "123", "", " "})));
+
     // Chinese.
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"你 好 ", "杭州 西湖", "¿¿¿¿!!"}),
@@ -637,6 +638,13 @@ try
                         createColumn<Nullable<String>>({" ", "西湖", "!!"}),
                         createColumn<Nullable<UInt64>>({4, 5, 6}),
                         createColumn<Nullable<String>>({"你 好", "杭州 ll", "¿¿¿¿¿¿"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"𝌃𝌃𝌃𝌃 ", "杭州 西湖", "¿¿¿¿!!"}),
+        executeFunction("lpadUTF8",
+                        createColumn<Nullable<String>>({" ", "西湖", "!!"}),
+                        createColumn<Nullable<UInt64>>({5, 5, 6}),
+                        createColumn<Nullable<String>>({"𝌃𝌃𝌃𝌃", "杭州 ll", "¿¿¿¿¿¿"})));
 
     // Length value is zero.
     ASSERT_COLUMN_EQ(

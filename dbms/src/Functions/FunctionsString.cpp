@@ -2764,15 +2764,10 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 3)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", must be 3.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
         if (!removeNullable(arguments[0])->isString())
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1])->isNumber())
+        if (!removeNullable(arguments[1])->isInteger())
             throw Exception("Illegal type " + arguments[1]->getName()
                                 + " of second argument of function "
                                 + getName(),
@@ -2786,12 +2781,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        if (arguments.size() == 3)
-            tidbExecutePadUTF8(block, arguments, result);
-        else
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should beat least 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        tidbExecutePadUTF8(block, arguments, result);
     }
 
 private:
@@ -3396,21 +3386,16 @@ private:
             column_padding_ptr = tmp_block.getByPosition(arguments[2]).column;
         }
 
-        const ColumnVector<IntType> * column_length = nullptr;
-        size_t res_byte_len = 0;
-
         // Compute byte length of result so we can reserve enough memory.
+        // But it's just a hint, because length UTF8 chars vary from 1 to 4.
+        size_t res_byte_len = 0;
+        const ColumnVector<IntType> * column_length = nullptr;
+        IntType target_len = 0;
         if (is_length_const)
         {
             const ColumnConst * tmp_column = checkAndGetColumnConst<ColumnVector<IntType>>(column_length_ptr.get());
-            res_byte_len = tmp_column->getInt(0) * 3 * size + size;
-
-            column_length_ptr = column_length_ptr->convertToFullColumnIfConst();
-            column_length = checkAndGetColumn<ColumnVector<IntType>>(column_length_ptr.get());
-            if (column_length == nullptr)
-            {
-                throw Exception(fmt::format("the second argument type of {} is invalid", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            }
+            target_len = tmp_column->getInt(0);
+            res_byte_len = target_len * size + size;
         }
         else
         {
@@ -3421,80 +3406,185 @@ private:
             }
             for (size_t i = 0; i < size; i++)
             {
+                if (vec_result_null_map[i])
+                {
+                    continue;
+                }
                 int32_t len = static_cast<int32_t>(column_length->getInt(i));
                 if (len <= 0)
                 {
                     len = 0;
                 }
-                res_byte_len += len * 3;
+                res_byte_len += len; 
             }
             res_byte_len += size;
         }
-
-        // Convert padding column.
-        if (is_padding_const)
-        {
-            column_padding_ptr = column_padding_ptr->convertToFullColumnIfConst();
-        }
-        const ColumnString * column_padding = checkAndGetColumn<ColumnString>(column_padding_ptr.get());
-        const ColumnString::Offsets & padding_offsets = column_padding->getOffsets();
-        const ColumnString::Chars_t & padding_data = column_padding->getChars();
 
         auto column_result = ColumnString::create();
         ColumnString::Offsets & result_offsets = column_result->getOffsets();
         ColumnString::Chars_t & result_data = column_result->getChars();
         result_offsets.resize(size);
-        result_data.resize(res_byte_len);
+        result_data.reserve(res_byte_len);
 
-        ColumnString::Offset string_prev_offset = 0;
-        ColumnString::Offset padding_prev_offset = 0;
-        ColumnString::Offset res_prev_offset = 0;
-
-        if (!is_string_const)
-        {
-            const ColumnString * column_string = checkAndGetColumn<ColumnString>(column_string_ptr.get());
-            const ColumnString::Offsets & string_offsets = column_string->getOffsets();
-            const ColumnString::Chars_t & string_data = column_string->getChars();
-
-            for (size_t i = 0; i < size; i++)
-            {
-                if (!vec_result_null_map[i])
-                {
-                    IntType target_len = column_length->getElement(i);
-                    vec_result_null_map[i] = tidbPadOne(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), &padding_data[padding_prev_offset], padding_offsets[i] - padding_prev_offset, &result_data[0], res_prev_offset);
-                }
-
-                string_prev_offset = string_offsets[i];
-                padding_prev_offset = padding_offsets[i];
-                result_offsets[i] = res_prev_offset;
-            }
+        const ColumnString * column_padding = nullptr;
+        const ColumnString::Offsets * padding_offsets = nullptr;
+        const ColumnString::Chars_t * padding_data = nullptr;
+        size_t padding_size = 0;
+        const UInt8 * padding = nullptr;
+        Field padding_res_field;
+        // prepare objects related to padding_str to avoid duplicated code.
+        if (is_padding_const) {
+            const ColumnConst * column_padding = checkAndGetColumnConst<ColumnString>(column_padding_ptr.get());
+            column_padding->get(0, padding_res_field);
+            String padding_str = padding_res_field.get<String>();
+            padding_size = padding_str.size() + 1;
+            padding = reinterpret_cast<const UInt8 *>(padding_str.c_str());
+        } else {
+            column_padding = checkAndGetColumn<ColumnString>(column_padding_ptr.get());
+            padding_offsets = &(column_padding->getOffsets());
+            padding_data = &(column_padding->getChars());
         }
-        else
+
+        if (is_string_const)
         {
             const ColumnConst * column_string = checkAndGetColumnConst<ColumnString>(column_string_ptr.get());
             Field res_field;
             column_string->get(0, res_field);
             String str_val = res_field.get<String>();
 
-            for (size_t i = 0; i < size; i++)
-            {
-                if (!vec_result_null_map[i])
-                {
-                    IntType target_len = column_length->getElement(i);
-                    vec_result_null_map[i] = tidbPadOne(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), &padding_data[padding_prev_offset], padding_offsets[i] - padding_prev_offset, &result_data[0], res_prev_offset);
-                }
+            if (is_padding_const) {
+                const_const(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+            } else {
+                const_column(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+            }
+        }
+        else
+        {
+            const ColumnString * column_string = checkAndGetColumn<ColumnString>(column_string_ptr.get());
+            const ColumnString::Offsets & string_offsets = column_string->getOffsets();
+            const ColumnString::Chars_t & string_data = column_string->getChars();
 
-                padding_prev_offset = padding_offsets[i];
-                result_offsets[i] = res_prev_offset;
+            if (is_padding_const) {
+                column_const(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+            } else {
+                column_column(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
         }
         block.getByPosition(result).column = ColumnNullable::create(std::move(column_result), std::move(result_null_map));
     }
 
+    template<typename IntType>
+    void column_column(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets,
+                       const ColumnVector<IntType> * column_length,
+                       IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, 
+                       ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets) const 
+    {
+        ColumnString::Offset string_prev_offset = 0;
+        ColumnString::Offset padding_prev_offset = 0;
+        ColumnString::Offset res_prev_offset = 0;
+
+        // pad(col_str, length, col_pad)
+        for (size_t i = 0; i < size; i++)
+        {
+            if (!vec_result_null_map[i])
+            {
+                if (column_length != nullptr)
+                {
+                    target_len = column_length->getElement(i);
+                }
+                vec_result_null_map[i] = tidbPadOne(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset,
+                        static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset],
+                        (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
+            }
+
+            string_prev_offset = string_offsets[i];
+            padding_prev_offset = (*padding_offsets)[i];
+            result_offsets[i] = res_prev_offset;
+        }
+    }
+
+    template<typename IntType>
+    void column_const(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets,
+                     const ColumnVector<IntType> * column_length,
+                       IntType target_len, const UInt8 * padding, size_t padding_size,
+                       ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets) const 
+    {
+        ColumnString::Offset string_prev_offset = 0;
+        ColumnString::Offset res_prev_offset = 0;
+
+        // pad(col_str, length, const_pad)
+        for (size_t i = 0; i < size; i++)
+        {
+            if (!vec_result_null_map[i])
+            {
+                if (column_length != nullptr)
+                {
+                    target_len = column_length->getElement(i);
+                }
+                vec_result_null_map[i] = tidbPadOne(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset,
+                        static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
+            }
+
+            string_prev_offset = string_offsets[i];
+            result_offsets[i] = res_prev_offset;
+        }
+    }
+
+    template<typename IntType>
+    void const_column(const String & str_val, const ColumnVector<IntType> * column_length,
+                       IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, 
+                       ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets) const 
+    {
+        ColumnString::Offset padding_prev_offset = 0;
+        ColumnString::Offset res_prev_offset = 0;
+
+        // pad(const_str, length, col_pad)
+        for (size_t i = 0; i < size; i++)
+        {
+            if (!vec_result_null_map[i])
+            {
+                if (column_length != nullptr)
+                {
+                    target_len = column_length->getElement(i);
+                }
+                vec_result_null_map[i] = tidbPadOne(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1,
+                        static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset],
+                        (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
+            }
+
+            padding_prev_offset = (*padding_offsets)[i];
+            result_offsets[i] = res_prev_offset;
+        }
+    }
+
+    template<typename IntType>
+    void const_const(const String & str_val, const ColumnVector<IntType> * column_length,
+                       IntType target_len, const UInt8 * padding, size_t padding_size,
+                       ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets) const 
+    {
+        ColumnString::Offset res_prev_offset = 0;
+
+        // pad(const_str, length, const_pad)
+        for (size_t i = 0; i < size; i++)
+        {
+            if (!vec_result_null_map[i])
+            {
+                if (column_length != nullptr)
+                {
+                    target_len = column_length->getElement(i);
+                }
+                vec_result_null_map[i] = tidbPadOne(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1,
+                        static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
+            }
+
+            result_offsets[i] = res_prev_offset;
+        }
+    }
+
     // Do padding for one row.
     // data_size/padding_size includes the tailing '\0'.
     // Return true if result is null.
-    bool tidbPadOne(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, UInt8 * res, size_t & res_offset) const
+    bool tidbPadOne(const UInt8 * data, size_t data_size, int32_t target_len, const UInt8 * padding, size_t padding_size, ColumnString::Chars_t & res, size_t & res_offset) const
     {
         ColumnString::Offset data_len = UTF8::countCodePoints(data, data_size - 1);
         ColumnString::Offset pad_len = UTF8::countCodePoints(padding, padding_size - 1);
@@ -3516,25 +3606,25 @@ private:
             {
                 while (left > 0 && pad_len != 0)
                 {
-                    pad_bytes = getUTF8ByteLen(padding, per_pad_offset);
-                    memcpy(&res[res_offset], &padding[per_pad_offset], pad_bytes);
+                    pad_bytes = UTF8::seqLength(padding[per_pad_offset]);
+                    copyResult(res, res_offset, padding, per_pad_offset, pad_bytes);
                     res_offset += pad_bytes;
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
                     --left;
                 }
                 // Including the tailing '\0'.
-                memcpy(&res[res_offset], &data[0], data_size);
+                copyResult(res, res_offset, data, 0, data_size);
                 res_offset += data_size;
             }
             else
             {
-                memcpy(&res[res_offset], &data[0], data_size - 1);
+                copyResult(res, res_offset, data, 0, data_size - 1);
                 res_offset += data_size - 1;
 
                 while (left > 0 && pad_len != 0)
                 {
-                    pad_bytes = getUTF8ByteLen(padding, per_pad_offset);
-                    memcpy(&res[res_offset], &padding[per_pad_offset], pad_bytes);
+                    pad_bytes = UTF8::seqLength(padding[per_pad_offset]);
+                    copyResult(res, res_offset, padding, per_pad_offset, pad_bytes);
                     res_offset += pad_bytes;
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
                     --left;
@@ -3545,14 +3635,13 @@ private:
         }
         else
         {
-            ColumnString::Offset j = 0;
             while (left < tmp_target_len)
             {
-                pad_bytes = getUTF8ByteLen(data, j);
+                pad_bytes = UTF8::seqLength(data[per_pad_offset]);
 
-                memcpy(&res[res_offset], &data[j], pad_bytes);
+                copyResult(res, res_offset, data, per_pad_offset, pad_bytes);
                 res_offset += pad_bytes;
-                j += pad_bytes;
+                per_pad_offset += pad_bytes;
                 ++left;
             }
             res[res_offset] = '\0';
@@ -3561,18 +3650,10 @@ private:
         return false;
     }
 
-    static ColumnString::Offset getUTF8ByteLen(const UInt8 * padding, ColumnString::Offset offset)
+    static void copyResult(ColumnString::Chars_t & result_data,  size_t dst_offset, const UInt8 * padding, size_t padding_offset, size_t pad_bytes)
     {
-        ColumnString::Offset pad_bytes = 0;
-        if (padding[offset] < 0xBF)
-            pad_bytes = 1;
-        else if (padding[offset] < 0xE0)
-            pad_bytes = 2;
-        else if (padding[offset] < 0xF0)
-            pad_bytes = 3;
-        else
-            pad_bytes = 1;
-        return pad_bytes;
+        result_data.resize(result_data.size() + pad_bytes);
+        memcpy(&result_data[dst_offset], &padding[padding_offset], pad_bytes);
     }
 };
 
