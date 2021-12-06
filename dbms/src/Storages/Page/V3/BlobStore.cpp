@@ -1,4 +1,11 @@
 #include <Storages/Page/V3/BlobStore.h>
+#include <Common/CurrentMetrics.h>
+#include <Common/ProfileEvents.h>
+
+namespace ProfileEvents
+{
+    extern const Event PSMWritePages;
+}
 
 namespace DB
 {
@@ -20,6 +27,41 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_)
     , blob_stats(log)
     , cached_file(BLOBSTORE_CACHED_FD_SIZE)
 {
+}
+
+void BlobStore::write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
+{
+    ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
+
+    PageEntriesEdit edit(write_batch.getWrites().size());
+    const size_t all_page_data_size = write_batch.getTotalDataSize();
+
+    char * buffer = (char *)alloc(all_page_data_size);
+
+    PageEntry entry;
+    size_t offset_in_allocated = 0;
+    for (const auto & w : write_batch.getWrites())
+    {
+        switch (w.type)
+        {
+            case WriteBatch::WriteType::PUT:
+            {
+                // entry.file_id = xxx;
+                entry.offset = offset_in_file + offset_in_allocated;
+                offset_in_allocated += w.size;
+                edit.put(w.page_id, entry);
+                break;
+            }
+            case WriteBatch::WriteType::DEL:
+            case WriteBatch::WriteType::REF:
+            case WriteBatch::WriteType::UPSERT:
+                // TODO: put others to edit
+                break;
+            }
+        }
+    }
+
+
 }
 
 std::pair<BlobStore::BlobFileId, UInt64> BlobStore::write(char * buffer, size_t size, const WriteLimiterPtr & write_limiter)

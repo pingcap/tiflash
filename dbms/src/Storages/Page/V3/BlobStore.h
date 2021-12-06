@@ -98,9 +98,9 @@ public:
 
     BlobStats getAllBlobStats();
 
-    std::pair<BlobFileId, UInt64> write(char * buffer,
-                                        size_t size,
-                                        const WriteLimiterPtr & write_limiter = nullptr);
+    void write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter);
+
+    std::pair<BlobFileId, UInt64> write(size_t size);
 
     // TBD : may replace std::vector<char *> with a align buffer.
     void read(std::vector<std::tuple<BlobFileId, UInt64, size_t>>,
