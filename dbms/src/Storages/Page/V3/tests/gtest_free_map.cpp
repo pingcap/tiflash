@@ -215,4 +215,27 @@ TEST(SpaceMapTest, TestMarginsSTDMap)
 }
 
 
+std::pair<UInt64, size_t> shiftBlock(UInt64 block, size_t size)
+{
+    UInt64 cluster_bits = 1;
+    UInt64 block_end = block + size;
+
+    block >>= cluster_bits;
+    block_end += (1 << cluster_bits) - 1;
+    block_end >>= cluster_bits;
+    size = block_end - block;
+    return std::make_pair(block, size);
+}
+
+
+TEST(SpaceMapTest, null)
+{
+    UInt64 b = 0;
+    size_t s = 0;
+
+    std::tie(b, s) = shiftBlock(100, 500);
+
+    std::cout << "b : " << b << " , s : " << s << std::endl;
+}
+
 } // namespace DB::PS::V3::tests

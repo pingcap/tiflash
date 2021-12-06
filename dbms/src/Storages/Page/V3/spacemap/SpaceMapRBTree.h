@@ -33,15 +33,7 @@ struct rb_private
 // convert rb_node to smap_rb_entry
 inline static struct smap_rb_entry * node_to_entry(struct rb_node * node)
 {
-    struct smap_rb_entry * rb_ex;
-#define container_of(ptr, type, member) ({          \
-        const __typeof__( ((type *)0)->member ) *__mptr = (ptr);    \
-        (type *)( (char *)__mptr - offsetof(type,member) ); })
-
-    rb_ex = container_of(node, struct smap_rb_entry, node);
-
-#undef container_of
-    return rb_ex;
+    return reinterpret_cast<smap_rb_entry *>(node);
 }
 
 class RBTreeSpaceMap : public SpaceMap
@@ -81,9 +73,9 @@ protected:
     int testSmapRange(UInt64 block, size_t num) override;
 
     /* Search range , return the free bits */
-    void searchSmapRange([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] size_t num, [[maybe_unused]] UInt64 * ret) override
+    void searchSmapRange([[maybe_unused]] size_t size, [[maybe_unused]] UInt64 * ret, [[maybe_unused]] UInt64 * max_cap) override
     {
-        // TBD
+        // Will implement in BlobStore
     }
 
     int markSmapRange(UInt64 block, size_t num) override;

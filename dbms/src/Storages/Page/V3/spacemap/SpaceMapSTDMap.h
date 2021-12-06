@@ -82,9 +82,9 @@ protected:
         return 0;
     }
 
-    void searchSmapRange([[maybe_unused]] UInt64 start, [[maybe_unused]] UInt64 end, [[maybe_unused]] size_t num, [[maybe_unused]] UInt64 * ret) override
+    void searchSmapRange([[maybe_unused]] size_t size, [[maybe_unused]] UInt64 * ret, [[maybe_unused]] UInt64 * max_cap) override
     {
-        // TBD
+        // Will implement in BlobStore
     }
 
     int markSmapRange(UInt64 block, size_t num) override

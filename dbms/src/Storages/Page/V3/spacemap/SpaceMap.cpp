@@ -98,6 +98,18 @@ int SpaceMap::testRange(UInt64 block, size_t size)
     return testSmapRange(block, size);
 }
 
+void SpaceMap::searchRange(size_t size, UInt64 * ret, UInt64 * max_cap)
+{
+    UInt64 meanless;
+    UInt64 shift_cap;
+    std::tie(meanless, size) = shiftBlock(0, size);
+
+    searchSmapRange(size, ret, max_cap);
+
+    std::tie(meanless, shift_cap) = shiftBlock(0, *max_cap);
+    *max_cap = shift_cap;
+}
+
 SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, int cluster_bits)
     : start(start_)
     , end(end_)
