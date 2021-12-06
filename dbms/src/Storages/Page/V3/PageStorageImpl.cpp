@@ -59,44 +59,6 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
 {
     // Persist Page data to BlobStore
     PageEntriesEdit edit(write_batch.getWrites().size());
-    // {
-    //     {
-    //     // FIXME: These code should be inside `PageEntriesEdit BlobStore::write(DB::WriteBatch & write_batch, const WriteLimiterPtr)`
-    //     PageEntriesEdit edit(write_batch.getWrites().size());
-    //     const size_t all_page_data_size [[maybe_unused]] = write_batch.getTotalDataSize();
-    //     // allocate file_id, offset from space map
-    //     size_t offset_in_file = xxx;
-    //
-    //     // persist data to BlobFile
-    //     }
-    //
-    //     PageEntryV3 entry;
-    //     size_t offset_in_allocated = 0;
-    //     for (const auto & w : write_batch.getWrites())
-    //     {
-    //         switch (w.type)
-    //         {
-    //         case WriteBatch::WriteType::PUT:
-    //         {
-    //             // entry.file_id = xxx;
-    //             entry.offset = offset_in_file + offset_in_allocated;
-    //             offset_in_allocated += w.size;
-    //             edit.put(w.page_id, entry);
-    //             break;
-    //         }
-    //         case WriteBatch::WriteType::DEL:
-    //         case WriteBatch::WriteType::REF:
-    //         case WriteBatch::WriteType::UPSERT:
-    //             // TODO: put others to edit
-    //             break;
-    //         }
-    //     }
-    //     return edit;
-    // }
-
-    // Apply the position of persisted page to MVCC PageMap
-    // TODO: Making `write` pipeline, we may split page_directory.apply into smaller functions later
-    // page_directory.apply(std::move(edit));
 
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
