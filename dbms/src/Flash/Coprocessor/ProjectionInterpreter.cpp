@@ -43,7 +43,7 @@ void ProjectionInterpreter::executeImpl(DAGPipelinePtr & pipeline)
     for (auto const & p : pipeline->firstStream()->getHeader().getNamesAndTypesList())
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
-    DAGExpressionActionsChain chain;
+    DAGExpressionActionsChain chain; // Do not use pipeline->chain
     dag_analyzer.initChain(chain, dag_analyzer.getCurrentInputColumns());
     DAGExpressionActionsChain::Step & last_step = chain.steps.back();
     std::vector<NameAndTypePair> output_columns;

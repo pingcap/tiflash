@@ -202,8 +202,7 @@ void DAGInterpreterBase::executeOrder(DAGPipeline & pipeline, const std::vector<
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGInterpreterBase::executeNonSourceExecutors(DAGPipeline & pipeline)
 {
-    DAGExpressionActionsChain chain;
-
+    DAGExpressionActionsChain & chain = pipeline.chain;
     // this log measures the concurrent degree in this mpp task
     LOG_INFO(
         log,

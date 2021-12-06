@@ -314,7 +314,7 @@ void JoinInterpreter::executeJoin(const tipb::Join & join, DAGPipelinePtr & pipe
     for (const auto & p : left_pipeline->firstStream()->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
-    DAGExpressionActionsChain chain;
+    DAGExpressionActionsChain chain; // Do not use pipeline->chain
     dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
     pipeline = left_pipeline;
     /// add join input stream
