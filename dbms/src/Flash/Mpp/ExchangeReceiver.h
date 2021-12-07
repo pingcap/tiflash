@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/RecyclableBuffer.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -103,6 +104,8 @@ public:
     String getName() { return "ExchangeReceiver"; }
 
     std::vector<ConnectionProfileInfoPtr> createConnectionProfileInfos() const;
+
+    std::atomic<IProfilingBlockInputStream *> parent = nullptr;
 
 private:
     void setUpConnection();

@@ -63,6 +63,7 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
 void IBlockInputStream::dumpTree(std::ostream & ostr, size_t indent, size_t multiplier)
 {
     ostr << String(indent, ' ') << getName();
+
     if (multiplier > 1)
         ostr << " × " << multiplier;
     //ostr << ": " << getHeader().dumpStructure();

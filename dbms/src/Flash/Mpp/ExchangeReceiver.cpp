@@ -88,6 +88,9 @@ static inline String getReceiverStateStr(const ExchangeReceiverState & s)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 {
+    while (!parent) {}
+    auto timer = (*parent).newTimer(Timeline::SELF);
+
     CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
@@ -110,6 +113,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             bool has_data = false;
             for (;;)
             {
+                timer.switchTo(Timeline::NONE);
                 LOG_TRACE(log, "begin next ");
                 {
                     std::unique_lock<std::mutex> lock(mu);
@@ -124,12 +128,17 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         meet_error = true;
                         local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
                         LOG_WARNING(log, local_err_msg);
+                        timer.switchTo(Timeline::SELF);
                         break;
                     }
                 }
+
+                timer.switchTo(Timeline::PULL);
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = source_index;
                 bool success = reader->read(recv_msg->packet.get());
+                timer.switchTo(Timeline::SELF);
+
                 if (!success)
                     break;
                 else
@@ -138,6 +147,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 {
                     throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
                 }
+
+                timer.switchTo(Timeline::PUSH);
                 {
                     std::unique_lock<std::mutex> lock(mu);
                     cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
@@ -151,6 +162,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         meet_error = true;
                         local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
                         LOG_WARNING(log, local_err_msg);
+                        timer.switchTo(Timeline::SELF);
                         break;
                     }
                 }
@@ -292,6 +304,9 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
     }
     else
     {
+        while (!parent) {}
+        auto timer = (*parent).newTimer(Timeline::SELF);
+
         if (!recv_msg->packet->data().empty()) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
         {
             auto resp_ptr = std::make_shared<tipb::SelectResponse>();

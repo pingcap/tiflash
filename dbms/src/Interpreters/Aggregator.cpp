@@ -759,7 +759,7 @@ bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
 }
 
 
-void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider)
+void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider, Timeline::Timer * timer)
 {
     if (isCancelled())
         return;
@@ -782,8 +782,16 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
     size_t src_bytes = 0;
 
     /// Read all the data
-    while (Block block = stream->read())
+    while (true)
     {
+        if (timer)
+            timer->switchTo(Timeline::PULL);
+        Block block = stream->read();
+        if (timer)
+            timer->switchTo(Timeline::SELF);
+        if (!block)
+            break;
+
         if (isCancelled())
             return;
 

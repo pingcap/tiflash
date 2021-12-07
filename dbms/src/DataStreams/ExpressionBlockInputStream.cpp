@@ -37,10 +37,15 @@ Block ExpressionBlockInputStream::getHeader() const
 
 Block ExpressionBlockInputStream::readImpl()
 {
+    auto timer = newTimer(Timeline::PULL);
     Block res = children.back()->read();
+    timer.switchTo(Timeline::SELF);
+
     if (!res)
         return res;
+
     expression->execute(res);
+
     return res;
 }
 

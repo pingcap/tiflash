@@ -1,14 +1,11 @@
+#include <Core/Block.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 
-#include <Core/Block.h>
-
 namespace DB
 {
-
 void BlockStreamProfileInfo::read(ReadBuffer & in)
 {
     readVarUInt(rows, in);
@@ -77,8 +74,7 @@ void BlockStreamProfileInfo::collectInfosForStreamsWithName(const char * name, B
         return;
     }
 
-    parent->forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-    {
+    parent->forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         child.getProfileInfo().collectInfosForStreamsWithName(name, res);
         return false;
     });
@@ -107,8 +103,7 @@ void BlockStreamProfileInfo::calculateRowsBeforeLimit() const
 
         for (const BlockStreamProfileInfo * info_limit_or_sort : limits_or_sortings)
         {
-            info_limit_or_sort->parent->forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-            {
+            info_limit_or_sort->parent->forEachProfilingChild([&](IProfilingBlockInputStream & child) {
                 rows_before_limit += child.getProfileInfo().rows;
                 return false;
             });
@@ -134,4 +129,4 @@ void BlockStreamProfileInfo::calculateRowsBeforeLimit() const
     }
 }
 
-}
+} // namespace DB

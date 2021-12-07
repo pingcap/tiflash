@@ -161,6 +161,8 @@ public:
         , log(getMPPTaskLog(log_, getName()))
         , total_rows(0)
     {
+        remote_reader->parent = this;
+
         // generate sample block
         ColumnsWithTypeAndName columns;
         for (auto & dag_col : remote_reader->getOutputSchema())

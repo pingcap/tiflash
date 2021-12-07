@@ -18,12 +18,17 @@ SquashingBlockInputStream::SquashingBlockInputStream(
 
 Block SquashingBlockInputStream::readImpl()
 {
+    auto timer = newTimer(Timeline::SELF);
+
     if (all_read)
         return {};
 
     while (true)
     {
+        timer.switchTo(Timeline::PULL);
         Block block = children[0]->read();
+        timer.switchTo(Timeline::SELF);
+
         if (!block)
             all_read = true;
 
