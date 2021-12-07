@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -565,6 +566,19 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
+
+    FmtBuffer buf;
+    buf.append("join: left_key_names:");
+    for (const auto & name : left_key_names)
+    {
+        buf.fmtAppend(" '{}'", name);
+    }
+    buf.append("; right_key_names:");
+    for (const auto & name : right_key_names)
+    {
+        buf.fmtAppend(" '{}'", name);
+    }
+    LOG_DEBUG(log, buf.toString());
 
     JoinPtr join_ptr = std::make_shared<Join>(
         left_key_names,

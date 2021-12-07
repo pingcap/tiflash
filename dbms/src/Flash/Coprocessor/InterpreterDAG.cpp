@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExchangeSender.h>
@@ -143,6 +144,15 @@ BlockIO InterpreterDAG::execute()
                 log);
             stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
         });
+
+        FmtBuffer buf;
+        buf.append("sender: cols:");
+        for (Int64 col : partition_col_id)
+        {
+            buf.fmtAppend(" {}", col);
+        }
+        buf.fmtAppend("; schema: '{}'", pipeline.firstStream()->getHeader().dumpStructure());
+        LOG_DEBUG(log, buf.toString());
     }
 
     /// add union to run in parallel if needed
