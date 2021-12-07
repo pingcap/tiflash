@@ -8,6 +8,7 @@
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
+
 #include <type_traits>
 
 namespace DB::FailPoints
@@ -53,7 +54,9 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
     {
         uint64_t physical_record_offset = end_of_buffer_offset - buffer.size();
         size_t drop_size = 0;
-        static_assert(std::is_same_v<std::underlying_type_t<LogReader::ExtRecordType>, uint8_t>, "The underlying type of ExtRecordType should be uint8_t");
+        static_assert(
+            std::is_same_v<std::underlying_type_t<LogReader::ExtRecordType>, uint8_t>,
+            "The underlying type of ExtRecordType should be uint8_t");
         const uint8_t record_type = readPhysicalRecord(&fragment, &drop_size);
         switch (record_type)
         {
@@ -122,10 +125,9 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
             {
                 // In clean shutdown we don't expect any error in the log files.
-                // In point-in-time recovery an incomplete record at the end could
-                // produce a hole in the recovered data. Report an error here, which
-                // higher layers can choose to ignore when it's provable there is no
-                // hole.
+                // In point-in-time recovery an incomplete record at the end could produce
+                // a hole in the recovered data. Report an error here, which higher layers
+                // can choose to ignore when it's provable there is no hole.
                 reportCorruption(drop_size, "truncated header");
             }
             [[fallthrough]];
@@ -137,15 +139,14 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
                 if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                 {
                     // In clean shutdown we don't expect any error in the log files.
-                    // In point-in-time recovery an incomplete record at the end could
-                    // produce a hole in the recovered data. Report an error here, which
-                    // higher layers can choose to ignore when it's provable there is no
-                    // hole.
+                    // In point-in-time recovery an incomplete record at the end could produce
+                    // a hole in the recovered data. Report an error here, which higher layers
+                    // can choose to ignore when it's provable there is no hole.
                     reportCorruption(record.size(), "error reading trailing data");
                 }
-                // This can be caused by the writer dying immediately after
-                //  writing a physical record but before completing the next; don't
-                //  treat it as a corruption, just ignore the entire logical record.
+                // This can be caused by the writer dying immediately after writing a
+                // physical record but before completing the next; don't treat it as
+                // a corruption, just ignore the entire logical record.
                 record.clear();
             }
             return {false, std::move(record)};
@@ -160,15 +161,14 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
                     if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                     {
                         // In clean shutdown we don't expect any error in the log files.
-                        // In point-in-time recovery an incomplete record at the end could
-                        // produce a hole in the recovered data. Report an error here,
-                        // which higher layers can choose to ignore when it's provable
-                        // there is no hole.
+                        // In point-in-time recovery an incomplete record at the end could produce
+                        // a hole in the recovered data. Report an error here, which higher layers
+                        // can choose to ignore when it's provable there is no hole.
                         reportCorruption(record.size(), "error reading trailing data");
                     }
-                    // This can be caused by the writer dying immediately after
-                    // writing a physical record but before completing the next; don't
-                    // treat it as a corruption, just ignore the entire logical record.
+                    // This can be caused by the writer dying immediately after writing a
+                    // physical record but before completing the next; don't treat it as
+                    // a corruption, just ignore the entire logical record.
                     record.clear();
                 }
                 return {false, std::move(record)};
@@ -192,10 +192,9 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
                 if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                 {
                     // In clean shutdown we don't expect any error in the log files.
-                    // In point-in-time recovery an incomplete record at the end could
-                    // produce a hole in the recovered data. Report an error here, which
-                    // higher layers can choose to ignore when it's provable there is no
-                    // hole.
+                    // In point-in-time recovery an incomplete record at the end could produce
+                    // a hole in the recovered data. Report an error here, which higher layers
+                    // can choose to ignore when it's provable there is no hole.
                     reportCorruption(drop_size, "truncated record body");
                 }
                 return {false, std::move(record)};
