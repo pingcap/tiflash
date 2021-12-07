@@ -493,8 +493,6 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_))
     , context(context_)
-    , after_agg(false)
-    , implicit_cast_count(0)
 {
     settings = context.getSettings();
 }
@@ -504,6 +502,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
     DAGExpressionActionsChain::Step & step,
     const String & agg_func_name,
     AggregateDescriptions & aggregate_descriptions,
+    NamesAndTypes & aggregated_columns,
     bool result_is_nullable)
 {
     AggregateDescription aggregate;
@@ -637,7 +636,7 @@ static String getAggFuncName(
     return agg_func_name;
 }
 
-std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnalyzer::appendAggregation(
+std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions, NamesAndTypes> DAGExpressionAnalyzer::appendAggregation(
     DAGExpressionActionsChain & chain,
     const tipb::Aggregation & agg,
     bool group_by_collation_sensitive)
@@ -651,6 +650,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnaly
     Names aggregation_keys;
     TiDB::TiDBCollators collators;
     AggregateDescriptions aggregate_descriptions;
+    NamesAndTypes aggregated_columns;
 
     initChain(chain, getCurrentInputColumns());
     DAGExpressionActionsChain::Step & step = chain.steps.back();
@@ -661,7 +661,7 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnaly
         String agg_func_name = getAggFuncName(expr, agg, settings);
         if (expr.tp() == tipb::ExprType::GroupConcat)
         {
-            buildGroupConcat(expr, step, agg_func_name, aggregate_descriptions, agg.group_by().empty());
+            buildGroupConcat(expr, step, agg_func_name, aggregate_descriptions, aggregated_columns, agg.group_by().empty());
             continue;
         }
 
@@ -778,8 +778,8 @@ std::tuple<Names, TiDB::TiDBCollators, AggregateDescriptions> DAGExpressionAnaly
             aggregated_columns.emplace_back(name, step.actions->getSampleBlock().getByName(name).type);
         }
     }
-    after_agg = true;
-    return {aggregation_keys, collators, aggregate_descriptions};
+    source_columns = aggregated_columns;
+    return {aggregation_keys, collators, aggregate_descriptions, aggregated_columns};
 }
 
 bool isUInt8Type(const DataTypePtr & type)
@@ -913,7 +913,7 @@ std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
 
 const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns() const
 {
-    return after_agg ? aggregated_columns : source_columns;
+    return source_columns;
 }
 
 tipb::Expr constructTZExpr(
@@ -1111,19 +1111,22 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     return ret;
 }
 
-void DAGExpressionAnalyzer::appendAggSelect(DAGExpressionActionsChain & chain, const tipb::Aggregation & aggregation)
+void DAGExpressionAnalyzer::appendAggSelect(
+    DAGExpressionActionsChain & chain,
+    const tipb::Aggregation & aggregation,
+    const NamesAndTypes & aggregated_columns)
 {
     initChain(chain, getCurrentInputColumns());
-    bool need_update_aggregated_columns = false;
+    bool need_update_source_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
     DAGExpressionActionsChain::Step & step = chain.steps.back();
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
-        String & name = aggregated_columns[i].name;
-        String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name, false);
+        const String & name = aggregated_columns[i].name;
+        String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
         if (name != updated_name)
         {
-            need_update_aggregated_columns = true;
+            need_update_source_columns = true;
             DataTypePtr type = step.actions->getSampleBlock().getByName(updated_name).type;
             updated_aggregated_columns.emplace_back(updated_name, type);
             step.required_output.push_back(updated_name);
@@ -1137,11 +1140,11 @@ void DAGExpressionAnalyzer::appendAggSelect(DAGExpressionActionsChain & chain, c
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
         Int32 output_column_index = i + aggregation.agg_func_size();
-        String & name = aggregated_columns[output_column_index].name;
-        String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name, false);
+        const String & name = aggregated_columns[output_column_index].name;
+        String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
         if (name != updated_name)
         {
-            need_update_aggregated_columns = true;
+            need_update_source_columns = true;
             DataTypePtr type = step.actions->getSampleBlock().getByName(updated_name).type;
             updated_aggregated_columns.emplace_back(updated_name, type);
             step.required_output.push_back(updated_name);
@@ -1153,12 +1156,12 @@ void DAGExpressionAnalyzer::appendAggSelect(DAGExpressionActionsChain & chain, c
         }
     }
 
-    if (need_update_aggregated_columns)
+    if (need_update_source_columns)
     {
-        aggregated_columns.clear();
+        source_columns.clear();
         for (auto & col : updated_aggregated_columns)
         {
-            aggregated_columns.emplace_back(col.name, col.type);
+            source_columns.emplace_back(col.name, col.type);
         }
     }
 }
@@ -1299,7 +1302,7 @@ String DAGExpressionAnalyzer::alignReturnType(
     DataTypePtr orig_type = actions->getSampleBlock().getByName(expr_name).type;
     if (force_uint8 && isUInt8Type(orig_type))
         return expr_name;
-    String updated_name = appendCastIfNeeded(expr, actions, expr_name, false);
+    String updated_name = appendCastIfNeeded(expr, actions, expr_name);
     DataTypePtr updated_type = actions->getSampleBlock().getByName(updated_name).type;
     if (force_uint8 && !isUInt8Type(updated_type))
         updated_name = convertToUInt8(actions, updated_name);
@@ -1338,29 +1341,20 @@ String DAGExpressionAnalyzer::appendCast(const DataTypePtr & target_type, Expres
 String DAGExpressionAnalyzer::appendCastIfNeeded(
     const tipb::Expr & expr,
     ExpressionActionsPtr & actions,
-    const String & expr_name,
-    bool explicit_cast)
+    const String & expr_name)
 {
     if (!isFunctionExpr(expr))
         return expr_name;
 
     if (!expr.has_field_type())
-    {
         throw TiFlashException("Function Expression without field type", Errors::Coprocessor::BadRequest);
-    }
+
     if (exprHasValidFieldType(expr))
     {
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
         if (expected_type->getName() != actual_type->getName())
-        {
-            implicit_cast_count += !explicit_cast;
             return appendCast(expected_type, actions, expr_name);
-        }
-        else
-        {
-            return expr_name;
-        }
     }
     return expr_name;
 }

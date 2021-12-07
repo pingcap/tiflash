@@ -232,7 +232,7 @@ void DAGInterpreterBase::executeNonSourceExecutors(DAGPipeline & pipeline)
             /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
             context.getDAGContext()->isMPPTask();
 
-        auto [aggregation_keys, aggregation_collators, aggregate_descriptions] = analyzer->appendAggregation(
+        auto [aggregation_keys, aggregation_collators, aggregate_descriptions, aggregated_columns] = analyzer->appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
@@ -256,7 +256,7 @@ void DAGInterpreterBase::executeNonSourceExecutors(DAGPipeline & pipeline)
         chain.clear();
 
         // add cast if type is not match
-        analyzer->appendAggSelect(chain, query_block.aggregation->aggregation());
+        analyzer->appendAggSelect(chain, query_block.aggregation->aggregation(), aggregated_columns);
         if (query_block.having != nullptr)
         {
             std::vector<const tipb::Expr *> having_conditions;
