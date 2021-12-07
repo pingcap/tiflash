@@ -182,9 +182,9 @@ protected:
             if (it->first == biggest_range)
             {
                 it = free_map.erase(it);
-                // still need search for max_cap
+                // Still need search for max_cap
             }
-            else // It not champion, just return
+            else // It is not champion, just return
             {
                 free_map.erase(it);
                 max_cap = biggest_cap;
@@ -200,7 +200,7 @@ protected:
             it = free_map.erase(it);
             it = free_map.insert(/*hint=*/it, {k, v}); // Use the `it` after erased as a hint, should be good for performance
 
-            // It not champion, just return
+            // It is not champion, just return
             if (k - size != biggest_range)
             {
                 max_cap = biggest_cap;

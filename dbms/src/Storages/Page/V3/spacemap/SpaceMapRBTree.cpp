@@ -439,7 +439,7 @@ void RBTreeSpaceMap::smapStats()
     for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
-        LOG_DEBUG(log, "  Space: " << count << " start:" << entry->start << " size : " << entry->count);
+        LOG_DEBUG(log, "  Space: " << count << " start:" << entry->start << " size: " << entry->count);
         count++;
         if (entry->count > max_size)
         {
