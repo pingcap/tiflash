@@ -1,5 +1,6 @@
 
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
+
 namespace DB
 {
 
@@ -15,5 +16,4 @@ Block HashJoinBuildBlockInputStream::readImpl()
     join->insertFromBlock(block, stream_index);
     return block;
 }
-
 } // namespace DB
