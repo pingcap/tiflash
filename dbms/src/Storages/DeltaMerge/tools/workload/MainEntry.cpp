@@ -1,7 +1,7 @@
-#include <Storages/DeltaMerge/tests/workload/DTWorkload.h>
-#include <Storages/DeltaMerge/tests/workload/Handle.h>
-#include <Storages/DeltaMerge/tests/workload/Options.h>
-#include <Storages/DeltaMerge/tests/workload/Utils.h>
+#include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
+#include <Storages/DeltaMerge/tools/workload/Handle.h>
+#include <Storages/DeltaMerge/tools/workload/Options.h>
+#include <Storages/DeltaMerge/tools/workload/Utils.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
@@ -12,10 +12,11 @@
 using namespace DB::tests;
 using namespace DB::DM::tests;
 
+std::ofstream log_ofs;
+
 void init(WorkloadOptions & opts)
 {
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs);
-    static std::ofstream log_ofs(opts.log_file, std::ios_base::out | std::ios_base::app);
+    log_ofs.open(opts.log_file, std::ios_base::out | std::ios_base::app);
     if (!log_ofs)
     {
         throw std::logic_error(fmt::format("WorkloadOptions::init - Open {} ret {}", opts.log_file, strerror(errno)));
@@ -24,9 +25,9 @@ void init(WorkloadOptions & opts)
     opts.initFailpoints();
 }
 
-void shutdown()
+void finish()
 {
-    TiFlashTestEnv::shutdown();
+    log_ofs.close();
 }
 
 void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
@@ -39,14 +40,57 @@ void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
     }
 }
 
-void print(Poco::Logger * log, uint64_t i, const DTWorkload::Statistics & stat)
+struct BasicStatistics
 {
-    auto v = stat.toStrings(i);
-    for (const auto & s : v)
+    double init_sec = 0.0;
+    uint64_t write_count = 0;
+    double write_sec = 0.0;
+    uint64_t read_count = 0;
+    double read_sec = 0.0;
+
+    BasicStatistics(const DTWorkload::Statistics & stat)
     {
-        std::cerr << s << std::endl;
-        LOG_INFO(log, s);
+        init_sec = stat.init_store_sec;
+        for (const auto & t : stat.write_stats)
+        {
+            write_count += t.write_count;
+            write_sec += t.total_do_write_sec;
+        }
+        read_count = stat.total_read_count.load(std::memory_order_relaxed);
+        read_sec = stat.total_read_usec.load(std::memory_order_relaxed) / 1000000.0;
     }
+
+    BasicStatistics() {}
+};
+
+void print(Poco::Logger * log, uint64_t i, const BasicStatistics & stat, WorkloadOptions & opts)
+{
+    auto s = fmt::format("No {} Workload {} InitSec {} WriteCount {} WriteSec {} ReadCount {} ReadSec {}",
+                         i,
+                         opts.write_key_distribution,
+                         stat.init_sec,
+                         stat.write_count,
+                         stat.write_sec,
+                         stat.read_count,
+                         stat.read_sec);
+    LOG_INFO(log, s);
+}
+
+void outputResult(Poco::Logger * log, const std::vector<BasicStatistics> & stats, WorkloadOptions & opts)
+{
+    BasicStatistics total_stat;
+    for (const auto & stat : stats)
+    {
+        total_stat.init_sec = std::max(stat.init_sec, total_stat.init_sec);
+        total_stat.write_count += stat.write_count;
+        total_stat.write_sec += stat.write_sec;
+        total_stat.read_count += stat.read_count;
+        total_stat.read_sec += stat.read_sec;
+    }
+    // Date Workload MaxInitSec WriteQPS ReadQPS
+    auto s = fmt::format("{}, {}, {}, {}, {}", localDate(), opts.write_key_distribution, total_stat.init_sec, total_stat.write_count / total_stat.write_sec, total_stat.read_count / total_stat.read_sec);
+    LOG_INFO(log, s);
+    std::cout << s << std::endl;
 }
 
 std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
@@ -58,7 +102,9 @@ void run(WorkloadOptions & opts)
 {
     init(opts);
     auto * log = &Poco::Logger::get("DTWorkload_main");
+    LOG_INFO(log, opts.toString());
     auto data_dirs = DB::tests::TiFlashTestEnv::getGlobalContext().getPathPool().listPaths();
+    std::vector<BasicStatistics> basic_stats;
     try
     {
         // HandleTable is a unordered_map that stores handle->timestamp for data verified.
@@ -68,10 +114,9 @@ void run(WorkloadOptions & opts)
         {
             DTWorkload workload(opts, handle_table);
             workload.run(i);
-            auto & stat = workload.getStat();
-            print(log, i, stat);
+            basic_stats.emplace_back(workload.getStat());
+            print(log, i, basic_stats.back(), opts);
         }
-        shutdown();
         removeData(log, data_dirs);
     }
     catch (const DB::Exception & e)
@@ -86,6 +131,9 @@ void run(WorkloadOptions & opts)
     {
         LOG_ERROR(log, "Unknow Exception");
     }
+
+    outputResult(log, basic_stats, opts);
+    finish();
 }
 
 void randomKill(WorkloadOptions & opts, pid_t pid)
@@ -156,25 +204,46 @@ void runAndRandomKill(WorkloadOptions & opts)
     }
 }
 
-int main(int argc, char ** argv)
+void dailyTest(WorkloadOptions & opts)
+{
+    std::vector<std::string> workloads{"uniform", "normal", "incremental"};
+    for (const auto & w : workloads)
+    {
+        opts.write_key_distribution = w;
+        ::run(opts);
+    }
+}
+
+int DTWorkload::mainEntry(int argc, char ** argv)
 {
     WorkloadOptions opts;
     auto [ok, msg] = opts.parseOptions(argc, argv);
-    std::cerr << msg << std::endl;
     if (!ok)
     {
+        std::cerr << msg << std::endl;
         return -1;
     }
 
-    if (opts.random_kill <= 0)
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs);
+
+    if (opts.daily_test)
     {
-        run(opts);
+        dailyTest(opts);
     }
     else
     {
-        // Kill the running DeltaMergeStore could cause data loss, since we don't have raft-log here.
-        // Disable random_kill by default.
-        runAndRandomKill(opts);
+        if (opts.random_kill <= 0)
+        {
+            ::run(opts);
+        }
+        else
+        {
+            // Kill the running DeltaMergeStore could cause data loss, since we don't have raft-log here.
+            // Disable random_kill by default.
+            runAndRandomKill(opts);
+        }
     }
+
+    TiFlashTestEnv::shutdown();
     return 0;
 }

@@ -35,6 +35,8 @@ class SharedHandleTable;
 class DTWorkload
 {
 public:
+    static int mainEntry(int argc, char ** argv);
+
     DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_);
     ~DTWorkload();
 

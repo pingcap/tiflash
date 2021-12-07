@@ -4,18 +4,20 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
-#include <Storages/DeltaMerge/tests/workload/DTWorkload.h>
-#include <Storages/DeltaMerge/tests/workload/DataGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/Handle.h>
-#include <Storages/DeltaMerge/tests/workload/KeyGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/Limiter.h>
-#include <Storages/DeltaMerge/tests/workload/Options.h>
-#include <Storages/DeltaMerge/tests/workload/ReadColumnsGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/TableGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/TimestampGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/Utils.h>
+#include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
+#include <Storages/DeltaMerge/tools/workload/DataGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/Handle.h>
+#include <Storages/DeltaMerge/tools/workload/KeyGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/Limiter.h>
+#include <Storages/DeltaMerge/tools/workload/Options.h>
+#include <Storages/DeltaMerge/tools/workload/ReadColumnsGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/TableGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/TimestampGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/Utils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_fmt_useful.h>
 #include <cpptoml.h>
+
 namespace DB::DM::tests
 {
 DB::Settings createSettings(const std::string & fname)
@@ -45,7 +47,7 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
     auto v = table_info->toStrings();
     for (const auto & s : v)
     {
-        LOG_INFO(log, "TableInfo: " << s);
+        LOG_FMT_INFO(log, "TableInfo: {}", s);
     }
 
     key_gen = KeyGenerator::create(opts_);
@@ -58,7 +60,8 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
                                               table_info->rowkey_column_indexes.size(),
                                               DeltaMergeStore::Settings());
     stat.init_store_sec = sw.elapsedSeconds();
-    LOG_INFO(log, fmt::format("Init store {} seconds", stat.init_store_sec));
+    LOG_FMT_INFO(log, "Init store {} seconds", stat.init_store_sec);
+
 
     if (opts_.verification)
     {
@@ -76,7 +79,7 @@ void DTWorkload::write(ThreadWriteStat & write_stat)
 {
     try
     {
-        auto data_gen = DataGenerator::create(*opts, *table_info, *key_gen, *ts_gen);
+        auto data_gen = DataGenerator::create(*opts, *table_info, *ts_gen);
         auto limiter = Limiter::create(*opts);
         uint64_t write_count = std::ceil(static_cast<double>(opts->write_count) / opts->write_thread_count);
 
@@ -86,16 +89,16 @@ void DTWorkload::write(ThreadWriteStat & write_stat)
         for (uint64_t i = 0; i < write_count; i++)
         {
             limiter->request();
-            auto [block, key, ts] = data_gen->get();
-
+            uint64_t key = key_gen->get64();
             std::unique_lock<std::recursive_mutex> lock;
             if (handle_lock != nullptr)
             {
                 lock = handle_lock->getLock(key);
             }
+            auto [block, ts] = data_gen->get(key);
 
             Stopwatch w;
-            store->write(*context, context->getSettingsRef(), std::move(block));
+            store->write(*context, context->getSettingsRef(), block);
             uint64_t t = w.elapsed() / 1000; // us
             max_do_write_us = std::max(max_do_write_us, t);
             total_do_write_us += t;
@@ -103,6 +106,10 @@ void DTWorkload::write(ThreadWriteStat & write_stat)
             if (handle_table != nullptr)
             {
                 handle_table->write(key, ts);
+            }
+            if (opts->log_write_request)
+            {
+                LOG_FMT_INFO(log, "{} => {}", key, ts);
             }
         }
 
@@ -126,7 +133,7 @@ void DTWorkload::write(ThreadWriteStat & write_stat)
     }
     catch (...)
     {
-        LOG_ERROR(log, "Unknow exception.");
+        LOG_FMT_INFO(log, "Unknow exception.");
         std::abort();
     }
 }
@@ -152,11 +159,12 @@ void DTWorkload::read(const ColumnDefines & columns, int stream_count, T func)
     auto ranges = {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())};
     auto filter = EMPTY_FILTER;
     int excepted_block_size = 1024;
-    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, ts_gen->get(), filter, excepted_block_size);
+    uint64_t read_ts = ts_gen->get();
+    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, excepted_block_size);
     std::vector<std::thread> threads;
     for (size_t i = 0; i < streams.size(); i++)
     {
-        threads.push_back(std::thread(func, streams[i]));
+        threads.push_back(std::thread(func, streams[i], read_ts));
     }
     for (auto & t : threads)
     {
@@ -174,7 +182,7 @@ void DTWorkload::verifyHandle(uint64_t r)
     int stream_count = read_cols_gen->streamCount();
 
     std::atomic<uint64_t> read_count = 0;
-    auto verify = [r, &read_count, &columns, &handle_table = handle_table, &log = log](BlockInputStreamPtr in) {
+    auto verify = [r, &read_count, &columns, &handle_table = handle_table, &log = log](BlockInputStreamPtr in, uint64_t read_ts) {
         while (Block block = in->read())
         {
             read_count.fetch_add(block.rows(), std::memory_order_relaxed);
@@ -200,9 +208,9 @@ void DTWorkload::verifyHandle(uint64_t r)
                 uint64_t store_ts = ts_col->getInt(i);
 
                 auto table_ts = handle_table->read(h);
-                if (store_ts != table_ts)
+                if (store_ts != table_ts && table_ts <= read_ts)
                 {
-                    auto s = fmt::format("round {} handle {} ts in store {} ts in table {}", r, h, store_ts, table_ts);
+                    auto s = fmt::format("round {} handle {} ts in store {} ts in table {} read_ts {}", r, h, store_ts, table_ts, read_ts);
                     LOG_ERROR(log, s);
                     throw std::logic_error(s);
                 }
@@ -233,7 +241,7 @@ void DTWorkload::scanAll(uint64_t i)
         int stream_count = opts->read_stream_count;
 
         std::atomic<uint64_t> read_count = 0;
-        auto countRow = [&read_count](BlockInputStreamPtr in) {
+        auto countRow = [&read_count](BlockInputStreamPtr in, [[maybe_unused]] uint64_t read_ts) {
             while (Block block = in->read())
             {
                 read_count.fetch_add(block.rows(), std::memory_order_relaxed);
@@ -246,7 +254,7 @@ void DTWorkload::scanAll(uint64_t i)
         stat.total_read_usec.fetch_add(read_sec * 1000000, std::memory_order_relaxed);
         stat.total_read_count.fetch_add(read_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
 
-        LOG_INFO(log, fmt::format("scanAll[{}]: columns {} streams {} read_count {} read_sec {} handle_count {}", i, columns.size(), stream_count, read_count.load(std::memory_order_relaxed), read_sec, handle_table->count()));
+        LOG_FMT_INFO(log, "scanAll[{}]: columns {} streams {} read_count {} read_sec {} handle_count {}", i, columns.size(), stream_count, read_count.load(std::memory_order_relaxed), read_sec, handle_table->count());
     }
 }
 
@@ -274,7 +282,7 @@ void DTWorkload::run(uint64_t r)
     {
         t.join();
     }
-    if (handle_table != nullptr)
+    if (opts->verification)
     {
         verifyHandle(r);
     }

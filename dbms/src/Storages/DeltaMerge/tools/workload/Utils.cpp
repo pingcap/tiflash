@@ -1,4 +1,4 @@
-#include <Storages/DeltaMerge/tests/workload/Utils.h>
+#include <Storages/DeltaMerge/tools/workload/Utils.h>
 #include <fmt/ranges.h>
 
 namespace DB::DM::tests
@@ -9,6 +9,15 @@ std::string localTime()
     std::stringstream ss;
     struct tm local_tm;
     ss << std::put_time(localtime_r(&t, &local_tm), "%Y%m%d_%X");
+    return ss.str();
+}
+
+std::string localDate()
+{
+    time_t t = ::time(nullptr);
+    std::stringstream ss;
+    struct tm local_tm;
+    ss << std::put_time(localtime_r(&t, &local_tm), "%Y%m%d");
     return ss.str();
 }
 

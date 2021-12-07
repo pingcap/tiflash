@@ -11,8 +11,8 @@ class TimestampGenerator;
 class DataGenerator
 {
 public:
-    static std::unique_ptr<DataGenerator> create(const WorkloadOptions & opts, const TableInfo & table_info, KeyGenerator & key_gen, TimestampGenerator & ts_gen);
-    virtual std::tuple<Block, uint64_t, uint64_t> get() = 0;
+    static std::unique_ptr<DataGenerator> create(const WorkloadOptions & opts, const TableInfo & table_info, TimestampGenerator & ts_gen);
+    virtual std::tuple<Block, uint64_t> get(uint64_t key) = 0;
     virtual ~DataGenerator() {}
 };
 

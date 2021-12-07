@@ -11,6 +11,7 @@ option(ENABLE_CLICKHOUSE_BENCHMARK "Enable benchmark" OFF)
 option(ENABLE_CLICKHOUSE_PERFORMANCE "Enable performance" OFF)
 option(ENABLE_CLICKHOUSE_TOOLS "Enable tools: compressor format extract-from-config-lib" OFF)
 option(ENABLE_TIFLASH_DTTOOL "Enable dttool: tools to manage dmfile" ${ENABLE_CLICKHOUSE_ALL})
+option(ENABLE_TIFLASH_DTWORKLOAD "Enable dtworkload: tools to test and stress DeltaTree" ${ENABLE_CLICKHOUSE_ALL})
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
@@ -135,6 +136,9 @@ else ()
     endif ()
     if (ENABLE_TIFLASH_DTTOOL)
         target_link_libraries(tiflash tiflash-dttool-entry-object)
+    endif ()
+    if (ENABLE_TIFLASH_DTWORKLOAD)
+        target_link_libraries(tiflash dt-workload-lib)
     endif ()
     if (ENABLE_CLICKHOUSE_TOOLS)
     target_link_libraries (tiflash

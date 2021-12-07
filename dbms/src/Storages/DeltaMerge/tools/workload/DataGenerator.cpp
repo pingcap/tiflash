@@ -1,9 +1,9 @@
 #include <DataTypes/DataTypeEnum.h>
-#include <Storages/DeltaMerge/tests/workload/DataGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/KeyGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/Options.h>
-#include <Storages/DeltaMerge/tests/workload/TableGenerator.h>
-#include <Storages/DeltaMerge/tests/workload/TimestampGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/DataGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/KeyGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/Options.h>
+#include <Storages/DeltaMerge/tools/workload/TableGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/TimestampGenerator.h>
 #include <fmt/ranges.h>
 
 #include <random>
@@ -13,20 +13,18 @@ namespace DB::DM::tests
 class RandomDataGenerator : public DataGenerator
 {
 public:
-    RandomDataGenerator(const WorkloadOptions & opts_, const TableInfo & table_info_, KeyGenerator & key_gen_, TimestampGenerator & ts_gen_)
+    RandomDataGenerator(const WorkloadOptions & opts_, const TableInfo & table_info_, TimestampGenerator & ts_gen_)
         : opts(opts_)
         , table_info(table_info_)
-        , key_gen(key_gen_)
         , ts_gen(ts_gen_)
         , rand_gen(std::random_device()())
     {}
 
-    virtual std::tuple<Block, uint64_t, uint64_t> get() override
+    virtual std::tuple<Block, uint64_t> get(uint64_t key) override
     {
         Block block;
         // Generate 'rowkeys'.
         // Currently not support common handle and rowkey is handle column.
-        uint64_t key = key_gen.get64();
         for (int i : table_info.rowkey_column_indexes)
         {
             auto & col_def = (*table_info.columns)[i];
@@ -103,7 +101,7 @@ public:
             auto col = createColumnWithRandomData(col_def.type, col_def.name, col_def.id);
             block.insert(std::move(col));
         }
-        return {block, key, ts};
+        return {block, ts};
     }
 
 private:
@@ -242,16 +240,15 @@ private:
 
     const WorkloadOptions & opts;
     const TableInfo & table_info;
-    KeyGenerator & key_gen;
     TimestampGenerator & ts_gen;
     std::mt19937_64 rand_gen;
     std::uniform_real_distribution<double> real_rand_gen;
     const std::string charset{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
 };
 
-std::unique_ptr<DataGenerator> DataGenerator::create([[maybe_unused]] const WorkloadOptions & opts, const TableInfo & table_info, KeyGenerator & key_gen, TimestampGenerator & ts_gen)
+std::unique_ptr<DataGenerator> DataGenerator::create([[maybe_unused]] const WorkloadOptions & opts, const TableInfo & table_info, TimestampGenerator & ts_gen)
 {
-    return std::make_unique<RandomDataGenerator>(opts, table_info, key_gen, ts_gen);
+    return std::make_unique<RandomDataGenerator>(opts, table_info, ts_gen);
 }
 
 } // namespace DB::DM::tests
