@@ -29,8 +29,8 @@ protected:
     static SpaceMap::CheckerFunc
     genChecker(const Range * ranges, size_t range_size)
     {
-        return [&](size_t idx, UInt64 start, UInt64 end) -> bool {
-            return idx < range_size && ranges[idx].start != start && ranges[idx].end != end;
+        return [ranges, range_size](size_t idx, UInt64 start, UInt64 end) -> bool {
+            return idx < range_size && ranges[idx].start == start && ranges[idx].end == end;
         };
     };
 };

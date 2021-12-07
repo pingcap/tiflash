@@ -31,13 +31,13 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
         smap = STDMapSpaceMap::create(start, end);
         break;
     default:
-        return nullptr;
+        throw Exception("Invalid type to create spaceMap", ErrorCodes::LOGICAL_ERROR);
     }
 
     if (!smap->newSmap())
     {
         smap->freeSmap();
-        return nullptr;
+        throw Exception("Failed create SpaceMap [type=" + typeToString(type) + "]", ErrorCodes::LOGICAL_ERROR);
     }
 
     return smap;

@@ -29,12 +29,12 @@ public:
         {
             if (!checker(idx, offset, offset + length))
                 return false;
+            idx++;
         }
         return true;
     }
 
 protected:
-
     STDMapSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_STD_MAP)
     {
@@ -274,8 +274,8 @@ protected:
 
         return false;
     }
-private:
 
+private:
     // Save the <offset, length> of free blocks
     std::map<UInt64, UInt64> free_map;
     UInt64 biggest_range = 0;
