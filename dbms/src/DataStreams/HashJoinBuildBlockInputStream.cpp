@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 Block HashJoinBuildBlockInputStream::readImpl()
 {
     auto timer = newTimer(Timeline::PULL);
