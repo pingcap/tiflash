@@ -11,14 +11,12 @@ ProjectionInterpreter::ProjectionInterpreter(
     const DAGQueryBlock & query_block_,
     size_t max_streams_,
     bool keep_session_timezone_info_,
-    const DAGQuerySource & dag_,
     const LogWithPrefixPtr & log_)
     : DAGInterpreterBase(
         context_,
         query_block_,
         max_streams_,
         keep_session_timezone_info_,
-        dag_,
         log_)
     , input_pipeline(input_pipeline_)
 {
@@ -61,6 +59,6 @@ void ProjectionInterpreter::executeImpl(DAGPipelinePtr & pipeline)
     pipeline->transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
     executeProject(*pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
-    recordProfileStreams(dag.getDAGContext(), *pipeline, query_block.source_name, query_block.id);
+    recordProfileStreams(dagContext(), *pipeline, query_block.source_name, query_block.id);
 }
 } // namespace DB

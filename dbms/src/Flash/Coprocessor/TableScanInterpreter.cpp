@@ -20,14 +20,12 @@ TableScanInterpreter::TableScanInterpreter(
     const DAGQueryBlock & query_block_,
     size_t max_streams_,
     bool keep_session_timezone_info_,
-    const DAGQuerySource & dag_,
     const LogWithPrefixPtr & log_)
     : DAGInterpreterBase(
         context_,
         query_block_,
         max_streams_,
         keep_session_timezone_info_,
-        dag_,
         log_)
 {
     assert(query_block.source->tp() == tipb::ExecType::TypeTableScan);
@@ -192,12 +190,12 @@ void TableScanInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline & p
         // do not have table id
         throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
     }
-    if (dag.getRegions().empty() && dag.getRegionsForRemoteRead().empty())
+    if (dagContext().getRegions().empty() && dagContext().getRegionsForRemoteRead().empty())
     {
         throw TiFlashException("Dag Request does not have region to read. ", Errors::Coprocessor::BadRequest);
     }
 
-    DAGStorageInterpreter storage_interpreter(context, dag, query_block, ts, conditions, max_streams, log);
+    DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams, log);
     storage_interpreter.execute(pipeline);
     is_remote_table_scan.assign(pipeline.streams.size(), false);
 
@@ -263,7 +261,7 @@ void TableScanInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
 
     ::tipb::DAGRequest dag_req;
 
-    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, dag.getDAGRequest());
+    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, *dagContext().dag_request);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
     BoolVec is_ts_column;
@@ -278,7 +276,7 @@ void TableScanInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
         source_columns.emplace_back(col_name, getDataTypeByFieldTypeForComputingLayer(query_block.output_field_types[i]));
     }
 
-    dag_req.set_collect_execution_summaries(dag.getDAGContext().collect_execution_summaries);
+    dag_req.set_collect_execution_summaries(dagContext().collect_execution_summaries);
     executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
@@ -317,7 +315,7 @@ void TableScanInterpreter::executeRemoteQueryImpl(
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log);
         pipeline.streams.push_back(input);
         is_remote_table_scan.push_back(true);
-        dag.getDAGContext().getRemoteInputStreams().push_back(input);
+        dagContext().getRemoteInputStreams().push_back(input);
         task_start = task_end;
     }
 }
@@ -340,8 +338,8 @@ void TableScanInterpreter::executeImpl(DAGPipelinePtr & pipeline)
         return;
     }
     executeTS(query_block.source->tbl_scan(), *pipeline);
-    recordProfileStreams(dag.getDAGContext(), *pipeline, query_block.source_name, query_block.id);
-    dag.getDAGContext().table_scan_executor_id = query_block.source_name;
+    recordProfileStreams(dagContext(), *pipeline, query_block.source_name, query_block.id);
+    dagContext().table_scan_executor_id = query_block.source_name;
 
     auto old_ts_schema = analyzer->getCurrentInputColumns();
     if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, pipeline->chain, query_block))
@@ -380,7 +378,7 @@ void TableScanInterpreter::executeImpl(DAGPipelinePtr & pipeline)
                     if (!is_remote_table_scan[i])
                     {
                         stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
-                        recordProfileStream(dag.getDAGContext(), stream, query_block.selection_name, query_block.id);
+                        recordProfileStream(dagContext(), stream, query_block.selection_name, query_block.id);
                     }
                 }
             });

@@ -12,7 +12,6 @@ ExchangeReceiverInterpreter::ExchangeReceiverInterpreter(
     const DAGQueryBlock & query_block_,
     size_t max_streams_,
     bool keep_session_timezone_info_,
-    const DAGQuerySource & dag_,
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_,
     const LogWithPrefixPtr & log_)
     : DAGInterpreterBase(
@@ -20,7 +19,6 @@ ExchangeReceiverInterpreter::ExchangeReceiverInterpreter(
         query_block_,
         max_streams_,
         keep_session_timezone_info_,
-        dag_,
         log_)
     , exchange_receiver_map(exchange_receiver_map_)
 {
@@ -46,7 +44,7 @@ void ExchangeReceiverInterpreter::executeImpl(DAGPipelinePtr & pipeline)
     for (size_t i = 0; i < max_streams; i++)
     {
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log);
-        dag.getDAGContext().getRemoteInputStreams().push_back(stream);
+        dagContext().getRemoteInputStreams().push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log);
         pipeline->streams.push_back(stream);
     }
@@ -57,6 +55,6 @@ void ExchangeReceiverInterpreter::executeImpl(DAGPipelinePtr & pipeline)
         source_columns.emplace_back(NameAndTypePair(col.name, col.type));
     }
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-    recordProfileStreams(dag.getDAGContext(), *pipeline, query_block.source_name, query_block.id);
+    recordProfileStreams(dagContext(), *pipeline, query_block.source_name, query_block.id);
 }
 } // namespace DB

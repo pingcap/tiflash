@@ -15,7 +15,6 @@ public:
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
-        const DAGQuerySource & dag_,
         std::vector<SubqueriesForSets> & subqueries_for_sets_,
         const LogWithPrefixPtr & log_);
 

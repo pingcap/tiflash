@@ -17,7 +17,6 @@ public:
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
-        const DAGQuerySource & dag_,
         const LogWithPrefixPtr & log_);
 
 private:

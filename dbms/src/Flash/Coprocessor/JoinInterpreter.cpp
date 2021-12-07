@@ -26,7 +26,6 @@ JoinInterpreter::JoinInterpreter(
     const DAGQueryBlock & query_block_,
     size_t max_streams_,
     bool keep_session_timezone_info_,
-    const DAGQuerySource & dag_,
     std::vector<SubqueriesForSets> & subqueries_for_sets_,
     const LogWithPrefixPtr & log_)
     : DAGInterpreterBase(
@@ -34,7 +33,6 @@ JoinInterpreter::JoinInterpreter(
         query_block_,
         max_streams_,
         keep_session_timezone_info_,
-        dag_,
         log_)
     , input_pipelines(input_pipelines_)
     , subqueries_for_sets(subqueries_for_sets_)
@@ -308,7 +306,7 @@ void JoinInterpreter::executeJoin(const tipb::Join & join, DAGPipelinePtr & pipe
     right_query.source = right_pipeline->firstStream();
     right_query.join = join_ptr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
-    dag.getDAGContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
+    dagContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
     for (const auto & p : left_pipeline->firstStream()->getHeader().getNamesAndTypesList())
@@ -356,7 +354,7 @@ void JoinInterpreter::executeImpl(DAGPipelinePtr & pipeline)
 {
     SubqueryForSet right_query;
     executeJoin(query_block.source->join(), pipeline, right_query);
-    recordProfileStreams(dag.getDAGContext(), *pipeline, query_block.source_name, query_block.id);
+    recordProfileStreams(dagContext(), *pipeline, query_block.source_name, query_block.id);
 
     SubqueriesForSets subquries;
     subquries[query_block.qb_join_subquery_alias] = right_query;

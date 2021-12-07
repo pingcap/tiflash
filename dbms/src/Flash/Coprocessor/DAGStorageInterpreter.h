@@ -4,7 +4,6 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/TableLockHolder.h>
@@ -33,7 +32,6 @@ class DAGStorageInterpreter
 public:
     DAGStorageInterpreter(
         Context & context_,
-        const DAGQuerySource & dag_,
         const DAGQueryBlock & query_block_,
         const tipb::TableScan & ts,
         const std::vector<const tipb::Expr *> & conditions_,
@@ -76,7 +74,6 @@ private:
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
     Context & context;
-    const DAGQuerySource & dag;
     const DAGQueryBlock & query_block;
     const tipb::TableScan & table_scan;
     const std::vector<const tipb::Expr *> & conditions;

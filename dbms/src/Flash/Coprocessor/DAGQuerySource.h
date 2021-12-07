@@ -2,7 +2,6 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
-#include <Flash/Coprocessor/RegionInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
@@ -20,11 +19,8 @@ class DAGQuerySource : public IQuerySource
 public:
     DAGQuerySource(
         Context & context_,
-        const RegionInfoMap & regions_,
-        const RegionInfoList & regions_needs_remote_read_,
         const tipb::DAGRequest & dag_request_,
-        const LogWithPrefixPtr & log_,
-        const bool is_batch_cop_or_mpp_ = false);
+        const LogWithPrefixPtr & log_);
 
     std::tuple<std::string, ASTPtr> parse(size_t) override;
     String str(size_t max_query_size) override;
@@ -39,10 +35,8 @@ public:
     tipb::EncodeType getEncodeType() const { return encode_type; }
 
     std::shared_ptr<DAGQueryBlock> getRootQueryBlock() const { return root_query_block; }
-    const RegionInfoMap & getRegions() const { return regions; }
-    const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
 
-    bool isBatchCopOrMpp() const { return is_batch_cop_or_mpp; }
+    bool keepSessionTimezoneInfo() const { return keep_session_timezone_info; }
 
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
@@ -54,17 +48,14 @@ protected:
 protected:
     Context & context;
 
-    const RegionInfoMap & regions;
-    const RegionInfoList & regions_for_remote_read;
-
     const tipb::DAGRequest & dag_request;
+
+    bool keep_session_timezone_info = false;
 
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type;
     std::shared_ptr<DAGQueryBlock> root_query_block;
     ASTPtr ast;
-
-    const bool is_batch_cop_or_mpp;
 
     LogWithPrefixPtr log;
 };

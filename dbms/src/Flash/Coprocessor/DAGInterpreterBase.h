@@ -27,7 +27,6 @@ protected:
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
-        const DAGQuerySource & dag_,
         const LogWithPrefixPtr & log_);
 
     virtual void executeImpl(DAGPipelinePtr & pipeline) = 0;
@@ -60,6 +59,8 @@ protected:
         DAGPipeline & pipeline,
         const NamesWithAliases & project_cols);
 
+    DAGContext & dagContext() const { return *context.getDAGContext(); }
+
     Context & context;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
@@ -69,7 +70,6 @@ protected:
     size_t before_agg_streams = 1;
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     std::vector<const tipb::Expr *> conditions;
-    const DAGQuerySource & dag;
     const LogWithPrefixPtr log;
 };
 } // namespace DB

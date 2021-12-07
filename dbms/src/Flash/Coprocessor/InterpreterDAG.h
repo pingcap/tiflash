@@ -51,8 +51,6 @@ private:
     // key: source_name of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_maps;
 
-    const bool keep_session_timezone_info;
-
     LogWithPrefixPtr log;
 };
 } // namespace DB

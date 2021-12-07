@@ -24,12 +24,11 @@ namespace DB
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const LogWithPrefixPtr & log_)
     : context(context_)
     , dag(dag_)
-    , keep_session_timezone_info(
-          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
     , log(log_)
 {
     const Settings & settings = context.getSettingsRef();
-    if (dag.isBatchCopOrMpp())
+    const DAGContext & dag_context = *context.getDAGContext();
+    if (dag_context.isBatchCop() || dag_context.isMPPTask())
         max_streams = settings.max_threads;
     else
         max_streams = 1;
@@ -48,6 +47,7 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
     for (auto & child : query_block.children)
         input_pipelines.push_back(executeQueryBlock(*child, subqueries_for_sets));
 
+    bool keep_session_timezone_info = dag.keepSessionTimezoneInfo() || !query_block.isRootQueryBlock();
     switch (query_block.source->tp())
     {
     case tipb::ExecType::TypeTableScan:
@@ -55,8 +55,7 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
                    context,
                    query_block,
                    max_streams,
-                   keep_session_timezone_info || !query_block.isRootQueryBlock(),
-                   dag,
+                   keep_session_timezone_info,
                    log)
             .execute();
     case tipb::ExecType::TypeExchangeReceiver:
@@ -64,8 +63,7 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
                    context,
                    query_block,
                    max_streams,
-                   keep_session_timezone_info || !query_block.isRootQueryBlock(),
-                   dag,
+                   keep_session_timezone_info,
                    mpp_exchange_receiver_maps,
                    log)
             .execute();
@@ -76,8 +74,7 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
                    input_pipelines[0],
                    query_block,
                    max_streams,
-                   keep_session_timezone_info || !query_block.isRootQueryBlock(),
-                   dag,
+                   keep_session_timezone_info,
                    log)
             .execute();
     case tipb::ExecType::TypeJoin:
@@ -86,8 +83,7 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
                    input_pipelines,
                    query_block,
                    max_streams,
-                   keep_session_timezone_info || !query_block.isRootQueryBlock(),
-                   dag,
+                   keep_session_timezone_info,
                    subqueries_for_sets,
                    log)
             .execute();
