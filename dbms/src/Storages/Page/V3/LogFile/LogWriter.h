@@ -8,12 +8,12 @@ class WriteBufferFromFileBase;
 namespace PS::V3
 {
 /**
- * Use the same format as rocksdb write ahead log file
- * (https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log-File-Format)
- *
  * Writer is a general purpose log stream writer. It provides an append-only
  * abstraction for writing data. The details of the how the data is written is
  * handled by the WriteableFile sub-class implementation.
+ *
+ * Use the same format as rocksdb write ahead log file
+ * (https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log-File-Format)
  *
  * File format:
  *
@@ -31,11 +31,11 @@ namespace PS::V3
  *
  * Legacy record format:
  *
- * +---------+-----------+-----------+--- ... ---+
- * |CRC (4B) | Size (2B) | Type (1B) | Payload   |
- * +---------+-----------+-----------+--- ... ---+
+ * +--------------+-----------+-----------+--- ... ---+
+ * |CheckSum (4B) | Size (2B) | Type (1B) | Payload   |
+ * +--------------+-----------+-----------+--- ... ---+
  *
- * CRC = 32bit hash computed over the record type and payload using CRC
+ * CheckSum = 32bit hash computed over the record type and payload using checksum algo
  * Size = Length of the payload data
  * Type = Type of record
  *        (kZeroType, kFullType, kFirstType, kLastType, kMiddleType )
@@ -45,9 +45,9 @@ namespace PS::V3
  *
  * Recyclable record format:
  *
- * +---------+-----------+-----------+----------------+--- ... ---+
- * |CRC (4B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
- * +---------+-----------+-----------+----------------+--- ... ---+
+ * +--------------+-----------+-----------+----------------+--- ... ---+
+ * |CheckSum (4B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
+ * +--------------+-----------+-----------+----------------+--- ... ---+
  *
  * Same as above, with the addition of
  * Log number = 32bit log file number, so that we can distinguish between

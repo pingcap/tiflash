@@ -1,6 +1,9 @@
 #pragma once
 
+#include <Common/Checksum.h>
+
 #include <cstdint>
+
 namespace DB::PS::V3::Format
 {
 enum RecordType : uint8_t
@@ -24,10 +27,17 @@ static constexpr int MaxRecordType = RecyclableLastType;
 
 static constexpr unsigned int BLOCK_SIZE = 32 * 1024;
 
+using ChecksumClass = Digest::CRC32; // TODO: CRC64
+
+using ChecksumType = ChecksumClass::HashType;
+
+static constexpr int ChecksumFieldSize = sizeof(ChecksumType);
+
 // Header is checksum (4 bytes), length (2 bytes), type (1 byte)
-static constexpr int HEADER_SIZE = 4 + 2 + 1;
+static constexpr int HEADER_SIZE = ChecksumFieldSize + 2 + 1;
 
 // Recyclable header is checksum (4 bytes), length (2 bytes), type (1 byte),
 // log number (4 bytes).
-static constexpr int RECYCLABLE_HEADER_SIZE = 4 + 2 + 1 + 4;
+static constexpr int RECYCLABLE_HEADER_SIZE = ChecksumFieldSize + 2 + 1 + 4;
+
 } // namespace DB::PS::V3::Format

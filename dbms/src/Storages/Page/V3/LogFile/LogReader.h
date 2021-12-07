@@ -63,7 +63,26 @@ protected:
     void reportDrop(size_t bytes, const String & reason);
 
 private:
-    unsigned int readPhysicalRecord(std::string_view * result, size_t * drop_size);
+    // Extend record types with the following special values
+    enum ExtRecordType : uint8_t
+    {
+        Eof = Format::MaxRecordType + 1,
+        // Returned whenever we find an invalid physical record.
+        // Currently there are three situations in which this happens:
+        // * The record has an invalid checksum (ReadPhysicalRecord reports a drop)
+        // * The record is a 0-length record (No drop is reported)
+        BadRecord = Format::MaxRecordType + 2,
+        // Returned when we fail to read a valid header.
+        BadHeader = Format::MaxRecordType + 3,
+        // Returned when we read an old record from a previous user of the log.
+        OldRecord = Format::MaxRecordType + 4,
+        // Returned when we get a bad record length
+        BadRecordLen = Format::MaxRecordType + 5,
+        // Returned when we get a bad record checksum
+        BadRecordChecksum = Format::MaxRecordType + 6,
+    };
+
+    ExtRecordType readPhysicalRecord(std::string_view * result, size_t * drop_size);
     // Read some more
     bool readMore(size_t * drop_size, int * error);
 
@@ -85,25 +104,6 @@ private:
     UInt64 log_number;
 
     Poco::Logger * log;
-
-    // Extend record types with the following special values
-    enum
-    {
-        Eof = Format::MaxRecordType + 1,
-        // Returned whenever we find an invalid physical record.
-        // Currently there are three situations in which this happens:
-        // * The record has an invalid CRC (ReadPhysicalRecord reports a drop)
-        // * The record is a 0-length record (No drop is reported)
-        BadRecord = Format::MaxRecordType + 2,
-        // Returned when we fail to read a valid header.
-        BadHeader = Format::MaxRecordType + 3,
-        // Returned when we read an old record from a previous user of the log.
-        OldRecord = Format::MaxRecordType + 4,
-        // Returned when we get a bad record length
-        BadRecordLen = Format::MaxRecordType + 5,
-        // Returned when we get a bad record checksum
-        BadRecordChecksum = Format::MaxRecordType + 6,
-    };
 };
 
 } // namespace PS::V3

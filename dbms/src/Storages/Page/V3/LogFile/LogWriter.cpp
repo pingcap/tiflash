@@ -97,11 +97,12 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
 
 void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length)
 {
-    assert(length <= 0xFFFF); // Must fit in two bytes
+    assert(length <= 0xFFFF); // The length of payload must fit in two bytes
 
-    static_assert(Format::RECYCLABLE_HEADER_SIZE > sizeof(Digest::CRC32::HashType), "Header size must be greater than the checksum size");
+    // Create a header buffer without the checksum field
+    static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::ChecksumFieldSize, "Header size must be greater than the checksum size");
     static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::HEADER_SIZE, "Ensure the min buffer size for physical record");
-    constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - sizeof(Digest::CRC32::HashType);
+    constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - Format::ChecksumFieldSize;
     char buf[HEADER_BUFF_SIZE];
     WriteBuffer header_buff(buf, HEADER_BUFF_SIZE);
 
@@ -109,7 +110,7 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     writeIntBinary(static_cast<UInt16>(length), header_buff);
     writeChar(static_cast<char>(type), header_buff);
 
-    Digest::CRC32 digest;
+    Format::ChecksumClass digest;
     char ch_type = static_cast<char>(type);
     digest.update(&ch_type, 1);
 
@@ -130,17 +131,16 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
         // we will fail to detect an old record if we recycled a log from
         // ~4 billion logs ago, but that is effectively impossible, and
         // even if it were we'dbe far more likely to see a false positive
-        // on the 32-bit CRC.
+        // on the checksum.
         writeIntBinary(static_cast<UInt32>(log_number), header_buff);
         digest.update(header_buff.position() - sizeof(UInt32), sizeof(UInt32));
     }
 
-    // Compute the crc of the record type and the payload.
+    // Compute the checksum of the record type and the payload.
+    // Write the checksum, header and the payload
     digest.update(payload.position(), length);
-    Digest::CRC32::HashType crc = digest.checksum();
-    writeIntBinary(crc, *dest);
-
-    // Write the header and the payload
+    Format::ChecksumType checksum = digest.checksum();
+    writeIntBinary(checksum, *dest);
     writeString(header_buff.buffer().begin(), header_buff.count(), *dest);
     writeString(payload.position(), length, *dest);
 

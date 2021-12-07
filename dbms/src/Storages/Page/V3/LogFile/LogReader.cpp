@@ -8,6 +8,7 @@
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
+#include <type_traits>
 
 namespace DB::FailPoints
 {
@@ -52,7 +53,8 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
     {
         uint64_t physical_record_offset = end_of_buffer_offset - buffer.size();
         size_t drop_size = 0;
-        const unsigned int record_type = readPhysicalRecord(&fragment, &drop_size);
+        static_assert(std::is_same_v<std::underlying_type_t<LogReader::ExtRecordType>, uint8_t>, "The underlying type of ExtRecordType should be uint8_t");
+        const uint8_t record_type = readPhysicalRecord(&fragment, &drop_size);
         switch (record_type)
         {
         case Format::FullType:
@@ -235,7 +237,7 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
     return {false, std::move(record)};
 }
 
-unsigned int LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_size)
+LogReader::ExtRecordType LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_size)
 {
     while (true)
     {
@@ -245,16 +247,16 @@ unsigned int LogReader::readPhysicalRecord(std::string_view * result, size_t * d
             // the default value of r is meaningless because ReadMore will overwrite it if it
             // returns false; in case it returns true, the return value will not be used anyway.
             if (int r = Eof; !readMore(drop_size, &r))
-                return r;
+                return static_cast<LogReader::ExtRecordType>(r);
             continue;
         }
 
         // Parse the header
         const char * header = buffer.data();
-        uint32_t expected_crc;
+        uint32_t expected_checksum;
         uint16_t length = 0;
         char type;
-        readIntBinary(expected_crc, *file);
+        readIntBinary(expected_checksum, *file);
         readIntBinary(length, *file);
         readChar(type, *file);
         int header_size = Format::HEADER_SIZE;
@@ -269,7 +271,7 @@ unsigned int LogReader::readPhysicalRecord(std::string_view * result, size_t * d
             if (buffer.size() < static_cast<size_t>(Format::RECYCLABLE_HEADER_SIZE))
             {
                 if (int r = Eof; !readMore(drop_size, &r))
-                    return r;
+                    return static_cast<LogReader::ExtRecordType>(r);
                 continue;
             }
             uint32_t log_num = 0;
@@ -302,12 +304,11 @@ unsigned int LogReader::readPhysicalRecord(std::string_view * result, size_t * d
             return BadRecord;
         }
 
-        // Check crc
         if (verify_checksum)
         {
-            Digest::CRC32 digest;
+            Format::ChecksumClass digest;
             digest.update(header + 6, length + header_size - 6);
-            if (uint32_t actual_crc = digest.checksum(); actual_crc != expected_crc)
+            if (uint32_t actual_checksum = digest.checksum(); actual_checksum != expected_checksum)
             {
                 // Drop the rest of the buffer since "length" itself may have
                 // been corrupted and if we trust it, we could find some
@@ -323,7 +324,7 @@ unsigned int LogReader::readPhysicalRecord(std::string_view * result, size_t * d
 
         *result = std::string_view(header + header_size, length);
         file->ignore(length); // Move forward the payload size
-        return type;
+        return static_cast<LogReader::ExtRecordType>(type);
     }
 }
 
