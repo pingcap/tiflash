@@ -59,3 +59,7 @@ $ python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEA
 ```
 
 You can download the `clang-format` from [muttleyxd/clang-tools-static-binaries](https://github.com/muttleyxd/clang-tools-static-binaries/releases). clang-format 12.0.0+ is required.
+
+## Development
+
+To start developing TiFlash, see [TiFlash Development Guide](/docs/DEVELOPMENT.md) and [TiFlash Design documents](/docs/design).

@@ -3,7 +3,6 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Storages/IStorage.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -16,9 +15,10 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-BatchCoprocessorHandler::BatchCoprocessorHandler(CoprocessorContext & cop_context_,
-                                                 const coprocessor::BatchRequest * cop_request_,
-                                                 ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
+BatchCoprocessorHandler::BatchCoprocessorHandler(
+    CoprocessorContext & cop_context_,
+    const coprocessor::BatchRequest * cop_request_,
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
     : CoprocessorHandler(cop_context_, nullptr, nullptr)
     , cop_request(cop_request_)
     , writer(writer_)

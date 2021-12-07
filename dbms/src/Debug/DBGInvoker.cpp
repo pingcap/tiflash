@@ -69,7 +69,6 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
     regSchemalessFunc("remove_region", dbgFuncRemoveRegion);
     regSchemalessFunc("find_region_by_range", dbgFuncFindRegionByRange);
-    regSchemalessFunc("check_table_optimize", dbgFuncCheckTableOptimize);
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);

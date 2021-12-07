@@ -219,16 +219,12 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
 
     // set storage engine type
     std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) { return std::tolower(c); });
-    if (engine_type == "tmt")
-        table_info.engine_type = TiDB::StorageEngine::TMT;
-    else if (engine_type == "dt")
+    if (engine_type == "dt")
         table_info.engine_type = TiDB::StorageEngine::DT;
-    else
-        throw Exception("Unknown engine type : " + engine_type + ", must be 'tmt' or 'dt'", ErrorCodes::BAD_ARGUMENTS);
-    // TODO: Remove all TMT
-    if (table_info.engine_type == TiDB::StorageEngine::TMT)
+
+    if (table_info.engine_type != TiDB::StorageEngine::DT)
     {
-        throw Exception("TxnMergeTree is disabled!", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Unknown engine type : " + engine_type + ", must be 'dt'", ErrorCodes::BAD_ARGUMENTS);
     }
 
     return std::make_shared<TiDB::TableInfo>(std::move(table_info));

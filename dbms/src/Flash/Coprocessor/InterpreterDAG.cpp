@@ -12,7 +12,6 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <pingcap/coprocessor/Client.h>
 
@@ -69,7 +68,9 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
+            std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
+                                                  context.getTMTContext().getMPPTaskManager(),
+                                                  context.getSettings().enable_local_tunnel),
             dag_query_block.source->exchange_receiver(),
             dag.getDAGContext().getMPPTaskMeta(),
             max_streams,
