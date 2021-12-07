@@ -2,8 +2,9 @@
 #include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/LeastGreatestGeneric.h>
 
-#include "DataTypes/NumberTraits.h"
-#include "Functions/IsOperation.h"
+#include <DataTypes/NumberTraits.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/IsOperation.h>
 
 namespace DB
 {
@@ -81,7 +82,7 @@ struct NameLeast                { static constexpr auto name = "least"; };
 
 using FunctionLeast = FunctionBinaryArithmetic<LeastImpl, NameLeast>;
 using FunctionTiDBLeast = FunctionTiDBLeastGreatest<LeastGreatest::Least, FunctionLeast>;
-
+using FunctionTiDBLeast1 = FunctionLeastGreatest<LeastGreatest::Least, FunctionLeast>;
 } // namespace
 
 void registerFunctionTiDBLeast(FunctionFactory & factory)
@@ -92,5 +93,10 @@ void registerFunctionTiDBLeast(FunctionFactory & factory)
 void registerFunctionLeast(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionLeast>();
+}
+
+void registerFunctionTiDBLeast1(FunctionFactory & factory)
+{
+    factory.registerFunction<FunctionTiDBLeast1>();
 }
 } // namespace DB

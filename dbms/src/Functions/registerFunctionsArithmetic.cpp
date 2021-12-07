@@ -25,6 +25,7 @@ void registerFunctionBitRotateRight(FunctionFactory & factory);
 void registerFunctionLeast(FunctionFactory & factory);
 void registerFunctionGreatest(FunctionFactory & factory);
 void registerFunctionTiDBLeast(FunctionFactory & factory);
+void registerFunctionTiDBLeast1(FunctionFactory & factory);
 void registerFunctionTiDBGreatest(FunctionFactory & factory);
 void registerFunctionBitTest(FunctionFactory & factory);
 void registerFunctionBitTestAny(FunctionFactory & factory);
@@ -57,6 +58,7 @@ void registerFunctionsArithmetic(FunctionFactory & factory)
     registerFunctionLeast(factory);
     registerFunctionGreatest(factory);
     registerFunctionTiDBLeast(factory);
+    registerFunctionTiDBLeast1(factory);
     registerFunctionTiDBGreatest(factory);
     registerFunctionBitTest(factory);
     registerFunctionBitTestAny(factory);

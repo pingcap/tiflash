@@ -152,11 +152,11 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::GreatestDecimal, "tidbGreatest"},
     {tipb::ScalarFuncSig::GreatestTime, "greatest"},
 
-    {tipb::ScalarFuncSig::LeastInt, "tidbLeast"},
-    {tipb::ScalarFuncSig::LeastReal, "tidbLeast"},
-    {tipb::ScalarFuncSig::LeastString, "least"},
-    {tipb::ScalarFuncSig::LeastDecimal, "tidbLeast"},
-    {tipb::ScalarFuncSig::LeastTime, "least"},
+    {tipb::ScalarFuncSig::LeastInt, "tidbLeast1"},
+    {tipb::ScalarFuncSig::LeastReal, "tidbLeast1"},
+    {tipb::ScalarFuncSig::LeastString, "tidbleast1"},
+    {tipb::ScalarFuncSig::LeastDecimal, "tidbLeast1"},
+    {tipb::ScalarFuncSig::LeastTime, "tidbLeast1"},
 
     //{tipb::ScalarFuncSig::IntervalInt, "cast"},
     //{tipb::ScalarFuncSig::IntervalReal, "cast"},
