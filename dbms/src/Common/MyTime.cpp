@@ -833,6 +833,11 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
         return;
     }
     time_t epoch = getEpochSecond(from_time, time_zone_from, 0, throw_excep);
+    if (unlikely(epoch <= 0))
+    {
+        to_time = 0;
+        return;
+    }
     MyDateTime from_my_time(from_time);
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
