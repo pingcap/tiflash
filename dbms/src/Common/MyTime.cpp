@@ -825,7 +825,7 @@ inline bool isZeroDate(UInt64 time)
     return time == 0;
 }
 
-void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
+void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, UInt64 offset)
 {
     if (isZeroDate(from_time))
     {
@@ -833,23 +833,23 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
         return;
     }
     MyDateTime from_my_time(from_time);
-    time_t epoch = getEpochSecond(from_my_time, time_zone_from);
+    time_t epoch = getEpochSecond(from_my_time, time_zone_from, offset);
+    if (epoch <= 0) {
+        to_time = 0;
+        return;
+    }
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
+}
+void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
+{
+    convertTimeZoneImpl(from_time, to_time, time_zone_from, time_zone_to, 0);
 }
 
 void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone)
 {
-    if (isZeroDate(from_time))
-    {
-        to_time = from_time;
-        return;
-    }
-    MyDateTime from_my_time(from_time);
     static const auto & time_zone_utc = DateLUT::instance("UTC");
-    time_t epoch = getEpochSecond(from_my_time, time_zone_utc, offset);
-    MyDateTime to_my_time(time_zone.toYear(epoch), time_zone.toMonth(epoch), time_zone.toDayOfMonth(epoch), time_zone.toHour(epoch), time_zone.toMinute(epoch), time_zone.toSecond(epoch), from_my_time.micro_second);
-    to_time = to_my_time.toPackedUInt();
+    convertTimeZoneImpl(from_time, to_time, time_zone_utc, time_zone, offset);
 }
 
 MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to)
