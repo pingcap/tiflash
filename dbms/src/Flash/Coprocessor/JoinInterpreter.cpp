@@ -354,7 +354,7 @@ void JoinInterpreter::executeImpl(DAGPipelinePtr & pipeline)
 {
     SubqueryForSet right_query;
     executeJoin(query_block.source->join(), pipeline, right_query);
-    recordProfileStreams(dagContext(), *pipeline, query_block.source_name, query_block.id);
+    recordProfileStreams(*pipeline, query_block.source_name);
 
     SubqueriesForSets subquries;
     subquries[query_block.qb_join_subquery_alias] = right_query;

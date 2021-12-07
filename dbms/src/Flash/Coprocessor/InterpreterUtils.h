@@ -13,9 +13,6 @@ BlockInputStreamPtr combinedNonJoinedDataStream(DAGPipeline & pipeline, size_t m
 
 void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log);
 
-void recordProfileStreams(DAGContext & dag_context, const DAGPipeline & pipeline, const String & key, UInt32 query_block_id);
-void recordProfileStream(DAGContext & dag_context, const BlockInputStreamPtr & stream, const String & key, UInt32 query_block_id);
-
 ExpressionActionsPtr generateProjectExpressionActions(
     const Block & header,
     const Context & context,

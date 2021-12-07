@@ -43,21 +43,6 @@ void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefi
     }
 }
 
-void recordProfileStreams(DAGContext & dag_context, const DAGPipeline & pipeline, const String & key, UInt32 query_block_id)
-{
-    dag_context.getProfileStreamsMap()[key].qb_id = query_block_id;
-    for (auto & stream : pipeline.streams)
-        dag_context.getProfileStreamsMap()[key].input_streams.push_back(stream);
-    for (auto & stream : pipeline.streams_with_non_joined_data)
-        dag_context.getProfileStreamsMap()[key].input_streams.push_back(stream);
-}
-
-void recordProfileStream(DAGContext & dag_context, const BlockInputStreamPtr & stream, const String & key, UInt32 query_block_id)
-{
-    dag_context.getProfileStreamsMap()[key].qb_id = query_block_id;
-    dag_context.getProfileStreamsMap()[key].input_streams.push_back(stream);
-}
-
 ExpressionActionsPtr generateProjectExpressionActions(
     const Block & header,
     const Context & context,

@@ -338,7 +338,7 @@ void TableScanInterpreter::executeImpl(DAGPipelinePtr & pipeline)
         return;
     }
     executeTS(query_block.source->tbl_scan(), *pipeline);
-    recordProfileStreams(dagContext(), *pipeline, query_block.source_name, query_block.id);
+    recordProfileStreams(*pipeline, query_block.source_name);
     dagContext().table_scan_executor_id = query_block.source_name;
 
     auto old_ts_schema = analyzer->getCurrentInputColumns();
@@ -378,7 +378,7 @@ void TableScanInterpreter::executeImpl(DAGPipelinePtr & pipeline)
                     if (!is_remote_table_scan[i])
                     {
                         stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
-                        recordProfileStream(dagContext(), stream, query_block.selection_name, query_block.id);
+                        recordProfileStream(stream, query_block.selection_name);
                     }
                 }
             });

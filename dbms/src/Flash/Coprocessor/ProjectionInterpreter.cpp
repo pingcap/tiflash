@@ -59,6 +59,6 @@ void ProjectionInterpreter::executeImpl(DAGPipelinePtr & pipeline)
     pipeline->transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
     executeProject(*pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
-    recordProfileStreams(dagContext(), *pipeline, query_block.source_name, query_block.id);
+    recordProfileStreams(*pipeline, query_block.source_name);
 }
 } // namespace DB

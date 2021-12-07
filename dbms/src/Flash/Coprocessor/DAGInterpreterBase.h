@@ -59,6 +59,9 @@ protected:
         DAGPipeline & pipeline,
         const NamesWithAliases & project_cols);
 
+    void recordProfileStreams(const DAGPipeline & pipeline, const String & key);
+    void recordProfileStream(const BlockInputStreamPtr & stream, const String & key);
+
     DAGContext & dagContext() const { return *context.getDAGContext(); }
 
     Context & context;

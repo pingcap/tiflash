@@ -218,7 +218,7 @@ void DAGInterpreterBase::executeNonSourceExecutors(DAGPipeline & pipeline)
                 pipeline.transform([&](auto & stream) {
                     stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
                 });
-                recordProfileStreams(dagContext(), pipeline, query_block.selection_name, query_block.id);
+                recordProfileStreams(pipeline, query_block.selection_name);
             });
         chain.addStep();
     }
@@ -249,7 +249,7 @@ void DAGInterpreterBase::executeNonSourceExecutors(DAGPipeline & pipeline)
                     aggregation_keys,
                     aggregation_collators,
                     aggregate_descriptions);
-                recordProfileStreams(dagContext(), pipeline, query_block.aggregation_name, query_block.id);
+                recordProfileStreams(pipeline, query_block.aggregation_name);
             });
 
         chain.finalize();
@@ -267,7 +267,7 @@ void DAGInterpreterBase::executeNonSourceExecutors(DAGPipeline & pipeline)
                 "beforeHaving",
                 [&, having_column_name = std::move(having_column_name)](const ExpressionActionsPtr & before_having) {
                     executeWhere(pipeline, before_having, having_column_name);
-                    recordProfileStreams(dagContext(), pipeline, query_block.having_name, query_block.id);
+                    recordProfileStreams(pipeline, query_block.having_name);
                 });
             chain.addStep();
         }
@@ -284,7 +284,7 @@ void DAGInterpreterBase::executeNonSourceExecutors(DAGPipeline & pipeline)
                 [&, order_columns = std::move(order_columns)](const ExpressionActionsPtr & before_order) {
                     executeExpression(pipeline, before_order);
                     executeOrder(pipeline, order_columns);
-                    recordProfileStreams(dagContext(), pipeline, query_block.limitOrTopN_name, query_block.id);
+                    recordProfileStreams(pipeline, query_block.limitOrTopN_name);
                 });
             chain.addStep();
         }
@@ -295,7 +295,7 @@ void DAGInterpreterBase::executeNonSourceExecutors(DAGPipeline & pipeline)
                 [&](const ExpressionActionsPtr & before_limit) {
                     executeExpression(pipeline, before_limit);
                     executeLimit(pipeline);
-                    recordProfileStreams(dagContext(), pipeline, query_block.limitOrTopN_name, query_block.id);
+                    recordProfileStreams(pipeline, query_block.limitOrTopN_name);
                 });
             chain.addStep();
         }
@@ -370,4 +370,20 @@ DAGPipelinePtr DAGInterpreterBase::execute()
 
     return pipeline;
 }
+
+void DAGInterpreterBase::recordProfileStreams(const DAGPipeline & pipeline, const String & key)
+{
+    dagContext().getProfileStreamsMap()[key].qb_id = query_block.id;
+    for (auto & stream : pipeline.streams)
+        dagContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
+    for (auto & stream : pipeline.streams_with_non_joined_data)
+        dagContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
+}
+
+void DAGInterpreterBase::recordProfileStream(const BlockInputStreamPtr & stream, const String & key)
+{
+    dagContext().getProfileStreamsMap()[key].qb_id = query_block.id;
+    dagContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
+}
+
 } // namespace DB

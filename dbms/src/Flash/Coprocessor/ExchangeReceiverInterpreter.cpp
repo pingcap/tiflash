@@ -55,6 +55,6 @@ void ExchangeReceiverInterpreter::executeImpl(DAGPipelinePtr & pipeline)
         source_columns.emplace_back(NameAndTypePair(col.name, col.type));
     }
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
-    recordProfileStreams(dagContext(), *pipeline, query_block.source_name, query_block.id);
+    recordProfileStreams(*pipeline, query_block.source_name);
 }
 } // namespace DB
