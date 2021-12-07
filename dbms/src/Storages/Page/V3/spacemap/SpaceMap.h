@@ -86,7 +86,7 @@ public:
      * Sanity check for correctness
      */
     using CheckerFunc = std::function<bool(size_t idx, UInt64 start, UInt64 end)>;
-    virtual bool check(CheckerFunc /*checker*/)
+    virtual bool check(CheckerFunc /*checker*/, size_t /*size*/)
     {
         return true;
     }

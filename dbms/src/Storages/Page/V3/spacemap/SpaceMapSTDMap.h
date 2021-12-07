@@ -22,7 +22,7 @@ class STDMapSpaceMap
 public:
     ~STDMapSpaceMap() override = default;
 
-    bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker) override
+    bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override
     {
         size_t idx = 0;
         for (const auto [offset, length] : free_map)
@@ -31,7 +31,8 @@ public:
                 return false;
             idx++;
         }
-        return true;
+
+        return idx == size;
     }
 
 protected:
@@ -55,10 +56,10 @@ protected:
     {
         UInt64 count = 0;
 
-        LOG_DEBUG(log, "entry status :");
+        LOG_DEBUG(log, "STD-Map entries status: ");
         for (auto it = free_map.begin(); it != free_map.end(); it++)
         {
-            LOG_DEBUG(log, "  Space : " << count << " start:" << it->first << " size : " << it->second);
+            LOG_DEBUG(log, "  Space: " << count << " start:" << it->first << " size : " << it->second);
             count++;
         }
     }
@@ -83,47 +84,59 @@ protected:
         return false;
     }
 
-    bool markSmapUsed(UInt64 block, size_t num) override
+    bool markSmapUsed(UInt64 offset, size_t length) override
     {
-        auto it = free_map.find(block);
-        if (it == free_map.end())
+        auto it = free_map.upper_bound(offset);
+        if (it == free_map.begin())
         {
-            // can't found , check the near one.
-            for (it = free_map.begin(); it != free_map.end(); it++)
-            {
-                // In the space, jump to space.
-                if (it->first <= block && (it->first + it->second) > block)
-                {
-                    break;
-                }
+            return false;
+        }
 
-                // Could not found
-                if (it->first > block)
-                {
-                    return false;
-                }
-            }
+        --it;
+
+        // already been marked used
+        if (it->first + it->second < offset)
+        {
+            return false;
+        }
+
+        if (length > it->second || it->first + it->second < offset + length)
+        {
+            LOG_WARNING(log, "Marked space used failed. [offset = " << offset << ", size= " << length << "] is bigger than space [offset=" << it->first << ",size=" << it->second << "]");
+            return false;
         }
 
         // match
-        if (it->first == block)
+        if (it->first == offset)
         {
-            free_map.erase(it);
-
-            // in the space
+            if (length == it->second)
+            {
+                free_map.erase(it);
+            }
+            else
+            {
+                auto _offset = it->first + length;
+                auto _size = it->second - length;
+                free_map.erase(it);
+                free_map[_offset] = _size;
+            }
+        }
+        else if (it->first + it->second == offset + length)
+        {
+            free_map[it->first] = it->second - length;
         }
         else
         {
             // In the mid, and not match the left or right.
             // Split to two space
-            if (((it->first + it->second) - block) > num)
+            if (((it->first + it->second) - offset) > length)
             {
-                free_map.insert({block + num, it->first + it->second - block - num});
-                free_map[it->first] = block - it->first;
+                free_map.insert({offset + length, it->first + it->second - offset - length});
+                free_map[it->first] = offset - it->first;
             }
             else
-            { // < num
-                free_map[it->first] = it->first + it->second - block;
+            { // < length
+                free_map[it->first] = it->first + it->second - offset;
             }
         }
 
@@ -224,13 +237,13 @@ protected:
         return std::make_pair(offset, max_cap);
     }
 
-    bool markSmapFree(UInt64 block, size_t num) override
+    bool markSmapFree(UInt64 offset, size_t length) override
     {
-        auto it = free_map.find(block);
+        auto it = free_map.find(offset);
 
         /**
          * already unmarked.
-         * The `block` won't be mid of free space.
+         * The `offset` won't be mid of free space.
          * Because we alloc space from left to right.
          */
         if (it != free_map.end())
@@ -239,40 +252,77 @@ protected:
         }
 
         bool meanless = false;
-        std::tie(it, meanless) = free_map.insert({block, num});
+        std::tie(it, meanless) = free_map.insert({offset, length});
 
         auto it_prev = it;
+        auto it_next = it;
 
+        /**
+         * We need check current node is legal before we merge it.
+         * If prev/next node exist. Check if they have overlap with the current node.
+         * Also, We can’t check while doing the merge. 
+         * Because it will cause the original state not to be restored
+         */
         if (it != free_map.begin())
         {
             it_prev--;
+            if (it_prev->first + it_prev->second > it->first)
+            {
+                LOG_WARNING(log, "Marked space free failed. [offset = " << it->first << ", size= " << it->second << "], prev node is [offset=" << it_prev->first << ",size=" << it_prev->second << "]");
+                free_map.erase(it);
+                return false;
+            }
+        }
 
+        it_next++;
+        if (it_next != free_map.end())
+        {
+            if (it->first + it->second > it_next->first)
+            {
+                LOG_WARNING(log, "Marked space free failed. [offset = " << it->first << ", size= " << it->second << "], next node is [offset=" << it_next->first << ",size=" << it_next->second << "]");
+                free_map.erase(it);
+                return false;
+            }
+        }
+
+        /**
+         * Now, we can do merge.
+         * Restore the prev and next to the origin one.
+         * Also, we need check begin/end again. 
+         * Because there not cache result.
+         */
+        it_prev = it;
+
+        // Check prev
+        if (it != free_map.begin())
+        {
+            it_prev--;
             // Prev space can merge
-            if (it_prev->first + it_prev->second >= it->first)
+            if (it_prev->first + it_prev->second == it->first)
             {
                 free_map[it_prev->first] = it->first + it->second - it_prev->first;
                 free_map.erase(it);
                 it = it_prev;
             }
+
+            // prev can't merge
         }
 
-        // Check right
-        if (it == free_map.end())
-        {
-            return false;
-        }
-
-        auto it_next = it;
+        // Check next
+        it_next = it;
         it_next++;
+        if (it_next == free_map.end())
+        {
+            return true;
+        }
 
-        // next space can merge
-        if (it->first + it->second >= it_next->first)
+        if (it->first + it->second == it_next->first)
         {
             free_map[it->first] = it_next->first + it_next->second - it->first;
             free_map.erase(it_next);
         }
-
-        return false;
+        // next can't merge
+        return true;
     }
 
 private:

@@ -86,7 +86,7 @@ bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    return isSmapMarkUsed(offset, length);
+    return !isSmapMarkUsed(offset, length);
 }
 
 std::pair<UInt64, UInt64> SpaceMap::searchInsertOffset(size_t size)
@@ -98,7 +98,7 @@ SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_)
     : type(type_)
     , start(start_)
     , end(end_)
-    , log(&Poco::Logger::get("RBTreeSpaceMap"))
+    , log(&Poco::Logger::get("SpaceMap"))
 {
 }
 
