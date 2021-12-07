@@ -66,22 +66,18 @@ protected:
 
     bool isSmapMarkUsed(UInt64 block, size_t num) override
     {
-        for (auto it = free_map.begin(); it != free_map.end(); it++)
-        {
-            // block in the space
-            if (it->first <= block && (it->first + it->second) > block)
-            {
-                // end of block still in the space
-                return (it->first + it->second) >= (num + block);
-            }
+        auto it = free_map.lower_bound(block);
 
-            if (it->first >= block)
-            {
-                break;
-            }
+        if (it == free_map.end())
+        {
+            it--;
+        }
+        else if (it->first > block && it != free_map.begin())
+        {
+            it--;
         }
 
-        return false;
+        return (it->first <= block && (it->first + it->second >= block + num));
     }
 
     bool markSmapUsed(UInt64 offset, size_t length) override
@@ -170,7 +166,7 @@ protected:
         // not place found.
         if (it == free_map.end())
         {
-            LOG_ERROR(log, "Not sure why can't found any place to insert.[old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
+            LOG_ERROR(log, "Not sure why can't found any place to insert. [size=" << size << "] [old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
             biggest_range = _biggest_range;
             biggest_cap = _biggest_cap;
 
@@ -185,8 +181,7 @@ protected:
             // It is champion, need update
             if (it->first == biggest_range)
             {
-                auto it_cur = it++;
-                free_map.erase(it_cur);
+                it = free_map.erase(it);
                 // still need search for max_cap
             }
             else // It not champion, just return
@@ -198,27 +193,26 @@ protected:
         }
         else
         {
+            // Shrink the free block by `size`
             auto k = it->first + size;
             auto v = it->second - size;
 
-            free_map.erase(it);
-            free_map.insert({k, v});
+            it = free_map.erase(it);
+            it = free_map.insert(/*hint=*/it, {k, v}); // Use the `it` after erased as a hint, should be good for performance
 
-            // It is champion, need update
-            if (k - size == biggest_range)
-            {
-                if (v > _biggest_cap)
-                {
-                    _biggest_cap = v;
-                    _biggest_range = k;
-                }
-                it = free_map.find(k);
-                // still need search for max_cap
-            }
-            else // It not champion, just return
+            // It not champion, just return
+            if (k - size != biggest_range)
             {
                 max_cap = biggest_cap;
                 return std::make_pair(offset, max_cap);
+            }
+
+            // It is champion, need to update `_biggest_cap`, `_biggest_range`
+            // and scan other free blocks to update `biggest_range` and `biggest_cap`
+            if (v > _biggest_cap)
+            {
+                _biggest_cap = v;
+                _biggest_range = k;
             }
         }
 
@@ -232,9 +226,8 @@ protected:
         }
         biggest_range = _biggest_range;
         biggest_cap = _biggest_cap;
-        max_cap = biggest_cap;
 
-        return std::make_pair(offset, max_cap);
+        return std::make_pair(offset, biggest_cap);
     }
 
     bool markSmapFree(UInt64 offset, size_t length) override

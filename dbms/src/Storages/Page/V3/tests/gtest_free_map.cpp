@@ -263,6 +263,13 @@ TEST_P(SpaceMapTest, TestMargins2)
     ASSERT_TRUE(smap->check(genChecker(ranges2, 2), 2));
 }
 
+TEST(AAA, nulld)
+{
+    std::map<UInt64, UInt64> map;
+    map.insert({0, 100});
+    auto it = map.lower_bound(1);
+    std::cout << "rc:" << (int)(it == map.end()) << std::endl;
+}
 
 INSTANTIATE_TEST_CASE_P(
     Type,

@@ -11,8 +11,8 @@ static inline void rb_link_node(struct rb_node * node,
                                 struct rb_node ** rb_link)
 {
     node->parent = (uintptr_t)parent;
-    node->node_left = NULL;
-    node->node_right = NULL;
+    node->node_left = nullptr;
+    node->node_right = nullptr;
 
     *rb_link = node;
 }
@@ -23,12 +23,12 @@ static inline void rb_link_node(struct rb_node * node,
 // Its local debug info, So don't us LOG
 static void rb_tree_debug(struct rb_root * root, const char * method_call)
 {
-    struct rb_node * node = NULL;
+    struct rb_node * node = nullptr;
     struct smap_rb_entry * entry;
 
     node = rb_tree_first(root);
     printf("call in %s", method_call);
-    for (node = rb_tree_first(root); node != NULL; node = rb_tree_next(node))
+    for (node = rb_tree_first(root); node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
         printf(" Space - (%llu -> %llu)\n", entry->start, entry->start + entry->count);
@@ -48,7 +48,7 @@ static void rb_get_new_entry(struct smap_rb_entry ** entry, UInt64 start, UInt64
     struct smap_rb_entry * new_entry;
 
     new_entry = (struct smap_rb_entry *)calloc(1, sizeof(struct smap_rb_entry));
-    if (new_entry == NULL)
+    if (new_entry == nullptr)
     {
         return;
     }
@@ -65,17 +65,17 @@ inline static void rb_free_entry(struct rb_private * private_data, struct smap_r
      */
     if (private_data->write_index == entry)
     {
-        private_data->write_index = NULL;
+        private_data->write_index = nullptr;
     }
 
     if (private_data->read_index == entry)
     {
-        private_data->read_index = NULL;
+        private_data->read_index = nullptr;
     }
 
     if (private_data->read_index_next == entry)
     {
-        private_data->read_index_next = NULL;
+        private_data->read_index_next = nullptr;
     }
 
     free(entry);
@@ -85,20 +85,18 @@ inline static void rb_free_entry(struct rb_private * private_data, struct smap_r
 static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * private_data, Poco::Logger * log)
 {
     struct rb_root * root = &private_data->root;
-    struct rb_node *parent = NULL, **n = &root->rb_node;
+    struct rb_node *parent = nullptr, **n = &root->rb_node;
     struct rb_node *new_node, *node, *next;
     struct smap_rb_entry * new_entry;
     struct smap_rb_entry * entry;
     bool retval = true;
-
-    (void)log;
 
     if (count == 0)
     {
         return false;
     }
 
-    private_data->read_index_next = NULL;
+    private_data->read_index_next = nullptr;
     entry = private_data->write_index;
     if (entry)
     {
@@ -215,7 +213,7 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
 
 no_need_insert:
     // merge entry to the right
-    for (node = rb_tree_next(new_node); node != NULL; node = next)
+    for (node = rb_tree_next(new_node); node != nullptr; node = next)
     {
         next = rb_tree_next(node);
         entry = node_to_entry(node);
@@ -255,14 +253,14 @@ no_need_insert:
 static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * private_data, Poco::Logger * log)
 {
     struct rb_root * root = &private_data->root;
-    struct rb_node *parent = NULL, **n = &root->rb_node;
+    struct rb_node *parent = nullptr, **n = &root->rb_node;
     struct rb_node * node;
     struct smap_rb_entry * entry;
     UInt64 new_start, new_count;
     bool marked = false;
 
     // Root node have not been init
-    if (private_data->root.rb_node == NULL)
+    if (private_data->root.rb_node == nullptr)
     {
         assert(false);
     }
@@ -337,7 +335,7 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priv
     }
 
     // Checking the right node
-    for (; parent != NULL; parent = node)
+    for (; parent != nullptr; parent = node)
     {
         node = rb_tree_next(parent);
         entry = node_to_entry(parent);
@@ -378,17 +376,17 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priv
 bool RBTreeSpaceMap::newSmap()
 {
     rb_tree = (struct rb_private *)calloc(1, sizeof(struct rb_private));
-    if (rb_tree == NULL)
+    if (rb_tree == nullptr)
     {
         return false;
     }
 
     rb_tree->root = {
-        NULL,
+        nullptr,
     };
-    rb_tree->read_index = NULL;
-    rb_tree->read_index_next = NULL;
-    rb_tree->write_index = NULL;
+    rb_tree->read_index = nullptr;
+    rb_tree->read_index_next = nullptr;
+    rb_tree->write_index = nullptr;
 
     if (!rb_insert_entry(start, end, rb_tree, log))
     {
@@ -425,7 +423,7 @@ void RBTreeSpaceMap::freeSmap()
 
 void RBTreeSpaceMap::smapStats()
 {
-    struct rb_node * node = NULL;
+    struct rb_node * node = nullptr;
     struct smap_rb_entry * entry;
     UInt64 count = 0;
     UInt64 max_size = 0;
@@ -438,7 +436,7 @@ void RBTreeSpaceMap::smapStats()
     }
 
     LOG_DEBUG(log, "RB-Tree entries status: ");
-    for (node = rb_tree_first(&rb_tree->root); node != NULL; node = rb_tree_next(node))
+    for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
         LOG_DEBUG(log, "  Space: " << count << " start:" << entry->start << " size : " << entry->count);
@@ -458,7 +456,7 @@ void RBTreeSpaceMap::smapStats()
 bool RBTreeSpaceMap::isSmapMarkUsed(UInt64 _start,
                                     size_t len)
 {
-    struct rb_node *parent = NULL, **n;
+    struct rb_node *parent = nullptr, **n;
     struct rb_node *node, *next;
     struct smap_rb_entry * entry;
     bool retval = false;
@@ -466,7 +464,7 @@ bool RBTreeSpaceMap::isSmapMarkUsed(UInt64 _start,
     n = &rb_tree->root.rb_node;
     _start -= start;
 
-    if (len == 0 || rb_tree->root.rb_node == NULL)
+    if (len == 0 || rb_tree->root.rb_node == nullptr)
     {
         assert(0);
     }
@@ -515,12 +513,12 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
 {
     UInt64 offset = UINT64_MAX;
     UInt64 max_cap = 0;
-    struct rb_node * node = NULL;
+    struct rb_node * node = nullptr;
     struct smap_rb_entry * entry;
 
     UInt64 _biggest_cap = 0;
     UInt64 _biggest_range = 0;
-    for (node = rb_tree_first(&rb_tree->root); node != NULL; node = rb_tree_next(node))
+    for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
         if (entry->count >= size)
@@ -537,10 +535,10 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
         }
     }
 
-    // not place found.
+    // No enough space for insert
     if (!node)
     {
-        LOG_ERROR(log, "Not sure why can't found any place to insert. [old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
+        LOG_ERROR(log, "Not sure why can't found any place to insert.[size=" << size << "] [old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
         biggest_range = _biggest_range;
         biggest_cap = _biggest_cap;
 
@@ -593,7 +591,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
         }
     }
 
-    for (; node != NULL; node = rb_tree_next(node))
+    for (; node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
         if (entry->count > _biggest_cap)
