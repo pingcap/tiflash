@@ -35,8 +35,6 @@ public:
 
     std::shared_ptr<DAGQueryBlock> getRootQueryBlock() const { return root_query_block; }
 
-    bool keepSessionTimezoneInfo() const { return keep_session_timezone_info; }
-
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
     std::string getExecutorNames() const;
@@ -48,8 +46,6 @@ protected:
     Context & context;
 
     const tipb::DAGRequest & dag_request;
-
-    bool keep_session_timezone_info = false;
 
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type;

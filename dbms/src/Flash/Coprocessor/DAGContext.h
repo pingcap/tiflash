@@ -151,6 +151,7 @@ public:
     LogWithPrefixPtr mpp_task_log;
 
     bool is_batch_cop = false;
+    bool keep_session_timezone_info = false;
     UInt32 executor_id_generator = 0;
     RegionInfoMap regions;
     RegionInfoList regions_for_remote_read;

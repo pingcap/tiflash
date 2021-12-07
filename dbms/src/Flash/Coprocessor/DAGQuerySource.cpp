@@ -36,7 +36,7 @@ DAGQuerySource::DAGQuerySource(
         result_field_types.push_back(root_query_block->output_field_types[i]);
     }
     analyzeDAGEncodeType();
-    keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
+    context.getDAGContext()->keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
 }
 
 void DAGQuerySource::analyzeDAGEncodeType()

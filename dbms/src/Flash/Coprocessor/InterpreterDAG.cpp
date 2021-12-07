@@ -47,7 +47,7 @@ DAGPipelinePtr InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, st
     for (auto & child : query_block.children)
         input_pipelines.push_back(executeQueryBlock(*child, subqueries_for_sets));
 
-    bool keep_session_timezone_info = dag.keepSessionTimezoneInfo() || !query_block.isRootQueryBlock();
+    bool keep_session_timezone_info = context.getDAGContext()->keep_session_timezone_info || !query_block.isRootQueryBlock();
     switch (query_block.source->tp())
     {
     case tipb::ExecType::TypeTableScan:
