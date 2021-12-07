@@ -83,16 +83,25 @@ public:
     std::pair<UInt64, UInt64> searchInsertOffset(size_t size);
 
     /**
+     * Sanity check for correctness
+     */
+    using CheckerFunc = std::function<bool(size_t idx, UInt64 start, UInt64 end)>;
+    virtual bool check(CheckerFunc /*checker*/)
+    {
+        return true;
+    }
+
+    /**
      * Log the status of space map
      */
     void logStats();
 
-    SpaceMapType getType()
+    SpaceMapType getType() const
     {
         return type;
     }
 
-    String typeToString(SpaceMapType type)
+    static String typeToString(SpaceMapType type)
     {
         switch (type)
         {
@@ -105,13 +114,10 @@ public:
         }
     }
 
-#ifndef DBMS_PUBLIC_GTEST
 protected:
-#endif
+    SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_);
 
-    SpaceMap(UInt64 start, UInt64 end);
-
-    virtual ~SpaceMap(){};
+    virtual ~SpaceMap() = default;
 
     /* Generic space map operators */
     virtual bool newSmap() = 0;

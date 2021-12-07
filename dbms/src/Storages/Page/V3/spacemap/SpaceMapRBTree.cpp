@@ -559,5 +559,23 @@ bool RBTreeSpaceMap::markSmapFree(UInt64 block, size_t size)
     return rc;
 }
 
+bool RBTreeSpaceMap::check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker)
+{
+    struct smap_rb_entry * ext;
+
+    size_t i = 0;
+    for (struct rb_node * node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
+    {
+        ext = node_to_entry(node);
+        if (!checker(i, ext->start, ext->start + ext->count))
+        {
+            return false;
+        }
+        i++;
+    }
+
+    return true;
+}
+
 
 } // namespace DB::PS::V3

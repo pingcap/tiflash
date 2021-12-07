@@ -1,6 +1,8 @@
 #pragma once
 #include <Common/Exception.h>
 
+#include <ext/shared_ptr_helper.h>
+
 #include "RBTree.h"
 #include "SpaceMap.h"
 
@@ -36,23 +38,23 @@ inline static struct smap_rb_entry * node_to_entry(struct rb_node * node)
     return reinterpret_cast<smap_rb_entry *>(node);
 }
 
-class RBTreeSpaceMap : public SpaceMap
+class RBTreeSpaceMap
+    : public SpaceMap
+    , public ext::SharedPtrHelper<RBTreeSpaceMap>
 {
 public:
-    RBTreeSpaceMap(UInt64 start, UInt64 end)
-        : SpaceMap(start, end)
-    {
-        type = SMAP64_RBTREE;
-    };
-
     ~RBTreeSpaceMap() override
     {
         freeSmap();
-    };
+    }
 
-#ifndef DBMS_PUBLIC_GTEST
+    bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker) override;
+
 protected:
-#endif
+    RBTreeSpaceMap(UInt64 start, UInt64 end)
+        : SpaceMap(start, end, SMAP64_RBTREE)
+    {
+    }
 
     bool newSmap() override;
 
@@ -68,9 +70,7 @@ protected:
 
     std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) override;
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
     struct rb_private * rb_tree;
     UInt64 biggest_range = 0;
     UInt64 biggest_cap = 0;

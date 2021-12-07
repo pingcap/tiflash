@@ -1,6 +1,7 @@
 #pragma once
 #include <Common/Exception.h>
 
+#include <ext/shared_ptr_helper.h>
 #include <map>
 
 #include "SpaceMap.h"
@@ -14,22 +15,31 @@ extern const int NOT_IMPLEMENTED;
 
 namespace PS::V3
 {
-class STDMapSpaceMap : public SpaceMap
+class STDMapSpaceMap
+    : public SpaceMap
+    , public ext::SharedPtrHelper<STDMapSpaceMap>
 {
 public:
-    STDMapSpaceMap(UInt64 start, UInt64 end)
-        : SpaceMap(start, end)
+    ~STDMapSpaceMap() override = default;
+
+    bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker) override
     {
-        type = SMAP64_STD_MAP;
-    };
+        size_t idx = 0;
+        for (const auto [offset, length] : free_map)
+        {
+            if (!checker(idx, offset, offset + length))
+                return false;
+        }
+        return true;
+    }
 
-    ~STDMapSpaceMap() override{
-
-    };
-
-#ifndef DBMS_PUBLIC_GTEST
 protected:
-#endif
+
+    STDMapSpaceMap(UInt64 start, UInt64 end)
+        : SpaceMap(start, end, SMAP64_STD_MAP)
+    {
+    }
+
     bool newSmap() override
     {
         free_map.insert({start, end});
@@ -264,9 +274,7 @@ protected:
 
         return false;
     }
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
 
     // Save the <offset, length> of free blocks
     std::map<UInt64, UInt64> free_map;
