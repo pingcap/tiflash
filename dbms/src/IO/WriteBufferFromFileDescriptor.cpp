@@ -91,7 +91,7 @@ off_t WriteBufferFromFileDescriptor::getPositionInFile()
     return seek(0, SEEK_CUR);
 }
 
-void WriteBufferFromFileDescriptor::close() 
+void WriteBufferFromFileDescriptor::close()
 {
     next();
 
