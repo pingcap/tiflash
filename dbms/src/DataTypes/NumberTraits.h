@@ -1,21 +1,22 @@
 #pragma once
 
-#include <Core/Types.h>
 #include <Common/Decimal.h>
+#include <Core/Types.h>
+
 #include <type_traits>
 
 
 namespace DB
 {
-
 /** Allows get the result type of the functions +, -, *, /, %, intDiv (integer division).
   * The rules are different from those used in C++.
   */
 
 namespace NumberTraits
 {
-
-struct Error {};
+struct Error
+{
+};
 
 constexpr size_t max(size_t x, size_t y)
 {
@@ -43,22 +44,86 @@ struct Construct
  * 1. support wide integers (Int128/Int256) needed by Decimal.
  * 2. for floating point numbers Type should always be Float64.
  */
-template <> struct Construct<false, false, 1> { using Type = UInt8; };
-template <> struct Construct<false, false, 2> { using Type = UInt16; };
-template <> struct Construct<false, false, 4> { using Type = UInt32; };
-template <> struct Construct<false, false, 8> { using Type = UInt64; };
-template <> struct Construct<false, true, 1>  { using Type = Float32; };
-template <> struct Construct<false, true, 2>  { using Type = Float32; };
-template <> struct Construct<false, true, 4>  { using Type = Float32; };
-template <> struct Construct<false, true, 8>  { using Type = Float64; };
-template <> struct Construct<true, false, 1>  { using Type = Int8; };
-template <> struct Construct<true, false, 2>  { using Type = Int16; };
-template <> struct Construct<true, false, 4>  { using Type = Int32; };
-template <> struct Construct<true, false, 8>  { using Type = Int64; };
-template <> struct Construct<true, true, 1>   { using Type = Float32; };
-template <> struct Construct<true, true, 2>   { using Type = Float32; };
-template <> struct Construct<true, true, 4>   { using Type = Float32; };
-template <> struct Construct<true, true, 8>   { using Type = Float64; };
+template <>
+struct Construct<false, false, 1>
+{
+    using Type = UInt8;
+};
+template <>
+struct Construct<false, false, 2>
+{
+    using Type = UInt16;
+};
+template <>
+struct Construct<false, false, 4>
+{
+    using Type = UInt32;
+};
+template <>
+struct Construct<false, false, 8>
+{
+    using Type = UInt64;
+};
+template <>
+struct Construct<false, true, 1>
+{
+    using Type = Float32;
+};
+template <>
+struct Construct<false, true, 2>
+{
+    using Type = Float32;
+};
+template <>
+struct Construct<false, true, 4>
+{
+    using Type = Float32;
+};
+template <>
+struct Construct<false, true, 8>
+{
+    using Type = Float64;
+};
+template <>
+struct Construct<true, false, 1>
+{
+    using Type = Int8;
+};
+template <>
+struct Construct<true, false, 2>
+{
+    using Type = Int16;
+};
+template <>
+struct Construct<true, false, 4>
+{
+    using Type = Int32;
+};
+template <>
+struct Construct<true, false, 8>
+{
+    using Type = Int64;
+};
+template <>
+struct Construct<true, true, 1>
+{
+    using Type = Float32;
+};
+template <>
+struct Construct<true, true, 2>
+{
+    using Type = Float32;
+};
+template <>
+struct Construct<true, true, 4>
+{
+    using Type = Float32;
+};
+template <>
+struct Construct<true, true, 8>
+{
+    using Type = Float64;
+};
 
 
 /** The result of addition or multiplication is calculated according to the following rules:
@@ -67,7 +132,8 @@ template <> struct Construct<true, true, 8>   { using Type = Float64; };
     * - the result contains more bits (not only meaningful) than the maximum in the arguments
     *   (for example, UInt8 + Int32 = Int64).
     */
-template <typename A, typename B> struct ResultOfAdditionMultiplication
+template <typename A, typename B>
+struct ResultOfAdditionMultiplication
 {
     using Type = typename Construct<
         std::is_signed_v<A> || std::is_signed_v<B>,
@@ -75,7 +141,8 @@ template <typename A, typename B> struct ResultOfAdditionMultiplication
         nextSize(max(sizeof(A), sizeof(B)))>::Type;
 };
 
-template <typename A, typename B> struct ResultOfSubtraction
+template <typename A, typename B>
+struct ResultOfSubtraction
 {
     using Type = typename Construct<
         true,
@@ -85,14 +152,16 @@ template <typename A, typename B> struct ResultOfSubtraction
 
 /** When dividing, you always get a floating-point number.
     */
-template <typename A, typename B> struct ResultOfFloatingPointDivision
+template <typename A, typename B>
+struct ResultOfFloatingPointDivision
 {
     using Type = Float64;
 };
 
 /** For integer division, we get a number with the same number of bits as in divisible.
     */
-template <typename A, typename B> struct ResultOfIntegerDivision
+template <typename A, typename B>
+struct ResultOfIntegerDivision
 {
     using Type = typename Construct<
         std::is_signed_v<A> || std::is_signed_v<B>,
@@ -106,17 +175,46 @@ struct ConstructIntegerBySize
     using Type = Error;
 };
 
-template <> struct ConstructIntegerBySize<1> { using Type = Int8; };
-template <> struct ConstructIntegerBySize<2> { using Type = Int16; };
-template <> struct ConstructIntegerBySize<4> { using Type = Int32; };
-template <> struct ConstructIntegerBySize<8> { using Type = Int64; };
-template <> struct ConstructIntegerBySize<16> { using Type = Int128; };
-template <> struct ConstructIntegerBySize<32> { using Type = Int256; };
-template <> struct ConstructIntegerBySize<64> { using Type = Int512; };
+template <>
+struct ConstructIntegerBySize<1>
+{
+    using Type = Int8;
+};
+template <>
+struct ConstructIntegerBySize<2>
+{
+    using Type = Int16;
+};
+template <>
+struct ConstructIntegerBySize<4>
+{
+    using Type = Int32;
+};
+template <>
+struct ConstructIntegerBySize<8>
+{
+    using Type = Int64;
+};
+template <>
+struct ConstructIntegerBySize<16>
+{
+    using Type = Int128;
+};
+template <>
+struct ConstructIntegerBySize<32>
+{
+    using Type = Int256;
+};
+template <>
+struct ConstructIntegerBySize<64>
+{
+    using Type = Int512;
+};
 
 /** Division with remainder you get a number with the same number of bits as in divisor.
     */
-template <typename A, typename B> struct ResultOfModulo
+template <typename A, typename B>
+struct ResultOfModulo
 {
     static constexpr auto result_size = std::max(actual_size_v<A>, actual_size_v<B>);
 
@@ -129,11 +227,12 @@ template <typename A, typename B> struct ResultOfModulo
      * * the precision of A % B is the maximum precision of A and B.
      */
     using Type = std::conditional_t<std::is_floating_point_v<A> || std::is_floating_point_v<B>,
-        Float64,
-        std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
+                                    Float64,
+                                    std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
 };
 
-template <typename A> struct ResultOfNegate
+template <typename A>
+struct ResultOfNegate
 {
     using Type = typename Construct<
         true,
@@ -141,12 +240,14 @@ template <typename A> struct ResultOfNegate
         std::is_signed_v<A> ? sizeof(A) : nextSize(sizeof(A))>::Type;
 };
 
-template <typename T> struct ResultOfNegate<Decimal<T>>
+template <typename T>
+struct ResultOfNegate<Decimal<T>>
 {
     using Type = Decimal<T>;
 };
 
-template <typename A> struct ResultOfAbs
+template <typename A>
+struct ResultOfAbs
 {
     using Type = typename Construct<
         false,
@@ -154,14 +255,16 @@ template <typename A> struct ResultOfAbs
         sizeof(A)>::Type;
 };
 
-template <typename T> struct ResultOfAbs<Decimal<T>>
+template <typename T>
+struct ResultOfAbs<Decimal<T>>
 {
     using Type = Decimal<T>;
 };
 
 /** For bitwise operations, an integer is obtained with number of bits is equal to the maximum of the arguments.
     */
-template <typename A, typename B> struct ResultOfBit
+template <typename A, typename B>
+struct ResultOfBit
 {
     using Type = typename Construct<
         std::is_signed_v<A> || std::is_signed_v<B>,
@@ -169,7 +272,8 @@ template <typename A, typename B> struct ResultOfBit
         std::is_floating_point_v<A> || std::is_floating_point_v<B> ? 8 : max(sizeof(A), sizeof(B))>::Type;
 };
 
-template <typename A> struct ResultOfBitNot
+template <typename A>
+struct ResultOfBitNot
 {
     using Type = typename Construct<
         std::is_signed_v<A>,
@@ -177,7 +281,8 @@ template <typename A> struct ResultOfBitNot
         sizeof(A)>::Type;
 };
 
-template <typename T> struct ResultOfBitNot<Decimal<T>>
+template <typename T>
+struct ResultOfBitNot<Decimal<T>>
 {
     using Type = Decimal<T>;
 };
@@ -204,15 +309,12 @@ struct ResultOfIf
     static constexpr size_t max_size_of_integer = max(std::is_integral_v<A> ? sizeof(A) : 0, std::is_integral_v<B> ? sizeof(B) : 0);
     static constexpr size_t max_size_of_float = max(std::is_floating_point_v<A> ? sizeof(A) : 0, std::is_floating_point_v<B> ? sizeof(B) : 0);
 
-    using Type = typename Construct<has_signed, has_float,
-        ((has_float && has_integer && max_size_of_integer >= max_size_of_float)
-            || (has_signed && has_unsigned && max_size_of_unsigned_integer >= max_size_of_signed_integer))
-                ? max(sizeof(A), sizeof(B)) * 2
-                : max(sizeof(A), sizeof(B))>::Type;
+    using Type = typename Construct<has_signed, has_float, ((has_float && has_integer && max_size_of_integer >= max_size_of_float) || (has_signed && has_unsigned && max_size_of_unsigned_integer >= max_size_of_signed_integer)) ? max(sizeof(A), sizeof(B)) * 2 : max(sizeof(A), sizeof(B))>::Type;
 };
 
 /** Before applying bitwise operations, operands are casted to whole numbers. */
-template <typename A> struct ToInteger
+template <typename A>
+struct ToInteger
 {
     using Type = typename Construct<
         std::is_signed_v<A>,
@@ -220,28 +322,34 @@ template <typename A> struct ToInteger
         std::is_floating_point_v<A> ? 8 : sizeof(A)>::Type;
 };
 
-template <> struct ToInteger <Int256> {using Type = Int256;};
-template <> struct ToInteger <Int128> {using Type = Int128;};
+template <>
+struct ToInteger<Int256>
+{
+    using Type = Int256;
+};
+template <>
+struct ToInteger<Int128>
+{
+    using Type = Int128;
+};
 
 
 // CLICKHOUSE-29. The same depth, different signs
 // NOTE: This case is applied for 64-bit integers only (for backward compability), but could be used for any-bit integers
 template <typename A, typename B>
-constexpr bool LeastGreatestSpecialCase =
-    std::is_integral_v<A> && std::is_integral_v<B>
-    && (8 == sizeof(A) && sizeof(A) == sizeof(B))
+constexpr bool LeastGreatestSpecialCase = std::is_integral_v<A> && std::is_integral_v<B> && (8 == sizeof(A) && sizeof(A) == sizeof(B))
     && (std::is_signed_v<A> ^ std::is_signed_v<B>);
 
 template <typename A, typename B>
 using ResultOfLeast = std::conditional_t<LeastGreatestSpecialCase<A, B>,
-    typename Construct<true, false, sizeof(A)>::Type,
-    typename ResultOfIf<A, B>::Type>;
+                                         typename Construct<true, false, sizeof(A)>::Type,
+                                         typename ResultOfIf<A, B>::Type>;
 
 template <typename A, typename B>
 using ResultOfGreatest = std::conditional_t<LeastGreatestSpecialCase<A, B>,
-    typename Construct<false, false, sizeof(A)>::Type,
-    typename ResultOfIf<A, B>::Type>;
+                                            typename Construct<false, false, sizeof(A)>::Type,
+                                            typename ResultOfIf<A, B>::Type>;
 
-}
+} // namespace NumberTraits
 
-}
+} // namespace DB
