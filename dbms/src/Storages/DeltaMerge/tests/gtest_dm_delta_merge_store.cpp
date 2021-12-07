@@ -2031,7 +2031,7 @@ try
     size_t num_rows_write = 1;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // DDL add column Int8 with default value
@@ -2106,7 +2106,7 @@ try
     size_t num_rows_write = 1;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // DDL add column UInt8 with default value
