@@ -140,6 +140,14 @@ try
             EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(num_rows_read)));
         }
     }
+    auto delta_store = storage->getStore();
+    size_t total_segment_rows = 0;
+    auto segment_stats = delta_store->getSegmentStats();
+    for (auto & stat : segment_stats)
+    {
+        total_segment_rows += stat.rows;
+    }
+    EXPECT_EQ(total_segment_rows, num_rows_read);
     storage->drop();
 }
 CATCH
