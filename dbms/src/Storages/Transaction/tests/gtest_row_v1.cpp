@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "row_codec_test_basic_include.h"
+#include "RowCodecTestUtils.h"
 
 namespace DB::tests
 {
