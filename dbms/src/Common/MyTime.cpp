@@ -834,7 +834,7 @@ void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl &
     }
     MyDateTime from_my_time(from_time);
     time_t epoch = getEpochSecond(from_my_time, time_zone_from, offset);
-    if (epoch <= 0) 
+    if (epoch <= 0)
     {
         to_time = 0;
         return;
