@@ -218,6 +218,13 @@ try
             func_name,
             createColumn<Nullable<String>>({"sahdka"}),
             createColumn<Nullable<String>>({"sahdkb"})));
+    // todo must have bug here...
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"1"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"sahdka"}),
+            createColumn<Nullable<UInt64>>({1})));
 }
 CATCH
 

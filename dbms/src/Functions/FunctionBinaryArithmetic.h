@@ -591,6 +591,8 @@ struct StringOperationWithCollatorImpl
         ColumnString::Offsets & c_offsets)
     {
         size_t size = a_offsets.size();
+        c_data.reserve(std::max(a_data.size(), b_data.size()));
+        c_offsets.resize(size);
         size_t c_offset_idx = 0;
         size_t c_offset_num = 0;
 
@@ -648,6 +650,8 @@ struct StringOperationWithCollatorImpl
         ColumnString::Offsets & c_offsets)
     {
         size_t size = a_offsets.size();
+        c_data.reserve(std::max(a_data.size(), b_data.size()));
+        c_offsets.resize(size);
         size_t c_offset_idx = 0;
         size_t c_offset_num = 0;
         for (size_t i = 0; i < size; ++i)
@@ -699,6 +703,8 @@ struct StringOperationWithCollatorImpl
         ColumnString::Offsets & c_offsets)
     {
         size_t size = a_offsets.size();
+        c_data.reserve(std::max(a_data.size(), b.size() * size));
+        c_offsets.resize(size);
         size_t c_offset_idx = 0;
         size_t c_offset_num = 0;
         ColumnString::Offset b_size = b.size();
@@ -768,6 +774,8 @@ struct StringOperationWithCollatorImpl
         ColumnString::Offsets & c_offsets)
     {
         size_t size = a_data.size();
+        c_data.reserve(std::max(a_data.size(), b_data.size()));
+        c_offsets.resize(size);
         size_t c_offset_idx = 0;
         size_t c_offset_num = 0;
 
@@ -801,6 +809,8 @@ struct StringOperationWithCollatorImpl
         size_t c_offset_idx = 0;
         size_t c_offset_num = 0;
         size_t size = a_data.size();
+        c_data.reserve(std::max(a_data.size(), b_n * size));
+        c_offsets.resize(size);
         const char * b_data = reinterpret_cast<const char *>(b.data());
         for (size_t i = 0; i < size; i += a_n)
         {
@@ -1323,8 +1333,6 @@ public:
         else
         {
             auto c_res = ColumnString::create();
-
-            c_res->reserve(c0->size());
 
             if (c0_string && c1_string)
                 StringImpl::string_vector_string_vector(
