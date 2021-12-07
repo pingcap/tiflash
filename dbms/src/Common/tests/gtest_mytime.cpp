@@ -446,7 +446,7 @@ try
         "1970-01-01 00:00:00.00000",
         "1969-12-31 01:00:00.00000",
         "1970-01-01 08:00:01.00000"};
-    std::vector<UInt64> ref_value_vec {
+    std::vector<UInt64> ref_value_vec{
         MyDateTime(1970, 1, 1, 8, 0, 1, 0).toPackedUInt(),
         0ULL,
         0ULL,
@@ -454,11 +454,11 @@ try
         0ULL,
         0ULL,
         MyDateTime(1970, 1, 1, 16, 0, 1, 0).toPackedUInt(),
-        MyDateTime(1970, 1, 1, 0, 0, 1, 0).toPackedUInt()
-    };
+        MyDateTime(1970, 1, 1, 0, 0, 1, 0).toPackedUInt()};
 
     Int32 i = 0;
-    for (const String & datetime : date_time_vec) {
+    for (const String & datetime : date_time_vec)
+    {
         ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
         UInt64 origin_time_stamp;
         tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
