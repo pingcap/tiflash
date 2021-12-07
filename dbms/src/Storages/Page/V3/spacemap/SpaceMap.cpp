@@ -25,10 +25,10 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
     switch (type)
     {
     case SMAP64_RBTREE:
-        smap = std::make_shared<RBTreeSpaceMap>(start, end);
+        smap = RBTreeSpaceMap::create(start, end);
         break;
     case SMAP64_STD_MAP:
-        smap = std::make_shared<STDMapSpaceMap>(start, end);
+        smap = STDMapSpaceMap::create(start, end);
         break;
     default:
         return nullptr;
@@ -94,8 +94,9 @@ std::pair<UInt64, UInt64> SpaceMap::searchInsertOffset(size_t size)
     return searchSmapInsertOffset(size);
 }
 
-SpaceMap::SpaceMap(UInt64 start_, UInt64 end_)
-    : start(start_)
+SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_)
+    : type(type_)
+    , start(start_)
     , end(end_)
     , log(&Poco::Logger::get("RBTreeSpaceMap"))
 {
