@@ -6,6 +6,17 @@ namespace DB::PS::V3
 {
 class SpaceMap;
 using SpaceMapPtr = std::shared_ptr<SpaceMap>;
+/**
+ * SpaceMap design doc: 
+ * https://docs.google.com/document/d/1l1GoIV6Rp0GEwuYtToJMKYACmZv6jf4kp1n8JdQidS8/edit#heading=h.pff0nn7vsa6w
+ * 
+ * SpaceMap have red-black tree/ map implemention.
+ * Each node on the tree records the information of free data blocks,
+ * 
+ * The node is composed of `offset` : `size`. Each node sorted according to offset.
+ * - offset: Record the starting address of the free data segment in the file.
+ * - size: The length of the space data segment is recorded.
+ */
 class SpaceMap
 {
 public:
