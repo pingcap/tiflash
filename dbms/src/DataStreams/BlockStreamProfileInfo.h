@@ -13,7 +13,6 @@
 
 namespace DB
 {
-
 class Block;
 class ReadBuffer;
 class WriteBuffer;
@@ -105,5 +104,4 @@ private:
     mutable size_t rows_before_limit = 0;
     mutable bool calculated_rows_before_limit = false; /// Whether the field rows_before_limit was calculated
 };
-
 } // namespace DB
