@@ -143,7 +143,7 @@ private:
 
         try
         {
-            ret = getEpochSecond(ret, lut_utc);
+            ret = getEpochSecond(MyDateTime(ret), lut_utc);
         }
         catch (...)
         {

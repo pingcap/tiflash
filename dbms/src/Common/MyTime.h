@@ -176,23 +176,11 @@ int calcDayNum(int year, int month, int day);
 size_t maxFormattedDateTimeStringLength(const String & format);
 
 /// For time earlier than 1970-01-01 00:00:00 UTC, return 0, aligned with mysql and tidb
-inline time_t getEpochSecond(UInt64 from_time, const DateLUTImpl & time_zone, Int64 offset = 0, bool throw_excep = false)
+inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone, Int64 offset = 0)
 {
-    MyDateTime from_my_time(from_time);
-    time_t epoch = time_zone.makeDateTime(from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
-    epoch += offset;
-    if (unlikely(epoch <= 0))
-    {
-        if (throw_excep)
-        {
-            throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
-        }
-        else
-        {
-            return 0;
-        }
-    }
-    return epoch;
+    time_t res = time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
+    res += offset;
+    return (res >= 0) ? res : 0;
 }
 
 bool isPunctuation(char c);
