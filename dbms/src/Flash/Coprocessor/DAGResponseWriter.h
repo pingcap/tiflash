@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
@@ -58,6 +59,9 @@ public:
     virtual void write(const Block & block) = 0;
     virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;
+
+    IProfilingBlockInputStream * parent = nullptr;
+    Timeline::Timer * current_timer = nullptr;
 
 protected:
     Int64 records_per_chunk;

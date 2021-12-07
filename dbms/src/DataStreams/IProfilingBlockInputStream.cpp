@@ -1,21 +1,21 @@
-#include <Interpreters/Quota.h>
-#include <Interpreters/ProcessList.h>
+#include <Common/joinStr.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Interpreters/ProcessList.h>
+#include <Interpreters/Quota.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TOO_MANY_ROWS;
-    extern const int TOO_MANY_BYTES;
-    extern const int TOO_MANY_ROWS_OR_BYTES;
-    extern const int TIMEOUT_EXCEEDED;
-    extern const int TOO_SLOW;
-    extern const int LOGICAL_ERROR;
-    extern const int BLOCKS_HAVE_DIFFERENT_STRUCTURE;
-}
+extern const int TOO_MANY_ROWS;
+extern const int TOO_MANY_BYTES;
+extern const int TOO_MANY_ROWS_OR_BYTES;
+extern const int TIMEOUT_EXCEEDED;
+extern const int TOO_SLOW;
+extern const int LOGICAL_ERROR;
+extern const int BLOCKS_HAVE_DIFFERENT_STRUCTURE;
+} // namespace ErrorCodes
 
 
 IProfilingBlockInputStream::IProfilingBlockInputStream()
@@ -40,6 +40,7 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     if (!info.started)
     {
         info.total_stopwatch.start();
+        info.last_wait_ts = info.total_stopwatch.elapsed();
         info.started = true;
     }
 
@@ -48,17 +49,34 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     if (isCancelledOrThrowIfKilled())
         return res;
 
-    auto start_time = info.total_stopwatch.elapsed();
+    info.waiting_duration += info.total_stopwatch.elapsed() - info.last_wait_ts;
+    auto start_ts = info.total_stopwatch.elapsed();
 
     if (!checkTimeLimit())
         limit_exceeded_need_break = true;
 
     if (!limit_exceeded_need_break)
     {
+        if (info.is_first)
+        {
+            info.is_first = false;
+            info.first_ts = info.now();
+        }
+
         if (return_filter)
             res = readImpl(res_filter, return_filter);
         else
             res = readImpl();
+
+        if (res)
+        {
+            info.total_rows += res.rows();
+            info.total_bytes += res.bytes();
+        }
+        else
+        {
+            info.last_ts = info.now();
+        }
     }
 
     if (res)
@@ -96,36 +114,133 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     }
 #endif
 
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    auto duration = info.total_stopwatch.elapsed() - start_ts;
+    info.running_duration += duration;
+    info.updateExecutionTime(duration);
+
+    info.last_wait_ts = info.total_stopwatch.elapsed();
     return res;
 }
 
 
+void IProfilingBlockInputStream::dumpProfileInfo(FmtBuffer & buf)
+{
+    std::unordered_set<Int64> dumped;
+
+    buf.append("[");
+    recursiveDumpProfileInfo(buf, dumped);
+    buf.append("]");
+}
+
+void IProfilingBlockInputStream::recursiveDumpProfileInfo(FmtBuffer & buf, std::unordered_set<Int64> & dumped)
+{
+    if (dumped.count(info.id))
+        return;
+
+    bool first = dumped.empty();
+    dumped.insert(info.id);
+
+    if (!first)
+        buf.append(",");
+    buf.append("{");
+
+    buf.fmtAppend("\"id\":{},", info.id)
+        .fmtAppend(R"("name":"{}",)", getName())
+        .fmtAppend(R"("executor":"{}",)", info.executor.empty() ? "<unknown>" : info.executor);
+
+    buf.append("\"children\":[");
+    joinStr(
+        children.begin(),
+        children.end(),
+        buf,
+        [](const std::shared_ptr<IBlockInputStream> & child, FmtBuffer & buf) {
+            auto * child_ptr = dynamic_cast<IProfilingBlockInputStream *>(child.get());
+            buf.fmtAppend("{}", child_ptr->info.id);
+        },
+        ",");
+    buf.append("],");
+
+    buf.append("\"stat\":");
+    dumpProfileInfoImpl(buf);
+
+    buf.append("}");
+
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+        child.recursiveDumpProfileInfo(buf, dumped);
+        return false;
+    });
+}
+
+void IProfilingBlockInputStream::dumpProfileInfoImpl(FmtBuffer & buf)
+{
+    buf.append("{");
+
+    buf.fmtAppend(R"("schema":"{}",)", getHeader().dumpStructure())
+        .fmtAppend("\"prefix_duration\":{},", info.prefix_duration)
+        .fmtAppend("\"suffix_duration\":{},", info.suffix_duration)
+        .fmtAppend("\"pull_duration\":{},", info.timeline.getCounter(Timeline::PULL))
+        .fmtAppend("\"self_duration\":{},", info.timeline.getCounter(Timeline::SELF))
+        .fmtAppend("\"push_duration\":{},", info.timeline.getCounter(Timeline::PUSH))
+        .fmtAppend("\"first_ts\":{},", info.toNanoseconds(info.first_ts))
+        .fmtAppend("\"last_ts\":{},", info.toNanoseconds(info.last_ts))
+        .fmtAppend("\"total_rows\":{},", info.total_rows)
+        .fmtAppend("\"total_bytes\":{},", info.total_bytes);
+
+    buf.append("\"timeline\":");
+    info.timeline.flushBuffer();
+    info.timeline.dump(buf);
+
+    buf.append("}");
+}
+
+Timeline::Timer IProfilingBlockInputStream::newTimer(Timeline::CounterType type, bool running)
+{
+    return info.timeline.newTimer(type, running);
+}
+
 void IProfilingBlockInputStream::readPrefix()
 {
-    auto start_time = info.total_stopwatch.elapsed();
+    info.total_stopwatch.start();
+
+    info.prefix_ts = info.now();
+
+    auto start_ts = info.total_stopwatch.elapsed();
     readPrefixImpl();
 
-    forEachChild([&] (IBlockInputStream & child)
-    {
+    forEachChild([&](IBlockInputStream & child) {
         child.readPrefix();
         return false;
     });
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    info.prefix_duration = info.total_stopwatch.elapsed() - start_ts;
+    info.updateExecutionTime(info.prefix_duration);
+
+    info.last_wait_ts = info.total_stopwatch.elapsed();
+    info.started = true;
 }
 
 
 void IProfilingBlockInputStream::readSuffix()
 {
-    auto start_time = info.total_stopwatch.elapsed();
-    forEachChild([&] (IBlockInputStream & child)
+    if (!info.started)
     {
+        info.total_stopwatch.start();
+        info.last_wait_ts = info.total_stopwatch.elapsed();
+        info.started = true;
+    }
+
+    info.waiting_duration += info.total_stopwatch.elapsed() - info.last_wait_ts;
+
+    auto start_ts = info.total_stopwatch.elapsed();
+    forEachChild([&](IBlockInputStream & child) {
         child.readSuffix();
         return false;
     });
 
     readSuffixImpl();
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    info.suffix_duration = info.total_stopwatch.elapsed() - start_ts;
+    info.updateExecutionTime(info.suffix_duration);
+
+    info.suffix_ts = info.now();
 }
 
 
@@ -199,12 +314,12 @@ static bool handleOverflowMode(OverflowMode mode, const String & message, int co
 {
     switch (mode)
     {
-        case OverflowMode::THROW:
-            throw Exception(message, code);
-        case OverflowMode::BREAK:
-            return false;
-        default:
-            throw Exception("Logical error: unknown overflow mode", ErrorCodes::LOGICAL_ERROR);
+    case OverflowMode::THROW:
+        throw Exception(message, code);
+    case OverflowMode::BREAK:
+        return false;
+    default:
+        throw Exception("Logical error: unknown overflow mode", ErrorCodes::LOGICAL_ERROR);
     }
 };
 
@@ -214,9 +329,9 @@ bool IProfilingBlockInputStream::checkTimeLimit()
     if (limits.max_execution_time != 0
         && info.total_stopwatch.elapsed() > static_cast<UInt64>(limits.max_execution_time.totalMicroseconds()) * 1000)
         return handleOverflowMode(limits.timeout_overflow_mode,
-            "Timeout exceeded: elapsed " + toString(info.total_stopwatch.elapsedSeconds())
-                + " seconds, maximum: " + toString(limits.max_execution_time.totalMicroseconds() / 1000000.0),
-            ErrorCodes::TIMEOUT_EXCEEDED);
+                                  "Timeout exceeded: elapsed " + toString(info.total_stopwatch.elapsedSeconds())
+                                      + " seconds, maximum: " + toString(limits.max_execution_time.totalMicroseconds() / 1000000.0),
+                                  ErrorCodes::TIMEOUT_EXCEEDED);
 
     return true;
 }
@@ -226,24 +341,24 @@ void IProfilingBlockInputStream::checkQuota(Block & block)
 {
     switch (limits.mode)
     {
-        case LIMITS_TOTAL:
-            /// Checked in `progress` method.
-            break;
+    case LIMITS_TOTAL:
+        /// Checked in `progress` method.
+        break;
 
-        case LIMITS_CURRENT:
-        {
-            time_t current_time = time(nullptr);
-            double total_elapsed = info.total_stopwatch.elapsedSeconds();
+    case LIMITS_CURRENT:
+    {
+        time_t current_time = time(nullptr);
+        double total_elapsed = info.total_stopwatch.elapsedSeconds();
 
-            quota->checkAndAddResultRowsBytes(current_time, block.rows(), block.bytes());
-            quota->checkAndAddExecutionTime(current_time, Poco::Timespan((total_elapsed - prev_elapsed) * 1000000.0));
+        quota->checkAndAddResultRowsBytes(current_time, block.rows(), block.bytes());
+        quota->checkAndAddExecutionTime(current_time, Poco::Timespan((total_elapsed - prev_elapsed) * 1000000.0));
 
-            prev_elapsed = total_elapsed;
-            break;
-        }
+        prev_elapsed = total_elapsed;
+        break;
+    }
 
-        default:
-            throw Exception("Logical error: unknown limits mode.", ErrorCodes::LOGICAL_ERROR);
+    default:
+        throw Exception("Logical error: unknown limits mode.", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -273,33 +388,33 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
         {
             switch (limits.size_limits.overflow_mode)
             {
-                case OverflowMode::THROW:
+            case OverflowMode::THROW:
+            {
+                if (limits.size_limits.max_rows && total_rows_estimate > limits.size_limits.max_rows)
+                    throw Exception("Limit for rows to read exceeded: " + toString(total_rows_estimate)
+                                        + " rows read (or to read), maximum: " + toString(limits.size_limits.max_rows),
+                                    ErrorCodes::TOO_MANY_ROWS);
+                else
+                    throw Exception("Limit for (uncompressed) bytes to read exceeded: " + toString(progress.bytes)
+                                        + " bytes read, maximum: " + toString(limits.size_limits.max_bytes),
+                                    ErrorCodes::TOO_MANY_BYTES);
+                break;
+            }
+
+            case OverflowMode::BREAK:
+            {
+                /// For `break`, we will stop only if so many rows were actually read, and not just supposed to be read.
+                if ((limits.size_limits.max_rows && progress.rows > limits.size_limits.max_rows)
+                    || (limits.size_limits.max_bytes && progress.bytes > limits.size_limits.max_bytes))
                 {
-                    if (limits.size_limits.max_rows && total_rows_estimate > limits.size_limits.max_rows)
-                        throw Exception("Limit for rows to read exceeded: " + toString(total_rows_estimate)
-                            + " rows read (or to read), maximum: " + toString(limits.size_limits.max_rows),
-                            ErrorCodes::TOO_MANY_ROWS);
-                    else
-                        throw Exception("Limit for (uncompressed) bytes to read exceeded: " + toString(progress.bytes)
-                            + " bytes read, maximum: " + toString(limits.size_limits.max_bytes),
-                            ErrorCodes::TOO_MANY_BYTES);
-                    break;
+                    cancel(false);
                 }
 
-                case OverflowMode::BREAK:
-                {
-                    /// For `break`, we will stop only if so many rows were actually read, and not just supposed to be read.
-                    if ((limits.size_limits.max_rows && progress.rows > limits.size_limits.max_rows)
-                        || (limits.size_limits.max_bytes && progress.bytes > limits.size_limits.max_bytes))
-                    {
-                        cancel(false);
-                    }
+                break;
+            }
 
-                    break;
-                }
-
-                default:
-                    throw Exception("Logical error: unknown overflow mode", ErrorCodes::LOGICAL_ERROR);
+            default:
+                throw Exception("Logical error: unknown overflow mode", ErrorCodes::LOGICAL_ERROR);
             }
         }
 
@@ -313,8 +428,8 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
             {
                 if (limits.min_execution_speed && progress.rows / total_elapsed < limits.min_execution_speed)
                     throw Exception("Query is executing too slow: " + toString(progress.rows / total_elapsed)
-                        + " rows/sec., minimum: " + toString(limits.min_execution_speed),
-                        ErrorCodes::TOO_SLOW);
+                                        + " rows/sec., minimum: " + toString(limits.min_execution_speed),
+                                    ErrorCodes::TOO_SLOW);
 
                 size_t total_rows = progress.total_rows;
 
@@ -325,9 +440,9 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
 
                     if (estimated_execution_time_seconds > limits.max_execution_time.totalSeconds())
                         throw Exception("Estimated query execution time (" + toString(estimated_execution_time_seconds) + " seconds)"
-                            + " is too long. Maximum: " + toString(limits.max_execution_time.totalSeconds())
-                            + ". Estimated rows to process: " + toString(total_rows),
-                            ErrorCodes::TOO_SLOW);
+                                            + " is too long. Maximum: " + toString(limits.max_execution_time.totalSeconds())
+                                            + ". Estimated rows to process: " + toString(total_rows),
+                                        ErrorCodes::TOO_SLOW);
                 }
             }
         }
@@ -349,8 +464,7 @@ void IProfilingBlockInputStream::cancel(bool kill)
     if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
         return;
 
-    forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-    {
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         child.cancel(kill);
         return false;
     });
@@ -376,8 +490,7 @@ void IProfilingBlockInputStream::setProgressCallback(const ProgressCallback & ca
 {
     progress_callback = callback;
 
-    forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-    {
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         child.setProgressCallback(callback);
         return false;
     });
@@ -388,8 +501,7 @@ void IProfilingBlockInputStream::setProcessListElement(ProcessListElement * elem
 {
     process_list_elem = elem;
 
-    forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-    {
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         child.setProcessListElement(elem);
         return false;
     });
@@ -402,8 +514,7 @@ Block IProfilingBlockInputStream::getTotals()
         return totals;
 
     Block res;
-    forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-    {
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         res = child.getTotals();
         if (res)
             return true;
@@ -418,8 +529,7 @@ Block IProfilingBlockInputStream::getExtremes()
         return extremes;
 
     Block res;
-    forEachProfilingChild([&] (IProfilingBlockInputStream & child)
-    {
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
         res = child.getExtremes();
         if (res)
             return true;
@@ -428,4 +538,4 @@ Block IProfilingBlockInputStream::getExtremes()
     return res;
 }
 
-}
+} // namespace DB

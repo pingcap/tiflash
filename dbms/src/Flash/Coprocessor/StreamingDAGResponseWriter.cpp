@@ -109,7 +109,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             {
                 if constexpr (send_exec_summary_at_last)
                 {
-                    writer->write(packet);
+                    // writer->write(packet);
+                    wrappedWrite(packet);
                 }
                 return;
             }
@@ -119,7 +120,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 packet.add_chunks(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
-            writer->write(packet);
+            // writer->write(packet);
+            wrappedWrite(packet);
         }
         else /// passthrough data to a non-TiFlash node, like sending data to TiSpark
         {
@@ -128,7 +130,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             {
                 if constexpr (send_exec_summary_at_last)
                 {
-                    writer->write(response);
+                    // writer->write(response);
+                    wrappedWrite(response);
                 }
                 return;
             }
@@ -139,7 +142,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 dag_chunk->set_rows_data(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
-            writer->write(response);
+            // writer->write(response);
+            wrappedWrite(response);
         }
     }
     else /// passthrough data to a TiDB node
@@ -149,7 +153,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         {
             if constexpr (send_exec_summary_at_last)
             {
-                writer->write(response);
+                // writer->write(response);
+                wrappedWrite(response);
             }
             return;
         }
@@ -180,7 +185,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             dag_chunk->set_rows_data(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        writer->write(response);
+        // writer->write(response);
+        wrappedWrite(response);
     }
 }
 
@@ -222,7 +228,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         {
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
-                writer->write(packet[part_id], part_id);
+                // writer->write(packet[part_id], part_id);
+                wrappedWrite(packet[part_id], part_id);
             }
         }
         return;
@@ -297,12 +304,16 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     {
         if constexpr (send_exec_summary_at_last)
         {
-            writer->write(packet[part_id], part_id);
+            // writer->write(packet[part_id], part_id);
+            wrappedWrite(packet[part_id], part_id);
         }
         else
         {
             if (responses_row_count[part_id] > 0)
-                writer->write(packet[part_id], part_id);
+            {
+                // writer->write(packet[part_id], part_id);
+                wrappedWrite(packet[part_id], part_id);
+            }
         }
     }
 }

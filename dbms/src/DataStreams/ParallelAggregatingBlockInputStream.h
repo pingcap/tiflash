@@ -126,7 +126,7 @@ private:
     ParallelInputsProcessor<Handler> processor;
 
 
-    void execute();
+    void execute(Timeline::Timer * timer = nullptr);
 
 
     /** From here we get the finished blocks after the aggregation.

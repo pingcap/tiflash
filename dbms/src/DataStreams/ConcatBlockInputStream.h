@@ -33,11 +33,15 @@ protected:
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override
     {
+        auto timer = newTimer(Timeline::SELF);
+
         Block res;
 
         while (current_stream != children.end())
         {
+            timer.switchTo(Timeline::PULL);
             res = (*current_stream)->read(res_filter, return_filter);
+            timer.switchTo(Timeline::SELF);
 
             if (res)
                 break;

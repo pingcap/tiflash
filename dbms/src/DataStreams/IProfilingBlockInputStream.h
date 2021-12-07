@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -10,6 +11,7 @@
 #include <fmt/core.h>
 
 #include <atomic>
+#include <chrono>
 
 
 namespace DB
@@ -37,6 +39,25 @@ class IProfilingBlockInputStream : public IBlockInputStream
 
 public:
     IProfilingBlockInputStream();
+
+    template <typename Assigner>
+    void assignId(Assigner && assign)
+    {
+        if (info.id < 0)
+            info.id = assign();
+
+        forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+            child.assignExecutor(info.executor);
+            child.assignId(assign);
+            return false;
+        });
+    }
+
+    void assignExecutor(const String & executor_name)
+    {
+        if (info.executor.empty())
+            info.executor = executor_name;
+    }
 
     Block read() override final;
 
@@ -175,7 +196,12 @@ public:
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
 
+    void dumpProfileInfo(FmtBuffer & buf);
+
+    Timeline::Timer newTimer(Timeline::CounterType type, bool running = true);
+
 protected:
+    Int64 id = -1;
     BlockStreamProfileInfo info;
     std::atomic<bool> is_cancelled{false};
     std::atomic<bool> is_killed{false};
@@ -222,6 +248,9 @@ private:
 
     /// Here you need to do a finalization, which can lead to an exception.
     virtual void readSuffixImpl() {}
+
+    void recursiveDumpProfileInfo(FmtBuffer & buf, std::unordered_set<Int64> & dumped);
+    virtual void dumpProfileInfoImpl(FmtBuffer & buf);
 
     void updateExtremes(Block & block);
 

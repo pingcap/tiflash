@@ -39,6 +39,16 @@ public:
     void finishWrite() override;
 
 private:
+    template <typename... Args>
+    void wrappedWrite(Args &&... args) const
+    {
+        if (current_timer)
+            current_timer->switchTo(Timeline::PUSH);
+        writer->write(std::forward<Args>(args)...);
+        if (current_timer)
+            current_timer->switchTo(Timeline::SELF);
+    }
+
     template <bool send_exec_summary_at_last>
     void batchWrite();
     template <bool send_exec_summary_at_last>

@@ -1,9 +1,11 @@
 #pragma once
 
-#include <vector>
 #include <Common/Stopwatch.h>
-
 #include <Core/Types.h>
+#include <DataStreams/Timeline.h>
+
+#include <chrono>
+#include <vector>
 
 #if __APPLE__
 #include <common/apple_rt.h>
@@ -11,7 +13,6 @@
 
 namespace DB
 {
-
 class Block;
 class ReadBuffer;
 class WriteBuffer;
@@ -20,11 +21,13 @@ class IProfilingBlockInputStream;
 /// Information for profiling. See IProfilingBlockInputStream.h
 struct BlockStreamProfileInfo
 {
+    using TimePoint = std::chrono::high_resolution_clock::time_point;
+
     /// Info about stream object this profile info refers to.
     IProfilingBlockInputStream * parent = nullptr;
 
     bool started = false;
-    Stopwatch total_stopwatch {CLOCK_MONOTONIC_COARSE};    /// Time with waiting time
+    Stopwatch total_stopwatch{CLOCK_MONOTONIC_COARSE}; /// Time with waiting time
 
     size_t rows = 0;
     size_t blocks = 0;
@@ -34,6 +37,38 @@ struct BlockStreamProfileInfo
     // time spent on current stream and all its children streams, but also the time of its
     // parent streams
     UInt64 execution_time = 0;
+
+    Int64 id = -1;
+    String executor;
+    UInt64 prefix_duration = 0;
+    UInt64 suffix_duration = 0;
+    UInt64 running_duration = 0;
+
+    TimePoint prefix_ts;
+    TimePoint suffix_ts;
+
+    UInt64 last_wait_ts = 0;
+    UInt64 waiting_duration = 0;
+    UInt64 self_duration = 0;
+
+    UInt64 total_bytes = 0;
+    UInt64 total_rows = 0;
+
+    bool is_first = true;
+    TimePoint first_ts;
+    TimePoint last_ts;
+    Timeline timeline;
+
+    static TimePoint now()
+    {
+        return std::chrono::high_resolution_clock::now();
+    }
+
+    static UInt64 toNanoseconds(const TimePoint & tp)
+    {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch()).count();
+    }
+
 
     using BlockStreamProfileInfos = std::vector<const BlockStreamProfileInfo *>;
 
@@ -65,9 +100,8 @@ private:
     void calculateRowsBeforeLimit() const;
 
     /// For these fields we make accessors, because they must be calculated beforehand.
-    mutable bool applied_limit = false;                    /// Whether LIMIT was applied
+    mutable bool applied_limit = false; /// Whether LIMIT was applied
     mutable size_t rows_before_limit = 0;
-    mutable bool calculated_rows_before_limit = false;    /// Whether the field rows_before_limit was calculated
+    mutable bool calculated_rows_before_limit = false; /// Whether the field rows_before_limit was calculated
 };
-
-}
+} // namespace DB
