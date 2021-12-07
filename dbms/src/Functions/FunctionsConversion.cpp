@@ -139,11 +139,11 @@ private:
         if (timezone_.is_name_based)
             convertTimeZone(packed, ret, *timezone_.timezone, lut_utc);
         else
-            convertTimeZoneByOffset(packed, ret, -timezone_.timezone_offset, lut_utc);
+            convertTimeZoneByOffset(packed, ret, -timezone_.timezone_offset);
 
         try
         {
-            ret = getEpochSecond(MyDateTime(ret), lut_utc);
+            ret = getEpochSecond(ret, lut_utc);
         }
         catch (...)
         {

@@ -817,7 +817,7 @@ MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezone
     if (timezoneInfo.is_name_based)
         return convertUTC2TimeZone(second, micro_second, *timezoneInfo.timezone);
     else
-        return convertUTC2TimeZoneByOffset(second, micro_second, timezoneInfo.timezone_offset, *timezoneInfo.timezone);
+        return convertUTC2TimeZoneByOffset(second, micro_second, timezoneInfo.timezone_offset);
 }
 
 inline bool isZeroDate(UInt64 time)
@@ -825,32 +825,29 @@ inline bool isZeroDate(UInt64 time)
     return time == 0;
 }
 
-void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, UInt64 offset)
+void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_excep)
 {
     if (isZeroDate(from_time))
     {
         to_time = from_time;
         return;
     }
+    time_t epoch = getEpochSecond(from_time, time_zone_from, 0, throw_excep);
     MyDateTime from_my_time(from_time);
-    time_t epoch = getEpochSecond(from_my_time, time_zone_from, offset);
-    if (unlikely(epoch <= 0))
-    {
-        to_time = 0;
-        return;
-    }
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
 }
-void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
-{
-    convertTimeZoneImpl(from_time, to_time, time_zone_from, time_zone_to, 0);
-}
 
-void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone)
+void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, bool throw_excep)
 {
+    if (isZeroDate(from_time))
+    {
+        to_time = from_time;
+        return;
+    }
     static const auto & time_zone_utc = DateLUT::instance("UTC");
-    convertTimeZoneImpl(from_time, to_time, time_zone_utc, time_zone, offset);
+    time_t epoch = getEpochSecond(from_time, time_zone_utc, offset, throw_excep);
+    to_time = epoch;
 }
 
 MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to)
@@ -858,11 +855,11 @@ MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUT
     return MyDateTime(time_zone_to.toYear(utc_ts), time_zone_to.toMonth(utc_ts), time_zone_to.toDayOfMonth(utc_ts), time_zone_to.toHour(utc_ts), time_zone_to.toMinute(utc_ts), time_zone_to.toSecond(utc_ts), micro_second);
 }
 
-
-MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64 offset, const DateLUTImpl & time_zone_to)
+MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64 offset)
 {
+    static const auto & time_zone_utc = DateLUT::instance("UTC");
     time_t epoch = utc_ts + offset;
-    return MyDateTime(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), micro_second);
+    return MyDateTime(time_zone_utc.toYear(epoch), time_zone_utc.toMonth(epoch), time_zone_utc.toDayOfMonth(epoch), time_zone_utc.toHour(epoch), time_zone_utc.toMinute(epoch), time_zone_utc.toSecond(epoch), micro_second);
 }
 
 std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp)
