@@ -45,6 +45,8 @@ using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;
 
+using BlobFileID = UInt32;
+
 struct ByteBuffer
 {
     using Pos = char *;
