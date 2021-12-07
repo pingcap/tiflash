@@ -4,6 +4,7 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <Storages/Transaction/Collator.h>
 #include <fmt/core.h>
 
 namespace DB
@@ -96,7 +97,9 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     auto bp = factory.tryGet(func_name, context);
     if (!bp)
         throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(columns);
+
+    auto func = bp->build(columns, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY));
+    
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, cns, columns.size());
     return block.getByPosition(columns.size());
@@ -112,7 +115,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     auto bp = factory.tryGet(func_name, context);
     if (!bp)
         throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(arguments);
+    auto func = bp->build(arguments, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)); // ywq todo
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, argument_column_numbers, columns.size());
     return block.getByPosition(columns.size());
