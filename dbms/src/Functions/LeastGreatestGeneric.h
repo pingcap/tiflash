@@ -87,8 +87,14 @@ public:
             return executeNary(block, arguments, result);
     }
 
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
+    {
+        collator = collator_;
+    }
+
 private:
     const Context & context;
+    TiDB::TiDBCollatorPtr collator;
 
     template <typename T0>
     bool checkType(const DataTypePtr & arg) const
@@ -113,13 +119,18 @@ private:
             temp_block.insert({nullptr,
                                res_type,
                                "res_col"});
-            DefaultExecutable(std::make_shared<SpecializedFunction>(context)).execute(temp_block, {0, 1}, 2);
+            auto function = SpecializedFunction{context};
+            function.setCollator(collator);
+            function.executeImpl(temp_block, {0, 1}, 2);
             pre_col = temp_block.getByPosition(2);
         }
         block.getByPosition(result).column = std::move(pre_col.column);
     }
 };
 
+
+
+// don't read this.. dead code.
 template <LeastGreatest kind, typename SpecializedFunction>
 class FunctionLeastGreatest : public IFunction
 {
@@ -174,7 +185,6 @@ public:
                                                               result_type,
                                                               context)
                                                        ->convertToFullColumnIfConst();
-            // copyToResult(res, rhs, cmp_result);
         }
         ColumnWithTypeAndName cmp_result;
         ColumnPtr cmp_result_col = ColumnVector<UInt8>::create(block.rows());
@@ -200,19 +210,14 @@ public:
         block.getByPosition(result) = std::move(res);
     }
 
-    template <typename T0, typename T1, typename T2>
-    void vector_vector(T0 & a, T1 & b, T2 & res) const
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
     {
-        size_t size = a.size();
-        for (size_t i = 0; i < size; ++i)
-        {
-            if (a[i] == 0)
-                res[i] = b[i];
-        }
+        collator = collator_;
     }
 
 private:
     const Context & context;
+    TiDB::TiDBCollatorPtr collator;
 
     template <typename T0>
     bool checkType(const DataTypePtr & arg) const
