@@ -855,7 +855,7 @@ struct StringOperationWithCollatorImpl
 
         if (res < 0)
             c = a;
-        else 
+        else
             c = b;
     }
 };
@@ -968,10 +968,8 @@ public:
         collator = collator_;
     }
 
-
 private:
     const Context & context;
-
     TiDB::TiDBCollatorPtr collator;
 
     template <typename ResultDataType>
@@ -1084,11 +1082,7 @@ private:
         {
             left_type = removeNullable(left_type);
         }
-        if (arguments[0]->isStringOrFixedString()) 
-        {
-            return arguments[1]->isStringOrFixedString();
-        }
-        else if (typeid_cast<const T0 *>(left_type.get()))
+        if (typeid_cast<const T0 *>(left_type.get()))
         {
             if (checkRightType<T0, DataTypeDate>(arguments, type_res)
                 || checkRightType<T0, DataTypeDateTime>(arguments, type_res)
@@ -1199,24 +1193,31 @@ public:
             if (left_null_const || right_null_const)
                 return type_res;
         }
+        if (arguments[0]->isStringOrFixedString())
+        {
+            if (!arguments[1]->isStringOrFixedString())
+                throw Exception(
+                    "Illegal types " + arguments[0]->getName() + " and " + arguments[1]->getName() + " of arguments of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-
-        if (!(checkLeftType<DataTypeDate>(arguments, type_res)
-              || checkLeftType<DataTypeDateTime>(arguments, type_res)
-              || checkLeftType<DataTypeUInt8>(arguments, type_res)
-              || checkLeftType<DataTypeUInt16>(arguments, type_res)
-              || checkLeftType<DataTypeUInt32>(arguments, type_res)
-              || checkLeftType<DataTypeUInt64>(arguments, type_res)
-              || checkLeftType<DataTypeInt8>(arguments, type_res)
-              || checkLeftType<DataTypeInt16>(arguments, type_res)
-              || checkLeftType<DataTypeInt32>(arguments, type_res)
-              || checkLeftType<DataTypeInt64>(arguments, type_res)
-              || checkLeftType<DataTypeDecimal<Decimal32>>(arguments, type_res)
-              || checkLeftType<DataTypeDecimal<Decimal64>>(arguments, type_res)
-              || checkLeftType<DataTypeDecimal<Decimal128>>(arguments, type_res)
-              || checkLeftType<DataTypeDecimal<Decimal256>>(arguments, type_res)
-              || checkLeftType<DataTypeFloat32>(arguments, type_res)
-              || checkLeftType<DataTypeFloat64>(arguments, type_res)))
+            type_res = arguments[0]; // ywq todo not sure for fixed string
+        }
+        else if (!(checkLeftType<DataTypeDate>(arguments, type_res)
+                   || checkLeftType<DataTypeDateTime>(arguments, type_res)
+                   || checkLeftType<DataTypeUInt8>(arguments, type_res)
+                   || checkLeftType<DataTypeUInt16>(arguments, type_res)
+                   || checkLeftType<DataTypeUInt32>(arguments, type_res)
+                   || checkLeftType<DataTypeUInt64>(arguments, type_res)
+                   || checkLeftType<DataTypeInt8>(arguments, type_res)
+                   || checkLeftType<DataTypeInt16>(arguments, type_res)
+                   || checkLeftType<DataTypeInt32>(arguments, type_res)
+                   || checkLeftType<DataTypeInt64>(arguments, type_res)
+                   || checkLeftType<DataTypeDecimal<Decimal32>>(arguments, type_res)
+                   || checkLeftType<DataTypeDecimal<Decimal64>>(arguments, type_res)
+                   || checkLeftType<DataTypeDecimal<Decimal128>>(arguments, type_res)
+                   || checkLeftType<DataTypeDecimal<Decimal256>>(arguments, type_res)
+                   || checkLeftType<DataTypeFloat32>(arguments, type_res)
+                   || checkLeftType<DataTypeFloat64>(arguments, type_res)))
             throw Exception(
                 "Illegal types " + arguments[0]->getName() + " and " + arguments[1]->getName() + " of arguments of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1297,7 +1298,7 @@ public:
     }
 
 
-     // ywq maybe done...
+    // ywq maybe done...
     bool executeStringWithCollator(
         Block & block,
         size_t result,
@@ -1322,7 +1323,7 @@ public:
         else
         {
             auto c_res = ColumnString::create();
-            
+
             c_res->reserve(c0->size());
 
             if (c0_string && c1_string)
@@ -1402,329 +1403,330 @@ public:
             block.getByPosition(result).column = std::move(c_res);
             return true;
         }
+    }
 
-        void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        /// Special case when the function is plus or minus, one of arguments is Date/DateTime and another is Interval.
+        if (auto function_builder = getFunctionForIntervalArithmetic(block.getByPosition(arguments[0]).type, block.getByPosition(arguments[1]).type))
         {
-            /// Special case when the function is plus or minus, one of arguments is Date/DateTime and another is Interval.
-            if (auto function_builder = getFunctionForIntervalArithmetic(block.getByPosition(arguments[0]).type, block.getByPosition(arguments[1]).type))
+            ColumnNumbers new_arguments = arguments;
+
+            /// Interval argument must be second.
+            if (checkDataType<DataTypeInterval>(block.getByPosition(arguments[0]).type.get()))
+                std::swap(new_arguments[0], new_arguments[1]);
+
+            /// Change interval argument type to its representation
+            Block new_block = block;
+            new_block.getByPosition(new_arguments[1]).type = std::make_shared<typename DataTypeFromFieldType<DataTypeInterval::FieldType>::Type>();
+
+            ColumnsWithTypeAndName new_arguments_with_type_and_name = {new_block.getByPosition(new_arguments[0]), new_block.getByPosition(new_arguments[1])};
+            auto function = function_builder->build(new_arguments_with_type_and_name);
+
+            function->execute(new_block, new_arguments, result);
+            block.getByPosition(result).column = new_block.getByPosition(result).column;
+
+            return;
+        }
+
+        if (executeString(block, result, block.getByPosition(arguments[0]).column.get(), block.getByPosition(arguments[1]).column.get()))
+        {
+            return;
+        }
+
+        auto left_generic = block.getByPosition(arguments[0]).type;
+        auto right_generic = block.getByPosition(arguments[1]).type;
+        DataTypes types;
+        types.push_back(left_generic);
+        types.push_back(right_generic);
+        DataTypePtr result_type = getReturnTypeImpl(types);
+        if constexpr (!default_impl_for_nulls)
+        {
+            if (result_type->onlyNull())
             {
-                ColumnNumbers new_arguments = arguments;
-
-                /// Interval argument must be second.
-                if (checkDataType<DataTypeInterval>(block.getByPosition(arguments[0]).type.get()))
-                    std::swap(new_arguments[0], new_arguments[1]);
-
-                /// Change interval argument type to its representation
-                Block new_block = block;
-                new_block.getByPosition(new_arguments[1]).type = std::make_shared<typename DataTypeFromFieldType<DataTypeInterval::FieldType>::Type>();
-
-                ColumnsWithTypeAndName new_arguments_with_type_and_name = {new_block.getByPosition(new_arguments[0]), new_block.getByPosition(new_arguments[1])};
-                auto function = function_builder->build(new_arguments_with_type_and_name);
-
-                function->execute(new_block, new_arguments, result);
-                block.getByPosition(result).column = new_block.getByPosition(result).column;
-
+                block.getByPosition(result).column = result_type->createColumnConst(block.rows(), Null());
                 return;
             }
+        }
+        bool valid = castBothTypes(left_generic, right_generic, result_type, [&](const auto & left, bool is_left_nullable [[maybe_unused]], const auto & right, bool is_right_nullable [[maybe_unused]], const auto & result_type) {
+            using LeftDataType = std::decay_t<decltype(left)>;
+            using RightDataType = std::decay_t<decltype(right)>;
+            using ResultDataType = std::decay_t<decltype(result_type)>;
+            constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
+            constexpr bool is_multiply [[maybe_unused]] = IsOperation<Op>::multiply;
+            constexpr bool is_division [[maybe_unused]] = IsOperation<Op>::div_floating || IsOperation<Op>::div_int;
 
-            if (executeString(block, result, block.getByPosition(arguments[0]).column).get(), block.getByPosition(arguments[1]).column.get())
+            using T0 = typename LeftDataType::FieldType;
+            using T1 = typename RightDataType::FieldType;
+            using ResultType = typename ResultDataType::FieldType;
+            using ExpectedResultType = typename Op<T0, T1>::ResultType;
+            if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>)&&!std::is_same_v<ResultType, ExpectedResultType>)
             {
-                return;
+                return false;
             }
-
-            auto left_generic = block.getByPosition(arguments[0]).type;
-            auto right_generic = block.getByPosition(arguments[1]).type;
-            DataTypes types;
-            types.push_back(left_generic);
-            types.push_back(right_generic);
-            DataTypePtr result_type = getReturnTypeImpl(types);
-            if constexpr (!default_impl_for_nulls)
+            else if constexpr (!std::is_same_v<ResultDataType, InvalidType>)
             {
-                if (result_type->onlyNull())
+                using ColVecT0 = std::conditional_t<IsDecimal<T0>, ColumnDecimal<T0>, ColumnVector<T0>>;
+                using ColVecT1 = std::conditional_t<IsDecimal<T1>, ColumnDecimal<T1>, ColumnVector<T1>>;
+                using ColVecResult = std::conditional_t<IsDecimal<ResultType>, ColumnDecimal<ResultType>, ColumnVector<typename Op<T0, T1>::ResultType>>;
+
+                /// Only for arithmatic operator
+                using T0_ = Refine<T0, ResultType>;
+                using T1_ = Refine<T1, ResultType>;
+                using FieldT0 = typename NearestFieldType<T0>::Type;
+                using FieldT1 = typename NearestFieldType<T1>::Type;
+                /// Decimal operations need scale. Operations are on result type.
+                using OpImpl = std::conditional_t<
+                    result_is_decimal,
+                    DecimalBinaryOperation<T0, T1, Op, ResultType>,
+                    BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0, T1>::ResultType>>; // Use template to resolve !!!!!
+
+                auto col_left_raw = block.getByPosition(arguments[0]).column.get();
+                auto col_right_raw = block.getByPosition(arguments[1]).column.get();
+                const ColumnUInt8 * col_left_nullmap [[maybe_unused]] = nullptr;
+                const ColumnUInt8 * col_right_nullmap [[maybe_unused]] = nullptr;
+                bool is_left_null_constant [[maybe_unused]] = false;
+                bool is_right_null_constant [[maybe_unused]] = false;
+                DataTypePtr nullable_result_type [[maybe_unused]] = nullptr;
+                if constexpr (result_is_decimal)
                 {
-                    block.getByPosition(result).column = result_type->createColumnConst(block.rows(), Null());
-                    return;
+                    nullable_result_type = makeNullable(std::make_shared<ResultDataType>(result_type.getPrec(), result_type.getScale()));
                 }
-            }
-            bool valid = castBothTypes(left_generic, right_generic, result_type, [&](const auto & left, bool is_left_nullable [[maybe_unused]], const auto & right, bool is_right_nullable [[maybe_unused]], const auto & result_type) {
-                using LeftDataType = std::decay_t<decltype(left)>;
-                using RightDataType = std::decay_t<decltype(right)>;
-                using ResultDataType = std::decay_t<decltype(result_type)>;
-                constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
-                constexpr bool is_multiply [[maybe_unused]] = IsOperation<Op>::multiply;
-                constexpr bool is_division [[maybe_unused]] = IsOperation<Op>::div_floating || IsOperation<Op>::div_int;
-
-                using T0 = typename LeftDataType::FieldType;
-                using T1 = typename RightDataType::FieldType;
-                using ResultType = typename ResultDataType::FieldType;
-                using ExpectedResultType = typename Op<T0, T1>::ResultType;
-                if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>)&&!std::is_same_v<ResultType, ExpectedResultType>)
+                else
                 {
-                    return false;
+                    nullable_result_type = makeNullable(std::make_shared<ResultDataType>());
                 }
-                else if constexpr (!std::is_same_v<ResultDataType, InvalidType>)
+
+                if constexpr (!default_impl_for_nulls)
                 {
-                    using ColVecT0 = std::conditional_t<IsDecimal<T0>, ColumnDecimal<T0>, ColumnVector<T0>>;
-                    using ColVecT1 = std::conditional_t<IsDecimal<T1>, ColumnDecimal<T1>, ColumnVector<T1>>;
-                    using ColVecResult = std::conditional_t<IsDecimal<ResultType>, ColumnDecimal<ResultType>, ColumnVector<typename Op<T0, T1>::ResultType>>;
-
-                    /// Only for arithmatic operator
-                    using T0_ = Refine<T0, ResultType>;
-                    using T1_ = Refine<T1, ResultType>;
-                    using FieldT0 = typename NearestFieldType<T0>::Type;
-                    using FieldT1 = typename NearestFieldType<T1>::Type;
-                    /// Decimal operations need scale. Operations are on result type.
-                    using OpImpl = std::conditional_t<
-                        result_is_decimal,
-                        DecimalBinaryOperation<T0, T1, Op, ResultType>,
-                        BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0, T1>::ResultType>>; // Use template to resolve !!!!!
-
-                    auto col_left_raw = block.getByPosition(arguments[0]).column.get();
-                    auto col_right_raw = block.getByPosition(arguments[1]).column.get();
-                    const ColumnUInt8 * col_left_nullmap [[maybe_unused]] = nullptr;
-                    const ColumnUInt8 * col_right_nullmap [[maybe_unused]] = nullptr;
-                    bool is_left_null_constant [[maybe_unused]] = false;
-                    bool is_right_null_constant [[maybe_unused]] = false;
-                    DataTypePtr nullable_result_type [[maybe_unused]] = nullptr;
-                    if constexpr (result_is_decimal)
+                    if (is_left_nullable)
                     {
-                        nullable_result_type = makeNullable(std::make_shared<ResultDataType>(result_type.getPrec(), result_type.getScale()));
-                    }
-                    else
-                    {
-                        nullable_result_type = makeNullable(std::make_shared<ResultDataType>());
-                    }
-
-                    if constexpr (!default_impl_for_nulls)
-                    {
-                        if (is_left_nullable)
+                        if (auto * col_nullable = typeid_cast<const ColumnNullable *>(col_left_raw))
                         {
-                            if (auto * col_nullable = typeid_cast<const ColumnNullable *>(col_left_raw))
-                            {
-                                col_left_nullmap = &col_nullable->getNullMapColumn();
-                                col_left_raw = &col_nullable->getNestedColumn();
-                            }
-                            else if (auto * col_const = typeid_cast<const ColumnConst *>(col_left_raw))
-                            {
-                                if (col_const->isNullAt(0))
-                                    is_left_null_constant = true;
-                            }
-                            else
-                                return false;
+                            col_left_nullmap = &col_nullable->getNullMapColumn();
+                            col_left_raw = &col_nullable->getNestedColumn();
                         }
-                        if (is_right_nullable)
+                        else if (auto * col_const = typeid_cast<const ColumnConst *>(col_left_raw))
                         {
-                            if (auto * col_nullable = typeid_cast<const ColumnNullable *>(col_right_raw))
-                            {
-                                col_right_nullmap = &col_nullable->getNullMapColumn();
-                                col_right_raw = &col_nullable->getNestedColumn();
-                            }
-                            else if (auto * col_const = typeid_cast<const ColumnConst *>(col_right_raw))
-                            {
-                                if (col_const->isNullAt(0))
-                                    is_right_null_constant = true;
-                            }
-                            else
-                                return false;
-                        }
-                        if (is_left_null_constant || is_right_null_constant)
-                        {
-                            /// if one of the input is null constant, just return null constant
-                            block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left_raw->size(), Null());
-                            return true;
-                        }
-                    }
-
-                    if (auto col_left = checkAndGetColumnConst<ColVecT0>(col_left_raw, is_left_nullable))
-                    {
-                        if (auto col_right = checkAndGetColumnConst<ColVecT1>(col_right_raw, is_right_nullable))
-                        {
-                            /// the only case with a non-vector result
-                            if constexpr (result_is_decimal)
-                            {
-                                auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
-
-                                if constexpr (default_impl_for_nulls)
-                                {
-                                    auto res = OpImpl::constant_constant(col_left->template getValue<T0>(), col_right->template getValue<T1>(), scale_a, scale_b, scale_result);
-                                    block.getByPosition(result).column = ResultDataType(result_type.getPrec(), result_type.getScale()).createColumnConst(col_left->size(), toField(res, result_type.getScale()));
-                                }
-                                else
-                                {
-                                    UInt8 res_null = false;
-                                    Field result_field = Null();
-                                    auto res = OpImpl::constant_constant_nullable(
-                                        col_left->template getValue<T0>(),
-                                        col_right->template getValue<T1>(),
-                                        scale_a,
-                                        scale_b,
-                                        scale_result,
-                                        res_null);
-                                    if (!res_null)
-                                        result_field = toField(res, result_type.getScale());
-                                    block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left->size(), result_field);
-                                }
-                            }
-                            else
-                            {
-                                if constexpr (default_impl_for_nulls)
-                                {
-                                    auto res = OpImpl::constant_constant(col_left->getField().template safeGet<FieldT0>(), col_right->getField().template safeGet<FieldT1>());
-                                    block.getByPosition(result).column = ResultDataType().createColumnConst(col_left->size(), toField(res));
-                                }
-                                else
-                                {
-                                    UInt8 res_null = false;
-                                    Field result_field = Null();
-                                    auto res = OpImpl::constant_constant_nullable(
-                                        col_left->getField().template safeGet<FieldT0>(),
-                                        col_right->getField().template safeGet<FieldT1>(),
-                                        res_null);
-                                    if (!res_null)
-                                        result_field = toField(res);
-                                    block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left->size(), result_field);
-                                }
-                            }
-                            return true;
-                        }
-                    }
-
-                    typename ColVecResult::MutablePtr col_res = nullptr;
-                    if constexpr (result_is_decimal)
-                    {
-                        col_res = ColVecResult::create(0, result_type.getScale());
-                    }
-                    else
-                        col_res = ColVecResult::create();
-
-                    auto & vec_res = col_res->getData();
-                    vec_res.resize(block.rows());
-
-                    typename ColumnUInt8::MutablePtr res_nullmap = ColumnUInt8::create();
-                    typename ColumnUInt8::Container & vec_res_nulmap = res_nullmap->getData();
-                    if constexpr (!default_impl_for_nulls)
-                    {
-                        vec_res_nulmap.assign(block.rows(), (UInt8)0);
-                    }
-
-                    if (auto col_left_const = checkAndGetColumnConst<ColVecT0>(col_left_raw, is_left_nullable))
-                    {
-                        if (auto col_right = checkAndGetColumn<ColVecT1>(col_right_raw))
-                        {
-                            if constexpr (result_is_decimal)
-                            {
-                                auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
-                                if constexpr (default_impl_for_nulls)
-                                {
-                                    OpImpl::constant_vector(
-                                        col_left_const->template getValue<T0>(),
-                                        col_right->getData(),
-                                        vec_res,
-                                        scale_a,
-                                        scale_b,
-                                        scale_result);
-                                }
-                                else
-                                {
-                                    OpImpl::constant_vector_nullable(col_left_const->template getValue<T0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
-                                }
-                            }
-                            else
-                            {
-                                if constexpr (default_impl_for_nulls)
-                                {
-                                    OpImpl::constant_vector(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), vec_res);
-                                }
-                                else
-                                {
-                                    OpImpl::constant_vector_nullable(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
-                                }
-                            }
+                            if (col_const->isNullAt(0))
+                                is_left_null_constant = true;
                         }
                         else
                             return false;
                     }
-                    else if (auto col_left = checkAndGetColumn<ColVecT0>(col_left_raw))
+                    if (is_right_nullable)
                     {
-                        if (auto col_right_const = checkAndGetColumnConst<ColVecT1>(col_right_raw, is_right_nullable))
+                        if (auto * col_nullable = typeid_cast<const ColumnNullable *>(col_right_raw))
                         {
-                            if constexpr (result_is_decimal)
-                            {
-                                auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
-                                if constexpr (default_impl_for_nulls)
-                                {
-                                    OpImpl::vector_constant(
-                                        col_left->getData(),
-                                        col_right_const->template getValue<T1>(),
-                                        vec_res,
-                                        scale_a,
-                                        scale_b,
-                                        scale_result);
-                                }
-                                else
-                                {
-                                    OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->template getValue<T1>(), vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
-                                }
-                            }
-                            else
-                            {
-                                if constexpr (default_impl_for_nulls)
-                                {
-                                    OpImpl::vector_constant(col_left->getData(), col_right_const->getField().template safeGet<FieldT1>(), vec_res);
-                                }
-                                else
-                                {
-                                    OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->getField().template safeGet<FieldT1>(), vec_res, vec_res_nulmap);
-                                }
-                            }
+                            col_right_nullmap = &col_nullable->getNullMapColumn();
+                            col_right_raw = &col_nullable->getNestedColumn();
                         }
-                        else if (auto col_right = checkAndGetColumn<ColVecT1>(col_right_raw))
+                        else if (auto * col_const = typeid_cast<const ColumnConst *>(col_right_raw))
                         {
-                            if constexpr (result_is_decimal)
-                            {
-                                auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
-                                if constexpr (default_impl_for_nulls)
-                                {
-                                    OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b, scale_result);
-                                }
-                                else
-                                {
-                                    OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
-                                }
-                            }
-                            else
-                            {
-                                if constexpr (default_impl_for_nulls)
-                                {
-                                    OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res);
-                                }
-                                else
-                                {
-                                    OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
-                                }
-                            }
+                            if (col_const->isNullAt(0))
+                                is_right_null_constant = true;
                         }
                         else
                             return false;
+                    }
+                    if (is_left_null_constant || is_right_null_constant)
+                    {
+                        /// if one of the input is null constant, just return null constant
+                        block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left_raw->size(), Null());
+                        return true;
+                    }
+                }
+
+                if (auto col_left = checkAndGetColumnConst<ColVecT0>(col_left_raw, is_left_nullable))
+                {
+                    if (auto col_right = checkAndGetColumnConst<ColVecT1>(col_right_raw, is_right_nullable))
+                    {
+                        /// the only case with a non-vector result
+                        if constexpr (result_is_decimal)
+                        {
+                            auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
+
+                            if constexpr (default_impl_for_nulls)
+                            {
+                                auto res = OpImpl::constant_constant(col_left->template getValue<T0>(), col_right->template getValue<T1>(), scale_a, scale_b, scale_result);
+                                block.getByPosition(result).column = ResultDataType(result_type.getPrec(), result_type.getScale()).createColumnConst(col_left->size(), toField(res, result_type.getScale()));
+                            }
+                            else
+                            {
+                                UInt8 res_null = false;
+                                Field result_field = Null();
+                                auto res = OpImpl::constant_constant_nullable(
+                                    col_left->template getValue<T0>(),
+                                    col_right->template getValue<T1>(),
+                                    scale_a,
+                                    scale_b,
+                                    scale_result,
+                                    res_null);
+                                if (!res_null)
+                                    result_field = toField(res, result_type.getScale());
+                                block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left->size(), result_field);
+                            }
+                        }
+                        else
+                        {
+                            if constexpr (default_impl_for_nulls)
+                            {
+                                auto res = OpImpl::constant_constant(col_left->getField().template safeGet<FieldT0>(), col_right->getField().template safeGet<FieldT1>());
+                                block.getByPosition(result).column = ResultDataType().createColumnConst(col_left->size(), toField(res));
+                            }
+                            else
+                            {
+                                UInt8 res_null = false;
+                                Field result_field = Null();
+                                auto res = OpImpl::constant_constant_nullable(
+                                    col_left->getField().template safeGet<FieldT0>(),
+                                    col_right->getField().template safeGet<FieldT1>(),
+                                    res_null);
+                                if (!res_null)
+                                    result_field = toField(res);
+                                block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left->size(), result_field);
+                            }
+                        }
+                        return true;
+                    }
+                }
+
+                typename ColVecResult::MutablePtr col_res = nullptr;
+                if constexpr (result_is_decimal)
+                {
+                    col_res = ColVecResult::create(0, result_type.getScale());
+                }
+                else
+                    col_res = ColVecResult::create();
+
+                auto & vec_res = col_res->getData();
+                vec_res.resize(block.rows());
+
+                typename ColumnUInt8::MutablePtr res_nullmap = ColumnUInt8::create();
+                typename ColumnUInt8::Container & vec_res_nulmap = res_nullmap->getData();
+                if constexpr (!default_impl_for_nulls)
+                {
+                    vec_res_nulmap.assign(block.rows(), (UInt8)0);
+                }
+
+                if (auto col_left_const = checkAndGetColumnConst<ColVecT0>(col_left_raw, is_left_nullable))
+                {
+                    if (auto col_right = checkAndGetColumn<ColVecT1>(col_right_raw))
+                    {
+                        if constexpr (result_is_decimal)
+                        {
+                            auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
+                            if constexpr (default_impl_for_nulls)
+                            {
+                                OpImpl::constant_vector(
+                                    col_left_const->template getValue<T0>(),
+                                    col_right->getData(),
+                                    vec_res,
+                                    scale_a,
+                                    scale_b,
+                                    scale_result);
+                            }
+                            else
+                            {
+                                OpImpl::constant_vector_nullable(col_left_const->template getValue<T0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                            }
+                        }
+                        else
+                        {
+                            if constexpr (default_impl_for_nulls)
+                            {
+                                OpImpl::constant_vector(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), vec_res);
+                            }
+                            else
+                            {
+                                OpImpl::constant_vector_nullable(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
+                            }
+                        }
                     }
                     else
                         return false;
-
-                    if constexpr (default_impl_for_nulls)
+                }
+                else if (auto col_left = checkAndGetColumn<ColVecT0>(col_left_raw))
+                {
+                    if (auto col_right_const = checkAndGetColumnConst<ColVecT1>(col_right_raw, is_right_nullable))
                     {
-                        block.getByPosition(result).column = std::move(col_res);
+                        if constexpr (result_is_decimal)
+                        {
+                            auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
+                            if constexpr (default_impl_for_nulls)
+                            {
+                                OpImpl::vector_constant(
+                                    col_left->getData(),
+                                    col_right_const->template getValue<T1>(),
+                                    vec_res,
+                                    scale_a,
+                                    scale_b,
+                                    scale_result);
+                            }
+                            else
+                            {
+                                OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->template getValue<T1>(), vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                            }
+                        }
+                        else
+                        {
+                            if constexpr (default_impl_for_nulls)
+                            {
+                                OpImpl::vector_constant(col_left->getData(), col_right_const->getField().template safeGet<FieldT1>(), vec_res);
+                            }
+                            else
+                            {
+                                OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->getField().template safeGet<FieldT1>(), vec_res, vec_res_nulmap);
+                            }
+                        }
+                    }
+                    else if (auto col_right = checkAndGetColumn<ColVecT1>(col_right_raw))
+                    {
+                        if constexpr (result_is_decimal)
+                        {
+                            auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
+                            if constexpr (default_impl_for_nulls)
+                            {
+                                OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b, scale_result);
+                            }
+                            else
+                            {
+                                OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                            }
+                        }
+                        else
+                        {
+                            if constexpr (default_impl_for_nulls)
+                            {
+                                OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res);
+                            }
+                            else
+                            {
+                                OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
+                            }
+                        }
                     }
                     else
-                    {
-                        block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(res_nullmap));
-                    }
-                    return true;
+                        return false;
                 }
-                return false;
-            });
-            if (!valid)
-                throw Exception(getName() + "'s arguments do not match the expected data types", ErrorCodes::LOGICAL_ERROR);
-        }
-    };
+                else
+                    return false;
+
+                if constexpr (default_impl_for_nulls)
+                {
+                    block.getByPosition(result).column = std::move(col_res);
+                }
+                else
+                {
+                    block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(res_nullmap));
+                }
+                return true;
+            }
+            return false;
+        });
+        if (!valid)
+            throw Exception(getName() + "'s arguments do not match the expected data types", ErrorCodes::LOGICAL_ERROR);
+    }
+};
 
 } // namespace DB

@@ -10,8 +10,8 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
 #include <Functions/FunctionsComparison.h>
+#include <Functions/IFunction.h>
 
 #include <cstddef>
 #include <ext/range.h>
@@ -120,8 +120,6 @@ private:
     }
 };
 
-
-
 template <LeastGreatest kind, typename SpecializedFunction>
 class FunctionLeastGreatest : public IFunction
 {
@@ -156,10 +154,9 @@ public:
     }
 
 
-
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (arguments.size() < 2) 
+        if (arguments.size() < 2)
         {
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
                                 + ", should be at least 2.",
@@ -173,8 +170,10 @@ public:
         DataTypePtr result_type = getReturnTypeImpl(data_types);
         for (auto argument : arguments)
         {
-            block.getByPosition(argument).column = castColumn(block.getByPosition(argument), 
-                result_type, context)->convertToFullColumnIfConst();
+            block.getByPosition(argument).column = castColumn(block.getByPosition(argument),
+                                                              result_type,
+                                                              context)
+                                                       ->convertToFullColumnIfConst();
             // copyToResult(res, rhs, cmp_result);
         }
         ColumnWithTypeAndName cmp_result;
@@ -191,12 +190,11 @@ public:
 
         for (size_t i = 1; i < arguments.size(); ++i)
         {
-            Block temp_block {
+            Block temp_block{
                 cmp_result,
                 res,
-                block.getByPosition(arguments[i])
-            };
-            
+                block.getByPosition(arguments[i])};
+
             FunctionLess{}.executeImpl(temp_block, {1, 2}, 0);
         }
         block.getByPosition(result) = std::move(res);
@@ -220,52 +218,6 @@ private:
     bool checkType(const DataTypePtr & arg) const
     {
         return static_cast<bool>(typeid_cast<const T0 *>(arg.get()));
-    }
-
-    template <typename F>
-    bool castType(const IDataType * type, F && f) const
-    {
-        return castTypeToEither<
-            DataTypeUInt8,
-            DataTypeUInt16,
-            DataTypeUInt32,
-            DataTypeUInt64,
-            DataTypeInt8,
-            DataTypeInt16,
-            DataTypeInt32,
-            DataTypeInt64,
-            DataTypeFloat32,
-            DataTypeFloat64,
-            DataTypeDate,
-            DataTypeDateTime,
-            DataTypeDecimal32,
-            DataTypeDecimal64,
-            DataTypeDecimal128,
-            DataTypeDecimal256>(type, std::forward<F>(f));
-    }
-
-    // template <typename F>
-    // bool castBothTypes(DataTypePtr left, DataTypePtr right, DataTypePtr result, F && f) const
-    // {
-    //     return castType(left.get(), [&](auto & left_, bool is_left_nullable_) {
-    //         return castType(right.get(), [&](auto & right_, bool is_right_nullable_) {
-    //             return castType(result.get(), [&](auto & result_, bool) {
-    //                 return f(left_, is_left_nullable_, right_, is_right_nullable_, result_);
-    //             });
-    //         });
-    //     });
-    // }
-
-    template <typename F>
-    bool castBothTypes(DataTypePtr left, DataTypePtr right, DataTypePtr result, F && f) const
-    {
-        return castType(left.get(), [&](const auto & left_, bool is_left_nullable_) {
-            return castType(right.get(), [&](const auto & right_, bool is_right_nullable_) {
-                return castType(result.get(), [&](const auto & result_, bool) {
-                    return f(left_, is_left_nullable_, right_, is_right_nullable_, result_);
-                });
-            });
-        });
     }
 };
 

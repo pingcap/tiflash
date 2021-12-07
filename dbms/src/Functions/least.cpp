@@ -1,10 +1,9 @@
+#include <DataTypes/NumberTraits.h>
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
-#include <Functions/LeastGreatestGeneric.h>
-
-#include <DataTypes/NumberTraits.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IsOperation.h>
+#include <Functions/LeastGreatestGeneric.h>
 
 namespace DB
 {
