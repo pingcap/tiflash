@@ -11,10 +11,9 @@ extern const int COP_BAD_DAG_REQUEST;
 
 DAGQuerySource::DAGQuerySource(
     Context & context_,
-    const tipb::DAGRequest & dag_request_,
     const LogWithPrefixPtr & log_)
     : context(context_)
-    , dag_request(dag_request_)
+    , dag_request(*context.getDAGContext()->dag_request)
     , log(log_)
 {
     if (dag_request.has_root_executor())

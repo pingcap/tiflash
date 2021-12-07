@@ -269,7 +269,7 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     context.getDAGContext()->regions = local_regions;
     context.getDAGContext()->regions_for_remote_read = remote_regions;
-    DAGQuerySource dag(context, dag_req, log);
+    DAGQuerySource dag(context, log);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();

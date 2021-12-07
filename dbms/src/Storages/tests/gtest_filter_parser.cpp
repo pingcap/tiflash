@@ -71,7 +71,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     DAGContext dag_context(dag_request);
     ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(ctx, /*regions*/ RegionInfoMap{}, /*retry_regions*/ RegionInfoList{}, dag_request, std::make_shared<LogWithPrefix>(log, ""), false);
+    DAGQuerySource dag(ctx, std::make_shared<LogWithPrefix>(log, ""));
     auto query_block = *dag.getRootQueryBlock();
     std::vector<const tipb::Expr *> conditions;
     if (query_block.children[0]->selection != nullptr)

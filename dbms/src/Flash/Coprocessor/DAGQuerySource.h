@@ -19,7 +19,6 @@ class DAGQuerySource : public IQuerySource
 public:
     DAGQuerySource(
         Context & context_,
-        const tipb::DAGRequest & dag_request_,
         const LogWithPrefixPtr & log_);
 
     std::tuple<std::string, ASTPtr> parse(size_t) override;

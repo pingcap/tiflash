@@ -70,7 +70,7 @@ try
     dag_context.regions = regions;
     dag_context.regions_for_remote_read = retry_regions;
     context.setDAGContext(&dag_context);
-    DAGQuerySource dag(context, dag_request, std::make_shared<LogWithPrefix>(&Poco::Logger::get("CoprocessorHandler"), ""));
+    DAGQuerySource dag(context, std::make_shared<LogWithPrefix>(&Poco::Logger::get("CoprocessorHandler"), ""));
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
