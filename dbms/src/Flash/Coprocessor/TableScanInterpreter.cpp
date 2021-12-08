@@ -38,7 +38,7 @@ bool addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     DAGExpressionActionsChain & chain,
-    const DAGQueryBlock & query_block)
+    const tipb::TableScan & table_scan)
 {
     bool has_need_cast_column = false;
     for (auto b : need_cast_column)
@@ -47,7 +47,7 @@ bool addExtraCastsAfterTs(
     }
     if (!has_need_cast_column)
         return false;
-    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, query_block);
+    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
 }
 
 void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
@@ -342,7 +342,7 @@ void TableScanInterpreter::executeImpl(DAGPipelinePtr & pipeline)
     dagContext().table_scan_executor_id = query_block.source_name;
 
     auto old_ts_schema = analyzer->getCurrentInputColumns();
-    if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, pipeline->chain, query_block))
+    if (addExtraCastsAfterTs(*analyzer, need_add_cast_column_flag_for_tablescan, pipeline->chain, query_block.source->tbl_scan()))
     {
         auto projection_after_cast_for_remote_read = getProjectionAfterCastForRemoteRead(context, old_ts_schema, analyzer->getCurrentInputColumns());
         pipeline->chain.getLastStep().setCallback(

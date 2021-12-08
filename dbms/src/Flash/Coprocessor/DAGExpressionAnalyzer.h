@@ -105,7 +105,7 @@ public:
     bool appendExtraCastsAfterTS(
         DAGExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const DAGQueryBlock & query_block);
+        const tipb::TableScan & table_scan);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(

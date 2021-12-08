@@ -939,7 +939,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     DAGExpressionActionsChain & chain,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const DAGQueryBlock & query_block)
+    const tipb::TableScan & table_scan)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
@@ -954,7 +954,7 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     // For Duration
     String fsp_col;
     static const String dur_func_name = "FunctionConvertDurationFromNanos";
-    const auto & columns = query_block.source->tbl_scan().columns();
+    const auto & columns = table_scan.columns();
     for (size_t i = 0; i < need_cast_column.size(); ++i)
     {
         if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
