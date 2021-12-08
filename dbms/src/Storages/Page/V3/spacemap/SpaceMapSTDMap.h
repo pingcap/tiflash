@@ -168,7 +168,7 @@ protected:
         if (it == free_map.end())
         {
             LOG_ERROR(log, "Not sure why can't found any place to insert. [size=" << size << "] [old biggest_offset=" << biggest_offset << "] [old biggest_cap=" << biggest_cap << "] [new biggest_offset=" << scan_biggest_offset << "] [new biggest_cap=" << scan_biggest_cap << "]");
-            biggest_offset= scan_biggest_offset;
+            biggest_offset = scan_biggest_offset;
             biggest_cap = scan_biggest_cap;
 
             return std::make_pair(offset, max_cap);
