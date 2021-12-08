@@ -174,6 +174,14 @@ public:
         if (kill)
             remote_reader->cancel();
     }
+
+    size_t block_count = 0;
+
+    ~TiRemoteBlockInputStream()
+    {
+        LOG_DEBUG(log, fmt::format("SHUFFLE_OPT: block_count = {}", block_count));
+    }
+
     Block readImpl() override
     {
         if (block_queue.empty())
@@ -184,6 +192,10 @@ public:
         // todo should merge some blocks to make sure the output block is big enough
         Block block = block_queue.front();
         block_queue.pop();
+
+        if (block)
+            block_count++;
+
         return block;
     }
 

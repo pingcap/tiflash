@@ -88,6 +88,11 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
+    static constexpr size_t num_buckets = 16;
+    using BlockQueue = std::queue<Block>;
+    std::mutex bucket_mutex[num_buckets];
+    BlockQueue bucket[num_buckets];
+
     ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types);
 
     void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
