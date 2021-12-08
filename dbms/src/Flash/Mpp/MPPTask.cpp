@@ -81,8 +81,8 @@ void MPPTask::run()
     memory_tracker = current_memory_tracker;
     if (glb_thd_pool)
     {
-        glb_thd_pool->schedule(
-            ThreadFactory(true, "MPPTask").newJob([this] { MpptaskRunImpl(this->shared_from_this()); }));
+        glb_thd_pool->scheduleWithMemTracker(
+            ([this] { MpptaskRunImpl(this->shared_from_this()); }));
     }
     else
     {

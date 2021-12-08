@@ -3,6 +3,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -17,7 +18,7 @@ public:
     /// Every threads will execute pre_worker firstly when they are created.
     explicit ScalableThreadPool(
         size_t m_size,
-        Job pre_worker = [] {});
+        Job pre_worker_ = [] {});
 
     /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
@@ -46,11 +47,12 @@ protected:
     std::condition_variable has_new_job_or_shutdown;
 
     const size_t m_size;
+    Job pre_worker;
     size_t active_jobs = 0;
     bool shutdown = false;
 
     std::queue<Job> jobs;
-    std::vector<std::thread> threads;
+    std::vector<std::shared_ptr<std::thread>> threads;
     std::exception_ptr first_exception;
 
 
@@ -60,4 +62,4 @@ protected:
     std::function<void()> newJobWithMemTracker(F && f, Args &&... args);
 };
 
-extern ScalableThreadPool * global_thd_pool;
+extern std::unique_ptr<ScalableThreadPool> glb_thd_pool;

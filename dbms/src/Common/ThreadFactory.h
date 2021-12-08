@@ -3,6 +3,7 @@
 #include <Common/MemoryTracker.h>
 #include <Common/setThreadName.h>
 #include <common/ThreadPool.h>
+#include <Common/ScalableThreadPool.h>
 
 #include <thread>
 

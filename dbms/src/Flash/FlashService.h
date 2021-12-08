@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
+#include <Common/ScalableThreadPool.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>

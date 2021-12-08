@@ -1,10 +1,13 @@
 #include <Common/ScalableThreadPool.h>
+#include <Common/setThreadName.h>
 
 #include <exception>
 #include <iostream>
 #include <stdexcept>
 
 #include "MemoryTracker.h"
+
+std::unique_ptr<ScalableThreadPool> glb_thd_pool = std::make_unique<ScalableThreadPool>(200, [] { setThreadName("glb-thd-pool"); });
 
 void handle_eptr(std::exception_ptr eptr) // passing by value is ok
 {
@@ -28,35 +31,37 @@ std::function<void()> ScalableThreadPool::newJobWithMemTracker(F && f, Args &&..
     /// Use std::tuple to workaround the limit on the lambda's init-capture of C++17.
     /// See https://stackoverflow.com/questions/47496358/c-lambdas-how-to-capture-variadic-parameter-pack-from-the-upper-scope
     return [memory_tracker, f = std::move(f), args = std::make_tuple(std::move(args)...)] {
-        if (!current_memory_tracker)
-        {
-            current_memory_tracker = memory_tracker;
-        }
+        current_memory_tracker = memory_tracker;
         std::apply(f, std::move(args));
         current_memory_tracker = nullptr;
     };
 }
 
-ScalableThreadPool * global_thd_pool = nullptr;
-
-ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker)
+ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker_)
     : m_size(m_size)
+    , pre_worker(pre_worker_)
 {
     threads.reserve(m_size);
     for (size_t i = 0; i < m_size; ++i)
-        threads.emplace_back([this, pre_worker] {
+        threads.emplace_back(std::make_shared<std::thread>([this] {
             pre_worker();
             worker();
-        });
+        }));
 }
 
 void ScalableThreadPool::schedule(Job job)
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
-        has_free_thread.wait(lock, [this] { return active_jobs < m_size || shutdown; });
         if (shutdown)
             return;
+        if (active_jobs >= threads.size())
+        {
+            threads.emplace_back(std::make_shared<std::thread>([this] {
+                pre_worker();
+                worker();
+            }));
+        }
 
         jobs.push(std::move(job));
         ++active_jobs;
@@ -94,7 +99,7 @@ ScalableThreadPool::~ScalableThreadPool()
     has_new_job_or_shutdown.notify_all();
 
     for (auto & thread : threads)
-        thread.join();
+        thread->join();
 }
 
 size_t ScalableThreadPool::active() const
@@ -136,19 +141,12 @@ void ScalableThreadPool::worker()
             }
             catch (...)
             {
-                // {
                 std::unique_lock<std::mutex> lock(mutex);
                 if (!first_exception)
                 {
                     first_exception = std::current_exception();
                     eptr = std::current_exception();
                 }
-                // shutdown = true;
-                // --active_jobs;
-                // }
-                // has_free_thread.notify_all();
-                // has_new_job_or_shutdown.notify_all();
-                // return;
             }
             handle_eptr(eptr);
         }

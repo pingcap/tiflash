@@ -1,10 +1,12 @@
 #pragma once
 
-#include <Interpreters/Aggregator.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/ScalableThreadPool.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Interpreters/Aggregator.h>
 #include <common/ThreadPool.h>
+
 #include <condition_variable>
 
 
@@ -124,7 +126,7 @@ private:
 
     struct ParallelMergeData
     {
-        ThreadPool *pool;
+        ScalableThreadPool *pool;
 
         /// Now one of the merging threads receives next blocks for the merge. This operation must be done sequentially.
         std::mutex get_next_blocks_mutex;
@@ -144,7 +146,7 @@ private:
         /// An event by which the main thread is telling merging threads that it is possible to process the next group of blocks.
         std::condition_variable have_space;
 
-        explicit ParallelMergeData() : pool(glb_thd_pool) {}
+        explicit ParallelMergeData() : pool(glb_thd_pool.get()) {}
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;

@@ -1563,10 +1563,10 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        ThreadPool* pool;
+        ScalableThreadPool* pool;
 
         explicit ParallelMergeData()
-            : pool(glb_thd_pool)
+            : pool(glb_thd_pool.get())
         {}
     };
 
@@ -1578,8 +1578,8 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool->schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this, num] { thread(num); }));
+        parallel_merge_data->pool->scheduleWithMemTracker(
+            ([this, num] { thread(num); }));
     }
 
     void thread(Int32 bucket_num)

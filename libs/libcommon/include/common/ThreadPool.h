@@ -9,7 +9,7 @@
 #include <vector>
 
 
-    /** Very simple thread pool similar to boost::threadpool.
+/** Very simple thread pool similar to boost::threadpool.
   * Advantages:
   * - catches exceptions and rethrows on wait.
   */
@@ -59,5 +59,3 @@ private:
 
     void worker();
 };
-
-extern ThreadPool  *glb_thd_pool;

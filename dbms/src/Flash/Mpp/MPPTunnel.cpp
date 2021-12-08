@@ -256,8 +256,8 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     {
         if (glb_thd_pool)
         {
-            glb_thd_pool->schedule(
-                ThreadFactory(true, "MPPTunnel").newJob([this] {
+            glb_thd_pool->scheduleWithMemTracker(
+                ([this] {
                     tunnelSendLoop(this);
                 }));
             send_thread = nullptr;
