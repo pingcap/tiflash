@@ -12,7 +12,7 @@ LogWithPrefixPtr getMPPTaskLog(const DAGContext & dag_context, const String & na
     return getMPPTaskLog(dag_context.log, name, dag_context.getMPPTaskId());
 }
 
-LogWithPrefixPtr getMPPTaskLog(const LogWithPrefixPtr & log, const String & name, const MPPTaskId & mpp_task_id_ = MPPTaskId::unknown_mpp_task_id)
+LogWithPrefixPtr getMPPTaskLog(const LogWithPrefixPtr & log, const String & name, const MPPTaskId & mpp_task_id_)
 {
     if (log == nullptr)
     {
