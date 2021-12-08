@@ -124,7 +124,7 @@ void CreatingSetsBlockInputStream::createAll()
                     glb_thd_pool->schedule(
                         ThreadFactory(true, "CreatingSets").newJob([this, &item = elem.second] { this->createOne(item); }));
                     //    createOne(elem.second);
-                    //                    workers.emplace_back(ThreadFactory(true, "CreatingSets").newThread([this, &subquery = elem.second] { createOne(subquery); }));
+                    //    workers.emplace_back(ThreadFactory(true, "CreatingSets").newThread([this, &subquery = elem.second] { createOne(subquery); }));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }

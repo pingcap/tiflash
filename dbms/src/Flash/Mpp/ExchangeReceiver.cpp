@@ -106,7 +106,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
         send_task_id = req.send_task_id;
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
-        //LOG_DEBUG(log, "begin start and read : " << req.debugString());
+        LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
         for (int i = 0; i < 10; i++)
         {
@@ -129,7 +129,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     {
                         meet_error = true;
                         local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                        //LOG_WARNING(log, local_err_msg);
+                        LOG_WARNING(log, local_err_msg);
                         break;
                     }
                 }
@@ -160,7 +160,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     {
                         meet_error = true;
                         local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                        //LOG_WARNING(log, local_err_msg);
+                        LOG_WARNING(log, local_err_msg);
                         break;
                     }
                 }
@@ -173,14 +173,14 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             status = reader->finish();
             if (status.ok())
             {
-                //LOG_DEBUG(log, "finish read : " << req.debugString());
+                LOG_DEBUG(log, "finish read : " << req.debugString());
                 break;
             }
             else
             {
-                // LOG_WARNING(
-                    // log,
-                    // "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                 LOG_WARNING(
+                     log,
+                     "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
@@ -221,12 +221,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         copy_live_conn = live_connections;
         cv.notify_all();
     }
-    //LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
+    LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
 
-    // if (copy_live_conn == 0)
-        //LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
-    // else 
-    if (copy_live_conn < 0)
+    if (copy_live_conn == 0)
+        LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
+    else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");
 }
 

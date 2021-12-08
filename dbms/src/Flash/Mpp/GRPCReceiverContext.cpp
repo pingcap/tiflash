@@ -124,7 +124,8 @@ GrpcExchangePacketReader::~GrpcExchangePacketReader()
 
 void GrpcExchangePacketReader::initialize() const
 {
-    // reader->WaitForInitialMetadata();
+    //is this necessary?
+    reader->WaitForInitialMetadata();
 }
 
 bool GrpcExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
