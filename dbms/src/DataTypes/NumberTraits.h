@@ -235,26 +235,6 @@ struct ResultOfModulo
 };
 
 
-template <typename A, typename B>
-constexpr bool TiDBLeastGreatestSpecialCase
-    = (8 == sizeof(A) || 8 == sizeof(B))
-    && (std::is_unsigned_v<A> || std::is_unsigned_v<B>);
-
-
-template <typename A, typename B>
-struct ResultOfTiDBLeast
-{
-    /**
-     * in TiDB:
-     * * if A or B is floating-point, least(A, B) evalutes to Float64.
-     * * if A or B is Integer, least(A, B) evalutes to Int64.
-     */
-    using Type = std::conditional_t<
-        std::is_floating_point_v<A> || std::is_floating_point_v<B>,
-        Float64,
-        std::conditional_t<TiDBLeastGreatestSpecialCase<A, B>, UInt64, Int64>>;
-};
-
 template <typename A>
 struct ResultOfNegate
 {
@@ -379,6 +359,25 @@ using ResultOfGreatest = std::conditional_t<
     typename Construct<false, false, sizeof(A)>::Type,
     typename ResultOfIf<A, B>::Type>;
 
+template <typename A, typename B>
+constexpr bool TiDBLeastGreatestSpecialCase
+    = (8 == sizeof(A) || 8 == sizeof(B))
+    && (std::is_unsigned_v<A> || std::is_unsigned_v<B>);
+
+
+template <typename A, typename B>
+struct ResultOfTiDBLeast
+{
+    /**
+     * in TiDB:
+     * * if A or B is floating-point, least(A, B) evalutes to Float64.
+     * * if A or B is Integer, least(A, B) evalutes to Int64.
+     */
+    using Type = std::conditional_t<
+        std::is_floating_point_v<A> || std::is_floating_point_v<B>,
+        Float64,
+        std::conditional_t<TiDBLeastGreatestSpecialCase<A, B>, UInt64, Int64>>;
+};
 } // namespace NumberTraits
 
 } // namespace DB
