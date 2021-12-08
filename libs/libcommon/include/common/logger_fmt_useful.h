@@ -41,7 +41,6 @@ inline constexpr size_t getFileNameOffset(T (&str)[1])
 ///  and the latter arguments treat as values to substitute.
 /// If only one argument is provided, it is threat as message without substitutions.
 
-#if 1
 #define LOG_IMPL(logger, PRIORITY, ...)                                           \
     do                                                                            \
     {                                                                             \
@@ -62,26 +61,6 @@ inline constexpr size_t getFileNameOffset(T (&str)[1])
             }                                                                     \
         }                                                                         \
     } while (false)
-#else
-#define LOG_IMPL(logger, PRIORITY, ...)                                           \
-    do                                                                            \
-    {                                                                             \
-        if ((logger)->is((PRIORITY)))                                             \
-        {                                                                         \
-            if (auto channel = (logger)->getChannel())                            \
-            {                                                                     \
-                std::string formatted_message = details::numArgs(__VA_ARGS__) > 1 \
-                    ? fmt::format(__VA_ARGS__)                                    \
-                    : details::firstArg(__VA_ARGS__);                             \
-                Poco::Message poco_message(                                       \
-                    /*source*/ (logger)->name(),                                  \
-                    /*text*/ formatted_message,                                   \
-                    /*prio*/ (PRIORITY));                                         \
-                channel->log(poco_message);                                       \
-            }                                                                     \
-        }                                                                         \
-    } while (false)
-#endif
 
 #define LOG_FMT_TRACE(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_TRACE, __VA_ARGS__)
 #define LOG_FMT_DEBUG(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_DEBUG, __VA_ARGS__)
