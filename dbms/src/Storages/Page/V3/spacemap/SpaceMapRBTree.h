@@ -43,17 +43,6 @@ class RBTreeSpaceMap
     , public ext::SharedPtrHelper<RBTreeSpaceMap>
 {
 public:
-<<<<<<< HEAD
-    RBTreeSpaceMap(UInt64 start, UInt64 end, int cluster_bits = 0)
-        : SpaceMap(start, end, cluster_bits)
-        , biggest_range(start)
-        , biggest_cap(end - start)
-    {
-        type = SMAP64_RBTREE;
-    };
-
-=======
->>>>>>> bak-space-map
     ~RBTreeSpaceMap() override
     {
         freeSmap();
@@ -75,12 +64,7 @@ protected:
 
     bool isMarkUnused(UInt64 block, size_t num) override;
 
-<<<<<<< HEAD
-    /* Search range , return the free bits */
-    void searchRange(size_t size, UInt64 * ret, UInt64 * max_cap) override;
-=======
     bool markSmapUsed(UInt64 block, size_t num) override;
->>>>>>> bak-space-map
 
     bool markSmapFree(UInt64 block, size_t num) override;
 

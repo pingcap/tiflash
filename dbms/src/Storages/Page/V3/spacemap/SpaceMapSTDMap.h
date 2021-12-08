@@ -21,16 +21,9 @@ class STDMapSpaceMap
     , public ext::SharedPtrHelper<STDMapSpaceMap>
 {
 public:
-<<<<<<< HEAD
-    STDMapSpaceMap(UInt64 start, UInt64 end, int cluster_bits = 0)
-        : SpaceMap(start, end, cluster_bits)
-        , biggest_range(start)
-        , biggest_cap(end - start)
-=======
     ~STDMapSpaceMap() override = default;
 
     bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override
->>>>>>> bak-space-map
     {
         size_t idx = 0;
         for (const auto [offset, length] : free_map)
@@ -148,100 +141,6 @@ protected:
         return true;
     }
 
-<<<<<<< HEAD
-    void searchRange(size_t size, UInt64 * ret, UInt64 * max_cap) override
-    {
-        UInt64 _biggest_cap = 0;
-        UInt64 _biggest_range = 0;
-
-        auto it = map.begin();
-        for (; it != map.end(); it++)
-        {
-            if (it->second >= size)
-            {
-                break;
-            }
-            else
-            {
-                if (it->second > _biggest_cap)
-                {
-                    _biggest_cap = it->second;
-                    _biggest_range = it->first;
-                }
-            }
-        }
-
-        // not place found.
-        if (it == map.end())
-        {
-            LOG_ERROR(log, "Not sure why can't found any place to insert.[old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
-            biggest_range = _biggest_range;
-            biggest_cap = _biggest_cap;
-
-            *ret = UINT64_MAX;
-            *max_cap = 0;
-            return;
-        }
-
-        // Update return start
-        *ret = it->first;
-
-        if (it->second == size)
-        {
-            // It is champion, need update
-            if (it->first == biggest_range)
-            {
-                auto it_cur = it++;
-                map.erase(it_cur);
-                goto go_on_update_biggest;
-            }
-            else // It not champion, just return
-            {
-                map.erase(it);
-                *max_cap = biggest_cap;
-                return;
-            }
-        }
-        else
-        {
-            auto k = it->first + size;
-            auto v = it->second - size;
-
-            map.erase(it);
-            map.insert({k, v});
-
-            // It is champion, need update
-            if (k - size == biggest_range)
-            {
-                if (v > _biggest_cap)
-                {
-                    _biggest_cap = v;
-                    _biggest_range = k;
-                }
-                it = map.find(k);
-                goto go_on_update_biggest;
-            }
-            else // It not champion, just return
-            {
-                *max_cap = biggest_cap;
-                return;
-            }
-        }
-
-    go_on_update_biggest:
-        for (; it != map.end(); it++)
-        {
-            if (it->second > _biggest_cap)
-            {
-                _biggest_cap = it->second;
-                _biggest_range = it->first;
-            }
-        }
-        biggest_range = _biggest_range;
-        biggest_cap = _biggest_cap;
-        *max_cap = biggest_cap;
-    }
-=======
     std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) override
     {
         UInt64 offset = UINT64_MAX;
@@ -249,7 +148,6 @@ protected:
         // The biggest free block capacity and its start offset
         UInt64 scan_biggest_cap = 0;
         UInt64 scan_biggest_offset = 0;
->>>>>>> bak-space-map
 
         auto it = free_map.begin();
         for (; it != free_map.end(); it++)
@@ -306,11 +204,6 @@ protected:
             // It is not champion, just return
             if (k - size != biggest_offset)
             {
-<<<<<<< HEAD
-                map.erase(it);
-            }
-            else // in the range
-=======
                 max_cap = biggest_cap;
                 return std::make_pair(offset, max_cap);
             }
@@ -327,7 +220,6 @@ protected:
         for (; it != free_map.end(); it++)
         {
             if (it->second > scan_biggest_cap)
->>>>>>> bak-space-map
             {
                 scan_biggest_cap = it->second;
                 scan_biggest_offset = it->first;
@@ -345,17 +237,10 @@ protected:
 
         /**
          * already unmarked.
-<<<<<<< HEAD
-         * The `block` won't be mid of free range.
-         * Because we alloc space from left to right.
-         */
-        if (it != map.end())
-=======
          * The `offset` won't be mid of free space.
          * Because we alloc space from left to right.
          */
         if (it != free_map.end())
->>>>>>> bak-space-map
         {
             return true;
         }
@@ -368,10 +253,7 @@ protected:
          * If init `it_prev` after `goto` op
          */
         auto it_prev = it;
-<<<<<<< HEAD
-=======
         auto it_next = it;
->>>>>>> bak-space-map
 
         /**
          * We need check current node is legal before we merge it.
@@ -390,19 +272,8 @@ protected:
             }
         }
 
-<<<<<<< HEAD
-        /**
-         * but don't make this line upper, 
-         * it make no sense to upper it.
-         */
-        it_prev--;
-
-        // Prev range can merge
-        if (it_prev->first + it_prev->second >= it->first)
-=======
         it_next++;
         if (it_next != free_map.end())
->>>>>>> bak-space-map
         {
             if (it->first + it->second > it_next->first)
             {
@@ -453,16 +324,10 @@ protected:
     }
 
 private:
-<<<<<<< HEAD
-#endif
-    std::map<UInt64, UInt64> map;
-    UInt64 biggest_range = 0;
-=======
     // Save the <offset, length> of free blocks
     std::map<UInt64, UInt64> free_map;
     // Keep track of the biggest free block. Save its biggest capacity and start offset.
     UInt64 biggest_offset = 0;
->>>>>>> bak-space-map
     UInt64 biggest_cap = 0;
 };
 

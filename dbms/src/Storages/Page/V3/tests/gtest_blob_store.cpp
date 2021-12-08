@@ -154,5 +154,33 @@ TEST(BlobStatsTest, testFullStats)
     ASSERT_FALSE(stat);
 }
 
+WriteBatch perpareWriteBatch(size_t write_size,size_t write_nums)
+{
+    WriteBatch batch;
+    PageId page_id = 50;
+
+    for (size_t i = 0; i < write_nums; ++i)
+    {
+        char c_buff[write_size];
+        for (size_t j = 0; j < write_size; ++j)
+        {
+            c_buff[j] = j & 0xff;
+        }
+        auto buff = std::make_shared<ReadBufferFromMemory>(c_buff, write_size);
+        batch.putPage(page_id++, /* tag */0, buff, write_size);
+    }
+}
+
+TEST(BlobStatsTest, testWrite)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+
+    auto blob_store = BlobStore(file_provider);
+    auto wb = perpareWriteBatch(5,20);
+
+    blob_store.write(wb, nullptr);
+    
+}
+
 
 } // namespace DB::PS::V3::tests

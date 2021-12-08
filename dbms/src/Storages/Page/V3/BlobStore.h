@@ -74,6 +74,8 @@ public:
 
         void removePosFromStat(BlobStatPtr stat, UInt64 offset, size_t buf_size);
 
+        BlobStatPtr fileIdToStat(BlobFileId file_id);
+
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif
@@ -99,9 +101,7 @@ public:
 
     BlobStats getAllBlobStats();
 
-    void write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter);
-
-    std::pair<BlobFileId, UInt64> write(size_t size);
+    PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter);
 
     // TBD : may replace std::vector<char *> with a align buffer.
     void read(std::vector<std::tuple<BlobFileId, UInt64, size_t>>,
@@ -115,6 +115,10 @@ private:
 #endif
     // TBD: after single path work, do the multi-path
     // String choosePath();
+
+    std::pair<BlobFileId, UInt64> getPosFromStats(size_t size);
+
+    void removePosFromStats(BlobFileId file_id, UInt64 offset, size_t size);
 
     String getBlobFilePath(BlobFileId blob_id);
 

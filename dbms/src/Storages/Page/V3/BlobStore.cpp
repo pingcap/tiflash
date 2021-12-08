@@ -1,6 +1,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
+#include <Common/Checksum.h>
 
 namespace ProfileEvents
 {
@@ -16,55 +17,102 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
+    
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
+using ChecksumClass = Digest::CRC64;
 
 #define INVAILD_BLOBFILE_ID UINT16_MAX
 
 BlobStore::BlobStore(const FileProviderPtr & file_provider_)
     : file_provider(file_provider_)
-    , log(&Poco::Logger::get("RBTreeSpaceMap"))
+    , log(&Poco::Logger::get("BlobStore"))
     , blob_stats(log)
     , cached_file(BLOBSTORE_CACHED_FD_SIZE)
 {
 }
 
-void BlobStore::write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
+PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
-    PageEntriesEdit edit(write_batch.getWrites().size());
-    const size_t all_page_data_size = write_batch.getTotalDataSize();
+    PageEntriesEdit edit;
+    const size_t all_page_data_size = wb.getTotalDataSize();
 
     char * buffer = (char *)alloc(all_page_data_size);
+    char * buffer_pos = buffer;
+    BlobStore::BlobFileId blob_id;
+    UInt64 offset_in_file;
 
-    PageEntry entry;
+    std::tie(blob_id, offset_in_file) = getPosFromStats(all_page_data_size);
     size_t offset_in_allocated = 0;
-    for (const auto & w : write_batch.getWrites())
+
+    for (auto & write : wb.getWrites())
     {
-        switch (w.type)
+        switch (write.type)
         {
             case WriteBatch::WriteType::PUT:
+            case WriteBatch::WriteType::UPSERT:
             {
-                // entry.file_id = xxx;
+                ChecksumClass digest;
+                PageEntryV3 entry;
+                entry.file_id = blob_id;
+                entry.size = write.size;
                 entry.offset = offset_in_file + offset_in_allocated;
-                offset_in_allocated += w.size;
-                edit.put(w.page_id, entry);
+                offset_in_allocated += write.size;
+                digest.update(buffer_pos,write.size);
+                entry.checksum = digest.checksum();
+                edit.put(write.page_id, entry);
+
+                UInt64 field_begin,field_end;
+
+                for (size_t i = 0; i < write.offsets.size(); ++i)
+                {
+                    ChecksumClass digest;
+                    field_begin = write.offsets[i].first;
+                    field_end = (i == write.offsets.size() - 1) ? 
+                        write.size : 
+                        write.offsets[i + 1].first;
+
+                    digest.update(buffer_pos + field_begin, field_end - field_begin);
+                    write.offsets[i].second = digest.checksum();
+                }
+
+                entry.field_offsets.swap(write.offsets);
+                write.read_buffer->readStrict(buffer_pos, write.size);
+
+                if (write.type == WriteBatch::WriteType::PUT)
+                    edit.put(write.page_id, entry);
+                else if (write.type == WriteBatch::WriteType::UPSERT)
+                    edit.upsertPage(write.page_id, entry);
+
                 break;
             }
             case WriteBatch::WriteType::DEL:
+            {
+                edit.del(write.page_id);
+            }
             case WriteBatch::WriteType::REF:
-            case WriteBatch::WriteType::UPSERT:
-                // TODO: put others to edit
+            {
+                edit.ref(write.page_id, write.ori_page_id);
                 break;
             }
         }
     }
 
+    if (buffer_pos != buffer + all_page_data_size)
+    {
+        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
+        throw Exception("write batch have a invalid total size, or something wrong in parse write batch.", 
+            ErrorCodes::LOGICAL_ERROR);
+    }
 
+    auto blob_file = getBlobFile(blob_id);
+    blob_file->write(buffer, offset_in_file, all_page_data_size, write_limiter);
+    return edit;
 }
 
-std::pair<BlobStore::BlobFileId, UInt64> BlobStore::write(char * buffer, size_t size, const WriteLimiterPtr & write_limiter)
+std::pair<BlobStore::BlobFileId, UInt64> BlobStore::getPosFromStats(size_t size)
 {
     UInt16 blob_file_id = INVAILD_BLOBFILE_ID;
     BlobStatPtr stat;
@@ -79,7 +127,7 @@ std::pair<BlobStore::BlobFileId, UInt64> BlobStore::write(char * buffer, size_t 
 
     blob_stats.unlock();
 
-    // blobfile write
+    // Get Postion from single stat
     blob_stats.statLock(stat);
     UInt64 offset = blob_stats.getPosFromStat(stat, size);
 
@@ -91,14 +139,17 @@ std::pair<BlobStore::BlobFileId, UInt64> BlobStore::write(char * buffer, size_t 
                         ErrorCodes::LOGICAL_ERROR);
     }
     blob_stats.statUnlock(stat);
-
-    auto blob_file = getBlobFile(stat->id);
-
-    blob_file->write(buffer, offset, size, write_limiter);
     return std::make_pair(stat->id, offset);
 }
 
-void BlobStore::read(std::vector<std::tuple<BlobStore::BlobFileId, UInt64, size_t>> req_list, std::vector<char *> buffers, const ReadLimiterPtr & read_limiter)
+void BlobStore::removePosFromStats(BlobFileId blob_id, UInt64 offset,size_t size)
+{
+    blob_stats.removePosFromStat(blob_stats.fileIdToStat(blob_id),offset,size);
+}
+
+void BlobStore::read(std::vector<std::tuple<BlobStore::BlobFileId, UInt64, size_t>> req_list, 
+    std::vector<char *> buffers, 
+    const ReadLimiterPtr & read_limiter)
 {
     assert(req_list.size() == buffers.size());
 
@@ -180,7 +231,6 @@ void BlobStore::BlobStats::statUnlock(BlobStatPtr stat)
 {
     stat->sm_lock.unlock();
 }
-
 
 BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
 {
@@ -294,7 +344,8 @@ new_blob:
 UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
 {
     UInt64 offset = 0, max_cap = 0;
-    stat->smap->searchRange(buf_size, &offset, &max_cap);
+
+    std::tie(offset,max_cap) = stat->smap->searchInsertOffset(buf_size);
 
     // Whatever request success or not, it still need update.
     stat->sm_max_caps = max_cap;
@@ -323,22 +374,28 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
 
 void BlobStore::BlobStats::removePosFromStat(BlobStatPtr stat, UInt64 offset, size_t buf_size)
 {
-    auto rc = stat->smap->unmarkRange(offset, buf_size);
-
-    if (rc == -1)
+    if (!stat->smap->markFree(offset, buf_size))
     {
         throw Exception("[offset=" + DB::toString(offset) + " , buf_size=" + DB::toString(buf_size) + "] is invalid.",
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (rc == 1)
-    {
-        LOG_WARNING(log, "[offset=" << offset << ", buf_size=" << buf_size << "], have already been removed");
-        return;
-    }
-
     stat->sm_valid_size -= buf_size;
     stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
+}
+
+BlobStatPtr BlobStore::BlobStats::fileIdToStat(BlobFileId file_id)
+{
+    for (auto & stat:stats_map)
+    {
+        if (stat->id == file_id)
+        {
+            return stat;
+        }
+    }
+
+    throw Exception("Can't find BlobStat with [BlobFileId=" + DB::toString(file_id) +"]",
+                    ErrorCodes::LOGICAL_ERROR);
 }
 
 } // namespace PS::V3
