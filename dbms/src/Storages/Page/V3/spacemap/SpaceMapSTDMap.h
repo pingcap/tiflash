@@ -111,7 +111,7 @@ protected:
 
         if (length > it->second || it->first + it->second < offset + length)
         {
-            LOG_WARNING(log, "Marked space used failed. [offset = " << offset << ", size= " << length << "] is bigger than space [offset=" << it->first << ",size=" << it->second << "]");
+            LOG_WARNING(log, "Marked space used failed. [offset=" << offset << ", size=" << length << "] is bigger than space [offset=" << it->first << ",size=" << it->second << "]");
             return false;
         }
 
@@ -193,19 +193,17 @@ protected:
 
         if (it->second == size)
         {
-            // It is champion, need to update `scan_biggest_cap`, `scan_biggest_offset`
-            // and scan other free blocks to update `biggest_offset` and `biggest_cap`
-            if (it->first == biggest_offset)
-            {
-                it = free_map.erase(it);
-                // Still need search for max_cap
-            }
-            else // It is not champion, just return
+            // It is not champion, just return
+            if (it->first != biggest_offset)
             {
                 free_map.erase(it);
                 max_cap = biggest_cap;
                 return std::make_pair(offset, max_cap);
             }
+
+            // It is champion, need to update `scan_biggest_cap`, `scan_biggest_offset`
+            // and scan other free blocks to update `biggest_offset` and `biggest_cap`
+            it = free_map.erase(it);
         }
         else
         {
@@ -277,7 +275,7 @@ protected:
             it_prev--;
             if (it_prev->first + it_prev->second > it->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset = " << it->first << ", size= " << it->second << "], prev node is [offset=" << it_prev->first << ",size=" << it_prev->second << "]");
+                LOG_WARNING(log, "Marked space free failed. [offset=" << it->first << ", size=" << it->second << "], prev node is [offset=" << it_prev->first << ",size=" << it_prev->second << "]");
                 free_map.erase(it);
                 return false;
             }
@@ -288,7 +286,7 @@ protected:
         {
             if (it->first + it->second > it_next->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset = " << it->first << ", size= " << it->second << "], next node is [offset=" << it_next->first << ",size=" << it_next->second << "]");
+                LOG_WARNING(log, "Marked space free failed. [offset=" << it->first << ", size=" << it->second << "], next node is [offset=" << it_next->first << ",size=" << it_next->second << "]");
                 free_map.erase(it);
                 return false;
             }

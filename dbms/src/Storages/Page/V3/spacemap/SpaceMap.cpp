@@ -58,7 +58,7 @@ bool SpaceMap::markFree(UInt64 offset, size_t length)
     if (checkSpace(offset, length))
     {
         throw Exception("Unmark space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size = " + DB::toString(length) + "]",
+                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -70,7 +70,7 @@ bool SpaceMap::markUsed(UInt64 offset, size_t length)
     if (checkSpace(offset, length))
     {
         throw Exception("Mark space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size = " + DB::toString(length) + "]",
+                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -82,7 +82,7 @@ bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
     if (checkSpace(offset, length))
     {
         throw Exception("Test space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size = " + DB::toString(length) + "]",
+                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
                         ErrorCodes::LOGICAL_ERROR);
     }
 
