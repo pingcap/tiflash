@@ -1,11 +1,10 @@
 #pragma once
 #include <Common/Exception.h>
+#include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <fmt/format.h>
 
 #include <ext/shared_ptr_helper.h>
 #include <map>
-
-#include "SpaceMap.h"
 
 namespace DB
 {
@@ -16,6 +15,23 @@ extern const int NOT_IMPLEMENTED;
 
 namespace PS::V3
 {
+namespace details
+{
+// Return an iterator to the last element whose key is less than or equal to `key`.
+// If no such element is found, the past-the-end iterator is returned.
+template <typename C>
+typename C::const_iterator
+findLessEQ(const C & c, const typename C::key_type & key)
+{
+    auto iter = c.upper_bound(key); // first element > `key`
+    // Nothing greater than key
+    if (iter == c.cbegin())
+        return c.cend();
+    // its prev must be less than or equal to `key`
+    return --iter;
+}
+
+} // namespace details
 class STDMapSpaceMap
     : public SpaceMap
     , public ext::SharedPtrHelper<STDMapSpaceMap>
@@ -40,17 +56,7 @@ protected:
     STDMapSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_STD_MAP)
     {
-    }
-
-    bool newSmap() override
-    {
         free_map.insert({start, end});
-        return true;
-    }
-
-    void freeSmap() override
-    {
-        // no need clear
     }
 
     void smapStats() override
@@ -67,29 +73,23 @@ protected:
 
     bool isMarkUnused(UInt64 offset, size_t length) override
     {
-        auto it = free_map.lower_bound(offset);
-
+        auto it = details::findLessEQ(free_map, offset); // first free block <= `offset`
         if (it == free_map.end())
         {
-            it--;
-        }
-        else if (it->first > offset && it != free_map.begin())
-        {
-            it--;
+            // No free blocks <= `offset`
+            return false;
         }
 
         return (it->first <= offset && (it->first + it->second >= offset + length));
     }
 
-    bool markSmapUsed(UInt64 offset, size_t length) override
+    bool markUsedImpl(UInt64 offset, size_t length) override
     {
-        auto it = free_map.upper_bound(offset);
-        if (it == free_map.begin())
+        auto it = details::findLessEQ(free_map, offset); // first free block <= `offset`
+        if (it == free_map.end())
         {
             return false;
         }
-
-        --it;
 
         // already been marked used
         if (it->first + it->second < offset)
@@ -99,7 +99,7 @@ protected:
 
         if (length > it->second || it->first + it->second < offset + length)
         {
-            LOG_WARNING(log, "Marked space used failed. [offset = " << offset << ", size= " << length << "] is bigger than space [offset=" << it->first << ",size=" << it->second << "]");
+            LOG_WARNING(log, "Marked space used failed. [offset=" << offset << ", size=" << length << "] is bigger than space [offset=" << it->first << ",size=" << it->second << "]");
             return false;
         }
 
@@ -112,7 +112,7 @@ protected:
             }
             else
             {
-                // Shrink the free block
+                // Shrink the free block from left
                 auto shrink_offset = it->first + length;
                 auto shrink_size = it->second - length;
                 free_map.erase(it);
@@ -121,6 +121,8 @@ protected:
         }
         else if (it->first + it->second == offset + length)
         {
+            // Shrink the free block from right
+            assert(it->second != length); // should not run into here
             free_map[it->first] = it->second - length;
         }
         else
@@ -141,7 +143,7 @@ protected:
         return true;
     }
 
-    std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) override
+    std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override
     {
         UInt64 offset = UINT64_MAX;
         UInt64 max_cap = 0;
@@ -179,18 +181,17 @@ protected:
 
         if (it->second == size)
         {
-            // It is champion, need update
-            if (it->first == biggest_offset)
-            {
-                it = free_map.erase(it);
-                // Still need search for max_cap
-            }
-            else // It is not champion, just return
+            // It is not champion, just return
+            if (it->first != biggest_offset)
             {
                 free_map.erase(it);
                 max_cap = biggest_cap;
                 return std::make_pair(offset, max_cap);
             }
+
+            // It is champion, need to update `scan_biggest_cap`, `scan_biggest_offset`
+            // and scan other free blocks to update `biggest_offset` and `biggest_cap`
+            it = free_map.erase(it);
         }
         else
         {
@@ -231,7 +232,7 @@ protected:
         return std::make_pair(offset, biggest_cap);
     }
 
-    bool markSmapFree(UInt64 offset, size_t length) override
+    bool markFreeImpl(UInt64 offset, size_t length) override
     {
         auto it = free_map.find(offset);
 
@@ -262,7 +263,7 @@ protected:
             it_prev--;
             if (it_prev->first + it_prev->second > it->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset = " << it->first << ", size= " << it->second << "], prev node is [offset=" << it_prev->first << ",size=" << it_prev->second << "]");
+                LOG_WARNING(log, "Marked space free failed. [offset=" << it->first << ", size=" << it->second << "], prev node is [offset=" << it_prev->first << ",size=" << it_prev->second << "]");
                 free_map.erase(it);
                 return false;
             }
@@ -273,7 +274,7 @@ protected:
         {
             if (it->first + it->second > it_next->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset = " << it->first << ", size= " << it->second << "], next node is [offset=" << it_next->first << ",size=" << it_next->second << "]");
+                LOG_WARNING(log, "Marked space free failed. [offset=" << it->first << ", size=" << it->second << "], next node is [offset=" << it_next->first << ",size=" << it_next->second << "]");
                 free_map.erase(it);
                 return false;
             }

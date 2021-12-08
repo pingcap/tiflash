@@ -1,4 +1,4 @@
-#include "SpaceMapRBTree.h"
+#include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
 
 
 namespace DB::PS::V3
@@ -138,7 +138,7 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
                         auto * _entry = node_to_entry(_node);
                         if (start + count > _entry->start)
                         {
-                            LOG_WARNING(log, "Marked space free failed. [offset = " << start << ", size= " << count << "], next node is [offset=" << _entry->start << ",size=" << _entry->count << "]");
+                            LOG_WARNING(log, "Marked space free failed. [offset=" << start << ", size=" << count << "], next node is [offset=" << _entry->start << ",size=" << _entry->count << "]");
                             return false;
                         }
                     }
@@ -177,7 +177,7 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
         entry = node_to_entry(node);
         if (entry->start + entry->count > new_entry->start)
         {
-            LOG_WARNING(log, "Marked space free failed. [offset = " << new_entry->start << ", size= " << new_entry->count << "], prev node is [offset=" << entry->start << ",size=" << entry->count << "]");
+            LOG_WARNING(log, "Marked space free failed. [offset=" << new_entry->start << ", size=" << new_entry->count << "], prev node is [offset=" << entry->start << ",size=" << entry->count << "]");
             rb_node_remove(new_node, root);
             rb_free_entry(private_data, new_entry);
             return false;
@@ -190,7 +190,7 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
         entry = node_to_entry(node);
         if (new_entry->start + new_entry->count > entry->start)
         {
-            LOG_WARNING(log, "Marked space free failed. [offset = " << new_entry->start << ", size= " << new_entry->count << "], next node is [offset=" << entry->start << ",size=" << entry->count << "]");
+            LOG_WARNING(log, "Marked space free failed. [offset=" << new_entry->start << ", size=" << new_entry->count << "], next node is [offset=" << entry->start << ",size=" << entry->count << "]");
             rb_node_remove(new_node, root);
             rb_free_entry(private_data, new_entry);
             return false;
@@ -287,13 +287,13 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priv
 
         if ((start + count) > (entry->start + entry->count))
         {
-            LOG_WARNING(log, "Marked space used failed. [offset = " << start << ", size= " << count << "] is bigger than space [offset=" << entry->start << ",size=" << entry->count << "]");
+            LOG_WARNING(log, "Marked space used failed. [offset=" << start << ", size=" << count << "] is bigger than space [offset=" << entry->start << ",size=" << entry->count << "]");
             return false;
         }
 
         if (start < entry->start)
         {
-            LOG_WARNING(log, "Marked space used failed. [offset = " << start << ", size= " << count << "] is less than space [offset=" << entry->start << ",size=" << entry->count << "]");
+            LOG_WARNING(log, "Marked space used failed. [offset=" << start << ", size=" << count << "] is less than space [offset=" << entry->start << ",size=" << entry->count << "]");
             return false;
         }
 
@@ -373,29 +373,30 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priv
     return marked;
 }
 
-bool RBTreeSpaceMap::newSmap()
+std::shared_ptr<RBTreeSpaceMap> RBTreeSpaceMap::create(UInt64 start, UInt64 end)
 {
-    rb_tree = (struct rb_private *)calloc(1, sizeof(struct rb_private));
-    if (rb_tree == nullptr)
+    auto ptr = std::shared_ptr<RBTreeSpaceMap>(new RBTreeSpaceMap(start, end));
+
+    ptr->rb_tree = static_cast<struct rb_private *>(calloc(1, sizeof(struct rb_private)));
+    if (ptr->rb_tree == nullptr)
     {
-        return false;
+        return nullptr;
     }
 
-    rb_tree->root = {
+    ptr->rb_tree->root = {
         nullptr,
     };
-    rb_tree->read_index = nullptr;
-    rb_tree->read_index_next = nullptr;
-    rb_tree->write_index = nullptr;
+    ptr->rb_tree->read_index = nullptr;
+    ptr->rb_tree->read_index_next = nullptr;
+    ptr->rb_tree->write_index = nullptr;
 
-    if (!rb_insert_entry(start, end, rb_tree, log))
+    if (!rb_insert_entry(start, end, ptr->rb_tree, ptr->log))
     {
-        LOG_ERROR(log, "Erorr happend, when mark all space free.  [start=" << start << "] , [end = " << end << "]");
-        free(rb_tree);
-        return false;
+        LOG_ERROR(ptr->log, "Erorr happend, when mark all space free.  [start=" << start << "] , [end=" << end << "]");
+        free(ptr->rb_tree);
+        return nullptr;
     }
-
-    return true;
+    return ptr;
 }
 
 static void rb_free_tree(struct rb_root * root)
@@ -509,7 +510,7 @@ bool RBTreeSpaceMap::isMarkUnused(UInt64 _start,
     return retval;
 }
 
-std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
+std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
 {
     UInt64 offset = UINT64_MAX;
     UInt64 max_cap = 0;
@@ -538,7 +539,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
     // No enough space for insert
     if (!node)
     {
-        LOG_ERROR(log, "Not sure why can't found any place to insert.[size=" << size << "] [old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
+        LOG_ERROR(log, "Not sure why can't found any place to insert.[size=" << size << "] [old biggest_range=" << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
         biggest_range = _biggest_range;
         biggest_cap = _biggest_cap;
 
@@ -606,7 +607,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
     return std::make_pair(offset, max_cap);
 }
 
-bool RBTreeSpaceMap::markSmapUsed(UInt64 block, size_t size)
+bool RBTreeSpaceMap::markUsedImpl(UInt64 block, size_t size)
 {
     bool rc;
 
@@ -617,7 +618,7 @@ bool RBTreeSpaceMap::markSmapUsed(UInt64 block, size_t size)
     return rc;
 }
 
-bool RBTreeSpaceMap::markSmapFree(UInt64 block, size_t size)
+bool RBTreeSpaceMap::markFreeImpl(UInt64 block, size_t size)
 {
     bool rc;
 
