@@ -28,6 +28,11 @@ public:
             paths.emplace_back(Poco::Path{TiFlashTestEnv::getTemporaryPath() + "/path_pool_test/data" + toString(i)}.toString());
         return paths;
     }
+    static void createIfNotExist(const String & path)
+    {
+        if (Poco::File file(path); !file.exists())
+            file.createDirectories();
+    }
 
 protected:
     Poco::Logger * log;
@@ -321,11 +326,15 @@ try
 }
 CATCH
 
-TEST(PathCapcatity, FsStats)
+TEST(PathPool_test, FsStats)
 try
 {
     std::string main_data_path = TiFlashTestEnv::getTemporaryPath() + "/main";
+    createIfNotExist(main_data_path);
+    
     std::string latest_data_path = TiFlashTestEnv::getTemporaryPath() + "/lastest";
+    createIfNotExist(latest_data_path);
+    
     size_t global_capacity_quota = 10;
     size_t capacity = 100;
     {
