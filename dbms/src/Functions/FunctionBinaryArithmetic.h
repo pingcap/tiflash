@@ -578,9 +578,12 @@ private:
 };
 
 
-// 暂时实现 less 的逻辑
+template <template <typename, typename> typename Operation>
 struct StringOperationWithCollatorImpl
 {
+    static constexpr bool function_is_least = IsOperation<Operation>::least;
+    static constexpr bool function_is_greatest = IsOperation<Operation>::greatest;
+
     static void NO_INLINE string_vector_string_vector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
@@ -606,6 +609,8 @@ struct StringOperationWithCollatorImpl
                 a_size = a_offsets[0] - 1;
                 b_size = b_offsets[0] - 1;
                 res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_size);
+                if (!function_is_least)
+                    res *= -1;
                 if (res < 0)
                 {
                     memcpy(&c_data[0], &a_data[0], a_size);
@@ -624,6 +629,8 @@ struct StringOperationWithCollatorImpl
                 a_size = a_offsets[i] - a_offsets[i - 1] - 1;
                 b_size = b_offsets[i] - b_offsets[i - 1] - 1;
                 res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_size, reinterpret_cast<const char *>(&b_data[b_offsets[i - 1]]), b_size);
+                if (!function_is_least)
+                    res *= -1;
                 if (res < 0)
                 {
                     memcpy(&c_data[c_offset_idx], &a_data[a_offsets[i - 1]], a_size);
@@ -661,6 +668,8 @@ struct StringOperationWithCollatorImpl
             {
                 a_size = a_offsets[0] - 1;
                 int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_n);
+                if (!function_is_least)
+                    res *= -1;
                 if (res < 0)
                 {
                     memcpy(&c_data[0], &a_data[0], a_size);
@@ -678,6 +687,8 @@ struct StringOperationWithCollatorImpl
             {
                 a_size = a_offsets[i] - a_offsets[i - 1] - 1;
                 int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, reinterpret_cast<const char *>(&b_data[i * b_n]), b_n);
+                if (!function_is_least)
+                    res *= -1;
                 if (res < 0)
                 {
                     memcpy(&c_data[c_offset_idx], &a_data[a_offsets[i - 1]], a_size);
@@ -717,6 +728,8 @@ struct StringOperationWithCollatorImpl
             {
                 a_size = a_offsets[0] - 1;
                 int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_offsets[0] - 1, b_data, b_size);
+                if (!function_is_least)
+                    res *= -1;
                 if (res < 0)
                 {
                     memcpy(&c_data[0], &a_data[0], a_size);
@@ -734,6 +747,8 @@ struct StringOperationWithCollatorImpl
             {
                 a_size = a_offsets[i] - a_offsets[i - 1] - 1;
                 int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, b_data, b_size);
+                if (!function_is_least)
+                    res *= -1;
                 if (res < 0)
                 {
                     memcpy(&c_data[c_offset_idx], &a_data[a_offsets[i - 1]], a_size);
@@ -782,6 +797,8 @@ struct StringOperationWithCollatorImpl
         for (size_t i = 0, j = 0; i < size; i += a_n, ++j)
         {
             int res = collator->compare(reinterpret_cast<const char *>(&a_data[i]), a_n, reinterpret_cast<const char *>(&b_data[i]), b_n);
+            if (!function_is_least)
+                res *= -1;
             if (res < 0)
             {
                 memcpy(&c_data[c_offset_idx], &a_data[i], a_n);
@@ -815,6 +832,8 @@ struct StringOperationWithCollatorImpl
         for (size_t i = 0; i < size; i += a_n)
         {
             int res = collator->compare(reinterpret_cast<const char *>(&a_data[i]), a_n, b_data, b_n);
+            if (!function_is_least)
+                res *= -1;
             if (res < 0)
             {
                 memcpy(&c_data[c_offset_idx], &a_data[i], a_n);
@@ -862,7 +881,8 @@ struct StringOperationWithCollatorImpl
         size_t b_n = b.size();
 
         int res = collator->compare(reinterpret_cast<const char *>(a.data()), a_n, reinterpret_cast<const char *>(b.data()), b_n);
-
+        if (!function_is_least)
+            res *= -1;
         if (res < 0)
             c = a;
         else
@@ -1321,7 +1341,7 @@ public:
         const ColumnConst * c0_const,
         const ColumnConst * c1_const) const
     {
-        using StringImpl = StringOperationWithCollatorImpl;
+        using StringImpl = StringOperationWithCollatorImpl<Op>;
 
         if (c0_const && c1_const)
         {

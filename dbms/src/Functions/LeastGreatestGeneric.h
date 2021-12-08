@@ -90,9 +90,10 @@ public:
         {
             bool flag = false;
             DataTypes data_types(num_arguments);
-            for (size_t i = 0; i < num_arguments; ++i) {
+            for (size_t i = 0; i < num_arguments; ++i)
+            {
                 data_types[i] = block.getByPosition(arguments[i]).type;
-                if (data_types[i]->isStringOrFixedString()) 
+                if (data_types[i]->isStringOrFixedString())
                 {
                     flag = true;
                 }

@@ -211,7 +211,7 @@ try
             func_name,
             createColumn<Nullable<UInt64>>({9223372036854775818U}),
             createColumn<Nullable<UInt64>>({9223372036854775820U})));
-    
+
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"sahdka"}),
         executeFunction(
@@ -233,8 +233,7 @@ try
             func_name,
             createColumn<Nullable<String>>({"sahdka"}),
             createColumn<Nullable<UInt64>>({2}),
-            createColumn<Nullable<UInt8>>({1})
-            ));
+            createColumn<Nullable<UInt8>>({1})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"1"}),
@@ -243,22 +242,20 @@ try
             createColumn<Nullable<String>>({"sahdka"}),
             createColumn<Nullable<UInt64>>({2}),
             createColumn<Nullable<UInt8>>({1}),
-            createColumn<Nullable<Decimal64>>(
-                std::make_tuple(15, 3),
-                {DecimalField64(9244, 3)})
-            ));
+            createColumn<Nullable<Decimal32>>(
+                std::make_tuple(4, 3),
+                {DecimalField32(9244, 3)})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"9.244"}),
+        createColumn<Nullable<String>>({"10"}),
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"sahdka"}),
             createColumn<Nullable<UInt64>>({20}),
             createColumn<Nullable<UInt8>>({10}),
-            createColumn<Nullable<Decimal64>>(
-                std::make_tuple(15, 3),
-                {DecimalField64(9244, 3)})
-            ));
+            createColumn<Nullable<Decimal32>>(
+                std::make_tuple(4, 3),
+                {DecimalField32(9244, 3)})));
 }
 CATCH
 
@@ -467,27 +464,25 @@ try
             createColumn<Nullable<String>>({"sahdka"}),
             createColumn<Nullable<UInt64>>({1})));
 
-    
+
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"sahdka"}),
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"sahdka"}),
             createColumn<Nullable<UInt64>>({2}),
-            createColumn<Nullable<UInt8>>({1})
-            ));
+            createColumn<Nullable<UInt8>>({1})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"sshdka"}),
+        createColumn<Nullable<String>>({"sahdka"}),
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"sahdka"}),
             createColumn<Nullable<UInt64>>({2}),
             createColumn<Nullable<UInt8>>({1}),
-            createColumn<Nullable<Decimal64>>(
-                std::make_tuple(15, 3),
-                {DecimalField64(9244, 3)})
-            ));
+            createColumn<Nullable<Decimal32>>(
+                std::make_tuple(4, 3),
+                {DecimalField32(9244, 3)})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"sahdka"}),
@@ -496,10 +491,9 @@ try
             createColumn<Nullable<String>>({"sahdka"}),
             createColumn<Nullable<UInt64>>({20}),
             createColumn<Nullable<UInt8>>({10}),
-            createColumn<Nullable<Decimal64>>(
-                std::make_tuple(15, 3),
-                {DecimalField64(9244, 3)})
-            ));
+            createColumn<Nullable<Decimal32>>(
+                std::make_tuple(4, 3),
+                {DecimalField32(9244, 3)})));
 }
 CATCH
 
