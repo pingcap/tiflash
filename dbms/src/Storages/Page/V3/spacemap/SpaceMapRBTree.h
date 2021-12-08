@@ -40,7 +40,6 @@ inline static struct smap_rb_entry * node_to_entry(struct rb_node * node)
 
 class RBTreeSpaceMap
     : public SpaceMap
-    , public ext::SharedPtrHelper<RBTreeSpaceMap>
 {
 public:
     ~RBTreeSpaceMap() override
@@ -50,15 +49,16 @@ public:
 
     bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override;
 
+    static
+    std::shared_ptr<RBTreeSpaceMap> create(UInt64, UInt64 end);
+
 protected:
     RBTreeSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_RBTREE)
     {
     }
 
-    bool newSmap() override;
-
-    void freeSmap() override;
+    void freeSmap();
 
     void smapStats() override;
 

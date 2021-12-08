@@ -119,12 +119,6 @@ protected:
 
     virtual ~SpaceMap() = default;
 
-    /* Generic space map operators */
-    virtual bool newSmap() = 0;
-
-    /* Free the space map if necessary */
-    virtual void freeSmap() = 0;
-
     /* Print space maps status  */
     virtual void smapStats() = 0;
 

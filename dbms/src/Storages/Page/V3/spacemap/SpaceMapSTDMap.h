@@ -58,17 +58,7 @@ protected:
     STDMapSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_STD_MAP)
     {
-    }
-
-    bool newSmap() override
-    {
         free_map.insert({start, end});
-        return true;
-    }
-
-    void freeSmap() override
-    {
-        // no need clear
     }
 
     void smapStats() override

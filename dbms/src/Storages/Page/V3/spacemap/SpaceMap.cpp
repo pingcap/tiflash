@@ -34,9 +34,8 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
         throw Exception("Invalid type to create spaceMap", ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (!smap->newSmap())
+    if (!smap)
     {
-        smap->freeSmap();
         throw Exception("Failed create SpaceMap [type=" + typeToString(type) + "]", ErrorCodes::LOGICAL_ERROR);
     }
 

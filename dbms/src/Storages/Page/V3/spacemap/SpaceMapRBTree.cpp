@@ -373,29 +373,30 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priv
     return marked;
 }
 
-bool RBTreeSpaceMap::newSmap()
+std::shared_ptr<RBTreeSpaceMap> RBTreeSpaceMap::create(UInt64 start, UInt64 end)
 {
-    rb_tree = (struct rb_private *)calloc(1, sizeof(struct rb_private));
-    if (rb_tree == nullptr)
+    auto ptr = std::shared_ptr<RBTreeSpaceMap>(new RBTreeSpaceMap(start, end));
+
+    ptr->rb_tree = static_cast<struct rb_private *>(calloc(1, sizeof(struct rb_private)));
+    if (ptr->rb_tree == nullptr)
     {
-        return false;
+        return nullptr;
     }
 
-    rb_tree->root = {
+    ptr->rb_tree->root = {
         nullptr,
     };
-    rb_tree->read_index = nullptr;
-    rb_tree->read_index_next = nullptr;
-    rb_tree->write_index = nullptr;
+    ptr->rb_tree->read_index = nullptr;
+    ptr->rb_tree->read_index_next = nullptr;
+    ptr->rb_tree->write_index = nullptr;
 
-    if (!rb_insert_entry(start, end, rb_tree, log))
+    if (!rb_insert_entry(start, end, ptr->rb_tree, ptr->log))
     {
-        LOG_ERROR(log, "Erorr happend, when mark all space free.  [start=" << start << "] , [end=" << end << "]");
-        free(rb_tree);
-        return false;
+        LOG_ERROR(ptr->log, "Erorr happend, when mark all space free.  [start=" << start << "] , [end=" << end << "]");
+        free(ptr->rb_tree);
+        return nullptr;
     }
-
-    return true;
+    return ptr;
 }
 
 static void rb_free_tree(struct rb_root * root)
