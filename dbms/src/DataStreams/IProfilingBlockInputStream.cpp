@@ -3,6 +3,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
 
+#include <unordered_set>
 
 namespace DB
 {
@@ -122,6 +123,20 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     return res;
 }
 
+Int64 IProfilingBlockInputStream::getWorkingTime()
+{
+    auto working_time = info.timeline.getCounter(Timeline::SELF);
+    std::unordered_set<IBlockInputStream *> visited_set;
+    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
+        if (visited_set.find(&child) == visited_set.end())
+        {
+            visited_set.insert(&child);
+            working_time += child.getWorkingTime();
+        }
+        return false;
+    });
+    return working_time;
+}
 
 void IProfilingBlockInputStream::dumpProfileInfo(FmtBuffer & buf)
 {

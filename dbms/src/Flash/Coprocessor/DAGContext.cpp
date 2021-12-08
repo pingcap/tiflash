@@ -243,13 +243,16 @@ UInt64 DAGContext::getOutputBytes()
 
 void DAGContext::initExecutorStatistics(Context & context)
 {
-    assert(executor_statistics_map.empty());
-    executor_statistics_map = DB::initExecutorStatistics(context);
+    if (!executor_map.empty() && executor_statistics_map.empty())
+    {
+        executor_statistics_map = DB::initExecutorStatistics(context);
+        assert(executor_statistics_map.size() == executor_map.size());
+    }
 }
 
 void DAGContext::collectExecutorRuntimeDetails()
 {
-    assert(executor_statistics_map.size() == executor_map.size());
+    assert(executor_statistics_map.size() == profile_streams_map.size());
     for (const auto & statistics_entry : executor_statistics_map)
     {
         statistics_entry.second->collectRuntimeDetail();

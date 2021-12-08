@@ -80,6 +80,8 @@ public:
     /// Get information about execution speed.
     const BlockStreamProfileInfo & getProfileInfo() const { return info; }
 
+    Int64 getWorkingTime();
+
     /** Get "total" values.
       * The default implementation takes them from itself or from the first child source in which they are.
       * The overridden method can perform some calculations. For example, apply an expression to the `totals` of the child source.

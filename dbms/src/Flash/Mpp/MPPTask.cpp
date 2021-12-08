@@ -338,8 +338,13 @@ void MPPTask::runImpl()
         finishWrite();
         LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
 
-        FmtBuffer buf;
+        task_stats->local_input_bytes = dag_context->getLocalInputBytes();
+        task_stats->remote_input_bytes = dag_context->getRemoteInputBytes();
+        task_stats->output_bytes = dag_context->getOutputBytes();
+
         auto & profile_ptr = dynamic_cast<IProfilingBlockInputStream &>(*from);
+        task_stats->working_time = profile_ptr.getWorkingTime();
+        FmtBuffer buf;
         profile_ptr.dumpProfileInfo(buf);
         LOG_DEBUG(log, "input stream profile info: \n" + buf.toString());
     }
@@ -369,10 +374,6 @@ void MPPTask::runImpl()
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
         task_stats->memory_peak = peak_memory;
-
-        task_stats->local_input_bytes = dag_context->getLocalInputBytes();
-        task_stats->remote_input_bytes = dag_context->getRemoteInputBytes();
-        task_stats->output_bytes = dag_context->getOutputBytes();
     }
     else
     {
