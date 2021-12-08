@@ -1,10 +1,9 @@
 #pragma once
 #include <Common/Exception.h>
+#include <Storages/Page/V3/spacemap/RBTree.h>
+#include <Storages/Page/V3/spacemap/SpaceMap.h>
 
 #include <ext/shared_ptr_helper.h>
-
-#include "RBTree.h"
-#include "SpaceMap.h"
 
 namespace DB
 {
@@ -49,8 +48,7 @@ public:
 
     bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override;
 
-    static
-    std::shared_ptr<RBTreeSpaceMap> create(UInt64, UInt64 end);
+    static std::shared_ptr<RBTreeSpaceMap> create(UInt64, UInt64 end);
 
 protected:
     RBTreeSpaceMap(UInt64 start, UInt64 end)

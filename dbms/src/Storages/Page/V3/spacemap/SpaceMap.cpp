@@ -1,14 +1,12 @@
-#include "SpaceMap.h"
-
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/V3/spacemap/SpaceMap.h>
+#include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
+#include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <common/likely.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "SpaceMapRBTree.h"
-#include "SpaceMapSTDMap.h"
 
 namespace DB
 {

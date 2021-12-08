@@ -8,8 +8,6 @@
 
 #include <map>
 
-#include "gtest/gtest.h"
-#include "gtest/internal/gtest-internal.h"
 
 namespace DB::PS::V3::tests
 {
