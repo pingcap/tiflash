@@ -36,4 +36,33 @@ ColumnPtr castColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type
     return temporary_block.getByPosition(2).column;
 }
 
+ColumnPtr TiDBCastColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context)
+{
+    if (arg.type->equals(*type))
+        return arg.column;
+
+    Block temporary_block
+    {
+        arg,
+        {
+            DataTypeString().createColumnConst(arg.column->size(), type->getName()),
+            std::make_shared<DataTypeString>(),
+            ""
+        },
+        {
+            nullptr,
+            type,
+            ""
+        }
+    };
+
+    FunctionBuilderPtr func_builder_cast = FunctionFactory::instance().get("tidb_cast", context);
+
+    ColumnsWithTypeAndName arguments{ temporary_block.getByPosition(0), temporary_block.getByPosition(1)};
+    auto func_cast = func_builder_cast->build(arguments);
+
+    func_cast->execute(temporary_block, {0, 1}, 2);
+    return temporary_block.getByPosition(2).column;
+}
+
 }
