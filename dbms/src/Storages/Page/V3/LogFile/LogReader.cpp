@@ -55,13 +55,13 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
         uint64_t physical_record_offset = end_of_buffer_offset - buffer.size();
         size_t drop_size = 0;
         static_assert(
-            std::is_same_v<std::underlying_type_t<LogReader::ExtRecordType>, uint8_t>,
-            "The underlying type of ExtRecordType should be uint8_t");
+            std::is_same_v<std::underlying_type_t<ParseErrorType>, uint8_t>,
+            "The underlying type of ParseErrorType should be uint8_t");
         const uint8_t record_type = readPhysicalRecord(&fragment, &drop_size);
         switch (record_type)
         {
-        case Format::FullType:
-        case Format::RecyclableFullType:
+        case Format::RecordType::FullType:
+        case Format::RecordType::RecyclableFullType:
         {
             if (in_fragmented_record && !record.empty())
             {
@@ -76,8 +76,9 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             last_record_offset = prospective_record_offset;
             return {true, std::move(record)};
         }
-        case Format::FirstType:
-        case Format::RecyclableFirstType:
+
+        case Format::RecordType::FirstType:
+        case Format::RecordType::RecyclableFirstType:
         {
             if (in_fragmented_record && !record.empty())
             {
@@ -92,8 +93,8 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             in_fragmented_record = true;
             break;
         }
-        case Format::MiddleType:
-        case Format::RecyclableMiddleType:
+        case Format::RecordType::MiddleType:
+        case Format::RecordType::RecyclableMiddleType:
         {
             if (!in_fragmented_record)
             {
@@ -105,8 +106,8 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             }
             break;
         }
-        case Format::LastType:
-        case Format::RecyclableLastType:
+        case Format::RecordType::LastType:
+        case Format::RecordType::RecyclableLastType:
         {
             if (!in_fragmented_record)
             {
@@ -119,22 +120,14 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
                 return {true, std::move(record)};
             }
             break;
-        }
-        case BadHeader:
+        } // End of record_type in Format::RecordType
+
+        // For enum defined in ParseErrorType
+        default:
         {
-            if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
+            switch (record_type)
             {
-                // In clean shutdown we don't expect any error in the log files.
-                // In point-in-time recovery an incomplete record at the end could produce
-                // a hole in the recovered data. Report an error here, which higher layers
-                // can choose to ignore when it's provable there is no hole.
-                reportCorruption(drop_size, "truncated header");
-            }
-            [[fallthrough]];
-        }
-        case Eof:
-        {
-            if (in_fragmented_record)
+            case ParseErrorType::BadHeader:
             {
                 if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                 {
@@ -142,20 +135,12 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
                     // In point-in-time recovery an incomplete record at the end could produce
                     // a hole in the recovered data. Report an error here, which higher layers
                     // can choose to ignore when it's provable there is no hole.
-                    reportCorruption(record.size(), "error reading trailing data");
+                    reportCorruption(drop_size, "truncated header");
                 }
-                // This can be caused by the writer dying immediately after writing a
-                // physical record but before completing the next; don't treat it as
-                // a corruption, just ignore the entire logical record.
-                record.clear();
+                [[fallthrough]];
             }
-            return {false, std::move(record)};
-        }
-        case OldRecord:
-        {
-            if (wal_recovery_mode != WALRecoveryMode::SkipAnyCorruptedRecords)
+            case ParseErrorType::MeetEOF:
             {
-                // Treat a record from a previous instance of the log as EOF.
                 if (in_fragmented_record)
                 {
                     if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
@@ -173,70 +158,94 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
                 }
                 return {false, std::move(record)};
             }
-            [[fallthrough]];
-        }
-        case BadRecord:
-        {
-            if (in_fragmented_record)
+            case ParseErrorType::OldRecord:
             {
-                reportCorruption(record.size(), "error in middle of record");
-                in_fragmented_record = false;
-                record.clear();
-            }
-            break;
-        }
-        case BadRecordLen:
-        {
-            if (eof)
-            {
-                if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
+                if (wal_recovery_mode != WALRecoveryMode::SkipAnyCorruptedRecords)
                 {
-                    // In clean shutdown we don't expect any error in the log files.
-                    // In point-in-time recovery an incomplete record at the end could produce
-                    // a hole in the recovered data. Report an error here, which higher layers
-                    // can choose to ignore when it's provable there is no hole.
-                    reportCorruption(drop_size, "truncated record body");
+                    // Treat a record from a previous instance of the log as EOF.
+                    if (in_fragmented_record)
+                    {
+                        if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
+                        {
+                            // In clean shutdown we don't expect any error in the log files.
+                            // In point-in-time recovery an incomplete record at the end could produce
+                            // a hole in the recovered data. Report an error here, which higher layers
+                            // can choose to ignore when it's provable there is no hole.
+                            reportCorruption(record.size(), "error reading trailing data");
+                        }
+                        // This can be caused by the writer dying immediately after writing a
+                        // physical record but before completing the next; don't treat it as
+                        // a corruption, just ignore the entire logical record.
+                        record.clear();
+                    }
+                    return {false, std::move(record)};
                 }
-                return {false, std::move(record)};
+                [[fallthrough]];
             }
-            [[fallthrough]];
-        }
-        case BadRecordChecksum:
-        {
-            if (recycled && wal_recovery_mode == WALRecoveryMode::TolerateCorruptedTailRecords)
+            case ParseErrorType::BadRecord:
             {
-                record.clear();
-                return {false, std::move(record)};
+                if (in_fragmented_record)
+                {
+                    reportCorruption(record.size(), "error in middle of record");
+                    in_fragmented_record = false;
+                    record.clear();
+                }
+                break;
             }
-            if (record_type == BadRecordLen)
+            case ParseErrorType::BadRecordLen:
             {
-                reportCorruption(drop_size, "bad record length");
+                if (eof)
+                {
+                    if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
+                    {
+                        // In clean shutdown we don't expect any error in the log files.
+                        // In point-in-time recovery an incomplete record at the end could produce
+                        // a hole in the recovered data. Report an error here, which higher layers
+                        // can choose to ignore when it's provable there is no hole.
+                        reportCorruption(drop_size, "truncated record body");
+                    }
+                    return {false, std::move(record)};
+                }
+                [[fallthrough]];
             }
-            else
+            case ParseErrorType::BadRecordChecksum:
             {
-                reportCorruption(drop_size, "checksum mismatch");
+                if (recycled && wal_recovery_mode == WALRecoveryMode::TolerateCorruptedTailRecords)
+                {
+                    record.clear();
+                    return {false, std::move(record)};
+                }
+                if (record_type == ParseErrorType::BadRecordLen)
+                {
+                    reportCorruption(drop_size, "bad record length");
+                }
+                else
+                {
+                    reportCorruption(drop_size, "checksum mismatch");
+                }
+                if (in_fragmented_record)
+                {
+                    reportCorruption(record.size(), "error in middle of record");
+                    in_fragmented_record = false;
+                    record.clear();
+                }
+                break;
             }
-            if (in_fragmented_record)
+            default:
             {
-                reportCorruption(record.size(), "error in middle of record");
+                reportCorruption((fragment.size() + (in_fragmented_record ? record.size() : 0)), fmt::format("unknown record type {}", record_type));
                 in_fragmented_record = false;
                 record.clear();
+                break;
             }
-            break;
-        }
-        default:
-        {
-            reportCorruption((fragment.size() + (in_fragmented_record ? record.size() : 0)), fmt::format("unknown record type {}", record_type));
-            in_fragmented_record = false;
-            record.clear();
-            break;
-        }
-        }
+            }
+        } // End of record_type in ParseErrorType
+        } // End of record_type in Format::RecordType or ParseErrorType
     }
     return {false, std::move(record)};
 }
 
-LogReader::ExtRecordType LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_size)
+uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_size)
 {
     while (true)
     {
@@ -245,8 +254,8 @@ LogReader::ExtRecordType LogReader::readPhysicalRecord(std::string_view * result
         {
             // the default value of r is meaningless because ReadMore will overwrite it if it
             // returns false; in case it returns true, the return value will not be used anyway.
-            if (int r = Eof; !readMore(drop_size, &r))
-                return static_cast<LogReader::ExtRecordType>(r);
+            if (uint8_t r = ParseErrorType::MeetEOF; !readMore(drop_size, &r))
+                return r;
             continue;
         }
 
@@ -269,15 +278,15 @@ LogReader::ExtRecordType LogReader::readPhysicalRecord(std::string_view * result
             // We need enough for the larger header
             if (buffer.size() < static_cast<size_t>(Format::RECYCLABLE_HEADER_SIZE))
             {
-                if (int r = Eof; !readMore(drop_size, &r))
-                    return static_cast<LogReader::ExtRecordType>(r);
+                if (uint8_t r = ParseErrorType::MeetEOF; !readMore(drop_size, &r))
+                    return r;
                 continue;
             }
             uint32_t log_num = 0;
             readIntBinary(log_num, *file);
             if (log_num != log_number)
             {
-                return OldRecord;
+                return ParseErrorType::OldRecord;
             }
         }
         if (header_size + UInt32(length) > buffer.size())
@@ -289,7 +298,7 @@ LogReader::ExtRecordType LogReader::readPhysicalRecord(std::string_view * result
             // `header_size + length` bytes of payload, report a corruption. The
             // higher layers can decide how to handle it based on the recovery mode,
             // whether this occurred at EOF, whether this is the final WAL, etc.
-            return BadRecordLen;
+            return ParseErrorType::BadRecordLen;
         }
 
         if (type == Format::ZeroType && length == 0)
@@ -300,7 +309,7 @@ LogReader::ExtRecordType LogReader::readPhysicalRecord(std::string_view * result
             // NOTE: this should never happen in DB written by new RocksDB versions,
             // since we turn off mmap writes to manifest and log files
             buffer.remove_prefix(buffer.size());
-            return BadRecord;
+            return ParseErrorType::BadRecord;
         }
 
         if (verify_checksum)
@@ -315,7 +324,7 @@ LogReader::ExtRecordType LogReader::readPhysicalRecord(std::string_view * result
                 // like a valid log record.
                 *drop_size = buffer.size();
                 buffer.remove_prefix(buffer.size());
-                return BadRecordChecksum;
+                return ParseErrorType::BadRecordChecksum;
             }
         }
 
@@ -323,11 +332,11 @@ LogReader::ExtRecordType LogReader::readPhysicalRecord(std::string_view * result
 
         *result = std::string_view(header + header_size, length);
         file->ignore(length); // Move forward the payload size
-        return static_cast<LogReader::ExtRecordType>(type);
+        return type;
     }
 }
 
-bool LogReader::readMore(size_t * drop_size, int * error)
+bool LogReader::readMore(size_t * drop_size, uint8_t * error)
 {
     if (likely(!eof && !read_error))
     {
@@ -352,7 +361,7 @@ bool LogReader::readMore(size_t * drop_size, int * error)
             reportDrop(Format::BLOCK_SIZE, fmt::format("while reading Log file: {}, {}", file->getFileName(), getCurrentExceptionMessage(true)));
             buffer.remove_prefix(buffer.size());
             read_error = true;
-            *error = Eof;
+            *error = ParseErrorType::MeetEOF;
             return false;
         }
     }
@@ -365,12 +374,12 @@ bool LogReader::readMore(size_t * drop_size, int * error)
     {
         *drop_size = buffer.size();
         buffer.remove_prefix(buffer.size());
-        *error = BadHeader;
+        *error = ParseErrorType::BadHeader;
         return false;
     }
 
     buffer.remove_prefix(buffer.size());
-    *error = Eof;
+    *error = ParseErrorType::MeetEOF;
     return false;
 }
 

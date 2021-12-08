@@ -52,7 +52,7 @@ public:
     // Undefined before the first call to readRecord.
     UInt64 lastRecordOffset();
 
-    bool isEof() const { return eof; }
+    bool isEOF() const { return eof; }
 
     UInt64 getLogNumber() const { return log_number; }
 
@@ -64,9 +64,9 @@ protected:
 
 private:
     // Extend record types with the following special values
-    enum ExtRecordType : uint8_t
+    enum ParseErrorType : uint8_t
     {
-        Eof = Format::MaxRecordType + 1,
+        MeetEOF = Format::MaxRecordType + 1,
         // Returned whenever we find an invalid physical record.
         // Currently there are three situations in which this happens:
         // * The record has an invalid checksum (ReadPhysicalRecord reports a drop)
@@ -82,9 +82,9 @@ private:
         BadRecordChecksum = Format::MaxRecordType + 6,
     };
 
-    ExtRecordType readPhysicalRecord(std::string_view * result, size_t * drop_size);
+    uint8_t readPhysicalRecord(std::string_view * result, size_t * drop_size);
     // Read some more
-    bool readMore(size_t * drop_size, int * error);
+    bool readMore(size_t * drop_size, uint8_t * error);
 
 private:
     const bool verify_checksum;

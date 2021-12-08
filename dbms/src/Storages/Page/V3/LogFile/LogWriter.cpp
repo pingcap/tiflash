@@ -78,13 +78,13 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
         const bool end = (payload_left == fragment_length);
         Format::RecordType type;
         if (begin && end)
-            type = recycle_log_files ? Format::RecyclableFullType : Format::FullType;
+            type = recycle_log_files ? Format::RecordType::RecyclableFullType : Format::RecordType::FullType;
         else if (begin)
-            type = recycle_log_files ? Format::RecyclableFirstType : Format::FirstType;
+            type = recycle_log_files ? Format::RecordType::RecyclableFirstType : Format::RecordType::FirstType;
         else if (end)
-            type = recycle_log_files ? Format::RecyclableLastType : Format::LastType;
+            type = recycle_log_files ? Format::RecordType::RecyclableLastType : Format::RecordType::LastType;
         else
-            type = recycle_log_files ? Format::RecyclableMiddleType : Format::MiddleType;
+            type = recycle_log_files ? Format::RecordType::RecyclableMiddleType : Format::RecordType::MiddleType;
         emitPhysicalRecord(type, payload, fragment_length);
         payload.ignore(fragment_length);
         payload_left -= fragment_length;

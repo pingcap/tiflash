@@ -405,7 +405,7 @@ TEST_P(LogFileRWTest, ShortTrailer)
     ASSERT_EQ("EOF", read());
 }
 
-TEST_P(LogFileRWTest, AlignedEof)
+TEST_P(LogFileRWTest, AlignedEOF)
 {
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
     const int n = PS::V3::Format::BLOCK_SIZE - 2 * header_size + 4;
