@@ -175,11 +175,12 @@ public:
             remote_reader->cancel();
     }
 
+    size_t row_count = 0;
     size_t block_count = 0;
 
     ~TiRemoteBlockInputStream()
     {
-        LOG_DEBUG(log, fmt::format("SHUFFLE_OPT: block_count = {}", block_count));
+        LOG_DEBUG(log, fmt::format("SHUFFLE_OPT: block_count = {}, row_count = {}", block_count, row_count));
     }
 
     Block readImpl() override
@@ -194,7 +195,10 @@ public:
         block_queue.pop();
 
         if (block)
+        {
             block_count++;
+            row_count += block.rows();
+        }
 
         return block;
     }
