@@ -50,7 +50,7 @@ class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 public:
     SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
                                   StorageDeltaMergePtr storage_,
-                                  const DecodingStorageSchemaSnapshot & schema_snap_,
+                                  DecodingStorageSchemaSnapshotConstPtr schema_snap_,
                                   TiDB::SnapshotApplyMethod method_,
                                   FileConvertJobType job_type_,
                                   TMTContext & tmt_);
@@ -74,7 +74,7 @@ private:
 private:
     BoundedSSTFilesToBlockInputStreamPtr child;
     StorageDeltaMergePtr storage;
-    const DecodingStorageSchemaSnapshot & schema_snap;
+    DecodingStorageSchemaSnapshotConstPtr schema_snap;
     const TiDB::SnapshotApplyMethod method;
     const FileConvertJobType job_type;
     TMTContext & tmt;
