@@ -6,6 +6,17 @@ namespace DB::PS::V3
 {
 class SpaceMap;
 using SpaceMapPtr = std::shared_ptr<SpaceMap>;
+/**
+ * SpaceMap design doc: 
+ * https://docs.google.com/document/d/1l1GoIV6Rp0GEwuYtToJMKYACmZv6jf4kp1n8JdQidS8/edit#heading=h.pff0nn7vsa6w
+ * 
+ * SpaceMap have red-black tree/ map implemention.
+ * Each node on the tree records the information of free data blocks,
+ * 
+ * The node is composed of `offset` : `size`. Each node sorted according to offset.
+ * - offset: Record the starting address of the free data segment in the file.
+ * - size: The length of the space data segment is recorded.
+ */
 class SpaceMap
 {
 public:
@@ -16,91 +27,121 @@ public:
         SMAP64_STD_MAP = 2
     };
 
-    static SpaceMapPtr createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end, int cluster_bits = 0);
+    /**
+     * Create a SpaceMap that manages space address [start, end).
+     *  - type : 
+     *      - SMAP64_RBTREE : red-black tree implementation
+     *      - SMAP64_STD_MAP: std::map implementation
+     *  - start : begin of the space
+     *  - end : end if the space
+     */
+    static SpaceMapPtr createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end);
 
     /**
-     * ret value :
-     *  -1: Invalid args
-     *   0: Unmark the marked node
-     *   1: Unmark the unmarked node
+     * Mark a space [offset,offset + length) free of the space map.
+     * After mark this space freed.
+     * When user use `searchInsertOffset` to get a space.
+     * Then this space may been selected(If request size fit space size
+     * and it is the first freed space).
+     * 
+     * ret value:
+     *   true: mark the space which is used.
+     *   false: mark the space which is freed.
      */
-    int unmarkRange(UInt64 offset, size_t length);
+    bool markFree(UInt64 offset, size_t length);
 
     /**
-     * ret value :
-     *  -1: Invalid args
-     *   1: Mark success
+     * Mark a space [offset,offset + length) of the space map.
+     * After this space been marked.
+     * When user use `searchInsertOffset` to get a space. 
+     * This space won't be selected.
+     * ret value:
+     *   false: This space is freed, marked all space used.
+     *   true: This space is used, or some sub space is used.
      */
-    int markRange(UInt64 offset, size_t length);
+    bool markUsed(UInt64 offset, size_t length);
 
     /**
-     * ret value :
-     *  -1: Invalid args
-     *   0: This bit is marked
-     *   1: This bit is not marked
+     * Test a space [offset,offset + length) have been used or not.
+     * 
+     * ret value:
+     *   true: This space is used, or some sub space is used
+     *   false: This space is freed, all of space is freed for use.  
      */
-    int testRange(UInt64 offset, size_t length);
+    bool isMarkUsed(UInt64 offset, size_t length);
 
     /**
-     * Search range, return the free bits 
+     * Search a space that can fit in `size`
+     * SpaceMap will loop the range from start.
+     * After it found a range which can fit this `size`.
+     * It will decide if there needs to keep traverse to update `max_cap`.
+     * 
+     * Return value is <insert_offset, max_cap>:
+     *  insert_offset : start offset for the inserted space
+     *  max_cap : The largest available space this SpaceMap can hold. 
      */
-    virtual void searchRange(size_t size, UInt64 * ret, UInt64 * max_cap) = 0;
+    std::pair<UInt64, UInt64> searchInsertOffset(size_t size);
 
     /**
-     * Clear all ranges
+     * Sanity check for correctness
      */
-    void clear();
+    using CheckerFunc = std::function<bool(size_t idx, UInt64 start, UInt64 end)>;
+    virtual bool check(CheckerFunc /*checker*/, size_t /*size*/)
+    {
+        return true;
+    }
 
     /**
      * Log the status of space map
      */
     void logStats();
 
-    SpaceMapType getType()
+    SpaceMapType getType() const
     {
         return type;
     }
 
-#ifndef DBMS_PUBLIC_GTEST
+    static String typeToString(SpaceMapType type)
+    {
+        switch (type)
+        {
+        case SMAP64_RBTREE:
+            return "RB-Tree";
+        case SMAP64_STD_MAP:
+            return "STD Map";
+        default:
+            return "Invalid";
+        }
+    }
+
 protected:
-#endif
+    SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_);
 
-    SpaceMap(UInt64 start, UInt64 end, int cluster_bits = 0);
-
-    virtual ~SpaceMap(){};
+    virtual ~SpaceMap() = default;
 
     /* Generic space map operators */
-    virtual int newSmap() = 0;
+    virtual bool newSmap() = 0;
 
-    /* The difference between clear and free is that after you clear, you can still use this spacemap. */
-    virtual void clearSmap() = 0;
-
+    /* Free the space map if necessary */
     virtual void freeSmap() = 0;
-
-    virtual int copySmap(SpaceMap * dest) = 0;
-
-    virtual int resizeSmap(UInt64 new_end, UInt64 new_real_end) = 0;
 
     /* Print space maps status  */
     virtual void smapStats() = 0;
 
-    /* Space map bit/bits test operators */
-    virtual int testSmapRange(UInt64 offset, size_t size) = 0;
+    // Return true if space [offset, offset+size) are all free
+    virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;
 
-    /* Space map range set/unset operators */
-    virtual int markSmapRange(UInt64 offset, size_t size) = 0;
+    /* Space map mark used/free operators */
+    virtual bool markSmapUsed(UInt64 offset, size_t size) = 0;
 
-    virtual int unmarkSmapRange(UInt64 offset, size_t size) = 0;
+    virtual bool markSmapFree(UInt64 offset, size_t size) = 0;
+
+    virtual std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) = 0;
 
 private:
-    /* shift block to the right range */
-    std::pair<UInt64, size_t> shiftBlock(UInt64 offset, size_t num);
-
     /* Check the range */
-    bool checkRange(UInt64 offset, size_t num);
+    bool checkSpace(UInt64 offset, size_t num);
 
-    /* Check Space Map have been inited or not*/
-    bool checkInited();
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #else
@@ -108,16 +149,11 @@ public:
 #endif
     SpaceMapType type = SpaceMapType::SMAP64_INVALID;
 
-    /* [left - right] range */
-    UInt64 start, end;
+    /* The offset range managed by this SpaceMap. The range is [left, right). */
+    UInt64 start;
+    UInt64 end;
 
     Poco::Logger * log;
-
-private:
-    /* shift */
-    int cluster_bits;
-
-    char * description;
 };
 
 
