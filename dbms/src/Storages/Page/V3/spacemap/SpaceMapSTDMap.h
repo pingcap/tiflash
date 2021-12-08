@@ -3,7 +3,6 @@
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <fmt/format.h>
 
-#include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <ext/shared_ptr_helper.h>
 #include <map>
 
