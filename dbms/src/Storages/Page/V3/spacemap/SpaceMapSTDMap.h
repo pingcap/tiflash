@@ -1,5 +1,6 @@
 #pragma once
 #include <Common/Exception.h>
+#include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <fmt/format.h>
 
 #include <ext/shared_ptr_helper.h>
@@ -16,6 +17,23 @@ extern const int NOT_IMPLEMENTED;
 
 namespace PS::V3
 {
+namespace details
+{
+// Return an iterator to the last element whose key is less than or equal to `key`.
+// If no such element is found, the past-the-end iterator is returned.
+template <typename C>
+typename C::const_iterator
+findLessEQ(const C & c, const typename C::key_type & key)
+{
+    auto iter = c.upper_bound(key); // first element > `key`
+    // Nothing greater than key
+    if (iter == c.cbegin())
+        return c.cend();
+    // its prev must be less than or equal to `key`
+    return --iter;
+}
+
+} // namespace details
 class STDMapSpaceMap
     : public SpaceMap
     , public ext::SharedPtrHelper<STDMapSpaceMap>
@@ -67,15 +85,11 @@ protected:
 
     bool isMarkUnused(UInt64 offset, size_t length) override
     {
-        auto it = free_map.lower_bound(offset);
-
+        auto it = details::findLessEQ(free_map, offset); // first free block <= `offset`
         if (it == free_map.end())
         {
-            it--;
-        }
-        else if (it->first > offset && it != free_map.begin())
-        {
-            it--;
+            // No free blocks <= `offset`
+            return false;
         }
 
         return (it->first <= offset && (it->first + it->second >= offset + length));
@@ -83,13 +97,11 @@ protected:
 
     bool markSmapUsed(UInt64 offset, size_t length) override
     {
-        auto it = free_map.upper_bound(offset);
-        if (it == free_map.begin())
+        auto it = details::findLessEQ(free_map, offset); // first free block <= `offset`
+        if (it == free_map.end())
         {
             return false;
         }
-
-        --it;
 
         // already been marked used
         if (it->first + it->second < offset)
@@ -112,7 +124,7 @@ protected:
             }
             else
             {
-                // Shrink the free block
+                // Shrink the free block from left
                 auto shrink_offset = it->first + length;
                 auto shrink_size = it->second - length;
                 free_map.erase(it);
@@ -121,6 +133,8 @@ protected:
         }
         else if (it->first + it->second == offset + length)
         {
+            // Shrink the free block from right
+            assert(it->second != length); // should not run into here
             free_map[it->first] = it->second - length;
         }
         else
@@ -179,7 +193,8 @@ protected:
 
         if (it->second == size)
         {
-            // It is champion, need update
+            // It is champion, need to update `scan_biggest_cap`, `scan_biggest_offset`
+            // and scan other free blocks to update `biggest_offset` and `biggest_cap`
             if (it->first == biggest_offset)
             {
                 it = free_map.erase(it);

@@ -8,8 +8,48 @@
 
 #include <map>
 
+#include "gtest/gtest.h"
+#include "gtest/internal/gtest-internal.h"
+
 namespace DB::PS::V3::tests
 {
+::testing::AssertionResult MapIterCompare(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const std::map<int, int>::const_iterator lhs,
+    const std::pair<int, int> rhs)
+{
+    if (lhs->first == rhs.first && lhs->second == rhs.second)
+        return ::testing::AssertionSuccess();
+    return ::testing::internal::EqFailure(
+        lhs_expr,
+        rhs_expr,
+        fmt::format("{{{},{}}}", lhs->first, lhs->second),
+        fmt::format("{{{}, {}}}", rhs.first, rhs.second),
+        false);
+}
+
+#define ASSERT_ITER_EQ(iter, val) ASSERT_PRED_FORMAT2(MapIterCompare, iter, val)
+
+TEST(STDMapUtil, FindLessEqual)
+{
+    std::map<int, int> m0{};
+    ASSERT_EQ(details::findLessEQ(m0, 1), m0.end());
+
+    std::map<int, int> m1{{1, 1}, {2, 2}, {3, 3}, {6, 6}};
+    ASSERT_EQ(details::findLessEQ(m1, 0), m1.end());
+    ASSERT_ITER_EQ(details::findLessEQ(m1, 1), std::make_pair(1, 1));
+    ASSERT_ITER_EQ(details::findLessEQ(m1, 2), std::make_pair(2, 2));
+    ASSERT_ITER_EQ(details::findLessEQ(m1, 3), std::make_pair(3, 3));
+    for (int x = 4; x < 20; ++x)
+    {
+        if (x < 6)
+            ASSERT_ITER_EQ(details::findLessEQ(m1, x), std::make_pair(3, 3));
+        else
+            ASSERT_ITER_EQ(details::findLessEQ(m1, x), std::make_pair(6, 6));
+    }
+}
+
 struct Range
 {
     size_t start;
