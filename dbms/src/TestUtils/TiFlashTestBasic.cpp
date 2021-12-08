@@ -8,7 +8,7 @@ namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
 
-void TiFlashTestEnv::initializeGlobalContext()
+void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
 {
     // set itself as global context
     global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
@@ -24,7 +24,10 @@ void TiFlashTestEnv::initializeGlobalContext()
     // 2. path pool
     // 3. TMTContext
 
-    Strings testdata_path = {getTemporaryPath()};
+    if (testdata_path.empty())
+    {
+        testdata_path = {getTemporaryPath()};
+    }
     global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
 
     auto paths = getPathPool(testdata_path);

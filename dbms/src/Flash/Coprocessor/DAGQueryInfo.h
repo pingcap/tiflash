@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 
@@ -11,7 +12,11 @@ namespace DB
 // be used to extracted key conditions by storage engine
 struct DAGQueryInfo
 {
-    DAGQueryInfo(const std::vector<const tipb::Expr *> & filters_, DAGPreparedSets dag_sets_, const std::vector<NameAndTypePair> & source_columns_, const TimezoneInfo & timezone_info_)
+    DAGQueryInfo(
+        const std::vector<const tipb::Expr *> & filters_,
+        DAGPreparedSets dag_sets_,
+        const NamesAndTypes & source_columns_,
+        const TimezoneInfo & timezone_info_)
         : filters(filters_)
         , dag_sets(std::move(dag_sets_))
         , source_columns(source_columns_)
@@ -21,7 +26,7 @@ struct DAGQueryInfo
     // Prepared sets extracted from dag request, which are used for indices
     // by storage engine.
     DAGPreparedSets dag_sets;
-    const std::vector<NameAndTypePair> & source_columns;
+    const NamesAndTypes & source_columns;
 
     const TimezoneInfo & timezone_info;
 };

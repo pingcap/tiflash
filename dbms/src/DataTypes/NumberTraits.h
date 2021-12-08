@@ -234,7 +234,6 @@ struct ResultOfModulo
         std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
 };
 
-
 template <typename A>
 struct ResultOfNegate
 {

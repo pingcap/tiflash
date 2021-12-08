@@ -371,7 +371,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+            store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
         {
@@ -482,7 +482,7 @@ try
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+            store->write(*db_context, db_context->getSettingsRef(), block);
             break;
         default:
         {
@@ -578,9 +578,9 @@ try
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
         {
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block1));
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block2));
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block3));
+            store->write(*db_context, db_context->getSettingsRef(), block1);
+            store->write(*db_context, db_context->getSettingsRef(), block2);
+            store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
         case TestMode::V2_FileOnly:
@@ -606,7 +606,7 @@ try
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
             store->ingestFiles(dm_context, range, file_ids, false);
 
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block2));
+            store->write(*db_context, db_context->getSettingsRef(), block2);
             break;
         }
         }
@@ -659,9 +659,9 @@ try
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
         {
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block1));
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block2));
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block3));
+            store->write(*db_context, db_context->getSettingsRef(), block1);
+            store->write(*db_context, db_context->getSettingsRef(), block2);
+            store->write(*db_context, db_context->getSettingsRef(), block3);
             break;
         }
         case TestMode::V2_FileOnly:
@@ -679,7 +679,7 @@ try
         }
         case TestMode::V2_Mix:
         {
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block2));
+            store->write(*db_context, db_context->getSettingsRef(), block2);
 
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
@@ -779,7 +779,7 @@ try
     {
         // Write 7 rows that would not trigger a split
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, 8, false);
-        store->write(*db_context, settings, std::move(block));
+        store->write(*db_context, settings, block);
     }
 
     {
@@ -814,7 +814,7 @@ try
     {
         // Write rows that would trigger a split
         Block block = DMTestEnv::prepareSimpleWriteBlock(8, 9, false);
-        store->write(*db_context, settings, std::move(block));
+        store->write(*db_context, settings, block);
     }
 
     // Now there is 2 segments
@@ -866,7 +866,7 @@ try
     {
         // write to store
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_tso1, false, tso1);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     const UInt64 tso2 = 890;
@@ -874,7 +874,7 @@ try
     {
         // write to store
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_tso1, num_rows_tso1 + num_rows_tso2, false, tso2);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     {
@@ -978,7 +978,7 @@ try
     // Write to store [0, 128)
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_before_ingest, false, tso1);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     const UInt64 tso2 = 10;
@@ -1159,7 +1159,7 @@ try
     // Write to store [0, 128)
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_before_ingest, false, tso1);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
 
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
         store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
@@ -1296,7 +1296,7 @@ try
     // Write to store [0, 128)
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_before_ingest, false, tso1);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // Test that if we ingest a empty file list, the data in range will be removed.
@@ -1404,7 +1404,7 @@ try
             {
             case TestMode::V1_BlockOnly:
             case TestMode::V2_BlockOnly:
-                store->write(*db_context, settings, std::move(block));
+                store->write(*db_context, settings, block);
                 break;
             case TestMode::V2_FileOnly:
                 write_as_file();
@@ -1413,7 +1413,7 @@ try
             {
                 if ((std::rand() % 2) == 0)
                 {
-                    store->write(*db_context, settings, std::move(block));
+                    store->write(*db_context, settings, block);
                 }
                 else
                 {
@@ -1522,7 +1522,7 @@ try
                 col_name_ddl,
                 col_id_ddl));
         }
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     {
@@ -1628,7 +1628,7 @@ try
                 col_name_to_drop,
                 col_id_to_drop));
         }
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     {
@@ -1716,7 +1716,7 @@ try
                 col_name_c1,
                 col_id_c1));
         }
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     {
@@ -1806,7 +1806,7 @@ try
     size_t num_rows_write = 1;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // DDL add column f64 with default value
@@ -1881,7 +1881,7 @@ try
     size_t num_rows_write = 1;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // DDL add column f64 with default value
@@ -1956,7 +1956,7 @@ try
     size_t num_rows_write = 1;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // DDL add column f32 with default value
@@ -2020,6 +2020,156 @@ try
 }
 CATCH
 
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumnInt8)
+try
+{
+    const String col_name_to_add = "Int8";
+    const ColId col_id_to_add = 2;
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Int8");
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    // DDL add column Int8 with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type = AlterCommand::ADD_COLUMN;
+            com.data_type = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `Int8` Int8 DEFAULT 1
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name = "CAST";
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field((Int64)1));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*db_context,
+                              db_context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                Field tmp;
+                col.column->get(i, tmp);
+                // There is some loss of precision during the convertion, so we just do a rough comparison
+                EXPECT_FLOAT_EQ(tmp.get<Int8>(), 1);
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumnUInt8)
+try
+{
+    const String col_name_to_add = "UInt8";
+    const ColId col_id_to_add = 2;
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("UInt8");
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    // DDL add column UInt8 with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type = AlterCommand::ADD_COLUMN;
+            com.data_type = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `UInt8` UInt8 DEFAULT 1
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name = "CAST";
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field((UInt64)1));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*db_context,
+                              db_context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                Field tmp;
+                col.column->get(i, tmp);
+                // There is some loss of precision during the convertion, so we just do a rough comparison
+                EXPECT_FLOAT_EQ(tmp.get<UInt64>(), 1);
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
 TEST_P(DeltaMergeStore_RWTest, DDLAddColumnDateTime)
 try
 {
@@ -2030,7 +2180,7 @@ try
     // write some rows before DDL
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, 1, false);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // DDL add column date with default value
@@ -2103,7 +2253,7 @@ try
     size_t num_rows_write = 1;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // DDL add column string with default value
@@ -2202,7 +2352,7 @@ try
                 col_name_before_ddl,
                 col_id_ddl));
         }
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     {
@@ -2319,7 +2469,7 @@ try
             col_name_before_ddl,
             col_id_ddl,
             col_type);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     {
@@ -2412,7 +2562,7 @@ try
                 col_name_after_ddl,
                 col_id_ddl,
                 col_type);
-            store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+            store->write(*db_context, db_context->getSettingsRef(), block);
         }
         {
             // read all columns from store
@@ -2483,7 +2633,7 @@ try
         FailPointHelper::enableFailPoint(FailPoints::force_triggle_background_merge_delta);
 
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // DDL add column f32 with default value
@@ -2559,7 +2709,7 @@ try
             col.default_value = col_default_value;
             block.insert(std::move(col));
         }
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     // disable pause so that delta-merge can continue
@@ -2671,7 +2821,7 @@ try
                 col_i8_define.name,
                 col_i8_define.id));
         }
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
     {
@@ -2801,9 +2951,9 @@ try
                                                           EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                           true,
                                                           rowkey_column_size);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block1));
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block2));
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block3));
+        store->write(*db_context, db_context->getSettingsRef(), block1);
+        store->write(*db_context, db_context->getSettingsRef(), block2);
+        store->write(*db_context, db_context->getSettingsRef(), block3);
 
         store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
@@ -2871,9 +3021,9 @@ try
                                                           EXTRA_HANDLE_COLUMN_STRING_TYPE,
                                                           true,
                                                           rowkey_column_size);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block1));
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block2));
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block3));
+        store->write(*db_context, db_context->getSettingsRef(), block1);
+        store->write(*db_context, db_context->getSettingsRef(), block2);
+        store->write(*db_context, db_context->getSettingsRef(), block3);
 
         store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
@@ -2965,7 +3115,7 @@ try
             EXTRA_HANDLE_COLUMN_STRING_TYPE,
             true,
             rowkey_column_size);
-        store->write(*db_context, db_context->getSettingsRef(), std::move(block));
+        store->write(*db_context, db_context->getSettingsRef(), block);
     }
     // Test Reading first
     {
