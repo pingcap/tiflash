@@ -1,5 +1,6 @@
 #pragma once
 #include <Common/Exception.h>
+#include <fmt/format.h>
 
 #include <ext/shared_ptr_helper.h>
 #include <map>
@@ -64,20 +65,20 @@ protected:
         }
     }
 
-    bool isSmapMarkUsed(UInt64 block, size_t num) override
+    bool isSmapMarkUsed(UInt64 offset, size_t length) override
     {
-        auto it = free_map.lower_bound(block);
+        auto it = free_map.lower_bound(offset);
 
         if (it == free_map.end())
         {
             it--;
         }
-        else if (it->first > block && it != free_map.begin())
+        else if (it->first > offset && it != free_map.begin())
         {
             it--;
         }
 
-        return (it->first <= block && (it->first + it->second >= block + num));
+        return (it->first <= offset && (it->first + it->second >= offset + length));
     }
 
     bool markSmapUsed(UInt64 offset, size_t length) override
@@ -111,10 +112,11 @@ protected:
             }
             else
             {
-                auto _offset = it->first + length;
-                auto _size = it->second - length;
+                // Shrink the free block
+                auto shrink_offset = it->first + length;
+                auto shrink_size = it->second - length;
                 free_map.erase(it);
-                free_map[_offset] = _size;
+                free_map[shrink_offset] = shrink_size;
             }
         }
         else if (it->first + it->second == offset + length)
@@ -143,8 +145,9 @@ protected:
     {
         UInt64 offset = UINT64_MAX;
         UInt64 max_cap = 0;
-        UInt64 _biggest_cap = 0;
-        UInt64 _biggest_range = 0;
+        // The biggest free block capacity and its start offset
+        UInt64 scan_biggest_cap = 0;
+        UInt64 scan_biggest_offset = 0;
 
         auto it = free_map.begin();
         for (; it != free_map.end(); it++)
@@ -153,22 +156,20 @@ protected:
             {
                 break;
             }
-            else
+            // Keep track of the biggest free block we scanned before `it`
+            if (it->second > scan_biggest_cap)
             {
-                if (it->second > _biggest_cap)
-                {
-                    _biggest_cap = it->second;
-                    _biggest_range = it->first;
-                }
+                scan_biggest_cap = it->second;
+                scan_biggest_offset = it->first;
             }
         }
 
-        // not place found.
+        // No enough space for insert
         if (it == free_map.end())
         {
-            LOG_ERROR(log, "Not sure why can't found any place to insert. [size=" << size << "] [old biggest_range= " << biggest_range << "] [old biggest_cap=" << biggest_cap << "] [new biggest_range=" << _biggest_range << "] [new biggest_cap=" << _biggest_cap << "]");
-            biggest_range = _biggest_range;
-            biggest_cap = _biggest_cap;
+            LOG_ERROR(log, "Not sure why can't found any place to insert. [size=" << size << "] [old biggest_offset=" << biggest_offset << "] [old biggest_cap=" << biggest_cap << "] [new biggest_offset=" << scan_biggest_offset << "] [new biggest_cap=" << scan_biggest_cap << "]");
+            biggest_offset= scan_biggest_offset;
+            biggest_cap = scan_biggest_cap;
 
             return std::make_pair(offset, max_cap);
         }
@@ -179,7 +180,7 @@ protected:
         if (it->second == size)
         {
             // It is champion, need update
-            if (it->first == biggest_range)
+            if (it->first == biggest_offset)
             {
                 it = free_map.erase(it);
                 // Still need search for max_cap
@@ -201,31 +202,31 @@ protected:
             it = free_map.insert(/*hint=*/it, {k, v}); // Use the `it` after erased as a hint, should be good for performance
 
             // It is not champion, just return
-            if (k - size != biggest_range)
+            if (k - size != biggest_offset)
             {
                 max_cap = biggest_cap;
                 return std::make_pair(offset, max_cap);
             }
 
-            // It is champion, need to update `_biggest_cap`, `_biggest_range`
-            // and scan other free blocks to update `biggest_range` and `biggest_cap`
-            if (v > _biggest_cap)
+            // It is champion, need to update `scan_biggest_cap`, `scan_biggest_offset`
+            // and scan other free blocks to update `biggest_offset` and `biggest_cap`
+            if (v > scan_biggest_cap)
             {
-                _biggest_cap = v;
-                _biggest_range = k;
+                scan_biggest_cap = v;
+                scan_biggest_offset = k;
             }
         }
 
         for (; it != free_map.end(); it++)
         {
-            if (it->second > _biggest_cap)
+            if (it->second > scan_biggest_cap)
             {
-                _biggest_cap = it->second;
-                _biggest_range = it->first;
+                scan_biggest_cap = it->second;
+                scan_biggest_offset = it->first;
             }
         }
-        biggest_range = _biggest_range;
-        biggest_cap = _biggest_cap;
+        biggest_offset = scan_biggest_offset;
+        biggest_cap = scan_biggest_cap;
 
         return std::make_pair(offset, biggest_cap);
     }
@@ -321,7 +322,8 @@ protected:
 private:
     // Save the <offset, length> of free blocks
     std::map<UInt64, UInt64> free_map;
-    UInt64 biggest_range = 0;
+    // Keep track of the biggest free block. Save its biggest capacity and start offset.
+    UInt64 biggest_offset = 0;
     UInt64 biggest_cap = 0;
 };
 
