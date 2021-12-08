@@ -162,9 +162,9 @@ protected:
         // No enough space for insert
         if (it == free_map.end())
         {
-            LOG_ERROR(log, "Not sure why can't found any place to insert. [size=" << size << "] [old biggest_offset=" << biggest_offset << "] [old biggest_cap=" << biggest_cap << "] [new biggest_offset=" << scan_biggest_offset << "] [new biggest_cap=" << scan_biggest_cap << "]");
-            biggest_offset = scan_biggest_offset;
-            biggest_cap = scan_biggest_cap;
+            LOG_ERROR(log, "Not sure why can't found any place to insert. [size=" << size << "] [old biggest_offset=" << hint_biggest_offset << "] [old biggest_cap=" << hint_biggest_cap << "] [new biggest_offset=" << scan_biggest_offset << "] [new biggest_cap=" << scan_biggest_cap << "]");
+            hint_biggest_offset = scan_biggest_offset;
+            hint_biggest_cap = scan_biggest_cap;
 
             return std::make_pair(offset, max_cap);
         }
@@ -175,10 +175,10 @@ protected:
         if (it->second == size)
         {
             // It is not champion, just return
-            if (it->first != biggest_offset)
+            if (it->first != hint_biggest_offset)
             {
                 free_map.erase(it);
-                max_cap = biggest_cap;
+                max_cap = hint_biggest_cap;
                 return std::make_pair(offset, max_cap);
             }
 
@@ -196,9 +196,9 @@ protected:
             it = free_map.insert(/*hint=*/it, {k, v}); // Use the `it` after erased as a hint, should be good for performance
 
             // It is not champion, just return
-            if (k - size != biggest_offset)
+            if (k - size != hint_biggest_offset)
             {
-                max_cap = biggest_cap;
+                max_cap = hint_biggest_cap;
                 return std::make_pair(offset, max_cap);
             }
 
@@ -219,10 +219,10 @@ protected:
                 scan_biggest_offset = it->first;
             }
         }
-        biggest_offset = scan_biggest_offset;
-        biggest_cap = scan_biggest_cap;
+        hint_biggest_offset = scan_biggest_offset;
+        hint_biggest_cap = scan_biggest_cap;
 
-        return std::make_pair(offset, biggest_cap);
+        return std::make_pair(offset, hint_biggest_cap);
     }
 
     bool markFreeImpl(UInt64 offset, size_t length) override
