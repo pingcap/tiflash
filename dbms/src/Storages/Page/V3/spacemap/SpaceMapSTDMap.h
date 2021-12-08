@@ -129,15 +129,8 @@ protected:
         {
             // In the mid, and not match the left or right.
             // Split to two space
-            if (((it->first + it->second) - offset) > length)
-            {
-                free_map.insert({offset + length, it->first + it->second - offset - length});
-                free_map[it->first] = offset - it->first;
-            }
-            else
-            { // < length
-                free_map[it->first] = it->first + it->second - offset;
-            }
+            free_map.insert({offset + length, it->first + it->second - offset - length});
+            free_map[it->first] = offset - it->first;
         }
 
         return true;
