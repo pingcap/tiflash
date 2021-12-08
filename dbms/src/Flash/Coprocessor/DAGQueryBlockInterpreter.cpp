@@ -568,7 +568,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
     FmtBuffer buf;
-    buf.append("join: left_key_names:");
+    buf.append("SHUFFLE_OPT: join: left_key_names:");
     for (const auto & name : left_key_names)
     {
         buf.fmtAppend(" '{}'", name);

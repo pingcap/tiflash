@@ -146,7 +146,7 @@ BlockIO InterpreterDAG::execute()
         });
 
         FmtBuffer buf;
-        buf.append("sender: cols:");
+        buf.append("SHUFFLE_OPT: sender: cols:");
         for (Int64 col : partition_col_id)
         {
             buf.fmtAppend(" {}", col);
