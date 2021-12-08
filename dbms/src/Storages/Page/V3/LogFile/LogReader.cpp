@@ -23,12 +23,14 @@ LogReader::LogReader(
     Reporter * reporter_,
     bool verify_checksum_,
     uint64_t log_num_,
+    WALRecoveryMode recovery_mode_,
     Poco::Logger * log_)
     : verify_checksum(verify_checksum_)
     , recycled(false)
     , eof(false)
     , read_error(false)
     , eof_offset(0)
+    , recovery_mode(recovery_mode_)
     , file(std::move(file_))
     , buffer(file->buffer().begin(), file->buffer().size())
     , reporter(reporter_)
@@ -41,7 +43,7 @@ LogReader::LogReader(
 
 LogReader::~LogReader() = default;
 
-std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode)
+std::tuple<bool, String> LogReader::readRecord()
 {
     String record;
     bool in_fragmented_record = false;
@@ -129,7 +131,7 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             {
             case ParseErrorType::BadHeader:
             {
-                if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
+                if (recovery_mode == WALRecoveryMode::AbsoluteConsistency || recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                 {
                     // In clean shutdown we don't expect any error in the log files.
                     // In point-in-time recovery an incomplete record at the end could produce
@@ -143,7 +145,7 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             {
                 if (in_fragmented_record)
                 {
-                    if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
+                    if (recovery_mode == WALRecoveryMode::AbsoluteConsistency || recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                     {
                         // In clean shutdown we don't expect any error in the log files.
                         // In point-in-time recovery an incomplete record at the end could produce
@@ -160,12 +162,12 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             }
             case ParseErrorType::OldRecord:
             {
-                if (wal_recovery_mode != WALRecoveryMode::SkipAnyCorruptedRecords)
+                if (recovery_mode != WALRecoveryMode::SkipAnyCorruptedRecords)
                 {
                     // Treat a record from a previous instance of the log as EOF.
                     if (in_fragmented_record)
                     {
-                        if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
+                        if (recovery_mode == WALRecoveryMode::AbsoluteConsistency || recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                         {
                             // In clean shutdown we don't expect any error in the log files.
                             // In point-in-time recovery an incomplete record at the end could produce
@@ -196,7 +198,7 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             {
                 if (eof)
                 {
-                    if (wal_recovery_mode == WALRecoveryMode::AbsoluteConsistency || wal_recovery_mode == WALRecoveryMode::PointInTimeRecovery)
+                    if (recovery_mode == WALRecoveryMode::AbsoluteConsistency || recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                     {
                         // In clean shutdown we don't expect any error in the log files.
                         // In point-in-time recovery an incomplete record at the end could produce
@@ -210,7 +212,7 @@ std::tuple<bool, String> LogReader::readRecord(WALRecoveryMode wal_recovery_mode
             }
             case ParseErrorType::BadRecordChecksum:
             {
-                if (recycled && wal_recovery_mode == WALRecoveryMode::TolerateCorruptedTailRecords)
+                if (recycled && recovery_mode == WALRecoveryMode::TolerateCorruptedTailRecords)
                 {
                     record.clear();
                     return {false, std::move(record)};
@@ -358,7 +360,7 @@ uint8_t LogReader::readMore(size_t * drop_size)
                 eof_offset = buffer.size();
             }
             // Return "0" for no error happen
-            return 0; 
+            return 0;
         }
         catch (...)
         {

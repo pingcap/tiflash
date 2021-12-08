@@ -230,8 +230,13 @@ public:
 
         std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<StringSink>(reader_contents);
         writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
+        resetReader();
+    }
+
+    void resetReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
+    {
         std::unique_ptr<ReadBufferFromFileBase> file_reader = std::make_unique<StringSouce>(reader_contents, /*fail_after_read_partial_*/ !allow_retry_read);
-        reader = std::make_unique<LogReader>(std::move(file_reader), &report, /* verify_checksum */ true, /* log_number */ log_file_num, log);
+        reader = std::make_unique<LogReader>(std::move(file_reader), &report, /* verify_checksum */ true, /* log_number */ log_file_num, wal_recovery_mode, log);
     }
 
     void write(const std::string & msg)
@@ -245,9 +250,9 @@ public:
         return reader_contents.size();
     }
 
-    String read(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
+    String read()
     {
-        if (auto [ok, scratch] = reader->readRecord(wal_recovery_mode); ok)
+        if (auto [ok, scratch] = reader->readRecord(); ok)
             return scratch;
         return "EOF";
     }
@@ -474,9 +479,10 @@ TEST_P(LogFileRWTest, TruncatedTrailingRecordIsNotIgnored)
         // raise an error.
         return;
     }
+    resetReader(WALRecoveryMode::AbsoluteConsistency);
     write("foo");
     shrinkSize(4); // Drop all payload as well as a header byte
-    ASSERT_EQ("EOF", read(WALRecoveryMode::AbsoluteConsistency));
+    ASSERT_EQ("EOF", read());
     // Truncated last record is ignored, not treated as an error
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated header"));
@@ -534,9 +540,10 @@ TEST_P(LogFileRWTest, BadLengthAtEndIsNotIgnored)
         // available. It's possible that the body of the record is not written yet.
         return;
     }
+    resetReader(WALRecoveryMode::AbsoluteConsistency);
     write("foo");
     shrinkSize(1);
-    ASSERT_EQ("EOF", read(WALRecoveryMode::AbsoluteConsistency));
+    ASSERT_EQ("EOF", read());
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated record body"));
 }
@@ -620,10 +627,11 @@ TEST_P(LogFileRWTest, MissingLastIsNotIgnored)
         // raise an error.
         return;
     }
+    resetReader(WALRecoveryMode::AbsoluteConsistency);
     write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
     shrinkSize(14);
-    ASSERT_EQ("EOF", read(WALRecoveryMode::AbsoluteConsistency));
+    ASSERT_EQ("EOF", read());
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: error reading trailing data"));
 }
@@ -646,10 +654,11 @@ TEST_P(LogFileRWTest, PartialLastIsNotIgnored)
         // raise an error.
         return;
     }
+    resetReader(WALRecoveryMode::AbsoluteConsistency);
     write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
     // Cause a bad record length in the LAST block.
     shrinkSize(1);
-    ASSERT_EQ("EOF", read(WALRecoveryMode::AbsoluteConsistency));
+    ASSERT_EQ("EOF", read());
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: truncated record body"));
 }

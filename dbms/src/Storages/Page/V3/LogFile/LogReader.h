@@ -33,6 +33,7 @@ public:
         Reporter * reporter_,
         bool verify_checksum_,
         uint64_t log_num_,
+        WALRecoveryMode recovery_mode_,
         Poco::Logger * log_);
 
     LogReader(const LogReader &) = delete;
@@ -45,7 +46,7 @@ public:
     // "*scratch" as temporary storage.  The contents filled in *record
     // will only be valid until the next mutating operation on this
     // reader or the next mutation to *scratch.
-    virtual std::tuple<bool, String> readRecord(WALRecoveryMode wal_recovery_mode);
+    virtual std::tuple<bool, String> readRecord();
 
     // Returns the physical offset of the last record returned by readRecord.
     //
@@ -98,6 +99,7 @@ private:
     bool read_error; // Error occrured while reading from file
     // Offset of the file position indicator within the last block when an EOF was detected.
     size_t eof_offset;
+    WALRecoveryMode recovery_mode;
 
     const std::unique_ptr<ReadBufferFromFileBase> file;
     std::string_view buffer;
