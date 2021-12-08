@@ -323,9 +323,10 @@ protected:
 private:
     // Save the <offset, length> of free blocks
     std::map<UInt64, UInt64> free_map;
-    // Keep track of the biggest free block. Save its biggest capacity and start offset.
-    UInt64 biggest_offset = 0;
-    UInt64 biggest_cap = 0;
+    // Keep a hint track of the biggest free block. Save its biggest capacity and start offset.
+    // The hint could be invalid after `markSmapUsed` while restoring or `markSmapFree`.
+    UInt64 hint_biggest_offset = 0;
+    UInt64 hint_biggest_cap = 0;
 };
 
 using STDMapSpaceMapPtr = std::shared_ptr<STDMapSpaceMap>;
