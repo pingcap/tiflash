@@ -240,7 +240,7 @@ constexpr bool TiDBLeastGreatestSpecialCase
     = (8 == sizeof(A) || 8 == sizeof(B))
     && (std::is_unsigned_v<A> || std::is_unsigned_v<B>);
 
-    
+
 template <typename A, typename B>
 struct ResultOfTiDBLeast
 {
@@ -365,8 +365,7 @@ struct ToInteger<Int128>
 // NOTE: This case is applied for 64-bit integers only (for backward compability), but could be used for any-bit integers
 template <typename A, typename B>
 constexpr bool LeastGreatestSpecialCase
-    = std::is_integral_v<A> && std::is_integral_v<B> && (8 == sizeof(A) && sizeof(A) == sizeof(B))
-    && (std::is_signed_v<A> ^ std::is_signed_v<B>);
+    = std::is_integral_v<A> && std::is_integral_v<B> && (8 == sizeof(A) && sizeof(A) == sizeof(B)) && (std::is_signed_v<A> ^ std::is_signed_v<B>);
 
 template <typename A, typename B>
 using ResultOfLeast = std::conditional_t<
