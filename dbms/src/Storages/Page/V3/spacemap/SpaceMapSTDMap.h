@@ -65,7 +65,7 @@ protected:
         }
     }
 
-    bool isSmapMarkUsed(UInt64 offset, size_t length) override
+    bool isMarkUnused(UInt64 offset, size_t length) override
     {
         auto it = free_map.lower_bound(offset);
 

@@ -62,7 +62,7 @@ protected:
 
     void smapStats() override;
 
-    bool isSmapMarkUsed(UInt64 block, size_t num) override;
+    bool isMarkUnused(UInt64 block, size_t num) override;
 
     bool markSmapUsed(UInt64 block, size_t num) override;
 

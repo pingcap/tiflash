@@ -86,7 +86,7 @@ bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    return !isSmapMarkUsed(offset, length);
+    return !isMarkUnused(offset, length);
 }
 
 std::pair<UInt64, UInt64> SpaceMap::searchInsertOffset(size_t size)

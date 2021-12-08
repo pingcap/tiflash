@@ -453,8 +453,8 @@ void RBTreeSpaceMap::smapStats()
     }
 }
 
-bool RBTreeSpaceMap::isSmapMarkUsed(UInt64 _start,
-                                    size_t len)
+bool RBTreeSpaceMap::isMarkUnused(UInt64 _start,
+                                  size_t len)
 {
     struct rb_node *parent = nullptr, **n;
     struct rb_node *node, *next;

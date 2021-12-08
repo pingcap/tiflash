@@ -128,8 +128,8 @@ protected:
     /* Print space maps status  */
     virtual void smapStats() = 0;
 
-    /* Space map bit/bits test operators */
-    virtual bool isSmapMarkUsed(UInt64 offset, size_t size) = 0;
+    // Return true if space [offset, offset+size) are all free
+    virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;
 
     /* Space map mark used/free operators */
     virtual bool markSmapUsed(UInt64 offset, size_t size) = 0;
