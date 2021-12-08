@@ -1,7 +1,5 @@
 #pragma once
 
-#include <kvproto/coprocessor.pb.h>
-#include <tipb/select.pb.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -12,7 +10,9 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
+#include <kvproto/coprocessor.pb.h>
 #include <pingcap/coprocessor/Client.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
@@ -37,6 +37,7 @@ public:
     ~DAGQueryBlockInterpreter() = default;
 
     BlockInputStreams execute();
+
 private:
     void executeRemoteQuery(DAGPipeline & pipeline);
     void executeImpl(DAGPipeline & pipeline);
