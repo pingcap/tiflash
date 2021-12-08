@@ -3,10 +3,8 @@ minmax_index_cache_size = 5368709120
 tcp_port = 9000
 http_port = 8123
 
-[storage]
-[storage.main]
-dir = [ "/tmp/tiflash/data/db" ]
-capacity = [ 107374182400 ]
+path = "/tmp/tiflash/data/db"
+capacity = "10737418240"
 
 [flash]
 tidb_status_addr = "tidb0:10080"
