@@ -1,6 +1,8 @@
 #include <Common/Exception.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
+#include <tuple>
+
 namespace pingcap
 {
 namespace kv
@@ -33,11 +35,14 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
-GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_)
+GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_, bool enable_local_tunnel_)
     : cluster(cluster_)
+    , task_manager(std::move(task_manager_))
+    , enable_local_tunnel(enable_local_tunnel_)
 {}
 
-GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
+
+ExchangeRecvRequest GRPCReceiverContext::makeRequest(
     int index,
     const tipb::ExchangeReceiver & pb_exchange_receiver,
     const ::mpp::TaskMeta & task_meta) const
@@ -47,7 +52,7 @@ GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
     if (!sender_task->ParseFromString(meta_raw))
         throw Exception("parse task meta error!");
 
-    Request req;
+    ExchangeRecvRequest req;
     req.send_task_id = sender_task->task_id();
     req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
     req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
@@ -55,42 +60,96 @@ GRPCReceiverContext::Request GRPCReceiverContext::makeRequest(
     return req;
 }
 
-std::shared_ptr<GRPCReceiverContext::Reader> GRPCReceiverContext::makeReader(const GRPCReceiverContext::Request & request) const
+static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager)
 {
-    auto reader = std::make_shared<Reader>(request);
-    reader->reader = cluster->rpc_client->sendStreamRequest(
-        request.req->sender_meta().address(),
-        &reader->client_context,
-        *reader->call);
-    return reader;
+    std::chrono::seconds timeout(10);
+    std::string err_msg;
+    MPPTunnelPtr tunnel = nullptr;
+    {
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
+        if (sender_task != nullptr)
+        {
+            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
+        }
+        if (tunnel == nullptr)
+        {
+            return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+        }
+    }
+    if (!tunnel->isLocal())
+    {
+        std::string err_msg("EstablishMPPConnectionLocal into a remote channel !");
+        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+    }
+    tunnel->connect(nullptr);
+    return std::make_tuple(tunnel, grpc::Status::OK);
 }
 
-String GRPCReceiverContext::Request::debugString() const
+std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request, const std::string & recv_addr) const
+{
+    bool is_local = enable_local_tunnel && request.req->sender_meta().address() == recv_addr;
+    if (is_local)
+    {
+        auto [tunnel, status] = establishMPPConnectionLocal(request.req.get(), task_manager);
+        if (!status.ok())
+        {
+            throw Exception("Exchange receiver meet error : " + status.error_message());
+        }
+        return std::make_shared<LocalExchangePacketReader>(tunnel);
+    }
+    else
+    {
+        auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+        reader->reader = cluster->rpc_client->sendStreamRequest(
+            request.req->sender_meta().address(),
+            &reader->client_context,
+            *reader->call);
+        return reader;
+    }
+}
+
+String ExchangeRecvRequest::debugString() const
 {
     return req->DebugString();
 }
 
-GRPCReceiverContext::Reader::Reader(const GRPCReceiverContext::Request & req)
+
+GrpcExchangePacketReader::GrpcExchangePacketReader(const ExchangeRecvRequest & req)
 {
-    call = std::make_unique<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
+    call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
 }
 
-GRPCReceiverContext::Reader::~Reader()
+GrpcExchangePacketReader::~GrpcExchangePacketReader()
 {}
 
-void GRPCReceiverContext::Reader::initialize() const
+void GrpcExchangePacketReader::initialize() const
 {
     reader->WaitForInitialMetadata();
 }
 
-bool GRPCReceiverContext::Reader::read(mpp::MPPDataPacket * packet) const
+bool GrpcExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
 {
-    return reader->Read(packet);
+    return reader->Read(packet.get());
 }
 
-GRPCReceiverContext::StatusType GRPCReceiverContext::Reader::finish() const
+::grpc::Status GrpcExchangePacketReader::finish() const
 {
     return reader->Finish();
+}
+
+
+bool LocalExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
+{
+    std::shared_ptr<mpp::MPPDataPacket> tmp_packet = tunnel->readForLocal();
+    bool success = tmp_packet != nullptr;
+    if (success)
+        packet = tmp_packet;
+    return success;
+}
+
+::grpc::Status LocalExchangePacketReader::finish() const
+{
+    return ::grpc::Status::OK;
 }
 
 } // namespace DB
