@@ -43,7 +43,7 @@ public:
 
     void cancel(const String & reason);
 
-    std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
+    void prepare(const mpp::DispatchTaskRequest & task_request);
 
     void preprocess();
 
@@ -72,9 +72,6 @@ private:
     void finishWrite();
 
     bool switchStatus(TaskStatus from, TaskStatus to);
-
-    RegionInfoMap local_regions;
-    RegionInfoList remote_regions;
 
     tipb::DAGRequest dag_req;
 

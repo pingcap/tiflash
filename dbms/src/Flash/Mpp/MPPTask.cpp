@@ -135,8 +135,11 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
     return meta_snap.ver != region_info.region_version;
 }
 
-std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
+void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
+    RegionInfoMap local_regions;
+    RegionInfoList remote_regions;
+
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
     TMTContext & tmt_context = context.getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
@@ -206,7 +209,9 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         is_root_mpp_task = task_meta.task_id() == -1;
     }
     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
-    dag_context->mpp_task_log = log;
+    dag_context->log = log;
+    dag_context->regions_for_local_read = std::move(local_regions);
+    dag_context->regions_for_remote_read = std::move(remote_regions);
     context.setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())
@@ -260,14 +265,12 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     {
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
-
-    return remote_regions;
 }
 
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
-    DAGQuerySource dag(context, local_regions, remote_regions, dag_req, log, true);
+    DAGQuerySource dag(context);
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();

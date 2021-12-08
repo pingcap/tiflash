@@ -35,42 +35,45 @@ UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 class DAGContext
 {
 public:
-    explicit DAGContext(const tipb::DAGRequest & dag_request)
-        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
+    explicit DAGContext(const tipb::DAGRequest & dag_request_)
+        : dag_request(&dag_request_)
+        , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , tunnel_set(nullptr)
-        , flags(dag_request.flags())
-        , sql_mode(dag_request.sql_mode())
-        , max_recorded_error_count(getMaxErrorCount(dag_request))
+        , flags(dag_request->flags())
+        , sql_mode(dag_request->sql_mode())
+        , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        assert(dag_request.has_root_executor() || dag_request.executors_size() > 0);
-        return_executor_id = dag_request.has_root_executor() || dag_request.executors(0).has_executor_id();
+        assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
+        return_executor_id = dag_request->has_root_executor() || dag_request->executors(0).has_executor_id();
     }
 
-    DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
-        : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries())
+    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
+        : dag_request(&dag_request_)
+        , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , return_executor_id(true)
         , is_mpp_task(true)
         , is_root_mpp_task(is_root_mpp_task_)
         , tunnel_set(nullptr)
-        , flags(dag_request.flags())
-        , sql_mode(dag_request.sql_mode())
+        , flags(dag_request->flags())
+        , sql_mode(dag_request->sql_mode())
         , mpp_task_meta(meta_)
         , mpp_task_id(mpp_task_meta.start_ts(), mpp_task_meta.task_id())
-        , max_recorded_error_count(getMaxErrorCount(dag_request))
+        , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        assert(dag_request.has_root_executor());
-        exchange_sender_executor_id = dag_request.root_executor().executor_id();
-        exchange_sender_execution_summary_key = dag_request.root_executor().exchange_sender().child().executor_id();
+        assert(dag_request->has_root_executor());
+        exchange_sender_executor_id = dag_request->root_executor().executor_id();
+        exchange_sender_execution_summary_key = dag_request->root_executor().exchange_sender().child().executor_id();
     }
 
     explicit DAGContext(UInt64 max_error_count_)
-        : collect_execution_summaries(false)
+        : dag_request(nullptr)
+        , collect_execution_summaries(false)
         , is_mpp_task(false)
         , is_root_mpp_task(false)
         , tunnel_set(nullptr)
@@ -116,6 +119,7 @@ public:
     void clearWarnings() { warnings.clear(); }
     UInt64 getWarningCount() { return warning_count; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
+    bool isBatchCop() const { return is_batch_cop; }
     bool isMPPTask() const { return is_mpp_task; }
     /// root mpp task means mpp task that send data back to TiDB
     bool isRootMPPTask() const { return is_root_mpp_task; }
@@ -128,6 +132,10 @@ public:
 
     std::pair<bool, double> getTableScanThroughput();
 
+    const RegionInfoMap & getRegionsForLocalRead() const { return regions_for_local_read; }
+    const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
+
+    const tipb::DAGRequest * dag_request;
     size_t final_concurrency = 1;
     Int64 compile_time_ns;
     String table_scan_executor_id = "";
@@ -135,12 +143,18 @@ public:
     String exchange_sender_execution_summary_key = "";
     bool collect_execution_summaries;
     bool return_executor_id;
-    bool is_mpp_task;
-    bool is_root_mpp_task;
+    bool is_mpp_task = false;
+    bool is_root_mpp_task = false;
+    bool is_batch_cop = false;
     MPPTunnelSetPtr tunnel_set;
+    RegionInfoMap regions_for_local_read;
+    RegionInfoList regions_for_remote_read;
+    // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
 
-    LogWithPrefixPtr mpp_task_log;
+    LogWithPrefixPtr log;
+
+    bool keep_session_timezone_info = false;
 
 private:
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
