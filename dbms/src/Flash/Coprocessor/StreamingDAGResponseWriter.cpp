@@ -228,6 +228,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         return;
     }
 
+    constexpr size_t num_buckets = 16;
+    size_t num_chunks = num_buckets * partition_num;
+
     // partition tuples in blocks
     // 1) compute partition id
     // 2) partition each row
@@ -235,8 +238,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     std::vector<String> partition_key_containers(collators.size());
     for (auto & block : input_blocks)
     {
-        std::vector<Block> dest_blocks(partition_num);
-        std::vector<MutableColumns> dest_tbl_cols(partition_num);
+        std::vector<Block> dest_blocks(num_chunks);
+        std::vector<MutableColumns> dest_tbl_cols(num_chunks);
 
         for (size_t i = 0; i < block.columns(); ++i)
         {
@@ -246,7 +249,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
             }
         }
 
-        for (auto i = 0; i < partition_num; ++i)
+        for (size_t i = 0; i < num_chunks; ++i)
         {
             dest_tbl_cols[i] = block.cloneEmptyColumns();
             dest_blocks[i] = block.cloneEmpty();
@@ -268,26 +271,29 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         {
             /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
             selector[row] = hash_data[row]; /// [0, 2^32)
-            selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
+            selector[row] *= num_chunks; /// [0, partition_num * 2^32), selector stores 64 bit values.
             selector[row] >>= 32u; /// [0, partition_num)
         }
 
         for (size_t col_id = 0; col_id < block.columns(); ++col_id)
         {
             // Scatter columns to different partitions
-            auto scattered_columns = block.getByPosition(col_id).column->scatter(partition_num, selector);
-            for (size_t part_id = 0; part_id < partition_num; ++part_id)
+            auto scattered_columns = block.getByPosition(col_id).column->scatter(num_chunks, selector);
+            for (size_t part_id = 0; part_id < num_chunks; ++part_id)
             {
                 dest_tbl_cols[part_id][col_id] = std::move(scattered_columns[part_id]);
             }
         }
 
         // serialize each partitioned block and write it to its destination
-        for (auto part_id = 0; part_id < partition_num; ++part_id)
+        for (size_t chunk_id = 0; chunk_id < num_chunks; ++chunk_id)
         {
-            dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
-            responses_row_count[part_id] += dest_blocks[part_id].rows();
-            chunk_codec_stream[part_id]->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
+            auto & chunk_block = dest_blocks[chunk_id];
+            chunk_block.setColumns(std::move(dest_tbl_cols[chunk_id]));
+
+            size_t part_id = chunk_id / num_buckets;
+            responses_row_count[part_id] += chunk_block.rows();
+            chunk_codec_stream[part_id]->encode(chunk_block, 0, chunk_block.rows());
             packet[part_id].add_chunks(chunk_codec_stream[part_id]->getString());
             chunk_codec_stream[part_id]->clear();
         }
