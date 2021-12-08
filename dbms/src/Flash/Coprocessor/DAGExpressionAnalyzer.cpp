@@ -1168,17 +1168,13 @@ void DAGExpressionAnalyzer::appendAggSelect(
 
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
     DAGExpressionActionsChain & chain,
-    const String & column_prefix [[maybe_unused]])
+    const String & column_prefix)
 {
     const auto & current_columns = getCurrentInputColumns();
     NamesWithAliases final_project;
-    for (const auto & element : current_columns)
-        final_project.emplace_back(element.name, element.name);
-    /*
     UniqueNameGenerator unique_name_generator;
     for (const auto & element : current_columns)
         final_project.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
-    */
 
     initChain(chain, current_columns);
     for (const auto & name : final_project)
@@ -1190,7 +1186,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     DAGExpressionActionsChain & chain,
     const std::vector<tipb::FieldType> & schema,
     const std::vector<Int32> & output_offsets,
-    const String & column_prefix [[maybe_unused]],
+    const String & column_prefix,
     bool keep_session_timezone_info)
 {
     if (unlikely(!keep_session_timezone_info && output_offsets.empty()))
@@ -1198,6 +1194,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
 
     NamesWithAliases final_project;
     const auto & current_columns = getCurrentInputColumns();
+    UniqueNameGenerator unique_name_generator;
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     /// TiDB can not guarantee that the field type in DAG request is accurate, so in order to make things work,
     /// TiFlash will append extra type cast if needed.
@@ -1224,14 +1221,16 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
         {
             for (auto i : output_offsets)
             {
-                final_project.emplace_back(current_columns[i].name, current_columns[i].name);
+                final_project.emplace_back(
+                    current_columns[i].name,
+                    unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
             }
         }
         else
         {
             for (const auto & element : current_columns)
             {
-                final_project.emplace_back(element.name, element.name);
+                final_project.emplace_back(element.name, unique_name_generator.toUniqueName(column_prefix + element.name));
             }
         }
     }
@@ -1269,17 +1268,19 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
                     {
                         updated_name = appendCast(getDataTypeByFieldTypeForComputingLayer(schema[i]), step.actions, updated_name);
                     }
-                    final_project.emplace_back(updated_name, updated_name);
+                    final_project.emplace_back(updated_name, unique_name_generator.toUniqueName(column_prefix + updated_name));
                     casted_name_map[current_columns[i].name] = updated_name;
                 }
                 else
                 {
-                    final_project.emplace_back(it->second, it->second);
+                    final_project.emplace_back(it->second, unique_name_generator.toUniqueName(column_prefix + it->second));
                 }
             }
             else
             {
-                final_project.emplace_back(current_columns[i].name, current_columns[i].name);
+                final_project.emplace_back(
+                    current_columns[i].name,
+                    unique_name_generator.toUniqueName(column_prefix + current_columns[i].name));
             }
         }
     }
