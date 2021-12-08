@@ -31,11 +31,6 @@ public:
 
 protected:
     Poco::Logger * log;
-    void createIfNotExist(const String & path)
-    {
-        if (Poco::File file(path); !file.exists())
-            file.createDirectories();
-    }
 };
 
 TEST_F(PathPool_test, AlignPaths)
@@ -326,7 +321,13 @@ try
 }
 CATCH
 
-TEST(PathPool_test, FsStats)
+static void createIfNotExist(const String & path)
+{
+    if (Poco::File file(path); !file.exists())
+        file.createDirectories();
+}
+
+TEST(PathCapcatity, FsStats)
 try
 {
     std::string main_data_path = TiFlashTestEnv::getTemporaryPath() + "/main";
