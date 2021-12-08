@@ -64,9 +64,9 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
             // Switch to a new block
             if (leftover > 0)
             {
-                // Fill the trailer (literal below relies on HeaderSize and RecyclableHeaderSize being <= 11)
-                assert(header_size <= 11);
-                writeString("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", leftover, *dest);
+                // Fill the trailer with all zero
+                static constexpr char MAX_ZERO_HEADER[Format::RECYCLABLE_HEADER_SIZE]{'\x00'};
+                writeString(MAX_ZERO_HEADER, leftover, *dest);
             }
             block_offset = 0;
         }
