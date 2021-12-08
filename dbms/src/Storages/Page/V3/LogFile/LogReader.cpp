@@ -254,8 +254,8 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
         {
             // the default value of r is meaningless because ReadMore will overwrite it if it
             // returns false; in case it returns true, the return value will not be used anyway.
-            if (uint8_t r = ParseErrorType::MeetEOF; !readMore(drop_size, &r))
-                return r;
+            if (uint8_t err = readMore(drop_size); err != 0)
+                return err;
             continue;
         }
 
@@ -278,8 +278,8 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
             // We need enough for the larger header
             if (buffer.size() < static_cast<size_t>(Format::RECYCLABLE_HEADER_SIZE))
             {
-                if (uint8_t r = ParseErrorType::MeetEOF; !readMore(drop_size, &r))
-                    return r;
+                if (uint8_t err = readMore(drop_size); err != 0)
+                    return err;
                 continue;
             }
             uint32_t log_num = 0;
@@ -289,6 +289,7 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
                 return ParseErrorType::OldRecord;
             }
         }
+
         if (header_size + UInt32(length) > buffer.size())
         {
             assert(buffer.size() >= static_cast<size_t>(header_size));
@@ -336,8 +337,10 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
     }
 }
 
-bool LogReader::readMore(size_t * drop_size, uint8_t * error)
+uint8_t LogReader::readMore(size_t * drop_size)
 {
+    static_assert(ParseErrorType::MeetEOF != 0 && ParseErrorType::BadHeader != 0);
+
     if (likely(!eof && !read_error))
     {
         // Last read was a full read, so this is a trailer to skip
@@ -354,33 +357,30 @@ bool LogReader::readMore(size_t * drop_size, uint8_t * error)
                 eof = true;
                 eof_offset = buffer.size();
             }
-            return true;
+            // Return "0" for no error happen
+            return 0; 
         }
         catch (...)
         {
+            // Exception thrown while reading data by `file->next()`, consider it as meeting EOF
             reportDrop(Format::BLOCK_SIZE, fmt::format("while reading Log file: {}, {}", file->getFileName(), getCurrentExceptionMessage(true)));
             buffer.remove_prefix(buffer.size());
             read_error = true;
-            *error = ParseErrorType::MeetEOF;
-            return false;
+            return ParseErrorType::MeetEOF;
         }
     }
 
     // Note that if buffer is non-empty, we have a truncated header at the
     // end of the file, which can be caused by the writer crashing in the
-    // middle of writing the header. Unless explicitly requested we don't
-    // considering this an error, just report EOF.
+    // middle of writing the header.
     if (!buffer.empty())
     {
         *drop_size = buffer.size();
         buffer.remove_prefix(buffer.size());
-        *error = ParseErrorType::BadHeader;
-        return false;
+        return ParseErrorType::BadHeader;
     }
 
-    buffer.remove_prefix(buffer.size());
-    *error = ParseErrorType::MeetEOF;
-    return false;
+    return ParseErrorType::MeetEOF;
 }
 
 void LogReader::reportCorruption(size_t bytes, const String & reason)

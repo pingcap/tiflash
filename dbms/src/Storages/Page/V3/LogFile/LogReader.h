@@ -83,8 +83,13 @@ private:
     };
 
     uint8_t readPhysicalRecord(std::string_view * result, size_t * drop_size);
-    // Read some more
-    bool readMore(size_t * drop_size, uint8_t * error);
+
+    /*
+     * Read more data from `file` and update the `buffer`.
+     * Return 0 if read success.
+     * Otherwise return `ParseErrorType::MeetEOF` or `ParseErrorType::BadHeader`
+     */
+    uint8_t readMore(size_t * drop_size);
 
 private:
     const bool verify_checksum;
