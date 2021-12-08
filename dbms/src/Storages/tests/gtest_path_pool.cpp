@@ -28,14 +28,14 @@ public:
             paths.emplace_back(Poco::Path{TiFlashTestEnv::getTemporaryPath() + "/path_pool_test/data" + toString(i)}.toString());
         return paths;
     }
-    static void createIfNotExist(const String & path)
+
+protected:
+    Poco::Logger * log;
+    void createIfNotExist(const String & path)
     {
         if (Poco::File file(path); !file.exists())
             file.createDirectories();
     }
-
-protected:
-    Poco::Logger * log;
 };
 
 TEST_F(PathPool_test, AlignPaths)
