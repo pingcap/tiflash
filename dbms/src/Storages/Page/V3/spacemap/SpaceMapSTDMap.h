@@ -84,7 +84,7 @@ protected:
         return (it->first <= offset && (it->first + it->second >= offset + length));
     }
 
-    bool markSmapUsed(UInt64 offset, size_t length) override
+    bool markUsedImpl(UInt64 offset, size_t length) override
     {
         auto it = details::findLessEQ(free_map, offset); // first free block <= `offset`
         if (it == free_map.end())
@@ -144,7 +144,7 @@ protected:
         return true;
     }
 
-    std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) override
+    std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override
     {
         UInt64 offset = UINT64_MAX;
         UInt64 max_cap = 0;
@@ -233,7 +233,7 @@ protected:
         return std::make_pair(offset, biggest_cap);
     }
 
-    bool markSmapFree(UInt64 offset, size_t length) override
+    bool markFreeImpl(UInt64 offset, size_t length) override
     {
         auto it = free_map.find(offset);
 

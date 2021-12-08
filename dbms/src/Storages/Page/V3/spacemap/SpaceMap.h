@@ -80,7 +80,7 @@ public:
      *  insert_offset : start offset for the inserted space
      *  max_cap : The largest available space this SpaceMap can hold. 
      */
-    std::pair<UInt64, UInt64> searchInsertOffset(size_t size);
+    virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
 
     /**
      * Sanity check for correctness
@@ -126,11 +126,9 @@ protected:
     virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;
 
     /* Space map mark used/free operators */
-    virtual bool markSmapUsed(UInt64 offset, size_t size) = 0;
+    virtual bool markUsedImpl(UInt64 offset, size_t size) = 0;
 
-    virtual bool markSmapFree(UInt64 offset, size_t size) = 0;
-
-    virtual std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) = 0;
+    virtual bool markFreeImpl(UInt64 offset, size_t size) = 0;
 
 private:
     /* Check the range */

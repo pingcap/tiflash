@@ -59,7 +59,7 @@ bool SpaceMap::markFree(UInt64 offset, size_t length)
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    return markSmapFree(offset, length);
+    return markFreeImpl(offset, length);
 }
 
 bool SpaceMap::markUsed(UInt64 offset, size_t length)
@@ -71,7 +71,7 @@ bool SpaceMap::markUsed(UInt64 offset, size_t length)
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    return markSmapUsed(offset, length);
+    return markUsedImpl(offset, length);
 }
 
 bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
@@ -84,11 +84,6 @@ bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
     }
 
     return !isMarkUnused(offset, length);
-}
-
-std::pair<UInt64, UInt64> SpaceMap::searchInsertOffset(size_t size)
-{
-    return searchSmapInsertOffset(size);
 }
 
 SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_)

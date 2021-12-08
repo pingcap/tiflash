@@ -50,6 +50,8 @@ public:
 
     static std::shared_ptr<RBTreeSpaceMap> create(UInt64, UInt64 end);
 
+    std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override;
+
 protected:
     RBTreeSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_RBTREE)
@@ -62,11 +64,9 @@ protected:
 
     bool isMarkUnused(UInt64 block, size_t num) override;
 
-    bool markSmapUsed(UInt64 block, size_t num) override;
+    bool markUsedImpl(UInt64 block, size_t num) override;
 
-    bool markSmapFree(UInt64 block, size_t num) override;
-
-    std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) override;
+    bool markFreeImpl(UInt64 block, size_t num) override;
 
 private:
     struct rb_private * rb_tree;

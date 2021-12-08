@@ -510,7 +510,7 @@ bool RBTreeSpaceMap::isMarkUnused(UInt64 _start,
     return retval;
 }
 
-std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
+std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
 {
     UInt64 offset = UINT64_MAX;
     UInt64 max_cap = 0;
@@ -607,7 +607,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchSmapInsertOffset(size_t size)
     return std::make_pair(offset, max_cap);
 }
 
-bool RBTreeSpaceMap::markSmapUsed(UInt64 block, size_t size)
+bool RBTreeSpaceMap::markUsedImpl(UInt64 block, size_t size)
 {
     bool rc;
 
@@ -618,7 +618,7 @@ bool RBTreeSpaceMap::markSmapUsed(UInt64 block, size_t size)
     return rc;
 }
 
-bool RBTreeSpaceMap::markSmapFree(UInt64 block, size_t size)
+bool RBTreeSpaceMap::markFreeImpl(UInt64 block, size_t size)
 {
     bool rc;
 
