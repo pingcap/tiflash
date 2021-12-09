@@ -152,6 +152,14 @@ void ColumnNullable::insertData(const char * /*pos*/, size_t /*length*/)
     throw Exception{"Method insertData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED};
 }
 
+bool ColumnNullable::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode)
+{
+    if (!getNestedColumn().decodeTiDBRowV2Datum(cursor, raw_value, length, force_decode))
+        return false;
+    getNullMapData().push_back(0);
+    return true;
+}
+
 StringRef ColumnNullable::serializeValueIntoArena(
     size_t n,
     Arena & arena,
