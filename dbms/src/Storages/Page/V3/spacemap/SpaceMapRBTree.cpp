@@ -543,7 +543,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
         biggest_range = _biggest_range;
         biggest_cap = _biggest_cap;
 
-        return std::make_pair(offset, max_cap);
+        return std::make_pair(offset, biggest_cap);
     }
 
     // Update return start

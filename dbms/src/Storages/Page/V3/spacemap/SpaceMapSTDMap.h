@@ -166,7 +166,7 @@ protected:
             hint_biggest_offset = scan_biggest_offset;
             hint_biggest_cap = scan_biggest_cap;
 
-            return std::make_pair(offset, max_cap);
+            return std::make_pair(offset, hint_biggest_cap);
         }
 
         // Update return start
