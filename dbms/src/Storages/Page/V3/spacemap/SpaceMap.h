@@ -51,13 +51,12 @@ public:
     bool markFree(UInt64 offset, size_t length);
 
     /**
-     * Mark a space [offset,offset + length) of the space map.
-     * After this space been marked.
-     * When user use `searchInsertOffset` to get a space. 
-     * This space won't be selected.
+     * Mark a span [offset,offset + length) to being used.
+     * After this span is marked used, this span can not be selected by `searchInsertOffset`.
+     *
      * ret value:
-     *   false: This space is freed, marked all space used.
-     *   true: This space is used, or some sub space is used.
+     *   false: This span is marked as used successfully.
+     *   true: This span can not be marked as used. It or some sub spans have been marked as used before.
      */
     bool markUsed(UInt64 offset, size_t length);
 
