@@ -3,6 +3,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/Transaction/PartitionStreams.h>
 
 #include <memory>
 #include <string_view>
@@ -40,21 +41,19 @@ using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBl
 class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
-    using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
-    SSTFilesToBlockInputStream(RegionPtr                      region_,
-                               const SSTViewVec &             snaps_,
-                               const TiFlashRaftProxyHelper * proxy_helper_,
-                               StorageDeltaMergePtr           ingest_storage_,
-                               DM::ColumnDefinesPtr           schema_snap_,
-                               Timestamp                      gc_safepoint_,
-                               bool                           force_decode_,
-                               TMTContext &                   tmt_,
-                               size_t                         expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
+    SSTFilesToBlockInputStream(RegionPtr                             region_,
+                               const SSTViewVec &                    snaps_,
+                               const TiFlashRaftProxyHelper *        proxy_helper_,
+                               const DecodingStorageSchemaSnapshot & schema_snap_,
+                               Timestamp                             gc_safepoint_,
+                               bool                                  force_decode_,
+                               TMTContext &                          tmt_,
+                               size_t                                expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToBlockInputStream();
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 
-    Block getHeader() const override { return toEmptyBlock(*schema_snap); }
+    Block getHeader() const override { return toEmptyBlock(*(schema_snap.column_defines)); }
 
     void  readPrefix() override;
     void  readSuffix() override;
@@ -76,15 +75,14 @@ private:
     Block readCommitedBlock();
 
 private:
-    RegionPtr                      region;
-    const SSTViewVec &             snaps;
-    const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    const StorageDeltaMergePtr     ingest_storage;
-    const DM::ColumnDefinesPtr     schema_snap;
-    TMTContext &                   tmt;
-    const Timestamp                gc_safepoint;
-    size_t                         expected_size;
-    Poco::Logger *                 log;
+    RegionPtr                             region;
+    const SSTViewVec &                    snaps;
+    const TiFlashRaftProxyHelper *        proxy_helper{nullptr};
+    const DecodingStorageSchemaSnapshot & schema_snap;
+    TMTContext &                          tmt;
+    const Timestamp                       gc_safepoint;
+    size_t                                expected_size;
+    Poco::Logger *                        log;
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
     SSTReaderPtr write_cf_reader;
@@ -107,7 +105,9 @@ private:
 class BoundedSSTFilesToBlockInputStream final
 {
 public:
-    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child, const ColId pk_column_id_, const bool is_common_handle_);
+    BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr         child,
+                                      const ColId                           pk_column_id_,
+                                      const DecodingStorageSchemaSnapshot & schema_snap);
 
     String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
 
@@ -116,8 +116,6 @@ public:
     void readSuffix();
 
     Block read();
-
-    std::tuple<std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> ingestingInfo() const;
 
     SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const;
 
@@ -128,7 +126,6 @@ public:
 
 private:
     const ColId pk_column_id;
-    const bool  is_common_handle;
 
     // Note that we only keep _raw_child for getting ingest info / process key, etc. All block should be
     // read from `mvcc_compact_stream`

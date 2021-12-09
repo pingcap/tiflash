@@ -1,12 +1,11 @@
 #pragma once
 
-#include <thread>
-
 #include <Common/ConcurrentBoundedQueue.h>
 #include <common/logger_useful.h>
 #include <Common/typeid_cast.h>
-
 #include <DataStreams/IProfilingBlockInputStream.h>
+
+#include <thread>
 
 namespace DB
 {
@@ -37,15 +36,9 @@ public:
         }
     }
 
-    String getName() const override
-    {
-        return "SharedQuery";
-    }
+    String getName() const override { return "SharedQuery"; }
 
-    Block getHeader() const override
-    {
-        return children.back()->getHeader();
-    }
+    Block getHeader() const override { return children.back()->getHeader(); }
 
     void readPrefix() override
     {
@@ -69,8 +62,8 @@ public:
 
         if (thread.joinable())
             thread.join();
-        if (exception)
-            std::rethrow_exception(exception);
+        if (!exception_msg.empty())
+            throw Exception(exception_msg);
     }
 
 protected:
@@ -84,8 +77,10 @@ protected:
         Block block;
         do
         {
-            if (exception)
-                std::rethrow_exception(exception);
+            if (!exception_msg.empty())
+            {
+                throw Exception(exception_msg);
+            }
             if (isCancelled() || read_suffixed)
                 return {};
         } while (!queue.tryPop(block, try_action_millisecionds));
@@ -100,7 +95,7 @@ protected:
             in->readPrefix();
             while (!isCancelled())
             {
-                Block block;
+                Block block = in->read();
                 do
                 {
                     if (isCancelled() || read_suffixed)
@@ -109,16 +104,24 @@ protected:
                         queue.tryEmplace(0);
                         break;
                     }
-                } while (!queue.tryPush(block = in->read(), try_action_millisecionds));
+                } while (!queue.tryPush(block, try_action_millisecionds));
 
                 if (!block)
                     break;
             }
             in->readSuffix();
         }
+        catch (Exception & e)
+        {
+            exception_msg = e.message();
+        }
+        catch (std::exception & e)
+        {
+            exception_msg = e.what();
+        }
         catch (...)
         {
-            exception = std::current_exception();
+            exception_msg = "other error";
         }
     }
 
@@ -131,11 +134,11 @@ private:
     bool read_suffixed = false;
 
     std::thread thread;
-    std::mutex  mutex;
+    std::mutex mutex;
 
-    std::exception_ptr exception;
+    std::string exception_msg;
 
     Logger * log;
     BlockInputStreamPtr in;
 };
-}
+} // namespace DB

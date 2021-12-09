@@ -34,7 +34,6 @@ void ExchangeReceiver::setUpConnection()
     {
         auto & meta = pb_exchange_receiver.encoded_task_meta(index);
         std::thread t(&ExchangeReceiver::ReadLoop, this, std::ref(meta), index);
-        live_connections++;
         workers.push_back(std::move(t));
     }
 }
