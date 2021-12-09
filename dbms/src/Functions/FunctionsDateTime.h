@@ -2169,6 +2169,7 @@ public:
     }
 };
 
+template <bool convert_from_utc>
 class FunctionMyTimeZoneConvertByOffset : public IFunction
 {
     using FromFieldType = typename DataTypeMyDateTime::FieldType;
@@ -2176,7 +2177,7 @@ class FunctionMyTimeZoneConvertByOffset : public IFunction
 
 public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionMyTimeZoneConvertByOffset>(); };
-    static constexpr auto name = "ConvertTimeZoneByOffset";
+    static constexpr auto name = convert_from_utc ? "ConvertTimeZoneByOffsetFromUTC" : "ConvertTimeZoneByOffsetToUTC";
 
     String getName() const override
     {
@@ -2211,7 +2212,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        static const DateLUTImpl & UTC = DateLUT::instance("UTC");
         if (const ColumnVector<FromFieldType> * col_from
             = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
@@ -2232,7 +2232,10 @@ public:
             {
                 UInt64 result_time = vec_from[i] + offset;
                 // todo maybe affected by daytime saving, need double check
-                convertTimeZoneByOffset(vec_from[i], result_time, offset, UTC);
+                if constexpr (convert_from_utc)
+                    convertTimeZoneByOffset(vec_from[i], result_time, true, offset);
+                else
+                    convertTimeZoneByOffset(vec_from[i], result_time, false, offset);
                 vec_to[i] = result_time;
             }
 
