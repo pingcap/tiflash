@@ -58,7 +58,11 @@ using LeastBaseImpl_t = LeastBaseImpl<A, B>;
 template <typename A, typename B>
 struct LeastSpecialImpl;
 template <typename A, typename B>
+struct LeastStringImpl;
+template <typename A, typename B>
 using LeastImpl = std::conditional_t<!NumberTraits::LeastGreatestSpecialCase<A, B>, LeastBaseImpl<A, B>, LeastSpecialImpl<A, B>>;
+template <typename A, typename B>
+using TiDBLeastImpl = LeastStringImpl<A, B>;
 
 template <template <typename, typename> typename Op1, template <typename, typename> typename Op2>
 struct IsSameOperation
