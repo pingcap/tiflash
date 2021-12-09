@@ -7,15 +7,15 @@
 #include <fmt/format.h>
 
 
-namespace details
+namespace LogFmtDetails
 {
 template <typename... Ts>
-constexpr size_t numArgs(Ts &&...)
+inline constexpr size_t numArgs(Ts &&...)
 {
     return sizeof...(Ts);
 }
 template <typename T, typename... Ts>
-constexpr auto firstArg(T && x, Ts &&...)
+inline constexpr auto firstArg(T && x, Ts &&...)
 {
     return std::forward<T>(x);
 }
@@ -32,7 +32,7 @@ inline constexpr size_t getFileNameOffset(T (&/*str*/)[1])
 {
     return 0;
 }
-} // namespace details
+} // namespace LogFmtDetails
 
 
 /// Logs a message to a specified logger with that level.
@@ -41,22 +41,22 @@ inline constexpr size_t getFileNameOffset(T (&/*str*/)[1])
 ///  and the latter arguments treat as values to substitute.
 /// If only one argument is provided, it is threat as message without substitutions.
 
-#define LOG_IMPL(logger, PRIORITY, ...)                                       \
-    do                                                                        \
-    {                                                                         \
-        if ((logger)->is((PRIORITY)))                                         \
-        {                                                                     \
-            std::string formatted_message = details::numArgs(__VA_ARGS__) > 1 \
-                ? fmt::format(__VA_ARGS__)                                    \
-                : details::firstArg(__VA_ARGS__);                             \
-            Poco::Message poco_message(                                       \
-                /*source*/ (logger)->name(),                                  \
-                /*text*/ formatted_message,                                   \
-                /*prio*/ (PRIORITY),                                          \
-                /*file*/ &__FILE__[details::getFileNameOffset(__FILE__)],     \
-                /*line*/ __LINE__);                                           \
-            (logger)->log(poco_message);                                      \
-        }                                                                     \
+#define LOG_IMPL(logger, PRIORITY, ...)                                             \
+    do                                                                              \
+    {                                                                               \
+        if ((logger)->is((PRIORITY)))                                               \
+        {                                                                           \
+            std::string formatted_message = LogFmtDetails::numArgs(__VA_ARGS__) > 1 \
+                ? fmt::format(__VA_ARGS__)                                          \
+                : LogFmtDetails::firstArg(__VA_ARGS__);                             \
+            Poco::Message poco_message(                                             \
+                /*source*/ (logger)->name(),                                        \
+                /*text*/ formatted_message,                                         \
+                /*prio*/ (PRIORITY),                                                \
+                /*file*/ &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)],     \
+                /*line*/ __LINE__);                                                 \
+            (logger)->log(poco_message);                                            \
+        }                                                                           \
     } while (false)
 
 #define LOG_FMT_TRACE(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_TRACE, __VA_ARGS__)

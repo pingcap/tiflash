@@ -45,7 +45,7 @@ static void UnifiedLogFormatterBM(benchmark::State & state)
             /*source*/ "log_name",
             /*text*/ text,
             /*prio*/ Poco::Message::PRIO_INFORMATION,
-            /*file*/ &__FILE__[details::getFileNameOffset(__FILE__)],
+            /*file*/ &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)],
             /*line*/ __LINE__);
         formatter.format(msg, formatted_text);
     }
