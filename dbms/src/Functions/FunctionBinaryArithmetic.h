@@ -584,7 +584,6 @@ private:
 template <typename Op>
 struct StringOperationWithCollatorImpl
 {
-
     static void NO_INLINE string_vector_string_vector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
@@ -597,7 +596,7 @@ struct StringOperationWithCollatorImpl
         size_t size = a_offsets.size();
         c_data.reserve(std::max(a_data.size(), b_data.size()));
         c_offsets.resize(size);
-    
+
         for (size_t i = 0; i < size; ++i)
         {
             Op::process(collator, a_data, a_offsets, b_data, b_offsets, c_data, c_offsets, i);
@@ -625,7 +624,7 @@ struct StringOperationWithCollatorImpl
             {
                 a_size = a_offsets[0] - 1;
                 int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_n);
-            
+
                 if (res < 0)
                 {
                     memcpy(&c_data[0], &a_data[0], a_size);
@@ -643,7 +642,7 @@ struct StringOperationWithCollatorImpl
             {
                 a_size = a_offsets[i] - a_offsets[i - 1] - 1;
                 int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, reinterpret_cast<const char *>(&b_data[i * b_n]), b_n);
-            
+
                 if (res < 0)
                 {
                     memcpy(&c_data[c_offset_idx], &a_data[a_offsets[i - 1]], a_size);
@@ -683,7 +682,7 @@ struct StringOperationWithCollatorImpl
             {
                 a_size = a_offsets[0] - 1;
                 int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_offsets[0] - 1, b_data, b_size);
-                
+
                 if (res < 0)
                 {
                     memcpy(&c_data[0], &a_data[0], a_size);
@@ -701,7 +700,7 @@ struct StringOperationWithCollatorImpl
             {
                 a_size = a_offsets[i] - a_offsets[i - 1] - 1;
                 int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, b_data, b_size);
-            
+
                 if (res < 0)
                 {
                     memcpy(&c_data[c_offset_idx], &a_data[a_offsets[i - 1]], a_size);
@@ -750,7 +749,7 @@ struct StringOperationWithCollatorImpl
         for (size_t i = 0, j = 0; i < size; i += a_n, ++j)
         {
             int res = collator->compare(reinterpret_cast<const char *>(&a_data[i]), a_n, reinterpret_cast<const char *>(&b_data[i]), b_n);
-        
+
             if (res < 0)
             {
                 memcpy(&c_data[c_offset_idx], &a_data[i], a_n);
@@ -784,7 +783,7 @@ struct StringOperationWithCollatorImpl
         for (size_t i = 0; i < size; i += a_n)
         {
             int res = collator->compare(reinterpret_cast<const char *>(&a_data[i]), a_n, b_data, b_n);
-        
+
             if (res < 0)
             {
                 memcpy(&c_data[c_offset_idx], &a_data[i], a_n);
@@ -832,7 +831,7 @@ struct StringOperationWithCollatorImpl
         size_t b_n = b.size();
 
         int res = collator->compare(reinterpret_cast<const char *>(a.data()), a_n, reinterpret_cast<const char *>(b.data()), b_n);
-        
+
         if (res < 0)
             c = a;
         else
@@ -1263,7 +1262,7 @@ public:
 
 
     template <typename A, typename B, typename C>
-    bool executeNumeric(Block &block, size_t result[[maybe_unused]], const ColumnNumbers & arguments, const A & left, bool is_left_nullable [[maybe_unused]], const B & right, bool is_right_nullable [[maybe_unused]], const C & result_type) const
+    bool executeNumeric(Block & block, size_t result [[maybe_unused]], const ColumnNumbers & arguments, const A & left, bool is_left_nullable [[maybe_unused]], const B & right, bool is_right_nullable [[maybe_unused]], const C & result_type) const
     {
         using LeftDataType = std::decay_t<decltype(left)>;
         using RightDataType = std::decay_t<decltype(right)>;
@@ -1561,7 +1560,6 @@ public:
         else
             return false;
     }
-    
 
 
     // ywq maybe done...
@@ -1713,17 +1711,13 @@ public:
             using RightDataType = std::decay_t<decltype(right)>;
             using ResultDataType = std::decay_t<decltype(result_type)>;
 
-            if constexpr ((std::is_same_v<DataTypeFixedString, LeftDataType> 
-                         || std::is_same_v<DataTypeString, LeftDataType>) 
-                         || (std::is_same_v<DataTypeFixedString, RightDataType> 
-                         || std::is_same_v<DataTypeString, RightDataType>)
-                         || (std::is_same_v<DataTypeFixedString, ResultDataType> 
-                         || std::is_same_v<DataTypeString, ResultDataType>)
-                         )
+            if constexpr ((std::is_same_v<DataTypeFixedString, LeftDataType> || std::is_same_v<DataTypeString, LeftDataType>)
+                          || (std::is_same_v<DataTypeFixedString, RightDataType> || std::is_same_v<DataTypeString, RightDataType>)
+                          || (std::is_same_v<DataTypeFixedString, ResultDataType> || std::is_same_v<DataTypeString, ResultDataType>))
             {
                 if constexpr (!(IsOperation<Op>::least))
                     return false;
-                else 
+                else
                     return executeString(block, result, arguments);
             }
             else
