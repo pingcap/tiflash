@@ -670,6 +670,7 @@ const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColum
     return after_agg ? aggregated_columns : source_columns;
 }
 
+<<<<<<< HEAD
 void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project)
 {
     initChain(chain, getCurrentInputColumns());
@@ -680,11 +681,18 @@ void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, c
 }
 
 void constructTZExpr(tipb::Expr & tz_expr, const TimezoneInfo & dag_timezone_info, bool from_utc)
+=======
+tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
+>>>>>>> 773cc619a3 (Fix Issue #3374 for unix_timestamp corner case (#3612))
 {
     if (dag_timezone_info.is_name_based)
         constructStringLiteralTiExpr(tz_expr, dag_timezone_info.timezone_name);
     else
+<<<<<<< HEAD
         constructInt64LiteralTiExpr(tz_expr, from_utc ? dag_timezone_info.timezone_offset : -dag_timezone_info.timezone_offset);
+=======
+        return constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
+>>>>>>> 773cc619a3 (Fix Issue #3374 for unix_timestamp corner case (#3612))
 }
 
 String DAGExpressionAnalyzer::appendTimeZoneCast(
@@ -715,11 +723,26 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & 
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
+<<<<<<< HEAD
     tipb::Expr tz_expr;
     constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
     String tz_col;
     String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
     for (size_t i = 0; i < is_ts_column.size(); i++)
+=======
+    // For TimeZone
+    tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+    String tz_col = getActions(tz_expr, actions);
+    static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
+    static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffsetFromUTC";
+    const String & timezone_func_name = context.getTimezoneInfo().is_name_based ? convert_time_zone_form_utc : convert_time_zone_by_offset;
+
+    // For Duration
+    String fsp_col;
+    static const String dur_func_name = "FunctionConvertDurationFromNanos";
+    const auto & columns = query_block.source->tbl_scan().columns();
+    for (size_t i = 0; i < need_cast_column.size(); ++i)
+>>>>>>> 773cc619a3 (Fix Issue #3374 for unix_timestamp corner case (#3612))
     {
         if (is_ts_column[i])
         {
@@ -965,10 +988,14 @@ void DAGExpressionAnalyzer::generateFinalProject(
         initChain(chain, getCurrentInputColumns());
         ExpressionActionsChain::Step step = chain.steps.back();
 
+<<<<<<< HEAD
         tipb::Expr tz_expr;
         constructTZExpr(tz_expr, context.getTimezoneInfo(), false);
+=======
+        tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+>>>>>>> 773cc619a3 (Fix Issue #3374 for unix_timestamp corner case (#3612))
         String tz_col;
-        String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffset";
+        String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffsetToUTC";
         std::vector<Int32> casted(schema.size(), 0);
         std::unordered_map<String, String> casted_name_map;
 
@@ -1121,9 +1148,14 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         if (expr.field_type().tp() == TiDB::TypeTimestamp && !context.getTimezoneInfo().is_utc_timezone)
         {
             /// append timezone cast for timestamp literal
+<<<<<<< HEAD
             tipb::Expr tz_expr;
             constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
             String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
+=======
+            tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+            String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffsetFromUTC";
+>>>>>>> 773cc619a3 (Fix Issue #3374 for unix_timestamp corner case (#3612))
             String tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions);
             ret = casted_name;
