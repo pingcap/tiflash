@@ -1,11 +1,11 @@
-#include <Storages/Page/V3/BlobStore.h>
+#include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
-#include <Common/Checksum.h>
+#include <Storages/Page/V3/BlobStore.h>
 
 namespace ProfileEvents
 {
-    extern const Event PSMWritePages;
+extern const Event PSMWritePages;
 }
 
 namespace DB
@@ -17,7 +17,6 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-    
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
@@ -51,60 +50,69 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     {
         switch (write.type)
         {
-            case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT:
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT:
+        {
+            ChecksumClass digest;
+            PageEntryV3 entry;
+
+            entry.file_id = blob_id;
+            entry.size = write.size;
+            entry.offset = offset_in_file + offset_in_allocated;
+            offset_in_allocated += write.size;
+            digest.update(buffer_pos, write.size);
+            entry.checksum = digest.checksum();
+
+            UInt64 field_begin, field_end;
+
+            for (size_t i = 0; i < write.offsets.size(); ++i)
             {
                 ChecksumClass digest;
-                PageEntryV3 entry;
-                entry.file_id = blob_id;
-                entry.size = write.size;
-                entry.offset = offset_in_file + offset_in_allocated;
-                offset_in_allocated += write.size;
-                digest.update(buffer_pos,write.size);
-                entry.checksum = digest.checksum();
-                edit.put(write.page_id, entry);
+                field_begin = write.offsets[i].first;
+                field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
 
-                UInt64 field_begin,field_end;
+                digest.update(buffer_pos + field_begin, field_end - field_begin);
+                write.offsets[i].second = digest.checksum();
+            }
 
-                for (size_t i = 0; i < write.offsets.size(); ++i)
-                {
-                    ChecksumClass digest;
-                    field_begin = write.offsets[i].first;
-                    field_end = (i == write.offsets.size() - 1) ? 
-                        write.size : 
-                        write.offsets[i + 1].first;
-
-                    digest.update(buffer_pos + field_begin, field_end - field_begin);
-                    write.offsets[i].second = digest.checksum();
-                }
-
+            if (write.offsets.size())
+            {
+                // we can swap from WriteBatch instead of copying
                 entry.field_offsets.swap(write.offsets);
-                write.read_buffer->readStrict(buffer_pos, write.size);
+            }
 
-                if (write.type == WriteBatch::WriteType::PUT)
-                    edit.put(write.page_id, entry);
-                else if (write.type == WriteBatch::WriteType::UPSERT)
-                    edit.upsertPage(write.page_id, entry);
+            write.read_buffer->readStrict(buffer_pos, write.size);
+            buffer_pos += write.size;
 
-                break;
-            }
-            case WriteBatch::WriteType::DEL:
+            if (write.type == WriteBatch::WriteType::PUT)
             {
-                edit.del(write.page_id);
+                edit.put(write.page_id, entry);
             }
-            case WriteBatch::WriteType::REF:
+            else // WriteBatch::WriteType::UPSERT
             {
-                edit.ref(write.page_id, write.ori_page_id);
-                break;
+                edit.upsertPage(write.page_id, entry);
             }
+
+
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            edit.del(write.page_id);
+        }
+        case WriteBatch::WriteType::REF:
+        {
+            edit.ref(write.page_id, write.ori_page_id);
+            break;
+        }
         }
     }
 
     if (buffer_pos != buffer + all_page_data_size)
     {
         removePosFromStats(blob_id, offset_in_file, all_page_data_size);
-        throw Exception("write batch have a invalid total size, or something wrong in parse write batch.", 
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception("write batch have a invalid total size, or something wrong in parse write batch.",
+                        ErrorCodes::LOGICAL_ERROR);
     }
 
     auto blob_file = getBlobFile(blob_id);
@@ -142,14 +150,14 @@ std::pair<BlobStore::BlobFileId, UInt64> BlobStore::getPosFromStats(size_t size)
     return std::make_pair(stat->id, offset);
 }
 
-void BlobStore::removePosFromStats(BlobFileId blob_id, UInt64 offset,size_t size)
+void BlobStore::removePosFromStats(BlobFileId blob_id, UInt64 offset, size_t size)
 {
-    blob_stats.removePosFromStat(blob_stats.fileIdToStat(blob_id),offset,size);
+    blob_stats.removePosFromStat(blob_stats.fileIdToStat(blob_id), offset, size);
 }
 
-void BlobStore::read(std::vector<std::tuple<BlobStore::BlobFileId, UInt64, size_t>> req_list, 
-    std::vector<char *> buffers, 
-    const ReadLimiterPtr & read_limiter)
+void BlobStore::read(std::vector<std::tuple<BlobStore::BlobFileId, UInt64, size_t>> req_list,
+                     std::vector<char *> buffers,
+                     const ReadLimiterPtr & read_limiter)
 {
     assert(req_list.size() == buffers.size());
 
@@ -183,6 +191,7 @@ void BlobStore::read(std::vector<std::tuple<BlobStore::BlobFileId, UInt64, size_
 
 void BlobStore::read(BlobStore::BlobFileId blob_id, UInt64 offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
 {
+    assert(buffers != nullptr);
     getBlobFile(blob_id)->read(buffers, offset, size, read_limiter);
 }
 
@@ -345,7 +354,7 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
 {
     UInt64 offset = 0, max_cap = 0;
 
-    std::tie(offset,max_cap) = stat->smap->searchInsertOffset(buf_size);
+    std::tie(offset, max_cap) = stat->smap->searchInsertOffset(buf_size);
 
     // Whatever request success or not, it still need update.
     stat->sm_max_caps = max_cap;
@@ -386,7 +395,7 @@ void BlobStore::BlobStats::removePosFromStat(BlobStatPtr stat, UInt64 offset, si
 
 BlobStatPtr BlobStore::BlobStats::fileIdToStat(BlobFileId file_id)
 {
-    for (auto & stat:stats_map)
+    for (auto & stat : stats_map)
     {
         if (stat->id == file_id)
         {
@@ -394,7 +403,7 @@ BlobStatPtr BlobStore::BlobStats::fileIdToStat(BlobFileId file_id)
         }
     }
 
-    throw Exception("Can't find BlobStat with [BlobFileId=" + DB::toString(file_id) +"]",
+    throw Exception("Can't find BlobStat with [BlobFileId=" + DB::toString(file_id) + "]",
                     ErrorCodes::LOGICAL_ERROR);
 }
 
