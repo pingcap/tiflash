@@ -246,6 +246,70 @@ std::tuple<bool, String> LogReader::readRecord()
     return {false, std::move(record)};
 }
 
+struct LogReader::RecyclableHeader
+{
+    Format::ChecksumType checksum = 0;
+    UInt16 length = 0;
+    UInt8 type;
+    Format::LogNumberType log_num;
+};
+
+std::tuple<UInt8, size_t>
+LogReader::deserializeHeader(LogReader::RecyclableHeader * hdr, size_t * drop_size)
+{
+    readIntBinary(hdr->checksum, *file);
+    readIntBinary(hdr->length, *file);
+    readChar(hdr->type, *file);
+    size_t header_size = Format::HEADER_SIZE;
+    if (hdr->type >= Format::RecyclableFullType && hdr->type <= Format::RecyclableLastType)
+    {
+        if (end_of_buffer_offset - buffer.size() == 0)
+        {
+            recycled = true;
+        }
+        header_size = Format::RECYCLABLE_HEADER_SIZE;
+        // We need enough for the larger header
+        if (buffer.size() < static_cast<size_t>(Format::RECYCLABLE_HEADER_SIZE))
+        {
+            // Go to the next block and continue parsing
+            if (UInt8 err = readMore(drop_size); err != 0)
+                return {err, 0};
+            return {ParseErrorType::NextBlock, 0};
+        }
+        Format::LogNumberType log_num = 0;
+        readIntBinary(log_num, *file);
+        if (log_num != log_number)
+        {
+            return {ParseErrorType::OldRecord, 0};
+        }
+    }
+
+    if (header_size + hdr->length > buffer.size())
+    {
+        assert(buffer.size() >= header_size);
+        *drop_size = buffer.size();
+        buffer.remove_prefix(buffer.size());
+        // If the end of the read has been reached without seeing
+        // `header_size + length` bytes of payload, report a corruption. The
+        // higher layers can decide how to handle it based on the recovery mode,
+        // whether this occurred at EOF, whether this is the final WAL, etc.
+        return {ParseErrorType::BadRecordLen, 0};
+    }
+
+    if (hdr->type == Format::ZeroType && hdr->length == 0)
+    {
+        // Skip zero length record without reporting any drops since
+        // such records are produced by the mmap based writing code in
+        // env_posix.cc that preallocates file regions.
+        // NOTE: this should never happen in DB written by new RocksDB versions,
+        // since we turn off mmap writes to manifest and log files
+        buffer.remove_prefix(buffer.size());
+        return {ParseErrorType::BadRecord, 0};
+    }
+
+    return {0, header_size};
+}
+
 UInt8 LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_size)
 {
     while (true)
@@ -261,67 +325,27 @@ UInt8 LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_siz
         }
 
         // Parse the header
-        const char * header = buffer.data();
-        UInt32 expected_checksum;
-        UInt16 length = 0;
-        UInt8 type;
-        readIntBinary(expected_checksum, *file);
-        readIntBinary(length, *file);
-        readChar(type, *file);
-        size_t header_size = Format::HEADER_SIZE;
-        if (type >= Format::RecyclableFullType && type <= Format::RecyclableLastType)
+        const char * header_pos = buffer.data();
+        LogReader::RecyclableHeader hdr;
+        size_t header_size;
+        UInt8 err;
+        std::tie(err, header_size) = deserializeHeader(&hdr, drop_size);
+        if (err == ParseErrorType::NextBlock)
         {
-            if (end_of_buffer_offset - buffer.size() == 0)
-            {
-                recycled = true;
-            }
-            header_size = Format::RECYCLABLE_HEADER_SIZE;
-            // We need enough for the larger header
-            if (buffer.size() < static_cast<size_t>(Format::RECYCLABLE_HEADER_SIZE))
-            {
-                if (UInt8 err = readMore(drop_size); err != 0)
-                    return err;
-                continue;
-            }
-            Format::LogNumberType log_num = 0;
-            readIntBinary(log_num, *file);
-            if (log_num != log_number)
-            {
-                return ParseErrorType::OldRecord;
-            }
+            // No enough bytes for deser header, continue parsing from the next block
+            continue;
         }
-
-        if (header_size + length > buffer.size())
-        {
-            assert(buffer.size() >= header_size);
-            *drop_size = buffer.size();
-            buffer.remove_prefix(buffer.size());
-            // If the end of the read has been reached without seeing
-            // `header_size + length` bytes of payload, report a corruption. The
-            // higher layers can decide how to handle it based on the recovery mode,
-            // whether this occurred at EOF, whether this is the final WAL, etc.
-            return ParseErrorType::BadRecordLen;
-        }
-
-        if (type == Format::ZeroType && length == 0)
-        {
-            // Skip zero length record without reporting any drops since
-            // such records are produced by the mmap based writing code in
-            // env_posix.cc that preallocates file regions.
-            // NOTE: this should never happen in DB written by new RocksDB versions,
-            // since we turn off mmap writes to manifest and log files
-            buffer.remove_prefix(buffer.size());
-            return ParseErrorType::BadRecord;
-        }
+        else if (err != 0)
+            return err;
+        // else parse header successe.
 
         if (verify_checksum)
         {
             Format::ChecksumClass digest;
-
             digest.update(
-                header + Format::CHECKSUM_START_OFFSET,
-                length + header_size - Format::CHECKSUM_START_OFFSET);
-            if (Format::ChecksumType actual_checksum = digest.checksum(); actual_checksum != expected_checksum)
+                header_pos + Format::CHECKSUM_START_OFFSET,
+                hdr.length + header_size - Format::CHECKSUM_START_OFFSET);
+            if (Format::ChecksumType actual_checksum = digest.checksum(); actual_checksum != hdr.checksum)
             {
                 // Drop the rest of the buffer since "length" itself may have
                 // been corrupted and if we trust it, we could find some
@@ -333,11 +357,11 @@ UInt8 LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_siz
             }
         }
 
-        buffer.remove_prefix(header_size + length);
+        buffer.remove_prefix(header_size + hdr.length);
 
-        *result = std::string_view(header + header_size, length);
-        file->ignore(length); // Move forward the payload size
-        return type;
+        *result = std::string_view(header_pos + header_size, hdr.length);
+        file->ignore(hdr.length); // Move forward the payload size
+        return hdr.type;
     }
 }
 

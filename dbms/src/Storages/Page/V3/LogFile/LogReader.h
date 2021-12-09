@@ -81,9 +81,19 @@ private:
         BadRecordLen = Format::MaxRecordType + 5,
         // Returned when we get a bad record checksum
         BadRecordChecksum = Format::MaxRecordType + 6,
+        NextBlock = Format::MaxRecordType + 7,
     };
 
     UInt8 readPhysicalRecord(std::string_view * result, size_t * drop_size);
+
+    struct RecyclableHeader;
+    /*
+     * Deserialize header from `file` and apply some check by the header field
+     * Return 0 if deser success.
+     * Else if no enough bytes for deser, return `ParseErrorType::NextBlock`
+     * Otherwise return non-zero error.
+     */
+    std::tuple<UInt8, size_t> deserializeHeader(RecyclableHeader * hdr, size_t * drop_size);
 
     /*
      * Read more data from `file` and update the `buffer`.
