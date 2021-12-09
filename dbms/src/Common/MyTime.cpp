@@ -825,7 +825,7 @@ inline bool isZeroDate(UInt64 time)
     return time == 0;
 }
 
-void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, Int64 offset, bool throw_excep)
+void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, Int64 offset, bool throw_exception)
 {
     if (isZeroDate(from_time))
     {
@@ -836,9 +836,9 @@ void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl &
     time_t epoch = getEpochSecond(from_my_time, time_zone_from, offset);
     if (unlikely(epoch <= 0))
     {
-        if (throw_excep)
+        if (throw_exception)
         {
-            throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
+            throw Exception("Unsupported timestamp value , TiFlash only supports timestamp after 1970-01-01 00:00:00 UTC)");
         }
         else
         {
@@ -850,15 +850,15 @@ void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl &
     to_time = to_my_time.toPackedUInt();
 }
 
-void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_excep)
+void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception)
 {
-    convertTimeZoneImpl(from_time, to_time, time_zone_from, time_zone_to, 0, throw_excep);
+    convertTimeZoneImpl(from_time, to_time, time_zone_from, time_zone_to, 0, throw_exception);
 }
 
-void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, bool throw_excep)
+void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, bool throw_exception)
 {
     static const auto & time_zone_utc = DateLUT::instance("UTC");
-    convertTimeZoneImpl(from_time, to_time, time_zone_utc, time_zone_utc, offset, throw_excep);
+    convertTimeZoneImpl(from_time, to_time, time_zone_utc, time_zone_utc, offset, throw_exception);
 }
 
 MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to)
