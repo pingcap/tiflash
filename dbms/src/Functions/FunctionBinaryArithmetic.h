@@ -32,8 +32,6 @@
 #include <common/types.h>
 
 #include <boost/integer/common_factor.hpp>
-#include <cstddef>
-#include <ext/range.h>
 #include <type_traits>
 
 
