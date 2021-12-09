@@ -32,14 +32,14 @@ namespace DM
 SSTFilesToDTFilesOutputStream::SSTFilesToDTFilesOutputStream( //
     BoundedSSTFilesToBlockInputStreamPtr child_,
     StorageDeltaMergePtr storage_,
-    const DecodingStorageSchemaSnapshot & schema_snap_,
+    DecodingStorageSchemaSnapshotConstPtr schema_snap_,
     TiDB::SnapshotApplyMethod method_,
     FileConvertJobType job_type_,
     TMTContext & tmt_)
     : child(std::move(child_))
     , //
     storage(std::move(storage_))
-    , schema_snap(schema_snap_)
+    , schema_snap(std::move(schema_snap_))
     , method(method_)
     , job_type(job_type_)
     , tmt(tmt_)
@@ -123,7 +123,7 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
     LOG_INFO(log,
              "Create file for snapshot data " << child->getRegion()->toString(true) << " [file=" << dt_file->path()
                                               << "] [single_file_mode=" << flags.isSingleFile() << "]");
-    dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *(schema_snap.column_defines), flags);
+    dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *(schema_snap->column_defines), flags);
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);
     return true;
