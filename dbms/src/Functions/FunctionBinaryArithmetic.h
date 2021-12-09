@@ -6,16 +6,19 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
 #include <Common/FieldVisitors.h>
 #include <Common/toSafeUnsigned.h>
 #include <Common/typeid_cast.h>
 #include <Core/AccurateComparison.h>
+#include <Core/ColumnNumbers.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeInterval.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/NumberTraits.h>
 #include <Functions/DataTypeFromFieldType.h>
@@ -26,17 +29,12 @@
 #include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/ExpressionActions.h>
+#include <common/types.h>
 
 #include <boost/integer/common_factor.hpp>
 #include <cstddef>
 #include <ext/range.h>
-#include <iostream>
 #include <type_traits>
-
-#include "Columns/IColumn.h"
-#include "Core/ColumnNumbers.h"
-#include "DataTypes/DataTypeString.h"
-#include "common/types.h"
 
 
 namespace DB
@@ -607,7 +605,7 @@ struct StringOperationWithCollatorImpl
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
-        const ColumnString::Offset  & b_n,
+        const ColumnString::Offset & b_n,
         const TiDB::TiDBCollatorPtr & collator,
         ColumnString::Chars_t & c_data,
         ColumnString::Offsets & c_offsets)
@@ -617,7 +615,7 @@ struct StringOperationWithCollatorImpl
         for (size_t i = 0; i < size; ++i)
         {
             Op::process(collator, a_data, a_offsets, b_data, b_n, c_data, c_offsets, i);
-        }   
+        }
     }
 
     static void NO_INLINE string_vector_constant(
@@ -1627,13 +1625,12 @@ public:
                           || (std::is_same_v<DataTypeFixedString, RightDataType> || std::is_same_v<DataTypeString, RightDataType>)
                           || (std::is_same_v<DataTypeFixedString, ResultDataType> || std::is_same_v<DataTypeString, ResultDataType>))
             {
-                if constexpr (!(IsOperation<Op>::least))  // block compile for other operation
+                if constexpr (!(IsOperation<Op>::least || IsOperation<Op>::greatest)) // block compile for other operation
                     return false;
                 else
                 {
                     return executeString(block, result, arguments);
                 }
-                    
             }
             else
                 return executeNumeric<LeftDataType, RightDataType, ResultDataType>(block, result, arguments, left, is_left_nullable, right, is_right_nullable, result_type);

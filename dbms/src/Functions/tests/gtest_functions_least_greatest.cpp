@@ -259,33 +259,34 @@ try
 
     // string_string
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"1"}),
+        createColumn<Nullable<String>>({"sahdka", "1"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"sahdka"}),
-            createColumn<Nullable<UInt64>>({1})));
+            createColumn<Nullable<String>>({"sahdka", "1"}),
+            createColumn<Nullable<String>>({"sahdkb", "2"})));
 
     // string_fixedString
-    
+
 
     // string_constant
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"sahdka"}),
+        createColumn<Nullable<String>>({"sahdka", "sahdkb"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"sahdka"}),
-            createConstColumn<Nullable<String>>(1, "sahdkb")));
+            createColumn<Nullable<String>>({"sahdka", "sahdkc"}),
+            createConstColumn<Nullable<String>>(2, "sahdkb")));
+
     // fixedString_fixedString
 
     // fixedString_constant
 
     // constant_contant
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(1, "sahdka"),
+        createConstColumn<Nullable<String>>(2, "sahdka"),
         executeFunction(
             func_name,
-            createConstColumn<Nullable<String>>(1, "sahdka"),
-            createConstColumn<Nullable<String>>(1, "sahdkb")));
+            createConstColumn<Nullable<String>>(2, "sahdka"),
+            createConstColumn<Nullable<String>>(2, "sahdkb")));
 }
 CATCH
 
@@ -524,6 +525,37 @@ try
             createColumn<Nullable<Decimal32>>(
                 std::make_tuple(4, 3),
                 {DecimalField32(9244, 3)})));
+
+    // string_string
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"sahdkb", "2"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"sahdka", "1"}),
+            createColumn<Nullable<String>>({"sahdkb", "2"})));
+
+    // string_fixedString
+
+
+    // string_constant
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"sahdkb", "sahdkc"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"sahdka", "sahdkc"}),
+            createConstColumn<Nullable<String>>(2, "sahdkb")));
+
+    // fixedString_fixedString
+
+    // fixedString_constant
+
+    // constant_contant
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(2, "sahdkb"),
+        executeFunction(
+            func_name,
+            createConstColumn<Nullable<String>>(2, "sahdka"),
+            createConstColumn<Nullable<String>>(2, "sahdkb")));
 }
 CATCH
 

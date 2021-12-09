@@ -2,10 +2,9 @@
 
 #include <Common/Decimal.h>
 #include <Core/Types.h>
+#include <common/types.h>
 
 #include <type_traits>
-
-#include <common/types.h>
 
 
 namespace DB

@@ -14,8 +14,6 @@ struct LeastBaseImpl<A, B, false>
 {
     using ResultType = typename NumberTraits::ResultOfTiDBLeast<A, B>::Type;
 
-    static const constexpr bool allow_string = false;
-
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
@@ -27,7 +25,7 @@ struct LeastBaseImpl<A, B, false>
     {
         throw Exception("Should not reach here");
     }
-    
+
 
     // string_string
     static void process(
@@ -135,12 +133,11 @@ struct LeastBaseImpl<A, B, false>
     {
         const char * b_data = reinterpret_cast<const char *>(b.data());
         ColumnString::Offset b_size = b.size();
-        /// Trailing zero byte of the smaller string is included in the comparison.
         size_t a_size;
         if (i == 0)
         {
             a_size = a_offsets[0] - 1;
-            int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_offsets[0] - 1, b_data, b_size);
+            int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, b_data, b_size);
 
             if (res < 0)
             {
@@ -156,7 +153,7 @@ struct LeastBaseImpl<A, B, false>
         else
         {
             a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-            int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, b_data, b_size);
+            int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_size, b_data, b_size);
 
             if (res < 0)
             {
@@ -165,8 +162,8 @@ struct LeastBaseImpl<A, B, false>
             }
             else
             {
-                memcpy(&c_data[c_offsets.back()], &b_data[i* b_size], b_size);
-                c_offsets.push_back(c_offsets.back() + b_size + 1); // ywq todo
+                memcpy(&c_data[c_offsets.back()], &b_data[0], b_size);
+                c_offsets.push_back(c_offsets.back() + b_size + 1);
             }
         }
     }
@@ -178,8 +175,7 @@ struct LeastBaseImpl<A, B, false>
         const std::string & b,
         std::string & c)
     {
-        int res = collator->compare(reinterpret_cast<const char *>(a.data()), a.size(), 
-                                    reinterpret_cast<const char *>(b.data()), b.size());
+        int res = collator->compare(reinterpret_cast<const char *>(a.data()), a.size(), reinterpret_cast<const char *>(b.data()), b.size());
         if (res < 0)
             c = a;
         else
@@ -192,9 +188,6 @@ struct LeastBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = ModDecimalInferer;
-
-    static const constexpr bool allow_string = false;
-
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -224,8 +217,6 @@ template <typename A, typename B>
 struct LeastSpecialImpl
 {
     using ResultType = std::make_signed_t<A>;
-    static const constexpr bool allow_string = false;
-
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)

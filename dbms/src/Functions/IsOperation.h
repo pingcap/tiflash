@@ -49,7 +49,15 @@ using GreatestBaseImpl_t = GreatestBaseImpl<A, B>;
 template <typename A, typename B>
 struct GreatestSpecialImpl;
 template <typename A, typename B>
-using GreatestImpl = std::conditional_t<!NumberTraits::LeastGreatestSpecialCase<A, B>, GreatestBaseImpl<A, B>, GreatestSpecialImpl<A, B>>;
+struct GreatestStringImpl;
+template <typename A, typename B>
+using GreatestImpl = std::conditional_t<
+    !NumberTraits::LeastGreatestSpecialCase<A, B>,
+    GreatestBaseImpl<A, B>,
+    GreatestSpecialImpl<A, B>>;
+
+template <typename A, typename B>
+using TiDBGreatestStringImpl = GreatestStringImpl<A, B>;
 
 template <typename A, typename B, bool existDecimal = IsDecimal<A> || IsDecimal<B>>
 struct LeastBaseImpl;
@@ -62,7 +70,7 @@ struct LeastStringImpl;
 template <typename A, typename B>
 using LeastImpl = std::conditional_t<
     !NumberTraits::LeastGreatestSpecialCase<A, B>,
-    LeastBaseImpl<A, B>, 
+    LeastBaseImpl<A, B>,
     LeastSpecialImpl<A, B>>;
 template <typename A, typename B>
 using TiDBLeastStringImpl = LeastStringImpl<A, B>;
@@ -84,8 +92,7 @@ struct IsOperation
     static constexpr bool div_floating = IsSameOperation<Op, DivideFloatingImpl_t>::value || IsSameOperation<Op, TiDBDivideFloatingImpl_t>::value;
     static constexpr bool div_int = IsSameOperation<Op, DivideIntegralImpl_t>::value || IsSameOperation<Op, DivideIntegralOrZeroImpl_t>::value;
     static constexpr bool least = IsSameOperation<Op, LeastBaseImpl_t>::value || IsSameOperation<Op, TiDBLeastStringImpl>::value;
-    static constexpr bool stringleast = IsSameOperation<Op, TiDBLeastStringImpl>::value;
-    static constexpr bool greatest = IsSameOperation<Op, GreatestBaseImpl_t>::value;
+    static constexpr bool greatest = IsSameOperation<Op, GreatestBaseImpl_t>::value || IsSameOperation<Op, TiDBGreatestStringImpl>::value;
 };
 
 } // namespace DB
