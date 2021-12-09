@@ -286,7 +286,6 @@ TEST(BlobStatsTest, testFeildOffsetWriteRead)
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 0);
 
-
         PageFieldSizes check_field_sizes;
         for (auto & [field_offset, crc] : record.entry.field_offsets)
         {

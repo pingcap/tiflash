@@ -10,7 +10,7 @@
 #include <mutex>
 
 // TBD : need add these into config
-#define BLOBSTORE_TEST_PATH "./BlobStore/"
+#define BLOBSTORE_TEST_PATH "./"
 #define BLOBSTORE_CACHED_FD_SIZE 100
 #define BLOBSTORE_SMAP_TYPE SpaceMap::SpaceMapType::SMAP64_RBTREE
 #define BLOBFILE_NAME_PRE "blobfile_"
