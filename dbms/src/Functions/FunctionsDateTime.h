@@ -2096,13 +2096,14 @@ public:
     }
 };
 
+template <bool convert_from_utc>
 class FunctionMyTimeZoneConvertByOffset : public IFunction
 {
     using FromFieldType = typename DataTypeMyDateTime::FieldType;
     using ToFieldType = typename DataTypeMyDateTime::FieldType;
 public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionMyTimeZoneConvertByOffset>(); };
-    static constexpr auto name = "ConvertTimeZoneByOffset";
+    static constexpr auto name = convert_from_utc ? "ConvertTimeZoneByOffsetFromUTC" : "ConvertTimeZoneByOffsetToUTC";
 
     String getName() const override
     {
@@ -2135,10 +2136,18 @@ public:
         return arguments[0].type;
     }
 
+<<<<<<< HEAD
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override {
         static const DateLUTImpl & UTC = DateLUT::instance("UTC");
         if (const ColumnVector<FromFieldType> *col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get())) {
+=======
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (const ColumnVector<FromFieldType> * col_from
+            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+        {
+>>>>>>> 773cc619a3 (Fix Issue #3374 for unix_timestamp corner case (#3612))
             auto col_to = ColumnVector<ToFieldType>::create();
             const typename ColumnVector<FromFieldType>::Container &vec_from = col_from->getData();
             typename ColumnVector<ToFieldType>::Container &vec_to = col_to->getData();
@@ -2155,7 +2164,10 @@ public:
             for (size_t i = 0; i < size; ++i) {
                 UInt64 result_time = vec_from[i] + offset;
                 // todo maybe affected by daytime saving, need double check
-                convertTimeZoneByOffset(vec_from[i], result_time, offset, UTC);
+                if constexpr (convert_from_utc)
+                    convertTimeZoneByOffset(vec_from[i], result_time, true, offset);
+                else
+                    convertTimeZoneByOffset(vec_from[i], result_time, false, offset);
                 vec_to[i] = result_time;
             }
 
