@@ -71,14 +71,13 @@ public:
     bool isMarkUsed(UInt64 offset, size_t length);
 
     /**
-     * Search a space that can fit in `size`
-     * SpaceMap will loop the range from start.
-     * After it found a range which can fit this `size`.
-     * It will decide if there needs to keep traverse to update `max_cap`.
+     * Search a span that can fit in `size`.
+     * If such span is found, it will also return a hint of the max capacity available
+     * in this SpaceMap.
      * 
-     * Return value is <insert_offset, max_cap>:
+     * return value is <insert_offset, max_cap>:
      *  insert_offset : start offset for the inserted space
-     *  max_cap : The largest available space this SpaceMap can hold. 
+     *  max_cap : A hint of the largest available space this SpaceMap can hold. 
      */
     virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
 
