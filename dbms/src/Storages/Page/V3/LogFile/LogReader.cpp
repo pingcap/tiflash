@@ -58,8 +58,8 @@ std::tuple<bool, String> LogReader::readRecord()
         static_assert(
             std::is_same_v<std::underlying_type_t<ParseErrorType>, UInt8>,
             "The underlying type of ParseErrorType should be UInt8");
-        const UInt8 record_type = readPhysicalRecord(&fragment, &drop_size);
-        switch (record_type)
+        const UInt8 record_type_or_error = readPhysicalRecord(&fragment, &drop_size);
+        switch (record_type_or_error)
         {
         case Format::RecordType::FullType:
         case Format::RecordType::RecyclableFullType:
@@ -126,7 +126,7 @@ std::tuple<bool, String> LogReader::readRecord()
         // For enum defined in ParseErrorType
         default:
         {
-            switch (record_type)
+            switch (record_type_or_error)
             {
             case ParseErrorType::BadHeader:
             {
@@ -216,7 +216,7 @@ std::tuple<bool, String> LogReader::readRecord()
                     record.clear();
                     return {false, std::move(record)};
                 }
-                if (record_type == ParseErrorType::BadRecordLen)
+                if (record_type_or_error == ParseErrorType::BadRecordLen)
                 {
                     reportCorruption(drop_size, "bad record length");
                 }
@@ -234,7 +234,7 @@ std::tuple<bool, String> LogReader::readRecord()
             }
             default:
             {
-                reportCorruption((fragment.size() + (in_fragmented_record ? record.size() : 0)), fmt::format("unknown record type {}", record_type));
+                reportCorruption((fragment.size() + (in_fragmented_record ? record.size() : 0)), fmt::format("unknown record type {}", record_type_or_error));
                 in_fragmented_record = false;
                 record.clear();
                 break;
