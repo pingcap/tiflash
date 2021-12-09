@@ -50,7 +50,7 @@ static void UnifiedLogFormatterBM(benchmark::State & state)
         formatter.format(msg, formatted_text);
     }
 }
-BENCHMARK(BMUnifiedLogFormatter)->Iterations(1000000);
+BENCHMARK(UnifiedLogFormatterBM)->Iterations(1000000);
 
 class UnifiedLogBM : public benchmark::Fixture
 {
