@@ -477,6 +477,8 @@ private:
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
 };
 
+using ContextPtr = std::shared_ptr<Context>;
+
 
 /// Puts an element into the map, erases it in the destructor.
 /// If the element already exists in the map, throws an exception containing provided message.

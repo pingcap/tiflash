@@ -57,7 +57,7 @@ public:
     ~MPPTask();
 
 private:
-    MPPTask(const mpp::TaskMeta & meta_, const Context & context_);
+    MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_);
 
     void runImpl();
 
@@ -75,7 +75,7 @@ private:
 
     tipb::DAGRequest dag_req;
 
-    Context context;
+    ContextPtr context;
     /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
     /// BlockIO contains some information stored in Context, so need deconstruct it before Context
     BlockIO io;
