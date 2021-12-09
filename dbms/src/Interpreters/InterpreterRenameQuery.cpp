@@ -11,22 +11,22 @@
 
 namespace DB
 {
-
-
 InterpreterRenameQuery::InterpreterRenameQuery(const ASTPtr & query_ptr_, Context & context_, const String executor_name_)
-    : query_ptr(query_ptr_), context(context_), executor_name(std::move(executor_name_))
+    : query_ptr(query_ptr_)
+    , context(context_)
+    , executor_name(std::move(executor_name_))
 {}
 
 
 struct RenameDescription
 {
     RenameDescription(const ASTRenameQuery::Element & elem, const String & current_database)
-        : from_database_name(elem.from.database.empty() ? current_database : elem.from.database),
-          from_table_name(elem.from.table),
-          to_database_name(elem.to.database.empty() ? current_database : elem.to.database),
-          to_table_name(elem.to.table),
-          tidb_display_database_name(elem.tidb_display.has_value() ? std::make_optional(elem.tidb_display->database) : std::nullopt),
-          tidb_display_table_name(elem.tidb_display.has_value() ? std::make_optional(elem.tidb_display->table) : std::nullopt)
+        : from_database_name(elem.from.database.empty() ? current_database : elem.from.database)
+        , from_table_name(elem.from.table)
+        , to_database_name(elem.to.database.empty() ? current_database : elem.to.database)
+        , to_table_name(elem.to.table)
+        , tidb_display_database_name(elem.tidb_display.has_value() ? std::make_optional(elem.tidb_display->database) : std::nullopt)
+        , tidb_display_table_name(elem.tidb_display.has_value() ? std::make_optional(elem.tidb_display->table) : std::nullopt)
     {
         if (tidb_display_database_name.has_value() && tidb_display_database_name->empty())
             throw Exception("Display database name is empty, should not happed. " + toString());
@@ -54,11 +54,6 @@ BlockIO InterpreterRenameQuery::execute()
 {
     ASTRenameQuery & rename = typeid_cast<ASTRenameQuery &>(*query_ptr);
 
-    if (!rename.cluster.empty())
-    {
-        throw Exception("Should not run into `executeDDLQueryOnCluster`");
-    }
-
     String current_database = context.getCurrentDatabase();
 
     /** In case of error while renaming, it is possible that only part of tables was renamed
@@ -75,7 +70,8 @@ BlockIO InterpreterRenameQuery::execute()
         String table_name;
 
         UniqueTableName(const String & database_name_, const String & table_name_) //
-            : database_name(database_name_), table_name(table_name_)
+            : database_name(database_name_)
+            , table_name(table_name_)
         {}
 
         bool operator<(const UniqueTableName & rhs) const
@@ -100,14 +96,16 @@ BlockIO InterpreterRenameQuery::execute()
 
         if (!table_guards.count(from))
             table_guards.emplace(from,
-                context.getDDLGuard(from.database_name,
-                    from.table_name,
-                    "Table " + from.database_name + "." + from.table_name + " is being renamed right now"));
+                                 context.getDDLGuard(from.database_name,
+                                                     from.table_name,
+                                                     "Table " + from.database_name + "." + from.table_name + " is being renamed right now"));
 
         if (!table_guards.count(to))
             table_guards.emplace(to,
-                context.getDDLGuard(
-                    to.database_name, to.table_name, "Some table right now is being renamed to " + to.database_name + "." + to.table_name));
+                                 context.getDDLGuard(
+                                     to.database_name,
+                                     to.table_name,
+                                     "Some table right now is being renamed to " + to.database_name + "." + to.table_name));
 
         // Don't need any lock on "tidb_display" names, because we don't identify any table by that name in TiFlash
     }
@@ -147,11 +145,11 @@ BlockIO InterpreterRenameQuery::execute()
                 const String & display_db = elem.hasTidbDisplayName() ? *elem.tidb_display_database_name : elem.to_database_name;
                 const String & display_tbl = elem.hasTidbDisplayName() ? *elem.tidb_display_table_name : elem.to_table_name;
                 from_database_concrete->renameTable(context,
-                    elem.from_table_name,
-                    *context.getDatabase(elem.to_database_name),
-                    elem.to_table_name,
-                    display_db,
-                    display_tbl);
+                                                    elem.from_table_name,
+                                                    *context.getDatabase(elem.to_database_name),
+                                                    elem.to_table_name,
+                                                    display_db,
+                                                    display_tbl);
             }
             else
                 throw Exception(
