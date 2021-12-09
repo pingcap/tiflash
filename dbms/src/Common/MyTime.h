@@ -163,7 +163,7 @@ Field parseMyDateTime(const String & str, int8_t fsp = 6);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 
-void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, bool throw_exception = false);
+void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, bool from_utc, Int64 offset, bool throw_exception = false);
 
 MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to);
 
@@ -178,8 +178,7 @@ size_t maxFormattedDateTimeStringLength(const String & format);
 /// For time earlier than 1970-01-01 00:00:00 UTC, return 0, aligned with mysql and tidb
 inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
 {
-    time_t res = time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
-    return std::max<time_t>(res, 0);
+    return time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
 }
 
 bool isPunctuation(char c);

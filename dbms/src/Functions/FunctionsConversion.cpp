@@ -139,7 +139,7 @@ private:
         if (timezone_.is_name_based)
             convertTimeZone(packed, ret, *timezone_.timezone, lut_utc);
         else
-            convertTimeZoneByOffset(packed, ret, -timezone_.timezone_offset);
+            convertTimeZoneByOffset(packed, ret, false, timezone_.timezone_offset);
 
         try
         {
