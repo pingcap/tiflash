@@ -53,7 +53,7 @@ std::tuple<bool, String> LogReader::readRecord()
     std::string_view fragment;
     while (true)
     {
-        uint64_t physical_record_offset = end_of_buffer_offset - buffer.size();
+        UInt64 physical_record_offset = end_of_buffer_offset - buffer.size();
         size_t drop_size = 0;
         static_assert(
             std::is_same_v<std::underlying_type_t<ParseErrorType>, UInt8>,
