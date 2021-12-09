@@ -60,9 +60,12 @@ struct LeastSpecialImpl;
 template <typename A, typename B>
 struct LeastStringImpl;
 template <typename A, typename B>
-using LeastImpl = std::conditional_t<!NumberTraits::LeastGreatestSpecialCase<A, B>, LeastBaseImpl<A, B>, LeastSpecialImpl<A, B>>;
+using LeastImpl = std::conditional_t<
+    !NumberTraits::LeastGreatestSpecialCase<A, B>,
+    LeastBaseImpl<A, B>, 
+    LeastSpecialImpl<A, B>>;
 template <typename A, typename B>
-using TiDBLeastImpl = LeastStringImpl<A, B>;
+using TiDBLeastStringImpl = LeastStringImpl<A, B>;
 
 template <template <typename, typename> typename Op1, template <typename, typename> typename Op2>
 struct IsSameOperation
@@ -80,7 +83,8 @@ struct IsOperation
     static constexpr bool modulo = IsSameOperation<Op, ModuloImpl_t>::value;
     static constexpr bool div_floating = IsSameOperation<Op, DivideFloatingImpl_t>::value || IsSameOperation<Op, TiDBDivideFloatingImpl_t>::value;
     static constexpr bool div_int = IsSameOperation<Op, DivideIntegralImpl_t>::value || IsSameOperation<Op, DivideIntegralOrZeroImpl_t>::value;
-    static constexpr bool least = IsSameOperation<Op, LeastBaseImpl_t>::value;
+    static constexpr bool least = IsSameOperation<Op, LeastBaseImpl_t>::value || IsSameOperation<Op, TiDBLeastStringImpl>::value;
+    static constexpr bool stringleast = IsSameOperation<Op, TiDBLeastStringImpl>::value;
     static constexpr bool greatest = IsSameOperation<Op, GreatestBaseImpl_t>::value;
 };
 

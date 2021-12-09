@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <ext/range.h>
 #include <iostream>
+#include <type_traits>
 
 #include "Columns/IColumn.h"
 #include "Core/ColumnNumbers.h"
@@ -595,7 +596,6 @@ struct StringOperationWithCollatorImpl
     {
         size_t size = a_offsets.size();
         c_data.reserve(std::max(a_data.size(), b_data.size()));
-        c_offsets.resize(size);
 
         for (size_t i = 0; i < size; ++i)
         {
@@ -607,56 +607,17 @@ struct StringOperationWithCollatorImpl
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
-        ColumnString::Offset b_n,
+        const ColumnString::Offset  & b_n,
         const TiDB::TiDBCollatorPtr & collator,
         ColumnString::Chars_t & c_data,
         ColumnString::Offsets & c_offsets)
     {
         size_t size = a_offsets.size();
         c_data.reserve(std::max(a_data.size(), b_data.size()));
-        c_offsets.resize(size);
-        size_t c_offset_idx = 0;
-        size_t c_offset_num = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            size_t a_size;
-            if (i == 0)
-            {
-                a_size = a_offsets[0] - 1;
-                int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_n);
-
-                if (res < 0)
-                {
-                    memcpy(&c_data[0], &a_data[0], a_size);
-                    c_offset_num += a_size;
-                    c_offsets[c_offset_idx++] = c_offset_num + 1;
-                }
-                else
-                {
-                    memcpy(&c_data[0], &b_data[0], b_n);
-                    c_offset_num += b_n;
-                    c_offsets[c_offset_idx++] = c_offset_num + 1;
-                }
-            }
-            else
-            {
-                a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-                int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, reinterpret_cast<const char *>(&b_data[i * b_n]), b_n);
-
-                if (res < 0)
-                {
-                    memcpy(&c_data[c_offset_idx], &a_data[a_offsets[i - 1]], a_size);
-                    c_offset_num += a_size;
-                    c_offsets[c_offset_idx++] = c_offset_num + 1;
-                }
-                else
-                {
-                    memcpy(&c_data[c_offset_idx], &b_data[i * b_n], b_n);
-                    c_offset_num += b_n;
-                    c_offsets[c_offset_idx++] = c_offset_num + 1;
-                }
-            }
-        }
+            Op::process(collator, a_data, a_offsets, b_data, b_n, c_data, c_offsets, i);
+        }   
     }
 
     static void NO_INLINE string_vector_constant(
@@ -669,51 +630,9 @@ struct StringOperationWithCollatorImpl
     {
         size_t size = a_offsets.size();
         c_data.reserve(std::max(a_data.size(), b.size() * size));
-        c_offsets.resize(size);
-        size_t c_offset_idx = 0;
-        size_t c_offset_num = 0;
-        ColumnString::Offset b_size = b.size();
-        const char * b_data = reinterpret_cast<const char *>(b.data());
         for (size_t i = 0; i < size; ++i)
         {
-            /// Trailing zero byte of the smaller string is included in the comparison. ? ywq don't know what it is..
-            size_t a_size;
-            if (i == 0)
-            {
-                a_size = a_offsets[0] - 1;
-                int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_offsets[0] - 1, b_data, b_size);
-
-                if (res < 0)
-                {
-                    memcpy(&c_data[0], &a_data[0], a_size);
-                    c_offset_num += a_size;
-                    c_offsets[c_offset_idx++] = c_offset_num + 1;
-                }
-                else
-                {
-                    memcpy(&c_data[0], &b_data[0], b_size);
-                    c_offset_num += b_size;
-                    c_offsets[c_offset_idx++] = c_offset_num + 1;
-                }
-            }
-            else
-            {
-                a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-                int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, b_data, b_size);
-
-                if (res < 0)
-                {
-                    memcpy(&c_data[c_offset_idx], &a_data[a_offsets[i - 1]], a_size);
-                    c_offset_num += a_size;
-                    c_offsets[c_offset_idx++] = c_offset_num + 1;
-                }
-                else
-                {
-                    memcpy(&c_data[c_offset_idx], &b_data[0], b_size);
-                    c_offset_num += b_size;
-                    c_offsets[c_offset_idx++] = c_offset_num + 1;
-                }
-            }
+            Op::process(collator, a_data, a_offsets, b, c_data, c_offsets, i);
         }
     }
 
@@ -730,7 +649,7 @@ struct StringOperationWithCollatorImpl
     }
 
 
-    // ywq bug prone
+    // todo .....
     static void NO_INLINE fixed_string_vector_fixed_string_vector(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
@@ -765,6 +684,7 @@ struct StringOperationWithCollatorImpl
         }
     }
 
+    // ywq todo
     static void NO_INLINE fixed_string_vector_constant(
         const ColumnString::Chars_t & a_data,
         ColumnString::Offset a_n,
@@ -827,15 +747,7 @@ struct StringOperationWithCollatorImpl
         const TiDB::TiDBCollatorPtr & collator,
         std::string & c)
     {
-        size_t a_n = a.size();
-        size_t b_n = b.size();
-
-        int res = collator->compare(reinterpret_cast<const char *>(a.data()), a_n, reinterpret_cast<const char *>(b.data()), b_n);
-
-        if (res < 0)
-            c = a;
-        else
-            c = b;
+        Op::process(collator, a, b, c);
     }
 };
 
@@ -1715,10 +1627,13 @@ public:
                           || (std::is_same_v<DataTypeFixedString, RightDataType> || std::is_same_v<DataTypeString, RightDataType>)
                           || (std::is_same_v<DataTypeFixedString, ResultDataType> || std::is_same_v<DataTypeString, ResultDataType>))
             {
-                if constexpr (!(IsOperation<Op>::least))
+                if constexpr (!(IsOperation<Op>::least))  // block compile for other operation
                     return false;
                 else
+                {
                     return executeString(block, result, arguments);
+                }
+                    
             }
             else
                 return executeNumeric<LeftDataType, RightDataType, ResultDataType>(block, result, arguments, left, is_left_nullable, right, is_right_nullable, result_type);
