@@ -438,5 +438,48 @@ try
 }
 CATCH
 
+TEST_F(TestMyTime, ConvertTimeZone)
+try
+{
+    const auto & time_zone_utc = DateLUT::instance("UTC");
+    const auto & time_zone_sh = DateLUT::instance("Asia/Shanghai");
+    std::vector<String> date_time_vec{
+        "1970-01-01 00:00:01.00000",
+        "1970-01-01 00:00:00.00000",
+        "1969-12-31 01:00:00.00000",
+        "1970-01-01 08:00:01.00000"};
+    std::vector<UInt64> ref_value_vec{
+        MyDateTime(1970, 1, 1, 8, 0, 1, 0).toPackedUInt(),
+        0ULL,
+        0ULL,
+        0ULL,
+        0ULL,
+        0ULL,
+        MyDateTime(1970, 1, 1, 16, 0, 1, 0).toPackedUInt(),
+        MyDateTime(1970, 1, 1, 0, 0, 1, 0).toPackedUInt()};
+
+    Int32 i = 0;
+    for (const String & datetime : date_time_vec)
+    {
+        ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
+        UInt64 origin_time_stamp;
+        tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
+        UInt64 converted_time = origin_time_stamp;
+        {
+            convertTimeZone(origin_time_stamp, converted_time, time_zone_utc, time_zone_sh);
+            EXPECT_EQ(converted_time, ref_value_vec[i * 2]) << datetime;
+
+            convertTimeZone(origin_time_stamp, converted_time, time_zone_sh, time_zone_utc);
+            EXPECT_EQ(converted_time, ref_value_vec[i * 2 + 1]) << datetime;
+        }
+        i++;
+    }
+}
+catch (Exception & e)
+{
+    std::cerr << e.displayText() << std::endl;
+    GTEST_FAIL();
+}
+
 } // namespace tests
 } // namespace DB

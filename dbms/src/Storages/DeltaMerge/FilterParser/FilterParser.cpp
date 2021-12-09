@@ -172,7 +172,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     if (timezone_info.is_name_based)
                         convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
                     else if (timezone_info.timezone_offset != 0)
-                        convertTimeZoneByOffset(from_time, result_time, -timezone_info.timezone_offset, time_zone_utc);
+                        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
                     value = Field(result_time);
                 }
             }
