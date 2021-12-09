@@ -600,7 +600,7 @@ struct StringOperationWithCollatorImpl
     
         for (size_t i = 0; i < size; ++i)
         {
-            Op::process(collator, a_data, a_offsets, b_data, b_offsets, c_data, c_offsets);
+            Op::process(collator, a_data, a_offsets, b_data, b_offsets, c_data, c_offsets, i);
         }
     }
 
