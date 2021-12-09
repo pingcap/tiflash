@@ -60,7 +60,8 @@ void registerFunctionsDateTime(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionMyTimeZoneConverter<true>>();
     factory.registerFunction<FunctionMyTimeZoneConverter<false>>();
-    factory.registerFunction<FunctionMyTimeZoneConvertByOffset>();
+    factory.registerFunction<FunctionMyTimeZoneConvertByOffset<true>>();
+    factory.registerFunction<FunctionMyTimeZoneConvertByOffset<false>>();
     factory.registerFunction<FunctionToYear>();
     factory.registerFunction<FunctionToQuarter>();
     factory.registerFunction<FunctionToMonth>();
