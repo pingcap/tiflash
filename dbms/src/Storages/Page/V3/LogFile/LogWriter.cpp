@@ -1,6 +1,5 @@
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
-#include <Common/RedactHelpers.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -13,7 +12,7 @@ namespace DB::PS::V3
 {
 LogWriter::LogWriter(
     std::unique_ptr<WriteBufferFromFileBase> && dest_,
-    UInt64 log_number_,
+    Format::LogNumberType log_number_,
     bool recycle_log_files_,
     bool manual_flush_)
     : dest(std::move(dest_))
@@ -97,12 +96,12 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
 
 void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length)
 {
-    assert(length <= 0xFFFF); // The length of payload must fit in two bytes
+    assert(length <= 0xFFFF); // The length of payload must fit in two bytes (less than `BLOCK_SIZE`)
 
     // Create a header buffer without the checksum field
-    static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::ChecksumFieldSize, "Header size must be greater than the checksum size");
+    static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::CHECKSUM_FIELD_SIZE, "Header size must be greater than the checksum size");
     static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::HEADER_SIZE, "Ensure the min buffer size for physical record");
-    constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - Format::ChecksumFieldSize;
+    constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - Format::CHECKSUM_FIELD_SIZE;
     char buf[HEADER_BUFF_SIZE];
     WriteBuffer header_buff(buf, HEADER_BUFF_SIZE);
 
@@ -110,10 +109,12 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     writeIntBinary(static_cast<UInt16>(length), header_buff);
     writeChar(static_cast<char>(type), header_buff);
 
+    // The checksum range:
+    // Header: [type, payload-size]
+    // RecyclabelHeader: [type, log_number, payload-size]
     Format::ChecksumClass digest;
     char ch_type = static_cast<char>(type);
-    digest.update(&ch_type, 1);
-
+    digest.update(&ch_type, sizeof(char));
     size_t header_size;
     if (type < Format::RecyclableFullType)
     {
@@ -127,13 +128,12 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
         assert(block_offset + Format::RECYCLABLE_HEADER_SIZE + length <= Format::BLOCK_SIZE);
         header_size = Format::RECYCLABLE_HEADER_SIZE;
 
-        // Only encode low 32-bits of the 64-bit log number.  This means
-        // we will fail to detect an old record if we recycled a log from
+        // We will fail to detect an old record if we recycled a log from
         // ~4 billion logs ago, but that is effectively impossible, and
         // even if it were we'dbe far more likely to see a false positive
         // on the checksum.
-        writeIntBinary(static_cast<UInt32>(log_number), header_buff);
-        digest.update(header_buff.position() - sizeof(UInt32), sizeof(UInt32));
+        writeIntBinary(log_number, header_buff);
+        digest.update(header_buff.position() - sizeof(Format::LogNumberType), sizeof(Format::LogNumberType));
     }
 
     // Compute the checksum of the record type and the payload.

@@ -44,9 +44,9 @@ namespace DB::PS::V3::tests
 {
 // Construct a string of the specified length made out of the supplied
 // partial string.
-static std::string BigString(const std::string & partial_string, size_t n)
+static String repeatedString(const String & partial_string, size_t n)
 {
-    std::string result;
+    String result;
     while (result.size() < n)
     {
         result.append(partial_string);
@@ -64,9 +64,9 @@ static UInt32 getSkewedNum(int max_log, std::mt19937 & rd)
 }
 
 // Return a skewed potentially long string
-static String RandomSkewedString(int i, std::mt19937 & rd)
+static String randomSkewedString(int i, std::mt19937 & rd)
 {
-    return BigString(DB::toString(i), getSkewedNum(17, rd));
+    return repeatedString(DB::toString(i), getSkewedNum(17, rd));
 }
 
 class StringSink : public DB::WriteBufferFromFileBase
@@ -279,7 +279,9 @@ public:
         // Compute crc of type/len/data
         int header_size = recyclable ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
         Digest::CRC32 digest;
-        digest.update(&reader_contents[header_offset + 6], header_size - 6 + len);
+        digest.update(
+            &reader_contents[header_offset + Format::CHECKSUM_START_OFFSET],
+            header_size - Format::CHECKSUM_START_OFFSET + len);
         auto checksum = digest.checksum();
         WriteBuffer buff(&reader_contents[header_offset], sizeof(checksum));
         writeIntBinary(checksum, buff);
@@ -332,7 +334,7 @@ TEST_P(LogFileRWTest, ReadWrite)
 
 TEST_P(LogFileRWTest, BlockBoundary)
 {
-    const auto big_str = BigString("A", PS::V3::Format::BLOCK_SIZE - Format::HEADER_SIZE - 4);
+    const auto big_str = repeatedString("A", PS::V3::Format::BLOCK_SIZE - Format::HEADER_SIZE - 4);
     write(big_str);
     write("small");
     ASSERT_EQ(big_str, read());
@@ -358,11 +360,11 @@ TEST_P(LogFileRWTest, ManyBlocks)
 TEST_P(LogFileRWTest, Fragmentation)
 {
     write("small");
-    write(BigString("medium", 50000));
-    write(BigString("large", 100000));
+    write(repeatedString("medium", 50000));
+    write(repeatedString("large", 100000));
     ASSERT_EQ("small", read());
-    ASSERT_EQ(BigString("medium", 50000), read());
-    ASSERT_EQ(BigString("large", 100000), read());
+    ASSERT_EQ(repeatedString("medium", 50000), read());
+    ASSERT_EQ(repeatedString("large", 100000), read());
     ASSERT_EQ("EOF", read());
 }
 
@@ -371,11 +373,11 @@ TEST_P(LogFileRWTest, MarginalTrailer)
     // Make a trailer that is exactly the same length as an empty record.
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
     const int n = PS::V3::Format::BLOCK_SIZE - 2 * header_size;
-    write(BigString("foo", n));
+    write(repeatedString("foo", n));
     ASSERT_EQ(static_cast<size_t>(PS::V3::Format::BLOCK_SIZE - header_size), writtenBytes());
     write("");
     write("bar");
-    ASSERT_EQ(BigString("foo", n), read());
+    ASSERT_EQ(repeatedString("foo", n), read());
     ASSERT_EQ("", read());
     ASSERT_EQ("bar", read());
     ASSERT_EQ("EOF", read());
@@ -386,10 +388,10 @@ TEST_P(LogFileRWTest, MarginalTrailer2)
     // Make a trailer that is exactly the same length as an empty record.
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
     const int n = PS::V3::Format::BLOCK_SIZE - 2 * header_size;
-    write(BigString("foo", n));
+    write(repeatedString("foo", n));
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size), writtenBytes());
     write("bar");
-    ASSERT_EQ(BigString("foo", n), read());
+    ASSERT_EQ(repeatedString("foo", n), read());
     ASSERT_EQ("bar", read());
     ASSERT_EQ("EOF", read());
     ASSERT_EQ(0, droppedBytes());
@@ -400,11 +402,11 @@ TEST_P(LogFileRWTest, ShortTrailer)
 {
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
     const int n = PS::V3::Format::BLOCK_SIZE - 2 * header_size + 4;
-    write(BigString("foo", n));
+    write(repeatedString("foo", n));
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size + 4), writtenBytes());
     write("");
     write("bar");
-    ASSERT_EQ(BigString("foo", n), read());
+    ASSERT_EQ(repeatedString("foo", n), read());
     ASSERT_EQ("", read());
     ASSERT_EQ("bar", read());
     ASSERT_EQ("EOF", read());
@@ -414,9 +416,9 @@ TEST_P(LogFileRWTest, AlignedEOF)
 {
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
     const int n = PS::V3::Format::BLOCK_SIZE - 2 * header_size + 4;
-    write(BigString("foo", n));
+    write(repeatedString("foo", n));
     ASSERT_EQ((unsigned int)(PS::V3::Format::BLOCK_SIZE - header_size + 4), writtenBytes());
-    ASSERT_EQ(BigString("foo", n), read());
+    ASSERT_EQ(repeatedString("foo", n), read());
     ASSERT_EQ("EOF", read());
 }
 
@@ -427,12 +429,12 @@ TEST_P(LogFileRWTest, RandomRead)
     std::mt19937 write_rd(rand_seed);
     for (int i = 0; i < n; i++)
     {
-        write(RandomSkewedString(i, write_rd));
+        write(randomSkewedString(i, write_rd));
     }
     std::mt19937 read_rd(rand_seed);
     for (int i = 0; i < n; i++)
     {
-        ASSERT_EQ(RandomSkewedString(i, read_rd), read());
+        ASSERT_EQ(randomSkewedString(i, read_rd), read());
     }
     ASSERT_EQ("EOF", read());
 }
@@ -451,8 +453,8 @@ TEST_P(LogFileRWTest, ReadError)
 TEST_P(LogFileRWTest, BadRecordType)
 {
     write("foo");
-    // Type is stored in header[6], break the type
-    incrementByte(6, 100);
+    // Type is stored in header[`CHECKSUM_START_OFFSET`], break the type
+    incrementByte(Format::CHECKSUM_START_OFFSET, 100);
     // Meeting a unknown type, consider its header size as `Format::HEADER_SIZE`
     fixChecksum(0, 3, /*recyclable*/ false);
     // Can not successfully read the BadRecord, and get dropped bytes, message reported
@@ -499,7 +501,7 @@ TEST_P(LogFileRWTest, BadLength)
     }
     int header_size = recyclable_log ? PS::V3::Format::RECYCLABLE_HEADER_SIZE : PS::V3::Format::HEADER_SIZE;
     const int payload_size = PS::V3::Format::BLOCK_SIZE - header_size;
-    write(BigString("bar", payload_size));
+    write(repeatedString("bar", payload_size));
     write("foo");
     // Least significant size byte is stored in header[4].
     incrementByte(4, 1);
@@ -568,8 +570,8 @@ TEST_P(LogFileRWTest, ChecksumMismatch)
 TEST_P(LogFileRWTest, UnexpectedMiddleType)
 {
     write("foo");
-    setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableMiddleType : Format::MiddleType));
-    fixChecksum(0, 3, !!recyclable_log);
+    setByte(Format::CHECKSUM_START_OFFSET, static_cast<char>(recyclable_log ? Format::RecyclableMiddleType : Format::MiddleType));
+    fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("missing start"));
@@ -578,7 +580,7 @@ TEST_P(LogFileRWTest, UnexpectedMiddleType)
 TEST_P(LogFileRWTest, UnexpectedLastType)
 {
     write("foo");
-    setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableLastType : Format::LastType));
+    setByte(Format::CHECKSUM_START_OFFSET, static_cast<char>(recyclable_log ? Format::RecyclableLastType : Format::LastType));
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
@@ -589,7 +591,7 @@ TEST_P(LogFileRWTest, UnexpectedFullType)
 {
     write("foo");
     write("bar");
-    setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
+    setByte(Format::CHECKSUM_START_OFFSET, static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
     fixChecksum(0, 3, recyclable_log);
     ASSERT_EQ("bar", read());
     ASSERT_EQ("EOF", read());
@@ -600,10 +602,10 @@ TEST_P(LogFileRWTest, UnexpectedFullType)
 TEST_P(LogFileRWTest, UnexpectedFirstType)
 {
     write("foo");
-    write(BigString("bar", 100000));
-    setByte(6, static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
+    write(repeatedString("bar", 100000));
+    setByte(Format::CHECKSUM_START_OFFSET, static_cast<char>(recyclable_log ? Format::RecyclableFirstType : Format::FirstType));
     fixChecksum(0, 3, recyclable_log);
-    ASSERT_EQ(BigString("bar", 100000), read());
+    ASSERT_EQ(repeatedString("bar", 100000), read());
     ASSERT_EQ("EOF", read());
     ASSERT_EQ(3, droppedBytes());
     ASSERT_EQ("OK", matchError("partial record without end"));
@@ -611,7 +613,7 @@ TEST_P(LogFileRWTest, UnexpectedFirstType)
 
 TEST_P(LogFileRWTest, MissingLastIsIgnored)
 {
-    write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
+    write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
     shrinkSize(14);
     ASSERT_EQ("EOF", read());
@@ -628,7 +630,7 @@ TEST_P(LogFileRWTest, MissingLastIsNotIgnored)
         return;
     }
     resetReader(WALRecoveryMode::AbsoluteConsistency);
-    write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
+    write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
     shrinkSize(14);
     ASSERT_EQ("EOF", read());
@@ -638,7 +640,7 @@ TEST_P(LogFileRWTest, MissingLastIsNotIgnored)
 
 TEST_P(LogFileRWTest, PartialLastIsIgnored)
 {
-    write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
+    write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     // Cause a bad record length in the LAST block.
     shrinkSize(1);
     ASSERT_EQ("EOF", read());
@@ -655,7 +657,7 @@ TEST_P(LogFileRWTest, PartialLastIsNotIgnored)
         return;
     }
     resetReader(WALRecoveryMode::AbsoluteConsistency);
-    write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
+    write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     // Cause a bad record length in the LAST block.
     shrinkSize(1);
     ASSERT_EQ("EOF", read());
@@ -671,8 +673,8 @@ TEST_P(LogFileRWTest, ErrorJoinsRecords)
     // first(R1),last(R2) to get joined and returned as a valid record.
 
     // write records that span two blocks
-    write(BigString("foo", PS::V3::Format::BLOCK_SIZE));
-    write(BigString("bar", PS::V3::Format::BLOCK_SIZE));
+    write(repeatedString("foo", PS::V3::Format::BLOCK_SIZE));
+    write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     write("correct");
 
     // Wipe the middle block
@@ -788,7 +790,7 @@ TEST_P(LogFileRWTest, RecycleWithSameBoundaryLogNum)
     // Overwrite some record with same log file number
     std::unique_ptr<WriteBufferFromFileBase> file_writer = std::make_unique<OverwritingStringSink>(getReaderContents());
     std::unique_ptr<LogWriter> recycle_writer = std::make_unique<LogWriter>(std::move(file_writer), /*log_num*/ log_file_num, /*recycle_log*/ recyclable_log);
-    String text_to_write = BigString("A", boundary - PS::V3::Format::RECYCLABLE_HEADER_SIZE);
+    String text_to_write = repeatedString("A", boundary - PS::V3::Format::RECYCLABLE_HEADER_SIZE);
     ReadBufferFromString foo(text_to_write);
     recycle_writer->addRecord(foo, text_to_write.size());
 

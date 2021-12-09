@@ -1,7 +1,6 @@
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/RedactHelpers.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
@@ -22,15 +21,15 @@ LogReader::LogReader(
     std::unique_ptr<ReadBufferFromFileBase> && file_,
     Reporter * reporter_,
     bool verify_checksum_,
-    uint64_t log_num_,
+    UInt32 log_num_,
     WALRecoveryMode recovery_mode_,
     Poco::Logger * log_)
     : verify_checksum(verify_checksum_)
     , recycled(false)
     , eof(false)
     , read_error(false)
-    , eof_offset(0)
     , recovery_mode(recovery_mode_)
+    , eof_offset(0)
     , file(std::move(file_))
     , buffer(file->buffer().begin(), file->buffer().size())
     , reporter(reporter_)
@@ -49,7 +48,7 @@ std::tuple<bool, String> LogReader::readRecord()
     bool in_fragmented_record = false;
     // Record offset of the logical record that we're reading
     // 0 is a dummy value to make compilers happy
-    uint64_t prospective_record_offset = 0;
+    UInt64 prospective_record_offset = 0;
 
     std::string_view fragment;
     while (true)
@@ -57,9 +56,9 @@ std::tuple<bool, String> LogReader::readRecord()
         uint64_t physical_record_offset = end_of_buffer_offset - buffer.size();
         size_t drop_size = 0;
         static_assert(
-            std::is_same_v<std::underlying_type_t<ParseErrorType>, uint8_t>,
-            "The underlying type of ParseErrorType should be uint8_t");
-        const uint8_t record_type = readPhysicalRecord(&fragment, &drop_size);
+            std::is_same_v<std::underlying_type_t<ParseErrorType>, UInt8>,
+            "The underlying type of ParseErrorType should be UInt8");
+        const UInt8 record_type = readPhysicalRecord(&fragment, &drop_size);
         switch (record_type)
         {
         case Format::RecordType::FullType:
@@ -247,7 +246,7 @@ std::tuple<bool, String> LogReader::readRecord()
     return {false, std::move(record)};
 }
 
-uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_size)
+UInt8 LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_size)
 {
     while (true)
     {
@@ -256,20 +255,20 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
         {
             // the default value of r is meaningless because ReadMore will overwrite it if it
             // returns false; in case it returns true, the return value will not be used anyway.
-            if (uint8_t err = readMore(drop_size); err != 0)
+            if (UInt8 err = readMore(drop_size); err != 0)
                 return err;
             continue;
         }
 
         // Parse the header
         const char * header = buffer.data();
-        uint32_t expected_checksum;
-        uint16_t length = 0;
-        char type;
+        UInt32 expected_checksum;
+        UInt16 length = 0;
+        UInt8 type;
         readIntBinary(expected_checksum, *file);
         readIntBinary(length, *file);
         readChar(type, *file);
-        int header_size = Format::HEADER_SIZE;
+        size_t header_size = Format::HEADER_SIZE;
         if (type >= Format::RecyclableFullType && type <= Format::RecyclableLastType)
         {
             if (end_of_buffer_offset - buffer.size() == 0)
@@ -280,11 +279,11 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
             // We need enough for the larger header
             if (buffer.size() < static_cast<size_t>(Format::RECYCLABLE_HEADER_SIZE))
             {
-                if (uint8_t err = readMore(drop_size); err != 0)
+                if (UInt8 err = readMore(drop_size); err != 0)
                     return err;
                 continue;
             }
-            uint32_t log_num = 0;
+            Format::LogNumberType log_num = 0;
             readIntBinary(log_num, *file);
             if (log_num != log_number)
             {
@@ -292,9 +291,9 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
             }
         }
 
-        if (header_size + UInt32(length) > buffer.size())
+        if (header_size + length > buffer.size())
         {
-            assert(buffer.size() >= static_cast<size_t>(header_size));
+            assert(buffer.size() >= header_size);
             *drop_size = buffer.size();
             buffer.remove_prefix(buffer.size());
             // If the end of the read has been reached without seeing
@@ -318,8 +317,11 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
         if (verify_checksum)
         {
             Format::ChecksumClass digest;
-            digest.update(header + 6, length + header_size - 6);
-            if (uint32_t actual_checksum = digest.checksum(); actual_checksum != expected_checksum)
+
+            digest.update(
+                header + Format::CHECKSUM_START_OFFSET,
+                length + header_size - Format::CHECKSUM_START_OFFSET);
+            if (Format::ChecksumType actual_checksum = digest.checksum(); actual_checksum != expected_checksum)
             {
                 // Drop the rest of the buffer since "length" itself may have
                 // been corrupted and if we trust it, we could find some
@@ -339,7 +341,7 @@ uint8_t LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_s
     }
 }
 
-uint8_t LogReader::readMore(size_t * drop_size)
+UInt8 LogReader::readMore(size_t * drop_size)
 {
     static_assert(ParseErrorType::MeetEOF != 0 && ParseErrorType::BadHeader != 0);
 

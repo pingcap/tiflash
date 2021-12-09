@@ -56,7 +56,11 @@ namespace PS::V3
 class LogWriter final
 {
 public:
-    LogWriter(std::unique_ptr<WriteBufferFromFileBase> && dest_, UInt64 log_number_, bool recycle_log_files_, bool manual_flush_ = false);
+    LogWriter(
+        std::unique_ptr<WriteBufferFromFileBase> && dest_,
+        Format::LogNumberType log_number_,
+        bool recycle_log_files_,
+        bool manual_flush_ = false);
 
     LogWriter(const LogWriter &) = delete;
     LogWriter & operator=(const LogWriter &) = delete;
@@ -69,7 +73,7 @@ public:
 
     void close();
 
-    UInt64 logNumber() const { return log_number; }
+    Format::LogNumberType logNumber() const { return log_number; }
 
 private:
     void emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length);
@@ -77,7 +81,7 @@ private:
 private:
     std::unique_ptr<WriteBufferFromFileBase> dest;
     size_t block_offset; // Current offset in block
-    UInt64 log_number;
+    Format::LogNumberType log_number;
     bool recycle_log_files;
     // If true, it does not flush after each write. Instead it relies on the upper
     // layer to manually does the flush by calling ::flush()

@@ -32,7 +32,7 @@ public:
         std::unique_ptr<ReadBufferFromFileBase> && file_,
         Reporter * reporter_,
         bool verify_checksum_,
-        uint64_t log_num_,
+        Format::LogNumberType log_num_,
         WALRecoveryMode recovery_mode_,
         Poco::Logger * log_);
 
@@ -55,7 +55,7 @@ public:
 
     bool isEOF() const { return eof; }
 
-    UInt64 getLogNumber() const { return log_number; }
+    Format::LogNumberType getLogNumber() const { return log_number; }
 
 protected:
     // Reports dropped bytes to the reporter.
@@ -65,7 +65,7 @@ protected:
 
 private:
     // Extend record types with the following special values
-    enum ParseErrorType : uint8_t
+    enum ParseErrorType : UInt8
     {
         MeetEOF = Format::MaxRecordType + 1,
         // Returned whenever we find an invalid physical record.
@@ -83,14 +83,14 @@ private:
         BadRecordChecksum = Format::MaxRecordType + 6,
     };
 
-    uint8_t readPhysicalRecord(std::string_view * result, size_t * drop_size);
+    UInt8 readPhysicalRecord(std::string_view * result, size_t * drop_size);
 
     /*
      * Read more data from `file` and update the `buffer`.
      * Return 0 if read success.
      * Otherwise return `ParseErrorType::MeetEOF` or `ParseErrorType::BadHeader`
      */
-    uint8_t readMore(size_t * drop_size);
+    UInt8 readMore(size_t * drop_size);
 
 private:
     const bool verify_checksum;
@@ -98,8 +98,8 @@ private:
     bool eof; // Last Read() indicated EOF by returning < BlockSize
     bool read_error; // Error occrured while reading from file
     // Offset of the file position indicator within the last block when an EOF was detected.
-    size_t eof_offset;
     WALRecoveryMode recovery_mode;
+    size_t eof_offset;
 
     const std::unique_ptr<ReadBufferFromFileBase> file;
     std::string_view buffer;
@@ -108,7 +108,7 @@ private:
     UInt64 last_record_offset;
     UInt64 end_of_buffer_offset;
     // which log number it is
-    UInt64 log_number;
+    Format::LogNumberType log_number;
 
     Poco::Logger * log;
 };
