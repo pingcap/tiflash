@@ -38,15 +38,12 @@ public:
     static SpaceMapPtr createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end);
 
     /**
-     * Mark a space [offset,offset + length) free of the space map.
-     * After mark this space freed.
-     * When user use `searchInsertOffset` to get a space.
-     * Then this space may been selected(If request size fit space size
-     * and it is the first freed space).
+     * Mark a span [offset,offset + length) to be free.
+     * After this span is marked free, this span may be selected by `searchInsertOffset`.
      * 
      * ret value:
-     *   true: mark the space which is used.
-     *   false: mark the space which is freed.
+     *   true: the span is marked as free
+     *   false: the span can not mark as free
      */
     bool markFree(UInt64 offset, size_t length);
 
