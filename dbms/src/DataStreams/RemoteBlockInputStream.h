@@ -4,7 +4,6 @@
 #include <Client/MultiplexedConnections.h>
 #include <Common/Throttler.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/Cluster.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 

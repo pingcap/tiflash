@@ -1,19 +1,18 @@
-#include <TableFunctions/TableFunctionCatBoostPool.h>
-#include <Storages/StorageCatBoostPool.h>
-#include <TableFunctions/TableFunctionFactory.h>
-#include <Parsers/ASTFunction.h>
 #include <Common/typeid_cast.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/StorageCatBoostPool.h>
+#include <TableFunctions/TableFunctionCatBoostPool.h>
+#include <TableFunctions/TableFunctionFactory.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 StoragePtr TableFunctionCatBoostPool::executeImpl(const ASTPtr & ast_function, const Context & context) const
@@ -21,7 +20,7 @@ StoragePtr TableFunctionCatBoostPool::executeImpl(const ASTPtr & ast_function, c
     ASTs & args_func = typeid_cast<ASTFunction &>(*ast_function).children;
 
     std::string err = "Table function '" + getName() + "' requires 2 parameters: "
-                       + "column descriptions file, dataset description file";
+        + "column descriptions file, dataset description file";
 
     if (args_func.size() != 1)
         throw Exception(err, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -31,8 +30,7 @@ StoragePtr TableFunctionCatBoostPool::executeImpl(const ASTPtr & ast_function, c
     if (args.size() != 2)
         throw Exception(err, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    auto getStringLiteral = [](const IAST & node, const char * description)
-    {
+    auto getStringLiteral = [](const IAST & node, const char * description) {
         auto lit = typeid_cast<const ASTLiteral *>(&node);
         if (!lit)
             throw Exception(description + String(" must be string literal (in single quotes)."), ErrorCodes::BAD_ARGUMENTS);
@@ -53,4 +51,4 @@ void registerTableFunctionCatBoostPool(TableFunctionFactory & factory)
     factory.registerFunction<TableFunctionCatBoostPool>();
 }
 
-}
+} // namespace DB
