@@ -833,7 +833,7 @@ void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl &
         return;
     }
     MyDateTime from_my_time(from_time);
-    time_t epoch = getEpochSecond(from_my_time, time_zone_from, offset);
+    time_t epoch = getEpochSecond(from_my_time, time_zone_from);
     if (unlikely(epoch <= 0))
     {
         if (throw_exception)
@@ -846,6 +846,7 @@ void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl &
             return;
         }
     }
+    epoch += offset;
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch), time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
 }
