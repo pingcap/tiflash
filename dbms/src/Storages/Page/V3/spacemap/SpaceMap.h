@@ -38,49 +38,44 @@ public:
     static SpaceMapPtr createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end);
 
     /**
-     * Mark a space [offset,offset + length) free of the space map.
-     * After mark this space freed.
-     * When user use `searchInsertOffset` to get a space.
-     * Then this space may been selected(If request size fit space size
-     * and it is the first freed space).
+     * Mark a span [offset,offset + length) to be free.
+     * After this span is marked free, this span may be selected by `searchInsertOffset`.
      * 
      * ret value:
-     *   true: mark the space which is used.
-     *   false: mark the space which is freed.
+     *   true: the span is marked as free
+     *   false: the span can not mark as free
      */
     bool markFree(UInt64 offset, size_t length);
 
     /**
-     * Mark a space [offset,offset + length) of the space map.
-     * After this space been marked.
-     * When user use `searchInsertOffset` to get a space. 
-     * This space won't be selected.
+     * Mark a span [offset,offset + length) to being used.
+     * After this span is marked used, this span can not be selected by `searchInsertOffset`.
+     *
      * ret value:
-     *   false: This space is freed, marked all space used.
-     *   true: This space is used, or some sub space is used.
+     *   false: This span is marked as used successfully.
+     *   true: This span can not be marked as used. It or some sub spans have been marked as used before.
      */
     bool markUsed(UInt64 offset, size_t length);
 
     /**
-     * Test a space [offset,offset + length) have been used or not.
+     * Check a span [offset, offset + length) has been used or not.
      * 
      * ret value:
-     *   true: This space is used, or some sub space is used
-     *   false: This space is freed, all of space is freed for use.  
+     *   true: This span is used, or some sub span is used
+     *   false: All of this span is freed.
      */
     bool isMarkUsed(UInt64 offset, size_t length);
 
     /**
-     * Search a space that can fit in `size`
-     * SpaceMap will loop the range from start.
-     * After it found a range which can fit this `size`.
-     * It will decide if there needs to keep traverse to update `max_cap`.
+     * Search a span that can fit in `size`.
+     * If such span is found, it will also return a hint of the max capacity available
+     * in this SpaceMap.
      * 
-     * Return value is <insert_offset, max_cap>:
+     * return value is <insert_offset, max_cap>:
      *  insert_offset : start offset for the inserted space
-     *  max_cap : The largest available space this SpaceMap can hold. 
+     *  max_cap : A hint of the largest available space this SpaceMap can hold. 
      */
-    std::pair<UInt64, UInt64> searchInsertOffset(size_t size);
+    virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
 
     /**
      * Sanity check for correctness
@@ -119,12 +114,6 @@ protected:
 
     virtual ~SpaceMap() = default;
 
-    /* Generic space map operators */
-    virtual bool newSmap() = 0;
-
-    /* Free the space map if necessary */
-    virtual void freeSmap() = 0;
-
     /* Print space maps status  */
     virtual void smapStats() = 0;
 
@@ -132,11 +121,9 @@ protected:
     virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;
 
     /* Space map mark used/free operators */
-    virtual bool markSmapUsed(UInt64 offset, size_t size) = 0;
+    virtual bool markUsedImpl(UInt64 offset, size_t size) = 0;
 
-    virtual bool markSmapFree(UInt64 offset, size_t size) = 0;
-
-    virtual std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) = 0;
+    virtual bool markFreeImpl(UInt64 offset, size_t size) = 0;
 
 private:
     /* Check the range */

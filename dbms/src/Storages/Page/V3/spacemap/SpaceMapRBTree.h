@@ -1,10 +1,9 @@
 #pragma once
 #include <Common/Exception.h>
+#include <Storages/Page/V3/spacemap/RBTree.h>
+#include <Storages/Page/V3/spacemap/SpaceMap.h>
 
 #include <ext/shared_ptr_helper.h>
-
-#include "RBTree.h"
-#include "SpaceMap.h"
 
 namespace DB
 {
@@ -40,7 +39,6 @@ inline static struct smap_rb_entry * node_to_entry(struct rb_node * node)
 
 class RBTreeSpaceMap
     : public SpaceMap
-    , public ext::SharedPtrHelper<RBTreeSpaceMap>
 {
 public:
     ~RBTreeSpaceMap() override
@@ -50,25 +48,25 @@ public:
 
     bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override;
 
+    static std::shared_ptr<RBTreeSpaceMap> create(UInt64, UInt64 end);
+
+    std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override;
+
 protected:
     RBTreeSpaceMap(UInt64 start, UInt64 end)
         : SpaceMap(start, end, SMAP64_RBTREE)
     {
     }
 
-    bool newSmap() override;
-
-    void freeSmap() override;
+    void freeSmap();
 
     void smapStats() override;
 
     bool isMarkUnused(UInt64 block, size_t num) override;
 
-    bool markSmapUsed(UInt64 block, size_t num) override;
+    bool markUsedImpl(UInt64 block, size_t num) override;
 
-    bool markSmapFree(UInt64 block, size_t num) override;
-
-    std::pair<UInt64, UInt64> searchSmapInsertOffset(size_t size) override;
+    bool markFreeImpl(UInt64 block, size_t num) override;
 
 private:
     struct rb_private * rb_tree;

@@ -8,8 +8,46 @@
 
 #include <map>
 
+
 namespace DB::PS::V3::tests
 {
+::testing::AssertionResult MapIterCompare(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const std::map<int, int>::const_iterator lhs,
+    const std::pair<int, int> rhs)
+{
+    if (lhs->first == rhs.first && lhs->second == rhs.second)
+        return ::testing::AssertionSuccess();
+    return ::testing::internal::EqFailure(
+        lhs_expr,
+        rhs_expr,
+        fmt::format("{{{},{}}}", lhs->first, lhs->second),
+        fmt::format("{{{}, {}}}", rhs.first, rhs.second),
+        false);
+}
+
+#define ASSERT_ITER_EQ(iter, val) ASSERT_PRED_FORMAT2(MapIterCompare, iter, val)
+
+TEST(STDMapUtil, FindLessEqual)
+{
+    std::map<int, int> m0{};
+    ASSERT_EQ(details::findLessEQ(m0, 1), m0.end());
+
+    std::map<int, int> m1{{1, 1}, {2, 2}, {3, 3}, {6, 6}};
+    ASSERT_EQ(details::findLessEQ(m1, 0), m1.end());
+    ASSERT_ITER_EQ(details::findLessEQ(m1, 1), std::make_pair(1, 1));
+    ASSERT_ITER_EQ(details::findLessEQ(m1, 2), std::make_pair(2, 2));
+    ASSERT_ITER_EQ(details::findLessEQ(m1, 3), std::make_pair(3, 3));
+    for (int x = 4; x < 20; ++x)
+    {
+        if (x < 6)
+            ASSERT_ITER_EQ(details::findLessEQ(m1, x), std::make_pair(3, 3));
+        else
+            ASSERT_ITER_EQ(details::findLessEQ(m1, x), std::make_pair(6, 6));
+    }
+}
+
 struct Range
 {
     size_t start;
@@ -261,6 +299,68 @@ TEST_P(SpaceMapTest, TestMargins2)
                        {.start = 59,
                         .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges2, 2), 2));
+}
+
+TEST_P(SpaceMapTest, TestSearch)
+{
+    auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+    UInt64 offset;
+    UInt64 max_cap;
+    Range ranges[] = {{.start = 0,
+                       .end = 100}};
+    ASSERT_TRUE(smap->check(genChecker(ranges, 1), 1));
+    ASSERT_TRUE(smap->markUsed(50, 10));
+
+    std::tie(offset, max_cap) = smap->searchInsertOffset(20);
+    ASSERT_EQ(offset, 0);
+    ASSERT_EQ(max_cap, 40);
+
+    Range ranges1[] = {{.start = 20,
+                        .end = 50},
+                       {.start = 60,
+                        .end = 100}};
+    ASSERT_TRUE(smap->check(genChecker(ranges1, 2), 2));
+
+    // We can't use `markFree` to restore the map status
+    // It won't update `max_cap`/`max_offset` which inside space map
+    // So just recreate a space map
+    smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+    ASSERT_TRUE(smap->markUsed(50, 10));
+
+    std::tie(offset, max_cap) = smap->searchInsertOffset(5);
+    ASSERT_EQ(offset, 0);
+    ASSERT_EQ(max_cap, 45);
+
+    Range ranges2[] = {{.start = 5,
+                        .end = 50},
+                       {.start = 60,
+                        .end = 100}};
+    ASSERT_TRUE(smap->check(genChecker(ranges2, 2), 2));
+
+    // Test margin
+    smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+    ASSERT_TRUE(smap->markUsed(50, 10));
+    std::tie(offset, max_cap) = smap->searchInsertOffset(50);
+    ASSERT_EQ(offset, 0);
+    ASSERT_EQ(max_cap, 40);
+
+    Range ranges3[] = {{.start = 60,
+                        .end = 100}};
+    ASSERT_TRUE(smap->check(genChecker(ranges3, 1), 1));
+
+    // Test invalid Size
+    smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+    ASSERT_TRUE(smap->markUsed(50, 10));
+    std::tie(offset, max_cap) = smap->searchInsertOffset(100);
+    ASSERT_EQ(offset, UINT64_MAX);
+    ASSERT_EQ(max_cap, 50);
+
+    // No changed
+    Range ranges4[] = {{.start = 0,
+                        .end = 50},
+                       {.start = 60,
+                        .end = 100}};
+    ASSERT_TRUE(smap->check(genChecker(ranges4, 2), 2));
 }
 
 INSTANTIATE_TEST_CASE_P(
