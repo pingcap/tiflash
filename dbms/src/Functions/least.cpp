@@ -75,52 +75,6 @@ struct LeastBaseImpl<A, B, false>
         }
     }
 
-    // string_fixedString
-    static void process(
-        const TiDB::TiDBCollatorPtr & collator,
-        const ColumnString::Chars_t & a_data,
-        const ColumnString::Offsets & a_offsets,
-        const ColumnString::Chars_t & b_data,
-        const ColumnString::Offset & b_n,
-        ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets,
-        size_t i)
-    {
-        size_t a_size;
-        if (i == 0)
-        {
-            a_size = a_offsets[0] - 1;
-            int res = collator->compare(reinterpret_cast<const char *>(&a_data[0]), a_size, reinterpret_cast<const char *>(&b_data[0]), b_n);
-
-            if (res < 0)
-            {
-                memcpy(&c_data[0], &a_data[0], a_size);
-                c_offsets.push_back(a_size + 1);
-            }
-            else
-            {
-                memcpy(&c_data[0], &b_data[0], b_n);
-                c_offsets.push_back(b_n + 1);
-            }
-        }
-        else
-        {
-            a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-            int res = collator->compare(reinterpret_cast<const char *>(&a_data[a_offsets[i - 1]]), a_offsets[i] - a_offsets[i - 1] - 1, reinterpret_cast<const char *>(&b_data[i * b_n]), b_n);
-
-            if (res < 0)
-            {
-                memcpy(&c_data[c_offsets.back()], &a_data[a_offsets[i - 1]], a_size);
-                c_offsets.push_back(c_offsets.back() + a_size + 1);
-            }
-            else
-            {
-                memcpy(&c_data[c_offsets.back()], &b_data[i * b_n], b_n); // ywq todo maybe bug...
-                c_offsets.push_back(c_offsets.back() + b_n);
-            }
-        }
-    }
-
     // string_constant
     static void process(
         const TiDB::TiDBCollatorPtr & collator,

@@ -534,9 +534,6 @@ try
             createColumn<Nullable<String>>({"sahdka", "1"}),
             createColumn<Nullable<String>>({"sahdkb", "2"})));
 
-    // string_fixedString
-
-
     // string_constant
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"sahdkb", "sahdkc"}),
@@ -544,10 +541,6 @@ try
             func_name,
             createColumn<Nullable<String>>({"sahdka", "sahdkc"}),
             createConstColumn<Nullable<String>>(2, "sahdkb")));
-
-    // fixedString_fixedString
-
-    // fixedString_constant
 
     // constant_contant
     ASSERT_COLUMN_EQ(

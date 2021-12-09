@@ -601,23 +601,6 @@ struct StringOperationWithCollatorImpl
         }
     }
 
-    static void NO_INLINE string_vector_fixed_string_vector(
-        const ColumnString::Chars_t & a_data,
-        const ColumnString::Offsets & a_offsets,
-        const ColumnString::Chars_t & b_data,
-        const ColumnString::Offset & b_n,
-        const TiDB::TiDBCollatorPtr & collator,
-        ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets)
-    {
-        size_t size = a_offsets.size();
-        c_data.reserve(std::max(a_data.size(), b_data.size()));
-        for (size_t i = 0; i < size; ++i)
-        {
-            Op::process(collator, a_data, a_offsets, b_data, b_n, c_data, c_offsets, i);
-        }
-    }
-
     static void NO_INLINE string_vector_constant(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
@@ -634,89 +617,6 @@ struct StringOperationWithCollatorImpl
         }
     }
 
-    static void fixed_string_vector_string_vector(
-        const ColumnString::Chars_t & a_data,
-        ColumnString::Offset a_n,
-        const ColumnString::Chars_t & b_data,
-        const ColumnString::Offsets & b_offsets,
-        const TiDB::TiDBCollatorPtr & collator,
-        ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets)
-    {
-        StringOperationWithCollatorImpl::string_vector_fixed_string_vector(b_data, b_offsets, a_data, a_n, collator, c_data, c_offsets);
-    }
-
-
-    // todo .....
-    static void NO_INLINE fixed_string_vector_fixed_string_vector(
-        const ColumnString::Chars_t & a_data,
-        ColumnString::Offset a_n,
-        const ColumnString::Chars_t & b_data,
-        ColumnString::Offset b_n,
-        const TiDB::TiDBCollatorPtr & collator,
-        ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets)
-    {
-        size_t size = a_data.size();
-        c_data.reserve(std::max(a_data.size(), b_data.size()));
-        c_offsets.resize(size);
-        size_t c_offset_idx = 0;
-        size_t c_offset_num = 0;
-
-        for (size_t i = 0, j = 0; i < size; i += a_n, ++j)
-        {
-            int res = collator->compare(reinterpret_cast<const char *>(&a_data[i]), a_n, reinterpret_cast<const char *>(&b_data[i]), b_n);
-
-            if (res < 0)
-            {
-                memcpy(&c_data[c_offset_idx], &a_data[i], a_n);
-                c_offset_num += a_n;
-                c_offsets[c_offset_idx++] = c_offset_num + 1;
-            }
-            else
-            {
-                memcpy(&c_data[c_offset_idx], &b_data[i], b_n);
-                c_offset_num += b_n;
-                c_offsets[c_offset_idx++] = c_offset_num + 1;
-            }
-        }
-    }
-
-    // ywq todo
-    static void NO_INLINE fixed_string_vector_constant(
-        const ColumnString::Chars_t & a_data,
-        ColumnString::Offset a_n,
-        const std::string & b,
-        const TiDB::TiDBCollatorPtr & collator,
-        ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets)
-    {
-        ColumnString::Offset b_n = b.size();
-        size_t c_offset_idx = 0;
-        size_t c_offset_num = 0;
-        size_t size = a_data.size();
-        c_data.reserve(std::max(a_data.size(), b_n * size));
-        c_offsets.resize(size);
-        const char * b_data = reinterpret_cast<const char *>(b.data());
-        for (size_t i = 0; i < size; i += a_n)
-        {
-            int res = collator->compare(reinterpret_cast<const char *>(&a_data[i]), a_n, b_data, b_n);
-
-            if (res < 0)
-            {
-                memcpy(&c_data[c_offset_idx], &a_data[i], a_n);
-                c_offset_num += a_n;
-                c_offsets[c_offset_idx++] = c_offset_num + 1;
-            }
-            else
-            {
-                memcpy(&c_data[c_offset_idx], &b_data[0], b_n);
-                c_offset_num += b_n;
-                c_offsets[c_offset_idx++] = c_offset_num + 1;
-            }
-        }
-    }
-
     static void constant_string_vector(
         const std::string & a,
         const ColumnString::Chars_t & b_data,
@@ -726,17 +626,6 @@ struct StringOperationWithCollatorImpl
         ColumnString::Offsets & c_offsets)
     {
         StringOperationWithCollatorImpl::string_vector_constant(b_data, b_offsets, a, collator, c_data, c_offsets);
-    }
-
-    static void constant_fixed_string_vector(
-        const std::string & a,
-        const ColumnString::Chars_t & b_data,
-        ColumnString::Offset b_n,
-        const TiDB::TiDBCollatorPtr & collator,
-        ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets)
-    {
-        StringOperationWithCollatorImpl::fixed_string_vector_constant(b_data, b_n, a, collator, c_data, c_offsets);
     }
 
     static void constant_constant(
@@ -1457,16 +1346,15 @@ public:
 
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
         const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1);
-        const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0);
-        const ColumnFixedString * c1_fixed_string = checkAndGetColumn<ColumnFixedString>(c1);
+
         const ColumnConst * c0_const = checkAndGetColumnConstStringOrFixedString(c0);
         const ColumnConst * c1_const = checkAndGetColumnConstStringOrFixedString(c1);
 
-        if (!((c0_string || c0_fixed_string || c0_const) && (c1_string || c1_fixed_string || c1_const)))
+        if (!((c0_string || c0_const) && (c1_string || c1_const)))
             return false;
 
         if (collator != nullptr)
-            return executeStringWithCollator(block, result, c0, c1, c0_string, c1_string, c0_fixed_string, c1_fixed_string, c0_const, c1_const);
+            return executeStringWithCollator(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
         else
             return false;
     }
@@ -1480,8 +1368,6 @@ public:
         const IColumn * c1,
         const ColumnString * c0_string,
         const ColumnString * c1_string,
-        const ColumnFixedString * c0_fixed_string,
-        const ColumnFixedString * c1_fixed_string,
         const ColumnConst * c0_const,
         const ColumnConst * c1_const) const
     {
@@ -1507,45 +1393,10 @@ public:
                     collator,
                     c_res->getChars(),
                     c_res->getOffsets());
-            else if (c0_string && c1_fixed_string)
-                StringImpl::string_vector_fixed_string_vector(
-                    c0_string->getChars(),
-                    c0_string->getOffsets(),
-                    c1_fixed_string->getChars(),
-                    c1_fixed_string->getN(),
-                    collator,
-                    c_res->getChars(),
-                    c_res->getOffsets());
             else if (c0_string && c1_const)
                 StringImpl::string_vector_constant(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
-                    c1_const->getValue<String>(),
-                    collator,
-                    c_res->getChars(),
-                    c_res->getOffsets());
-            else if (c0_fixed_string && c1_string)
-                StringImpl::fixed_string_vector_string_vector(
-                    c0_fixed_string->getChars(),
-                    c0_fixed_string->getN(),
-                    c1_string->getChars(),
-                    c1_string->getOffsets(),
-                    collator,
-                    c_res->getChars(),
-                    c_res->getOffsets());
-            else if (c0_fixed_string && c1_fixed_string)
-                StringImpl::fixed_string_vector_fixed_string_vector(
-                    c0_fixed_string->getChars(),
-                    c0_fixed_string->getN(),
-                    c1_fixed_string->getChars(),
-                    c1_fixed_string->getN(),
-                    collator,
-                    c_res->getChars(),
-                    c_res->getOffsets());
-            else if (c0_fixed_string && c1_const)
-                StringImpl::fixed_string_vector_constant(
-                    c0_fixed_string->getChars(),
-                    c0_fixed_string->getN(),
                     c1_const->getValue<String>(),
                     collator,
                     c_res->getChars(),
@@ -1555,14 +1406,6 @@ public:
                     c0_const->getValue<String>(),
                     c1_string->getChars(),
                     c1_string->getOffsets(),
-                    collator,
-                    c_res->getChars(),
-                    c_res->getOffsets());
-            else if (c0_const && c1_fixed_string)
-                StringImpl::constant_fixed_string_vector(
-                    c0_const->getValue<String>(),
-                    c1_fixed_string->getChars(),
-                    c1_fixed_string->getN(),
                     collator,
                     c_res->getChars(),
                     c_res->getOffsets());
