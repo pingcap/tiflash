@@ -76,8 +76,6 @@
 /// Version of ClickHouse TCP protocol. Set to git tag with latest protocol change.
 #define DBMS_TCP_PROTOCOL_VERSION 54226
 
-#define DBMS_DISTRIBUTED_DIRECTORY_MONITOR_SLEEP_TIME_MS 100
-
 /// The boundary on which the blocks for asynchronous file operations should be aligned.
 #define DEFAULT_AIO_FILE_BLOCK_SIZE 4096
 

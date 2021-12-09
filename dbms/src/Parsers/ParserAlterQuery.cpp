@@ -1,15 +1,14 @@
-#include <Parsers/ParserAlterQuery.h>
+#include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserPartition.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTLiteral.h>
 
 namespace DB
 {
-
 bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_alter_table("ALTER TABLE");
@@ -44,7 +43,6 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ASTPtr table;
     ASTPtr database;
-    String cluster_str;
     ASTPtr col_type;
     ASTPtr col_after;
     ASTPtr col_drop;
@@ -70,12 +68,6 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         table = database;
         query->table = typeid_cast<ASTIdentifier &>(*table).name;
-    }
-
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
     }
 
     bool parsing_finished = false;
@@ -213,12 +205,10 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             parsing_finished = true;
 
         query->addParameters(params);
-    }
-    while (!parsing_finished);
+    } while (!parsing_finished);
 
-    query->cluster = cluster_str;
     node = query;
 
     return true;
 }
-}
+} // namespace DB
