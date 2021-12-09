@@ -9,7 +9,6 @@
 
 #include <mutex>
 
-
 // TBD : need add these into config
 #define BLOBSTORE_TEST_PATH "./BlobStore/"
 #define BLOBSTORE_CACHED_FD_SIZE 100
@@ -86,13 +85,6 @@ public:
         std::list<BlobFileId> old_ids;
         std::list<BlobStatPtr> stats_map;
 
-        /**
-            * TBD : not sure we need total
-             *  For now these two value are not update and unused.
-             */
-        UInt64 total_sm_used;
-        UInt64 total_sm_size;
-
         std::mutex lock_stats;
     };
 
@@ -102,12 +94,11 @@ public:
 
     BlobStats getAllBlobStats();
 
-    PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter);
+    PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
-    // TBD : may replace std::vector<char *> with a align buffer.
-    void read(std::vector<std::tuple<BlobFileId, UInt64, size_t>>,
-              std::vector<char *> buffers,
-              const ReadLimiterPtr & read_limiter = nullptr);
+    PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
+
+    Page read(const PageIDAndEntryV3 & entry, const ReadLimiterPtr & read_limiter = nullptr);
 
     void read(BlobFileId blob_id, UInt64 offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
 

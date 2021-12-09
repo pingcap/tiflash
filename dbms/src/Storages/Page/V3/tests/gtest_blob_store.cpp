@@ -160,8 +160,8 @@ TEST(BlobStatsTest, testWriteRead)
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
 
     PageId page_id = 50;
-    size_t buff_size = 20;
-    size_t buff_nums = 5;
+    size_t buff_nums = 21;
+    size_t buff_size = 123;
 
     auto blob_store = BlobStore(file_provider);
     char c_buff[buff_size * buff_nums];
@@ -172,14 +172,14 @@ TEST(BlobStatsTest, testWriteRead)
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = j & 0xff;
+            c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
         }
 
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
-    ASSERT_EQ(wb.getTotalDataSize(), 100);
+    ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
     PageEntriesEdit edit = blob_store.write(wb, nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
@@ -193,35 +193,49 @@ TEST(BlobStatsTest, testWriteRead)
         ASSERT_EQ(record.entry.size, buff_size);
         ASSERT_EQ(record.entry.file_id, 0);
 
-        // Read
+        // Read directly from the file
         blob_store.read(record.entry.file_id,
                         record.entry.offset,
                         c_buff_read + index * buff_size,
                         record.entry.size,
                         /* ReadLimiterPtr */ nullptr);
 
-        ASSERT_EQ(strncmp(c_buff, c_buff_read, record.entry.size), 0);
+        ASSERT_EQ(strncmp(c_buff + index * buff_size, c_buff_read + index * buff_size, record.entry.size), 0);
         index++;
     }
     ASSERT_EQ(index, buff_nums);
 
-    index = 0;
-    std::vector<std::tuple<BlobStore::BlobFileId, UInt64, size_t>> read_reqs;
-    std::vector<char *> buffers_read;
+    page_id = 50;
+    PageIDAndEntriesV3 entries = {};
+
     for (auto & record : edit.getRecords())
     {
-        buffers_read.emplace_back(c_buff_read + index++ * buff_size);
-        read_reqs.emplace_back(std::make_tuple(
-            record.entry.file_id,
-            record.entry.offset,
-            record.entry.size));
+        entries.emplace_back(std::make_pair(page_id++, record.entry));
     }
 
-    blob_store.read(read_reqs,
-                    buffers_read,
-                    /* ReadLimiterPtr */ nullptr);
+    // Test `PageMap` read
+    page_id = 50;
+    index = 0;
+    auto page_map = blob_store.read(entries, /* ReadLimiterPtr */ nullptr);
+    for (auto & [id, page] : page_map)
+    {
+        ASSERT_EQ(id, page_id++);
+        ASSERT_EQ(page.data.size(), buff_size);
+        ASSERT_EQ(strncmp(c_buff + index * buff_size, page.data.begin(), page.data.size()), 0);
+        index++;
+    }
+    ASSERT_EQ(index, buff_nums);
 
-    ASSERT_EQ(strncmp(c_buff, c_buff_read, sizeof(c_buff)), 0);
+    // Test single `Page` read
+    index = 0;
+    for (auto & entry : entries)
+    {
+        auto page = blob_store.read(entry, /* ReadLimiterPtr */ nullptr);
+        ASSERT_EQ(page.data.size(), buff_size);
+        ASSERT_EQ(strncmp(c_buff + index * buff_size, page.data.begin(), page.data.size()), 0);
+        index++;
+    }
+    ASSERT_EQ(index, buff_nums);
 }
 
 
@@ -251,14 +265,14 @@ TEST(BlobStatsTest, testFeildOffsetWriteRead)
     {
         for (size_t j = 0; j < buff_size; ++j)
         {
-            c_buff[j + i * buff_size] = j & 0xff;
+            c_buff[j + i * buff_size] = (char)((j & 0xff) + i);
         }
 
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size, field_sizes);
     }
 
-    ASSERT_EQ(wb.getTotalDataSize(), 100);
+    ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
     PageEntriesEdit edit = blob_store.write(wb, nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
@@ -289,11 +303,10 @@ TEST(BlobStatsTest, testFeildOffsetWriteRead)
                         record.entry.size,
                         /* ReadLimiterPtr */ nullptr);
 
-        ASSERT_EQ(strncmp(c_buff, c_buff_read, record.entry.size), 0);
+        ASSERT_EQ(strncmp(c_buff + index * buff_size, c_buff_read + index * buff_size, record.entry.size), 0);
         index++;
     }
     ASSERT_EQ(index, buff_nums);
 }
-
 
 } // namespace DB::PS::V3::tests

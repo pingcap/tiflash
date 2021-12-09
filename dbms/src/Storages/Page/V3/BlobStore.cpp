@@ -3,16 +3,21 @@
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/V3/BlobStore.h>
 
+
 namespace ProfileEvents
 {
 extern const Event PSMWritePages;
-}
+extern const Event PSMReadPages;
+} // namespace ProfileEvents
+
+static constexpr bool PAGE_CHECKSUM_ON_READ = true;
 
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int CHECKSUM_DOESNT_MATCH;
 } // namespace ErrorCodes
 
 namespace PS::V3
@@ -56,10 +61,13 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             ChecksumClass digest;
             PageEntryV3 entry;
 
+            write.read_buffer->readStrict(buffer_pos, write.size);
+
             entry.file_id = blob_id;
             entry.size = write.size;
             entry.offset = offset_in_file + offset_in_allocated;
             offset_in_allocated += write.size;
+
             digest.update(buffer_pos, write.size);
             entry.checksum = digest.checksum();
 
@@ -81,7 +89,6 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 entry.field_offsets.swap(write.offsets);
             }
 
-            write.read_buffer->readStrict(buffer_pos, write.size);
             buffer_pos += write.size;
 
             if (write.type == WriteBatch::WriteType::PUT)
@@ -155,38 +162,84 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, UInt64 offset, size_t siz
     blob_stats.removePosFromStat(blob_stats.fileIdToStat(blob_id), offset, size);
 }
 
-void BlobStore::read(std::vector<std::tuple<BlobStore::BlobFileId, UInt64, size_t>> req_list,
-                     std::vector<char *> buffers,
-                     const ReadLimiterPtr & read_limiter)
+
+PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter)
 {
-    assert(req_list.size() == buffers.size());
+    ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
-    if (req_list.empty())
-    {
-        return;
-    }
-
-    if (req_list.size() == 1)
-    {
-        read(std::get<0>(req_list.front()), std::get<1>(req_list.front()), buffers.front(), std::get<2>(req_list.front()));
-        return;
-    }
-
-    std::sort(req_list.begin(), req_list.end(), [](const std::tuple<BlobStore::BlobFileId, UInt64, size_t> & l, const std::tuple<BlobStore::BlobFileId, UInt64, size_t> & r) {
-        return std::get<1>(l) < std::get<1>(r);
+    // Sort in ascending order by offset in file.
+    std::sort(entries.begin(), entries.end(), [](const PageIDAndEntryV3 & a, const PageIDAndEntryV3 & b) {
+        return a.second.offset < b.second.offset;
     });
 
+    // allocate data_buf that can hold all pages
     size_t buf_size = 0;
-    for (const auto & p : req_list)
+    for (const auto & p : entries)
     {
-        buf_size += std::get<2>(p);
+        buf_size += p.second.size;
     }
 
-    size_t index = 0;
-    for (const auto & [blob_id, offset, size] : req_list)
+    char * data_buf = (char *)alloc(buf_size);
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
+        free(p, buf_size);
+    });
+
+    char * pos = data_buf;
+    PageMap page_map;
+    for (const auto & [page_id, entry] : entries)
     {
-        BlobStore::read(blob_id, offset, buffers[index++], size, read_limiter);
+        read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
+
+        if constexpr (PAGE_CHECKSUM_ON_READ)
+        {
+            ChecksumClass digest;
+            digest.update(pos, entry.size);
+            auto checksum = digest.checksum();
+            if (unlikely(entry.size != 0 && checksum != entry.checksum))
+            {
+                std::stringstream ss;
+                ss << ", expected: " << std::hex << entry.checksum << ", but: " << checksum;
+                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + getBlobFilePath(entry.file_id) + ss.str(),
+                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            }
+        }
+
+        Page page;
+        page.page_id = page_id;
+        page.data = ByteBuffer(pos, pos + entry.size);
+        page.mem_holder = mem_holder;
+        page_map.emplace(page_id, page);
+
+        pos += entry.size;
     }
+
+    if (unlikely(pos != data_buf + buf_size))
+        throw Exception("data pos not match the total size sub current pos", ErrorCodes::LOGICAL_ERROR);
+
+    return page_map;
+}
+
+Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
+{
+    PageId page_id;
+    PageEntryV3 entry;
+
+    std::tie(page_id, entry) = id_entry;
+    size_t buf_size = entry.size;
+
+    char * data_buf = (char *)alloc(buf_size);
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
+        free(p, buf_size);
+    });
+
+    read(entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
+
+    Page page;
+    page.page_id = page_id;
+    page.data = ByteBuffer(data_buf, data_buf + buf_size);
+    page.mem_holder = mem_holder;
+
+    return page;
 }
 
 void BlobStore::read(BlobStore::BlobFileId blob_id, UInt64 offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
@@ -216,8 +269,6 @@ BlobFilePtr BlobStore::getBlobFile(BlobStore::BlobFileId blob_id)
 
 BlobStore::BlobStats::BlobStats(Poco::Logger * log_)
     : log(log_)
-    , total_sm_used(0)
-    , total_sm_size(0)
 {
 }
 
