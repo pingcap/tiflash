@@ -62,11 +62,11 @@ public:
     bool markUsed(UInt64 offset, size_t length);
 
     /**
-     * Test a space [offset,offset + length) have been used or not.
+     * Check a span [offset, offset + length) has been used or not.
      * 
      * ret value:
-     *   true: This space is used, or some sub space is used
-     *   false: This space is freed, all of space is freed for use.  
+     *   true: This span is used, or some sub span is used
+     *   false: All of this span is freed.
      */
     bool isMarkUsed(UInt64 offset, size_t length);
 
