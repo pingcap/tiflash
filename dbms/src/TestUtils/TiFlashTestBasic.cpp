@@ -1,5 +1,10 @@
+#include <Common/UnifiedLogPatternFormatter.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
+#include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -70,6 +75,16 @@ void TiFlashTestEnv::shutdown()
     global_context->getTMTContext().setStatusTerminated();
     global_context->shutdown();
     global_context.reset();
+}
+
+void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
+{
+    Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(os);
+    Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
+    formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
+    Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
+    Poco::Logger::root().setChannel(formatting_channel);
+    Poco::Logger::root().setLevel(level);
 }
 
 ::testing::AssertionResult DataTypeCompare(
