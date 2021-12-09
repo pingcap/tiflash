@@ -42,7 +42,53 @@ LogReader::LogReader(
 
 LogReader::~LogReader() = default;
 
-std::tuple<bool, String> LogReader::readRecord()
+// State Transition Table
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | State/               | Begin read          | In fragmented       | End with        | End with           |
+// | The type read        |                     | record              | record returned | no record returned |
+// +======================+=====================+=====================+=================+====================+
+// | FullType             | End with            | Report corruption;  | -               | -                  |
+// | RecyclableFullType   | record returned     | End with            |                 |                    |
+// |                      |                     | no record read      |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | FirstType            | Append into buffer; | Report corruption;  | -               | -                  |
+// | RecyclableFirstType  | In fragmented       | End with            |                 |                    |
+// |                      | record              | no record read      |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | MiddleType           | Report corruption;  | Append into buffer; | -               | -                  |
+// | RecyclableMiddleType | End with            | In fragmented       |                 |                    |
+// |                      | no record read      | record              |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | LastType             | Report corruption;  | Append into buffer; | -               | -                  |
+// | RecyclableLastType   | End with            | End with            |                 |                    |
+// |                      | no record read      | record returned     |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | BadHeader            | Report corruption;  | Report corruption;  | -               | -                  |
+// |                      | End with            | End with            |                 |                    |
+// |                      | no record read      | no record read      |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | MeetEOF              | Report corruption;  | Report corruption;  | -               | -                  |
+// |                      | End with            | End with            |                 |                    |
+// |                      | no record read      | no record read      |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | OldRecord            | Report corruption;  | Report corruption;  | -               | -                  |
+// |                      | End with            | End with            |                 |                    |
+// |                      | no record read      | no record read      |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | BadRecord            | Report corruption;  | Report corruption;  | -               | -                  |
+// |                      | End with            | End with            |                 |                    |
+// |                      | no record read      | no record read      |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | BadRecordLen         | Report corruption;  | Report corruption;  | -               | -                  |
+// |                      | End with            | End with            |                 |                    |
+// |                      | no record read      | no record read      |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+// | BadRecordChecksum    | Report corruption;  | Report corruption;  | -               | -                  |
+// |                      | End with            | End with            |                 |                    |
+// |                      | no record read      | no record read      |                 |                    |
+// +----------------------+---------------------+---------------------+-----------------+--------------------+
+std::tuple<bool, String>
+LogReader::readRecord()
 {
     String record;
     bool in_fragmented_record = false;
@@ -50,14 +96,18 @@ std::tuple<bool, String> LogReader::readRecord()
     // 0 is a dummy value to make compilers happy
     UInt64 prospective_record_offset = 0;
 
+    static_assert(
+        std::is_same_v<std::underlying_type_t<Format::RecordType>, UInt8>,
+        "The underlying type of Format::RecordType should be UInt8");
+    static_assert(
+        std::is_same_v<std::underlying_type_t<ParseErrorType>, UInt8>,
+        "The underlying type of ParseErrorType should be UInt8");
+
     std::string_view fragment;
     while (true)
     {
         UInt64 physical_record_offset = end_of_buffer_offset - buffer.size();
         size_t drop_size = 0;
-        static_assert(
-            std::is_same_v<std::underlying_type_t<ParseErrorType>, UInt8>,
-            "The underlying type of ParseErrorType should be UInt8");
         const UInt8 record_type_or_error = readPhysicalRecord(&fragment, &drop_size);
         switch (record_type_or_error)
         {
