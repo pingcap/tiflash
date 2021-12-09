@@ -321,11 +321,21 @@ try
 }
 CATCH
 
+static void createIfNotExist(const String & path)
+{
+    if (Poco::File file(path); !file.exists())
+        file.createDirectories();
+}
+
 TEST(PathCapcatity, FsStats)
 try
 {
     std::string main_data_path = TiFlashTestEnv::getTemporaryPath() + "/main";
+    createIfNotExist(main_data_path);
+
     std::string latest_data_path = TiFlashTestEnv::getTemporaryPath() + "/lastest";
+    createIfNotExist(latest_data_path);
+    
     size_t global_capacity_quota = 10;
     size_t capacity = 100;
     {
