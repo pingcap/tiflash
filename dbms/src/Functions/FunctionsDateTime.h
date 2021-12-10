@@ -846,7 +846,7 @@ public:
             DateTimeTransformImpl<DataTypeDate::FieldType, typename ToDataType::FieldType, Transform>::execute(block, arguments, result);
         else if (checkDataType<DataTypeDateTime>(from_type))
             DateTimeTransformImpl<DataTypeDateTime::FieldType, typename ToDataType::FieldType, Transform>::execute(block, arguments, result);
-        else if (checkDataType<DataTypeMyDateTime>(from_type) || checkDataType<DataTypeMyDate>(from_type))
+        else if ( from_type->isMyDateOrMyDateTime())
             DateTimeTransformImpl<DataTypeMyTimeBase::FieldType, typename ToDataType::FieldType, Transform>::execute(block, arguments, result);
         else
             throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
@@ -1318,7 +1318,7 @@ public:
             DateTimeAddIntervalImpl<DataTypeDate::FieldType, Transform, false>::execute(block, arguments, result);
         else if (checkDataType<DataTypeDateTime>(from_type))
             DateTimeAddIntervalImpl<DataTypeDateTime::FieldType, Transform, false>::execute(block, arguments, result);
-        else if (checkDataType<DataTypeMyDate>(from_type) || checkDataType<DataTypeMyDateTime>(from_type))
+        else if (from_type->isMyDateOrMyDateTime())
             DateTimeAddIntervalImpl<DataTypeMyTimeBase::FieldType, Transform, true>::execute(block, arguments, result);
         else
             throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
@@ -1346,11 +1346,11 @@ public:
             throw Exception("First argument for function " + getName() + " (unit) must be String",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[1]).get()) && !checkDataType<DataTypeMyDate>(removeNullable(arguments[1]).get()) && !arguments[1]->onlyNull())
+        if (!removeNullable(arguments[1]).get()->isMyDateOrMyDateTime() && !arguments[1]->onlyNull())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[2]).get()) && !checkDataType<DataTypeMyDate>(removeNullable(arguments[2]).get()) && !arguments[2]->onlyNull())
+        if (!removeNullable(arguments[2]).get()->isMyDateOrMyDateTime() && !arguments[2]->onlyNull())
             throw Exception("Third argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -1724,11 +1724,11 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!removeNullable(arguments[0]).get()->isDateOrDateTime())
+        if (!removeNullable(arguments[0]).get()->isMyDateOrMyDateTime())
             throw Exception("First argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1]).get()->isDateOrDateTime())
+        if (!removeNullable(arguments[1]).get()->isMyDateOrMyDateTime())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
