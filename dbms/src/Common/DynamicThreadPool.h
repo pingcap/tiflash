@@ -114,7 +114,7 @@ public:
         {
             std::unique_lock lock(dynamic_mutex);
             in_destructing = true;
-            for (auto * next = dynamic_head.next; next != &dynamic_head; next = next->next)
+            for (auto * next = dynamic_idle_head.next; next != &dynamic_idle_head; next = next->next)
                 next->cv.notify_one();
         }
 
@@ -167,9 +167,9 @@ private:
     bool scheduledToExistedDynamicThread(TaskPtr task)
     {
         std::unique_lock lock(dynamic_mutex);
-        if (dynamic_head.empty())
+        if (dynamic_idle_head.empty())
             return false;
-        DynamicNode * next = dynamic_head.next;
+        DynamicNode * next = dynamic_idle_head.next;
         next->detach();
         next->task = std::move(task);
         next->cv.notify_one();
@@ -210,7 +210,7 @@ private:
                 std::unique_lock lock(dynamic_mutex);
                 if (in_destructing)
                     break;
-                node.prepend(&dynamic_head); // prepend to reuse hot threads so that cold threads have chance to exit
+                node.prepend(&dynamic_idle_head); // prepend to reuse hot threads so that cold threads have chance to exit
                 node.cv.wait_for(lock, timeout);
                 task = std::move(node.task);
             }
@@ -223,11 +223,12 @@ private:
     }
 
     std::vector<std::thread> fixed_threads;
+    // Each fixed thread interacts with outside via a Queue.
     std::vector<std::unique_ptr<Queue>> fixed_queues;
     boost::lockfree::queue<Queue *> idle_fixed_queues;
 
     std::mutex dynamic_mutex;
-    DynamicNode dynamic_head;
+    DynamicNode dynamic_idle_head;
 
     bool in_destructing = false;
     std::atomic<Int64> alive_dynamic_threads = 0;
