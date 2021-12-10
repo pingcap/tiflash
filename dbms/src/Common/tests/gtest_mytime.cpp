@@ -460,7 +460,7 @@ try
     for (const String & datetime : date_time_vec)
     {
         ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
-        UInt64 origin_time_stamp;
+        UInt64 origin_time_stamp = 0;
         tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
         UInt64 converted_time = origin_time_stamp;
         {
