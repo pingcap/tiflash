@@ -1,16 +1,16 @@
+#include <Core/Field.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/types.h>
 
 #include <iostream>
 #include <string>
 #include <vector>
-
-#include "Core/Field.h"
-#include "DataTypes/DataTypeNothing.h"
-#include "DataTypes/DataTypeNullable.h"
-#include "DataTypes/IDataType.h"
-#include "common/types.h"
 
 namespace DB::tests
 {
@@ -549,6 +549,14 @@ try
             func_name,
             createConstColumn<Nullable<String>>(2, "sahdka"),
             createConstColumn<Nullable<String>>(2, "sahdkb")));
+
+    // date
+    // ASSERT_COLUMN_EQ(
+    //     createConstColumn<Nullable<DataTypeDate>>(2, "sahdkb"),
+    //     executeFunction(
+    //         func_name,
+    //         createConstColumn<Nullable<String>>(2, "sahdka"),
+    //         createConstColumn<Nullable<String>>(2, "sahdkb")));
 }
 CATCH
 
