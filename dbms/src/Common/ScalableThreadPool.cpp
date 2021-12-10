@@ -41,6 +41,7 @@ ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker_)
     : init_cap(m_size)
     , pre_worker(pre_worker_)
     , threads(std::make_shared<std::vector<std::shared_ptr<ThdCtx>>>())
+    , bk_thd(std::thread([this] {backgroundJob();}))
 {
     threads->reserve(m_size);
     for (size_t i = 0; i < m_size; ++i)
@@ -106,6 +107,7 @@ ScalableThreadPool::~ScalableThreadPool()
 
     has_new_job_or_shutdown.notify_all();
     cv_shutdown.notify_all();
+    bk_thd.join();
     for (auto & thread_ctx : *threads)
         thread_ctx->thd->join();
 }
@@ -133,9 +135,12 @@ void ScalableThreadPool::backgroundJob()
             for(auto & thd_ctx: *old_threads) {
                 if (thd_ctx->status == 2) { //end: can be removed safely
                     cnt_cleaned++;
-                } else {
+                }
+            }
+            for(auto &thd_ctx: *old_threads) {
+                if (thd_ctx->status != 2) {
                     new_threads->push_back(thd_ctx);
-                    if (!(thd_ctx->end_syn) && thd_ctx->status == 0) {
+                    if (cnt_cleaned < cnt_to_clean && !(thd_ctx->end_syn) && thd_ctx->status == 0) {
                         thd_ctx->end_syn = true;
                         cnt_cleaned++;
                     }

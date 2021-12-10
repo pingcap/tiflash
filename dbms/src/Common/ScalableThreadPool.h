@@ -70,6 +70,7 @@ protected:
     std::queue<Job> jobs;
     std::shared_ptr<std::vector<std::shared_ptr<ThdCtx>>> threads;
     std::exception_ptr first_exception;
+    std::thread bk_thd;
 
 
     void worker(ThdCtx *thdctx);
