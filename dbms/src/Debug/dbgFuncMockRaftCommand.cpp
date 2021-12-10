@@ -1,4 +1,4 @@
-#include <Common/FmtUtils.h>
+#include <fmt/core.h>
 #include <Common/typeid_cast.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockTiDB.h>
@@ -120,9 +120,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
                                 MockTiKV::instance().getRaftTerm(region_id),
                                 tmt);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("execute batch split, region {} into ({},{})", region_id, region_id, region_id2);
-    output(fmt_buf.toString());
+    output(fmt::format("execute batch split, region {} into ({},{})", region_id, region_id, region_id2));
 }
 
 void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -162,9 +160,7 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
                                 MockTiKV::instance().getRaftTerm(region_id),
                                 tmt);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("execute prepare merge, source {} target {}", region_id, target_id);
-    output(fmt_buf.toString());
+    output(fmt::format("execute prepare merge, source {} target {}", region_id, target_id));
 }
 
 void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -200,9 +196,7 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
                                 MockTiKV::instance().getRaftTerm(current_id),
                                 tmt);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("execute commit merge, source {} current {}", source_id, current_id);
-    output(fmt_buf.toString());
+    output(fmt::format("execute commit merge, source {} current {}", source_id, current_id));
 }
 
 void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -237,9 +231,7 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
                                 MockTiKV::instance().getRaftTerm(region_id),
                                 tmt);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("execute rollback merge, region {}", region_id);
-    output(fmt_buf.toString());
+    output(fmt::format("execute rollback merge, region {}", region_id));
 }
 
 } // namespace DB
