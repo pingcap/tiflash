@@ -229,8 +229,8 @@ private:
 
     std::mutex dynamic_mutex;
     DynamicNode dynamic_idle_head;
-
     bool in_destructing = false;
+
     std::atomic<Int64> alive_dynamic_threads = 0;
 };
 } // namespace DB
