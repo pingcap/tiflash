@@ -70,7 +70,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
             block_offset = 0;
         }
         // Invariant: we never leave < header_size bytes in a block.
-        assert(static_cast<int64_t>(Format::BLOCK_SIZE - block_offset) >= header_size);
+        assert(static_cast<Int64>(Format::BLOCK_SIZE - block_offset) >= header_size);
 
         const size_t avail_payload_size = Format::BLOCK_SIZE - block_offset - header_size;
         const size_t fragment_length = (payload_left < avail_payload_size) ? payload_left : avail_payload_size;
