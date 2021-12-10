@@ -7,8 +7,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include "Common/FmtUtils.h"
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -28,9 +27,7 @@ void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().setFlushThresholds({{bytes, Seconds(seconds)}});
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("set flush threshold to ({} bytes, {} seconds)", bytes, seconds);
-    output(fmt_buf.toString());
+    output(fmt::format("set flush threshold to ({} bytes, {} seconds)", bytes, seconds));
 }
 
 void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -49,9 +46,7 @@ void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer outp
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 4, args.end(), context);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("wrote one row to {}.{} region #{} with raft commands", database_name, table_name, region_id);
-    output(fmt_buf.toString());
+    output(fmt::format("wrote one row to {}.{} region #{} with raft commands", database_name, table_name, region_id));
 }
 
 void dbgInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -77,9 +72,7 @@ void dbgInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 6, args.end(), context, extra_data);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("wrote one row to {}.{} region #{} with raft commands", database_name, table_name, region_id);
-    output(fmt_buf.toString());
+    output(fmt::format("wrote one row to {}.{} region #{} with raft commands", database_name, table_name, region_id));
 }
 
 void dbgFuncRaftInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -105,9 +98,7 @@ void dbgFuncRaftDeleteRow(Context & context, const ASTs & args, DBGInvoker::Prin
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::remove(table->table_info, region_id, handle_id, context);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("delete one row in {}.{}, region #{}", database_name, table_name, region_id);
-    output(fmt_buf.toString());
+    output(fmt::format("delete one row in {}.{}, region #{}", database_name, table_name, region_id));
 }
 
 void dbgInsertRows(Context & context, const ASTs & args, DBGInvoker::Printer output)

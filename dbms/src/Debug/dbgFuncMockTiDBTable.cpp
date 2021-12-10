@@ -1,4 +1,3 @@
-#include <Common/FmtUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/Context.h>
@@ -13,6 +12,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -58,9 +58,7 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
 
     TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso, handle_pk_name, engine_type);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("mock table #{}", table_id);
-    output(fmt_buf.toString());
+    output(fmt::format("mock table #{}", table_id));
 }
 
 void MockTiDBTable::dbgFuncMockTiDBDB(Context &, const ASTs & args, DBGInvoker::Printer output)
@@ -72,9 +70,7 @@ void MockTiDBTable::dbgFuncMockTiDBDB(Context &, const ASTs & args, DBGInvoker::
 
     DatabaseID db_id = MockTiDB::instance().newDataBase(database_name);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("mock db #{}", db_id);
-    output(fmt_buf.toString());
+    output(fmt::format("mock db #{}", db_id));
 }
 
 void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -94,9 +90,7 @@ void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & arg
 
     MockTiDB::instance().newPartition(database_name, table_name, partition_id, tso, is_add_part);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("mock partition #{}", partition_id);
-    output(fmt_buf.toString());
+    output(fmt::format("mock partition #{}", partition_id));
 }
 
 void MockTiDBTable::dbgFuncDropTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer output)
@@ -110,9 +104,7 @@ void MockTiDBTable::dbgFuncDropTiDBPartition(Context &, const ASTs & args, DBGIn
 
     MockTiDB::instance().dropPartition(database_name, table_name, partition_id);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("drop partition #{}", partition_id);
-    output(fmt_buf.toString());
+    output(fmt::format("drop partition #{}", partition_id));
 }
 
 void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -127,9 +119,7 @@ void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGI
 
     MockTiDB::instance().dropDB(context, database_name, drop_regions);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("dropped db #{}", database_name);
-    output(fmt_buf.toString());
+    output(fmt::format("dropped db #{}", database_name));
 }
 
 void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -160,9 +150,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
 
     MockTiDB::instance().dropTable(context, database_name, table_name, drop_regions);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("dropped table #{}", table_id);
-    output(fmt_buf.toString());
+    output(fmt::format("dropped table #{}", table_id));
 }
 
 void MockTiDBTable::dbgFuncAddColumnToTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -192,9 +180,7 @@ void MockTiDBTable::dbgFuncAddColumnToTiDBTable(Context & context, const ASTs & 
         default_value = getDefaultValue(it->second.expression);
     MockTiDB::instance().addColumnToTable(database_name, table_name, column, default_value);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("add column {} {}", column.name, column.type->getName());
-    output(fmt_buf.toString());
+    output(fmt::format("add column {} {}", column.name, column.type->getName()));
 }
 
 void MockTiDBTable::dbgFuncDropColumnFromTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
@@ -210,9 +196,7 @@ void MockTiDBTable::dbgFuncDropColumnFromTiDBTable(Context & /*context*/, const 
 
     MockTiDB::instance().dropColumnFromTable(database_name, table_name, column_name);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("dropped column {}", column_name);
-    output(fmt_buf.toString());
+    output(fmt::format("dropped column {}", column_name));
 }
 
 void MockTiDBTable::dbgFuncModifyColumnInTiDBTable(DB::Context & context, const DB::ASTs & args, DB::DBGInvoker::Printer output)
@@ -238,9 +222,7 @@ void MockTiDBTable::dbgFuncModifyColumnInTiDBTable(DB::Context & context, const 
     NameAndTypePair column = cols.getAllPhysical().front();
     MockTiDB::instance().modifyColumnInTable(database_name, table_name, column);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("modified column {} {}", column.name, column.type->getName());
-    output(fmt_buf.toString());
+    output(fmt::format("modified column {} {}", column.name, column.type->getName()));
 }
 
 void MockTiDBTable::dbgFuncRenameColumnInTiDBTable(DB::Context &, const DB::ASTs & args, DB::DBGInvoker::Printer output)
@@ -255,9 +237,7 @@ void MockTiDBTable::dbgFuncRenameColumnInTiDBTable(DB::Context &, const DB::ASTs
 
     MockTiDB::instance().renameColumnInTable(database_name, table_name, old_column_name, new_column_name);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("rename column {} {}", old_column_name, new_column_name);
-    output(fmt_buf.toString());
+    output(fmt::format("rename column {} {}", old_column_name, new_column_name));
 }
 
 void MockTiDBTable::dbgFuncRenameTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
@@ -271,9 +251,7 @@ void MockTiDBTable::dbgFuncRenameTiDBTable(Context & /*context*/, const ASTs & a
 
     MockTiDB::instance().renameTable(database_name, table_name, new_table_name);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("renamed table {}.{} to {}.{}", database_name, table_name, database_name, new_table_name);
-    output(fmt_buf.toString());
+    output(fmt::format("renamed table {}.{} to {}.{}", database_name, table_name, database_name, new_table_name));
 }
 
 void MockTiDBTable::dbgFuncTruncateTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
@@ -286,9 +264,7 @@ void MockTiDBTable::dbgFuncTruncateTiDBTable(Context & /*context*/, const ASTs &
 
     MockTiDB::instance().truncateTable(database_name, table_name);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("truncated table {}.{}", database_name, table_name);
-    output(fmt_buf.toString());
+    output(fmt::format("truncated table {}.{}", database_name, table_name));
 }
 
 void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs &, DB::DBGInvoker::Printer output)

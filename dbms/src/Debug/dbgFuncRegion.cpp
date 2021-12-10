@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
@@ -11,8 +12,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
-
-#include "Common/FmtUtils.h"
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -63,9 +63,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("put region #{}, range{} to table #{} with kvstore.onSnapshot", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys()), table_id);
-        output(fmt_buf.toString());
+        output(fmt::format("put region #{}, range{} to table #{} with kvstore.onSnapshot", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys()), table_id));
     }
     else
     {
@@ -76,9 +74,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("put region #{}, range[{}, {}) to table #{} with kvstore.onSnapshot", region_id, start, end, table_id);
-        output(fmt_buf.toString());
+        output(fmt::format("put region #{}, range[{}, {}) to table #{} with kvstore.onSnapshot", region_id, start, end, table_id));
     }
 }
 
@@ -87,9 +83,7 @@ void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegions();
 
-    FmtBuffer fmt_buf;
-    fmt_buf.append("region_table try flush regions");
-    output(fmt_buf.toString());
+    output("region_table try flush regions");
 }
 
 void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -104,9 +98,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegion(region_id);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("region_table try flush region {}", region_id);
-    output(fmt_buf.toString());
+    output(fmt::format("region_table try flush region {}", region_id));
 }
 
 void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none, bool dump_status, DBGInvoker::Printer & output)
@@ -192,9 +184,7 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     RegionTable & region_table = tmt.getRegionTable();
     kvstore->mockRemoveRegion(region_id, region_table);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("remove region #{}", region_id);
-    output(fmt_buf.toString());
+    output(fmt::format("remove region #{}", region_id));
 }
 
 

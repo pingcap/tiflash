@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/dbgFuncSchema.h>
@@ -9,8 +10,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
-
-#include "Common/FmtUtils.h"
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -37,9 +37,7 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
             context.getSchemaSyncService().reset();
     }
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("schema sync service {}", (enable ? "enabled" : "disabled"));
-    output(fmt_buf.toString());
+    output(fmt::format("schema sync service {}", (enable ? "enabled" : "disabled")));
 }
 
 void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
@@ -48,9 +46,7 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->syncSchemas(context);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.append("schemas refreshed");
-    output(fmt_buf.toString());
+    output("schemas refreshed");
 }
 
 // Trigger gc on all databases / tables.
@@ -66,9 +62,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     service->gc(gc_safe_point);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.append("schemas gc done");
-    output(fmt_buf.toString());
+    output("schemas gc done");
 }
 
 void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
@@ -77,9 +71,7 @@ void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer ou
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->reset();
 
-    FmtBuffer fmt_buf;
-    fmt_buf.append("reset schemas");
-    output(fmt_buf.toString());
+    output("reset schemas");
 }
 
 void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printer output)

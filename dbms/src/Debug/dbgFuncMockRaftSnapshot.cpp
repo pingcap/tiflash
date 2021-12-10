@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
@@ -22,7 +23,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/tests/region_helper.h>
-
 #include <fmt/core.h>
 
 namespace DB
@@ -146,9 +146,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotWithData(Context & context, const AST
     // Mock to apply a snapshot with data in `region`
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>(region, tmt);
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("put region #{}, range{} to table #{} with {} records", region_id, range_string, table_id, cnt);
-    output(fmt_buf.toString());
+    output(fmt::format("put region #{}, range{} to table #{} with {} records", region_id, range_string, table_id, cnt));
 }
 
 // Mock to apply an empty snapshot for region
@@ -223,10 +221,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         RAFT_INIT_LOG_TERM,
         tmt);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("put region #{}, range[{}, {}) to table #{} with raft commands", region_id, RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key), RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key), table_id);
-
-    output(fmt_buf.toString());
+    output(fmt::format("put region #{}, range[{}, {}) to table #{} with raft commands", region_id, RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key), RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key), table_id));
 }
 
 /// Some helper structure / functions for IngestSST
@@ -594,9 +589,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyBlock(Context & context, const A
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithBlock>({region, std::move(block_cache)}, tmt);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("success apply {} with block cache", region->id());
-    output(fmt_buf.toString());
+    output(fmt::format("success apply {} with block cache", region->id()));
 }
 
 
@@ -698,9 +691,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
 
     FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
     {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("Generate {} files for [region_id={}]", ingest_ids.size(), region_id);
-        output(fmt_buf.toString());
+        output(fmt::format("Generate {} files for [region_id={}]", ingest_ids.size(), region_id));
     }
 }
 
@@ -797,9 +788,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
 
     FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
     {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("Generate {} files for [region_id={}]", ingest_ids.size(), region_id);
-        output(fmt_buf.toString());
+        output(fmt::format("Generate {} files for [region_id={}]", ingest_ids.size(), region_id));
     }
 }
 
@@ -818,9 +807,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const
         RegionPtrWithSnapshotFiles{new_region, std::move(ingest_ids)},
         tmt);
 
-    FmtBuffer fmt_buf;
-    fmt_buf.fmtAppend("success apply region {} with dt files", new_region->id());
-    output(fmt_buf.toString());
+    output(fmt::format("success apply region {} with dt files", new_region->id()));
 }
 
 } // namespace DB

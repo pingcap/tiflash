@@ -1,4 +1,3 @@
-#include <fmt/core.h>
 #include <Common/typeid_cast.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockTiDB.h>
@@ -11,6 +10,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
+#include <fmt/core.h>
 
 #include "dbgTools.h"
 
