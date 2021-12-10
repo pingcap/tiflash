@@ -41,11 +41,8 @@ public:
 
     virtual ~LogReader();
 
-    // Read the next record into *record.  Returns true if read
-    // successfully, false if we hit end of the input.  May use
-    // "*scratch" as temporary storage.  The contents filled in *record
-    // will only be valid until the next mutating operation on this
-    // reader or the next mutation to *scratch.
+    // Read the next record record.  Returns <true, record> if read
+    // successfully, false if we hit end of the input.
     virtual std::tuple<bool, String> readRecord();
 
     // Returns the physical offset of the last record returned by readRecord.
@@ -59,7 +56,7 @@ public:
 
 protected:
     // Reports dropped bytes to the reporter.
-    // buffer_ must be updated to remove the dropped bytes prior to invocation.
+    // `buffer` must be updated to remove the dropped bytes prior to invocation.
     void reportCorruption(size_t bytes, const String & reason);
     void reportDrop(size_t bytes, const String & reason);
 
