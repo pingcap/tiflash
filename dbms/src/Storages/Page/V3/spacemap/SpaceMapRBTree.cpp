@@ -87,8 +87,8 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
     struct rb_root * root = &private_data->root;
     struct rb_node *parent = nullptr, **n = &root->rb_node;
     struct rb_node *new_node, *node, *next;
-    struct smap_rb_entry * new_entry;
-    struct smap_rb_entry * entry;
+    struct smap_rb_entry * new_entry = nullptr;
+    struct smap_rb_entry * entry = nullptr;
     bool retval = true;
 
     if (count == 0)
@@ -159,6 +159,11 @@ static bool rb_insert_entry(UInt64 start, UInt64 count, struct rb_private * priv
     }
 
     rb_get_new_entry(&new_entry, start, count);
+    if (!new_entry)
+    {
+        LOG_WARNING(log, "No enough memory");
+        return false;
+    }
 
     new_node = &new_entry->node;
     rb_link_node(new_node, parent, n);
@@ -254,8 +259,8 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct rb_private * priv
 {
     struct rb_root * root = &private_data->root;
     struct rb_node *parent = nullptr, **n = &root->rb_node;
-    struct rb_node * node;
-    struct smap_rb_entry * entry;
+    struct rb_node * node = nullptr;
+    struct smap_rb_entry * entry = nullptr;
     UInt64 new_start, new_count;
     bool marked = false;
 
