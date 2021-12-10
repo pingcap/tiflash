@@ -9,10 +9,22 @@
 #include <thread>
 #include <vector>
 
+
 class ScalableThreadPool
 {
 public:
     using Job = std::function<void()>;
+
+    struct ThdCtx
+    {
+        ThdCtx()
+            : end_syn(false)
+            , status(0)
+        {}
+        std::shared_ptr<std::thread> thd;
+        std::atomic_bool end_syn; //someone wants it end
+        std::atomic_int status; // 0.idle 1.working 2.ended
+    };
 
     /// Size is constant, all threads are created immediately.
     /// Every threads will execute pre_worker firstly when they are created.
@@ -36,27 +48,31 @@ public:
     /// You should not destroy object while calling schedule or wait methods from another threads.
     ~ScalableThreadPool();
 
-    size_t size() const { return m_size; }
+    size_t size() const { return init_cap; }
 
     /// Returns number of active jobs.
     size_t active() const;
+
+    void backgroundJob();
 
 protected:
     mutable std::mutex mutex;
     std::condition_variable has_free_thread;
     std::condition_variable has_new_job_or_shutdown;
+    std::condition_variable cv_shutdown;
+    size_t max_history_active_cnt = 0;
 
-    const size_t m_size;
+    const size_t init_cap;
     Job pre_worker;
     size_t active_jobs = 0;
-    bool shutdown = false;
+    std::atomic<bool> shutdown = false;
 
     std::queue<Job> jobs;
-    std::vector<std::shared_ptr<std::thread>> threads;
+    std::shared_ptr<std::vector<std::shared_ptr<ThdCtx>>> threads;
     std::exception_ptr first_exception;
 
 
-    void worker();
+    void worker(ThdCtx *thdctx);
 
     template <typename F, typename... Args>
     std::function<void()> newJobWithMemTracker(F && f, Args &&... args);
