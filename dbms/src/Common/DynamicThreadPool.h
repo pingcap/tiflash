@@ -5,6 +5,7 @@
 
 #include <boost/lockfree/queue.hpp>
 #include <chrono>
+#include <future>
 
 namespace DB
 {
@@ -148,11 +149,11 @@ public:
 private:
     void scheduleTask(TaskPtr task)
     {
-        if (!scheduledToFixedThreads(task) && !scheduledToExistedDynamicThreads(task))
-            scheduledToNewDynamicThreads(task);
+        if (!scheduledToFixedThread(task) && !scheduledToExistedDynamicThread(task))
+            scheduledToNewDynamicThread(task);
     }
 
-    bool scheduledToFixedThreads(TaskPtr task)
+    bool scheduledToFixedThread(TaskPtr task)
     {
         Queue * queue = nullptr;
         if (idle_fixed_queues.pop(queue))
@@ -163,7 +164,7 @@ private:
         return false;
     }
 
-    bool scheduledToExistedDynamicThreads(TaskPtr task)
+    bool scheduledToExistedDynamicThread(TaskPtr task)
     {
         std::unique_lock lock(dynamic_mutex);
         if (dynamic_head.empty())
@@ -175,10 +176,10 @@ private:
         return true;
     }
 
-    void scheduledToNewDynamicThreads(TaskPtr task)
+    void scheduledToNewDynamicThread(TaskPtr task)
     {
         alive_dynamic_threads.fetch_add(1);
-        std::thread t = ThreadFactory(true, "DynamicThread").newThread(&DynamicThreadPool::dynamic_work, this);
+        std::thread t = ThreadFactory(true, "DynamicThread").newThread(&DynamicThreadPool::dynamic_work, this, std::move(task));
         t.detach();
     }
 
@@ -196,8 +197,10 @@ private:
         }
     }
 
-    void dynamic_work()
+    void dynamic_work(TaskPtr initial_task)
     {
+        initial_task->execute();
+
         static constexpr auto timeout = std::chrono::minutes(10);
         DynamicNode node;
         while (true)
@@ -208,7 +211,7 @@ private:
                 if (in_destructing)
                     break;
                 node.prepend(&dynamic_head); // prepend to reuse hot threads so that cold threads have chance to exit
-                node.cv.wait_for(&lock, timeout);
+                node.cv.wait_for(lock, timeout);
                 task = std::move(node.task);
             }
 

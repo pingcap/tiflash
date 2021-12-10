@@ -3,7 +3,11 @@
 
 namespace DB::tests
 {
-TEST_F(DynamicThreadPool, TestInterDependent)
+class DynamicThreadPoolTest : public ::testing::Test
+{
+};
+
+TEST_F(DynamicThreadPoolTest, TestInterDependent)
 try
 {
     DynamicThreadPool pool(1);
