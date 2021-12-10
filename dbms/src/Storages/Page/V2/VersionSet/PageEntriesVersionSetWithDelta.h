@@ -6,6 +6,7 @@
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V2/PageEntries.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesBuilder.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
@@ -97,7 +98,9 @@ public:
     /// Snapshot.
     /// When snapshot object is freed, it will call `view.release()` to compact VersionList,
     /// and its weak_ptr in the VersionSet's snapshots list will become empty.
-    class Snapshot : private boost::noncopyable
+    class Snapshot
+        : public DB::PageStorageSnapshot
+        , private boost::noncopyable
     {
     public:
         PageEntriesVersionSetWithDelta * vset;

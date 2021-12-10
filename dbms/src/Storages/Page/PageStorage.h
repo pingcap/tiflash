@@ -7,8 +7,8 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageUtil.h>
-#include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/Snapshot.h>
 #include <fmt/format.h>
 
 #include <condition_variable>
@@ -42,7 +42,7 @@ using PageStoragePtr = std::shared_ptr<PageStorage>;
 class PageStorage : private boost::noncopyable
 {
 public:
-    using SnapshotPtr = DB::PS::V2::PageEntriesVersionSetWithDelta::SnapshotPtr;
+    using SnapshotPtr = PageStorageSnapshotPtr;
 
     struct Config
     {

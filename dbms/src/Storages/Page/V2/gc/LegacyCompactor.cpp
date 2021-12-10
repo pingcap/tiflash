@@ -240,7 +240,9 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
     return {page_files_to_remove, page_files_to_compact, compact_sequence, old_checkpoint_file};
 }
 
-WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence)
+WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(
+    const PageStorage::ConcreteSnapshotPtr snapshot,
+    const WriteBatch::SequenceID wb_sequence)
 {
     WriteBatch wb;
     // First Ingest exists pages with normal_id
