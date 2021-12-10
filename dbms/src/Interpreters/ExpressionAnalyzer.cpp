@@ -21,7 +21,6 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/ExternalDictionaries.h>
-#include <Interpreters/InJoinSubqueriesPreprocessor.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/LogicalExpressionsOptimizer.h>
@@ -41,7 +40,6 @@
 #include <Poco/String.h>
 #include <Poco/Util/Application.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageDistributed.h>
 #include <Storages/StorageJoin.h>
 #include <Storages/StorageMemory.h>
 #include <Storages/StorageSet.h>
@@ -174,10 +172,6 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     addAliasColumns();
 
     translateQualifiedNames();
-
-    /// Depending on the user's profile, check for the execution rights
-    /// distributed subqueries inside the IN or JOIN sections and process these subqueries.
-    InJoinSubqueriesPreprocessor(context).process(select_query);
 
     /// Optimizes logical expressions.
     LogicalExpressionsOptimizer(select_query, settings).perform();

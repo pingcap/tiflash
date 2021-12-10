@@ -1,28 +1,25 @@
 #include <Common/OptimizedRegularExpression.h>
 #include <Common/typeid_cast.h>
-
-#include <Storages/StorageMerge.h>
+#include <Databases/IDatabase.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
+#include <Storages/StorageMerge.h>
 #include <TableFunctions/ITableFunction.h>
-#include <Interpreters/evaluateConstantExpression.h>
-#include <Interpreters/Context.h>
-#include <Databases/IDatabase.h>
-#include <TableFunctions/TableFunctionMerge.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <TableFunctions/TableFunctionMerge.h>
 
 
 namespace DB
 {
-
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int UNKNOWN_TABLE;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int UNKNOWN_TABLE;
+} // namespace ErrorCodes
 
 
 static NamesAndTypesList chooseColumns(const String & source_database, const String & table_name_regexp_, const Context & context)
@@ -49,7 +46,8 @@ static NamesAndTypesList chooseColumns(const String & source_database, const Str
 
     if (!any_table)
         throw Exception("Error while executing table function merge. In database " + source_database + " no one matches regular expression: "
-            + table_name_regexp_, ErrorCodes::UNKNOWN_TABLE);
+                            + table_name_regexp_,
+                        ErrorCodes::UNKNOWN_TABLE);
 
     return any_table->getColumns().getAllPhysical();
 }
@@ -61,15 +59,15 @@ StoragePtr TableFunctionMerge::executeImpl(const ASTPtr & ast_function, const Co
 
     if (args_func.size() != 1)
         throw Exception("Table function 'merge' requires exactly 2 arguments"
-            " - name of source database and regexp for table names.",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                        " - name of source database and regexp for table names.",
+                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     ASTs & args = typeid_cast<ASTExpressionList &>(*args_func.at(0)).children;
 
     if (args.size() != 2)
         throw Exception("Table function 'merge' requires exactly 2 arguments"
-            " - name of source database and regexp for table names.",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                        " - name of source database and regexp for table names.",
+                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     args[0] = evaluateConstantExpressionOrIdentifierAsLiteral(args[0], context);
     args[1] = evaluateConstantExpressionAsLiteral(args[1], context);
@@ -93,4 +91,4 @@ void registerTableFunctionMerge(TableFunctionFactory & factory)
     factory.registerFunction<TableFunctionMerge>();
 }
 
-}
+} // namespace DB

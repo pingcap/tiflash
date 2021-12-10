@@ -14,7 +14,7 @@ namespace DB
 class ExchangePacketReader
 {
 public:
-    virtual ~ExchangePacketReader() {}
+    virtual ~ExchangePacketReader() = default;
     virtual void initialize() const = 0;
     virtual bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const = 0;
     virtual ::grpc::Status finish() const = 0;

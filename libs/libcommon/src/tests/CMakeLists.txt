@@ -17,9 +17,20 @@ target_link_libraries (date_lut_default_timezone common ${PLATFORM_LIBS})
 target_link_libraries (multi_version common)
 add_check(multi_version)
 
-add_executable (gtests_libcommon gtest_json_test.cpp gtest_strong_typedef.cpp gtest_mem_utils.cpp gtest_crc64.cpp)
+add_executable (gtests_libcommon
+    gtest_json_test.cpp
+    gtest_strong_typedef.cpp
+    gtest_mem_utils.cpp
+    gtest_crc64.cpp
+    gtest_logger.cpp
+    )
 target_link_libraries (gtests_libcommon gtest_main common)
 add_check(gtests_libcommon)
+
+add_executable(bench_libcommon
+    bench_logger.cpp
+)
+target_link_libraries(bench_libcommon benchmark::benchmark_main common)
 
 add_executable (dump_variable dump_variable.cpp)
 target_link_libraries (dump_variable clickhouse_common_io)
