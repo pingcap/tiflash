@@ -24,6 +24,9 @@ static constexpr UInt64 PAGE_FILE_SMALL_SIZE = 2 * MB;
 static constexpr UInt64 PAGE_FILE_ROLL_SIZE = 128 * MB;
 static constexpr UInt64 PAGE_META_ROLL_SIZE = 2 * MB;
 
+static constexpr UInt64 BLOBFILE_LIMIT_SIZE = 512 * MB;
+static constexpr UInt64 BLOBSTORE_CACHED_FD_SIZE = 100;
+
 static_assert(PAGE_SIZE_STEP >= ((1 << 10) * 16), "PAGE_SIZE_STEP should be at least 16 KB");
 static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP should be power of 2");
 static_assert(PAGE_BUFFER_SIZE % PAGE_SIZE_STEP == 0, "PAGE_BUFFER_SIZE should be dividable by PAGE_SIZE_STEP");
@@ -46,6 +49,9 @@ using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 using PageSize = UInt64;
 
 using BlobFileId = UInt32;
+using BlobFileOffset = UInt64;
+static constexpr UInt32 INVALID_BLOBFILE_ID = UINT32_MAX;
+static constexpr UInt64 INVALID_BLOBFILE_OFFSET = UINT64_MAX;
 
 struct ByteBuffer
 {

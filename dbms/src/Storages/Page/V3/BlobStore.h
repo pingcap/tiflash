@@ -2,19 +2,13 @@
 
 #include <Common/Exception.h>
 #include <Common/LRUCache.h>
+#include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/V3/BlobFile.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 
 #include <mutex>
-
-// TBD : need add these into config
-#define BLOBSTORE_TEST_PATH "./"
-#define BLOBSTORE_CACHED_FD_SIZE 100
-#define BLOBSTORE_SMAP_TYPE SpaceMap::SpaceMapType::SMAP64_RBTREE
-#define BLOBFILE_NAME_PRE "blobfile_"
-#define BLOBFILE_LIMIT_SIZE 512 * DB::MB
 
 namespace DB
 {
@@ -28,6 +22,13 @@ namespace PS::V3
 class BlobStore : public Allocator<false>
 {
 public:
+    struct Config
+    {
+        SettingUInt64 blobfile_limit_size = BLOBFILE_LIMIT_SIZE;
+        SettingUInt64 spacemap_type = SpaceMap::SpaceMapType::SMAP64_STD_MAP;
+        SettingUInt64 blobstore_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
+    };
+
     class BlobStats
     {
     public:
@@ -40,7 +41,7 @@ public:
             /**
             * If no any data inside. It shoule be same as space map `biggest_cap`
             */
-            UInt64 sm_max_caps = BLOBFILE_LIMIT_SIZE;
+            UInt64 sm_max_caps = 0;
 
             UInt64 sm_total_size = 0;
             UInt64 sm_valid_size = 0;
@@ -52,7 +53,7 @@ public:
         using BlobStatPtr = std::shared_ptr<BlobStat>;
 
     public:
-        BlobStats(Poco::Logger * log_);
+        BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
         void lock();
 
@@ -68,9 +69,9 @@ public:
 
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size);
 
-        UInt64 getPosFromStat(BlobStatPtr stat, size_t buf_size);
+        BlobFileOffset getPosFromStat(BlobStatPtr stat, size_t buf_size);
 
-        void removePosFromStat(BlobStatPtr stat, UInt64 offset, size_t buf_size);
+        void removePosFromStat(BlobStatPtr stat, BlobFileOffset offset, size_t buf_size);
 
         BlobStatPtr fileIdToStat(BlobFileId file_id);
 
@@ -78,6 +79,7 @@ public:
     private:
 #endif
         Poco::Logger * log;
+        BlobStore::Config config;
 
         BlobFileId roll_id = 0;
         std::list<BlobFileId> old_ids;
@@ -86,7 +88,7 @@ public:
         std::mutex lock_stats;
     };
 
-    BlobStore(const FileProviderPtr & file_provider_);
+    BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
 
     void recover();
 
@@ -98,17 +100,15 @@ public:
 
     Page read(const PageIDAndEntryV3 & entry, const ReadLimiterPtr & read_limiter = nullptr);
 
-    void read(BlobFileId blob_id, UInt64 offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    // TBD: after single path work, do the multi-path
-    // String choosePath();
 
-    std::pair<BlobFileId, UInt64> getPosFromStats(size_t size);
+    void read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
 
-    void removePosFromStats(BlobFileId file_id, UInt64 offset, size_t size);
+    std::pair<BlobFileId, BlobFileOffset> getPosFromStats(size_t size);
+
+    void removePosFromStats(BlobFileId file_id, BlobFileOffset offset, size_t size);
 
     String getBlobFilePath(BlobFileId blob_id);
 
@@ -119,6 +119,8 @@ private:
 #endif
 
     FileProviderPtr file_provider;
+    String path{};
+    Config config;
 
     Poco::Logger * log;
 

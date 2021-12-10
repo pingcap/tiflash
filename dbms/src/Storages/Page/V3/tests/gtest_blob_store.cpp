@@ -9,9 +9,29 @@ namespace DB::PS::V3::tests
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStats = BlobStore::BlobStats;
 
-TEST(BlobStatsTest, testStats)
+class BlobStoreTest : public DB::base::TiFlashStorageTestBasic
 {
-    BlobStats stats(&Poco::Logger::get("BlobStatsTest"));
+public:
+    void SetUp() override
+    {
+        path = getTemporaryPath();
+        DB::tests::TiFlashTestEnv::tryRemovePath(path);
+
+        Poco::File file(path);
+        if (!file.exists())
+        {
+            file.createDirectories();
+        }
+    }
+
+protected:
+    BlobStore::Config config;
+    String path{};
+};
+
+TEST_F(BlobStoreTest, testStats)
+{
+    BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
     auto stat = stats.createStat(0);
 
@@ -37,12 +57,12 @@ TEST(BlobStatsTest, testStats)
 }
 
 
-TEST(BlobStatsTest, testStat)
+TEST_F(BlobStoreTest, testStat)
 {
     UInt16 blob_file_id = 0;
     BlobStore::BlobStats::BlobStatPtr stat;
 
-    BlobStats stats(&Poco::Logger::get("BlobStatsTest"));
+    BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
     std::tie(stat, blob_file_id) = stats.chooseStat(10);
     ASSERT_EQ(blob_file_id, 0);
@@ -109,13 +129,13 @@ TEST(BlobStatsTest, testStat)
     ASSERT_LE(stat->sm_valid_rate, 1);
 }
 
-TEST(BlobStatsTest, testFullStats)
+TEST_F(BlobStoreTest, testFullStats)
 {
     UInt16 blob_file_id = 0;
     BlobStore::BlobStats::BlobStatPtr stat;
     UInt64 offset = 0;
 
-    BlobStats stats(&Poco::Logger::get("BlobStatsTest"));
+    BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
     stat = stats.createStat(0);
     offset = stats.getPosFromStat(stat, BLOBFILE_LIMIT_SIZE - 1);
@@ -155,7 +175,7 @@ TEST(BlobStatsTest, testFullStats)
     ASSERT_FALSE(stat);
 }
 
-TEST(BlobStatsTest, testWriteRead)
+TEST_F(BlobStoreTest, testWriteRead)
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
 
@@ -163,7 +183,7 @@ TEST(BlobStatsTest, testWriteRead)
     size_t buff_nums = 21;
     size_t buff_size = 123;
 
-    auto blob_store = BlobStore(file_provider);
+    auto blob_store = BlobStore(file_provider, path, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -238,7 +258,7 @@ TEST(BlobStatsTest, testWriteRead)
     ASSERT_EQ(index, buff_nums);
 }
 
-TEST(BlobStatsTest, testFeildOffsetWriteRead)
+TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
 
@@ -255,7 +275,7 @@ TEST(BlobStatsTest, testFeildOffsetWriteRead)
         off += data_sz;
     }
 
-    auto blob_store = BlobStore(file_provider);
+    auto blob_store = BlobStore(file_provider, path, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -307,10 +327,10 @@ TEST(BlobStatsTest, testFeildOffsetWriteRead)
     ASSERT_EQ(index, buff_nums);
 }
 
-TEST(BlobStatsTest, testWrite)
+TEST_F(BlobStoreTest, testWrite)
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-    auto blob_store = BlobStore(file_provider);
+    auto blob_store = BlobStore(file_provider, path, config);
 
     PageId page_id = 50;
     const size_t buff_size = 1024;
@@ -414,6 +434,74 @@ TEST(BlobStatsTest, testWrite)
         record = records[2];
         ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
         ASSERT_EQ(record.page_id, page_id);
+    }
+}
+
+TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    size_t buff_size = 100;
+
+    {
+        config.blobfile_limit_size = buff_size - 1;
+        auto blob_store = BlobStore(file_provider, path, config);
+
+        WriteBatch wb;
+        char c_buff[buff_size];
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>((const char *)c_buff, buff_size);
+        wb.putPage(50, /*tag*/ 0, buff, buff_size);
+
+        bool catch_exception = false;
+        try
+        {
+            blob_store.write(wb, nullptr);
+        }
+        catch (DB::Exception & e)
+        {
+            catch_exception = true;
+        }
+        ASSERT_TRUE(catch_exception);
+    }
+
+    config.blobfile_limit_size = buff_size;
+
+    size_t buffer_sizes[] = {buff_size, buff_size - 1, buff_size / 2 + 1};
+    for (auto & buf_size : buffer_sizes)
+    {
+        auto blob_store = BlobStore(file_provider, path, config);
+
+        WriteBatch wb;
+        char c_buff1[buf_size];
+        char c_buff2[buf_size];
+
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>((const char *)c_buff1, buf_size);
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>((const char *)c_buff2, buf_size);
+
+        wb.putPage(50, /*tag*/ 0, buff1, buf_size);
+
+        auto edit = blob_store.write(wb, nullptr);
+        ASSERT_EQ(edit.size(), 1);
+
+        auto records = edit.getRecords();
+        auto record = records[0];
+        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.page_id, 50);
+        ASSERT_EQ(record.entry.offset, 0);
+        ASSERT_EQ(record.entry.size, buf_size);
+        ASSERT_EQ(record.entry.file_id, 0);
+
+        wb.clear();
+        wb.putPage(51, /*tag*/ 0, buff2, buf_size);
+        edit = blob_store.write(wb, nullptr);
+        ASSERT_EQ(edit.size(), 1);
+
+        records = edit.getRecords();
+        record = records[0];
+        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.page_id, 51);
+        ASSERT_EQ(record.entry.offset, 0);
+        ASSERT_EQ(record.entry.size, buf_size);
+        ASSERT_EQ(record.entry.file_id, 1);
     }
 }
 

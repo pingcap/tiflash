@@ -26,13 +26,13 @@ using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
 
-#define INVAILD_BLOBFILE_ID UINT16_MAX
-
-BlobStore::BlobStore(const FileProviderPtr & file_provider_)
+BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobStore::Config config_)
     : file_provider(file_provider_)
+    , path(path_)
+    , config(config_)
     , log(&Poco::Logger::get("BlobStore"))
-    , blob_stats(log)
-    , cached_file(BLOBSTORE_CACHED_FD_SIZE)
+    , blob_stats(log, config_)
+    , cached_file(config.blobstore_cached_fd_size)
 {
 }
 
@@ -43,12 +43,18 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     PageEntriesEdit edit;
     const size_t all_page_data_size = wb.getTotalDataSize();
 
+    if (all_page_data_size > config.blobfile_limit_size)
+    {
+        throw Exception("Write batch is too large. It should less than [blobfile_limit_size=" + DB::toString(config.blobfile_limit_size.get()) + "]",
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
     if (all_page_data_size != 0)
     {
         char * buffer = (char *)alloc(all_page_data_size);
         char * buffer_pos = buffer;
         BlobFileId blob_id;
-        UInt64 offset_in_file;
+        BlobFileOffset offset_in_file;
         std::tie(blob_id, offset_in_file) = getPosFromStats(all_page_data_size);
 
         size_t offset_in_allocated = 0;
@@ -154,15 +160,15 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     return edit;
 }
 
-std::pair<BlobFileId, UInt64> BlobStore::getPosFromStats(size_t size)
+std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 {
-    UInt16 blob_file_id = INVAILD_BLOBFILE_ID;
+    BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
     BlobStatPtr stat;
 
     blob_stats.lock();
     std::tie(stat, blob_file_id) = blob_stats.chooseStat(size);
 
-    if (blob_file_id != INVAILD_BLOBFILE_ID)
+    if (blob_file_id != INVALID_BLOBFILE_ID)
     {
         stat = blob_stats.createStat(blob_file_id);
     }
@@ -171,10 +177,10 @@ std::pair<BlobFileId, UInt64> BlobStore::getPosFromStats(size_t size)
 
     // Get Postion from single stat
     blob_stats.statLock(stat);
-    UInt64 offset = blob_stats.getPosFromStat(stat, size);
+    BlobFileOffset offset = blob_stats.getPosFromStat(stat, size);
 
     // Can't insert into this spacemap
-    if (offset == UINT64_MAX)
+    if (offset == INVALID_BLOBFILE_OFFSET)
     {
         stat->smap->logStats();
         blob_stats.statUnlock(stat);
@@ -185,7 +191,7 @@ std::pair<BlobFileId, UInt64> BlobStore::getPosFromStats(size_t size)
     return std::make_pair(stat->id, offset);
 }
 
-void BlobStore::removePosFromStats(BlobFileId blob_id, UInt64 offset, size_t size)
+void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
     blob_stats.removePosFromStat(blob_stats.fileIdToStat(blob_id), offset, size);
 }
@@ -270,7 +276,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     return page;
 }
 
-void BlobStore::read(BlobFileId blob_id, UInt64 offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
+void BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
 {
     assert(buffers != nullptr);
     getBlobFile(blob_id)->read(buffers, offset, size, read_limiter);
@@ -279,7 +285,7 @@ void BlobStore::read(BlobFileId blob_id, UInt64 offset, char * buffers, size_t s
 
 String BlobStore::getBlobFilePath(BlobFileId blob_id)
 {
-    return (String)BLOBSTORE_TEST_PATH + BLOBFILE_NAME_PRE + DB::toString(blob_id);
+    return path + "/" + "blobfile_" + DB::toString(blob_id);
 }
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
@@ -295,8 +301,9 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
     return blob_file;
 }
 
-BlobStore::BlobStats::BlobStats(Poco::Logger * log_)
+BlobStore::BlobStats::BlobStats(Poco::Logger * log_, BlobStore::Config config_)
     : log(log_)
+    , config(config_)
 {
 }
 
@@ -345,7 +352,8 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
 
     LOG_DEBUG(log, "Created a new BlobStat which [BlobFileId= " << blob_file_id << "]");
     stat->id = blob_file_id;
-    stat->smap = SpaceMap::createSpaceMap(BLOBSTORE_SMAP_TYPE, 0, BLOBFILE_LIMIT_SIZE);
+    stat->smap = SpaceMap::createSpaceMap((SpaceMap::SpaceMapType)config.spacemap_type.get(), 0, config.blobfile_limit_size);
+    stat->sm_max_caps = config.blobfile_limit_size;
 
     stats_map.emplace_back(stat);
 
@@ -408,7 +416,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         goto new_blob;
     }
 
-    return std::make_pair(stat_ptr, INVAILD_BLOBFILE_ID);
+    return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
 
 new_blob:
     /**
@@ -429,9 +437,10 @@ new_blob:
     }
 }
 
-UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
+BlobFileOffset BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
 {
-    UInt64 offset = 0, max_cap = 0;
+    BlobFileOffset offset = 0;
+    UInt64 max_cap = 0;
 
     std::tie(offset, max_cap) = stat->smap->searchInsertOffset(buf_size);
 
@@ -440,7 +449,7 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
      * Max capability still need update.
      */
     stat->sm_max_caps = max_cap;
-    if (offset != UINT64_MAX)
+    if (offset != INVALID_BLOBFILE_OFFSET)
     {
         if (offset + buf_size > stat->sm_total_size)
         {
@@ -464,7 +473,7 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
     return offset;
 }
 
-void BlobStore::BlobStats::removePosFromStat(BlobStatPtr stat, UInt64 offset, size_t buf_size)
+void BlobStore::BlobStats::removePosFromStat(BlobStatPtr stat, BlobFileOffset offset, size_t buf_size)
 {
     if (!stat->smap->markFree(offset, buf_size))
     {
