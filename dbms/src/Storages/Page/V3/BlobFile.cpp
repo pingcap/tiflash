@@ -33,11 +33,10 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 {
     /**
      * Precautions:
-     *  - in the BlobFile `write` method, we won't increase the `PSMWritePages`.
-     *  - also won't increase `PSMReadPages` in the read.
-     *  - because in this layer we only care about write/read data, rather than `page`.
-     *  - so in meta size(WAL store) will increase these events.
-     *  - also `PSMWriteBytes` and `PSMReadBytes` will be increased in `PageUtils`.
+     *  - In the BlobFile `write` method, we won't increase the `PSMWritePages`.
+     *  - Also won't increase `PSMReadPages` in the `read` method. 
+     *  - It already do in `BlobStore`.
+     *  - Also `PSMWriteBytes` and `PSMReadBytes` will be increased in `PageUtils`.
      */
 
     if (unlikely(wrfile->isClosed()))

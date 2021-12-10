@@ -100,12 +100,12 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                 edit.upsertPage(write.page_id, entry);
             }
 
-
             break;
         }
         case WriteBatch::WriteType::DEL:
         {
             edit.del(write.page_id);
+            break;
         }
         case WriteBatch::WriteType::REF:
         {
@@ -149,6 +149,7 @@ std::pair<BlobStore::BlobFileId, UInt64> BlobStore::getPosFromStats(size_t size)
     // Can't insert into this spacemap
     if (offset == UINT64_MAX)
     {
+        stat->smap->logStats();
         blob_stats.statUnlock(stat);
         throw Exception("Get postion from BlobStat Failed, it may caused by `sm_max_caps` is no corrent.",
                         ErrorCodes::LOGICAL_ERROR);
@@ -214,7 +215,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     }
 
     if (unlikely(pos != data_buf + buf_size))
-        throw Exception("data pos not match the total size sub current pos", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Data pos not match the total size sub current pos", ErrorCodes::LOGICAL_ERROR);
 
     return page_map;
 }
@@ -384,10 +385,10 @@ std::pair<BlobStatPtr, BlobStore::BlobFileId> BlobStore::BlobStats::chooseStat(s
 
 new_blob:
     /**
-     * If we do have a old blob id which may be GC(Then this id have been removed) 
-     * in the `old_ids` . Then we should get a old id rather than create new one.
-     * If there are no old id in `old_ids` , we will use the `roll_id` as the new 
-     * id return. After roll_id generate a `BlobStat`, it will `++`.
+     * If we do have any `old blob id` which may removed by GC.
+     * Then we should get a `old blob id` rather than create a new blob id.
+     * If `old_ids` is empty , we will use the `roll_id` as the new 
+     * id return. After roll_id generate a `BlobStat`, it will been `++`.
      */
     if (old_ids.empty())
     {
@@ -407,7 +408,10 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
 
     std::tie(offset, max_cap) = stat->smap->searchInsertOffset(buf_size);
 
-    // Whatever request success or not, it still need update.
+    /**
+     * Whatever `searchInsertOffset` success or failed,
+     * Max capability still need update.
+     */
     stat->sm_max_caps = max_cap;
     if (offset != UINT64_MAX)
     {
@@ -421,8 +425,9 @@ UInt64 BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
         else
         {
             /**
-             * All in old place, no expand.
-             * Just update valid size
+             * The `offset` reuses the original address. 
+             * Current blob file is not expanded.
+             * Only update valid size.
              */
             stat->sm_valid_size += buf_size;
         }
@@ -436,6 +441,7 @@ void BlobStore::BlobStats::removePosFromStat(BlobStatPtr stat, UInt64 offset, si
 {
     if (!stat->smap->markFree(offset, buf_size))
     {
+        stat->smap->logStats();
         throw Exception("[offset=" + DB::toString(offset) + " , buf_size=" + DB::toString(buf_size) + "] is invalid.",
                         ErrorCodes::LOGICAL_ERROR);
     }
