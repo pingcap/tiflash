@@ -786,21 +786,17 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
         fmt_buf.fmtAppend("{} {} (", exprToString(expr.children(0), input_col), func_name);
-        joinStr(expr.children().begin() + 1, expr.children().end(), fmt_buf, [input_col](const auto & arg, FmtBuffer & fb) 
-            { 
-
-                fb.append(exprToString(arg, input_col));
-            });
+        joinStr(expr.children().begin() + 1, expr.children().end(), fmt_buf, [input_col](const auto & arg, FmtBuffer & fb) {
+            fb.append(exprToString(arg, input_col));
+        });
         fmt_buf.append(")");
     }
     else
     {
         fmt_buf.fmtAppend("{}(", func_name);
-        joinStr(expr.children().begin(), expr.children().end(), fmt_buf, [input_col](const auto & arg, FmtBuffer & fb) 
-            { 
-
-                fb.append(exprToString(arg, input_col));
-            });
+        joinStr(expr.children().begin(), expr.children().end(), fmt_buf, [input_col](const auto & arg, FmtBuffer & fb) {
+            fb.append(exprToString(arg, input_col));
+        });
         fmt_buf.append(")");
     }
     return fmt_buf.toString();
