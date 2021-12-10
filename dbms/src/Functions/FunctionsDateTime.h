@@ -1346,11 +1346,11 @@ public:
             throw Exception("First argument for function " + getName() + " (unit) must be String",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1]).get()->isMyDateOrMyDateTime() && !arguments[1]->onlyNull())
+        if (!removeNullable(arguments[1])->isMyDateOrMyDateTime() && !arguments[1]->onlyNull())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[2]).get()->isMyDateOrMyDateTime() && !arguments[2]->onlyNull())
+        if (!removeNullable(arguments[2])->isMyDateOrMyDateTime() && !arguments[2]->onlyNull())
             throw Exception("Third argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -1724,11 +1724,11 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!removeNullable(arguments[0]).get()->isMyDateOrMyDateTime())
+        if (!removeNullable(arguments[0])->isMyDateOrMyDateTime())
             throw Exception("First argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!removeNullable(arguments[1]).get()->isMyDateOrMyDateTime())
+        if (!removeNullable(arguments[1])->isMyDateOrMyDateTime())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -2221,7 +2221,7 @@ public:
             size_t size = vec_from.size();
             vec_to.resize(size);
 
-            const auto * const offset_col = block.getByPosition(arguments.back()).column.get();
+            const auto * offset_col = block.getByPosition(arguments.back()).column.get();
             if (!offset_col->isColumnConst())
                 throw Exception{
                     "Second argument of function " + getName() + " must be an integral constant",
@@ -2806,7 +2806,7 @@ public:
     {
         int fsp = 0;
         const auto fsp_type = arguments[0].type;
-        const auto * const fsp_column = arguments[0].column.get();
+        const auto * fsp_column = arguments[0].column.get();
         if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
         {
             fsp = fsp_column->getInt(0);
@@ -2823,7 +2823,7 @@ public:
     static UInt8 getFsp(Block & block, const ColumnNumbers & arguments)
     {
         const auto fsp_type = block.getByPosition(arguments[0]).type;
-        const auto * const fsp_column = block.getByPosition(arguments[0]).column.get();
+        const auto * fsp_column = block.getByPosition(arguments[0]).column.get();
         if (fsp_type && fsp_type->isInteger() && fsp_column && fsp_column->isColumnConst())
         {
             return fsp_column->getInt(0);
