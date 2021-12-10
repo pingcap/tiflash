@@ -114,7 +114,7 @@ public:
             std::unique_lock lock(dynamic_mutex);
             in_destructing = true;
             for (auto * next = dynamic_head.next; next != &dynamic_head; next = next->next)
-                next.cv->notify_one();
+                next->cv.notify_one();
         }
 
         while (alive_dynamic_threads.load() != 0)
