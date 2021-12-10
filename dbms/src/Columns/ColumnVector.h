@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Columns/ColumnVectorHelper.h>
+#include <IO/Endian.h>
 
 #include <cmath>
 
@@ -126,6 +127,19 @@ inline UInt64 unionCastToUInt64(Float32 x)
     return res;
 }
 
+template <typename targetType, typename encodeType>
+inline targetType decodeInt(const char * pos)
+{
+    if (is_signed_v<targetType>)
+    {
+        return static_cast<targetType>(static_cast<std::make_signed_t<encodeType>>(readLittleEndian<encodeType>(pos)));
+    }
+    else
+    {
+        return static_cast<targetType>(static_cast<std::make_unsigned_t<encodeType>>(readLittleEndian<encodeType>(pos)));
+    }
+}
+
 
 /** A template for columns that use a simple array to store.
   */
@@ -180,10 +194,64 @@ public:
         data.push_back(static_cast<const Self &>(src).getData()[n]);
     }
 
-    void insertData(const char * pos, size_t /*length*/)
-        override
+    void insertData(const char * pos, size_t /*length*/) override
     {
         data.push_back(*reinterpret_cast<const T *>(pos));
+    }
+
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode [[maybe_unused]]) override
+    {
+        if constexpr (std::is_same_v<T, Float32> || std::is_same_v<T, Float64>)
+        {
+            if (unlikely(length != sizeof(Float64)))
+            {
+                throw Exception("Invalid float value length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
+            }
+            constexpr UInt64 SIGN_MASK = UInt64(1) << 63;
+            auto num = readBigEndian<UInt64>(raw_value.c_str() + cursor);
+            if (num & SIGN_MASK)
+                num ^= SIGN_MASK;
+            else
+                num = ~num;
+            Float64 res;
+            memcpy(&res, &num, sizeof(UInt64));
+            data.push_back(res);
+        }
+        else
+        {
+            // check overflow
+            if (length > sizeof(T))
+            {
+                if (!force_decode)
+                {
+                    return false;
+                }
+                else
+                {
+                    throw Exception("Detected overflow when decoding integer of length " + std::to_string(length) + " with column type " + this->getName(),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+
+            switch (length)
+            {
+            case sizeof(UInt8):
+                data.push_back(decodeInt<T, UInt8>(raw_value.c_str() + cursor));
+                break;
+            case sizeof(UInt16):
+                data.push_back(decodeInt<T, UInt16>(raw_value.c_str() + cursor));
+                break;
+            case sizeof(UInt32):
+                data.push_back(decodeInt<T, UInt32>(raw_value.c_str() + cursor));
+                break;
+            case sizeof(UInt64):
+                data.push_back(decodeInt<T, UInt64>(raw_value.c_str() + cursor));
+                break;
+            default:
+                throw Exception("Invalid integer length " + std::to_string(length), ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        return true;
     }
 
     void insertDefault() override

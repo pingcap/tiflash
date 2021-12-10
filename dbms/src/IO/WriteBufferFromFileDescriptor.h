@@ -18,7 +18,7 @@ protected:
     std::string getFileName() const override;
 
 public:
-    WriteBufferFromFileDescriptor(
+    explicit WriteBufferFromFileDescriptor(
         int fd_ = -1,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
@@ -42,6 +42,8 @@ public:
     off_t getPositionInFile() override;
 
     void sync() override;
+
+    void close() override;
 
 private:
     off_t doSeek(off_t offset, int whence) override;

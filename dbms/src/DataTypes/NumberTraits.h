@@ -226,9 +226,10 @@ struct ResultOfModulo
      * * unsigned int % signed int evaluates to unsigned int, but signed int % unsigned int evaluates to signed int.
      * * the precision of A % B is the maximum precision of A and B.
      */
-    using Type = std::conditional_t<std::is_floating_point_v<A> || std::is_floating_point_v<B>,
-                                    Float64,
-                                    std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
+    using Type = std::conditional_t<
+        std::is_floating_point_v<A> || std::is_floating_point_v<B>,
+        Float64,
+        std::conditional_t<is_signed_v<A>, IntegerType, make_unsigned_t<IntegerType>>>;
 };
 
 template <typename A>
@@ -309,7 +310,10 @@ struct ResultOfIf
     static constexpr size_t max_size_of_integer = max(std::is_integral_v<A> ? sizeof(A) : 0, std::is_integral_v<B> ? sizeof(B) : 0);
     static constexpr size_t max_size_of_float = max(std::is_floating_point_v<A> ? sizeof(A) : 0, std::is_floating_point_v<B> ? sizeof(B) : 0);
 
-    using Type = typename Construct<has_signed, has_float, ((has_float && has_integer && max_size_of_integer >= max_size_of_float) || (has_signed && has_unsigned && max_size_of_unsigned_integer >= max_size_of_signed_integer)) ? max(sizeof(A), sizeof(B)) * 2 : max(sizeof(A), sizeof(B))>::Type;
+    using Type = typename Construct<
+        has_signed,
+        has_float,
+        ((has_float && has_integer && max_size_of_integer >= max_size_of_float) || (has_signed && has_unsigned && max_size_of_unsigned_integer >= max_size_of_signed_integer)) ? max(sizeof(A), sizeof(B)) * 2 : max(sizeof(A), sizeof(B))>::Type;
 };
 
 /** Before applying bitwise operations, operands are casted to whole numbers. */
@@ -337,18 +341,20 @@ struct ToInteger<Int128>
 // CLICKHOUSE-29. The same depth, different signs
 // NOTE: This case is applied for 64-bit integers only (for backward compability), but could be used for any-bit integers
 template <typename A, typename B>
-constexpr bool LeastGreatestSpecialCase = std::is_integral_v<A> && std::is_integral_v<B> && (8 == sizeof(A) && sizeof(A) == sizeof(B))
-    && (std::is_signed_v<A> ^ std::is_signed_v<B>);
+constexpr bool LeastGreatestSpecialCase
+    = std::is_integral_v<A> && std::is_integral_v<B> && (8 == sizeof(A) && sizeof(A) == sizeof(B)) && (std::is_signed_v<A> ^ std::is_signed_v<B>);
 
 template <typename A, typename B>
-using ResultOfLeast = std::conditional_t<LeastGreatestSpecialCase<A, B>,
-                                         typename Construct<true, false, sizeof(A)>::Type,
-                                         typename ResultOfIf<A, B>::Type>;
+using ResultOfLeast = std::conditional_t<
+    LeastGreatestSpecialCase<A, B>,
+    typename Construct<true, false, sizeof(A)>::Type,
+    typename ResultOfIf<A, B>::Type>;
 
 template <typename A, typename B>
-using ResultOfGreatest = std::conditional_t<LeastGreatestSpecialCase<A, B>,
-                                            typename Construct<false, false, sizeof(A)>::Type,
-                                            typename ResultOfIf<A, B>::Type>;
+using ResultOfGreatest = std::conditional_t<
+    LeastGreatestSpecialCase<A, B>,
+    typename Construct<false, false, sizeof(A)>::Type,
+    typename ResultOfIf<A, B>::Type>;
 
 } // namespace NumberTraits
 
