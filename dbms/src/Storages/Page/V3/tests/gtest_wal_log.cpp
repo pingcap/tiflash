@@ -23,6 +23,7 @@
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
+#include <Storages/Page/V3/WALStore.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 #include <sys/types.h>
@@ -206,7 +207,6 @@ private:
         }
     };
 
-
     String reader_contents;
     ReportCollector report;
     std::unique_ptr<LogWriter> writer;
@@ -233,10 +233,16 @@ public:
         resetReader();
     }
 
-    void resetReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
+    std::unique_ptr<LogReader> getNewReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords, size_t log_num = 0)
     {
         std::unique_ptr<ReadBufferFromFileBase> file_reader = std::make_unique<StringSouce>(reader_contents, /*fail_after_read_partial_*/ !allow_retry_read);
-        reader = std::make_unique<LogReader>(std::move(file_reader), &report, /* verify_checksum */ true, /* log_number */ log_file_num, wal_recovery_mode, log);
+        auto log_reader = std::make_unique<LogReader>(std::move(file_reader), &report, /* verify_checksum */ true, /* log_number */ log_num, wal_recovery_mode, log);
+        return log_reader;
+    }
+
+    void resetReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
+    {
+        reader = getNewReader(wal_recovery_mode, log_file_num);
     }
 
     void write(const std::string & msg)
@@ -764,7 +770,17 @@ TEST_P(LogFileRWTest, RecycleWithAnotherLogNum)
     ASSERT_EQ(getReaderContents().size(), content_size_before_overwrite);
     // read with old log number
     ASSERT_EQ("EOF", read());
-    // TODO: read with new log number
+
+    // read with new log number
+    auto new_log_reader = getNewReader(WALRecoveryMode::TolerateCorruptedTailRecords, overwrite_log_num);
+    auto read_from_new = [&new_log_reader]() -> String {
+        if (auto [ok, scratch] = new_log_reader->readRecord(); ok)
+            return scratch;
+        return "EOF";
+    };
+    ASSERT_EQ("foooo", read_from_new());
+    ASSERT_EQ("bar", read_from_new());
+    ASSERT_EQ("EOF", read_from_new());
 }
 
 TEST_P(LogFileRWTest, RecycleWithSameBoundaryLogNum)
