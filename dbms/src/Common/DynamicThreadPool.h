@@ -65,6 +65,7 @@ private:
             prev = this;
         }
 
+        /// valid when call on a single node whose next and prev is itself.
         void prepend(DynamicNode * head)
         {
             next = head->next;
@@ -73,6 +74,7 @@ private:
             head->next = this;
         }
 
+        /// valid when call on a single node whose next and prev is itself.
         void detach()
         {
             prev->next = next;
@@ -81,7 +83,7 @@ private:
             prev = this;
         }
 
-        bool empty() const
+        bool noFollowers() const
         {
             return next == prev;
         }
@@ -114,10 +116,12 @@ public:
         {
             std::unique_lock lock(dynamic_mutex);
             in_destructing = true;
-            for (auto * next = dynamic_idle_head.next; next != &dynamic_idle_head; next = next->next)
-                next->cv.notify_one();
+            // do not need to detach node here
+            for (auto * node = dynamic_idle_head.next; node != &dynamic_idle_head; node = node->next)
+                node->cv.notify_one();
         }
 
+        // TODO: maybe use a latch is more elegant.
         while (alive_dynamic_threads.load() != 0)
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -153,7 +157,7 @@ private:
             scheduledToNewDynamicThread(task);
     }
 
-    bool scheduledToFixedThread(TaskPtr task)
+    bool scheduledToFixedThread(TaskPtr & task)
     {
         Queue * queue = nullptr;
         if (idle_fixed_queues.pop(queue))
@@ -164,19 +168,20 @@ private:
         return false;
     }
 
-    bool scheduledToExistedDynamicThread(TaskPtr task)
+    bool scheduledToExistedDynamicThread(TaskPtr & task)
     {
         std::unique_lock lock(dynamic_mutex);
-        if (dynamic_idle_head.empty())
+        if (dynamic_idle_head.noFollowers())
             return false;
-        DynamicNode * next = dynamic_idle_head.next;
-        next->detach();
-        next->task = std::move(task);
-        next->cv.notify_one();
+        DynamicNode * node = dynamic_idle_head.next;
+        // detach node to avoid assigning two tasks to node.
+        node->detach();
+        node->task = std::move(task);
+        node->cv.notify_one();
         return true;
     }
 
-    void scheduledToNewDynamicThread(TaskPtr task)
+    void scheduledToNewDynamicThread(TaskPtr & task)
     {
         alive_dynamic_threads.fetch_add(1);
         std::thread t = ThreadFactory(true, "DynamicThread").newThread(&DynamicThreadPool::dynamic_work, this, std::move(task));
@@ -205,19 +210,20 @@ private:
         DynamicNode node;
         while (true)
         {
-            TaskPtr task;
             {
                 std::unique_lock lock(dynamic_mutex);
                 if (in_destructing)
                     break;
                 node.prepend(&dynamic_idle_head); // prepend to reuse hot threads so that cold threads have chance to exit
                 node.cv.wait_for(lock, timeout);
-                task = std::move(node.task);
+                node.detach();
             }
 
+            TaskPtr & task = node.task;
             if (!task) // may be timeout or cancelled
                 break;
             task->execute();
+            task.reset();
         }
         alive_dynamic_threads.fetch_sub(1);
     }
