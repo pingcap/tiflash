@@ -14,8 +14,6 @@ namespace DB::PS::V3
 class BlobFile
 {
 public:
-    using BlobFileId = UInt16;
-
     BlobFile(String path_,
              FileProviderPtr file_provider_,
              bool truncate_if_exists = true);

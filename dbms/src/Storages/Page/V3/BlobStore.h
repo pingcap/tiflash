@@ -28,8 +28,6 @@ namespace PS::V3
 class BlobStore : public Allocator<false>
 {
 public:
-    using BlobFileId = UInt16;
-
     class BlobStats
     {
     public:

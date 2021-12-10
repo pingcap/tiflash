@@ -238,7 +238,6 @@ TEST(BlobStatsTest, testWriteRead)
     ASSERT_EQ(index, buff_nums);
 }
 
-
 TEST(BlobStatsTest, testFeildOffsetWriteRead)
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
@@ -306,6 +305,116 @@ TEST(BlobStatsTest, testFeildOffsetWriteRead)
         index++;
     }
     ASSERT_EQ(index, buff_nums);
+}
+
+TEST(BlobStatsTest, testWrite)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    auto blob_store = BlobStore(file_provider);
+
+    PageId page_id = 50;
+    const size_t buff_size = 1024;
+    WriteBatch wb;
+    {
+        char c_buff1[buff_size];
+        char c_buff2[buff_size];
+
+        for (size_t i = 0; i < buff_size; ++i)
+        {
+            c_buff1[i] = i & 0xff;
+            c_buff2[i] = (char)((i & 0xff) + 1);
+        }
+
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(c_buff1, buff_size);
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, buff_size);
+
+        wb.putPage(page_id, /*tag*/ 0, buff1, buff_size);
+        wb.upsertPage(page_id,
+                      /*tag*/ 0,
+                      /*PageFileIdAndLevel*/ {},
+                      buff2,
+                      buff_size,
+                      /*PageFieldOffsetChecksums*/ {});
+
+        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        ASSERT_EQ(edit.size(), 2);
+
+        auto records = edit.getRecords();
+        auto record = records[0];
+
+        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.page_id, page_id);
+        ASSERT_EQ(record.entry.offset, 0);
+        ASSERT_EQ(record.entry.size, buff_size);
+        ASSERT_EQ(record.entry.file_id, 0);
+
+        record = records[1];
+        ASSERT_EQ(record.type, WriteBatch::WriteType::UPSERT);
+        ASSERT_EQ(record.page_id, page_id);
+        ASSERT_EQ(record.entry.offset, buff_size);
+        ASSERT_EQ(record.entry.size, buff_size);
+        ASSERT_EQ(record.entry.file_id, 0);
+    }
+
+
+    wb.clear();
+    {
+        wb.putRefPage(page_id + 1, page_id);
+        wb.delPage(page_id + 1);
+        wb.delPage(page_id);
+
+        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        ASSERT_EQ(edit.size(), 3);
+
+        auto records = edit.getRecords();
+        auto record = records[0];
+
+        ASSERT_EQ(record.type, WriteBatch::WriteType::REF);
+        ASSERT_EQ(record.page_id, page_id + 1);
+        ASSERT_EQ(record.ori_page_id, page_id);
+
+        record = records[1];
+        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.page_id, page_id + 1);
+
+        record = records[2];
+        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.page_id, page_id);
+    }
+
+    wb.clear();
+    {
+        char c_buff[buff_size];
+
+        for (size_t i = 0; i < buff_size; ++i)
+        {
+            c_buff[i] = i & 0xff;
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, buff_size);
+        wb.putPage(page_id, /*tag*/ 0, buff, buff_size);
+        wb.putRefPage(page_id + 1, page_id);
+        wb.delPage(page_id);
+
+        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        auto records = edit.getRecords();
+
+        auto record = records[0];
+        ASSERT_EQ(record.type, WriteBatch::WriteType::PUT);
+        ASSERT_EQ(record.page_id, page_id);
+        ASSERT_EQ(record.entry.offset, buff_size * 2);
+        ASSERT_EQ(record.entry.size, buff_size);
+        ASSERT_EQ(record.entry.file_id, 0);
+
+        record = records[1];
+        ASSERT_EQ(record.type, WriteBatch::WriteType::REF);
+        ASSERT_EQ(record.page_id, page_id + 1);
+        ASSERT_EQ(record.ori_page_id, page_id);
+
+        record = records[2];
+        ASSERT_EQ(record.type, WriteBatch::WriteType::DEL);
+        ASSERT_EQ(record.page_id, page_id);
+    }
 }
 
 } // namespace DB::PS::V3::tests

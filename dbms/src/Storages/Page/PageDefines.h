@@ -45,7 +45,7 @@ using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;
 
-using BlobFileID = UInt32;
+using BlobFileId = UInt32;
 
 struct ByteBuffer
 {
