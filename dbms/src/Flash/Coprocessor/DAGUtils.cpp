@@ -1,5 +1,6 @@
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
+#include <Common/joinStr.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/FieldToDataType.h>
@@ -785,31 +786,21 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
         fmt_buf.fmtAppend("{} {} (", exprToString(expr.children(0), input_col), func_name);
-        bool first = true;
-        for (int i = 1; i < expr.children_size(); i++)
-        {
-            String s = exprToString(expr.children(i), input_col);
-            if (first)
-                first = false;
-            else
-                fmt_buf.append(", ");
-            fmt_buf.append(s);
-        }
+        joinStr(expr.children().begin() + 1, expr.children().end(), fmt_buf, [input_col](const auto & arg, FmtBuffer & fb) 
+            { 
+
+                fb.append(exprToString(arg, input_col));
+            });
         fmt_buf.append(")");
     }
     else
     {
         fmt_buf.fmtAppend("{}(", func_name);
-        bool first = true;
-        for (const tipb::Expr & child : expr.children())
-        {
-            String s = exprToString(child, input_col);
-            if (first)
-                first = false;
-            else
-                fmt_buf.append(", ");
-            fmt_buf.append(s);
-        }
+        joinStr(expr.children().begin(), expr.children().end(), fmt_buf, [input_col](const auto & arg, FmtBuffer & fb) 
+            { 
+
+                fb.append(exprToString(arg, input_col));
+            });
         fmt_buf.append(")");
     }
     return fmt_buf.toString();
