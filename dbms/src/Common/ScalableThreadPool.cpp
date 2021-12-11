@@ -72,21 +72,6 @@ std::future<int> ScalableThreadPool::schedule(Job job)
     return schedule0(p, newJob(p, job));
 }
 
-void ScalableThreadPool::wait()
-{
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        has_free_thread.wait(lock, [this] { return active_jobs == 0; });
-
-        if (first_exception)
-        {
-            std::exception_ptr exception;
-            std::swap(exception, first_exception);
-            std::rethrow_exception(exception);
-        }
-    }
-}
-
 ScalableThreadPool::~ScalableThreadPool()
 {
     {

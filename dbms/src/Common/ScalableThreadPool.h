@@ -46,12 +46,6 @@ public:
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
     std::future<int> schedule(Job job);
 
-    /// Wait for all currently active jobs to be done.
-    /// You may call schedule and wait many times in arbitary order.
-    /// If any thread was throw an exception, first exception will be rethrown from this method,
-    ///  and exception will be cleared.
-    void wait();
-
     /// Waits for all threads. Doesn't rethrow exceptions (use 'wait' method to rethrow exceptions).
     /// You should not destroy object while calling schedule or wait methods from another threads.
     ~ScalableThreadPool();
