@@ -89,7 +89,7 @@ static void waitTask(std::future<int> & f)
 {
     try
     {
-        f.get();
+        if (f.valid()) f.get();
     }
     catch (const std::exception & e)
     {
