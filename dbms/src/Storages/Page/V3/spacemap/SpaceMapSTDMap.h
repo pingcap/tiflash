@@ -1,5 +1,6 @@
 #pragma once
 #include <Common/Exception.h>
+#include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <fmt/format.h>
 
@@ -15,23 +16,6 @@ extern const int NOT_IMPLEMENTED;
 
 namespace PS::V3
 {
-namespace details
-{
-// Return an iterator to the last element whose key is less than or equal to `key`.
-// If no such element is found, the past-the-end iterator is returned.
-template <typename C>
-typename C::const_iterator
-findLessEQ(const C & c, const typename C::key_type & key)
-{
-    auto iter = c.upper_bound(key); // first element > `key`
-    // Nothing greater than key
-    if (iter == c.cbegin())
-        return c.cend();
-    // its prev must be less than or equal to `key`
-    return --iter;
-}
-
-} // namespace details
 class STDMapSpaceMap
     : public SpaceMap
     , public ext::SharedPtrHelper<STDMapSpaceMap>
@@ -73,7 +57,7 @@ protected:
 
     bool isMarkUnused(UInt64 offset, size_t length) override
     {
-        auto it = details::findLessEQ(free_map, offset); // first free block <= `offset`
+        auto it = MapUtils::findLessEQ(free_map, offset); // first free block <= `offset`
         if (it == free_map.end())
         {
             // No free blocks <= `offset`
@@ -85,7 +69,7 @@ protected:
 
     bool markUsedImpl(UInt64 offset, size_t length) override
     {
-        auto it = details::findLessEQ(free_map, offset); // first free block <= `offset`
+        auto it = MapUtils::findLessEQ(free_map, offset); // first free block <= `offset`
         if (it == free_map.end())
         {
             return false;
