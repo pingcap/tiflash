@@ -75,13 +75,13 @@ protected:
     std::thread bk_thd;
 
 
-    void worker(ThdCtx *thdctx);
+    void worker(ThdCtx * thdctx);
 
     /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
     std::future<int> schedule0(std::shared_ptr<std::promise<int>> p, Job job);
 
-//    template <typename F, typename... Args>
+    //    template <typename F, typename... Args>
     std::function<void()> newJob(std::shared_ptr<std::promise<int>> p, Job job);
 };
 
@@ -89,7 +89,8 @@ static void waitTask(std::future<int> & f)
 {
     try
     {
-        if (f.valid()) f.get();
+        if (f.valid())
+            f.get();
     }
     catch (const std::exception & e)
     {
@@ -97,8 +98,10 @@ static void waitTask(std::future<int> & f)
     }
 }
 
-[[maybe_unused]] static void waitTasks(std::vector<std::future<int>> &futures) {
-    for(auto &f: futures) {
+[[maybe_unused]] static void waitTasks(std::vector<std::future<int>> & futures)
+{
+    for (auto & f : futures)
+    {
         waitTask(f);
     }
 }

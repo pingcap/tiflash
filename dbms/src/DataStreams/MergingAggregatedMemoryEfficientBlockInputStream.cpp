@@ -284,7 +284,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::finalize()
     LOG_TRACE(log, "Waiting for threads to finish");
 
     // if (parallel_merge_data)
-        // parallel_merge_data->pool.wait();
+    // parallel_merge_data->pool.wait();
 
     LOG_TRACE(log, "Waited for threads to finish");
 }

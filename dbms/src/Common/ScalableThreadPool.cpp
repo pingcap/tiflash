@@ -177,5 +177,3 @@ void ScalableThreadPool::worker(ThdCtx * thdctx)
     }
     thdctx->status = 2;
 }
-
-

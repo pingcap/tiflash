@@ -169,9 +169,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             }
             else
             {
-                 LOG_WARNING(
-                     log,
-                     "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                LOG_WARNING(
+                    log,
+                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;

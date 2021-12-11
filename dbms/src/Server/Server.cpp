@@ -509,7 +509,7 @@ public:
         builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_ping_interval_without_data_ms", 10 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_time_between_pings_ms", 10 * 1000));
         builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, 500);
-// +       builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MIN_POLLERS, 1);
+        // +       builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MIN_POLLERS, 1);
         builder.RegisterService(flash_service.get());
         LOG_INFO(log, "Flash service registered");
         builder.RegisterService(diagnostics_service.get());

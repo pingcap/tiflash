@@ -1456,7 +1456,7 @@ public:
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
         // if (parallel_merge_data)
-            // parallel_merge_data->pool.wait();
+        // parallel_merge_data->pool.wait();
     }
 
 protected:
@@ -1563,7 +1563,7 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        ScalableThreadPool* pool;
+        ScalableThreadPool * pool;
 
         explicit ParallelMergeData()
             : pool(glb_thd_pool.get())
