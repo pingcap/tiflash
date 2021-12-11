@@ -166,6 +166,12 @@ public:
         offsets.push_back(new_size);
     }
 
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
+    {
+        insertData(raw_value.c_str() + cursor, length);
+        return true;
+    }
+
     void insertDataWithTerminatingZero(const char * pos, size_t length) override
     {
         const size_t old_size = chars.size();
