@@ -13,8 +13,7 @@ std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<in
 {
     auto memory_tracker = current_memory_tracker;
     return [p, memory_tracker, job] {
-        if (memory_tracker)
-            current_memory_tracker = memory_tracker;
+        current_memory_tracker = memory_tracker;
         try
         {
             job();
@@ -31,8 +30,7 @@ std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<in
             {
             } // set_exception() may throw too
         }
-        if (memory_tracker)
-            current_memory_tracker = nullptr;
+        current_memory_tracker = nullptr;
     };
 }
 
