@@ -11,6 +11,7 @@
 #include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -98,7 +99,7 @@ public:
 
     int input_streams_num;
 
-    std::unique_ptr<std::thread> send_thread;
+    std::future<int> future;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;

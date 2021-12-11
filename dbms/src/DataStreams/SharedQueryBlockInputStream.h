@@ -49,9 +49,8 @@ public:
             return;
         read_prefixed = true;
         is_end = 0;
-        glb_thd_pool->scheduleWithMemTracker(([this] { this->fetchBlocks(); }));
         /// Start reading thread.
-        // thread = ThreadFactory(true, "SharedQuery").newThread([this] { fetchBlocks(); });
+        future = glb_thd_pool->schedule(([this] { this->fetchBlocks(); }));
     }
 
     void readSuffix() override
@@ -61,14 +60,7 @@ public:
         if (read_suffixed)
             return;
         read_suffixed = true;
-        {
-            std::unique_lock<std::mutex> lk(end_mu);
-            // is_end++;
-            end_cv.wait(lk, [&] { return is_end.load(); });
-        }
-
-        // if (thread.joinable())
-        //     thread.join();
+        waitTask(future);
         if (!exception_msg.empty())
             throw Exception(exception_msg);
     }
@@ -148,6 +140,7 @@ private:
     std::mutex end_mu;
     std::atomic<int> is_end;
     std::condition_variable end_cv;
+    std::future<int> future;
 
     std::string exception_msg;
 

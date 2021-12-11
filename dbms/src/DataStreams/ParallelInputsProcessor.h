@@ -106,19 +106,10 @@ public:
     void process()
     {
         active_threads = max_threads;
-        if (glb_thd_pool)
+        for (size_t i = 0; i < max_threads; ++i)
         {
-            for (size_t i = 0; i < max_threads; ++i)
-            {
-                glb_thd_pool->scheduleWithMemTracker(
-                    ([this, i] { this->thread(i); }));
-            }
-        }
-        else
-        {
-            threads.reserve(max_threads);
-            for (size_t i = 0; i < max_threads; ++i)
-                threads.emplace_back(ThreadFactory(true, handler.getName()).newThread([this, i] { thread(i); }));
+            futures.emplace_back(glb_thd_pool->schedule(
+                ([this, i] { this->thread(i); })));
         }
     }
 
@@ -152,15 +143,7 @@ public:
     {
         if (joined_threads)
             return;
-
-        {
-            std::unique_lock<std::mutex> lk(thd_mu);
-            end_cv.wait(lk, [&] { return end_threads == max_threads; });
-        }
-        //        for (auto & thread : threads)
-        //            thread.join();
-
-        //        threads.clear();
+        waitTasks(futures);
         joined_threads = true;
     }
 
@@ -328,6 +311,7 @@ private:
     /// Streams.
     using ThreadsData = std::vector<std::thread>;
     ThreadsData threads;
+    std::vector<std::future<int>> futures;
 
     /** A set of available sources that are not currently processed by any thread.
       * Each thread takes one source from this set, takes a block out of the source (at this moment the source does the calculations)

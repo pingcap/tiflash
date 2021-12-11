@@ -12,6 +12,7 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <future>
 #include <mutex>
 #include <thread>
 
@@ -110,7 +111,7 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::vector<std::thread> workers;
+    std::vector<std::future<int>> futures;
     DAGSchema schema;
 
     std::mutex mu;

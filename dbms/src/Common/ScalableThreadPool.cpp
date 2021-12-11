@@ -24,16 +24,31 @@ void handle_eptr(std::exception_ptr eptr) // passing by value is ok
     }
 }
 
-template <typename F, typename... Args>
-std::function<void()> ScalableThreadPool::newJobWithMemTracker(F && f, Args &&... args)
+//template <typename F, typename... Args>
+std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<int>> p, Job job)
 {
     auto memory_tracker = current_memory_tracker;
     /// Use std::tuple to workaround the limit on the lambda's init-capture of C++17.
     /// See https://stackoverflow.com/questions/47496358/c-lambdas-how-to-capture-variadic-parameter-pack-from-the-upper-scope
-    return [memory_tracker, f = std::move(f), args = std::make_tuple(std::move(args)...)] {
-        current_memory_tracker = memory_tracker;
-        std::apply(f, std::move(args));
-        current_memory_tracker = nullptr;
+    return [p, memory_tracker, job] {
+        if (memory_tracker) current_memory_tracker = memory_tracker;
+        try
+        {
+            job();
+            p->set_value(0);
+        }
+        catch (...)
+        {
+            try
+            {
+                // store anything thrown in the promise
+                p->set_exception(std::current_exception());
+            }
+            catch (...)
+            {
+            } // set_exception() may throw too
+        }
+        if (memory_tracker) current_memory_tracker = nullptr;
     };
 }
 
@@ -41,34 +56,24 @@ ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker_)
     : init_cap(m_size)
     , pre_worker(pre_worker_)
     , threads(std::make_shared<std::vector<std::shared_ptr<ThdCtx>>>())
-    , bk_thd(std::thread([this] {backgroundJob();}))
+    , bk_thd(std::thread([this] { backgroundJob(); }))
 {
     threads->reserve(m_size);
     for (size_t i = 0; i < m_size; ++i)
     {
-        std::shared_ptr<ThdCtx> thd_ctx_ptr = std::make_shared<ThdCtx>();
-        threads->emplace_back(thd_ctx_ptr);
-        threads->back()->thd = std::make_shared<std::thread>([this, thd_ctx_ptr] {
-            pre_worker();
-            worker(thd_ctx_ptr.get());
-        });
+        threads->emplace_back(std::make_shared<ThdCtx>(this));
     }
 }
 
-void ScalableThreadPool::schedule(Job job)
+std::future<int> ScalableThreadPool::schedule0(std::shared_ptr<std::promise<int>> p, Job job)
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
         if (shutdown)
-            return;
+            return std::future<int>();
         if (active_jobs >= threads->size())
         {
-            std::shared_ptr<ThdCtx> thd_ctx_ptr = std::make_shared<ThdCtx>();
-            threads->emplace_back(thd_ctx_ptr);
-            threads->back()->thd = std::make_shared<std::thread>([this, thd_ctx_ptr] {
-                pre_worker();
-                worker(thd_ctx_ptr.get());
-            });
+            threads->emplace_back(std::make_shared<ThdCtx>(this));
         }
 
         jobs.push(std::move(job));
@@ -76,11 +81,13 @@ void ScalableThreadPool::schedule(Job job)
         max_history_active_cnt = std::max(max_history_active_cnt, active_jobs);
     }
     has_new_job_or_shutdown.notify_one();
+    return p->get_future();
 }
 
-void ScalableThreadPool::scheduleWithMemTracker(Job job)
+std::future<int> ScalableThreadPool::schedule(Job job)
 {
-    schedule(newJobWithMemTracker(job));
+    std::shared_ptr<std::promise<int>> p = std::make_shared<std::promise<int>>();
+    return schedule0(p, newJob(p, job));
 }
 
 void ScalableThreadPool::wait()
@@ -120,27 +127,34 @@ size_t ScalableThreadPool::active() const
 
 void ScalableThreadPool::backgroundJob()
 {
-    while(!shutdown) {
+    while (!shutdown)
+    {
         std::unique_lock<std::mutex> lock(mutex);
         if (cv_shutdown.wait_for(lock, std::chrono::seconds(10), [this] { return shutdown.load(); }))
             break;
-        if (max_history_active_cnt > init_cap && max_history_active_cnt < threads->size() * 0.9) {
-            int cnt_to_clean = (int)(threads->size()) - std::max(max_history_active_cnt + 10, init_cap);
-            if (cnt_to_clean <= 0) continue;
+        if (max_history_active_cnt > init_cap && max_history_active_cnt < threads->size() * 0.9)
+        {
+            int cnt_to_clean = static_cast<int>(threads->size()) - std::max(max_history_active_cnt + 10, init_cap);
+            if (cnt_to_clean <= 0)
+                continue;
             auto old_threads = threads;
             int old_threads_size = threads->size();
             lock.unlock();
             auto new_threads = std::make_shared<std::vector<std::shared_ptr<ThdCtx>>>();
             int cnt_cleaned = 0;
-            for(auto & thd_ctx: *old_threads) {
-                if (thd_ctx->status == 2) { //end: can be removed safely
+            for (auto & thd_ctx : *old_threads)
+            {
+                //status.end: can be removed safely
+                if (thd_ctx->status == 2)
                     cnt_cleaned++;
-                }
             }
-            for(auto &thd_ctx: *old_threads) {
-                if (thd_ctx->status != 2) {
+            for (auto & thd_ctx : *old_threads)
+            {
+                if (thd_ctx->status != 2)
+                {
                     new_threads->push_back(thd_ctx);
-                    if (cnt_cleaned < cnt_to_clean && !(thd_ctx->end_syn) && thd_ctx->status == 0) {
+                    if (cnt_cleaned < cnt_to_clean && !(thd_ctx->end_syn) && thd_ctx->status == 0)
+                    {
                         thd_ctx->end_syn = true;
                         cnt_cleaned++;
                     }
@@ -149,7 +163,8 @@ void ScalableThreadPool::backgroundJob()
             {
                 std::unique_lock<std::mutex> lock2(mutex);
                 threads = new_threads; //update threads
-                for(size_t i = old_threads_size; i < old_threads->size(); i++) { //update new threads created during this loop
+                for (size_t i = old_threads_size; i < old_threads->size(); i++)
+                { //update new threads created during this loop
                     threads->push_back(old_threads->at(i));
                 }
             }
@@ -160,7 +175,7 @@ void ScalableThreadPool::backgroundJob()
 }
 
 
-void ScalableThreadPool::worker(ThdCtx *thdctx)
+void ScalableThreadPool::worker(ThdCtx * thdctx)
 {
     while (!thdctx->end_syn)
     {
@@ -211,4 +226,5 @@ void ScalableThreadPool::worker(ThdCtx *thdctx)
     }
     thdctx->status = 2;
 }
+
 

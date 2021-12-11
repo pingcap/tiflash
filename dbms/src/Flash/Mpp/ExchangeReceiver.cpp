@@ -44,10 +44,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         cv.notify_all();
     }
 
-    for (auto & worker : workers)
-    {
-        worker.join();
-    }
+    waitTasks(futures);
 }
 
 template <typename RPCContext>
@@ -63,15 +60,9 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
     {
-        if (glb_thd_pool) {
-            glb_thd_pool->scheduleWithMemTracker([this, idx=index] {
-                this->readLoop(idx);
-            });
-        } else
-        {
-            auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
-            workers.push_back(std::move(t));
-        }
+        futures.emplace_back(glb_thd_pool->schedule([this, idx = index] {
+            this->readLoop(idx);
+        }));
     }
 }
 

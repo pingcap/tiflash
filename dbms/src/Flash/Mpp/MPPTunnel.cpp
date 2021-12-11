@@ -30,7 +30,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
-    , send_thread(nullptr)
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
     , log(getMPPTaskLog(log_, tunnel_id))
 {
@@ -45,15 +44,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             writeDone();
         if (!is_local)
         {
-            if (nullptr != send_thread && send_thread->joinable())
-            {
-                send_thread->join();
-            }
-            else
-            {
-                std::unique_lock<std::mutex> lk(end_mu);
-                end_cv.wait(lk, [&] { return send_end.load(); });
-            }
+            waitTask(future);
         }
         /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
         clearSendQueue();
@@ -254,18 +245,10 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        if (glb_thd_pool)
-        {
-            glb_thd_pool->scheduleWithMemTracker(
-                ([this] {
-                    tunnelSendLoop(this);
-                }));
-            send_thread = nullptr;
-        }
-        else
-        {
-            send_thread = std::make_unique<std::thread>(ThreadFactory(true, "MPPTunnel").newThread([this] { sendLoop(); }));
-        }
+        future = glb_thd_pool->schedule(
+            ([this] {
+                this->sendLoop();
+            }));
     }
     connected = true;
     cv_for_connected.notify_all();

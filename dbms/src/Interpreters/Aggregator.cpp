@@ -1578,7 +1578,7 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool->scheduleWithMemTracker(
+        parallel_merge_data->pool->schedule(
             ([this, num] { thread(num); }));
     }
 

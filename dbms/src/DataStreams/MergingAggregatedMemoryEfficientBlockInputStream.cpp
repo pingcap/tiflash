@@ -194,7 +194,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
           */
 
         for (size_t i = 0; i < merging_threads; ++i)
-            pool->scheduleWithMemTracker([this] { mergeThread(); });
+            pool->schedule([this] { mergeThread(); });
     }
 }
 

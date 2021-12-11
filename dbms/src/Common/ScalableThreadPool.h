@@ -3,6 +3,8 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <future>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -21,9 +23,17 @@ public:
             : end_syn(false)
             , status(0)
         {}
-        std::shared_ptr<std::thread> thd;
+        ThdCtx(ScalableThreadPool * thd_pool)
+            : end_syn(false)
+            , status(0)
+            , thd(std::make_shared<std::thread>([this, thd_pool] {
+                thd_pool->pre_worker();
+                thd_pool->worker(this);
+            }))
+        {}
         std::atomic_bool end_syn; //someone wants it end
         std::atomic_int status; // 0.idle 1.working 2.ended
+        std::shared_ptr<std::thread> thd;
     };
 
     /// Size is constant, all threads are created immediately.
@@ -34,9 +44,7 @@ public:
 
     /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
-    void schedule(Job job);
-
-    void scheduleWithMemTracker(Job job);
+    std::future<int> schedule(Job job);
 
     /// Wait for all currently active jobs to be done.
     /// You may call schedule and wait many times in arbitary order.
@@ -75,8 +83,30 @@ protected:
 
     void worker(ThdCtx *thdctx);
 
-    template <typename F, typename... Args>
-    std::function<void()> newJobWithMemTracker(F && f, Args &&... args);
+    /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
+    /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
+    std::future<int> schedule0(std::shared_ptr<std::promise<int>> p, Job job);
+
+//    template <typename F, typename... Args>
+    std::function<void()> newJob(std::shared_ptr<std::promise<int>> p, Job job);
 };
+
+static void waitTask(std::future<int> & f)
+{
+    try
+    {
+        f.get();
+    }
+    catch (const std::exception & e)
+    {
+        std::cerr << "Caught exception \"" << e.what() << "\"\n";
+    }
+}
+
+[[maybe_unused]] static void waitTasks(std::vector<std::future<int>> &futures) {
+    for(auto &f: futures) {
+        waitTask(f);
+    }
+}
 
 extern std::unique_ptr<ScalableThreadPool> glb_thd_pool;

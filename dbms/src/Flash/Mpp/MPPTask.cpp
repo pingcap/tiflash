@@ -71,24 +71,11 @@ void MPPTask::finishWrite()
     }
 }
 
-static void MpptaskRunImpl(std::shared_ptr<MPPTask> mpptask)
-{
-    mpptask->runImpl();
-}
-
 void MPPTask::run()
 {
     memory_tracker = current_memory_tracker;
-    if (glb_thd_pool)
-    {
-        glb_thd_pool->scheduleWithMemTracker(
-            ([this] { MpptaskRunImpl(this->shared_from_this()); }));
-    }
-    else
-    {
-        auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
-        worker.detach();
-    }
+    glb_thd_pool->schedule(
+        ([this] { this->shared_from_this()->runImpl(); }));
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)

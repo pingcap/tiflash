@@ -112,6 +112,7 @@ void CreatingSetsBlockInputStream::createAll()
         }
         start_thds = 0;
         end_thds = 0;
+        std::vector<std::future<int>> futures;
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
@@ -121,18 +122,17 @@ void CreatingSetsBlockInputStream::createAll()
                     if (isCancelledOrThrowIfKilled())
                         return;
                     start_thds++;
-                    glb_thd_pool->scheduleWithMemTracker(
-                        ([this, &item = elem.second] { this->createOne(item); }));
-                    //    createOne(elem.second);
-                    //    workers.emplace_back(ThreadFactory(true, "CreatingSets").newThread([this, &subquery = elem.second] { createOne(subquery); }));
+                    futures.emplace_back(glb_thd_pool->schedule(
+                        ([this, &item = elem.second] { this->createOne(item); })));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
-        {
-            std::unique_lock<std::mutex> lk(thd_mu);
-            end_cv.wait(lk, [&] { return start_thds.load() == end_thds.load(); });
-        }
+        waitTasks(futures);
+//        {
+//            std::unique_lock<std::mutex> lk(thd_mu);
+//            end_cv.wait(lk, [&] { return start_thds.load() == end_thds.load(); });
+//        }
         //        for (auto & work : workers)
         //        {
         //            work.join();
