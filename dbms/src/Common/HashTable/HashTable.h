@@ -737,7 +737,7 @@ public:
         free();
 
         std::swap(buf, rhs.buf);
-        std::swap(m_size, rhs.init_cap);
+        std::swap(m_size, rhs.m_size);
         std::swap(grower, rhs.grower);
 
         Hash::operator=(std::move(rhs));

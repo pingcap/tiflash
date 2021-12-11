@@ -78,6 +78,6 @@ public:
     void clear()
     {
         ++this->version;
-        this->init_cap = 0;
+        this->m_size = 0;
     }
 };
