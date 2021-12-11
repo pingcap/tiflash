@@ -129,14 +129,6 @@ void CreatingSetsBlockInputStream::createAll()
             }
         }
         waitTasks(futures);
-//        {
-//            std::unique_lock<std::mutex> lk(thd_mu);
-//            end_cv.wait(lk, [&] { return start_thds.load() == end_thds.load(); });
-//        }
-        //        for (auto & work : workers)
-        //        {
-        //            work.join();
-        //        }
 
         if (!exception_from_workers.empty())
             std::rethrow_exception(exception_from_workers.front());

@@ -61,7 +61,7 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
-//private:
+private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
     // must under mu's protection
