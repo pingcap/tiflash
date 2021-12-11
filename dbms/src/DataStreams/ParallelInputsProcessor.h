@@ -246,9 +246,6 @@ private:
 
             handler.onFinish(); /// TODO If in `onFinish` or `onFinishThread` there is an exception, then std::terminate is called.
         }
-        std::unique_lock<std::mutex> lk(thd_mu);
-        end_threads++;
-        end_cv.notify_one();
     }
 
     void loop(size_t thread_num)
@@ -348,9 +345,6 @@ private:
 
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};
-    std::mutex thd_mu;
-    std::condition_variable end_cv;
-    std::atomic<size_t> end_threads{0};
     /// Finish the threads work (before the sources run out).
     std::atomic<bool> finish{false};
     /// Wait for the completion of all threads.

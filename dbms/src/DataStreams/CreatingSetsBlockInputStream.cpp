@@ -110,8 +110,6 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setFinishBuildTable(false);
             }
         }
-        start_thds = 0;
-        end_thds = 0;
         std::vector<std::future<int>> futures;
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
@@ -121,7 +119,6 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    start_thds++;
                     futures.emplace_back(glb_thd_pool->schedule(
                         ([this, &item = elem.second] { this->createOne(item); })));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
@@ -167,9 +164,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             if (isCancelled())
             {
                 LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
-                std::unique_lock<std::mutex> lk(thd_mu);
-                end_thds++;
-                end_cv.notify_one();
                 return;
             }
 
@@ -263,9 +257,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         std::unique_lock<std::mutex> lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
     }
-    std::unique_lock<std::mutex> lk(thd_mu);
-    end_thds++;
-    end_cv.notify_one();
 }
 
 } // namespace DB

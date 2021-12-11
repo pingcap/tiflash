@@ -77,8 +77,6 @@ private:
     std::mutex end_mu;
     std::condition_variable cv_for_connected;
     std::condition_variable cv_for_finished;
-    std::condition_variable end_cv;
-    std::atomic<bool> send_end;
 
     bool connected; // if the exchange in has connected this tunnel.
 

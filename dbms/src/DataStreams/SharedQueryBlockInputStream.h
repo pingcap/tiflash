@@ -48,7 +48,6 @@ public:
         if (read_prefixed)
             return;
         read_prefixed = true;
-        is_end = 0;
         /// Start reading thread.
         future = glb_thd_pool->schedule(([this] { this->fetchBlocks(); }));
     }
@@ -122,9 +121,6 @@ protected:
         {
             exception_msg = "other error";
         }
-        std::unique_lock<std::mutex> lk(end_mu);
-        is_end++;
-        end_cv.notify_one();
     }
 
 private:
@@ -137,9 +133,6 @@ private:
 
     std::thread thread;
     std::mutex mutex;
-    std::mutex end_mu;
-    std::atomic<int> is_end;
-    std::condition_variable end_cv;
     std::future<int> future;
 
     std::string exception_msg;

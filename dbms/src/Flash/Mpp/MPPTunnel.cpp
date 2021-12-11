@@ -145,11 +145,6 @@ void MPPTunnelBase<Writer>::sendLoop()
             if (nullptr == res)
             {
                 finishWithLock();
-                {
-                    std::unique_lock<std::mutex> lk(end_mu);
-                    send_end = true;
-                    end_cv.notify_one();
-                }
                 return;
             }
             else
@@ -182,11 +177,6 @@ void MPPTunnelBase<Writer>::sendLoop()
     if (!finished)
     {
         finishWithLock();
-    }
-    {
-        std::unique_lock<std::mutex> lk(end_mu);
-        send_end = true;
-        end_cv.notify_one();
     }
 }
 
