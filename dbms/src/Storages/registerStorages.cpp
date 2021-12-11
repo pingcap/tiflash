@@ -12,7 +12,6 @@ void registerStorageStripeLog(StorageFactory & factory);
 void registerStorageNull(StorageFactory & factory);
 void registerStorageMerge(StorageFactory & factory);
 void registerStorageBuffer(StorageFactory & factory);
-void registerStorageDistributed(StorageFactory & factory);
 void registerStorageMemory(StorageFactory & factory);
 void registerStorageFile(StorageFactory & factory);
 void registerStorageDictionary(StorageFactory & factory);
@@ -33,7 +32,6 @@ void registerStorages()
     registerStorageNull(factory);
     registerStorageMerge(factory);
     registerStorageBuffer(factory);
-    registerStorageDistributed(factory);
     registerStorageMemory(factory);
     registerStorageFile(factory);
     registerStorageDictionary(factory);

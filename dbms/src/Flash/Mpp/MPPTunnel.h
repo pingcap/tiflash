@@ -61,11 +61,11 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
-private:
-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
-
     // must under mu's protection
     void finishWithLock();
+
+private:
+    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
