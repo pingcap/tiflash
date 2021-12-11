@@ -9,29 +9,12 @@
 
 std::unique_ptr<ScalableThreadPool> glb_thd_pool = std::make_unique<ScalableThreadPool>(200, [] { setThreadName("glb-thd-pool"); });
 
-void handle_eptr(std::exception_ptr eptr) // passing by value is ok
-{
-    try
-    {
-        if (eptr)
-        {
-            std::rethrow_exception(eptr);
-        }
-    }
-    catch (const std::exception & e)
-    {
-        std::cerr << "Caught exception \"" << e.what() << "\"\n";
-    }
-}
-
-//template <typename F, typename... Args>
 std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<int>> p, Job job)
 {
     auto memory_tracker = current_memory_tracker;
-    /// Use std::tuple to workaround the limit on the lambda's init-capture of C++17.
-    /// See https://stackoverflow.com/questions/47496358/c-lambdas-how-to-capture-variadic-parameter-pack-from-the-upper-scope
     return [p, memory_tracker, job] {
-        if (memory_tracker) current_memory_tracker = memory_tracker;
+        if (memory_tracker)
+            current_memory_tracker = memory_tracker;
         try
         {
             job();
@@ -48,7 +31,8 @@ std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<in
             {
             } // set_exception() may throw too
         }
-        if (memory_tracker) current_memory_tracker = nullptr;
+        if (memory_tracker)
+            current_memory_tracker = nullptr;
     };
 }
 
@@ -199,23 +183,7 @@ void ScalableThreadPool::worker(ThdCtx * thdctx)
         }
 
         if (!need_shutdown)
-        {
-            std::exception_ptr eptr;
-            try
-            {
-                job();
-            }
-            catch (...)
-            {
-                std::unique_lock<std::mutex> lock(mutex);
-                if (!first_exception)
-                {
-                    first_exception = std::current_exception();
-                    eptr = std::current_exception();
-                }
-            }
-            handle_eptr(eptr);
-        }
+            job();
 
         {
             std::unique_lock<std::mutex> lock(mutex);
