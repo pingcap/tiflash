@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/ElasticThreadPool.h>
 #include <Common/ThreadFactory.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -49,7 +50,7 @@ public:
             return;
         read_prefixed = true;
         /// Start reading thread.
-        future = ScalableThreadPool::glb_instance->schedule(([this] { this->fetchBlocks(); }));
+        future = ElasticThreadPool::glb_instance->schedule(([this] { this->fetchBlocks(); }));
     }
 
     void readSuffix() override

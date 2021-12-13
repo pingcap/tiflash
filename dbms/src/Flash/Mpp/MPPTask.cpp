@@ -1,4 +1,5 @@
 #include <Common/CPUAffinityManager.h>
+#include <Common/ElasticThreadPool.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
@@ -73,7 +74,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    ScalableThreadPool::glb_instance->schedule(
+    ElasticThreadPool::glb_instance->schedule(
         ([this] { this->shared_from_this()->runImpl(); }));
 }
 

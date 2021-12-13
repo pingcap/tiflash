@@ -5,6 +5,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/ElasticThreadPool.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadFactory.h>
@@ -1563,10 +1564,10 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        ScalableThreadPool * pool;
+        ElasticThreadPool * pool;
 
         explicit ParallelMergeData()
-            : pool(ScalableThreadPool::glb_instance.get())
+            : pool(ElasticThreadPool::glb_instance.get())
         {}
     };
 

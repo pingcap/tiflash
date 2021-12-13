@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/ElasticThreadPool.h>
 #include <Common/LogWithPrefix.h>
-#include <Common/ScalableThreadPool.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <common/ThreadPool.h>
@@ -130,7 +130,7 @@ private:
 
     struct ParallelMergeData
     {
-        ScalableThreadPool * pool;
+        ElasticThreadPool * pool;
 
         /// Now one of the merging threads receives next blocks for the merge. This operation must be done sequentially.
         std::mutex get_next_blocks_mutex;
@@ -151,7 +151,7 @@ private:
         std::condition_variable have_space;
 
         explicit ParallelMergeData()
-            : pool(ScalableThreadPool::glb_instance.get())
+            : pool(ElasticThreadPool::glb_instance.get())
         {}
     };
 

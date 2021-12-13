@@ -1,4 +1,4 @@
-#include <Common/ScalableThreadPool.h>
+#include <Common/ElasticThreadPool.h>
 #include <Common/setThreadName.h>
 
 #include <exception>
@@ -6,9 +6,9 @@
 
 #include "MemoryTracker.h"
 
-std::unique_ptr<ScalableThreadPool> ScalableThreadPool::glb_instance = std::make_unique<ScalableThreadPool>(200, [] { setThreadName("glb-thd-pool"); });
+std::unique_ptr<ElasticThreadPool> ElasticThreadPool::glb_instance = std::make_unique<ElasticThreadPool>(200, [] { setThreadName("glb-thd-pool"); });
 
-std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<void>> p, Job job)
+std::function<void()> ElasticThreadPool::newJob(std::shared_ptr<std::promise<void>> p, Job job)
 {
     auto memory_tracker = current_memory_tracker;
     return [p, memory_tracker, job] {
@@ -33,8 +33,9 @@ std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<vo
     };
 }
 
-ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker_)
+ElasticThreadPool::ElasticThreadPool(size_t m_size, Job pre_worker_)
     : init_cap(m_size)
+    , idle_cnt(m_size)
     , pre_worker(pre_worker_)
     , threads(std::make_shared<std::vector<std::shared_ptr<Thd>>>())
     , bk_thd(std::thread([this] { backgroundJob(); }))
@@ -46,31 +47,33 @@ ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker_)
     }
 }
 
-std::future<void> ScalableThreadPool::schedule0(std::shared_ptr<std::promise<void>> p, Job job)
+std::future<void> ElasticThreadPool::schedule0(std::shared_ptr<std::promise<void>> p, Job job)
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
         if (shutdown)
             return std::future<void>();
-        if (wait_cnt <= 0)
+        if (idle_cnt <= 0)
         {
+            idle_cnt++;
             threads->emplace_back(std::make_shared<Thd>(this));
         }
 
         jobs.push(std::move(job));
-        min_history_wait_cnt = std::min(min_history_wait_cnt, wait_cnt);
+        idle_cnt--;
+        min_history_wait_cnt = std::min(min_history_wait_cnt, idle_cnt);
     }
     has_new_job_or_shutdown.notify_one();
     return p->get_future();
 }
 
-std::future<void> ScalableThreadPool::schedule(Job job)
+std::future<void> ElasticThreadPool::schedule(Job job)
 {
     std::shared_ptr<std::promise<void>> p = std::make_shared<std::promise<void>>();
     return schedule0(p, newJob(p, job));
 }
 
-ScalableThreadPool::~ScalableThreadPool()
+ElasticThreadPool::~ElasticThreadPool()
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
@@ -84,7 +87,7 @@ ScalableThreadPool::~ScalableThreadPool()
         thread_ctx->thd->join();
 }
 
-void ScalableThreadPool::backgroundJob()
+void ElasticThreadPool::backgroundJob()
 {
     while (!shutdown)
     {
@@ -130,7 +133,7 @@ void ScalableThreadPool::backgroundJob()
     }
 }
 
-void ScalableThreadPool::worker(Thd * thdctx)
+void ElasticThreadPool::worker(Thd * thdctx)
 {
     while (!thdctx->end_syn)
     {
@@ -138,11 +141,7 @@ void ScalableThreadPool::worker(Thd * thdctx)
         bool need_shutdown = false;
         {
             std::unique_lock<std::mutex> lock(mutex);
-            wait_cnt++;
-            min_history_wait_cnt = std::min(min_history_wait_cnt, wait_cnt);
             has_new_job_or_shutdown.wait(lock, [this] { return shutdown || !jobs.empty(); });
-            wait_cnt--;
-            min_history_wait_cnt = std::min(min_history_wait_cnt, wait_cnt);
             need_shutdown = shutdown;
 
             if (!jobs.empty())
@@ -159,6 +158,12 @@ void ScalableThreadPool::worker(Thd * thdctx)
 
         if (!need_shutdown)
             job();
+
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            idle_cnt++;
+            min_history_wait_cnt = std::min(min_history_wait_cnt, idle_cnt);
+        }
 
         thdctx->status = 0;
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/ElasticThreadPool.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
 #include <Common/setThreadName.h>
@@ -108,7 +109,7 @@ public:
         active_threads = max_threads;
         for (size_t i = 0; i < max_threads; ++i)
         {
-            futures.emplace_back(ScalableThreadPool::glb_instance->schedule(
+            futures.emplace_back(ElasticThreadPool::glb_instance->schedule(
                 ([this, i] { this->thread(i); })));
         }
     }

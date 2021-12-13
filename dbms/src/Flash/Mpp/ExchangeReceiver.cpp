@@ -1,4 +1,5 @@
 #include <Common/CPUAffinityManager.h>
+#include <Common/ElasticThreadPool.h>
 #include <Common/ThreadFactory.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -60,7 +61,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
     {
-        futures.emplace_back(ScalableThreadPool::glb_instance->schedule([this, idx = index] {
+        futures.emplace_back(ElasticThreadPool::glb_instance->schedule([this, idx = index] {
             this->readLoop(idx);
         }));
     }
@@ -107,7 +108,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             bool has_data = false;
             for (;;)
             {
-                 LOG_TRACE(log, "begin next ");
+                LOG_TRACE(log, "begin next ");
                 {
                     std::unique_lock<std::mutex> lock(mu);
                     cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });

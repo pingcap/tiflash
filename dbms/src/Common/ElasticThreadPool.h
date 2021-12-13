@@ -12,18 +12,14 @@
 #include <vector>
 
 
-class ScalableThreadPool
+class ElasticThreadPool
 {
 public:
     using Job = std::function<void()>;
-    static std::unique_ptr<ScalableThreadPool> glb_instance;
+    static std::unique_ptr<ElasticThreadPool> glb_instance;
     struct Thd
     {
-        explicit Thd()
-            : end_syn(false)
-            , status(0)
-        {}
-        explicit Thd(ScalableThreadPool * thd_pool)
+        explicit Thd(ElasticThreadPool * thd_pool)
             : end_syn(false)
             , status(0)
             , thd(std::make_shared<std::thread>([this, thd_pool] {
@@ -36,21 +32,15 @@ public:
         std::shared_ptr<std::thread> thd;
     };
 
-    /// Size is constant, all threads are created immediately.
     /// Every threads will execute pre_worker firstly when they are created.
-    explicit ScalableThreadPool(
+    explicit ElasticThreadPool(
         size_t m_size,
         Job pre_worker_ = [] {});
 
-    /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
-    /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
+    /// Add new job.
     std::future<void> schedule(Job job);
 
-    /// Waits for all threads. Doesn't rethrow exceptions (use 'wait' method to rethrow exceptions).
-    /// You should not destroy object while calling schedule or wait methods from another threads.
-    ~ScalableThreadPool();
-
-    size_t size() const { return init_cap; }
+    ~ElasticThreadPool();
 
     void backgroundJob();
 
@@ -61,23 +51,18 @@ protected:
     size_t min_history_wait_cnt = std::numeric_limits<size_t>::max();
 
     const size_t init_cap;
+    size_t idle_cnt;
     Job pre_worker;
-    size_t wait_cnt = 0;
     std::atomic<bool> shutdown = false;
 
     std::queue<Job> jobs;
     std::shared_ptr<std::vector<std::shared_ptr<Thd>>> threads;
-    std::exception_ptr first_exception;
     std::thread bk_thd;
-
 
     void worker(Thd * thdctx);
 
-    /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
-    /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
     std::future<void> schedule0(std::shared_ptr<std::promise<void>> p, Job job);
 
-    //    template <typename F, typename... Args>
     std::function<void()> newJob(std::shared_ptr<std::promise<void>> p, Job job);
 };
 

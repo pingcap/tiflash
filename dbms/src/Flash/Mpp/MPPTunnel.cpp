@@ -1,3 +1,4 @@
+#include <Common/ElasticThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
@@ -235,7 +236,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        future = ScalableThreadPool::glb_instance->schedule(
+        future = ElasticThreadPool::glb_instance->schedule(
             ([this] {
                 this->sendLoop();
             }));

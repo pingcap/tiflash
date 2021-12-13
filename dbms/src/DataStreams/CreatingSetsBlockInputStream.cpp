@@ -1,3 +1,4 @@
+#include <Common/ElasticThreadPool.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
@@ -119,7 +120,7 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    futures.emplace_back(ScalableThreadPool::glb_instance->schedule(
+                    futures.emplace_back(ElasticThreadPool::glb_instance->schedule(
                         ([this, &item = elem.second] { this->createOne(item); })));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
