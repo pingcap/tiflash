@@ -150,7 +150,8 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, UInt32 & 
     else if (current->tp() == tipb::ExecType::TypeProjection)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_projection).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(max_block_id + 1, source->projection().child(), max_block_id));
+        auto child_id = ++max_block_id;
+        children.push_back(std::make_shared<DAGQueryBlock>(child_id, source->projection().child(), max_block_id));
     }
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
