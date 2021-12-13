@@ -118,7 +118,7 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
         case tipb::ExecType::TypeExchangeSender:
             GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
             assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
-            exchangeServer_name = current->executor_id();
+            exchange_sender_name = current->executor_id();
             current = &current->exchange_sender().child();
             break;
         case tipb::ExecType::TypeIndexScan:
