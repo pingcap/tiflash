@@ -6,6 +6,7 @@
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
@@ -101,6 +102,8 @@ private:
     MPPTaskManager * manager = nullptr;
 
     const LogWithPrefixPtr log;
+
+    MPPTaskStatisticsPtr mpp_task_statistics;
 
     Exception err;
 
