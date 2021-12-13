@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/UnifiedLogPatternFormatter.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
