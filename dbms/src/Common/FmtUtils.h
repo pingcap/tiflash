@@ -4,8 +4,10 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
+#include <cstddef>
 #include <iterator>
 #include <string>
+#include <type_traits>
 
 namespace DB
 {
@@ -31,6 +33,44 @@ public:
     {
         return fmt::to_string(buffer);
     }
+
+    template <typename Iter>
+    FmtBuffer & joinStr(
+        Iter first,
+        Iter end,
+        StringRef delimiter = ", ")
+    {
+        if (first == end)
+            return *this;
+        append(*first);
+        ++first;
+        for (; first != end; ++first)
+        {
+            append(delimiter);
+            append(*first);
+        }
+        return *this;
+    }
+
+    template <typename Iter, typename FF>
+    FmtBuffer & joinStr(
+        Iter first,
+        Iter end,
+        StringRef delimiter = ", ",
+        FF && toStringFunc = [](const auto & s, FmtBuffer & fb) { fb.append(s); })
+    {
+        if (first == end)
+            return *this;
+        toStringFunc(*first, *this);
+        ++first;
+        for (; first != end; ++first)
+        {
+            append(delimiter);
+            toStringFunc(*first, *this);
+        }
+        return *this;
+    }
+
 
     void resize(size_t count) { buffer.resize(count); }
     void reserve(size_t capacity) { buffer.reserve(capacity); }

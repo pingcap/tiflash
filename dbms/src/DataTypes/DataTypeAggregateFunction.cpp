@@ -2,7 +2,6 @@
 #include <Columns/ColumnAggregateFunction.h>
 #include <Common/FieldVisitors.h>
 #include <Common/FmtUtils.h>
-#include <Common/joinStr.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -33,7 +32,7 @@ std::string DataTypeAggregateFunction::getName() const
     if (!parameters.empty())
     {
         fmt_buf.append("(");
-        joinStr(parameters.cbegin(), parameters.cend(), fmt_buf, [](const auto & arg, FmtBuffer & fb) {
+        fmt_buf.joinStr(parameters.cbegin(), parameters.cend(), ", ", [](const auto & arg, FmtBuffer & fb) {
             fb.append(applyVisitor(DB::FieldVisitorToString(), arg));
         });
         fmt_buf.append(")");
