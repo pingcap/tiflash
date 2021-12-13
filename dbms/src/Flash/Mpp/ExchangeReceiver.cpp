@@ -14,7 +14,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const ::mpp::TaskMeta & meta,
     size_t max_streams_,
     const std::shared_ptr<LogWithPrefix> & log_)
-    : rpc_context(rpc_context_)
+    : rpc_context(std::move(rpc_context_))
     , pb_exchange_receiver(exc)
     , source_num(pb_exchange_receiver.encoded_task_meta_size())
     , task_meta(meta)
@@ -107,7 +107,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             bool has_data = false;
             for (;;)
             {
-                // LOG_TRACE(log, "begin next ");
+                 LOG_TRACE(log, "begin next ");
                 {
                     std::unique_lock<std::mutex> lock(mu);
                     cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });

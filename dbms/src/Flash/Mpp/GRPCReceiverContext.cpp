@@ -124,7 +124,6 @@ GrpcExchangePacketReader::~GrpcExchangePacketReader()
 
 void GrpcExchangePacketReader::initialize() const
 {
-    //is this necessary?
     reader->WaitForInitialMetadata();
 }
 

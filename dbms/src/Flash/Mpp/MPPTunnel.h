@@ -74,7 +74,6 @@ private:
     void clearSendQueue();
 
     std::mutex mu;
-    std::mutex end_mu;
     std::condition_variable cv_for_connected;
     std::condition_variable cv_for_finished;
 

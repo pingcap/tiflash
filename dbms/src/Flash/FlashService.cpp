@@ -177,7 +177,6 @@ grpc::Status FlashService::Coprocessor(
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling establish mpp connection request: " << request->DebugString());
-    LOG_ERROR(log, "EstablishMPPConnection now");
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
