@@ -308,7 +308,7 @@ private:
     /// Streams.
     using ThreadsData = std::vector<std::thread>;
     ThreadsData threads;
-    std::vector<std::future<int>> futures;
+    std::vector<std::future<void>> futures;
 
     /** A set of available sources that are not currently processed by any thread.
       * Each thread takes one source from this set, takes a block out of the source (at this moment the source does the calculations)

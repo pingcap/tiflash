@@ -133,7 +133,7 @@ private:
 
     std::thread thread;
     std::mutex mutex;
-    std::future<int> future;
+    std::future<void> future;
 
     std::string exception_msg;
 

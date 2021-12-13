@@ -97,7 +97,7 @@ private:
 
     int input_streams_num;
 
-    std::future<int> future;
+    std::future<void> future;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;

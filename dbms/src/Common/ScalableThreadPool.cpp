@@ -9,7 +9,7 @@
 
 std::unique_ptr<ScalableThreadPool> glb_thd_pool = std::make_unique<ScalableThreadPool>(200, [] { setThreadName("glb-thd-pool"); });
 
-std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<int>> p, Job job)
+std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<void>> p, Job job)
 {
     auto memory_tracker = current_memory_tracker;
     return [p, memory_tracker, job] {
@@ -17,7 +17,7 @@ std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<in
         try
         {
             job();
-            p->set_value(0);
+            p->set_value();
         }
         catch (...)
         {
@@ -47,12 +47,12 @@ ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker_)
     }
 }
 
-std::future<int> ScalableThreadPool::schedule0(std::shared_ptr<std::promise<int>> p, Job job)
+std::future<void> ScalableThreadPool::schedule0(std::shared_ptr<std::promise<void>> p, Job job)
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
         if (shutdown)
-            return std::future<int>();
+            return std::future<void>();
         if (active_jobs >= threads->size())
         {
             threads->emplace_back(std::make_shared<ThdCtx>(this));
@@ -66,9 +66,9 @@ std::future<int> ScalableThreadPool::schedule0(std::shared_ptr<std::promise<int>
     return p->get_future();
 }
 
-std::future<int> ScalableThreadPool::schedule(Job job)
+std::future<void> ScalableThreadPool::schedule(Job job)
 {
-    std::shared_ptr<std::promise<int>> p = std::make_shared<std::promise<int>>();
+    std::shared_ptr<std::promise<void>> p = std::make_shared<std::promise<void>>();
     return schedule0(p, newJob(p, job));
 }
 

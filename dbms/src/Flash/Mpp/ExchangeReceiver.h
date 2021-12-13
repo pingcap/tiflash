@@ -111,7 +111,7 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::vector<std::future<int>> futures;
+    std::vector<std::future<void>> futures;
     DAGSchema schema;
 
     std::mutex mu;

@@ -44,7 +44,7 @@ public:
 
     /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
-    std::future<int> schedule(Job job);
+    std::future<void> schedule(Job job);
 
     /// Waits for all threads. Doesn't rethrow exceptions (use 'wait' method to rethrow exceptions).
     /// You should not destroy object while calling schedule or wait methods from another threads.
@@ -79,13 +79,13 @@ protected:
 
     /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
-    std::future<int> schedule0(std::shared_ptr<std::promise<int>> p, Job job);
+    std::future<void> schedule0(std::shared_ptr<std::promise<void>> p, Job job);
 
     //    template <typename F, typename... Args>
-    std::function<void()> newJob(std::shared_ptr<std::promise<int>> p, Job job);
+    std::function<void()> newJob(std::shared_ptr<std::promise<void>> p, Job job);
 };
 
-inline void waitTask(std::future<int> & f)
+inline void waitTask(std::future<void> & f)
 {
     try
     {
@@ -98,7 +98,7 @@ inline void waitTask(std::future<int> & f)
     }
 }
 
-inline void waitTasks(std::vector<std::future<int>> & futures)
+inline void waitTasks(std::vector<std::future<void>> & futures)
 {
     for (auto & f : futures)
     {

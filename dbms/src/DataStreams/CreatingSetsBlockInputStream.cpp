@@ -110,7 +110,7 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setFinishBuildTable(false);
             }
         }
-        std::vector<std::future<int>> futures;
+        std::vector<std::future<void>> futures;
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
