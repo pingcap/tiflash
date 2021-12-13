@@ -59,8 +59,7 @@ public:
     /** it is desirable in the successors to place the next() call in the destructor,
       * so that the last data is written
       */
-    virtual ~WriteBuffer() {}
-
+    virtual ~WriteBuffer() = default;
 
     inline void nextIfAtEnd()
     {

@@ -20,6 +20,7 @@ public:
     virtual void sync() = 0;
     virtual std::string getFileName() const = 0;
     virtual int getFD() const = 0;
+    virtual void close() = 0;
 
 protected:
     virtual off_t doSeek(off_t off, int whence) = 0;
