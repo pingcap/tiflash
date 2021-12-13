@@ -147,7 +147,7 @@ public:
     std::string toString(char separator = '-') const
     {
         if (separator)
-            fmt::format("{}{}{}{}{}{}{}", year(), separator, month() / 10, month() % 10, separator, day() / 10, day() % 10);
+            return fmt::format("{}{}{}{}{}{}{}", year(), separator, month() / 10, month() % 10, separator, day() / 10, day() % 10);
         else
             return fmt::format("{}{}{}{}{}", year(), month() / 10, month() % 10, day() / 10, day() % 10);
     }
