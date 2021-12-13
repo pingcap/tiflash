@@ -1840,11 +1840,13 @@ public:
                 format_raw_col = checkAndGetColumn<ColumnString>(format_column.get());
             }
 
+            String str_input_const;
             StringRef str_ref;
             if (input_column->isColumnConst())
             {
                 const auto & input_const = checkAndGetColumnConst<ColumnString>(input_column.get());
-                str_ref = input_const->getValue<String>();
+                str_input_const = input_const->getValue<String>();
+                str_ref = StringRef(str_input_const);
             }
             for (size_t i = 0; i < num_rows; ++i)
             {
