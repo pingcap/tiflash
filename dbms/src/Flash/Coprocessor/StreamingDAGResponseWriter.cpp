@@ -32,10 +32,8 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
     bool should_send_exec_summary_at_last_,
-    tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_,
     DAGContext & dag_context_)
-    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
+    : DAGResponseWriter(records_per_chunk_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
     , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , exchange_type(exchange_type_)
@@ -59,7 +57,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
-    if (block.columns() != result_field_types.size())
+    if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
     size_t rows = block.rows();
     rows_in_blocks += rows;
@@ -67,7 +65,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     {
         blocks.push_back(block);
     }
-    if ((Int64)rows_in_blocks > (encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk - 1))
+    if ((Int64)rows_in_blocks > (dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk - 1))
     {
         batchWrite<false>();
     }
@@ -80,20 +78,20 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     tipb::SelectResponse & response) const
 {
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
-    if (encode_type == tipb::EncodeType::TypeDefault)
+    if (dag_context.encode_type == tipb::EncodeType::TypeDefault)
     {
-        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
+        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types);
     }
-    else if (encode_type == tipb::EncodeType::TypeChunk)
+    else if (dag_context.encode_type == tipb::EncodeType::TypeChunk)
     {
-        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
+        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types);
     }
-    else if (encode_type == tipb::EncodeType::TypeCHBlock)
+    else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
-        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
+        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
     }
 
-    if (encode_type == tipb::EncodeType::TypeCHBlock)
+    if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         if (dag_context.isMPPTask()) /// broadcast data among TiFlash nodes in MPP
         {
@@ -120,7 +118,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         }
         else /// passthrough data to a non-TiFlash node, like sending data to TiSpark
         {
-            response.set_encode_type(encode_type);
+            response.set_encode_type(dag_context.encode_type);
             if (input_blocks.empty())
             {
                 if constexpr (send_exec_summary_at_last)
@@ -141,7 +139,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     }
     else /// passthrough data to a TiDB node
     {
-        response.set_encode_type(encode_type);
+        response.set_encode_type(dag_context.encode_type);
         if (input_blocks.empty())
         {
             if constexpr (send_exec_summary_at_last)
@@ -194,17 +192,17 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     std::vector<size_t> responses_row_count(partition_num);
     for (auto i = 0; i < partition_num; ++i)
     {
-        if (encode_type == tipb::EncodeType::TypeDefault)
+        if (dag_context.encode_type == tipb::EncodeType::TypeDefault)
         {
-            chunk_codec_stream[i] = DefaultChunkCodec().newCodecStream(result_field_types);
+            chunk_codec_stream[i] = DefaultChunkCodec().newCodecStream(dag_context.result_field_types);
         }
-        else if (encode_type == tipb::EncodeType::TypeChunk)
+        else if (dag_context.encode_type == tipb::EncodeType::TypeChunk)
         {
-            chunk_codec_stream[i] = ArrowChunkCodec().newCodecStream(result_field_types);
+            chunk_codec_stream[i] = ArrowChunkCodec().newCodecStream(dag_context.result_field_types);
         }
-        else if (encode_type == tipb::EncodeType::TypeCHBlock)
+        else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
         {
-            chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(result_field_types);
+            chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(dag_context.result_field_types);
         }
         if constexpr (send_exec_summary_at_last)
         {

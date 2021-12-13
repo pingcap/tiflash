@@ -23,11 +23,7 @@ public:
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
-    const std::vector<tipb::FieldType> & getResultFieldTypes() const { return result_field_types; }
-
     ASTPtr getAST() const { return ast; };
-
-    tipb::EncodeType getEncodeType() const { return encode_type; }
 
     std::shared_ptr<DAGQueryBlock> getRootQueryBlock() const { return root_query_block; }
 
@@ -36,11 +32,9 @@ public:
     std::string getExecutorNames() const;
 
 private:
-    void analyzeDAGEncodeType();
+    tipb::EncodeType analyzeDAGEncodeType();
 
     Context & context;
-    std::vector<tipb::FieldType> result_field_types;
-    tipb::EncodeType encode_type;
     std::shared_ptr<DAGQueryBlock> root_query_block;
     ASTPtr ast;
 

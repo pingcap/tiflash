@@ -31,8 +31,6 @@ public:
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
-        tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types,
         DAGContext & dag_context_);
     void write(const Block & block) override;
     void finishWrite() override;

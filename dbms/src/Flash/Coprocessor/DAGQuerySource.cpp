@@ -31,34 +31,34 @@ DAGQuerySource::DAGQuerySource(Context & context_)
             throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "
                                        + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
                                    Errors::Coprocessor::BadRequest);
-        result_field_types.push_back(root_query_block->output_field_types[i]);
+        getDAGContext().result_field_types.push_back(root_query_block->output_field_types[i]);
     }
-    analyzeDAGEncodeType();
+    auto encode_type = analyzeDAGEncodeType();
+    getDAGContext().encode_type = encode_type;
     getDAGContext().keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
 }
 
-void DAGQuerySource::analyzeDAGEncodeType()
+tipb::EncodeType DAGQuerySource::analyzeDAGEncodeType()
 {
+    const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
+    const tipb::EncodeType encode_type = dag_request.encode_type();
     if (getDAGContext().isMPPTask() && !getDAGContext().isRootMPPTask())
     {
         /// always use CHBlock encode type for data exchange between TiFlash nodes
-        encode_type = tipb::EncodeType::TypeCHBlock;
-        return;
+        return tipb::EncodeType::TypeCHBlock;
     }
-    const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
     if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
     {
-        encode_type = dag_request.encode_type();
         assert(encode_type == tipb::EncodeType::TypeCHBlock);
-        return;
+        return encode_type;
     }
-    encode_type = dag_request.encode_type();
-    if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
-        encode_type = tipb::EncodeType::TypeDefault;
+    if (isUnsupportedEncodeType(getDAGContext().result_field_types, encode_type))
+        return tipb::EncodeType::TypeDefault;
     if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
         && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
         // todo support BigEndian encode for chunk encode type
-        encode_type = tipb::EncodeType::TypeDefault;
+        return tipb::EncodeType::TypeDefault;
+    return encode_type;
 }
 
 std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)

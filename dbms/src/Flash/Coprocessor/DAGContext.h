@@ -47,8 +47,8 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        assert(dag_request.has_root_executor() || dag_request.executors_size() > 0);
-        return_executor_id = dag_request.root_executor().has_executor_id() || dag_request.executors(0).has_executor_id();
+        assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
+        return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
     }
 
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
@@ -66,7 +66,7 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        assert(dag_request.has_root_executor() && dag_request.root_executor().has_executor_id());
+        assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
     }
 
     explicit DAGContext(UInt64 max_error_count_)
@@ -151,6 +151,8 @@ public:
     LogWithPrefixPtr log;
 
     bool keep_session_timezone_info = false;
+    std::vector<tipb::FieldType> result_field_types;
+    tipb::EncodeType encode_type = tipb::EncodeType::TypeDefault;
 
 private:
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo

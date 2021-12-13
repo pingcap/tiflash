@@ -1127,7 +1127,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
 void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
 {
     /// only run in MPP
-    assert(dag.getDAGContext().isMPPTask() && context.getDAGContext()->tunnel_set != nullptr);
+    assert(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr);
     /// exchange sender should be at the top of operators
     const auto & exchange_sender = query_block.exchangeSender->exchange_sender();
     /// get partition column ids
@@ -1157,7 +1157,7 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
             collators.emplace_back(nullptr);
         }
     }
-    restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
+    restoreConcurrency(pipeline, dagContext().final_concurrency, log);
     int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer
@@ -1169,10 +1169,7 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
             context.getSettings().dag_records_per_chunk,
             context.getSettings().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-            dag.getEncodeType(),
-            dag.getResultFieldTypes(),
-            dag.getDAGContext(),
-            log);
+            dagContext());
         stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
     });
 }
