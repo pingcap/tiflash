@@ -323,6 +323,52 @@ try
         executeFunction(func_name,
                         {createOnlyNullColumn(1),
                          createCastTypeConstColumn("Nullable(String)")}));
+
+    /// const cases
+    // uint64/32/16/8 -> string
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "18446744073709551615"),
+        executeFunction(func_name,
+                        {createConstColumn<UInt64>(1, MAX_UINT64),
+                         createCastTypeConstColumn("String")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "4294967295"),
+        executeFunction(func_name,
+                        {createConstColumn<UInt32>(1, MAX_UINT32),  
+                         createCastTypeConstColumn("String")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "65535"),
+        executeFunction(func_name,
+                        {createConstColumn<UInt16>(1, MAX_UINT16),
+                         createCastTypeConstColumn("String")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "255"),
+        executeFunction(func_name,
+                        {createConstColumn<UInt8>(1, MAX_UINT8),
+                         createCastTypeConstColumn("String")}));
+    // int64/32/16/8 -> string
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "9223372036854775807"),
+        executeFunction(func_name,
+                        {createConstColumn<Int64>(1, MAX_INT64),
+                         createCastTypeConstColumn("String")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "2147483647"),
+        executeFunction(func_name,
+                        {createConstColumn<Int32>(1, MAX_INT32),
+                         createCastTypeConstColumn("String")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "32767"),
+        executeFunction(func_name,
+                        {createConstColumn<Int16>(1, MAX_INT16),
+                         createCastTypeConstColumn("String")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(1, "127"),
+        executeFunction(func_name,
+                        {createConstColumn<Int8>(1, MAX_INT8),
+                         createCastTypeConstColumn("String")}));
+
+    /// normal cases
     // uint64/32/16/8 -> string
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"18446744073709551615", "0", {}}),
