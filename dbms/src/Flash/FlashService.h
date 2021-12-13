@@ -52,7 +52,7 @@ public:
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
 private:
-    std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
+    std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
     // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
     grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()>);

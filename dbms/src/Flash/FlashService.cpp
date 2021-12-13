@@ -74,7 +74,7 @@ grpc::Status FlashService::Coprocessor(
         {
             return status;
         }
-        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+        CoprocessorContext cop_context(*context, request->context(), *grpc_context);
         CoprocessorHandler cop_handler(cop_context, request, response);
         return cop_handler.execute();
     });
@@ -108,7 +108,7 @@ grpc::Status FlashService::Coprocessor(
         {
             return status;
         }
-        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+        CoprocessorContext cop_context(*context, request->context(), *grpc_context);
         BatchCoprocessorHandler cop_handler(cop_context, request, writer);
         return cop_handler.execute();
     });
@@ -164,7 +164,7 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
 
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
     return ::grpc::Status::OK;
 }
@@ -196,7 +196,7 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
 
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
     std::string err_msg;
@@ -261,7 +261,7 @@ grpc::Status FlashService::Coprocessor(
         response->set_allocated_error(err.release());
         return status;
     }
-    auto & tmt_context = context.getTMTContext();
+    auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
     return grpc::Status::OK;
@@ -301,7 +301,7 @@ grpc::Status FlashService::BatchCommands(
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());
 
         BatchCommandsContext batch_commands_context(
-            context,
+            *context,
             [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
             *grpc_context);
         BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
@@ -341,13 +341,13 @@ grpc::Status FlashService::executeInThreadPool(const std::unique_ptr<ThreadPool>
     return future.get();
 }
 
-std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const
+std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const
 {
     try
     {
         /// Create DB context.
-        Context context = server.context();
-        context.setGlobalContext(server.context());
+        auto context = std::make_shared<Context>(server.context());
+        context->setGlobalContext(server.context());
 
         /// Set a bunch of client information.
         std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
@@ -362,12 +362,12 @@ std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::Serv
         std::string client_ip = peer.substr(pos + 1);
         Poco::Net::SocketAddress client_address(client_ip);
 
-        context.setUser(user, password, client_address, quota_key);
+        context->setUser(user, password, client_address, quota_key);
 
         String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
-        context.setCurrentQueryId(query_id);
+        context->setCurrentQueryId(query_id);
 
-        ClientInfo & client_info = context.getClientInfo();
+        ClientInfo & client_info = context->getClientInfo();
         client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
         client_info.interface = ClientInfo::Interface::GRPC;
 
@@ -375,7 +375,7 @@ std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::Serv
         std::string dag_records_per_chunk_str = getClientMetaVarWithDefault(grpc_context, "dag_records_per_chunk", "");
         if (!dag_records_per_chunk_str.empty())
         {
-            context.setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
+            context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
 
         return std::make_tuple(context, grpc::Status::OK);
@@ -383,17 +383,17 @@ std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::Serv
     catch (Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message());
-        return std::make_tuple(server.context(), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
+        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
     }
     catch (const std::exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
-        return std::make_tuple(server.context(), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
+        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
     }
     catch (...)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
-        return std::make_tuple(server.context(), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
+        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
     }
 }
 
