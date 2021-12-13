@@ -806,7 +806,7 @@ struct TiDBConvertToFloat
     }
 };
 
-/// cast int/real/decimal/time/string as decimal
+/// cast int/real/decimal/enum/string/time/string as decimal
 // todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
 template <typename FromDataType, typename ToFieldType, bool return_nullable>
 struct TiDBConvertToDecimal
@@ -1118,7 +1118,7 @@ struct TiDBConvertToDecimal
         return static_cast<UType>(is_negative ? -v : v);
     }
 
-    /// cast int/real/time/decimal as decimal
+    /// cast int/real/enum/string/time/decimal as decimal
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec [[maybe_unused]], ScaleType scale, bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
@@ -1927,7 +1927,7 @@ private:
             return createWrapper<DataTypeEnum8, return_nullable>(to_type);
         if (checkAndGetDataType<DataTypeEnum16>(from_type.get()))
             return createWrapper<DataTypeEnum16, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
+        if (checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
             return createWrapper<DataTypeMyDuration, return_nullable>(to_type);
 
         // todo support convert to duration/json type
@@ -2090,6 +2090,7 @@ protected:
         return std::make_shared<FunctionTiDBCast>(context, name, std::move(monotonicity), data_types, return_type, in_union, tidb_tp);
     }
 
+    // use the last const string column's value as the return type name, in string representation like "Float64"
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         const auto * type_col = checkAndGetColumnConst<ColumnString>(arguments.back().column.get());
