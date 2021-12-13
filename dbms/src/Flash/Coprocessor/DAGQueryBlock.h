@@ -15,9 +15,11 @@ namespace DB
 {
 class Context;
 
-struct QueryBlockIDGenerator {
+struct QueryBlockIDGenerator
+{
     UInt32 current_id = 0; //Root query block id is 1, so set current_id initial value to 0
-    inline UInt32 nextBlockID() {
+    inline UInt32 nextBlockID()
+    {
         return ++current_id;
     }
 };
