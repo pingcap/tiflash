@@ -15,6 +15,13 @@ namespace DB
 {
 class Context;
 
+struct QueryBlockIDGenerator {
+    UInt32 current_id = 0; //Root query block id is 1, so set current_id initial value to 0
+    inline UInt32 nextBlockID() {
+        return ++current_id;
+    }
+};
+
 /// DAGQueryBlock is a dag query from single source,
 /// which means the query block contains a source node(tablescan or join)
 /// and some of the optional node.(selection/aggregation/project/limit/topN)
