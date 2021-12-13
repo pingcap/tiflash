@@ -1,29 +1,22 @@
 #pragma once
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <kvproto/coprocessor.pb.h>
-#include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
-
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
+#include <kvproto/coprocessor.pb.h>
 #include <pingcap/coprocessor/Client.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
-class Context;
-
-class DAGQuerySource;
 class DAGQueryBlock;
-struct RegionInfo;
 class ExchangeReceiver;
 class DAGExpressionAnalyzer;
 
@@ -38,16 +31,12 @@ public:
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
         bool keep_session_timezone_info_,
-        const DAGQuerySource & dag_,
         std::vector<SubqueriesForSets> & subqueries_for_sets_,
-        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map,
-        const LogWithPrefixPtr & log_);
+        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
 
     ~DAGQueryBlockInterpreter() = default;
 
     BlockInputStreams execute();
-
-    static void executeUnion(DAGPipeline & pipeline, size_t max_streams, const LogWithPrefixPtr & log);
 
 private:
     void executeRemoteQuery(DAGPipeline & pipeline);
@@ -89,11 +78,13 @@ private:
         ::tipb::DAGRequest & dag_req,
         const DAGSchema & schema);
 
+    DAGContext & dagContext() const { return *context.getDAGContext(); }
+    const LogWithPrefixPtr & taskLogger() const { return dagContext().log; }
+
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
-    const tipb::DAGRequest & rqst;
 
     NamesWithAliases final_project;
 
@@ -108,11 +99,10 @@ private:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
     std::vector<const tipb::Expr *> conditions;
-    const DAGQuerySource & dag;
     std::vector<SubqueriesForSets> & subqueries_for_sets;
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
     std::vector<ExtraCastAfterTSMode> need_add_cast_column_flag_for_tablescan;
 
-    const LogWithPrefixPtr log;
+    LogWithPrefixPtr log;
 };
 } // namespace DB

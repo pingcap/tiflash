@@ -17,7 +17,7 @@ public:
         : task_request(task_request_)
         , log(&Poco::Logger::get("MPPHandler"))
     {}
-    grpc::Status execute(Context & context, mpp::DispatchTaskResponse * response);
+    grpc::Status execute(const ContextPtr & context, mpp::DispatchTaskResponse * response);
     void handleError(const MPPTaskPtr & task, String error);
 };
 

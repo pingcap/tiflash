@@ -74,14 +74,19 @@ grpc::Status CoprocessorHandler::execute()
                     Errors::Coprocessor::Unimplemented);
             tipb::SelectResponse dag_response;
             RegionInfoMap regions;
-            RegionInfoList retry_regions;
 
             const std::unordered_set<UInt64> bypass_lock_ts(
                 cop_context.kv_context.resolved_locks().begin(),
                 cop_context.kv_context.resolved_locks().end());
             regions.emplace(cop_context.kv_context.region_id(),
                             RegionInfo(cop_context.kv_context.region_id(), cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), GenCopKeyRange(cop_request->ranges()), &bypass_lock_ts));
-            DAGDriver driver(cop_context.db_context, dag_request, regions, retry_regions, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);
+
+            DAGContext dag_context(dag_request);
+            dag_context.regions_for_local_read = std::move(regions);
+            dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+            cop_context.db_context.setDAGContext(&dag_context);
+
+            DAGDriver driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);
             driver.execute();
             cop_response->set_data(dag_response.SerializeAsString());
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
