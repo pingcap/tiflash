@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
-//#include <Common/ElasticThreadPool.h>
 #include <Common/setThreadName.h>
 #include <common/ThreadPool.h>
 
@@ -60,9 +59,8 @@ private:
         if (force_overwrite || !current_memory_tracker)
         {
             current_memory_tracker = memory_tracker;
-            //this is a syscall
             if (!thread_name.empty())
-                setThreadName(thread_name.c_str());
+                setThreadName(thread_name.c_str()); //this is a syscall
         }
     }
 

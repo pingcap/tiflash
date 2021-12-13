@@ -35,7 +35,7 @@ std::function<void()> ElasticThreadPool::newJob(std::shared_ptr<std::promise<voi
 
 ElasticThreadPool::ElasticThreadPool(size_t m_size, Job pre_worker_)
     : init_cap(m_size)
-    , idle_cnt(m_size)
+    , available_cnt(m_size)
     , pre_worker(pre_worker_)
     , threads(std::make_shared<std::vector<std::shared_ptr<Thd>>>())
     , bk_thd(std::thread([this] { backgroundJob(); }))
@@ -53,15 +53,15 @@ std::future<void> ElasticThreadPool::schedule0(std::shared_ptr<std::promise<void
         std::unique_lock<std::mutex> lock(mutex);
         if (shutdown)
             return std::future<void>();
-        if (idle_cnt <= 0)
+        if (available_cnt <= 0)
         {
-            idle_cnt++;
+            available_cnt++;
             threads->emplace_back(std::make_shared<Thd>(this));
         }
 
         jobs.push(std::move(job));
-        idle_cnt--;
-        min_history_wait_cnt = std::min(min_history_wait_cnt, idle_cnt);
+        available_cnt--;
+        history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
     }
     has_new_job_or_shutdown.notify_one();
     return p->get_future();
@@ -92,12 +92,12 @@ void ElasticThreadPool::backgroundJob()
     while (!shutdown)
     {
         std::unique_lock<std::mutex> lock(mutex);
-        if (cv_shutdown.wait_for(lock, std::chrono::seconds(10), [this] { return shutdown.load(); }))
+        if (cv_shutdown.wait_for(lock, recycle_period, [this] { return shutdown.load(); }))
             break;
         size_t idle_buffer_cnt = 50;
-        if (min_history_wait_cnt != std::numeric_limits<size_t>::max() && min_history_wait_cnt > idle_buffer_cnt)
+        if (history_min_available_cnt != std::numeric_limits<size_t>::max() && history_min_available_cnt > idle_buffer_cnt)
         {
-            int cnt_to_clean = static_cast<int>(min_history_wait_cnt) - idle_buffer_cnt;
+            int cnt_to_clean = static_cast<int>(history_min_available_cnt) - idle_buffer_cnt;
             if (cnt_to_clean <= 0)
                 continue;
             auto old_threads = threads;
@@ -129,7 +129,7 @@ void ElasticThreadPool::backgroundJob()
             }
         }
 
-        min_history_wait_cnt = std::numeric_limits<size_t>::max();
+        history_min_available_cnt = std::numeric_limits<size_t>::max();
     }
 }
 
@@ -141,7 +141,9 @@ void ElasticThreadPool::worker(Thd * thdctx)
         bool need_shutdown = false;
         {
             std::unique_lock<std::mutex> lock(mutex);
-            has_new_job_or_shutdown.wait(lock, [this] { return shutdown || !jobs.empty(); });
+            has_new_job_or_shutdown.wait_for(lock, recycle_period, [this] { return shutdown.load() || !jobs.empty(); });
+            if (thdctx->end_syn)
+                break;
             need_shutdown = shutdown;
 
             if (!jobs.empty())
@@ -161,11 +163,16 @@ void ElasticThreadPool::worker(Thd * thdctx)
 
         {
             std::unique_lock<std::mutex> lock(mutex);
-            idle_cnt++;
-            min_history_wait_cnt = std::min(min_history_wait_cnt, idle_cnt);
+            available_cnt++;
+            history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
         }
 
         thdctx->status = 0;
+    }
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        available_cnt--;
+        history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
     }
     thdctx->status = 2;
 }

@@ -48,16 +48,17 @@ protected:
     mutable std::mutex mutex;
     std::condition_variable has_new_job_or_shutdown;
     std::condition_variable cv_shutdown;
-    size_t min_history_wait_cnt = std::numeric_limits<size_t>::max();
+    size_t history_min_available_cnt = std::numeric_limits<size_t>::max();
 
     const size_t init_cap;
-    size_t idle_cnt;
+    size_t available_cnt;
     Job pre_worker;
     std::atomic<bool> shutdown = false;
 
     std::queue<Job> jobs;
     std::shared_ptr<std::vector<std::shared_ptr<Thd>>> threads;
     std::thread bk_thd;
+    std::chrono::seconds recycle_period = std::chrono::seconds(10);
 
     void worker(Thd * thdctx);
 
