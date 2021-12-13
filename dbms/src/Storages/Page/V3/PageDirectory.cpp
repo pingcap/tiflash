@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/WriteBatch.h>
 
 #include <mutex>
 
@@ -21,7 +22,8 @@ std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 
     if (auto iter = MapUtils::findLess(entries, VersionType(seq + 1));
         iter != entries.end())
     {
-        return iter->second;
+        if (!iter->second.is_delete)
+            return iter->second.entry;
     }
     return std::nullopt;
 }
@@ -90,12 +92,29 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     UInt64 last_sequence = sequence.load();
     // wal.apply(edit);
 
+    // stage 1, nothing to rollback
     std::unordered_map<PageId, PageLock> updating_locks;
     std::vector<VersionedPageEntriesPtr> updating_pages;
     updating_pages.reserve(edit.size());
-    const auto & records = edit.getRecords();
-    for (const auto & r : records)
+    for (auto & r : edit.getRecords())
     {
+        if (r.type == WriteBatch::WriteType::REF)
+        {
+            auto iter = mvcc_table_directory.find(r.ori_page_id);
+            if (iter == mvcc_table_directory.end())
+            {
+                throw Exception("");
+            }
+            if (auto entry = iter->second->getEntry(last_sequence); entry)
+            {
+                r.entry = *entry;
+            }
+            else
+            {
+                throw Exception("");
+            }
+        }
+
         auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
         if (created)
         {
@@ -105,14 +124,32 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         updating_pages.emplace_back(iter->second);
     }
 
+    // stage 2, there are no rollback since we already persist `edit` to WAL, just ignore error if any
+    const auto & records = edit.getRecords();
     for (size_t idx = 0; idx < records.size(); ++idx)
     {
-        // Append a new version for this page
-        updating_pages[idx]->createNewVersion(last_sequence + 1, records[idx].entry);
-        updating_locks.erase(records[idx].page_id);
+        const auto & r = records[idx];
+        switch (r.type)
+        {
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT:
+        case WriteBatch::WriteType::REF:
+        {
+            // Append a new version for this page
+            updating_pages[idx]->createNewVersion(last_sequence + 1, records[idx].entry);
+            updating_locks.erase(records[idx].page_id);
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            updating_pages[idx]->createDelete(last_sequence + 1);
+            updating_locks.erase(records[idx].page_id);
+            break;
+        }
+        }
     }
 
-    // The edit committed, incr the sequence number
+    // The edit committed, incr the sequence number to publish changes for `createSnapshot`
     sequence.fetch_add(1);
 }
 

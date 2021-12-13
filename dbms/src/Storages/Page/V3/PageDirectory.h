@@ -59,12 +59,27 @@ private:
         }
     };
 
+    struct EntryOrDelete
+    {
+        bool is_delete;
+        PageEntryV3 entry;
+
+        explicit EntryOrDelete(bool del)
+            : is_delete(del)
+        {
+            assert(del == true);
+        }
+        explicit EntryOrDelete(const PageEntryV3 & entry_)
+            : is_delete(false)
+            , entry(entry_)
+        {}
+    };
+
     using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;
     class VersionedPageEntries
     {
     public:
-        PageLock
-        acquireLock() const
+        PageLock acquireLock() const
         {
             return std::make_unique<std::lock_guard<std::mutex>>(m);
         }
@@ -74,12 +89,17 @@ private:
             entries.emplace(VersionType(seq), entry);
         }
 
+        void createDelete(UInt64 seq)
+        {
+            entries.emplace(VersionType(seq), EntryOrDelete(/*del*/ true));
+        }
+
         std::optional<PageEntryV3> getEntry(UInt64 seq);
 
     private:
         mutable std::mutex m;
         // Entries sorted by version
-        std::map<VersionType, PageEntryV3> entries;
+        std::map<VersionType, EntryOrDelete> entries;
     };
     using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 
