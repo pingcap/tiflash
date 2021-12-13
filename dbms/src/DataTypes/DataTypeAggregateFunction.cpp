@@ -10,6 +10,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Common/joinStr.h>
 
 
 namespace DB
@@ -32,12 +33,9 @@ std::string DataTypeAggregateFunction::getName() const
     if (!parameters.empty())
     {
         fmt_buf.append("(");
-        for (size_t i = 0; i < parameters.size(); ++i)
-        {
-            if (i)
-                fmt_buf.append(", ");
-            fmt_buf.append(applyVisitor(DB::FieldVisitorToString(), parameters[i]));
-        }
+        joinStr(parameters.begin(), parameters.end(), fmt_buf, [](const auto & arg, FmtBuffer & fb) {
+            fb.append(applyVisitor(DB::FieldVisitorToString(), arg));
+        });
         fmt_buf.append(")");
     }
 
