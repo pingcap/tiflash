@@ -11,15 +11,12 @@
 
 namespace DB
 {
-InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const LogWithPrefixPtr & log_)
+InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_)
     , dag(dag_)
-    , keep_session_timezone_info(
-          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock)
-    , log(log_)
 {
     const Settings & settings = context.getSettingsRef();
-    if (dag.isBatchCopOrMpp())
+    if (dagContext().isBatchCop() || dagContext().isMPPTask())
         max_streams = settings.max_threads;
     else
         max_streams = 1;
@@ -45,11 +42,9 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         input_streams_vec,
         query_block,
         max_streams,
-        keep_session_timezone_info || !query_block.isRootQueryBlock(),
-        dag,
+        dagContext().keep_session_timezone_info || !query_block.isRootQueryBlock(),
         subqueries_for_sets,
-        mpp_exchange_receiver_maps,
-        log);
+        mpp_exchange_receiver_maps);
     return query_block_interpreter.execute();
 }
 
@@ -62,19 +57,20 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
-                                                  context.getTMTContext().getMPPTaskManager(),
-                                                  context.getSettings().enable_local_tunnel),
+            std::make_shared<GRPCReceiverContext>(
+                context.getTMTContext().getKVCluster(),
+                context.getTMTContext().getMPPTaskManager(),
+                context.getSettings().enable_local_tunnel),
             dag_query_block.source->exchange_receiver(),
-            dag.getDAGContext().getMPPTaskMeta(),
+            dagContext().getMPPTaskMeta(),
             max_streams,
-            log);
+            dagContext().log);
     }
 }
 
 BlockIO InterpreterDAG::execute()
 {
-    if (dag.getDAGContext().isMPPTask())
+    if (dagContext().isMPPTask())
         /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
         /// the query plan, so we init mpp exchange receiver before executeQueryBlock
         initMPPExchangeReceiver(*dag.getRootQueryBlock());
@@ -89,9 +85,9 @@ BlockIO InterpreterDAG::execute()
     /// add union to run in parallel if needed
     if (context.getDAGContext()->isMPPTask())
         /// MPPTask do not need the returned blocks.
-        DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log, /*ignore_block=*/true);
+        DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true);
     else
-        DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, log);
+        DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, dagContext().log);
     if (!subqueries_for_sets.empty())
     {
         const Settings & settings = context.getSettingsRef();
@@ -99,8 +95,8 @@ BlockIO InterpreterDAG::execute()
             pipeline.firstStream(),
             std::move(subqueries_for_sets),
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            dag.getDAGContext().getMPPTaskId(),
-            log);
+            dagContext().getMPPTaskId(),
+            dagContext().log);
     }
 
     BlockIO res;
