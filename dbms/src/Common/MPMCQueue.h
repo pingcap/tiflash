@@ -30,23 +30,20 @@ struct WaitingNode
         prev = this;
     }
 
-    void pushBack(WaitingNode & node)
+    void attachTo(WaitingNode & head)
     {
-        node.prev = prev;
-        node.next = this;
-        prev->next = &node;
-        prev = &node;
+        prev = head.prev;
+        next = &head;
+        head.prev->next = this;
+        head.prev = this;
     }
 
-    void removeSelfFromList()
+    void detach()
     {
-        if (next != this)
-        {
-            next->prev = prev;
-            prev->next = next;
-            next = this;
-            prev = this;
-        }
+        next->prev = prev;
+        prev->next = next;
+        next = this;
+        prev = this;
     }
 };
 } // namespace MPMCQueueDetail
@@ -191,13 +188,13 @@ private:
         Pred pred,
         const TimePoint * deadline)
     {
-        head.pushBack(node);
+        node.attachTo(head);
         if (deadline)
             node.cv.wait_until(lock, *deadline, pred);
         else
             node.cv.wait(lock, pred);
-        /// removeSelfFromList is adaptive for both conditions.
-        node.removeSelfFromList();
+        /// detach is adaptive for both conditions.
+        node.detach();
     }
 
     ALWAYS_INLINE void notifyNext(WaitingNode & head)
