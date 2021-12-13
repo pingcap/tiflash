@@ -1128,7 +1128,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (query_block.exchangeSender)
     {
         executeExchangeSender(pipeline);
-        recordProfileStreams(pipeline, query_block.exchangeSender_name);
+        recordProfileStreams(pipeline, query_block.exchange_sender_name);
     }
 }
 
@@ -1159,7 +1159,7 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
 {
     /// only run in MPP
     assert(dag.getDAGContext().isMPPTask() && context.getDAGContext()->tunnel_set != nullptr);
-    /// add exchange sender on the top of operators
+    /// exchange sender should be at the top of operators
     const auto & exchange_sender = query_block.exchangeSender->exchange_sender();
     /// get partition column ids
     const auto & part_keys = exchange_sender.partition_keys();
@@ -1169,10 +1169,9 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
     bool has_collator_info = exchange_sender.types_size() != 0;
     if (has_collator_info && part_keys.size() != exchange_sender.types_size())
     {
-        throw TiFlashException(std::string(__PRETTY_FUNCTION__)
-                                   + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is "
-                                     "enabled",
-                               Errors::Coprocessor::BadRequest);
+        throw TiFlashException(
+            std::string(__PRETTY_FUNCTION__) + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is enabled",
+            Errors::Coprocessor::BadRequest);
     }
     for (int i = 0; i < part_keys.size(); ++i)
     {
