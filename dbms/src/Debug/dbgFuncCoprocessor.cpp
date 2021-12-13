@@ -25,8 +25,8 @@
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/StringTokenizer.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -42,6 +42,7 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
+extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
 
 using TiDB::DatumFlat;
@@ -323,7 +324,9 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         root_tm.set_partition_id(-1);
         std::shared_ptr<ExchangeReceiver> exchange_receiver
             = std::make_shared<ExchangeReceiver>(
-                std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
+                std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
+                                                      context.getTMTContext().getMPPTaskManager(),
+                                                      context.getSettings().enable_local_tunnel),
                 tipb_exchange_receiver,
                 root_tm,
                 10,
@@ -2408,10 +2411,15 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
     RegionInfoMap regions;
-    RegionInfoList retry_regions;
 
     regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
-    DAGDriver driver(context, dag_request, regions, retry_regions, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+
+    DAGContext dag_context(dag_request);
+    dag_context.regions_for_local_read = regions;
+    dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+    context.setDAGContext(&dag_context);
+
+    DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;

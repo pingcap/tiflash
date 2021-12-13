@@ -1,33 +1,30 @@
-#include <TableFunctions/TableFunctionFactory.h>
-
-#include <Interpreters/Context.h>
-
 #include <Common/Exception.h>
+#include <Interpreters/Context.h>
+#include <TableFunctions/TableFunctionFactory.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int READONLY;
-    extern const int UNKNOWN_FUNCTION;
-    extern const int LOGICAL_ERROR;
-}
+extern const int READONLY;
+extern const int UNKNOWN_FUNCTION;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 void TableFunctionFactory::registerFunction(const std::string & name, Creator creator)
 {
     if (!functions.emplace(name, std::move(creator)).second)
         throw Exception("TableFunctionFactory: the table function name '" + name + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR);
 }
 
 TableFunctionPtr TableFunctionFactory::get(
     const std::string & name,
     const Context & context) const
 {
-    if (context.getSettings().readonly == 1)        /** For example, for readonly = 2 - allowed. */
+    if (context.getSettings().readonly == 1) /** For example, for readonly = 2 - allowed. */
         throw Exception("Table functions are forbidden in readonly mode", ErrorCodes::READONLY);
 
     auto it = functions.find(name);
@@ -37,4 +34,4 @@ TableFunctionPtr TableFunctionFactory::get(
     return it->second();
 }
 
-}
+} // namespace DB

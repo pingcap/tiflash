@@ -3,7 +3,6 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Storages/IStorage.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -16,9 +15,10 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-BatchCoprocessorHandler::BatchCoprocessorHandler(CoprocessorContext & cop_context_,
-                                                 const coprocessor::BatchRequest * cop_request_,
-                                                 ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
+BatchCoprocessorHandler::BatchCoprocessorHandler(
+    CoprocessorContext & cop_context_,
+    const coprocessor::BatchRequest * cop_request_,
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
     : CoprocessorHandler(cop_context_, nullptr, nullptr)
     , cop_request(cop_request_)
     , writer(writer_)
@@ -62,7 +62,14 @@ grpc::Status BatchCoprocessorHandler::execute()
             LOG_DEBUG(log,
                       __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
 
-            DAGDriver<true> driver(cop_context.db_context, dag_request, regions, retry_regions, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
+            DAGContext dag_context(dag_request);
+            dag_context.is_batch_cop = true;
+            dag_context.regions_for_local_read = std::move(regions);
+            dag_context.regions_for_remote_read = std::move(retry_regions);
+            dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+            cop_context.db_context.setDAGContext(&dag_context);
+
+            DAGDriver<true> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
             // batch execution;
             driver.execute();
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");

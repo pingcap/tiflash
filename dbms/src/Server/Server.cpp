@@ -41,6 +41,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
@@ -185,11 +186,6 @@ static std::string getCanonicalPath(std::string path)
     if (path.back() != '/')
         path += '/';
     return path;
-}
-
-static String getNormalizedPath(const String & s)
-{
-    return getCanonicalPath(Poco::Path{s}.toString());
 }
 
 void Server::uninitialize()
@@ -735,26 +731,6 @@ public:
                 /// At least one of TCP and HTTP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-                /// Interserver IO HTTP
-                if (config.has("interserver_http_port") && !security_config.has_tls_config)
-                {
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("interserver_http_port"));
-                    socket.setReceiveTimeout(settings.http_receive_timeout);
-                    socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(new HTTPServer(
-                        new InterserverIOHTTPHandlerFactory(server, "InterserverIOHTTPHandler-factory"),
-                        server_pool,
-                        socket,
-                        http_params));
-
-                    LOG_INFO(log, "Listening interserver http: " + address.toString());
-                }
-                else if (security_config.has_tls_config)
-                {
-                    LOG_INFO(log, "internal http port is closed because tls config is set");
-                }
             }
             catch (const Poco::Net::NetException & e)
             {
@@ -940,24 +916,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // 2. path pool
     // 3. TMTContext
 
-
-    // TODO: remove this configuration left by ClickHouse
-    std::vector<String> all_fast_path;
-    if (config().has("fast_path"))
-    {
-        String fast_paths = config().getString("fast_path");
-        Poco::trimInPlace(fast_paths);
-        if (!fast_paths.empty())
-        {
-            Poco::StringTokenizer string_tokens(fast_paths, ",");
-            for (const auto & string_token : string_tokens)
-            {
-                all_fast_path.emplace_back(getNormalizedPath(std::string(string_token)));
-                LOG_DEBUG(log, "Fast data part candidate path: " << all_fast_path.back());
-            }
-        }
-    }
-
     // Deprecated settings.
     // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
     // "0" by default, means no quota, the actual disk capacity is used.
@@ -989,15 +947,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
-    global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
     /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);
     Redact::setRedactLog(security_config.redact_info_log);
 
-    /// Create directories for 'path' and for default database, if not exist.
-    for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
+    // Create directories for 'path' and for default database, if not exist.
+    for (const String & candidate_path : all_normal_path)
     {
         Poco::File(candidate_path + "data/" + default_database).createDirectories();
     }
@@ -1081,27 +1038,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         Poco::File(user_files_path).createDirectories();
     }
 
-    if (config().has("interserver_http_port"))
-    {
-        String this_host = config().getString("interserver_http_host", "");
-
-        if (this_host.empty())
-        {
-            this_host = getFQDNOrHostName();
-            LOG_DEBUG(log,
-                      "Configuration parameter 'interserver_http_host' doesn't exist or exists and empty. Will use '" + this_host
-                          + "' as replica host.");
-        }
-
-        String port_str = config().getString("interserver_http_port");
-        int port = parse<int>(port_str);
-
-        if (port < 0 || port > 0xFFFF)
-            throw Exception("Out of range 'interserver_http_port': " + toString(port), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-        global_context->setInterserverIOAddress(this_host, port);
-    }
-
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
@@ -1116,7 +1052,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         config_path,
         [&](ConfigurationPtr config) {
             buildLoggers(*config);
-            global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
@@ -1144,13 +1079,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
     if (uncompressed_cache_size)
         global_context->setUncompressedCache(uncompressed_cache_size);
-
-    /// Quota size in bytes of persisted mapping cache. 0 means unlimited.
-    size_t persisted_cache_size = config().getUInt64("persisted_mapping_cache_size", 0);
-    /// Path of persisted cache in fast(er) disk device. Empty means disabled.
-    std::string persisted_cache_path = config().getString("persisted_mapping_cache_path", "");
-    if (!persisted_cache_path.empty())
-        global_context->setPersistedCache(persisted_cache_size, persisted_cache_path);
 
     bool use_l0_opt = config().getBool("l0_optimize", false);
     global_context->setUseL0Opt(use_l0_opt);
@@ -1270,13 +1198,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         users_config_reloader->start();
 
         {
-            std::stringstream message;
-            message << "Available RAM = " << formatReadableSizeWithBinarySuffix(getMemoryAmount()) << ";"
-                    << " physical cores = " << getNumberOfPhysicalCPUCores()
-                    << ";"
-                    // on ARM processors it can show only enabled at current moment cores
-                    << " threads = " << std::thread::hardware_concurrency() << ".";
-            LOG_INFO(log, message.str());
+            // on ARM processors it can show only enabled at current moment cores
+            LOG_INFO(
+                log,
+                fmt::format(
+                    "Available RAM = {}; physical cores = {}; threads = {}.",
+                    formatReadableSizeWithBinarySuffix(getMemoryAmount()),
+                    getNumberOfPhysicalCPUCores(),
+                    std::thread::hardware_concurrency()));
         }
 
         LOG_INFO(log, "Ready for connections.");

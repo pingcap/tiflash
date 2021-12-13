@@ -1,17 +1,13 @@
 #pragma once
 
-#include <Common/UnifiedLogPatternFormatter.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
-#include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
-#include <Poco/FormattingChannel.h>
 #include <Poco/Path.h>
-#include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
@@ -124,15 +120,7 @@ public:
         return std::make_pair(result, result);
     }
 
-    static void setupLogger(const String & level = "trace")
-    {
-        Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-        Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
-        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
-        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-        Poco::Logger::root().setChannel(formatting_channel);
-        Poco::Logger::root().setLevel(level);
-    }
+    static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr);
 
     // If you want to run these tests, you should set this envrionment variablle
     // For example:
@@ -159,7 +147,7 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
-    static void initializeGlobalContext();
+    static void initializeGlobalContext(Strings testdata_path = {});
     static Context & getGlobalContext() { return *global_context; }
     static void shutdown();
 

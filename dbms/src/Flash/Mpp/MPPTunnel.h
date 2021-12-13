@@ -29,6 +29,7 @@ public:
         const std::chrono::seconds timeout_,
         TaskCancelledCallback callback,
         int input_steams_num_,
+        bool is_local_,
         const LogWithPrefixPtr & log_ = nullptr);
 
     ~MPPTunnelBase();
@@ -43,6 +44,8 @@ public:
     // finish the writing.
     void writeDone();
 
+    std::shared_ptr<mpp::MPPDataPacket> readForLocal();
+
     /// close() finishes the tunnel, if the tunnel is connected already, it will
     /// write the error message to the tunnel, otherwise it just close the tunnel
     void close(const String & reason);
@@ -53,13 +56,15 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
-    const LogWithPrefixPtr & getLogger() const { return log; }
+    bool isLocal() const { return is_local; }
 
-private:
-    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
+    const LogWithPrefixPtr & getLogger() const { return log; }
 
     // must under mu's protection
     void finishWithLock();
+
+private:
+    void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
@@ -74,6 +79,8 @@ private:
     bool connected; // if the exchange in has connected this tunnel.
 
     std::atomic<bool> finished; // if the tunnel has finished its connection.
+
+    bool is_local; // if this tunnel used for local environment
 
     Writer * writer;
 
