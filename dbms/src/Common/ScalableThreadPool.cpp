@@ -7,7 +7,8 @@
 
 #include "MemoryTracker.h"
 
-std::unique_ptr<ScalableThreadPool> glb_thd_pool = std::make_unique<ScalableThreadPool>(200, [] { setThreadName("glb-thd-pool"); });
+//std::unique_ptr<ScalableThreadPool>
+std::unique_ptr<ScalableThreadPool> ScalableThreadPool::glb_instance = std::make_unique<ScalableThreadPool>(200, [] { setThreadName("glb-thd-pool"); });
 
 std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<void>> p, Job job)
 {
@@ -37,13 +38,13 @@ std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<vo
 ScalableThreadPool::ScalableThreadPool(size_t m_size, Job pre_worker_)
     : init_cap(m_size)
     , pre_worker(pre_worker_)
-    , threads(std::make_shared<std::vector<std::shared_ptr<ThdCtx>>>())
+    , threads(std::make_shared<std::vector<std::shared_ptr<Thd>>>())
     , bk_thd(std::thread([this] { backgroundJob(); }))
 {
     threads->reserve(m_size);
     for (size_t i = 0; i < m_size; ++i)
     {
-        threads->emplace_back(std::make_shared<ThdCtx>(this));
+        threads->emplace_back(std::make_shared<Thd>(this));
     }
 }
 
@@ -55,7 +56,7 @@ std::future<void> ScalableThreadPool::schedule0(std::shared_ptr<std::promise<voi
             return std::future<void>();
         if (active_jobs >= threads->size())
         {
-            threads->emplace_back(std::make_shared<ThdCtx>(this));
+            threads->emplace_back(std::make_shared<Thd>(this));
         }
 
         jobs.push(std::move(job));
@@ -107,7 +108,7 @@ void ScalableThreadPool::backgroundJob()
             auto old_threads = threads;
             int old_threads_size = threads->size();
             lock.unlock();
-            auto new_threads = std::make_shared<std::vector<std::shared_ptr<ThdCtx>>>();
+            auto new_threads = std::make_shared<std::vector<std::shared_ptr<Thd>>>();
             int cnt_cleaned = 0;
             for (auto & thd_ctx : *old_threads)
             {
@@ -142,7 +143,7 @@ void ScalableThreadPool::backgroundJob()
 }
 
 
-void ScalableThreadPool::worker(ThdCtx * thdctx)
+void ScalableThreadPool::worker(Thd * thdctx)
 {
     while (!thdctx->end_syn)
     {

@@ -151,7 +151,7 @@ private:
         std::condition_variable have_space;
 
         explicit ParallelMergeData()
-            : pool(glb_thd_pool.get())
+            : pool(ScalableThreadPool::glb_instance.get())
         {}
     };
 

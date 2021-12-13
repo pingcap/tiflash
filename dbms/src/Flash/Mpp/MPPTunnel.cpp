@@ -235,7 +235,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        future = glb_thd_pool->schedule(
+        future = ScalableThreadPool::glb_instance->schedule(
             ([this] {
                 this->sendLoop();
             }));

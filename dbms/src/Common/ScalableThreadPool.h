@@ -16,14 +16,14 @@ class ScalableThreadPool
 {
 public:
     using Job = std::function<void()>;
-
-    struct ThdCtx
+    static std::unique_ptr<ScalableThreadPool> glb_instance;
+    struct Thd
     {
-        ThdCtx()
+        explicit Thd()
             : end_syn(false)
             , status(0)
         {}
-        ThdCtx(ScalableThreadPool * thd_pool)
+        explicit Thd(ScalableThreadPool * thd_pool)
             : end_syn(false)
             , status(0)
             , thd(std::make_shared<std::thread>([this, thd_pool] {
@@ -70,12 +70,12 @@ protected:
     std::atomic<bool> shutdown = false;
 
     std::queue<Job> jobs;
-    std::shared_ptr<std::vector<std::shared_ptr<ThdCtx>>> threads;
+    std::shared_ptr<std::vector<std::shared_ptr<Thd>>> threads;
     std::exception_ptr first_exception;
     std::thread bk_thd;
 
 
-    void worker(ThdCtx * thdctx);
+    void worker(Thd * thdctx);
 
     /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
@@ -106,4 +106,3 @@ inline void waitTasks(std::vector<std::future<void>> & futures)
     }
 }
 
-extern std::unique_ptr<ScalableThreadPool> glb_thd_pool;

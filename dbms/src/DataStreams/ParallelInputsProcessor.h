@@ -108,7 +108,7 @@ public:
         active_threads = max_threads;
         for (size_t i = 0; i < max_threads; ++i)
         {
-            futures.emplace_back(glb_thd_pool->schedule(
+            futures.emplace_back(ScalableThreadPool::glb_instance->schedule(
                 ([this, i] { this->thread(i); })));
         }
     }

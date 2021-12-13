@@ -74,7 +74,7 @@ void MPPTask::finishWrite()
 void MPPTask::run()
 {
     memory_tracker = current_memory_tracker;
-    glb_thd_pool->schedule(
+    ScalableThreadPool::glb_instance->schedule(
         ([this] { this->shared_from_this()->runImpl(); }));
 }
 

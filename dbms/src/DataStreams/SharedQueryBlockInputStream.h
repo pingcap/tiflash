@@ -49,7 +49,7 @@ public:
             return;
         read_prefixed = true;
         /// Start reading thread.
-        future = glb_thd_pool->schedule(([this] { this->fetchBlocks(); }));
+        future = ScalableThreadPool::glb_instance->schedule(([this] { this->fetchBlocks(); }));
     }
 
     void readSuffix() override

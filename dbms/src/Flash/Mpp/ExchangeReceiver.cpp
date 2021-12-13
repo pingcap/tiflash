@@ -60,7 +60,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
     {
-        futures.emplace_back(glb_thd_pool->schedule([this, idx = index] {
+        futures.emplace_back(ScalableThreadPool::glb_instance->schedule([this, idx = index] {
             this->readLoop(idx);
         }));
     }
