@@ -85,9 +85,9 @@ BlockIO InterpreterDAG::execute()
     /// add union to run in parallel if needed
     if (context.getDAGContext()->isMPPTask())
         /// MPPTask do not need the returned blocks.
-        DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true);
+        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true);
     else
-        DAGQueryBlockInterpreter::executeUnion(pipeline, max_streams, dagContext().log);
+        executeUnion(pipeline, max_streams, dagContext().log);
     if (!subqueries_for_sets.empty())
     {
         const Settings & settings = context.getSettingsRef();

@@ -75,7 +75,7 @@ public:
     using ExceptionCallback = std::function<void()>;
 
 private:
-    using Self = UnionBlockInputStream<mode>;
+    using Self = UnionBlockInputStream<mode, ignore_block>;
 
 public:
     UnionBlockInputStream(
@@ -279,18 +279,18 @@ private:
         void onBlock(Block & block, size_t /*thread_num*/)
         {
             if constexpr (!ignore_block)
-                parent.output_queue.push(Payload(block));
+                parent.output_queue.emplace(Payload(block));
         }
 
         void onBlock(Block & block, BlockExtraInfo & extra_info, size_t /*thread_num*/)
         {
             if constexpr (!ignore_block)
-                parent.output_queue.push(Payload(block, extra_info));
+                parent.output_queue.emplace(block, extra_info);
         }
 
         void onFinish()
         {
-            parent.output_queue.push(Payload());
+            parent.output_queue.emplace();
         }
 
         void onFinishThread(size_t /*thread_num*/)
@@ -303,7 +303,7 @@ private:
             /// when before exception, an empty block (end of data) will be put into the queue,
             /// and the exception is lost.
 
-            parent.output_queue.push(exception);
+            parent.output_queue.emplace(exception);
             /// can not cancel parent inputStream or the exception might be lost
             parent.processor.cancel(false); /// Does not throw exceptions.
         }
