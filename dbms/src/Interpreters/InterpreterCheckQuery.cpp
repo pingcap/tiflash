@@ -76,11 +76,6 @@ struct TableDescription
     UInt32 structure_class;
 };
 
-inline bool operator<(const TableDescription & lhs, const TableDescription & rhs)
-{
-    return lhs.hash < rhs.hash;
-}
-
 using TableDescriptions = std::deque<TableDescription>;
 
 } // namespace
