@@ -367,6 +367,9 @@ void MPPTask::runImpl()
         LOG_INFO(log, "finish task");
     else
         LOG_WARNING(log, "finish task which was cancelled before");
+
+    mpp_task_statistics->end(status.load(), err_msg);
+    mpp_task_statistics->logStats();
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)
