@@ -1052,7 +1052,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         config_path,
         [&](ConfigurationPtr config) {
             buildLoggers(*config);
-            global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);

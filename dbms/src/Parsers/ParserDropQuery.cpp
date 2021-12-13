@@ -1,16 +1,12 @@
-#include <Parsers/ASTIdentifier.h>
+#include <Common/typeid_cast.h>
 #include <Parsers/ASTDropQuery.h>
-
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserDropQuery.h>
-
-#include <Common/typeid_cast.h>
 
 
 namespace DB
 {
-
-
 bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_drop("DROP");
@@ -24,7 +20,6 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ASTPtr database;
     ASTPtr table;
-    String cluster_str;
     bool detach = false;
     bool if_exists = false;
     bool temporary = false;
@@ -44,12 +39,6 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         if (!name_p.parse(pos, database, expected))
             return false;
-
-        if (ParserKeyword{"ON"}.ignore(pos, expected))
-        {
-            if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-                return false;
-        }
     }
     else
     {
@@ -71,12 +60,6 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (!name_p.parse(pos, table, expected))
                 return false;
         }
-
-        if (ParserKeyword{"ON"}.ignore(pos, expected))
-        {
-            if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-                return false;
-        }
     }
 
     auto query = std::make_shared<ASTDropQuery>();
@@ -89,10 +72,9 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         query->database = typeid_cast<ASTIdentifier &>(*database).name;
     if (table)
         query->table = typeid_cast<ASTIdentifier &>(*table).name;
-    query->cluster = cluster_str;
 
     return true;
 }
 
 
-}
+} // namespace DB

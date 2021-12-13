@@ -2,6 +2,7 @@
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/ExchangeSender.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
@@ -21,6 +22,7 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -1090,6 +1092,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
+
+    // execute exchange_sender
+    if (query_block.exchangeSender)
+    {
+        executeExchangeSender(pipeline);
+        recordProfileStreams(pipeline, query_block.exchange_sender_name);
+    }
 }
 
 void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols)
@@ -1113,6 +1122,59 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
         executeUnion(pipeline, max_streams, taskLogger());
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, taskLogger(), false); });
     }
+}
+
+void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
+{
+    /// only run in MPP
+    assert(dag.getDAGContext().isMPPTask() && context.getDAGContext()->tunnel_set != nullptr);
+    /// exchange sender should be at the top of operators
+    const auto & exchange_sender = query_block.exchangeSender->exchange_sender();
+    /// get partition column ids
+    const auto & part_keys = exchange_sender.partition_keys();
+    std::vector<Int64> partition_col_id;
+    TiDB::TiDBCollators collators;
+    /// in case TiDB is an old version, it has no collation info
+    bool has_collator_info = exchange_sender.types_size() != 0;
+    if (has_collator_info && part_keys.size() != exchange_sender.types_size())
+    {
+        throw TiFlashException(
+            std::string(__PRETTY_FUNCTION__) + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is enabled",
+            Errors::Coprocessor::BadRequest);
+    }
+    for (int i = 0; i < part_keys.size(); ++i)
+    {
+        const auto & expr = part_keys[i];
+        assert(isColumnExpr(expr));
+        auto column_index = decodeDAGInt64(expr.val());
+        partition_col_id.emplace_back(column_index);
+        if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
+        {
+            collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
+        }
+        else
+        {
+            collators.emplace_back(nullptr);
+        }
+    }
+    restoreConcurrency(pipeline, dag.getDAGContext().final_concurrency, log);
+    int stream_id = 0;
+    pipeline.transform([&](auto & stream) {
+        // construct writer
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
+            context.getDAGContext()->tunnel_set,
+            partition_col_id,
+            collators,
+            exchange_sender.tp(),
+            context.getSettings().dag_records_per_chunk,
+            context.getSettings().batch_send_min_limit,
+            stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+            dag.getEncodeType(),
+            dag.getResultFieldTypes(),
+            dag.getDAGContext(),
+            log);
+        stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
+    });
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()
