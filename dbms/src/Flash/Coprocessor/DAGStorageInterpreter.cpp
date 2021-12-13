@@ -520,8 +520,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
             region_retry.cbegin(),
             region_retry.cend(),
             ",",
-            [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); }
-            );
+            [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); });
         buffer.append(")");
         return buffer.toString();
     };

@@ -28,7 +28,7 @@ TEST(FmtUtilsTest, TestJoinStr)
     buffer.clear();
     v.push_back("a");
     buffer.joinStr(v.cbegin(), v.cend(), ", ", [](const auto & s, FmtBuffer & fb) { fb.append(s); })
-      .joinStr(v.cbegin(), v.cend(), ", ", [](const auto & s, FmtBuffer & fb) { fb.append(s); fb.append("t"); });
+        .joinStr(v.cbegin(), v.cend(), ", ", [](const auto & s, FmtBuffer & fb) { fb.append(s); fb.append("t"); });
     ASSERT_EQ(buffer.toString(), "aat");
 
     buffer.clear();
