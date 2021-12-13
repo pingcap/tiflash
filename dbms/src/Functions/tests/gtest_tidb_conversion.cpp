@@ -317,6 +317,12 @@ CATCH
 TEST_F(TestTidbConversion, castIntAsString)
 try
 {
+    /// null only cases
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({{}}),
+        executeFunction(func_name,
+                        {createOnlyNullColumn(1),
+                         createCastTypeConstColumn("Nullable(String)")}));
     // uint64/32/16/8 -> string
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"18446744073709551615", "0", {}}),
