@@ -50,8 +50,8 @@ using PageSize = UInt64;
 
 using BlobFileId = UInt32;
 using BlobFileOffset = UInt64;
-static constexpr BlobFileId INVALID_BLOBFILE_ID = UINT32_MAX;
-static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = UINT64_MAX;
+static constexpr BlobFileId INVALID_BLOBFILE_ID = std::numeric_limits<BlobFileId>::max();
+static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = std::numeric_limits<BlobFileOffset>::max();
 
 struct ByteBuffer
 {
