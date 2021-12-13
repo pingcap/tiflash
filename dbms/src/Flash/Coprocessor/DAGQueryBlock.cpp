@@ -64,13 +64,15 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
 
 /// construct DAGQueryBlock from a tree struct based executors, which is the
 /// format after supporting join in dag request
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
+/// max_block_id tracks the current max block id that are created to avoid conflict block ids efficiently
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, UInt32 & max_block_id)
     : id(id_)
     , root(&root_)
     , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
     , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
+    max_block_id = id;
     while (!isSourceNode(current) && current->has_executor_id())
     {
         switch (current->tp())
@@ -138,8 +140,8 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
         if (source->join().children_size() != 2)
             throw TiFlashException("Join executor children size not equal to 2", Errors::Coprocessor::BadRequest);
         GET_METRIC(tiflash_coprocessor_executor_count, type_join).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0)));
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1)));
+        children.push_back(std::make_shared<DAGQueryBlock>(max_block_id + 1, source->join().children(0), max_block_id));
+        children.push_back(std::make_shared<DAGQueryBlock>(max_block_id + 1, source->join().children(1), max_block_id));
     }
     else if (current->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
@@ -148,7 +150,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
     else if (current->tp() == tipb::ExecType::TypeProjection)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_projection).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->projection().child()));
+        children.push_back(std::make_shared<DAGQueryBlock>(max_block_id + 1, source->projection().child(), max_block_id));
     }
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {

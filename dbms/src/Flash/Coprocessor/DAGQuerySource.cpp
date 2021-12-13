@@ -25,7 +25,9 @@ DAGQuerySource::DAGQuerySource(
 {
     if (dag_request.has_root_executor())
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor());
+        UInt32 max_block_id = 1;
+        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor(), max_block_id);
+        LOG_INFO(log, "Max block id is " << max_block_id);
     }
     else
     {
