@@ -42,7 +42,7 @@ namespace DB
 enum class StreamUnionMode
 {
     Basic = 0, /// take out blocks
-    ExtraInfo  /// take out blocks + additional information
+    ExtraInfo /// take out blocks + additional information
 };
 
 /// Example of the handler.

@@ -69,7 +69,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
 namespace
 {
 using UnionWithBlock = UnionBlockInputStream<>;
-using UnionWithoutBlock = UnionBlockInputStream<StreamUnionMode::Basic, /*ignore_block=*/ true>;
+using UnionWithoutBlock = UnionBlockInputStream<StreamUnionMode::Basic, /*ignore_block=*/true>;
 
 BlockInputStreamPtr combinedNonJoinedDataStream(
     DAGPipeline & pipeline,
@@ -600,7 +600,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     size_t stream_index = 0;
     right_pipeline.transform(
         [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, stream_index++, log); });
-    executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/ true); // don't need to return block during HashJoin build.
+    executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/true); // don't need to return block during HashJoin build.
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = join_ptr;
