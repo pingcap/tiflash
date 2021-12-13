@@ -334,7 +334,7 @@ try
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(1, "4294967295"),
         executeFunction(func_name,
-                        {createConstColumn<UInt32>(1, MAX_UINT32),  
+                        {createConstColumn<UInt32>(1, MAX_UINT32),
                          createCastTypeConstColumn("String")}));
     ASSERT_COLUMN_EQ(
         createConstColumn<String>(1, "65535"),
@@ -704,9 +704,14 @@ try
                         {createColumn<Nullable<UInt32>>({MAX_UINT32}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
         TiFlashException);
+    ASSERT_COLUMN_EQ(
+        createNullableDateTimeColumn({{}}, 6),
+        executeFunction(func_name,
+                        {createColumn<Nullable<UInt64>>({0}),
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
     ASSERT_THROW(
         executeFunction(func_name,
-                        {createColumn<Nullable<UInt64>>({1}),
+                        {createColumn<Nullable<Int64>>({{}, -20211026160859}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
         TiFlashException);
 }
