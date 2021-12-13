@@ -39,7 +39,7 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
-MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
+MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : context(context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
@@ -136,10 +136,13 @@ bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_conte
     return meta_snap.ver != region_info.region_version;
 }
 
-std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
+void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
+    RegionInfoMap local_regions;
+    RegionInfoList remote_regions;
+
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
-    TMTContext & tmt_context = context.getTMTContext();
+    TMTContext & tmt_context = context->getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions. The ones defined in tipb::TableScan
     /// will never be used and can be removed later.
     /// Each MPP task will contain at most one TableScan operator belonging to one table. For those tasks without
@@ -173,25 +176,25 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     auto schema_ver = task_request.schema_ver();
     auto start_ts = task_request.meta().start_ts();
 
-    context.setSetting("read_tso", start_ts);
-    context.setSetting("schema_version", schema_ver);
+    context->setSetting("read_tso", start_ts);
+    context->setSetting("schema_version", schema_ver);
     if (unlikely(task_request.timeout() < 0))
     {
         /// this is only for test
-        context.setSetting("mpp_task_timeout", static_cast<Int64>(5));
-        context.setSetting("mpp_task_running_timeout", static_cast<Int64>(10));
+        context->setSetting("mpp_task_timeout", static_cast<Int64>(5));
+        context->setSetting("mpp_task_running_timeout", static_cast<Int64>(10));
     }
     else
     {
-        context.setSetting("mpp_task_timeout", task_request.timeout());
+        context->setSetting("mpp_task_timeout", task_request.timeout());
         if (task_request.timeout() > 0)
         {
             /// in the implementation, mpp_task_timeout is actually the task writing tunnel timeout
             /// so make the mpp_task_running_timeout a little bigger than mpp_task_timeout
-            context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
+            context->setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
         }
     }
-    context.getTimezoneInfo().resetByDAGRequest(dag_req);
+    context->getTimezoneInfo().resetByDAGRequest(dag_req);
 
     bool is_root_mpp_task = false;
     const auto & exchange_sender = dag_req.root_executor().exchange_sender();
@@ -207,8 +210,10 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         is_root_mpp_task = task_meta.task_id() == -1;
     }
     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
-    dag_context->mpp_task_log = log;
-    context.setDAGContext(dag_context.get());
+    dag_context->log = log;
+    dag_context->regions_for_local_read = std::move(local_regions);
+    dag_context->regions_for_remote_read = std::move(remote_regions);
+    context->setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())
     {
@@ -234,8 +239,8 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         mpp::TaskMeta task_meta;
         if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
-        bool is_local = context.getSettings().enable_local_tunnel && meta.address() == task_meta.address();
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context.getSettings().max_threads, is_local, log);
+        bool is_local = context->getSettings().enable_local_tunnel && meta.address() == task_meta.address();
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, task_cancelled_callback, context->getSettings().max_threads, is_local, log);
         LOG_DEBUG(log, "begin to register the tunnel " << tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         tunnel_set->addTunnel(tunnel);
@@ -261,15 +266,13 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     {
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
-
-    return remote_regions;
 }
 
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
-    DAGQuerySource dag(context, local_regions, remote_regions, dag_req, log, true);
-    io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
+    DAGQuerySource dag(*context);
+    io = executeQuery(dag, *context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 }
@@ -348,7 +351,7 @@ void MPPTask::runImpl()
         auto throughput = dag_context->getTableScanThroughput();
         if (throughput.first)
             GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
-        auto process_info = context.getProcessListElement()->getInfo();
+        auto process_info = context->getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
     }
@@ -403,7 +406,7 @@ void MPPTask::cancel(const String & reason)
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
         {
-            context.getProcessList().sendCancelToQuery(context.getCurrentQueryId(), context.getClientInfo().current_user, true);
+            context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
             closeAllTunnels(reason);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish cancel task from running");
