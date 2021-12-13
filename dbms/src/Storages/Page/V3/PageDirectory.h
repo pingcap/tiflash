@@ -38,10 +38,13 @@ public:
     bool gc();
 
 private:
+    // `apply` with create a version={directory.sequence, epoch=0}.
+    // After data compaction and page entries need to be updated, will create
+    // some entries with a version={old_sequence, epoch=old_epoch+1}.
     struct VersionType
     {
-        UInt64 sequence;
-        UInt64 epoch;
+        UInt64 sequence; // The write sequence
+        UInt64 epoch; // The GC epoch
 
         explicit VersionType(UInt64 seq)
             : sequence(seq)
@@ -54,16 +57,6 @@ private:
                 return epoch < rhs.epoch;
             return sequence < rhs.sequence;
         }
-    };
-    struct VersionedPageEntry
-    {
-        VersionType ver;
-        PageEntryV3 entry;
-
-        VersionedPageEntry(UInt64 seq, const PageEntryV3 & entry)
-            : ver(seq)
-            , entry(entry)
-        {}
     };
 
     using PageLock = std::unique_ptr<std::lock_guard<std::mutex>>;

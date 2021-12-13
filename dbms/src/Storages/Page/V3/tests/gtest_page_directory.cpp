@@ -158,8 +158,6 @@ try
     auto snap2 = dir.createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
-
-    // ASSERT_ENTRY_EQ(entry1, get(1, snap));
 }
 CATCH
 
