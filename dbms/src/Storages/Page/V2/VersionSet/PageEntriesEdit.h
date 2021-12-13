@@ -49,8 +49,8 @@ public:
 
     void concate(PageEntriesEdit & edit)
     {
-        auto records_ = edit.getRecords();
-        records.insert(records.end(), records_.begin(), records_.end());
+        auto rhs = edit.getRecords();
+        records.insert(records.end(), rhs.begin(), rhs.end());
     }
 
     void clear() { records.clear(); }

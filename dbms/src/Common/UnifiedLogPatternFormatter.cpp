@@ -26,7 +26,7 @@ void UnifiedLogPatternFormatter::format(const Poco::Message & msg, std::string &
 
     std::string source_str = "<unknown>";
     if (msg.getSourceFile())
-        source_str = "<" + std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine()) + ">";
+        source_str = std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine());
 
     std::string message;
     const std::string & source = msg.getSource();
@@ -88,6 +88,7 @@ std::string UnifiedLogPatternFormatter::getPriorityString(const Poco::Message::P
 
 std::string UnifiedLogPatternFormatter::getTimestamp()
 {
+    // The format is "yyyy/MM/dd HH:mm:ss.SSS ZZZZZ"
     auto time_point = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(time_point);
 

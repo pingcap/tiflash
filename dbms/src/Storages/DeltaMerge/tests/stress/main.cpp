@@ -87,7 +87,7 @@ void init()
 #endif
 }
 
-void runProxy(const StressOptions & opts, const Poco::Logger * log)
+void runProxy(const StressOptions & opts, Poco::Logger * log)
 {
     try
     {
