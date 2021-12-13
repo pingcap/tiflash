@@ -52,7 +52,7 @@ std::future<void> ScalableThreadPool::schedule0(std::shared_ptr<std::promise<voi
         std::unique_lock<std::mutex> lock(mutex);
         if (shutdown)
             return std::future<void>();
-        if (wait_cnt<=0)
+        if (wait_cnt <= 0)
         {
             threads->emplace_back(std::make_shared<Thd>(this));
         }
@@ -84,12 +84,6 @@ ScalableThreadPool::~ScalableThreadPool()
         thread_ctx->thd->join();
 }
 
-//size_t ScalableThreadPool::active() const
-//{
-//    std::unique_lock<std::mutex> lock(mutex);
-//    return active_jobs;
-//}
-
 void ScalableThreadPool::backgroundJob()
 {
     while (!shutdown)
@@ -110,12 +104,6 @@ void ScalableThreadPool::backgroundJob()
             int cnt_cleaned = 0;
             for (auto & thd_ctx : *old_threads)
             {
-                //status.end: can be removed safely
-                if (thd_ctx->status == 2)
-                    cnt_cleaned++;
-            }
-            for (auto & thd_ctx : *old_threads)
-            {
                 if (thd_ctx->status != 2)
                 {
                     new_threads->push_back(thd_ctx);
@@ -124,15 +112,17 @@ void ScalableThreadPool::backgroundJob()
                         thd_ctx->end_syn = true;
                         cnt_cleaned++;
                     }
+                } else { //status.end: can be removed safely
+                    thd_ctx->thd->join();
                 }
             }
             {
                 std::unique_lock<std::mutex> lock2(mutex);
-                threads = new_threads; //update threads
                 for (size_t i = old_threads_size; i < old_threads->size(); i++)
                 { //update new threads created during this loop
-                    threads->push_back(old_threads->at(i));
+                    new_threads->push_back(old_threads->at(i));
                 }
+                threads = new_threads; //update threads
             }
         }
 
@@ -171,11 +161,6 @@ void ScalableThreadPool::worker(Thd * thdctx)
             job();
 
         thdctx->status = 0;
-//        has_free_thread.notify_all();
     }
     thdctx->status = 2;
-//    {
-//        std::unique_lock<std::mutex> lock(mutex);
-//        thd_cnt--;
-//    }
 }

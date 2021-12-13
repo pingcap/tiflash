@@ -52,24 +52,18 @@ public:
 
     size_t size() const { return init_cap; }
 
-    /// Returns number of active jobs.
-//    size_t active() const;
-
     void backgroundJob();
 
 protected:
     mutable std::mutex mutex;
-//    std::condition_variable has_free_thread;
     std::condition_variable has_new_job_or_shutdown;
     std::condition_variable cv_shutdown;
     size_t min_history_wait_cnt = std::numeric_limits<size_t>::max();
 
     const size_t init_cap;
     Job pre_worker;
-//    size_t active_jobs = 0;
     size_t wait_cnt = 0;
     std::atomic<bool> shutdown = false;
-//    size_t thd_cnt = 0;
 
     std::queue<Job> jobs;
     std::shared_ptr<std::vector<std::shared_ptr<Thd>>> threads;
