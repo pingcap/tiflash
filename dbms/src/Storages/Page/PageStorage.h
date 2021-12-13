@@ -9,7 +9,6 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WriteBatch.h>
-#include <Storages/Page/Snapshot.h>
 #include <fmt/format.h>
 
 #include <condition_variable>

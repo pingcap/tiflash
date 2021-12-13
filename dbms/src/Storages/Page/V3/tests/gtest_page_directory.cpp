@@ -1,4 +1,6 @@
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
+#include <Common/joinStr.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -7,15 +9,13 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>
 
-#include "gtest/gtest.h"
-
 
 namespace DB
 {
 namespace ErrorCodes
 {
-extern const int PS_PAGE_NOT_EXISTS;
-extern const int PS_PAGE_NO_VALID_VERSION;
+extern const int PS_ENTRY_NOT_EXISTS;
+extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3::tests
 {
@@ -45,16 +45,15 @@ inline bool isSameEntry(const PageEntryV3 & lhs, const PageEntryV3 & rhs)
         String err_msg;
         if (pid != expected_id_entry.first)
         {
-            err_msg = fmt::format("Try to get Page{} but get Page{}", page_id_expr, pid);
+            err_msg = fmt::format("Try to get entry [id={}] but get [id={}]", page_id_expr, pid);
             return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
         }
         if (isSameEntry(entry, expected_entry))
         {
-            // Do not need a further check on the unsafe
             return ::testing::AssertionSuccess();
         }
         // else not the expected entry we want
-        auto actual_expr = fmt::format("Get Page{} from {} with snap{}", page_id_expr, dir_expr, snap_expr);
+        auto actual_expr = fmt::format("Get entry [id={}] from {} with snap{}", page_id_expr, dir_expr, snap_expr);
         return testing::internal::EqFailure(
             expected_entry_expr,
             actual_expr.c_str(),
@@ -70,10 +69,10 @@ inline bool isSameEntry(const PageEntryV3 & lhs, const PageEntryV3 & rhs)
     }
     catch (DB::Exception & ex)
     {
-        if (ex.code() == ErrorCodes::PS_PAGE_NOT_EXISTS)
-            error = fmt::format("Try to get Page{} but not exists. Err message: {}", page_id_expr, ex.message());
-        else if (ex.code() == ErrorCodes::PS_PAGE_NO_VALID_VERSION)
-            error = fmt::format("Try to get Page{} with version {} from {} but failed. Err message: {}", page_id_expr, snap->sequence, snap_expr, ex.message());
+        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS)
+            error = fmt::format("Try to get entry [id={}] but not exists. Err message: {}", page_id_expr, ex.message());
+        else if (ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
+            error = fmt::format("Try to get entry [id={}] with version {} from {} but failed. Err message: {}", page_id_expr, snap->sequence, snap_expr, ex.message());
         else
             error = ex.displayText();
         return ::testing::AssertionFailure(::testing::Message(error.c_str()));
@@ -89,6 +88,96 @@ inline bool isSameEntry(const PageEntryV3 & lhs, const PageEntryV3 & rhs)
 #define EXPECT_ENTRY_EQ(expected_entry, dir, pid, snap) \
     EXPECT_PRED_FORMAT4(getEntryCompare, expected_entry, dir, pid, snap)
 
+String toString(const PageIDAndEntriesV3 & entries)
+{
+    FmtBuffer buf;
+    buf.append("[");
+    joinStr(
+        entries.begin(),
+        entries.end(),
+        buf,
+        [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
+            buf.fmtAppend("<{},{}>", id_entry.first, toString(id_entry.second));
+        });
+    buf.append("]");
+    return buf.toString();
+}
+::testing::AssertionResult getEntriesCompare(
+    const char * expected_entries_expr,
+    const char * dir_expr,
+    const char * page_ids_expr,
+    const char * snap_expr,
+    const PageIDAndEntriesV3 & expected_entries,
+    const PageDirectory & dir,
+    const PageIds page_ids,
+    const PageDirectorySnapshotPtr & snap)
+{
+    auto check_id_entries = [&](const PageIDAndEntriesV3 & expected_id_entries, const PageIDAndEntriesV3 & actual_id_entries) -> ::testing::AssertionResult {
+        if (expected_id_entries.size() == actual_id_entries.size())
+        {
+            for (size_t idx = 0; idx == expected_id_entries.size(); ++idx)
+            {
+                const auto & expected_id_entry = expected_id_entries[idx];
+                const auto & actual_id_entry = expected_id_entries[idx];
+                if (actual_id_entry.first != expected_id_entry.first)
+                {
+                    auto err_msg = fmt::format("Try to get entry [id={}] but get [id={}] at [index={}]", expected_id_entry.first, actual_id_entry.first, idx);
+                    return ::testing::AssertionFailure(::testing::Message(err_msg.c_str()));
+                }
+                if (!isSameEntry(expected_id_entry.second, actual_id_entry.second))
+                {
+                    // not the expected entry we want
+                    String err_msg;
+                    auto expect_expr = fmt::format("Entry at {} [index={}]", idx);
+                    auto actual_expr = fmt::format("Get entries {} from {} with snap {} [index={}", page_ids_expr, dir_expr, snap_expr, idx);
+                    return testing::internal::EqFailure(
+                        expect_expr.c_str(),
+                        actual_expr.c_str(),
+                        toString(expected_id_entry.second),
+                        toString(actual_id_entry.second),
+                        false);
+                }
+            }
+            return ::testing::AssertionSuccess();
+        }
+
+        // else not the expected entry we want
+        auto expected_expr = fmt::format("Entries from {} [size={}]", expected_entries_expr, expected_entries.size());
+        auto actual_expr = fmt::format("Get entries {} from {} with snap {}, [size={}]", page_ids_expr, dir_expr, snap_expr, actual_id_entries.size());
+        return testing::internal::EqFailure(
+            expected_expr.c_str(),
+            actual_expr.c_str(),
+            toString(expected_entries),
+            toString(actual_id_entries),
+            false);
+    };
+    String error;
+    try
+    {
+        auto id_entries = dir.get(page_ids, snap);
+        return check_id_entries(expected_entries, id_entries);
+    }
+    catch (DB::Exception & ex)
+    {
+        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS)
+            error = fmt::format("Try to get entries with [ids={}] but not exists. Err message: {}", page_ids_expr, ex.message());
+        else if (ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
+            error = fmt::format("Try to get entries with [ids={}] with version {} from {} but failed. Err message: {}", page_ids_expr, snap->sequence, snap_expr, ex.message());
+        else
+            error = ex.displayText();
+        return ::testing::AssertionFailure(::testing::Message(error.c_str()));
+    }
+    catch (...)
+    {
+        error = getCurrentExceptionMessage(true);
+    }
+    return ::testing::AssertionFailure(::testing::Message(error.c_str()));
+}
+#define ASSERT_ENTRIES_EQ(expected_entries, dir, pid, snap) \
+    ASSERT_PRED_FORMAT4(getEntriesCompare, expected_entries, dir, pid, snap)
+#define EXPECT_ENTRIES_EQ(expected_entries, dir, pid, snap) \
+    EXPECT_PRED_FORMAT4(getEntriesCompare, expected_entries, dir, pid, snap)
+
 ::testing::AssertionResult getEntryNotExist(
     const char * dir_expr,
     const char * page_id_expr,
@@ -102,7 +191,7 @@ inline bool isSameEntry(const PageEntryV3 & lhs, const PageEntryV3 & rhs)
     {
         auto id_entry = dir.get(page_id, snap);
         error = fmt::format(
-            "Expect Page{} from {} with snap{} not exist, but got <{}, {}>",
+            "Expect entry [id={}] from {} with snap{} not exist, but got <{}, {}>",
             page_id_expr,
             dir_expr,
             snap_expr,
@@ -111,7 +200,7 @@ inline bool isSameEntry(const PageEntryV3 & lhs, const PageEntryV3 & rhs)
     }
     catch (DB::Exception & ex)
     {
-        if (ex.code() == ErrorCodes::PS_PAGE_NOT_EXISTS || ex.code() == ErrorCodes::PS_PAGE_NO_VALID_VERSION)
+        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS || ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
             return ::testing::AssertionSuccess();
         else
             error = ex.displayText();
@@ -158,6 +247,12 @@ try
     auto snap2 = dir.createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, 2, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap2);
+    EXPECT_ENTRY_EQ(entry1, dir, 1, snap2);
+    {
+        PageIds ids{1, 2};
+        PageIDAndEntriesV3 expected_entries{{1, entry1}, {2, entry2}};
+        EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
+    }
 }
 CATCH
 

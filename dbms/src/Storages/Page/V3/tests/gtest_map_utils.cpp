@@ -5,8 +5,9 @@
 #include <map>
 namespace DB::PS::V3::tests
 {
-
-struct Empty{};
+struct Empty
+{
+};
 
 ::testing::AssertionResult MapIterCompare(
     const char * lhs_expr,

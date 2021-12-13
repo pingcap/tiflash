@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageEntry.h>
 
 #include <mutex>
 
@@ -8,8 +9,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-extern const int PS_PAGE_NOT_EXISTS;
-extern const int PS_PAGE_NO_VALID_VERSION;
+extern const int PS_ENTRY_NOT_EXISTS;
+extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3
 {
@@ -37,7 +38,7 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
         std::shared_lock read_lock(table_rw_mutex);
         iter = mvcc_table_directory.find(page_id);
         if (iter == mvcc_table_directory.end())
-            throw Exception(fmt::format("Page{} not exist!", page_id), ErrorCodes::PS_PAGE_NOT_EXISTS);
+            throw Exception(fmt::format("Entry [id={}] not exist!", page_id), ErrorCodes::PS_ENTRY_NOT_EXISTS);
     }
 
     if (auto entry = iter->second->getEntry(snap->sequence); entry)
@@ -45,12 +46,42 @@ PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotP
         return PageIDAndEntryV3(page_id, *entry);
     }
 
-    throw Exception(fmt::format("Page{} with seq={} not exist!", page_id, snap->sequence), ErrorCodes::PS_PAGE_NO_VALID_VERSION);
+    throw Exception(fmt::format("Entry [id={}] [seq={}] not exist!", page_id, snap->sequence), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
 }
 
-PageIDAndEntriesV3 PageDirectory::get(const PageIds & /*read_ids*/, const PageDirectorySnapshotPtr & /*snap*/) const
+PageIDAndEntriesV3 PageDirectory::get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const
 {
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    std::vector<MVCCMapType::const_iterator> iters;
+    iters.reserve(page_ids.size());
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+        for (size_t idx = 0; idx < page_ids.size(); ++idx)
+        {
+            if (auto iter = mvcc_table_directory.find(page_ids[idx]);
+                iter != mvcc_table_directory.end())
+            {
+                iters.emplace_back(iter);
+            }
+            else
+            {
+                throw Exception(fmt::format("Entry [id={}] at [idx={}] not exist!", page_ids[idx], idx), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+            }
+        }
+    }
+
+    PageIDAndEntriesV3 id_entries;
+    for (size_t idx = 0; idx < page_ids.size(); ++idx)
+    {
+        const auto & iter = iters[idx];
+        if (auto entry = iter->second->getEntry(snap->sequence); entry)
+        {
+            id_entries.emplace_back(page_ids[idx], *entry);
+        }
+        else
+            throw Exception(fmt::format("Entry [id={}] [seq={}] at [idx={}] not exist!", page_ids[idx], snap->sequence, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+    }
+
+    return id_entries;
 }
 
 void PageDirectory::apply(PageEntriesEdit && edit)

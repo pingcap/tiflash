@@ -31,7 +31,7 @@ public:
     PageDirectorySnapshotPtr createSnapshot() const;
 
     PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const;
-    PageIDAndEntriesV3 get(const PageIds & read_ids, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntriesV3 get(const PageIds & page_ids, const PageDirectorySnapshotPtr & snap) const;
 
     void apply(PageEntriesEdit && edit);
 
