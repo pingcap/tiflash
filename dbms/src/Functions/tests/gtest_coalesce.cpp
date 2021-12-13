@@ -28,7 +28,7 @@ try
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({"a"}),
-            createOnlyNullColumn(1)));
+            createOnlyNullColumnConst(1)));
 }
 CATCH
 } // namespace DB::tests
