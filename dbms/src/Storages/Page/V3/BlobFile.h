@@ -40,8 +40,6 @@ private:
     FileProviderPtr file_provider;
     String path;
 
-    Poco::Logger * log;
-
     WriteReadableFilePtr wrfile;
 };
 using BlobFilePtr = std::shared_ptr<BlobFile>;

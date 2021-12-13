@@ -43,8 +43,8 @@ TEST_F(BlobStoreTest, testStats)
     ASSERT_EQ(stats.stats_map.size(), 3);
     ASSERT_EQ(stats.roll_id, 3);
 
-    stats.earseStat(0);
-    stats.earseStat(1);
+    stats.eraseStat(0);
+    stats.eraseStat(1);
     ASSERT_EQ(stats.stats_map.size(), 1);
     ASSERT_EQ(stats.roll_id, 3);
     ASSERT_EQ(stats.old_ids.size(), 2);
@@ -161,7 +161,7 @@ TEST_F(BlobStoreTest, testFullStats)
     ASSERT_EQ(offset, 0);
 
     // Remove the stat which id is 0 , now remain the stat which id is 1
-    stats.earseStat(0);
+    stats.eraseStat(0);
 
     // Then full the stat which id 1
     offset = stats.getPosFromStat(stat, BLOBFILE_LIMIT_SIZE - 100);

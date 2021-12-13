@@ -50,8 +50,8 @@ using PageSize = UInt64;
 
 using BlobFileId = UInt32;
 using BlobFileOffset = UInt64;
-static constexpr UInt32 INVALID_BLOBFILE_ID = UINT32_MAX;
-static constexpr UInt64 INVALID_BLOBFILE_OFFSET = UINT64_MAX;
+static constexpr BlobFileId INVALID_BLOBFILE_ID = UINT32_MAX;
+static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = UINT64_MAX;
 
 struct ByteBuffer
 {

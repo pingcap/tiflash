@@ -9,7 +9,6 @@ BlobFile::BlobFile(String path_,
                    bool truncate_if_exists)
     : file_provider{file_provider_}
     , path(path_)
-    , log(&Poco::Logger::get("BlobFile"))
 {
     wrfile = file_provider->newWriteReadableFile(
         getPath(),

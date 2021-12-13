@@ -55,17 +55,13 @@ public:
     public:
         BlobStats(Poco::Logger * log_, BlobStore::Config config);
 
-        void lock();
+        std::lock_guard<std::mutex> lock();
 
-        void unlock();
-
-        void statLock(BlobStatPtr stat);
-
-        void statUnlock(BlobStatPtr stat);
+        std::lock_guard<std::mutex> statLock(BlobStatPtr stat);
 
         BlobStatPtr createStat(BlobFileId blob_file_id);
 
-        void earseStat(BlobFileId blob_file_id);
+        void eraseStat(BlobFileId blob_file_id);
 
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size);
 
