@@ -4,8 +4,15 @@
 
 namespace DB
 {
-struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, UInt64, size_t>
+struct PKColumnIterator
 {
+    using iterator_type = PKColumnIterator;
+    using iterator_category = std::random_access_iterator_tag;
+    using value_type = UInt64;
+    using difference_type = size_t;
+    using pointer = value_type *;
+    using reference = value_type &;
+
     PKColumnIterator & operator++()
     {
         ++pos;
@@ -28,7 +35,10 @@ struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, 
 
     size_t operator-(const PKColumnIterator & itr) const { return pos - itr.pos; }
 
-    PKColumnIterator(const int pos_, const IColumn * column_) : pos(pos_), column(column_) {}
+    PKColumnIterator(const int pos_, const IColumn * column_)
+        : pos(pos_)
+        , column(column_)
+    {}
 
     PKColumnIterator(const PKColumnIterator & itr) { copy(itr); }
 
@@ -45,9 +55,9 @@ private:
     }
 };
 
-template<typename HandleType>
+template <typename HandleType>
 inline bool PkCmp(const UInt64 & a, const TiKVHandle::Handle<HandleType> & b)
 {
     return static_cast<HandleType>(a) < b;
 }
-}
+} // namespace DB
