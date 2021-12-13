@@ -25,7 +25,8 @@ DAGQuerySource::DAGQuerySource(
 {
     if (dag_request.has_root_executor())
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor());
+        QueryBlockIDGenerator id_generator;
+        root_query_block = std::make_shared<DAGQueryBlock>(dag_request.root_executor(), id_generator);
     }
     else
     {
