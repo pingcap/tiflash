@@ -195,6 +195,7 @@ ColumnPtr makeConstColumn(const DataTypePtr & data_type, size_t size, const Infe
     return data_type->createColumnConst(size, makeField(value));
 }
 
+ColumnWithTypeAndName createOnlyNullColumnConst(size_t size, const String & name = "");
 ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name = "");
 
 template <typename T>

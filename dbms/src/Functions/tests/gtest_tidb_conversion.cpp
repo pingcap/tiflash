@@ -62,6 +62,40 @@ using DecimalField256 = DecimalField<Decimal256>;
 TEST_F(TestTidbConversion, castIntAsInt)
 try
 {
+    // null only cases
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt64>>({{}}),
+        executeFunction(func_name,
+                        {createOnlyNullColumn(1),
+                         createCastTypeConstColumn("Nullable(UInt64)")}));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({{}}),
+        executeFunction(func_name,
+                        {createOnlyNullColumn(1),
+                         createCastTypeConstColumn("Nullable(Int64)")}));
+    // const cases
+    ASSERT_COLUMN_EQ(
+        createConstColumn<UInt64>(1, MAX_UINT8),
+        executeFunction(func_name,
+                        {createConstColumn<UInt8>(1, MAX_UINT8),
+                         createCastTypeConstColumn("UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<UInt64>(1, MAX_UINT16),
+        executeFunction(func_name,
+                        {createConstColumn<UInt16>(1, MAX_UINT16),
+                         createCastTypeConstColumn("UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<UInt64>(1, MAX_UINT32),
+        executeFunction(func_name,
+                        {createConstColumn<UInt32>(1, MAX_UINT32),
+                         createCastTypeConstColumn("UInt64")}));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<UInt64>(1, MAX_UINT64),
+        executeFunction(func_name,
+                        {createConstColumn<UInt64>(1, MAX_UINT64),
+                         createCastTypeConstColumn("UInt64")}));
+
+    // normal cases
     // uint8/16/32/64 -> uint64, no overflow
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({0, 1, MAX_UINT8, {}}),
@@ -162,8 +196,8 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>(
                              {1234567890, // this is fine
-                              123456789012345678,
-                              {}}), // but this cannot be represented precisely in the IEEE 754 64-bit float format
+                              123456789012345678, // but this cannot be represented precisely in the IEEE 754 64-bit float format
+                              {}}),
                          createCastTypeConstColumn("Nullable(Float64)")}));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>(
@@ -173,8 +207,8 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>(
                              {1234567890, // this is fine
-                              123456789012345678,
-                              {}}), // but this cannot be represented precisely in the IEEE 754 64-bit float format
+                              123456789012345678, // but this cannot be represented precisely in the IEEE 754 64-bit float format
+                              {}}),
                          createCastTypeConstColumn("Nullable(Float64)")}));
     // uint32/16/8 and int32/16/8 -> float64, precise
     ASSERT_COLUMN_EQ(
