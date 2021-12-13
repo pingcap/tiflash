@@ -69,6 +69,7 @@ def main():
             if diff_res:
                 print('Error: found files NOT formatted')
                 print(''.join(diff_res))
+                print(''.join(run_cmd('git diff')))
                 exit(-1)
             else:
                 print("Format check passed")
