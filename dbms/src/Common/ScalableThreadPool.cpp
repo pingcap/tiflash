@@ -3,11 +3,9 @@
 
 #include <exception>
 #include <iostream>
-#include <stdexcept>
 
 #include "MemoryTracker.h"
 
-//std::unique_ptr<ScalableThreadPool>
 std::unique_ptr<ScalableThreadPool> ScalableThreadPool::glb_instance = std::make_unique<ScalableThreadPool>(200, [] { setThreadName("glb-thd-pool"); });
 
 std::function<void()> ScalableThreadPool::newJob(std::shared_ptr<std::promise<void>> p, Job job)
@@ -54,14 +52,13 @@ std::future<void> ScalableThreadPool::schedule0(std::shared_ptr<std::promise<voi
         std::unique_lock<std::mutex> lock(mutex);
         if (shutdown)
             return std::future<void>();
-        if (active_jobs >= threads->size())
+        if (wait_cnt<=0)
         {
             threads->emplace_back(std::make_shared<Thd>(this));
         }
 
         jobs.push(std::move(job));
-        ++active_jobs;
-        max_history_active_cnt = std::max(max_history_active_cnt, active_jobs);
+        min_history_wait_cnt = std::min(min_history_wait_cnt, wait_cnt);
     }
     has_new_job_or_shutdown.notify_one();
     return p->get_future();
@@ -87,11 +84,11 @@ ScalableThreadPool::~ScalableThreadPool()
         thread_ctx->thd->join();
 }
 
-size_t ScalableThreadPool::active() const
-{
-    std::unique_lock<std::mutex> lock(mutex);
-    return active_jobs;
-}
+//size_t ScalableThreadPool::active() const
+//{
+//    std::unique_lock<std::mutex> lock(mutex);
+//    return active_jobs;
+//}
 
 void ScalableThreadPool::backgroundJob()
 {
@@ -100,9 +97,10 @@ void ScalableThreadPool::backgroundJob()
         std::unique_lock<std::mutex> lock(mutex);
         if (cv_shutdown.wait_for(lock, std::chrono::seconds(10), [this] { return shutdown.load(); }))
             break;
-        if (max_history_active_cnt > init_cap && max_history_active_cnt < threads->size() * 0.9)
+        size_t idle_buffer_cnt = 50;
+        if (min_history_wait_cnt != std::numeric_limits<size_t>::max() && min_history_wait_cnt > idle_buffer_cnt)
         {
-            int cnt_to_clean = static_cast<int>(threads->size()) - std::max(max_history_active_cnt + 10, init_cap);
+            int cnt_to_clean = static_cast<int>(min_history_wait_cnt) - idle_buffer_cnt;
             if (cnt_to_clean <= 0)
                 continue;
             auto old_threads = threads;
@@ -138,10 +136,9 @@ void ScalableThreadPool::backgroundJob()
             }
         }
 
-        max_history_active_cnt = 0;
+        min_history_wait_cnt = std::numeric_limits<size_t>::max();
     }
 }
-
 
 void ScalableThreadPool::worker(Thd * thdctx)
 {
@@ -151,7 +148,11 @@ void ScalableThreadPool::worker(Thd * thdctx)
         bool need_shutdown = false;
         {
             std::unique_lock<std::mutex> lock(mutex);
+            wait_cnt++;
+            min_history_wait_cnt = std::min(min_history_wait_cnt, wait_cnt);
             has_new_job_or_shutdown.wait(lock, [this] { return shutdown || !jobs.empty(); });
+            wait_cnt--;
+            min_history_wait_cnt = std::min(min_history_wait_cnt, wait_cnt);
             need_shutdown = shutdown;
 
             if (!jobs.empty())
@@ -162,19 +163,19 @@ void ScalableThreadPool::worker(Thd * thdctx)
             }
             else
             {
-                return;
+                break;
             }
         }
 
         if (!need_shutdown)
             job();
 
-        {
-            std::unique_lock<std::mutex> lock(mutex);
-            --active_jobs;
-        }
         thdctx->status = 0;
-        has_free_thread.notify_all();
+//        has_free_thread.notify_all();
     }
     thdctx->status = 2;
+//    {
+//        std::unique_lock<std::mutex> lock(mutex);
+//        thd_cnt--;
+//    }
 }
