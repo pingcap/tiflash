@@ -9,10 +9,9 @@
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 #include <boost/algorithm/string/replace.hpp>
-
-#include "Common/FmtUtils.h"
 
 namespace DB
 {
@@ -52,13 +51,11 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
 
-    FmtBuffer fmt_buf;
     auto mapped = mappedDatabase(context, database_name);
     if (mapped == std::nullopt)
-        fmt_buf.fmtAppend("Database {} not found.", database_name);
+        output(fmt::format("Database {} not found.", database_name));
     else
-        fmt_buf.append(mapped.value());
-    output(fmt_buf.toString());
+        output(fmt::format(mapped.value()));
 }
 
 void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -72,15 +69,13 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
     if (args.size() == 3)
         qualify = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value) == "true";
 
-    FmtBuffer fmt_buf;
     auto mapped = mappedTable(context, database_name, table_name);
     if (mapped == std::nullopt)
-        fmt_buf.fmtAppend("Table {}.{} not found.", database_name, table_name);
+        output(fmt::format("Table {}.{} not found.", database_name, table_name));
     else if (qualify)
-        fmt_buf.fmtAppend("{}.{}", mapped->first, mapped->second);
+        output(fmt::format("{}.{}", mapped->first, mapped->second));
     else
-        fmt_buf.append(mapped->second);
-    output(fmt_buf.toString());
+        output(fmt::format(mapped->second));
 }
 
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
