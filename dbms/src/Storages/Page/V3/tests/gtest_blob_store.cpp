@@ -64,17 +64,17 @@ TEST_F(BlobStoreTest, testStat)
 
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
-    std::tie(stat, blob_file_id) = stats.chooseStat(10);
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
     ASSERT_EQ(blob_file_id, 0);
     ASSERT_FALSE(stat);
 
     // still 0
-    std::tie(stat, blob_file_id) = stats.chooseStat(10);
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
     ASSERT_EQ(blob_file_id, 0);
     ASSERT_FALSE(stat);
 
     stats.createStat(0);
-    std::tie(stat, blob_file_id) = stats.chooseStat(10);
+    std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
     ASSERT_EQ(blob_file_id, UINT16_MAX);
     ASSERT_TRUE(stat);
 
@@ -151,7 +151,7 @@ TEST_F(BlobStoreTest, testFullStats)
     ASSERT_LE(stat->sm_valid_rate, 1);
 
     // Won't choose full one
-    std::tie(stat, blob_file_id) = stats.chooseStat(100);
+    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE);
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
@@ -170,7 +170,7 @@ TEST_F(BlobStoreTest, testFullStats)
     // Then choose stat , it should return the stat id 0
     // cause in this time , stat which id is 1 have been earsed,
     // and stat which id is 1 is full.
-    std::tie(stat, blob_file_id) = stats.chooseStat(100);
+    std::tie(stat, blob_file_id) = stats.chooseStat(100, BLOBFILE_LIMIT_SIZE);
     ASSERT_EQ(blob_file_id, 0);
     ASSERT_FALSE(stat);
 }
@@ -443,7 +443,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
     size_t buff_size = 100;
 
     {
-        config.blobfile_limit_size = buff_size - 1;
+        config.file_limit_size = buff_size - 1;
         auto blob_store = BlobStore(file_provider, path, config);
 
         WriteBatch wb;
@@ -463,7 +463,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
         ASSERT_TRUE(catch_exception);
     }
 
-    config.blobfile_limit_size = buff_size;
+    config.file_limit_size = buff_size;
 
     size_t buffer_sizes[] = {buff_size, buff_size - 1, buff_size / 2 + 1};
     for (auto & buf_size : buffer_sizes)

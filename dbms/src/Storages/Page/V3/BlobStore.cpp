@@ -10,8 +10,6 @@ extern const Event PSMWritePages;
 extern const Event PSMReadPages;
 } // namespace ProfileEvents
 
-static constexpr bool PAGE_CHECKSUM_ON_READ = true;
-
 namespace DB
 {
 namespace ErrorCodes
@@ -22,6 +20,8 @@ extern const int CHECKSUM_DOESNT_MATCH;
 
 namespace PS::V3
 {
+static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;
+
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
@@ -32,7 +32,7 @@ BlobStore::BlobStore(const FileProviderPtr & file_provider_, String path_, BlobS
     , config(config_)
     , log(&Poco::Logger::get("BlobStore"))
     , blob_stats(log, config_)
-    , cached_file(config.blobstore_cached_fd_size)
+    , cached_file(config.cached_fd_size)
 {
 }
 
@@ -43,9 +43,9 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     PageEntriesEdit edit;
     const size_t all_page_data_size = wb.getTotalDataSize();
 
-    if (all_page_data_size > config.blobfile_limit_size)
+    if (all_page_data_size > config.file_limit_size)
     {
-        throw Exception("Write batch is too large. It should less than [blobfile_limit_size=" + DB::toString(config.blobfile_limit_size.get()) + "]",
+        throw Exception("Write batch is too large. It should less than [file_limit_size=" + DB::toString(config.file_limit_size.get()) + "]",
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -83,15 +83,15 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
                 for (size_t i = 0; i < write.offsets.size(); ++i)
                 {
-                    ChecksumClass digest;
+                    ChecksumClass field_digest;
                     field_begin = write.offsets[i].first;
                     field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
 
-                    digest.update(buffer_pos + field_begin, field_end - field_begin);
-                    write.offsets[i].second = digest.checksum();
+                    field_digest.update(buffer_pos + field_begin, field_end - field_begin);
+                    write.offsets[i].second = field_digest.checksum();
                 }
 
-                if (write.offsets.size())
+                if (write.offsets.size() != 0)
                 {
                     // we can swap from WriteBatch instead of copying
                     entry.field_offsets.swap(write.offsets);
@@ -166,7 +166,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     BlobStatPtr stat;
 
     blob_stats.lock();
-    std::tie(stat, blob_file_id) = blob_stats.chooseStat(size);
+    std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, config.file_limit_size);
 
     if (blob_file_id != INVALID_BLOBFILE_ID)
     {
@@ -224,7 +224,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     {
         read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
 
-        if constexpr (PAGE_CHECKSUM_ON_READ)
+        if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
             ChecksumClass digest;
             digest.update(pos, entry.size);
@@ -352,8 +352,8 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
 
     LOG_DEBUG(log, "Created a new BlobStat which [BlobFileId= " << blob_file_id << "]");
     stat->id = blob_file_id;
-    stat->smap = SpaceMap::createSpaceMap((SpaceMap::SpaceMapType)config.spacemap_type.get(), 0, config.blobfile_limit_size);
-    stat->sm_max_caps = config.blobfile_limit_size;
+    stat->smap = SpaceMap::createSpaceMap((SpaceMap::SpaceMapType)config.spacemap_type.get(), 0, config.file_limit_size);
+    stat->sm_max_caps = config.file_limit_size;
 
     stats_map.emplace_back(stat);
 
@@ -389,7 +389,7 @@ void BlobStore::BlobStats::earseStat(BlobFileId blob_file_id)
     old_ids.emplace_back(blob_file_id);
 }
 
-std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size)
+std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size)
 {
     BlobStatPtr stat_ptr = NULL;
     BlobFileId littest_valid_rate = 2;
@@ -403,7 +403,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     for (auto stat : stats_map)
     {
         if (stat->sm_max_caps >= buf_size
-            && stat->sm_total_size + buf_size < BLOBFILE_LIMIT_SIZE
+            && stat->sm_total_size + buf_size < file_limit_size
             && stat->sm_valid_rate < littest_valid_rate)
         {
             littest_valid_rate = stat->sm_valid_size;

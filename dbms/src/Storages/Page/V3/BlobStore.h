@@ -24,9 +24,9 @@ class BlobStore : public Allocator<false>
 public:
     struct Config
     {
-        SettingUInt64 blobfile_limit_size = BLOBFILE_LIMIT_SIZE;
+        SettingUInt64 file_limit_size = BLOBFILE_LIMIT_SIZE;
         SettingUInt64 spacemap_type = SpaceMap::SpaceMapType::SMAP64_STD_MAP;
-        SettingUInt64 blobstore_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
+        SettingUInt64 cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
     };
 
     class BlobStats
@@ -67,7 +67,7 @@ public:
 
         void earseStat(BlobFileId blob_file_id);
 
-        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size);
+        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size);
 
         BlobFileOffset getPosFromStat(BlobStatPtr stat, size_t buf_size);
 
@@ -90,7 +90,7 @@ public:
 
     BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
 
-    void recover();
+    void restore();
 
     BlobStats getAllBlobStats();
 
