@@ -258,12 +258,13 @@ struct TiDBConvertToInteger
                 return static_cast<ToFieldType>(0);
             return static_cast<ToFieldType>(rounded_value);
         }
-        if (rounded_value > std::numeric_limits<ToFieldType>::max())
+        auto field_max = static_cast<T>(std::numeric_limits<ToFieldType>::max());
+        if (rounded_value > field_max)
         {
             context.getDAGContext()->handleOverflowError("Cast real as integer", Errors::Types::Truncated);
             return std::numeric_limits<ToFieldType>::max();
         }
-        else if (rounded_value == std::numeric_limits<ToFieldType>::max())
+        else if (rounded_value == field_max)
         {
             context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
             return std::numeric_limits<ToFieldType>::max();
@@ -276,12 +277,14 @@ struct TiDBConvertToInteger
     static std::enable_if_t<std::is_floating_point_v<T>, ToFieldType> toInt(const T & value, const Context & context)
     {
         T rounded_value = std::round(value);
-        if (rounded_value < std::numeric_limits<ToFieldType>::min())
+        auto field_min = static_cast<T>(std::numeric_limits<ToFieldType>::min());
+        auto field_max = static_cast<T>(std::numeric_limits<ToFieldType>::max());
+        if (rounded_value < field_min)
         {
             context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
             return std::numeric_limits<ToFieldType>::min();
         }
-        if (rounded_value >= std::numeric_limits<ToFieldType>::max())
+        if (rounded_value >= field_max)
         {
             context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
             return std::numeric_limits<ToFieldType>::max();
