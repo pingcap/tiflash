@@ -85,7 +85,7 @@ protected:
     std::function<void()> newJob(std::shared_ptr<std::promise<int>> p, Job job);
 };
 
-static void waitTask(std::future<int> & f)
+inline void waitTask(std::future<int> & f)
 {
     try
     {
@@ -98,7 +98,7 @@ static void waitTask(std::future<int> & f)
     }
 }
 
-[[maybe_unused]] static void waitTasks(std::vector<std::future<int>> & futures)
+inline void waitTasks(std::vector<std::future<int>> & futures)
 {
     for (auto & f : futures)
     {
