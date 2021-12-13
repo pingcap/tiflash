@@ -15,13 +15,23 @@ namespace DB
 {
 class Context;
 
+class QueryBlockIDGenerator
+{
+    UInt32 current_id = 0; //Root query block id is 1, so set current_id initial value to 0
+public:
+    UInt32 nextBlockID()
+    {
+        return ++current_id;
+    }
+};
+
 /// DAGQueryBlock is a dag query from single source,
 /// which means the query block contains a source node(tablescan or join)
 /// and some of the optional node.(selection/aggregation/project/limit/topN)
 class DAGQueryBlock
 {
 public:
-    DAGQueryBlock(UInt32 id, const tipb::Executor & root);
+    DAGQueryBlock(const tipb::Executor & root, QueryBlockIDGenerator & id_generator);
     DAGQueryBlock(UInt32 id, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors);
     /// the xxx_name is added for compatibility issues: before join is supported, executor does not
     /// has executor name, after join is supported in dag request, every executor has an unique
