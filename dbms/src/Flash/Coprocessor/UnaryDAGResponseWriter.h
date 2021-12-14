@@ -21,8 +21,6 @@ public:
     UnaryDAGResponseWriter(
         tipb::SelectResponse * response_,
         Int64 records_per_chunk_,
-        tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types,
         DAGContext & dag_context_);
 
     void write(const Block & block) override;

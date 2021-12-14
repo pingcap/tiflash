@@ -258,12 +258,13 @@ struct TiDBConvertToInteger
                 return static_cast<ToFieldType>(0);
             return static_cast<ToFieldType>(rounded_value);
         }
-        if (rounded_value > std::numeric_limits<ToFieldType>::max())
+        auto field_max = static_cast<T>(std::numeric_limits<ToFieldType>::max());
+        if (rounded_value > field_max)
         {
             context.getDAGContext()->handleOverflowError("Cast real as integer", Errors::Types::Truncated);
             return std::numeric_limits<ToFieldType>::max();
         }
-        else if (rounded_value == std::numeric_limits<ToFieldType>::max())
+        else if (rounded_value == field_max)
         {
             context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
             return std::numeric_limits<ToFieldType>::max();
@@ -276,12 +277,14 @@ struct TiDBConvertToInteger
     static std::enable_if_t<std::is_floating_point_v<T>, ToFieldType> toInt(const T & value, const Context & context)
     {
         T rounded_value = std::round(value);
-        if (rounded_value < std::numeric_limits<ToFieldType>::min())
+        auto field_min = static_cast<T>(std::numeric_limits<ToFieldType>::min());
+        auto field_max = static_cast<T>(std::numeric_limits<ToFieldType>::max());
+        if (rounded_value < field_min)
         {
             context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
             return std::numeric_limits<ToFieldType>::min();
         }
-        if (rounded_value >= std::numeric_limits<ToFieldType>::max())
+        if (rounded_value >= field_max)
         {
             context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
             return std::numeric_limits<ToFieldType>::max();
@@ -803,7 +806,7 @@ struct TiDBConvertToFloat
     }
 };
 
-/// cast int/real/decimal/time/string as decimal
+/// cast int/real/decimal/enum/string/time/string as decimal
 // todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
 template <typename FromDataType, typename ToFieldType, bool return_nullable>
 struct TiDBConvertToDecimal
@@ -1115,7 +1118,7 @@ struct TiDBConvertToDecimal
         return static_cast<UType>(is_negative ? -v : v);
     }
 
-    /// cast int/real/time/decimal as decimal
+    /// cast int/real/enum/string/time/decimal as decimal
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec [[maybe_unused]], ScaleType scale, bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
@@ -1924,7 +1927,7 @@ private:
             return createWrapper<DataTypeEnum8, return_nullable>(to_type);
         if (checkAndGetDataType<DataTypeEnum16>(from_type.get()))
             return createWrapper<DataTypeEnum16, return_nullable>(to_type);
-        if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
+        if (checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
             return createWrapper<DataTypeMyDuration, return_nullable>(to_type);
 
         // todo support convert to duration/json type
@@ -2087,6 +2090,7 @@ protected:
         return std::make_shared<FunctionTiDBCast>(context, name, std::move(monotonicity), data_types, return_type, in_union, tidb_tp);
     }
 
+    // use the last const string column's value as the return type name, in string representation like "Float64"
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         const auto * type_col = checkAndGetColumnConst<ColumnString>(arguments.back().column.get());
