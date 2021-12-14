@@ -22,9 +22,7 @@ extern const int LOGICAL_ERROR;
 
 static size_t getFileSize(int fd)
 {
-    struct stat stat_res
-    {
-    };
+    struct stat stat_res = {};
     if (0 != fstat(fd, &stat_res))
         throwFromErrno("MMappedFileDescriptor: Cannot fstat.", ErrorCodes::CANNOT_STAT);
 
@@ -57,7 +55,7 @@ void MMappedFileDescriptor::set(int fd_, size_t offset_, size_t length_)
     offset = offset_;
     length = length_;
 
-    if (!length)
+    if (length == 0)
         return;
 
     void * buf = mmap(nullptr, length, PROT_READ, MAP_PRIVATE, fd, offset);
@@ -83,7 +81,7 @@ void MMappedFileDescriptor::set(int fd_, size_t offset_)
 
 void MMappedFileDescriptor::finish()
 {
-    if (!length)
+    if (0 == length)
         return;
 
     if (0 != munmap(data, length))

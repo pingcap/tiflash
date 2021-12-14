@@ -204,6 +204,12 @@ endif ()
 
 target_include_directories (clickhouse_common_io BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
+if (USE_UNWIND)
+    target_include_directories(clickhouse_common_io PRIVATE ${UNWIND_INCLUDE_DIR})
+    target_include_directories (clickhouse_common_io BEFORE PRIVATE ${UNWIND_INCREMENTAL_DIR})
+    target_link_libraries (clickhouse_common_io PRIVATE ${UNWIND_LIBRARY})
+endif()
+
 if (Poco_Data_FOUND AND NOT USE_INTERNAL_POCO_LIBRARY)
     target_include_directories (clickhouse_common_io PRIVATE ${Poco_Data_INCLUDE_DIRS})
     target_include_directories (dbms PRIVATE ${Poco_Data_INCLUDE_DIRS})

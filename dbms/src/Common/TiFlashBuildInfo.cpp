@@ -1,3 +1,4 @@
+#include <Common/config.h>
 #include <Common/config_version.h>
 #include <common/config_common.h>
 #include <fmt/core.h>
@@ -58,6 +59,10 @@ std::string getEnabledFeatures()
 // failpoints
 #if ENABLE_FAILPOINTS
             "failpoints",
+#endif
+
+#if USE_UNWIND
+            "unwind",
 #endif
 
 // SIMD related
