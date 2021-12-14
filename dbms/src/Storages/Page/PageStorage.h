@@ -7,8 +7,8 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageUtil.h>
-#include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/Snapshot.h>
+#include <Storages/Page/WriteBatch.h>
 #include <fmt/format.h>
 
 #include <condition_variable>
