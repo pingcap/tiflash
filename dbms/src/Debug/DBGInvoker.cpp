@@ -1,5 +1,4 @@
 #include <Common/FmtUtils.h>
-#include <Common/joinStr.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
@@ -12,9 +11,7 @@
 #include <Debug/dbgFuncSchema.h>
 #include <Debug/dbgFuncSchemaName.h>
 #include <Parsers/ASTLiteral.h>
-#include <fmt/core.h>
 
-#include <cstring>
 #include <thread>
 
 namespace DB
@@ -161,11 +158,14 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
 {
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("{}(", name);
-
-    joinStr(args.cbegin(), args.cend(), fmt_buf, [](const auto & arg, FmtBuffer & fb) {
-        std::string column_name = arg->getColumnName();
-        fb.append(normalizeArg(column_name));
-    });
+    fmt_buf.joinStr(
+        args.cbegin(),
+        args.cend(),
+        [](const auto & arg, FmtBuffer & fb) {
+            std::string column_name = arg->getColumnName();
+            fb.append(normalizeArg(column_name));
+        },
+        ", ");
     fmt_buf.append(")");
 
     std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
