@@ -112,7 +112,7 @@ public:
         }
         return rows;
     }
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
+    CoprocessorReaderResult nextResult(size_t upstream_id [[maybe_unused]], std::queue<Block> & block_queue, const DataTypes & expected_types)
     {
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())

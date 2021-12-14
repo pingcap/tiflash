@@ -105,7 +105,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     bool fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult(block_queue, expected_types);
+        auto result = remote_reader->nextResult(upstream_id, block_queue, expected_types);
         if (result.meet_error)
         {
             LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
@@ -140,6 +140,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
+    size_t upstream_id;
+
     TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const LogWithPrefixPtr & log_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
@@ -163,6 +165,9 @@ public:
         }
         execution_summaries.resize(source_num);
         sample_block = Block(columns);
+
+        if constexpr (std::is_same_v<RemoteReader, ExchangeReceiver>)
+            upstream_id = remote_reader->num_upstreams.fetch_add(1);
     }
 
     Block getHeader() const override { return sample_block; }

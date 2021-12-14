@@ -6,6 +6,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Flash/Mpp/MultiStreamRingBuffer.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <kvproto/mpp.pb.h>
@@ -88,16 +89,16 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    static constexpr size_t num_buckets = 16;
     using BlockQueue = std::queue<Block>;
-    std::mutex bucket_mutex[num_buckets];
-    BlockQueue bucket[num_buckets];
+    static constexpr size_t num_streams = 16;
+    std::atomic<size_t> num_upstreams = 0;
 
-    ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types);
+    ExchangeReceiverResult nextResult(size_t upstream_id, BlockQueue & block_queue, const DataTypes & expected_types);
 
-    void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
+    // void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
+    void clearMessage(std::shared_ptr<ReceivedMessage> & recv_msg);
 
-    Int64 decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types);
+    Int64 decodeChunks(size_t upstream_id, std::shared_ptr<ReceivedMessage> & recv_msg, BlockQueue & block_queue, const DataTypes & expected_types);
 
     size_t getSourceNum() { return source_num; }
     String getName() { return "ExchangeReceiver"; }
@@ -119,9 +120,10 @@ private:
     DAGSchema schema;
 
     std::mutex mu;
-    std::condition_variable cv;
+    // std::condition_variable cv;
     /// should lock `mu` when visit these members
-    RecyclableBuffer<ReceivedMessage> res_buffer;
+    // RecyclableBuffer<ReceivedMessage> res_buffer;
+    MultiStreamRingBuffer<ReceivedMessage> ringbuf;
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
