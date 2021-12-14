@@ -24,7 +24,7 @@ try
     static const String func_name = "toQuarter";
     static const auto data_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(6));
 
-    // ColumnVector
+    // ColumnVector(nullable(DateTime))
     auto data_col_ptr = createColumn<Nullable<DataTypeMyDateTime::FieldType>>(
                             {
                                 MyDateTime(2020, 1, 10, 0, 0, 0, 0).toPackedUInt(),
@@ -57,6 +57,28 @@ try
     data_col_ptr = createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(4, {}).column;
     input_col = ColumnWithTypeAndName(data_col_ptr, data_type_ptr, "input");
     output_col = createConstColumn<Nullable<UInt8>>(4, {});
+    ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
+
+    // ColumnVector(DateTime)
+    data_col_ptr = createColumn<DataTypeMyDateTime::FieldType>(
+                       {
+                           MyDateTime(2020, 1, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 2, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 3, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 4, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 5, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 6, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 7, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 8, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 9, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 10, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 11, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(2020, 12, 10, 0, 0, 0, 0).toPackedUInt(),
+                           MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt() // Zero time
+                       })
+                       .column;
+    input_col = ColumnWithTypeAndName(data_col_ptr, std::make_shared<DataTypeMyDateTime>(6), "input");
+    output_col = createColumn<UInt8>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 0});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 }
 CATCH
