@@ -374,9 +374,9 @@ extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW = 397;
 extern const int CANNOT_STAT = 400;
 extern const int CANNOT_MPROTECT = 445;
 extern const int DECIMAL_OVERFLOW = 446;
+extern const int CANNOT_PARSE_BOOL = 447; // Note it is not the same as ch
 extern const int CANNOT_PARSE_ELF = 464;
 extern const int CANNOT_PARSE_DWARF = 465;
-extern const int CANNOT_PARSE_BOOL = 467;
 
 extern const int KEEPER_EXCEPTION = 999;
 extern const int POCO_EXCEPTION = 1000;
