@@ -1,5 +1,6 @@
 #include <Common/Dwarf.h>
 #include <Common/Elf.h>
+#include <Common/FmtUtils.h>
 #include <Common/MemorySanitizer.h>
 #include <Common/SimpleCache.h>
 #include <Common/StackTrace.h>
@@ -10,7 +11,6 @@
 #include <fmt/format.h>
 
 #include <cstring>
-#include <sstream>
 #include <unordered_map>
 
 #if !defined(ARCADIA_BUILD)
@@ -23,36 +23,35 @@
 
 std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused]] const ucontext_t & context)
 {
-    std::stringstream error; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    error.exceptions(std::ios::failbit);
+    DB::FmtBuffer fmt_buf;
     switch (sig)
     {
     case SIGSEGV:
     {
         /// Print info about address and reason.
         if (nullptr == info.si_addr)
-            error << "Address: NULL pointer.";
+            fmt_buf.append("Address: NULL pointer.");
         else
-            error << "Address: " << info.si_addr;
+            fmt_buf.fmtAppend("Address: {}", info.si_addr);
 
 #if defined(__x86_64__) && !defined(__FreeBSD__) && !defined(__APPLE__) && !defined(__arm__)
         auto err_mask = context.uc_mcontext.gregs[REG_ERR];
         if ((err_mask & 0x02))
-            error << " Access: write.";
+            fmt_buf.append(" Access: write.");
         else
-            error << " Access: read.";
+            fmt_buf.append(" Access: read.");
 #endif
 
         switch (info.si_code)
         {
         case SEGV_ACCERR:
-            error << " Attempted access has violated the permissions assigned to the memory area.";
+            fmt_buf.append(" Attempted access has violated the permissions assigned to the memory area.");
             break;
         case SEGV_MAPERR:
-            error << " Address not mapped to object.";
+            fmt_buf.append(" Address not mapped to object.");
             break;
         default:
-            error << " Unknown si_code.";
+            fmt_buf.append(" Unknown si_code.");
             break;
         }
         break;
@@ -63,29 +62,29 @@ std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused
         switch (info.si_code)
         {
         case BUS_ADRALN:
-            error << "Invalid address alignment.";
+            fmt_buf.append("Invalid address alignment.");
             break;
         case BUS_ADRERR:
-            error << "Non-existent physical address.";
+            fmt_buf.append("Non-existent physical address.");
             break;
         case BUS_OBJERR:
-            error << "Object specific hardware error.";
+            fmt_buf.append("Object specific hardware error.");
             break;
 
             // Linux specific
 #if defined(BUS_MCEERR_AR)
         case BUS_MCEERR_AR:
-            error << "Hardware memory error: action required.";
+            fmt_buf.append("Hardware memory error: action required.");
             break;
 #endif
 #if defined(BUS_MCEERR_AO)
         case BUS_MCEERR_AO:
-            error << "Hardware memory error: action optional.";
+            fmt_buf.append("Hardware memory error: action optional.");
             break;
 #endif
 
         default:
-            error << "Unknown si_code.";
+            fmt_buf.append("Unknown si_code.");
             break;
         }
         break;
@@ -96,31 +95,31 @@ std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused
         switch (info.si_code)
         {
         case ILL_ILLOPC:
-            error << "Illegal opcode.";
+            fmt_buf.append("Illegal opcode.");
             break;
         case ILL_ILLOPN:
-            error << "Illegal operand.";
+            fmt_buf.append("Illegal operand.");
             break;
         case ILL_ILLADR:
-            error << "Illegal addressing mode.";
+            fmt_buf.append("Illegal addressing mode.");
             break;
         case ILL_ILLTRP:
-            error << "Illegal trap.";
+            fmt_buf.append("Illegal trap.");
             break;
         case ILL_PRVOPC:
-            error << "Privileged opcode.";
+            fmt_buf.append("Privileged opcode.");
             break;
         case ILL_PRVREG:
-            error << "Privileged register.";
+            fmt_buf.append("Privileged register.");
             break;
         case ILL_COPROC:
-            error << "Coprocessor error.";
+            fmt_buf.append("Coprocessor error.");
             break;
         case ILL_BADSTK:
-            error << "Internal stack error.";
+            fmt_buf.append("Internal stack error.");
             break;
         default:
-            error << "Unknown si_code.";
+            fmt_buf.append("Unknown si_code.");
             break;
         }
         break;
@@ -131,31 +130,31 @@ std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused
         switch (info.si_code)
         {
         case FPE_INTDIV:
-            error << "Integer divide by zero.";
+            fmt_buf.append("Integer divide by zero.");
             break;
         case FPE_INTOVF:
-            error << "Integer overflow.";
+            fmt_buf.append("Integer overflow.");
             break;
         case FPE_FLTDIV:
-            error << "Floating point divide by zero.";
+            fmt_buf.append("Floating point divide by zero.");
             break;
         case FPE_FLTOVF:
-            error << "Floating point overflow.";
+            fmt_buf.append("Floating point overflow.");
             break;
         case FPE_FLTUND:
-            error << "Floating point underflow.";
+            fmt_buf.append("Floating point underflow.");
             break;
         case FPE_FLTRES:
-            error << "Floating point inexact result.";
+            fmt_buf.append("Floating point inexact result.");
             break;
         case FPE_FLTINV:
-            error << "Floating point invalid operation.";
+            fmt_buf.append("Floating point invalid operation.");
             break;
         case FPE_FLTSUB:
-            error << "Subscript out of range.";
+            fmt_buf.append("Subscript out of range.");
             break;
         default:
-            error << "Unknown si_code.";
+            fmt_buf.append("Unknown si_code.");
             break;
         }
         break;
@@ -163,12 +162,12 @@ std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused
 
     case SIGTSTP:
     {
-        error << "This is a signal used for debugging purposes by the user.";
+        fmt_buf.append("This is a signal used for debugging purposes by the user.");
         break;
     }
     }
 
-    return error.str();
+    return fmt_buf.toString();
 }
 
 static void * getCallerAddress(const ucontext_t & context)

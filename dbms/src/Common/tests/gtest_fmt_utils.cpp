@@ -12,6 +12,13 @@ TEST(FmtUtilsTest, TestFmtBuffer)
 
     buffer.fmtAppend(" fmt append {}", "test");
     ASSERT_EQ(buffer.toString(), "{test} fmt append test");
+
+    buffer.fmtAppend(" ptr var: {}", nullptr);
+    ASSERT_EQ(buffer.toString(), "{test} fmt append test ptr var: 0x0");
+
+    void * ptr = reinterpret_cast<void *>(0x123456);
+    buffer.fmtAppend(" ptr var2: {}", ptr);
+    ASSERT_EQ(buffer.toString(), "{test} fmt append test ptr var: 0x0 ptr var2: 0x123456");
 }
 
 TEST(FmtUtilsTest, TestJoinStr)
