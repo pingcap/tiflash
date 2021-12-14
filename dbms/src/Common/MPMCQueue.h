@@ -322,6 +322,7 @@ private:
         if constexpr (!std::is_trivially_destructible_v<T>)
             obj.~T();
     }
+
 private:
     const Int64 capacity;
 
