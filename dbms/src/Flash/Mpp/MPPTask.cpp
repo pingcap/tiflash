@@ -306,7 +306,7 @@ void MPPTask::runImpl()
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
 
-        while (Block block = from->read())
+        while (from->read())
             continue;
 
         from->readSuffix();
