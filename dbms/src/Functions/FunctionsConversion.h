@@ -1926,11 +1926,12 @@ struct ToIntMonotonicity
         if (checkDataType<DataTypeFloat32>(&type)
             || checkDataType<DataTypeFloat64>(&type))
         {
-            Float64 left_float = left.get<Float64>();
-            Float64 right_float = right.get<Float64>();
-
-            if (left_float >= std::numeric_limits<T>::min() && left_float <= std::numeric_limits<T>::max()
-                && right_float >= std::numeric_limits<T>::min() && right_float <= std::numeric_limits<T>::max())
+            auto left_float = left.get<Float64>();
+            auto right_float = right.get<Float64>();
+            auto float_min = static_cast<Float64>(std::numeric_limits<T>::min());
+            auto float_max = static_cast<Float64>(std::numeric_limits<T>::max());
+            if (left_float >= float_min && left_float <= float_max
+                && right_float >= float_min && right_float <= float_max)
                 return {true};
 
             return {};
