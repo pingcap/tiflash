@@ -313,8 +313,7 @@ private:
 
     ALWAYS_INLINE T & getObj(Int64 pos)
     {
-        pos = (pos % capacity) * sizeof(T);
-        return *reinterpret_cast<T *>(&data[pos]);
+        return *reinterpret_cast<T *>(getObjAddr(pos));
     }
 
     ALWAYS_INLINE void destruct(T & obj)
