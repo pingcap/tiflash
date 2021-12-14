@@ -2,8 +2,6 @@
 #include <Functions/FunctionBinaryArithmetic.h>
 #include <Functions/LeastGreatestGeneric.h>
 
-#include "Functions/IsOperation.h"
-
 namespace DB
 {
 template <typename A, typename B>
@@ -187,7 +185,7 @@ struct NameGreatest             { static constexpr auto name = "greatest"; };
 // clang-format on
 
 using FunctionGreatest = FunctionBinaryArithmetic<GreatestImpl, NameGreatest>;
-using FunctionTiDBGreatest = FunctionTiDBLeastGreatest<LeastGreatest::Greatest, FunctionGreatest>;
+using FunctionTiDBGreatest = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Greatest, FunctionGreatest>;
 
 } // namespace
 

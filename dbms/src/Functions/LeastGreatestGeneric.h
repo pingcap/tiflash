@@ -1,5 +1,5 @@
 #pragma once
-
+#include <Columns/Collator.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
@@ -16,6 +16,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
+#include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsComparison.h>
 #include <Functions/IFunction.h>
@@ -23,6 +24,7 @@
 #include <Interpreters/castColumn.h>
 #include <common/types.h>
 
+#include <iostream>
 #include <memory>
 
 namespace DB
@@ -62,11 +64,11 @@ public:
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         DataTypePtr type_res = arguments[0];
-        if (type_res->isStringOrFixedString())
+        if (type_res->isString())
             return std::make_shared<DataTypeString>();
         for (size_t i = 1; i < arguments.size(); ++i)
         {
-            if (arguments[i]->isStringOrFixedString())
+            if (arguments[i]->isString())
                 return std::make_shared<DataTypeString>();
             DataTypes args{type_res, arguments[i]};
             auto res = SpecializedFunction{context}.getReturnTypeImpl(args);
@@ -91,7 +93,7 @@ public:
             for (size_t i = 0; i < num_arguments; ++i)
             {
                 data_types[i] = block.getByPosition(arguments[i]).type;
-                if (data_types[i]->isStringOrFixedString())
+                if (data_types[i]->isString())
                 {
                     flag = true;
                 }
@@ -148,5 +150,180 @@ private:
         block.getByPosition(result).column = std::move(pre_col.column);
     }
 };
+
+template <LeastGreatest kind>
+class FunctionTiDBLeastGreatestGeneric : public IFunction
+{
+public:
+    static constexpr auto name = kind == LeastGreatest::Least ? "tidbLeast" : "tidbGreatest";
+    explicit FunctionTiDBLeastGreatestGeneric(const Context & context)
+        : context(context){};
+    static FunctionPtr create(const Context & context)
+    {
+        return std::make_shared<FunctionTiDBLeastGreatestGeneric<kind>>(context);
+    }
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool isVariadic() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
+    {
+        collator = collator_;
+    }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                                + ", should be at least 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto & argument : arguments)
+        {
+            if (argument->isString())
+                return std::make_shared<DataTypeString>();
+        }
+
+        return getLeastSupertype(arguments); // Todo ywq maybe not right..
+    }
+
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        size_t num_arguments = arguments.size();
+        if (num_arguments < 2)
+        {
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
+                                + toString(arguments.size()) + ", should be at least 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
+        std::cout << "start generic execution..." << std::endl;
+
+        DataTypes data_types(num_arguments);
+        for (size_t i = 0; i < num_arguments; ++i)
+            data_types[i] = block.getByPosition(arguments[i]).type;
+
+        DataTypePtr result_type = getReturnTypeImpl(data_types);
+        Columns converted_columns(num_arguments);
+        for (size_t arg = 0; arg < num_arguments; ++arg)
+            converted_columns[arg] = TiDBCastColumn(block.getByPosition(arguments[arg]), result_type, context);
+
+        auto result_column = result_type->createColumn();
+        result_column->reserve(block.rows());
+
+        for (size_t row_num = 0; row_num < block.rows(); ++row_num)
+        {
+            size_t best_arg = 0;
+            for (size_t arg = 1; arg < num_arguments; ++arg)
+            {
+                int cmp_result;
+                if (checkType<DataTypeString>(result_type)) // todo consider nullable ....
+                {
+                    cmp_result = converted_columns[arg]->compareAtWithCollation(row_num, row_num, *converted_columns[best_arg], 1, *collator.get());
+                    std::cout << __LINE__ << std::endl;
+                }
+                else
+                {
+                    cmp_result = converted_columns[arg]->compareAt(row_num, row_num, *converted_columns[best_arg], 1);
+                }
+
+                if constexpr (kind == LeastGreatest::Least)
+                {
+                    if (cmp_result < 0)
+                        best_arg = arg;
+                }
+                else
+                {
+                    if (cmp_result > 0)
+                        best_arg = arg;
+                }
+            }
+
+            result_column->insertFrom(*converted_columns[best_arg], row_num);
+        }
+        block.getByPosition(result).column = std::move(result_column);
+    }
+
+private:
+    const Context & context;
+    TiDB::TiDBCollatorPtr collator;
+
+    template <typename T0>
+    bool checkType(const DataTypePtr & arg) const
+    {
+        return static_cast<bool>(typeid_cast<const T0 *>(arg.get()));
+    }
+};
+
+
+template <LeastGreatest kind, typename SpecializedFunction>
+class FunctionBuilderTiDBLeastGreatest : public IFunctionBuilder
+{
+public:
+    explicit FunctionBuilderTiDBLeastGreatest(const Context & context_)
+        : context(context_)
+    {}
+
+    static FunctionBuilderPtr create(const Context & context)
+    {
+        return std::make_unique<FunctionBuilderTiDBLeastGreatest<kind, SpecializedFunction>>(context);
+    }
+
+    static constexpr auto name = kind == LeastGreatest::Least ? "tidbLeast" : "tidbGreatest";
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool isVariadic() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                                + ", should be at least 2.",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto & argument : arguments)
+        {
+            if (argument->isString()) // consider nullable....
+                return std::make_shared<DataTypeString>();
+        }
+
+        return FunctionTiDBLeastGreatest<kind, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
+    }
+
+    FunctionBasePtr buildImpl(
+        const ColumnsWithTypeAndName & arguments,
+        const DataTypePtr & result_type,
+        const TiDB::TiDBCollatorPtr & collator) const override
+    {
+        DataTypes data_types(arguments.size());
+
+        for (size_t i = 0; i < arguments.size(); ++i)
+            data_types[i] = arguments[i].type;
+
+        if (checkType<DataTypeString>(result_type))
+        {
+            // function->setCollator(collator);
+            auto function = FunctionTiDBLeastGreatestGeneric<kind>::create(context);
+            function->setCollator(collator);
+            return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
+        }
+        else
+        {
+            auto function = FunctionTiDBLeastGreatest<kind, SpecializedFunction>::create(context);
+            function->setCollator(collator);
+            return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
+        }
+    }
+
+private:
+    const Context & context;
+    template <typename T0>
+    bool checkType(const DataTypePtr & arg) const
+    {
+        return static_cast<bool>(typeid_cast<const T0 *>(arg.get()));
+    }
+};
+
 
 } // namespace DB

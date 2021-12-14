@@ -235,6 +235,14 @@ try
             createColumn<Nullable<UInt64>>({2}),
             createColumn<Nullable<UInt8>>({1})));
 
+    // ASSERT_COLUMN_EQ(
+    //     createColumn<String>({"1"}),
+    //     executeFunction(
+    //         func_name,
+    //         createColumn<String>({"sahdka"}),
+    //         createColumn<UInt64>({2}),
+    //         createColumn<UInt8>({1})));
+
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"1"}),
         executeFunction(
@@ -265,8 +273,6 @@ try
             createColumn<Nullable<String>>({"sahdka", "1"}),
             createColumn<Nullable<String>>({"sahdkb", "2"})));
 
-    // string_fixedString
-
 
     // string_constant
     ASSERT_COLUMN_EQ(
@@ -275,10 +281,6 @@ try
             func_name,
             createColumn<Nullable<String>>({"sahdka", "sahdkc"}),
             createConstColumn<Nullable<String>>(2, "sahdkb")));
-
-    // fixedString_fixedString
-
-    // fixedString_constant
 
     // constant_contant
     ASSERT_COLUMN_EQ(

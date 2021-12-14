@@ -1358,7 +1358,6 @@ public:
     }
 
 
-    // ywq maybe done...
     bool executeStringWithCollator(
         Block & block,
         size_t result,
@@ -1441,7 +1440,6 @@ public:
 
             return;
         }
-
 
         auto left_generic = block.getByPosition(arguments[0]).type;
         auto right_generic = block.getByPosition(arguments[1]).type;

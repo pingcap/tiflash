@@ -1,11 +1,6 @@
-#include <DataTypes/NumberTraits.h>
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionBinaryArithmetic.h>
-#include <Functions/FunctionFactory.h>
-#include <Functions/IsOperation.h>
 #include <Functions/LeastGreatestGeneric.h>
-
-#include <cstddef>
 
 namespace DB
 {
@@ -192,7 +187,7 @@ struct NameLeast                { static constexpr auto name = "least"; };
 // clang-format on
 
 using FunctionLeast = FunctionBinaryArithmetic<LeastImpl, NameLeast>;
-using FunctionTiDBLeast = FunctionTiDBLeastGreatest<LeastGreatest::Least, FunctionLeast>;
+using FunctionTiDBLeast = FunctionBuilderTiDBLeastGreatest<LeastGreatest::Least, FunctionLeast>;
 
 } // namespace
 
