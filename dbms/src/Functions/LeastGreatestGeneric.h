@@ -151,7 +151,7 @@ private:
     }
 };
 
-template <LeastGreatest kind>
+template <LeastGreatest kind, typename SpecializedFunction>
 class FunctionTiDBLeastGreatestGeneric : public IFunction
 {
 public:
@@ -160,7 +160,7 @@ public:
         : context(context){};
     static FunctionPtr create(const Context & context)
     {
-        return std::make_shared<FunctionTiDBLeastGreatestGeneric<kind>>(context);
+        return std::make_shared<FunctionTiDBLeastGreatestGeneric<kind, SpecializedFunction>>(context);
     }
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 0; }
@@ -186,7 +186,7 @@ public:
                 return std::make_shared<DataTypeString>();
         }
 
-        return getLeastSupertype(arguments); // Todo ywq maybe not right..
+        return FunctionTiDBLeastGreatest<kind, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
     }
 
 
@@ -226,7 +226,6 @@ public:
                 int cmp_result;
                 if (checkType<DataTypeString>(result_type)) // todo consider nullable ....
                 {
-                    std::cout << "tttt.." << std::endl;
                     cmp_result = converted_columns[arg]->compareAtWithCollation(row_num, row_num, *converted_columns[best_arg], 1, *collator.get());
                 }
                 else
@@ -307,9 +306,9 @@ public:
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
-        if (checkType<DataTypeString>(removeNullable(result_type)))
+        if (checkType<DataTypeString>(removeNullable(result_type)) || kind == LeastGreatest::Greatest) //YWQ: A hack, make Greatest use non-vectorised implementation.
         {
-            auto function = FunctionTiDBLeastGreatestGeneric<kind>::create(context);
+            auto function = FunctionTiDBLeastGreatestGeneric<kind, SpecializedFunction>::create(context);
             function->setCollator(collator);
             return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);
         }

@@ -8,6 +8,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 
+#include <cstddef>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -563,22 +564,68 @@ try
 CATCH
 
 
-TEST_F(LeastGreatestTest, testPerformance)
+TEST_F(LeastGreatestTest, testPerformance1)
 try
 {
     const String & func_name = "tidbLeast";
-
+    std::vector<Int64> c1;
+    std::vector<Int64> c2;
+    std::vector<Int64> c3;
+    std::vector<Int64> res;
+    // release: 126460ms
     for (size_t i = 0; i < 10000000; ++i)
     {
+        c1.push_back(i);
+        c2.push_back(i + 1);
+        c3.push_back(i + 2);
+        res.push_back(i);
+    }
+    std::vector<Int64> cc1 = c1;
+    std::vector<Int64> cc2 = c2;
+    std::vector<Int64> cc3 = c3;
+    std::vector<Int64> cres = res;
+    for (size_t i = 0; i < 100; ++i)
+    {
         ASSERT_COLUMN_EQ(
-            createColumn<Int64>({5}),
+            createColumn<Int64>(res),
             executeFunction(
                 func_name,
-                createColumn<Int8>({2}),
-                createColumn<Int8>({1}),
-                createColumn<Int8>({3}),
-                createColumn<Int8>({4}),
-                createColumn<Int32>({5})));
+                createColumn<Int64>(cc1),
+                createColumn<Int64>(cc2),
+                createColumn<Int64>(cc3)));
+    }
+}
+CATCH
+
+TEST_F(LeastGreatestTest, testPerformance2)
+try
+{
+    const String & func_name = "tidbGreatest";
+    std::vector<Int64> c1;
+    std::vector<Int64> c2;
+    std::vector<Int64> c3;
+    std::vector<Int64> res;
+    // release: 135937ms
+    for (size_t i = 0; i < 10000000; ++i)
+    {
+        c1.push_back(i);
+        c2.push_back(i + 1);
+        c3.push_back(i + 2);
+        res.push_back(i + 2);
+    }
+    std::vector<Int64> cc1 = c1;
+    std::vector<Int64> cc2 = c2;
+    std::vector<Int64> cc3 = c3;
+    std::vector<Int64> cres = res;
+    for (size_t i = 0; i < 100; ++i)
+    {
+        ASSERT_COLUMN_EQ(
+            createColumn<Int64>(res),
+            executeFunction(
+                func_name,
+                createColumn<Int64>(cc1),
+                createColumn<Int64>(cc2),
+                createColumn<Int64>(cc3)));
     }
 }
 CATCH
