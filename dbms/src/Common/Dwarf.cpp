@@ -212,37 +212,37 @@ void skipPadding(std::string_view & sp, const char * start, size_t alignment)
 } // namespace
 
 
-Dwarf::Path::Path(std::string_view baseDir, std::string_view subDir, std::string_view file)
-    : baseDir_(baseDir)
-    , subDir_(subDir)
-    , file_(file)
+Dwarf::Path::Path(std::string_view base_dir_, std::string_view sub_dir_, std::string_view filename_)
+    : base_dir(base_dir_)
+    , sub_dir(sub_dir_)
+    , filename(filename_)
 {
     using std::swap;
 
     // Normalize
-    if (file_.empty())
+    if (filename.empty())
     {
-        baseDir_ = {};
-        subDir_ = {};
+        base_dir = {};
+        sub_dir = {};
         return;
     }
 
-    if (file_[0] == '/')
+    if (filename[0] == '/')
     {
-        // file_ is absolute
-        baseDir_ = {};
-        subDir_ = {};
+        // filename is absolute
+        base_dir = {};
+        sub_dir = {};
     }
 
-    if (!subDir_.empty() && subDir_[0] == '/')
+    if (!sub_dir.empty() && sub_dir[0] == '/')
     {
-        baseDir_ = {}; // subDir_ is absolute
+        base_dir = {}; // sub_dir is absolute
     }
 
-    // Make sure it's never the case that baseDir_ is empty, but subDir_ isn't.
-    if (baseDir_.empty())
+    // Make sure it's never the case that base_dir is empty, but sub_dir isn't.
+    if (base_dir.empty())
     {
-        swap(baseDir_, subDir_);
+        swap(base_dir, sub_dir);
     }
 }
 
@@ -251,23 +251,23 @@ size_t Dwarf::Path::size() const
     size_t size = 0;
     bool needs_slash = false;
 
-    if (!baseDir_.empty())
+    if (!base_dir.empty())
     {
-        size += baseDir_.size();
-        needs_slash = baseDir_.back() != '/';
+        size += base_dir.size();
+        needs_slash = base_dir.back() != '/';
     }
 
-    if (!subDir_.empty())
+    if (!sub_dir.empty())
     {
         size += needs_slash;
-        size += subDir_.size();
-        needs_slash = subDir_.back() != '/';
+        size += sub_dir.size();
+        needs_slash = sub_dir.back() != '/';
     }
 
-    if (!file_.empty())
+    if (!filename.empty())
     {
         size += needs_slash;
-        size += file_.size();
+        size += filename.size();
     }
 
     return size;
@@ -289,27 +289,27 @@ size_t Dwarf::Path::toBuffer(char * buf, size_t bufSize) const
         total_size += sp.size();
     };
 
-    if (!baseDir_.empty())
+    if (!base_dir.empty())
     {
-        append(baseDir_);
-        needs_slash = baseDir_.back() != '/';
+        append(base_dir);
+        needs_slash = base_dir.back() != '/';
     }
-    if (!subDir_.empty())
+    if (!sub_dir.empty())
     {
         if (needs_slash)
         {
             append("/");
         }
-        append(subDir_);
-        needs_slash = subDir_.back() != '/';
+        append(sub_dir);
+        needs_slash = sub_dir.back() != '/';
     }
-    if (!file_.empty())
+    if (!filename.empty())
     {
         if (needs_slash)
         {
             append("/");
         }
-        append(file_);
+        append(filename);
     }
     if (bufSize)
     {
@@ -324,25 +324,25 @@ void Dwarf::Path::toString(std::string & dest) const
 {
     size_t initial_size = dest.size();
     dest.reserve(initial_size + size());
-    if (!baseDir_.empty())
+    if (!base_dir.empty())
     {
-        dest.append(baseDir_.begin(), baseDir_.end());
+        dest.append(base_dir.begin(), base_dir.end());
     }
-    if (!subDir_.empty())
+    if (!sub_dir.empty())
     {
         if (!dest.empty() && dest.back() != '/')
         {
             dest.push_back('/');
         }
-        dest.append(subDir_.begin(), subDir_.end());
+        dest.append(sub_dir.begin(), sub_dir.end());
     }
-    if (!file_.empty())
+    if (!filename.empty())
     {
         if (!dest.empty() && dest.back() != '/')
         {
             dest.push_back('/');
         }
-        dest.append(file_.begin(), file_.end());
+        dest.append(filename.begin(), filename.end());
     }
     SAFE_CHECK(dest.size() == initial_size + size(), "Size mismatch");
 }

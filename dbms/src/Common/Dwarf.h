@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-/** This file was edited for ClickHouse.
+/** This file was edited for ClickHouse, TiFlash.
   */
 
 #include <functional>
@@ -81,11 +81,11 @@ public:
     public:
         Path() = default;
 
-        Path(std::string_view baseDir, std::string_view subDir, std::string_view file);
+        Path(std::string_view base_dir_, std::string_view sub_dir_, std::string_view filename_);
 
-        std::string_view baseDir() const { return baseDir_; }
-        std::string_view subDir() const { return subDir_; }
-        std::string_view file() const { return file_; }
+        std::string_view baseDir() const { return base_dir; }
+        std::string_view subDir() const { return sub_dir; }
+        std::string_view file() const { return filename; }
 
         size_t size() const;
 
@@ -111,9 +111,9 @@ public:
         // TODO(tudorb): Implement operator==, operator!=; not as easy as it
         // seems as the same path can be represented in multiple ways
     private:
-        std::string_view baseDir_;
-        std::string_view subDir_;
-        std::string_view file_;
+        std::string_view base_dir;
+        std::string_view sub_dir;
+        std::string_view filename;
     };
 
     // Indicates inline function `name` is called  at `line@file`.
@@ -172,7 +172,7 @@ private:
 
     void init();
 
-    std::shared_ptr<const Elf> elf_;
+    std::shared_ptr<const Elf> elf_; // NOLINT(readability-identifier-naming)
 
     // DWARF section made up of chunks, each prefixed with a length header.
     // The length indicates whether the chunk is DWARF-32 or DWARF-64, which
@@ -196,8 +196,8 @@ private:
 
     private:
         // Yes, 32- and 64- bit sections may coexist.  Yikes!
-        bool is64Bit_;
-        std::string_view data_;
+        bool is64Bit_; // NOLINT(readability-identifier-naming)
+        std::string_view data_; // NOLINT(readability-identifier-naming)
     };
 
     // Abbreviation for a Debugging Information Entry.
@@ -216,7 +216,7 @@ private:
     // provide a description of a corresponding entity in the source program.
     struct Die
     {
-        bool is64Bit;
+        bool is64Bit; // NOLINT(readability-identifier-naming)
         // Offset from start to first attribute
         uint8_t attr_offset;
         // Offset within debug info.
@@ -242,7 +242,7 @@ private:
 
     struct CompilationUnit
     {
-        bool is64Bit;
+        bool is64Bit; // NOLINT(readability-identifier-naming)
         uint8_t version;
         uint8_t addr_size;
         // Offset in .debug_info of this compilation unit.
@@ -316,10 +316,10 @@ private:
 
         struct FileName
         {
-            std::string_view relativeName;
+            std::string_view relativeName; // NOLINT(readability-identifier-naming)
             // 0 = current compilation directory
             // otherwise, 1-based index in the list of include directories
-            uint64_t directoryIndex;
+            uint64_t directoryIndex; // NOLINT(readability-identifier-naming)
         };
         // Read one FileName object, remove_prefix program
         static bool readFileName(std::string_view & program, FileName & fn);
@@ -337,37 +337,37 @@ private:
         bool nextDefineFile(std::string_view & program, FileName & fn) const;
 
         // Initialization
-        bool is64Bit_;
-        std::string_view data_;
-        std::string_view compilationDirectory_;
+        bool is64Bit_; // NOLINT(readability-identifier-naming)
+        std::string_view data_; // NOLINT(readability-identifier-naming)
+        std::string_view compilationDirectory_; // NOLINT(readability-identifier-naming)
 
         // Header
-        uint16_t version_;
-        uint8_t minLength_;
-        bool defaultIsStmt_;
-        int8_t lineBase_;
-        uint8_t lineRange_;
-        uint8_t opcodeBase_;
-        const uint8_t * standardOpcodeLengths_;
+        uint16_t version_; // NOLINT(readability-identifier-naming)
+        uint8_t minLength_; // NOLINT(readability-identifier-naming)
+        bool defaultIsStmt_; // NOLINT(readability-identifier-naming)
+        int8_t lineBase_; // NOLINT(readability-identifier-naming)
+        uint8_t lineRange_; // NOLINT(readability-identifier-naming)
+        uint8_t opcodeBase_; // NOLINT(readability-identifier-naming)
+        const uint8_t * standardOpcodeLengths_; // NOLINT(readability-identifier-naming)
 
-        std::string_view includeDirectories_;
-        size_t includeDirectoryCount_;
+        std::string_view includeDirectories_; // NOLINT(readability-identifier-naming)
+        size_t includeDirectoryCount_; // NOLINT(readability-identifier-naming)
 
-        std::string_view fileNames_;
-        size_t fileNameCount_;
+        std::string_view fileNames_; // NOLINT(readability-identifier-naming)
+        size_t fileNameCount_; // NOLINT(readability-identifier-naming)
 
         // State machine registers
-        uint64_t address_;
-        uint64_t file_;
-        uint64_t line_;
-        uint64_t column_;
-        bool isStmt_;
-        bool basicBlock_;
-        bool endSequence_;
-        bool prologueEnd_;
-        bool epilogueBegin_;
-        uint64_t isa_;
-        uint64_t discriminator_;
+        uint64_t address_; // NOLINT(readability-identifier-naming)
+        uint64_t file_; // NOLINT(readability-identifier-naming)
+        uint64_t line_; // NOLINT(readability-identifier-naming)
+        uint64_t column_; // NOLINT(readability-identifier-naming)
+        bool isStmt_; // NOLINT(readability-identifier-naming)
+        bool basicBlock_; // NOLINT(readability-identifier-naming)
+        bool endSequence_; // NOLINT(readability-identifier-naming)
+        bool prologueEnd_; // NOLINT(readability-identifier-naming)
+        bool epilogueBegin_; // NOLINT(readability-identifier-naming)
+        uint64_t isa_; // NOLINT(readability-identifier-naming)
+        uint64_t discriminator_; // NOLINT(readability-identifier-naming)
     };
 
     /**
@@ -414,7 +414,7 @@ private:
 
     // Read one attribute value, remove_prefix sp
     using AttributeValue = std::variant<uint64_t, std::string_view>;
-    AttributeValue readAttributeValue(std::string_view & sp, uint64_t form, bool is64Bit) const;
+    AttributeValue readAttributeValue(std::string_view & sp, uint64_t form, bool is64bit) const;
 
     // Get an ELF section by name, return true if found
     bool getSection(const char * name, std::string_view * section) const;
@@ -443,12 +443,12 @@ private:
     // Finds the Compilation Unit starting at offset.
     static CompilationUnit findCompilationUnit(std::string_view info, uint64_t targetOffset);
 
-    std::string_view info_; // .debug_info
-    std::string_view abbrev_; // .debug_abbrev
-    std::string_view aranges_; // .debug_aranges
-    std::string_view line_; // .debug_line
-    std::string_view strings_; // .debug_str
-    std::string_view ranges_; // .debug_ranges
+    std::string_view info_; // .debug_info       NOLINT(readability-identifier-naming)
+    std::string_view abbrev_; // .debug_abbrev   NOLINT(readability-identifier-naming)
+    std::string_view aranges_; // .debug_aranges NOLINT(readability-identifier-naming)
+    std::string_view line_; // .debug_line       NOLINT(readability-identifier-naming)
+    std::string_view strings_; // .debug_str     NOLINT(readability-identifier-naming)
+    std::string_view ranges_; // .debug_ranges   NOLINT(readability-identifier-naming)
 };
 
 } // namespace DB
