@@ -7,7 +7,15 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <common/MultiVersion.h>
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #include <grpc++/grpc++.h>
+#pragma clang diagnostic pop
+#else
+#include <grpc++/grpc++.h>
+#endif
 
 #include <chrono>
 #include <condition_variable>
@@ -466,6 +474,8 @@ private:
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
 };
+
+using ContextPtr = std::shared_ptr<Context>;
 
 
 /// Puts an element into the map, erases it in the destructor.
