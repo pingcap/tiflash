@@ -17,7 +17,7 @@ TEST(FmtUtilsTest, TestJoinStr)
 {
     FmtBuffer buffer;
     std::vector<std::string> v{"a", "b", "c"};
-    buffer.joinStr(v.cbegin(), v.cend(), ", ");
+    buffer.joinStr(v.cbegin(), v.cend());
     ASSERT_EQ(buffer.toString(), "a, b, c");
 
     buffer.clear();

@@ -36,12 +36,7 @@ public:
         Iter first,
         Iter end)
     {
-        if (first == end)
-            return *this;
-        auto func = [](const auto & s, FmtBuffer & fb) {
-            fb.append(s);
-        };
-        return joinStr(first, end, func, ", ");
+        return joinStr(first, end, ", ");
     }
 
     template <typename Iter>
@@ -50,8 +45,6 @@ public:
         Iter end,
         StringRef delimiter)
     {
-        if (first == end)
-            return *this;
         auto func = [](const auto & s, FmtBuffer & fb) {
             fb.append(s);
         };
