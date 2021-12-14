@@ -13,7 +13,6 @@ namespace DB
 {
 namespace tests
 {
-
 class TestDateOrDatetimeToSomething : public DB::tests::FunctionTest
 {
 };
@@ -48,7 +47,10 @@ try
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     // ColumnConst(non-null)
-    data_col_ptr = createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(4, MyDateTime(2020, 10, 10, 0, 0, 0, 0).toPackedUInt()).column;
+    data_col_ptr = createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(
+                       4,
+                       MyDateTime(2020, 10, 10, 0, 0, 0, 0).toPackedUInt())
+                       .column;
     input_col = ColumnWithTypeAndName(data_col_ptr, data_type_ptr, "input");
     output_col = createConstColumn<Nullable<UInt8>>(4, 4);
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
@@ -77,7 +79,9 @@ try
                            MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt() // Zero time
                        })
                        .column;
-    input_col = ColumnWithTypeAndName(data_col_ptr, std::make_shared<DataTypeMyDateTime>(6), "input");
+    input_col = ColumnWithTypeAndName(data_col_ptr,
+                                      std::make_shared<DataTypeMyDateTime>(6),
+                                      "input");
     output_col = createColumn<UInt8>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 0});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 }
