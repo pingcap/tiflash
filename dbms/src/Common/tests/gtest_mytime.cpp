@@ -393,7 +393,96 @@ try
         // {"Tuesday 52 2001", "%W %V %Y", std::nullopt},                        //
         // {"Tuesday 52 2001", "%W %V %x", std::nullopt},                        //
         // {"Tuesday 52 2001", "%W %u %x", std::nullopt},                        //
+
+        // Test cases for %b
+        {"10/JAN/2010", "%d/%b/%Y", MyDateTime{2010, 1, 10, 0, 0, 0, 0}}, // Right spill, case-insensitive
+        {"10/FeB/2010", "%d/%b/%Y", MyDateTime{2010, 2, 10, 0, 0, 0, 0}},
+        {"10/MAr/2010", "%d/%b/%Y", MyDateTime{2010, 3, 10, 0, 0, 0, 0}},
+        {"10/ApR/2010", "%d/%b/%Y", MyDateTime{2010, 4, 10, 0, 0, 0, 0}},
+        {"10/mAY/2010", "%d/%b/%Y", MyDateTime{2010, 5, 10, 0, 0, 0, 0}},
+        {"10/JuN/2010", "%d/%b/%Y", MyDateTime{2010, 6, 10, 0, 0, 0, 0}},
+        {"10/JUL/2010", "%d/%b/%Y", MyDateTime{2010, 7, 10, 0, 0, 0, 0}},
+        {"10/Aug/2010", "%d/%b/%Y", MyDateTime{2010, 8, 10, 0, 0, 0, 0}},
+        {"10/seP/2010", "%d/%b/%Y", MyDateTime{2010, 9, 10, 0, 0, 0, 0}},
+        {"10/Oct/2010", "%d/%b/%Y", MyDateTime{2010, 10, 10, 0, 0, 0, 0}},
+        {"10/NOV/2010", "%d/%b/%Y", MyDateTime{2010, 11, 10, 0, 0, 0, 0}},
+        {"10/DEC/2010", "%d/%b/%Y", MyDateTime{2010, 12, 10, 0, 0, 0, 0}},
+        {"10/January/2010", "%d/%b/%Y", std::nullopt}, // Test full spilling
+
+        // Test cases for %M
+        {"10/January/2010", "%d/%M/%Y", MyDateTime{2010, 1, 10, 0, 0, 0, 0}}, // Test full spilling
+        {"10/February/2010", "%d/%M/%Y", MyDateTime{2010, 2, 10, 0, 0, 0, 0}},
+        {"10/March/2010", "%d/%M/%Y", MyDateTime{2010, 3, 10, 0, 0, 0, 0}},
+        {"10/April/2010", "%d/%M/%Y", MyDateTime{2010, 4, 10, 0, 0, 0, 0}},
+        {"10/May/2010", "%d/%M/%Y", MyDateTime{2010, 5, 10, 0, 0, 0, 0}},
+        {"10/June/2010", "%d/%M/%Y", MyDateTime{2010, 6, 10, 0, 0, 0, 0}},
+        {"10/July/2010", "%d/%M/%Y", MyDateTime{2010, 7, 10, 0, 0, 0, 0}},
+        {"10/August/2010", "%d/%M/%Y", MyDateTime{2010, 8, 10, 0, 0, 0, 0}},
+        {"10/September/2010", "%d/%M/%Y", MyDateTime{2010, 9, 10, 0, 0, 0, 0}},
+        {"10/October/2010", "%d/%M/%Y", MyDateTime{2010, 10, 10, 0, 0, 0, 0}},
+        {"10/November/2010", "%d/%M/%Y", MyDateTime{2010, 11, 10, 0, 0, 0, 0}},
+        {"10/December/2010", "%d/%M/%Y", MyDateTime{2010, 12, 10, 0, 0, 0, 0}},
+
+        // Test cases for %c
+        // {"10/0/2010", "%d/%c/%Y", MyDateTime{2010, 0, 10, 0, 0, 0, 0}},   // TODO: Need Check NO_ZERO_DATE
+        {"10/1/2010", "%d/%c/%Y", MyDateTime{2010, 1, 10, 0, 0, 0, 0}},
+        {"10/01/2010", "%d/%c/%Y", MyDateTime{2010, 1, 10, 0, 0, 0, 0}},
+        {"10/001/2010", "%d/%c/%Y", std::nullopt},
+        {"10/13/2010", "%d/%c/%Y", std::nullopt},
+        {"10/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 10, 0, 0, 0, 0}},
+
+        // Test cases for %d, %e
+        // {"0/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 0, 0, 0, 0, 0}},  // TODO: Need Check NO_ZERO_DATE
+        {"1/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 1, 0, 0, 0, 0}},
+        {"05/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 5, 0, 0, 0, 0}},
+        {"05/12/2010", "%e/%c/%Y", MyDateTime{2010, 12, 5, 0, 0, 0, 0}},
+        {"31/12/2010", "%d/%c/%Y", MyDateTime{2010, 12, 31, 0, 0, 0, 0}},
+        {"32/12/2010", "%d/%c/%Y", std::nullopt},
+        {"30/11/2010", "%d/%c/%Y", MyDateTime{2010, 11, 30, 0, 0, 0, 0}},
+        {"31/11/2010", "%e/%c/%Y", MyDateTime{2010, 11, 31, 0, 0, 0, 0}},
+        {"28/2/2010", "%e/%c/%Y", MyDateTime{2010, 2, 28, 0, 0, 0, 0}},
+        {"29/2/2010", "%e/%c/%Y", MyDateTime{2010, 2, 29, 0, 0, 0, 0}},
+        {"29/2/2020", "%e/%c/%Y", MyDateTime{2020, 2, 29, 0, 0, 0, 0}},
+
+        // Test cases for %Y
+        // {"1/12/0000", "%d/%c/%Y", MyDateTime{0000, 12, 1, 0, 0, 0, 0}}, // TODO: Need Check NO_ZERO_DATE
+        {"1/12/01", "%d/%c/%Y", MyDateTime{2001, 12, 1, 0, 0, 0, 0}},
+        {"1/12/0001", "%d/%c/%Y", MyDateTime{0001, 12, 1, 0, 0, 0, 0}},
+        {"1/12/2020", "%d/%c/%Y", MyDateTime{2020, 12, 1, 0, 0, 0, 0}},
+        {"1/12/9999", "%d/%c/%Y", MyDateTime{9999, 12, 1, 0, 0, 0, 0}},
+
+        // Test cases for %f
+        {"01,5,2013 999999", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 999999}},
+        {"01,5,2013 0", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 0}},
+        {"01,5,2013 9999990000000", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 999999}},
+        {"01,5,2013 1", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 100000}},
+        {"01,5,2013 1230", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 123000}},
+        {"01,5,2013 01", "%d,%c,%Y %f", MyDateTime{2013, 5, 1, 0, 0, 0, 10000}}, // issue 3556
+
+        // Test cases for %h, %I, %l
+        {"00:11:12 ", "%h:%i:%S ", std::nullopt}, // 0 is not a valid number of %h
+        {"01:11:12 ", "%I:%i:%S ", MyDateTime{0, 0, 0, 01, 11, 12, 0}},
+        {"12:11:12 ", "%l:%i:%S ", MyDateTime{0, 0, 0, 0, 11, 12, 0}},
+
+        // Test cases for %k, %H
+        {"00:11:12 ", "%H:%i:%S ", MyDateTime{0, 0, 0, 00, 11, 12, 0}},
+        {"01:11:12 ", "%k:%i:%S ", MyDateTime{0, 0, 0, 01, 11, 12, 0}},
+        {"12:11:12 ", "%H:%i:%S ", MyDateTime{0, 0, 0, 12, 11, 12, 0}},
+        {"24:11:12 ", "%k:%i:%S ", std::nullopt},
+
+        // Test cases for %i
+        {"00:00:12 ", "%H:%i:%S ", MyDateTime{0, 0, 0, 00, 00, 12, 0}},
+        {"00:01:12 ", "%H:%i:%S ", MyDateTime{0, 0, 0, 00, 01, 12, 0}},
+        {"00:59:12 ", "%H:%i:%S ", MyDateTime{0, 0, 0, 00, 59, 12, 0}},
+        {"00:60:12 ", "%H:%i:%S ", std::nullopt},
+
+        // Test cases for %s, %S
+        {"00:00:00 ", "%H:%i:%s ", MyDateTime{0, 0, 0, 00, 00, 00, 0}},
+        {"00:01:01 ", "%H:%i:%s ", MyDateTime{0, 0, 0, 00, 01, 01, 0}},
+        {"00:59:59 ", "%H:%i:%S ", MyDateTime{0, 0, 0, 00, 59, 59, 0}},
+        {"00:59:60 ", "%H:%i:%S ", std::nullopt},
     };
+
     auto result_formatter = MyDateTimeFormatter("%Y/%m/%d %T.%f");
     size_t idx = 0;
     for (const auto & [input, fmt, expected] : cases)
