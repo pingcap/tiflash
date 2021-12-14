@@ -10,6 +10,7 @@
 #include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/ProfileStreamsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -18,11 +19,6 @@ namespace DB
 class Context;
 class MPPTunnelSet;
 
-struct ProfileStreamsInfo
-{
-    UInt32 qb_id;
-    BlockInputStreams input_streams;
-};
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
