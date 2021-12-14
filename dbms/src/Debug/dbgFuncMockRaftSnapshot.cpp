@@ -3,6 +3,7 @@
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncMockRaftCommand.h>
+#include <Debug/dbgFuncMockRaftSnapshot.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
@@ -305,36 +306,67 @@ void fn_gc(SSTReaderPtr ptr, ColumnFamilyType)
     delete reader;
 }
 
-class RegionMockTest
+RegionMockTest::RegionMockTest(KVStorePtr kvstore_, RegionPtr region_)
+    : kvstore(kvstore_)
+    , region(region_)
 {
-public:
-    RegionMockTest(KVStorePtr kvstore_, RegionPtr region_)
-        : kvstore(kvstore_)
-        , region(region_)
-    {
-        std::memset(&mock_proxy_helper, 0, sizeof(mock_proxy_helper));
-        mock_proxy_helper.sst_reader_interfaces = SSTReaderInterfaces{
-            .fn_get_sst_reader = fn_get_sst_reader,
-            .fn_remained = fn_remained,
-            .fn_key = fn_key,
-            .fn_value = fn_value,
-            .fn_next = fn_next,
-            .fn_gc = fn_gc,
-        };
-        kvstore->proxy_helper = &mock_proxy_helper;
-        region->proxy_helper = &mock_proxy_helper;
-    }
-    ~RegionMockTest()
-    {
-        kvstore->proxy_helper = nullptr;
-        region->proxy_helper = nullptr;
-    }
+    std::memset(&mock_proxy_helper, 0, sizeof(mock_proxy_helper));
+    mock_proxy_helper.sst_reader_interfaces = SSTReaderInterfaces{
+        .fn_get_sst_reader = fn_get_sst_reader,
+        .fn_remained = fn_remained,
+        .fn_key = fn_key,
+        .fn_value = fn_value,
+        .fn_next = fn_next,
+        .fn_gc = fn_gc,
+    };
+    kvstore->proxy_helper = &mock_proxy_helper;
+    region->proxy_helper = &mock_proxy_helper;
+}
 
-private:
-    TiFlashRaftProxyHelper mock_proxy_helper;
-    KVStorePtr kvstore;
-    RegionPtr region;
-};
+RegionMockTest::~RegionMockTest()
+{
+    kvstore->proxy_helper = nullptr;
+    region->proxy_helper = nullptr;
+}
+
+// Check the MVCC (key-format and transaction model) for details
+// https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
+void FillKVList(UInt64 prewrite_ts, const TiDB::TableInfo & table_info, TableID table_id, UInt64 handle_id, std::vector<Field> & fields, MockSSTReader::Data & write_kv_list, MockSSTReader::Data & default_kv_list, MockSSTReader::Data * lock_kv_list = nullptr)
+{
+    TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
+    WriteBufferFromOwnString ss;
+
+    RegionBench::encodeRow(table_info, fields, ss);
+    TiKVValue prewrite_value(ss.releaseStr());
+
+    UInt64 commit_ts = prewrite_ts + 100; // Assume that commit_ts is larger that prewrite_ts
+
+    TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
+    default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
+
+    TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+    TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
+    write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+
+    if (lock_kv_list)
+    {
+        TiKVKey lock_key = TiKVKey::copyFrom(key);
+        TiKVValue lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "", 100, 0);
+        lock_kv_list->emplace_back(std::make_pair(std::move(lock_key), std::move(lock_value)));
+    }
+}
+
+void InsertMockSSTDate(const std::unordered_set<ColumnFamilyType> & cfs, const String & store_key, MockSSTReader::Data & write_kv_list, MockSSTReader::Data & default_kv_list, MockSSTReader::Data * lock_kv_list = nullptr)
+{
+    MockSSTReader::getMockSSTData().clear();
+
+    if (cfs.count(ColumnFamilyType::Write) > 0)
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}] = std::move(write_kv_list);
+    if (cfs.count(ColumnFamilyType::Default) > 0)
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}] = std::move(default_kv_list);
+    if (cfs.count(ColumnFamilyType::Lock) > 0 && lock_kv_list)
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Lock}] = std::move(*lock_kv_list);
+}
 
 void GenMockSSTData(const TiDB::TableInfo & table_info,
                     TableID table_id,
@@ -368,33 +400,12 @@ void GenMockSSTData(const TiDB::TableInfo & table_info,
             // column UInt64 for test
             fields.emplace_back(handle_id / 2);
         }
-
-        // Check the MVCC (key-format and transaction model) for details
-        // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
         {
-            TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
-            WriteBufferFromOwnString ss;
-            RegionBench::encodeRow(table_info, fields, ss);
-            TiKVValue prewrite_value(ss.releaseStr());
-
             UInt64 prewrite_ts = handle_id;
-            UInt64 commit_ts = prewrite_ts + 100; // Assume that commit_ts is larger that prewrite_ts
-
-            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
-            default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
-
-            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
-            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
-            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+            FillKVList(prewrite_ts, table_info, table_id, handle_id, fields, write_kv_list, default_kv_list);
         }
     }
-
-    MockSSTReader::getMockSSTData().clear();
-
-    if (cfs.count(ColumnFamilyType::Write) > 0)
-        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}] = std::move(write_kv_list);
-    if (cfs.count(ColumnFamilyType::Default) > 0)
-        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}] = std::move(default_kv_list);
+    InsertMockSSTDate(cfs, store_key, write_kv_list, default_kv_list);
 }
 
 // TODO: make it a more generic testing function
@@ -430,34 +441,39 @@ void GenMockSSTDataByHandles(const TiDB::TableInfo & table_info,
             fields.emplace_back(handle_id / 2);
         }
 
-        // Check the MVCC (key-format and transaction model) for details
-        // https://en.pingcap.com/blog/2016-11-17-mvcc-in-tikv#mvcc
         // The rows (primary key, timestamp) are sorted by primary key asc, timestamp desc in SSTFiles
         // https://github.com/pingcap/tics/issues/1864
         {
-            TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
-            WriteBufferFromOwnString ss;
-            RegionBench::encodeRow(table_info, fields, ss);
-            TiKVValue prewrite_value(ss.releaseStr());
-
             UInt64 prewrite_ts = 100000 + num_rows - index; // make it to be timestamp desc in SSTFiles
-            UInt64 commit_ts = prewrite_ts + 100; // Assume that commit_ts is larger that prewrite_ts
-
-            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
-            default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
-
-            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
-            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
-            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+            FillKVList(prewrite_ts, table_info, table_id, handle_id, fields, write_kv_list, default_kv_list);
         }
     }
+    InsertMockSSTDate(cfs, store_key, write_kv_list, default_kv_list);
+}
 
-    MockSSTReader::getMockSSTData().clear();
+void GenMockSSTDataMVCC(const TiDB::TableInfo & table_info,
+                        TableID table_id,
+                        const String & store_key,
+                        UInt64 start_handle,
+                        UInt64 end_handle,
+                        size_t version_num,
+                        const std::unordered_set<ColumnFamilyType> & cfs)
+{
+    MockSSTReader::Data write_kv_list, default_kv_list, lock_kv_list;
 
-    if (cfs.count(ColumnFamilyType::Write) > 0)
-        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Write}] = std::move(write_kv_list);
-    if (cfs.count(ColumnFamilyType::Default) > 0)
-        MockSSTReader::getMockSSTData()[MockSSTReader::Key{store_key, ColumnFamilyType::Default}] = std::move(default_kv_list);
+    UInt64 index = 0;
+    for (auto handle_id = start_handle; handle_id < end_handle; ++handle_id, ++index)
+    {
+        for (size_t i = 1; i <= version_num; i++)
+        {
+            std::vector<Field> fields;
+            fields.emplace_back(-static_cast<Int64>(handle_id * 100 + i));
+
+            UInt64 prewrite_ts = handle_id + i;
+            FillKVList(prewrite_ts, table_info, table_id, handle_id, fields, write_kv_list, default_kv_list, &lock_kv_list);
+        }
+    }
+    InsertMockSSTDate(cfs, store_key, write_kv_list, default_kv_list, &lock_kv_list);
 }
 
 // Simulate a region IngestSST raft command
