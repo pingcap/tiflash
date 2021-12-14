@@ -933,7 +933,7 @@ void DAGQueryBlockInterpreter::executeExchangeReceiver(DAGPipeline & pipeline)
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
-void DAGQueryBlockInterpreter::executeProjection(const tipb::Projection & projection, DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::executeSourceProject(DAGPipeline & pipeline, const tipb::Projection & projection)
 {
     std::vector<NameAndTypePair> input_columns;
     pipeline.streams = input_streams_vec[0];
@@ -1044,7 +1044,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
     {
-        executeProjection(query_block.source->projection(), pipeline);
+        executeSourceProject(pipeline, query_block.source->projection());
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else
