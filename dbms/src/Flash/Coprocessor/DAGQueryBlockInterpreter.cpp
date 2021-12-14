@@ -946,7 +946,7 @@ void DAGQueryBlockInterpreter::executeProjection(const tipb::Projection & projec
     std::vector<NameAndTypePair> output_columns;
     NamesWithAliases project_cols;
     UniqueNameGenerator unique_name_generator;
-    for (const auto & expr : query_block.source->projection().exprs())
+    for (const auto & expr : projection.exprs())
     {
         auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
         last_step.required_output.emplace_back(expr_name);
