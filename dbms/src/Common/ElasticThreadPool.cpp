@@ -39,6 +39,7 @@ ElasticThreadPool::ElasticThreadPool(size_t m_size, Job pre_worker_)
     , pre_worker(pre_worker_)
     , threads(std::make_shared<std::vector<std::shared_ptr<Thd>>>())
     , bk_thd(std::thread([this] { backgroundJob(); }))
+    , log(getLogWithPrefix(nullptr, "ElasticThreadPool"))
 {
     threads->reserve(m_size);
     for (size_t i = 0; i < m_size; ++i)
@@ -95,11 +96,14 @@ void ElasticThreadPool::backgroundJob()
         if (cv_shutdown.wait_for(lock, recycle_period, [this] { return shutdown.load(); }))
             break;
         size_t idle_buffer_cnt = 50;
+        LOG_INFO(log, "[ElasticThreadPool] loop_start, history_min_available_cnt: " << history_min_available_cnt << " available_cnt: " << available_cnt << " thread_list_size: " << threads->size());
         if (history_min_available_cnt != std::numeric_limits<size_t>::max() && history_min_available_cnt > idle_buffer_cnt)
         {
             int cnt_to_clean = static_cast<int>(history_min_available_cnt) - idle_buffer_cnt;
             if (cnt_to_clean <= 0)
+            {
                 continue;
+            }
             auto old_threads = threads;
             int old_threads_size = threads->size();
             lock.unlock();
@@ -107,29 +111,33 @@ void ElasticThreadPool::backgroundJob()
             int cnt_cleaned = 0;
             for (auto & thd_ctx : *old_threads)
             {
-                if (thd_ctx->status != 2)
+                if (thd_ctx->state != 2)
                 {
                     new_threads->push_back(thd_ctx);
-                    if (cnt_cleaned < cnt_to_clean && !(thd_ctx->end_syn) && thd_ctx->status == 0)
+                    if (cnt_cleaned < cnt_to_clean && !(thd_ctx->end_syn) && thd_ctx->state == 0)
                     {
                         thd_ctx->end_syn = true;
                         cnt_cleaned++;
                     }
-                } else { //status.end: can be removed safely
+                }
+                else
+                { //state.end: can be removed safely
                     thd_ctx->thd->join();
                 }
             }
+            int new_thds = 0;
             {
                 std::unique_lock<std::mutex> lock2(mutex);
                 for (size_t i = old_threads_size; i < old_threads->size(); i++)
                 { //update new threads created during this loop
                     new_threads->push_back(old_threads->at(i));
+                    new_thds++;
                 }
                 threads = new_threads; //update threads
+                history_min_available_cnt = std::numeric_limits<size_t>::max();
             }
+            LOG_INFO(log, "[ElasticThreadPool] loop_end, cnt_to_clean: " << cnt_to_clean << " cnt_cleaned: " << cnt_cleaned << " new_thds: " << new_thds);
         }
-
-        history_min_available_cnt = std::numeric_limits<size_t>::max();
     }
 }
 
@@ -150,7 +158,7 @@ void ElasticThreadPool::worker(Thd * thdctx)
             {
                 job = std::move(jobs.front());
                 jobs.pop();
-                thdctx->status = 1;
+                thdctx->state = 1;
             }
             else
             {
@@ -167,12 +175,12 @@ void ElasticThreadPool::worker(Thd * thdctx)
             history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
         }
 
-        thdctx->status = 0;
+        thdctx->state = 0;
     }
     {
         std::unique_lock<std::mutex> lock(mutex);
         available_cnt--;
         history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
     }
-    thdctx->status = 2;
+    thdctx->state = 2;
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
+
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -11,6 +13,7 @@
 #include <thread>
 #include <vector>
 
+using namespace DB;
 
 class ElasticThreadPool
 {
@@ -21,14 +24,14 @@ public:
     {
         explicit Thd(ElasticThreadPool * thd_pool)
             : end_syn(false)
-            , status(0)
+            , state(0)
             , thd(std::make_shared<std::thread>([this, thd_pool] {
                 thd_pool->pre_worker();
                 thd_pool->worker(this);
             }))
         {}
         std::atomic_bool end_syn; //someone wants it end
-        std::atomic_int status; // 0.idle 1.working 2.ended
+        std::atomic_int state; // 0.idle 1.working 2.ended
         std::shared_ptr<std::thread> thd;
     };
 
@@ -59,6 +62,7 @@ protected:
     std::shared_ptr<std::vector<std::shared_ptr<Thd>>> threads;
     std::thread bk_thd;
     std::chrono::seconds recycle_period = std::chrono::seconds(10);
+    const LogWithPrefixPtr log;
 
     void worker(Thd * thdctx);
 
@@ -87,4 +91,3 @@ inline void waitTasks(std::vector<std::future<void>> & futures)
         waitTask(f);
     }
 }
-
