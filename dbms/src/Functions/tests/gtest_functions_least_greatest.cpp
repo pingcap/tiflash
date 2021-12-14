@@ -571,16 +571,15 @@ try
     for (size_t i = 0; i < 10000000; ++i)
     {
         ASSERT_COLUMN_EQ(
-        createColumn<Int64>({5}),
-        executeFunction(
-            func_name,
-            createColumn<Int8>({2}),
-            createColumn<Int8>({1}),
-            createColumn<Int8>({3}),
-            createColumn<Int8>({4}),
-            createColumn<Int32>({5})));
+            createColumn<Int64>({5}),
+            executeFunction(
+                func_name,
+                createColumn<Int8>({2}),
+                createColumn<Int8>({1}),
+                createColumn<Int8>({3}),
+                createColumn<Int8>({4}),
+                createColumn<Int32>({5})));
     }
-    
 }
 CATCH
 

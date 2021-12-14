@@ -182,9 +182,11 @@ public:
         return data->compareAt(0, 0, *static_cast<const ColumnConst &>(rhs).data, nan_direction_hint);
     }
 
-    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const ICollator & collator) const override
+    int compareAtWithCollation(size_t, size_t m, const IColumn & rhs_, int null_direction_hint, const ICollator & collator) const override
     {
-        return data->compareAtWithCollation(n, m, rhs_, null_direction_hint, collator);
+        if (rhs_.isColumnConst())
+            return data->compareAtWithCollation(0, 0, rhs_, null_direction_hint, collator);
+        return data->compareAtWithCollation(0, m, rhs_, null_direction_hint, collator);
     }
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;

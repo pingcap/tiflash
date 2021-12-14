@@ -207,7 +207,13 @@ public:
         DataTypePtr result_type = getReturnTypeImpl(data_types);
         Columns converted_columns(num_arguments);
         for (size_t arg = 0; arg < num_arguments; ++arg)
+        {
             converted_columns[arg] = TiDBCastColumn(block.getByPosition(arguments[arg]), result_type, context);
+            auto temp = converted_columns[arg]->convertToFullColumnIfConst();
+            if (temp != nullptr)
+                converted_columns[arg] = std::move(temp);
+        }
+
 
         auto result_column = result_type->createColumn();
         result_column->reserve(block.rows());
@@ -274,7 +280,7 @@ public:
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 0; }
     bool isVariadic() const override { return true; }
-    
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
