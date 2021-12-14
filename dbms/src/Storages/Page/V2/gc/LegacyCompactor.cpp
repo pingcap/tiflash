@@ -17,8 +17,8 @@ LegacyCompactor::LegacyCompactor(const PageStorage & storage, const WriteLimiter
 {
 }
 
-std::tuple<PageFileSet, PageFileSet, size_t> //
-LegacyCompactor::tryCompact( //
+std::tuple<PageFileSet, PageFileSet, size_t>
+LegacyCompactor::tryCompact(
     PageFileSet && page_files,
     const WritingFilesSnapshot & writing_files)
 {
@@ -241,7 +241,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
 }
 
 WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(
-    const PageStorage::ConcreteSnapshotPtr snapshot,
+    const PageStorage::ConcreteSnapshotPtr & snapshot,
     const WriteBatch::SequenceID wb_sequence)
 {
     WriteBatch wb;

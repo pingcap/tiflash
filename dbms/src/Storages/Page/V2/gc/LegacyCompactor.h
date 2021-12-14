@@ -36,7 +36,7 @@ private:
     collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files);
 
     static WriteBatch prepareCheckpointWriteBatch(
-        const PageStorage::ConcreteSnapshotPtr snapshot,
+        const PageStorage::ConcreteSnapshotPtr & snapshot,
         const WriteBatch::SequenceID wb_sequence);
     [[nodiscard]] static size_t writeToCheckpoint(
         const String & storage_path,
