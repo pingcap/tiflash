@@ -50,7 +50,7 @@ protected:
     size_t history_min_available_cnt = std::numeric_limits<size_t>::max();
 
     const size_t init_cap;
-    size_t available_cnt;
+    size_t available_cnt, alive_cnt;
     Job pre_worker;
     std::atomic<bool> shutdown = false;
 
