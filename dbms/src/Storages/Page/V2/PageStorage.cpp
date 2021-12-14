@@ -16,7 +16,6 @@
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <common/logger_fmt_useful.h>
-#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 #include <queue>
@@ -235,7 +234,7 @@ void PageStorage::restore()
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         if (debugging_recover_stop_sequence != 0 && reader->writeBatchSequence() > debugging_recover_stop_sequence)
         {
-            LOG_FMT_TRACE(log, "{} debugging early stop on sequence: {}", storage_name debugging_recover_stop_sequence);
+            LOG_FMT_TRACE(log, "{} debugging early stop on sequence: {}", storage_name, debugging_recover_stop_sequence);
             break;
         }
 #endif
