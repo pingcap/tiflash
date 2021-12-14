@@ -127,6 +127,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         break;
                     }
                 }
+                LOG_DEBUG(log, "begin next read");
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = source_index;
                 bool success = reader->read(recv_msg->packet);
