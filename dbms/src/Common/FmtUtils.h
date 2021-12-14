@@ -4,8 +4,6 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
-#include <iterator>
-#include <string>
 namespace DB
 {
 class FmtBuffer
