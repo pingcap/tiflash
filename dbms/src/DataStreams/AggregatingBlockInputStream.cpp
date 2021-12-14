@@ -65,6 +65,8 @@ Block AggregatingBlockInputStream::readImpl()
 
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(input_streams, params, final, 1, 1);
         }
+
+        aggregated_data_variants_size_without_overflow_row = data_variants->sizeWithoutOverflowRow();
     }
 
     if (isCancelledOrThrowIfKilled() || !impl)

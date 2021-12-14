@@ -13,7 +13,7 @@ struct FilterStatistics : public ExecutorStatistics
     size_t inbound_blocks = 0;
     size_t inbound_bytes = 0;
 
-    FilterStatistics(const tipb::Executor * executor, Context & context_);
+    FilterStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
     static bool hit(const String & executor_id);
 

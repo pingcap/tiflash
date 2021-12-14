@@ -4,7 +4,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <Flash/Statistics/JoinStatistics.h>
-#include <Interpreters/Context.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -21,8 +20,8 @@ String JoinStatistics::extraToJson() const
         process_time_ns_for_build);
 }
 
-JoinStatistics::JoinStatistics(const tipb::Executor * executor, Context & context_)
-    : ExecutorStatistics(executor, context_)
+JoinStatistics::JoinStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+    : ExecutorStatistics(executor, dag_context_)
 {}
 
 bool JoinStatistics::hit(const String & executor_id)
@@ -32,7 +31,7 @@ bool JoinStatistics::hit(const String & executor_id)
 
 void JoinStatistics::collectRuntimeDetail()
 {
-    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
+    const auto & profile_streams_info = dag_context.getProfileStreams(executor_id);
     visitBlockInputStreams(
         profile_streams_info.input_streams,
         [&](const BlockInputStreamPtr & stream_ptr) {
@@ -52,7 +51,6 @@ void JoinStatistics::collectRuntimeDetail()
                 "IProfilingBlockInputStream");
         });
 
-    auto & dag_context = *context.getDAGContext();
     for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[profile_streams_info.qb_id])
     {
         const auto & profile_streams_map_for_join_build_side = dag_context.getProfileStreamsMapForJoinBuildSide();
@@ -60,7 +58,7 @@ void JoinStatistics::collectRuntimeDetail()
         if (join_build_side_it != profile_streams_map_for_join_build_side.end())
         {
             visitBlockInputStreamsRecursive(
-                context.getDAGContext()->getProfileStreamsMapForJoinBuildSide()[join_alias],
+                dag_context.getProfileStreamsMapForJoinBuildSide()[join_alias],
                 [&](const BlockInputStreamPtr & stream_ptr) {
                     return castBlockInputStream<HashJoinBuildBlockInputStream>(stream_ptr, [&](const HashJoinBuildBlockInputStream & stream) {
                         hash_table_bytes += stream.getJoinPtr()->getTotalByteCount();

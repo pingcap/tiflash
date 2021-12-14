@@ -9,7 +9,7 @@
 #include <Flash/Statistics/TableScanStatistics.h>
 #include <Flash/Statistics/TopNStatistics.h>
 #include <Flash/Statistics/collectExecutorStatistics.h>
-#include <Interpreters/Context.h>
+#include <Flash/Statistics/traverseExecutors.h>
 
 namespace DB
 {
@@ -17,12 +17,12 @@ namespace
 {
 struct ExecutorStatisticsCollector
 {
-    Context & context;
+    DAGContext & dag_context;
 
     std::map<String, ExecutorStatisticsPtr> res;
 
-    explicit ExecutorStatisticsCollector(Context & context_)
-        : context(context_)
+    explicit ExecutorStatisticsCollector(DAGContext & dag_context_)
+        : dag_context(dag_context_)
     {}
 
     template <typename... Ts>
@@ -38,26 +38,22 @@ private:
     {
         if (T::hit(executor_id))
         {
-            res[executor_id] = std::make_shared<T>(executor, context);
+            res[executor_id] = std::make_shared<T>(executor, dag_context);
             return true;
         }
-        else
-        {
-            return false;
-        }
+        return false;
     }
 };
 } // namespace
 
-std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(Context & context)
+std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(DAGContext & dag_context)
 {
-    ExecutorStatisticsCollector collector{context};
-    auto & dag_context = *context.getDAGContext();
-    for (const auto & executor_entry : dag_context.getExecutorMap())
-    {
-        const auto & executor_id = executor_entry.first;
-        const auto * executor = executor_entry.second;
-
+    ExecutorStatisticsCollector collector{dag_context};
+    assert(dag_context.dag_request);
+    const auto * dag_request = dag_context.dag_request;
+    traverseExecutors(dag_request, [&](const tipb::Executor & executor) {
+        assert(executor.has_executor_id());
+        const auto & executor_id = executor.executor_id();
         if (!collector.append<
                 AggStatistics,
                 ExchangeReceiverStatistics,
@@ -67,13 +63,13 @@ std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(Context & context
                 LimitStatistics,
                 ProjectionStatistics,
                 TableScanStatistics,
-                TopNStatistics>(executor_id, executor))
+                TopNStatistics>(executor_id, &executor))
         {
             throw TiFlashException(
                 fmt::format("Unknown executor type, executor_id: {}", executor_id),
                 Errors::Coprocessor::Internal);
         }
-    }
+    });
     return collector.res;
 }
 } // namespace DB

@@ -15,7 +15,7 @@ struct LimitStatistics : public ExecutorStatistics
     size_t inbound_blocks = 0;
     size_t inbound_bytes = 0;
 
-    LimitStatistics(const tipb::Executor * executor, Context & context);
+    LimitStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
     static bool hit(const String & executor_id);
 

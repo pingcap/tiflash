@@ -16,7 +16,7 @@ struct ExchangeSenderStatistics : public ExecutorStatistics
 
     std::vector<Int64> sender_target_task_ids;
 
-    ExchangeSenderStatistics(const tipb::Executor * executor, Context & context_);
+    ExchangeSenderStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
     static bool hit(const String & executor_id);
 

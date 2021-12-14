@@ -6,5 +6,5 @@
 
 namespace DB
 {
-std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(Context & context);
+std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(DAGContext & dag_context);
 } // namespace DB

@@ -90,30 +90,6 @@ inline void visitBlockInputStreamsRecursive(const BlockInputStreams & input_stre
     visitBlockInputStreamsRecursiveWithVisitedSet(visited_set, input_streams, ff);
 }
 
-template <bool is_ptr = true, typename Array>
-String arrayToJson(const Array & array)
-{
-    FmtBuffer buffer;
-    buffer.append("[");
-    joinStr(
-        array.cbegin(),
-        array.cend(),
-        buffer,
-        [](const auto & t, FmtBuffer & fb) {
-            if constexpr (is_ptr)
-            {
-                fb.append(t->toJson());
-            }
-            else
-            {
-                fb.append(t.toJson());
-            }
-        },
-        ",");
-    buffer.append("]");
-    return buffer.toString();
-}
-
 template <typename StatisticsPtr>
 void collectBaseInfo(StatisticsPtr statistics_ptr, const BlockStreamProfileInfo & profile_info)
 {

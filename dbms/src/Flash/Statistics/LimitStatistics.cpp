@@ -3,7 +3,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <Flash/Statistics/LimitStatistics.h>
-#include <Interpreters/Context.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -19,8 +18,8 @@ String LimitStatistics::extraToJson() const
         inbound_bytes);
 }
 
-LimitStatistics::LimitStatistics(const tipb::Executor * executor, Context & context_)
-    : ExecutorStatistics(executor, context_)
+LimitStatistics::LimitStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+    : ExecutorStatistics(executor, dag_context_)
 {
     assert(executor->tp() == tipb::ExecType::TypeLimit);
     const auto & limit_executor = executor->limit();
@@ -35,7 +34,7 @@ bool LimitStatistics::hit(const String & executor_id)
 
 void LimitStatistics::collectRuntimeDetail()
 {
-    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
+    const auto & profile_streams_info = dag_context.getProfileStreams(executor_id);
     if (profile_streams_info.input_streams.size() != 1)
         throw TiFlashException(
             fmt::format("Count of LimitBlockInputStream should be 1 or not {}", profile_streams_info.input_streams.size()),

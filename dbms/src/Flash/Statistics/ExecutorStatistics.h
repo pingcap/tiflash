@@ -9,7 +9,6 @@
 
 namespace DB
 {
-class Context;
 class DAGContext;
 
 struct ExecutorStatistics
@@ -26,9 +25,9 @@ struct ExecutorStatistics
 
     UInt64 execution_time_ns = 0;
 
-    Context & context;
+    DAGContext & dag_context;
 
-    ExecutorStatistics(const tipb::Executor * executor, Context & context_);
+    ExecutorStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
     virtual String toJson() const final;
 

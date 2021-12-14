@@ -15,7 +15,7 @@ struct AggStatistics : public ExecutorStatistics
 
     size_t hash_table_rows = 0;
 
-    AggStatistics(const tipb::Executor * executor, Context & context_);
+    AggStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
     static bool hit(const String & executor_id);
 

@@ -79,6 +79,7 @@ public:
     {}
 
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
+    const ProfileStreamsInfo & getProfileStreams(const String & executor_id);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     void handleTruncateError(const String & msg);

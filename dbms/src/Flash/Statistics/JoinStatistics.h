@@ -17,7 +17,7 @@ struct JoinStatistics : public ExecutorStatistics
 
     UInt64 process_time_ns_for_build = 0;
 
-    JoinStatistics(const tipb::Executor * executor, Context & context_);
+    JoinStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
     static bool hit(const String & executor_id);
 

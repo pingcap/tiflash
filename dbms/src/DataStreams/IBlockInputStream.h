@@ -118,6 +118,8 @@ public:
                 return;
     }
 
+    const BlockInputStreams & getChildren() const { return children; }
+
 protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;

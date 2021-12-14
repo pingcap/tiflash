@@ -1,10 +1,8 @@
-#include <Common/joinStr.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <Flash/Statistics/TopNStatistics.h>
-#include <Interpreters/Context.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -20,8 +18,8 @@ String TopNStatistics::extraToJson() const
         inbound_bytes);
 }
 
-TopNStatistics::TopNStatistics(const tipb::Executor * executor, Context & context_)
-    : ExecutorStatistics(executor, context_)
+TopNStatistics::TopNStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+    : ExecutorStatistics(executor, dag_context_)
 {
     assert(executor->tp() == tipb::ExecType::TypeTopN);
     const auto & top_n_executor = executor->topn();
@@ -36,7 +34,7 @@ bool TopNStatistics::hit(const String & executor_id)
 
 void TopNStatistics::collectRuntimeDetail()
 {
-    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
+    const auto & profile_streams_info = dag_context.getProfileStreams(executor_id);
     if (profile_streams_info.input_streams.size() != 1)
         throw TiFlashException(
             fmt::format("Count of MergeSortingBlockInputStream should be 1 or not {}", profile_streams_info.input_streams.size()),

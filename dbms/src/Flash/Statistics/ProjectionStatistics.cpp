@@ -2,12 +2,11 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <Flash/Statistics/ProjectionStatistics.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
-ProjectionStatistics::ProjectionStatistics(const tipb::Executor * executor, Context & context_)
-    : ExecutorStatistics(executor, context_)
+ProjectionStatistics::ProjectionStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+    : ExecutorStatistics(executor, dag_context_)
 {}
 
 bool ProjectionStatistics::hit(const String & executor_id)
@@ -17,7 +16,7 @@ bool ProjectionStatistics::hit(const String & executor_id)
 
 void ProjectionStatistics::collectRuntimeDetail()
 {
-    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
+    const auto & profile_streams_info = dag_context.getProfileStreams(executor_id);
     visitBlockInputStreams(
         profile_streams_info.input_streams,
         [&](const BlockInputStreamPtr & stream_ptr) {

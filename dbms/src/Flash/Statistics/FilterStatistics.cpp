@@ -3,7 +3,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>
 #include <Flash/Statistics/FilterStatistics.h>
-#include <Interpreters/Context.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -17,8 +16,8 @@ String FilterStatistics::extraToJson() const
         inbound_bytes);
 }
 
-FilterStatistics::FilterStatistics(const tipb::Executor * executor, Context & context_)
-    : ExecutorStatistics(executor, context_)
+FilterStatistics::FilterStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+    : ExecutorStatistics(executor, dag_context_)
 {}
 
 bool FilterStatistics::hit(const String & executor_id)
@@ -28,24 +27,16 @@ bool FilterStatistics::hit(const String & executor_id)
 
 void FilterStatistics::collectRuntimeDetail()
 {
-    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
+    const auto & profile_streams_info = dag_context.getProfileStreams(executor_id);
     visitBlockInputStreams(
         profile_streams_info.input_streams,
         [&](const BlockInputStreamPtr & stream_ptr) {
             throwFailCastException(
-                elseThen(
-                    [&]() {
-                        return castBlockInputStream<FilterBlockInputStream>(stream_ptr, [&](const FilterBlockInputStream & stream) {
-                            collectBaseInfo(this, stream.getProfileInfo());
-                        });
-                    },
-                    [&]() {
-                        return castBlockInputStream<IProfilingBlockInputStream>(stream_ptr, [&](const IProfilingBlockInputStream & stream) {
-                            collectBaseInfo(this, stream.getProfileInfo());
-                        });
-                    }),
+                castBlockInputStream<IProfilingBlockInputStream>(stream_ptr, [&](const IProfilingBlockInputStream & stream) {
+                    collectBaseInfo(this, stream.getProfileInfo());
+                }),
                 stream_ptr->getName(),
-                "FilterBlockInputStream/IProfilingBlockInputStream");
+                "IProfilingBlockInputStream");
         },
         [&](const BlockInputStreamPtr & child_stream_ptr) {
             throwFailCastException(

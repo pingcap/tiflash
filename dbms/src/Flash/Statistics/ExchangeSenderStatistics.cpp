@@ -1,10 +1,8 @@
 #include <Common/TiFlashException.h>
 #include <DataStreams/ExchangeSender.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Statistics/ExchangeSenderStatistics.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>
-#include <Interpreters/Context.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -37,10 +35,9 @@ String ExchangeSenderStatistics::extraToJson() const
         exchangeTypeToString(exchange_type));
 }
 
-ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * executor, Context & context_)
-    : ExecutorStatistics(executor, context_)
+ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
+    : ExecutorStatistics(executor, dag_context_)
 {
-    auto & dag_context = *context.getDAGContext();
     assert(dag_context.is_mpp_task);
 
     assert(executor->tp() == tipb::ExecType::TypeExchangeSender);
@@ -65,10 +62,9 @@ bool ExchangeSenderStatistics::hit(const String & executor_id)
 
 void ExchangeSenderStatistics::collectRuntimeDetail()
 {
-    auto & dag_context = *context.getDAGContext();
     assert(dag_context.is_mpp_task);
 
-    const auto & profile_streams_info = context.getDAGContext()->getProfileStreams(executor_id);
+    const auto & profile_streams_info = dag_context.getProfileStreams(executor_id);
     if (profile_streams_info.input_streams.empty())
         throw TiFlashException(
             fmt::format("Count of ExchangeSender should not be zero"),
