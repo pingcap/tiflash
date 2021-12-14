@@ -3,7 +3,7 @@
 
 namespace DB
 {
-inline StringRef taskStatusToString(const TaskStatus & status)
+StringRef taskStatusToString(const TaskStatus & status)
 {
     switch (status)
     {
