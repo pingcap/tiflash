@@ -208,6 +208,7 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
+    option (USE_LLVM_BASIC_RUNTIME "Use compiler-rt, libunwind from LLVM" ON)
     set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
 
     if (USE_LIBCXX)
@@ -224,6 +225,11 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             link_directories ("${LIBCXX_PATH}/lib")
         endif ()
     endif ()
+
+    if (USE_LLVM_BASIC_RUNTIME)
+         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind -rtlib=compiler-rt")
+         link_libraries(-unwindlib=libunwind -rtlib=compiler-rt)
+    endif()
 endif ()
 
 if (USE_STATIC_LIBRARIES AND HAVE_NO_PIE)
