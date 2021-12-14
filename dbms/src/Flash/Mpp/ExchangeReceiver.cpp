@@ -149,6 +149,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
+                    else if (!recv_msg)
+                        throw TiFlashException("beginPush returns nullptr", Errors::Coprocessor::Internal);
                 }
 
                 recv_msg->req_info = req_info;
@@ -406,10 +408,10 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(size_t upstr
     }
 
     // returnEmptyMsg(recv_msg);
-    clearMessage(recv_msg);
     {
         std::unique_lock lock(mu);
-        ringbuf.endPop(lock, upstream_id);
+        if (ringbuf.endPop(lock, upstream_id))
+            clearMessage(recv_msg);
     }
 
     return result;

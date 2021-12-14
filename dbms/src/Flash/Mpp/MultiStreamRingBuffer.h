@@ -39,7 +39,7 @@ public:
     }
 
     template <typename OtherCondition>
-    ItemPtr beginPop(Lock & lock, size_t stream_id, OtherCondition && other_condition)
+    ItemPtr beginPop(Lock & lock, size_t stream_id, const OtherCondition & other_condition)
     {
         auto condition_1 = [&, this] {
             return next[stream_id] != head;
@@ -50,7 +50,8 @@ public:
         return items[next[stream_id]];
     }
 
-    void endPop(Lock & lock [[maybe_unused]], size_t stream_id)
+    // `endPop` returns true if it the last stream
+    bool endPop(Lock & lock [[maybe_unused]], size_t stream_id)
     {
         size_t index = next[stream_id];
         count[index]--;
@@ -60,7 +61,10 @@ public:
         {
             tail = index;
             tail_cv.notify_all();
+            return true;
         }
+
+        return false;
     }
 
     template <typename OtherCondition>
