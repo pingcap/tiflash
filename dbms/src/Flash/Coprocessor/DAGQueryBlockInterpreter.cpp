@@ -919,9 +919,9 @@ void DAGQueryBlockInterpreter::executeExchangeReceiver(DAGPipeline & pipeline)
     // todo choose a more reasonable stream number
     for (size_t i = 0; i < max_streams; i++)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log);
-        dag.getDAGContext().getRemoteInputStreams().push_back(stream);
-        stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, taskLogger());
+        dagContext().getRemoteInputStreams().push_back(stream);
+        stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, taskLogger());
         pipeline.streams.push_back(stream);
     }
     std::vector<NameAndTypePair> source_columns;
@@ -946,7 +946,7 @@ void DAGQueryBlockInterpreter::executeProjection(const tipb::Projection & projec
     std::vector<NameAndTypePair> output_columns;
     NamesWithAliases project_cols;
     UniqueNameGenerator unique_name_generator;
-    for (const auto & expr : projection.exprs())
+    for (const auto & expr : query_block.source->projection().exprs())
     {
         auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
         last_step.required_output.emplace_back(expr_name);
@@ -955,7 +955,7 @@ void DAGQueryBlockInterpreter::executeProjection(const tipb::Projection & projec
         output_columns.emplace_back(alias, col.type);
         project_cols.emplace_back(col.name, alias);
     }
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), taskLogger()); });
     executeProject(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
@@ -981,20 +981,20 @@ void DAGQueryBlockInterpreter::executeExtraCastAndSelection(
                 {
                     project_for_cop_read = generateProjectExpressionActions(stream, context, project_after_ts_and_filter_for_remote_read);
                 }
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log);
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, taskLogger());
             }
         }
         else
         {
             /// execute timezone cast or duration cast if needed
             if (extra_cast)
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log);
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, taskLogger());
             /// execute selection if needed
             if (before_where)
             {
-                stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
+                stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, taskLogger());
                 if (project_after_where)
-                    stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
+                    stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, taskLogger());
             }
         }
     }
@@ -1003,9 +1003,9 @@ void DAGQueryBlockInterpreter::executeExtraCastAndSelection(
         /// execute selection if needed
         if (before_where)
         {
-            stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log);
+            stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, taskLogger());
             if (project_after_where)
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log);
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, taskLogger());
         }
     }
 }
