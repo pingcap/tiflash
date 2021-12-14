@@ -43,7 +43,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
-    , mpp_task_statistics(std::make_shared<MPPTaskStatistics>(log, id, meta.address()))
+    , mpp_task_statistics(log, id, meta.address())
 {}
 
 MPPTask::~MPPTask()
@@ -272,8 +272,8 @@ void MPPTask::preprocess()
     io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-    mpp_task_statistics->compile_start_timestamp = start_time;
-    mpp_task_statistics->compile_end_timestamp = end_time;
+    mpp_task_statistics.compile_start_timestamp = start_time;
+    mpp_task_statistics.compile_end_timestamp = end_time;
 }
 
 void MPPTask::runImpl()
@@ -284,7 +284,7 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
-    mpp_task_statistics->start();
+    mpp_task_statistics.start();
 
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
@@ -354,7 +354,7 @@ void MPPTask::runImpl()
         auto process_info = context.getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
-        mpp_task_statistics->memory_peak = peak_memory;
+        mpp_task_statistics.memory_peak = peak_memory;
     }
     else
     {
@@ -368,8 +368,8 @@ void MPPTask::runImpl()
     else
         LOG_WARNING(log, "finish task which was cancelled before");
 
-    mpp_task_statistics->end(status.load(), err_msg);
-    mpp_task_statistics->logStats();
+    mpp_task_statistics.end(status.load(), err_msg);
+    mpp_task_statistics.logStats();
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)

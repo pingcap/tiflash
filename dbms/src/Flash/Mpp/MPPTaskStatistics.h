@@ -45,6 +45,4 @@ struct MPPTaskStatistics
     Int64 working_time = 0;
     Int64 memory_peak = 0;
 };
-
-using MPPTaskStatisticsPtr = std::shared_ptr<MPPTaskStatistics>;
 } // namespace DB

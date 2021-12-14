@@ -103,7 +103,7 @@ private:
 
     const LogWithPrefixPtr log;
 
-    MPPTaskStatisticsPtr mpp_task_statistics;
+    MPPTaskStatistics mpp_task_statistics;
 
     Exception err;
 
