@@ -95,9 +95,10 @@ protected:
     void testCannotPop(MPMCQueue<T> & queue)
     {
         auto old_size = queue.size();
-        auto res = queue.pop();
+        T res;
+        bool ok = queue.pop(res);
         auto new_size = queue.size();
-        if (res.has_value())
+        if (ok)
             throw TiFlashTestException("Should pop fail");
         if (old_size != new_size)
             throw TiFlashTestException(fmt::format("Size changed from {} to {} without pop", old_size, new_size));
@@ -107,9 +108,10 @@ protected:
     void testCannotTryPop(MPMCQueue<T> & queue)
     {
         auto old_size = queue.size();
-        auto res = queue.tryPop(std::chrono::microseconds(1));
+        T res;
+        bool ok = queue.tryPop(res, std::chrono::microseconds(1));
         auto new_size = queue.size();
-        if (res.has_value())
+        if (ok)
             throw TiFlashTestException("Should pop fail");
         if (old_size != new_size)
             throw TiFlashTestException(fmt::format("Size changed from {} to {} without pop", old_size, new_size));
@@ -135,11 +137,12 @@ protected:
         auto old_size = queue.size();
         for (int i = 0; i < n; ++i)
         {
-            auto res = queue.pop();
-            if (!res.has_value())
+            T res;
+            bool ok = queue.pop(res);
+            if (!ok)
                 throw TiFlashTestException("Should pop a value");
             int expect = start++;
-            int actual = ValueHelper<T>::extract(res.value());
+            int actual = ValueHelper<T>::extract(res);
             if (actual != expect)
                 throw TiFlashTestException(fmt::format("Value mismatch! actual: {}, expect: {}", actual, expect));
         }
@@ -177,8 +180,8 @@ protected:
         std::vector<UInt8> reader_results(reader_cnt, -1);
 
         auto read_func = [&](int i) {
-            auto res = queue.pop();
-            reader_results[i] = res.has_value();
+            T res;
+            reader_results[i] = queue.pop(res);
         };
 
         for (int i = 0; i < reader_cnt; ++i)
@@ -197,8 +200,8 @@ protected:
 
         for (int i = 0; i < 10; ++i)
         {
-            auto res = queue.pop();
-            ASSERT_TRUE(!res.has_value());
+            T res;
+            ASSERT_TRUE(!queue.pop(res));
         }
 
         for (int i = 0; i < 10; ++i)
@@ -216,8 +219,8 @@ protected:
         std::vector<UInt8> reader_results(reader_cnt, -1);
 
         auto read_func = [&](int i) {
-            auto res = queue.pop();
-            reader_results[i] = res.has_value();
+            T res;
+            reader_results[i] = queue.pop(res);
         };
 
         for (int i = 0; i < reader_cnt; ++i)
@@ -234,8 +237,8 @@ protected:
 
         for (int i = 0; i < 10; ++i)
         {
-            auto res = queue.pop();
-            ASSERT_TRUE(!res.has_value());
+            T res;
+            ASSERT_TRUE(!queue.pop(res));
         }
 
         for (int i = 0; i < 10; ++i)
@@ -253,8 +256,8 @@ protected:
         std::vector<int> reader_results(reader_cnt, 0);
 
         auto read_func = [&](int i) {
-            auto res = queue.pop();
-            reader_results[i] += res.has_value();
+            T res;
+            reader_results[i] += queue.pop(res);
         };
 
         for (int i = 0; i < reader_cnt; ++i)
@@ -328,9 +331,9 @@ protected:
         auto read_func = [&] {
             while (true)
             {
-                auto res = queue.pop();
-                if (res.has_value())
-                    reader_results.push_back(ValueHelper<T>::extract(res.value()));
+                T res;
+                if (queue.pop(res))
+                    reader_results.push_back(ValueHelper<T>::extract(res));
                 else
                     break;
             }
@@ -376,9 +379,9 @@ protected:
         auto read_func = [&](int i) {
             while (true)
             {
-                auto res = queue.pop();
-                if (res.has_value())
-                    reader_results[i].push_back(ValueHelper<T>::extract(res.value()));
+                T res;
+                if (queue.pop(res))
+                    reader_results[i].push_back(ValueHelper<T>::extract(res));
                 else
                     break;
             }
@@ -556,7 +559,8 @@ try
     throw_when_move.store(true);
     try
     {
-        queue.pop();
+        ThrowInjectable res;
+        queue.pop(res);
         ASSERT_TRUE(false); // should throw
     }
     catch (const TiFlashTestException &)
@@ -565,9 +569,10 @@ try
     ASSERT_EQ(queue.size(), 1);
 
     throw_when_move.store(false);
-    auto res = queue.pop();
-    ASSERT_TRUE(res.has_value());
-    ASSERT_EQ(res.value().throw_when_move, &throw_when_move);
+    ThrowInjectable res;
+    bool ok = queue.pop(res);
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(res.throw_when_move, &throw_when_move);
     ASSERT_EQ(queue.size(), 0);
 
     try
