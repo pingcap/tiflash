@@ -32,9 +32,13 @@ std::string DataTypeAggregateFunction::getName() const
     if (!parameters.empty())
     {
         fmt_buf.append("(");
-        fmt_buf.joinStr(parameters.cbegin(), parameters.cend(), ", ", [](const auto & arg, FmtBuffer & fb) {
-            fb.append(applyVisitor(DB::FieldVisitorToString(), arg));
-        });
+        fmt_buf.joinStr(
+            parameters.cbegin(),
+            parameters.cend(),
+            [](const auto & arg, FmtBuffer & fb) {
+                fb.append(applyVisitor(DB::FieldVisitorToString(), arg));
+            },
+            ", ");
         fmt_buf.append(")");
     }
 

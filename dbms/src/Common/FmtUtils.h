@@ -34,27 +34,36 @@ public:
     template <typename Iter>
     FmtBuffer & joinStr(
         Iter first,
-        Iter end,
-        StringRef delimiter = ", ")
+        Iter end)
     {
         if (first == end)
             return *this;
-        append(*first);
-        ++first;
-        for (; first != end; ++first)
-        {
-            append(delimiter);
-            append(*first);
-        }
-        return *this;
+        auto func = [](const auto & s, FmtBuffer & fb) {
+            fb.append(s);
+        };
+        return joinStr(first, end, func, ", ");
+    }
+
+    template <typename Iter>
+    FmtBuffer & joinStr(
+        Iter first,
+        Iter end,
+        StringRef delimiter)
+    {
+        if (first == end)
+            return *this;
+        auto func = [](const auto & s, FmtBuffer & fb) {
+            fb.append(s);
+        };
+        return joinStr(first, end, func, delimiter);
     }
 
     template <typename Iter, typename FF>
     FmtBuffer & joinStr(
         Iter first,
         Iter end,
-        StringRef delimiter = ", ",
-        FF && toStringFunc = [](const auto & s, FmtBuffer & fb) { fb.append(s); })
+        FF && toStringFunc, // void (const auto &, FmtBuffer &)
+        StringRef delimiter)
     {
         if (first == end)
             return *this;
@@ -67,7 +76,6 @@ public:
         }
         return *this;
     }
-
 
     void resize(size_t count) { buffer.resize(count); }
     void reserve(size_t capacity) { buffer.reserve(capacity); }

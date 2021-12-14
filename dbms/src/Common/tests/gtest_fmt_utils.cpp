@@ -17,18 +17,22 @@ TEST(FmtUtilsTest, TestJoinStr)
 {
     FmtBuffer buffer;
     std::vector<std::string> v{"a", "b", "c"};
-    buffer.joinStr(v.cbegin(), v.cend(), ", ", [](const auto & s, FmtBuffer & fb) { fb.append(s); });
+    buffer.joinStr(v.cbegin(), v.cend(), ", ");
     ASSERT_EQ(buffer.toString(), "a, b, c");
 
     buffer.clear();
     v.clear();
-    buffer.joinStr(v.cbegin(), v.cend(), ", ", [](const auto & s, FmtBuffer & fb) { fb.append(s); });
+    buffer.joinStr(v.cbegin(), v.cend());
     ASSERT_EQ(buffer.toString(), "");
 
     buffer.clear();
     v.push_back("a");
-    buffer.joinStr(v.cbegin(), v.cend(), ", ", [](const auto & s, FmtBuffer & fb) { fb.append(s); })
-        .joinStr(v.cbegin(), v.cend(), ", ", [](const auto & s, FmtBuffer & fb) { fb.append(s); fb.append("t"); });
+    buffer.joinStr(v.cbegin(), v.cend())
+        .joinStr(
+            v.cbegin(),
+            v.cend(),
+            [](const auto & s, FmtBuffer & fb) { fb.append(s); fb.append("t"); },
+            ", ");
     ASSERT_EQ(buffer.toString(), "aat");
 
     buffer.clear();
