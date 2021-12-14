@@ -14,7 +14,7 @@ namespace DB
 class ExchangePacketReader
 {
 public:
-    virtual ~ExchangePacketReader() {}
+    virtual ~ExchangePacketReader() = default;
     virtual void initialize() const = 0;
     virtual bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const = 0;
     virtual ::grpc::Status finish() const = 0;
@@ -57,7 +57,13 @@ public:
 
     /// put the implementation of dtor in .cpp so we don't need to put the specialization of
     /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
-    ~LocalExchangePacketReader() override {}
+    ~LocalExchangePacketReader() override
+    {
+        if (tunnel)
+        { // In case that ExchangeReceiver throw error before finish reading from mpptunnel
+            tunnel->finishWithLock();
+        }
+    }
 
     void initialize() const override {}
     bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override;
