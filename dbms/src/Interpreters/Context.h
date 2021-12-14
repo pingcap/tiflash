@@ -1,12 +1,12 @@
 #pragma once
 
+#include <Common/MultiVersion.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
-#include <common/MultiVersion.h>
 
 #ifdef __clang__
 #pragma clang diagnostic push
