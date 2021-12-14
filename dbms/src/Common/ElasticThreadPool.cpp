@@ -33,13 +33,13 @@ std::function<void()> ElasticThreadPool::newJob(std::shared_ptr<std::promise<voi
     };
 }
 
-ElasticThreadPool::ElasticThreadPool(size_t m_size, Job pre_worker_)
+ElasticThreadPool::ElasticThreadPool(size_t m_size, Job pre_worker_, const DB::LogWithPrefixPtr & log_)
     : init_cap(m_size)
     , available_cnt(m_size)
     , pre_worker(pre_worker_)
     , threads(std::make_shared<std::vector<std::shared_ptr<Thd>>>())
     , bk_thd(std::thread([this] { backgroundJob(); }))
-    , log(getLogWithPrefix(nullptr, "ElasticThreadPool"))
+    , log(getLogWithPrefix(log_, "ElasticThreadPool"))
 {
     threads->reserve(m_size);
     for (size_t i = 0; i < m_size; ++i)
