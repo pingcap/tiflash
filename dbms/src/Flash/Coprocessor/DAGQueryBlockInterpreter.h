@@ -53,7 +53,7 @@ private:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
     void executeExchangeReceiver(DAGPipeline & pipeline);
-    void executeSourceProject(DAGPipeline & pipeline, const tipb::Projection & projection);
+    void executeSourceProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void executeExtraCastAndSelection(
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & extra_cast,
