@@ -187,20 +187,36 @@ private:
         Pred pred,
         const TimePoint * deadline)
     {
-        node.attachTo(head);
         if (deadline)
-            node.cv.wait_until(lock, *deadline, pred);
+        {
+            while (!pred())
+            {
+                node.attachTo(head);
+                auto res = node.cv.wait_until(lock, *deadline);
+                node.detach();
+                if (res == std::cv_status::timeout)
+                    break;
+            }
+        }
         else
-            node.cv.wait(lock, pred);
-        /// detach is adaptive for both conditions.
-        node.detach();
+        {
+            while (!pred())
+            {
+                node.attachTo(head);
+                node.cv.wait(lock);
+                node.detach();
+            }
+        }
     }
 
     ALWAYS_INLINE void notifyNext(WaitingNode & head)
     {
         auto * next = head.next;
         if (next != &head)
+        {
             next->cv.notify_one();
+            next->detach(); // avoid being notified more than once
+        }
     }
 
     bool popObj(T & res, const TimePoint * deadline = nullptr)
@@ -213,14 +229,9 @@ private:
             };
 
             std::unique_lock lock(mu);
-            if (isCancelled())
-                return false;
 
-            if (read_pos >= write_pos)
-                wait(lock, reader_head, node, pred, deadline);
+            wait(lock, reader_head, node, pred, deadline);
 
-            /// double check status after potential wait
-            /// check read_pos because timeouted will also reach here.
             if (!isCancelled() && read_pos < write_pos)
             {
                 auto & obj = getObj(read_pos);
@@ -252,11 +263,8 @@ private:
         };
 
         std::unique_lock lock(mu);
-        if (!isNormal())
-            return false;
 
-        if (write_pos - read_pos >= capacity)
-            wait(lock, writer_head, node, pred, deadline);
+        wait(lock, writer_head, node, pred, deadline);
 
         /// double check status after potential wait
         /// check write_pos because timeouted will also reach here.
