@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Common/LogWithPrefix.h>
-
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -12,8 +10,6 @@
 #include <queue>
 #include <thread>
 #include <vector>
-
-//using namespace DB;
 
 class ElasticThreadPool
 {
@@ -38,8 +34,7 @@ public:
     /// Every threads will execute pre_worker firstly when they are created.
     explicit ElasticThreadPool(
         size_t m_size,
-        Job pre_worker_ = [] {},
-        const DB::LogWithPrefixPtr & log_ = nullptr);
+        Job pre_worker_ = [] {});
 
     /// Add new job.
     std::future<void> schedule(Job job);
@@ -63,7 +58,6 @@ protected:
     std::shared_ptr<std::vector<std::shared_ptr<Thd>>> threads;
     std::thread bk_thd;
     std::chrono::seconds recycle_period = std::chrono::seconds(10);
-    const DB::LogWithPrefixPtr log;
 
     void worker(Thd * thdctx);
 
