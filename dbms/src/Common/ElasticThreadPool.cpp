@@ -99,16 +99,19 @@ void ElasticThreadPool::backgroundJob()
         size_t idle_buffer_cnt = 50;
         size_t cur_min_available_cnt = history_min_available_cnt;
         history_min_available_cnt = std::numeric_limits<size_t>::max();
-        //        std::cerr << "[ElasticThreadPool] loop_start, history_min_available_cnt: " << cur_min_available_cnt << " available_cnt: " << available_cnt << " thread_list_size: " << threads->size() << std::endl;
+        std::cerr << "[ElasticThreadPool] loop_start, history_min_available_cnt: " << cur_min_available_cnt << " available_cnt: " << available_cnt << " alive_cnt: " << alive_cnt << " thread_list_size: " << threads->size() << std::endl;
         if (cur_min_available_cnt > idle_buffer_cnt)
         {
-            int cnt_to_clean = cur_min_available_cnt == std::numeric_limits<size_t>::max() ? alive_cnt - init_cap : static_cast<int>(cur_min_available_cnt) - idle_buffer_cnt;
+            size_t old_threads_size = threads->size();
+            int max_cnt_to_clean = alive_cnt - init_cap;
+            int cnt_to_clean = std::min(max_cnt_to_clean, cur_min_available_cnt == std::numeric_limits<size_t>::max() ? max_cnt_to_clean : static_cast<int>(cur_min_available_cnt) - idle_buffer_cnt);
             if (cnt_to_clean <= 0)
             {
-                continue;
+                if (old_threads_size == alive_cnt)
+                    continue;
+                cnt_to_clean = 0;
             }
             auto old_threads = threads;
-            int old_threads_size = threads->size();
             lock.unlock();
             auto new_threads = std::make_shared<std::vector<std::shared_ptr<Thd>>>();
             int cnt_cleaned = 0;
@@ -138,7 +141,7 @@ void ElasticThreadPool::backgroundJob()
                 }
                 threads = new_threads; //update threads
             }
-            //            std::cerr << "[ElasticThreadPool] loop_end, cnt_to_clean: " << cnt_to_clean << " cnt_cleaned: " << cnt_cleaned << " new_thds: " << new_thds << std::endl;
+            std::cerr << "[ElasticThreadPool] loop_end, cnt_to_clean: " << cnt_to_clean << " cnt_cleaned: " << cnt_cleaned << " new_thds: " << new_thds << std::endl;
         }
     }
 }
