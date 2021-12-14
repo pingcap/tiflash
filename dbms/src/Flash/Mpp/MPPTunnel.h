@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <Common/LogWithPrefix.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -98,7 +98,7 @@ private:
     std::unique_ptr<std::thread> send_thread;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
+    MPMCQueue<MPPDataPacketPtr> send_queue;
 
     const LogWithPrefixPtr log;
 };

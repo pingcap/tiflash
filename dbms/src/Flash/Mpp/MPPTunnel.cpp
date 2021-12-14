@@ -13,6 +13,11 @@ namespace FailPoints
 extern const char exception_during_mpp_close_tunnel[];
 } // namespace FailPoints
 
+// 1. The lifecycle of a MPPTunnel is: start - connect - finish.
+// 2. Each MPPTunnel has an associating consumer, they communicate with each other by a queue.
+// 3. When consumer is alive, MPPTunnel guarantee to send all data (include errors) to consumer.
+// 4. MPPTunnel will close the queue to notify the consumer that no more data.
+
 template <typename Writer>
 MPPTunnelBase<Writer>::MPPTunnelBase(
     const mpp::TaskMeta & receiver_meta_,
@@ -39,6 +44,10 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
 template <typename Writer>
 MPPTunnelBase<Writer>::~MPPTunnelBase()
 {
+    // - if the consumer is running, notify it.
+    // - if the consumer isn't running, then this tunnel must have not started
+    //   (or when the consumer finished, it would finish the tunnel), just waiting
+    //   for consumer starting and then finishing.
     try
     {
         if (!finished)
@@ -59,6 +68,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
 template <typename Writer>
 void MPPTunnelBase<Writer>::close(const String & reason)
 {
+    // - if the sender is 
     std::unique_lock<std::mutex> lk(mu);
     if (finished)
         return;
