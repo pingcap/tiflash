@@ -917,7 +917,7 @@ void DAGQueryBlockInterpreter::executeExchangeReceiver(DAGPipeline & pipeline)
     if (unlikely(it == exchange_receiver_map.end()))
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
-    for (size_t i = 0; i < max_streams; i++)
+    for (size_t i = 0; i < max_streams; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, taskLogger());
         dagContext().getRemoteInputStreams().push_back(stream);
