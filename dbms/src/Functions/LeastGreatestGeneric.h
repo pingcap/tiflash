@@ -199,7 +199,6 @@ public:
                                 + toString(arguments.size()) + ", should be at least 2.",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
-        std::cout << "start generic execution..." << std::endl;
 
         DataTypes data_types(num_arguments);
         for (size_t i = 0; i < num_arguments; ++i)
@@ -221,8 +220,8 @@ public:
                 int cmp_result;
                 if (checkType<DataTypeString>(result_type)) // todo consider nullable ....
                 {
+                    std::cout << "tttt.." << std::endl;
                     cmp_result = converted_columns[arg]->compareAtWithCollation(row_num, row_num, *converted_columns[best_arg], 1, *collator.get());
-                    std::cout << __LINE__ << std::endl;
                 }
                 else
                 {
@@ -285,7 +284,7 @@ public:
 
         for (const auto & argument : arguments)
         {
-            if (argument->isString()) // consider nullable....
+            if (argument->isString())
                 return std::make_shared<DataTypeString>();
         }
 
@@ -302,9 +301,8 @@ public:
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
-        if (checkType<DataTypeString>(result_type))
+        if (checkType<DataTypeString>(removeNullable(result_type)))
         {
-            // function->setCollator(collator);
             auto function = FunctionTiDBLeastGreatestGeneric<kind>::create(context);
             function->setCollator(collator);
             return std::make_unique<DefaultFunctionBase>(function, data_types, result_type);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Columns/ColumnString.h>
 #include <Columns/IColumn.h>
 #include <Common/Exception.h>
 #include <Core/Field.h>
@@ -181,6 +182,11 @@ public:
         return data->compareAt(0, 0, *static_cast<const ColumnConst &>(rhs).data, nan_direction_hint);
     }
 
+    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const ICollator & collator) const override
+    {
+        return data->compareAtWithCollation(n, m, rhs_, null_direction_hint, collator);
+    }
+
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
 
     void gather(ColumnGathererStream &) override
@@ -204,6 +210,7 @@ public:
     bool isFixedAndContiguous() const override { return data->isFixedAndContiguous(); }
     bool valuesHaveFixedSize() const override { return data->valuesHaveFixedSize(); }
     size_t sizeOfValueIfFixed() const override { return data->sizeOfValueIfFixed(); }
+
     StringRef getRawData() const override { return data->getRawData(); }
 
     /// Not part of the common interface.
