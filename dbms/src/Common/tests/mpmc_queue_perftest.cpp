@@ -66,7 +66,8 @@ struct Helper<MPMCQueue<T>>
 {
     static void popOneFrom(MPMCQueue<T> & queue)
     {
-        queue.pop();
+        T t;
+        queue.pop(t);
     }
 
     template <typename U>
