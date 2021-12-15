@@ -37,10 +37,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
 template <typename Writer>
 MPPTunnelBase<Writer>::~MPPTunnelBase()
 {
-    // - if the consumer is running, notify it.
-    // - if the consumer isn't running, then this tunnel must have not started
-    //   (or when the consumer finished, it would finish the tunnel), just waiting
-    //   for consumer starting and then finishing.
     try
     {
         {
@@ -261,7 +257,6 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
     consumer_state.setState(err_msg);
     send_queue.finish();
     finished = true;
-    cv_for_finished.notify_all();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

@@ -99,7 +99,6 @@ private:
 
     std::mutex mu;
     std::condition_variable cv_for_connected;
-    std::condition_variable cv_for_finished;
 
     bool connected; // if the exchange in has connected this tunnel.
 
