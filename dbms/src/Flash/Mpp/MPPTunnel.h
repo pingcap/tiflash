@@ -11,12 +11,40 @@
 #include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
+#include <future>
 #include <memory>
 #include <mutex>
-#include <thread>
 
 namespace DB
 {
+/**
+ * MPPTunnelBase represents the sender of an exchange connection.
+ *
+ * (Deprecated) It is designed to be a template class so that we can mock a MPPTunnel without involving gRPC.
+ *
+ * The lifecycle of a MPPTunnel can be indicated by `connected` and `finished`:
+ * | Stage                          | `connected` | `finished` |
+ * |--------------------------------|-------------|------------|
+ * | After constructed              | false       | true       |
+ * | After `close` before `connect` | false       | true       |
+ * | After `connect`                | true        | false      |
+ * | After `consumerFinish`         | true        | true       |
+ *
+ * To be short: before `connect`, only `close` can finish a MPPTunnel; after `connect`, only `consumerFinish` can.
+ *
+ * Each MPPTunnel has a consumer to consume data. There're two kinds of consumers: local and remote.
+ * - Remote consumer is owned by MPPTunnel itself. MPPTunnel will create a thread and run `sendLoop`.
+ * - Local consumer is owned by the associated ExchangeReceiver (in the same process).
+ * 
+ * The protocol between MPPTunnel and consumer:
+ * - All data will be pushed into the `send_queue`, including errors.
+ * - MPPTunnel may close `send_queue` to notify consumer normally finish.
+ * - Consumer may close `send_queue` to notify MPPTunnel that an error occurs.
+ * - After `connect` only the consumer can set `finished` to `true`.
+ * - Consumer's state is saved in `consumer_state` and be available after consumer finished.
+ *
+ * NOTE: to avoid deadlock, `waitForConsumerFinish` should be called outside of the protection of `mu`.
+ */
 template <typename Writer>
 class MPPTunnelBase : private boost::noncopyable
 {
@@ -60,17 +88,14 @@ public:
 
     const LogWithPrefixPtr & getLogger() const { return log; }
 
-    // must under mu's protection
-    void finishWithLock();
-
+    void consumerFinish(const String & err_msg);
 private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
     /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
 
-    /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
-    void clearSendQueue();
+    void waitForConsumerFinish(bool allow_throw);
 
     std::mutex mu;
     std::condition_variable cv_for_connected;
@@ -91,14 +116,37 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    String send_loop_msg;
-
     int input_streams_num;
 
     std::unique_ptr<std::thread> send_thread;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
+
+    /// Consumer can be sendLoop or local receiver.
+    class ConsumerState
+    {
+    public:
+        ConsumerState()
+        {
+            future = std::move(promise.get_future());
+        }
+
+        String getState()
+        {
+            future.wait();
+            return future.get();
+        }
+
+        void setState(const String & state)
+        {
+            promise.set_value(state);
+        }
+    private:
+        std::future<String> future;
+        std::promise<String> promise;
+    };
+    ConsumerState consumer_state; // do not need to be guarded by mu
 
     const LogWithPrefixPtr log;
 };
