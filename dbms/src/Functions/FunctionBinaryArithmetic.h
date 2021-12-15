@@ -739,10 +739,7 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return default_impl_for_nulls; }
 
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
-    {
-        collator = collator_;
-    }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
 private:
     const Context & context;

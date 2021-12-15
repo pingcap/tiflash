@@ -5,27 +5,17 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
-#include <Common/PODArray.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnWithTypeAndName.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeEnum.h>
-#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
-#include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsComparison.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
 #include <common/types.h>
-
-#include <iostream>
-#include <memory>
 
 namespace DB
 {
@@ -94,11 +84,9 @@ public:
             {
                 data_types[i] = block.getByPosition(arguments[i]).type;
                 if (data_types[i]->isString())
-                {
                     flag = true;
-                }
             }
-            if (flag)
+            if (flag) // Need to cast all other column's type into string
             {
                 DataTypePtr result_type = getReturnTypeImpl(data_types);
                 for (size_t arg = 0; arg < num_arguments; ++arg)
@@ -112,27 +100,17 @@ public:
         }
     }
 
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
-    {
-        collator = collator_;
-    }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
 private:
     const Context & context;
     TiDB::TiDBCollatorPtr collator;
-
-    template <typename T0>
-    bool checkType(const DataTypePtr & arg) const
-    {
-        return static_cast<bool>(typeid_cast<const T0 *>(arg.get()));
-    }
 
     void executeNary(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         ColumnWithTypeAndName pre_col = block.getByPosition(arguments[0]);
         for (size_t i = 1; i < arguments.size(); ++i)
         {
-            // first get the return type
             DataTypePtr res_type;
             Block temp_block{
                 pre_col,
@@ -145,7 +123,7 @@ private:
             auto function = SpecializedFunction::create(context);
             function->setCollator(collator);
             function->executeImpl(temp_block, {0, 1}, 2);
-            pre_col = std::move(temp_block.getByPosition(2));
+            pre_col = std::move(temp_block.getByPosition(2)); // This code could have performance issue.
         }
         block.getByPosition(result).column = std::move(pre_col.column);
     }
@@ -168,11 +146,6 @@ public:
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
-    {
-        collator = collator_;
-    }
-
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
@@ -181,10 +154,8 @@ public:
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto & argument : arguments)
-        {
             if (argument->isString())
                 return std::make_shared<DataTypeString>();
-        }
 
         return FunctionTiDBLeastGreatest<kind, SpecializedFunction>::create(context)->getReturnTypeImpl(arguments);
     }
@@ -214,7 +185,6 @@ public:
                 converted_columns[arg] = std::move(temp);
         }
 
-
         auto result_column = result_type->createColumn();
         result_column->reserve(block.rows());
 
@@ -224,14 +194,10 @@ public:
             for (size_t arg = 1; arg < num_arguments; ++arg)
             {
                 int cmp_result;
-                if (checkType<DataTypeString>(result_type)) // todo consider nullable ....
-                {
+                if (typeid_cast<const DataTypeString *>(result_type.get()))
                     cmp_result = converted_columns[arg]->compareAtWithCollation(row_num, row_num, *converted_columns[best_arg], 1, *collator.get());
-                }
                 else
-                {
                     cmp_result = converted_columns[arg]->compareAt(row_num, row_num, *converted_columns[best_arg], 1);
-                }
 
                 if constexpr (kind == LeastGreatest::Least)
                 {
@@ -250,17 +216,12 @@ public:
         block.getByPosition(result).column = std::move(result_column);
     }
 
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
+
 private:
     const Context & context;
     TiDB::TiDBCollatorPtr collator;
-
-    template <typename T0>
-    bool checkType(const DataTypePtr & arg) const
-    {
-        return static_cast<bool>(typeid_cast<const T0 *>(arg.get()));
-    }
 };
-
 
 template <LeastGreatest kind, typename SpecializedFunction>
 class FunctionBuilderTiDBLeastGreatest : public IFunctionBuilder
@@ -306,7 +267,8 @@ public:
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
-        if (checkType<DataTypeString>(removeNullable(result_type)) || kind == LeastGreatest::Greatest) //YWQ: A hack, make Greatest use non-vectorised implementation.
+        if (typeid_cast<const DataTypeString *>(removeNullable(result_type).get())
+            || kind == LeastGreatest::Greatest) //YWQ: A hack, make Greatest use non-vectorised implementation.
         {
             auto function = FunctionTiDBLeastGreatestGeneric<kind, SpecializedFunction>::create(context);
             function->setCollator(collator);
@@ -322,11 +284,6 @@ public:
 
 private:
     const Context & context;
-    template <typename T0>
-    bool checkType(const DataTypePtr & arg) const
-    {
-        return static_cast<bool>(typeid_cast<const T0 *>(arg.get()));
-    }
 };
 
 
