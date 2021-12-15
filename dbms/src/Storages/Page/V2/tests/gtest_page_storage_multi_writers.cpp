@@ -374,9 +374,9 @@ try
     }
 
     auto old_storage = storage;
-    auto old_snapshot = old_storage->getSnapshot();
+    auto old_snapshot = old_storage->getConcreteSnapshot();
     storage = reopenWithConfig(curr_config);
-    auto snapshot = storage->getSnapshot();
+    auto snapshot = storage->getConcreteSnapshot();
 
     auto old_valid_pages = old_snapshot->version()->validPageIds();
     auto valid_pages = snapshot->version()->validPageIds();
