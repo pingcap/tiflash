@@ -9,8 +9,6 @@
 #include <common/types.h>
 
 #include <cstddef>
-#include <iostream>
-#include <string>
 #include <vector>
 
 namespace DB::tests
