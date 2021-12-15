@@ -63,3 +63,5 @@ You can download the `clang-format` from [muttleyxd/clang-tools-static-binaries]
 ## Development
 
 To start developing TiFlash, see [TiFlash Development Guide](/docs/DEVELOPMENT.md) and [TiFlash Design documents](/docs/design).
+
+- [Architecture Of Distributed Storage And Transaction](/docs/design/0000-00-00-architecture-of-distributed-storage-and-transaction.md)
