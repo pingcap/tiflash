@@ -132,7 +132,6 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
                 return;
 
             fmt_buf.fmtAppend("{} ranges: {}, ", region->toString(dump_status), RecordKVFormat::DecodedTiKVKeyRangeToDebugString(rawkeys));
-            ;
         }
         fmt_buf.fmtAppend("state: {}", raft_serverpb::PeerState_Name(region->peerState()));
         if (auto s = region->dataInfo(); s.size() > 2)
