@@ -33,7 +33,7 @@ TableScanStatistics::TableScanStatistics(const tipb::Executor * executor, Contex
 
 bool TableScanStatistics::hit(const String & executor_id)
 {
-    return startsWith(executor_id, "TableFullScan_");
+    return startsWith(executor_id, "TableFullScan_") || startsWith(executor_id, "TableRangeScan_");
 }
 
 void TableScanStatistics::collectRuntimeDetail()

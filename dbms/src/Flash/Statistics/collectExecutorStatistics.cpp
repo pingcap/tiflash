@@ -69,9 +69,9 @@ std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(Context & context
                 TableScanStatistics,
                 TopNStatistics>(executor_id, executor))
         {
-            throw TiFlashException(
-                fmt::format("Unknown executor type, executor_id: {}", executor_id),
-                Errors::Coprocessor::Internal);
+//            throw TiFlashException(
+//                fmt::format("Unknown executor type, executor_id: {}", executor_id),
+//                Errors::Coprocessor::Internal);
         }
     }
     return collector.res;
