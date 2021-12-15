@@ -11,6 +11,8 @@
 #include <thread>
 #include <vector>
 
+#include "Poco/Logger.h"
+
 class ElasticThreadPool
 {
 public:
@@ -34,6 +36,8 @@ public:
     /// Every threads will execute pre_worker firstly when they are created.
     explicit ElasticThreadPool(
         size_t m_size,
+        std::chrono::milliseconds recycle_period_ = std::chrono::milliseconds(10000),
+        size_t idle_buffer_size_ = 50,
         Job pre_worker_ = [] {});
 
     /// Add new job.
@@ -41,7 +45,13 @@ public:
 
     ~ElasticThreadPool();
 
-    void backgroundJob();
+    bool shrink(std::chrono::milliseconds wait_interval);
+
+    size_t getAvailableCnt() const;
+
+    size_t getAliveCnt() const;
+
+    size_t getIdleBufferSize() const;
 
 protected:
     mutable std::mutex mutex;
@@ -51,13 +61,16 @@ protected:
 
     const size_t init_cap;
     size_t available_cnt, alive_cnt;
+    std::chrono::milliseconds recycle_period;
+    size_t idle_buffer_size;
     Job pre_worker;
     std::atomic<bool> shutdown = false;
 
     std::queue<Job> jobs;
     std::shared_ptr<std::vector<std::shared_ptr<Thd>>> threads;
     std::thread bk_thd;
-    std::chrono::seconds recycle_period = std::chrono::seconds(10);
+
+    void backgroundJob();
 
     void worker(Thd * thdctx);
 
