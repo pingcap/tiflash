@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Common/FmtUtils.h>
-#include <Common/joinStr.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <common/types.h>
 #include <fmt/format.h>
@@ -88,15 +87,13 @@ String arrayToJson(const Array & array)
 {
     FmtBuffer buffer;
     buffer.append("[");
-    joinStr(
+    buffer.template joinStr(
         array.cbegin(),
         array.cend(),
-        buffer,
         [](const auto & t, FmtBuffer & fb) {
             fb.append(t.toJson());
         },
         ",");
-    buffer.append("]");
     return buffer.toString();
 }
 
