@@ -126,8 +126,8 @@ private:
     {
     public:
         ConsumerState()
+            : future(promise.get_future())
         {
-            future = std::move(promise.get_future());
         }
 
         String getState()
@@ -142,8 +142,8 @@ private:
         }
 
     private:
-        std::future<String> future;
         std::promise<String> promise;
+        std::shared_future<String> future;
     };
     ConsumerState consumer_state; // do not need to be guarded by mu
 
