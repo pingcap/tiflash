@@ -56,15 +56,21 @@ void JoinStatistics::collectRuntimeDetail()
         auto join_build_side_it = profile_streams_map_for_join_build_side.find(join_alias);
         if (join_build_side_it != profile_streams_map_for_join_build_side.end())
         {
+            bool hash_table_bytes_load = false;
             visitBlockInputStreamsRecursive(
                 dag_context.getProfileStreamsMapForJoinBuildSide()[join_alias],
                 [&](const BlockInputStreamPtr & stream_ptr) {
                     return castBlockInputStream<HashJoinBuildBlockInputStream>(stream_ptr, [&](const HashJoinBuildBlockInputStream & stream) {
-                        hash_table_bytes += stream.getJoinPtr()->getTotalByteCount();
+                        if (!hash_table_bytes_load)
+                        {
+                            hash_table_bytes_load = true;
+                            hash_table_bytes += stream.getJoinPtr()->getTotalByteCount();
+                        }
                         const auto & profile_info = stream.getProfileInfo();
                         process_time_ns_for_build = std::max(process_time_ns_for_build, profile_info.execution_time);
                     });
                 });
+            assert(hash_table_bytes_load);
         }
     }
 }
