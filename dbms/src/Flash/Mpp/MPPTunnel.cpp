@@ -156,6 +156,8 @@ void MPPTunnelBase<Writer>::sendLoop()
                     LOG_ERROR(log, msg);
                     throw Exception(tunnel_id + msg);
                 }
+                connection_profile_info.bytes += res->ByteSizeLong();
+                connection_profile_info.packets += 1;
             }
         }
     }

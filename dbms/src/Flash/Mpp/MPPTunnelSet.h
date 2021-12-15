@@ -35,6 +35,8 @@ public:
 
     void addTunnel(const TunnelPtr & tunnel) { tunnels.push_back(tunnel); }
 
+    const std::vector<TunnelPtr> & getTunnels() { return tunnels; }
+
 private:
     std::vector<TunnelPtr> tunnels;
 };

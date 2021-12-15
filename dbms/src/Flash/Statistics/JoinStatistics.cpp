@@ -1,4 +1,3 @@
-#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -36,11 +35,11 @@ void JoinStatistics::collectRuntimeDetail()
         profile_streams_info.input_streams,
         [&](const BlockInputStreamPtr & stream_ptr) {
             throwFailCastException(
-                castBlockInputStream<ExpressionBlockInputStream>(stream_ptr, [&](const ExpressionBlockInputStream & stream) {
+                castBlockInputStream<IProfilingBlockInputStream>(stream_ptr, [&](const IProfilingBlockInputStream & stream) {
                     collectBaseInfo(this, stream.getProfileInfo());
                 }),
                 stream_ptr->getName(),
-                "ExpressionBlockInputStream");
+                "IProfilingBlockInputStream");
         },
         [&](const BlockInputStreamPtr & child_stream_ptr) {
             throwFailCastException(

@@ -83,6 +83,23 @@ inline void visitBlockInputStreamsRecursiveWithVisitedSet(std::unordered_set<IBl
     });
 }
 
+template <typename Array>
+String arrayToJson(const Array & array)
+{
+    FmtBuffer buffer;
+    buffer.append("[");
+    joinStr(
+        array.cbegin(),
+        array.cend(),
+        buffer,
+        [](const auto & t, FmtBuffer & fb) {
+            fb.append(t.toJson());
+        },
+        ",");
+    buffer.append("]");
+    return buffer.toString();
+}
+
 template <typename FF>
 inline void visitBlockInputStreamsRecursive(const BlockInputStreams & input_streams, FF && ff)
 {
