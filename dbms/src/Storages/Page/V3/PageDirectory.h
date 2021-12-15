@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/LogWithPrefix.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -112,6 +113,8 @@ private:
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
     WALStore wal;
+
+    LogWithPrefixPtr log;
 };
 
 } // namespace DB::PS::V3

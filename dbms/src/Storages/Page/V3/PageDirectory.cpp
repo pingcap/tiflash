@@ -2,6 +2,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
+#include <common/logger_fmt_useful.h>
 
 #include <memory>
 #include <mutex>
@@ -106,7 +107,8 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             auto iter = mvcc_table_directory.find(r.ori_page_id);
             if (iter == mvcc_table_directory.end())
             {
-                throw Exception("");
+                // Just log a warning cause we have already persist edit to WAL, we can NOT rollback WAL
+                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={} is ignored", r.page_id, r.ori_page_id, last_sequence + 1);
             }
             if (auto entry = iter->second->getEntry(last_sequence); entry)
             {
@@ -114,7 +116,8 @@ void PageDirectory::apply(PageEntriesEdit && edit)
             }
             else
             {
-                throw Exception("");
+                // Just log a warning cause we have already persist edit to WAL, we can NOT rollback WAL
+                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={} is ignored", r.page_id, r.ori_page_id, last_sequence + 1);
             }
         }
 
