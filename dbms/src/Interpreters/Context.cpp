@@ -15,7 +15,6 @@
 #include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
-#include <Interpreters/Cluster.h>
 #include <Interpreters/Compiler.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/EmbeddedDictionaries.h>
@@ -170,12 +169,6 @@ struct ContextShared
     std::chrono::steady_clock::duration close_interval = std::chrono::seconds(1);
     std::chrono::steady_clock::time_point close_cycle_time = std::chrono::steady_clock::now();
     UInt64 close_cycle = 0;
-
-    /// Clusters for distributed tables
-    /// Initialized on demand (on distributed storages initialization) since Settings should be initialized
-    std::unique_ptr<Clusters> clusters;
-    ConfigurationPtr clusters_config; /// Soteres updated configs
-    mutable std::mutex clusters_mutex; /// Guards clusters and clusters_config
 
     bool shutdown_called = false;
 
@@ -1571,69 +1564,6 @@ UInt16 Context::getTCPPort() const
 
     auto & config = getConfigRef();
     return config.getInt("tcp_port");
-}
-
-
-std::shared_ptr<Cluster> Context::getCluster(const std::string & cluster_name) const
-{
-    auto res = getClusters().getCluster(cluster_name);
-
-    if (!res)
-        throw Exception("Requested cluster '" + cluster_name + "' not found", ErrorCodes::BAD_GET);
-
-    return res;
-}
-
-
-std::shared_ptr<Cluster> Context::tryGetCluster(const std::string & cluster_name) const
-{
-    return getClusters().getCluster(cluster_name);
-}
-
-
-void Context::reloadClusterConfig()
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-    auto & config = shared->clusters_config ? *shared->clusters_config : getConfigRef();
-    shared->clusters = std::make_unique<Clusters>(config, settings);
-}
-
-
-Clusters & Context::getClusters() const
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-    if (!shared->clusters)
-    {
-        auto & config = shared->clusters_config ? *shared->clusters_config : getConfigRef();
-        shared->clusters = std::make_unique<Clusters>(config, settings);
-    }
-
-    return *shared->clusters;
-}
-
-
-/// On repeating calls updates existing clusters and adds new clusters, doesn't delete old clusters
-void Context::setClustersConfig(const ConfigurationPtr & config, const String & config_name)
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-
-    shared->clusters_config = config;
-
-    if (!shared->clusters)
-        shared->clusters = std::make_unique<Clusters>(*shared->clusters_config, settings, config_name);
-    else
-        shared->clusters->updateClusters(*shared->clusters_config, settings, config_name);
-}
-
-
-void Context::setCluster(const String & cluster_name, const std::shared_ptr<Cluster> & cluster)
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-
-    if (!shared->clusters)
-        throw Exception("Clusters are not set", ErrorCodes::LOGICAL_ERROR);
-
-    shared->clusters->setCluster(cluster_name, cluster);
 }
 
 
