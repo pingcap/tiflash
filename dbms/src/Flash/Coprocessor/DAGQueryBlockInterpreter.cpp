@@ -617,7 +617,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     /// add join input stream
     if (is_tiflash_right_join)
     {
-        // Give it an expression chain instance, but createStreamWithNonJoinedDataIfFullOrRightJoin only need to
+        // Give it an expression chain instance, but createStreamWithNonJoinedDataIfFullOrRightJoin only needs to
         // know the type of join...
         ExpressionActionsChain chain;
         dag_analyzer.appendJoin(0, chain, right_query, columns_added_by_join);

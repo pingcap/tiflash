@@ -50,7 +50,7 @@ public:
         return items[next[stream_id]];
     }
 
-    // `endPop` returns true if it the last stream
+    // `endPop` returns true if it is the last stream
     bool endPop(Lock & lock [[maybe_unused]], size_t stream_id)
     {
         size_t index = next[stream_id];
