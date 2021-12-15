@@ -149,7 +149,6 @@ bool LocalExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packe
 
 ::grpc::Status LocalExchangePacketReader::finish()
 {
-    tunnel->consumerFinish("");
     tunnel.reset();
     return ::grpc::Status::OK;
 }
