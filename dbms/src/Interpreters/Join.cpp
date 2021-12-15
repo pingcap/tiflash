@@ -165,6 +165,9 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
 template <typename Maps>
 static void initImpl(Maps & maps, Join::Type type, size_t build_concurrency)
 {
+    // +1 for zero keys
+    build_concurrency += 1;
+
     switch (type)
     {
     case Join::Type::EMPTY:
@@ -533,8 +536,18 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             }
         }
 
+        // TODO: what does ZeroTraits do?
+        auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+        auto key = keyHolderGetKey(key_holder);
+        size_t segment_index = ZeroTraits::check(key) ? map.getSegmentSize() : stream_index;
+        keyHolderDiscardKey(key_holder);
+
+        std::unique_lock lock(map.getSegmentMutex(segment_index), std::defer_lock);
+        if (segment_index == map.getSegmentSize())
+            lock.lock();
+
         Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(
-            map.getSegmentTable(stream_index),
+            map.getSegmentTable(segment_index),
             key_getter,
             stored_block,
             i,
@@ -973,6 +986,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
 void NO_INLINE joinBlockImplTypeCase(
+    size_t stream_id,
     const Map & map,
     size_t rows,
     const ColumnRawPtrs & key_columns,
@@ -1008,16 +1022,24 @@ void NO_INLINE joinBlockImplTypeCase(
         {
             auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
             auto key = keyHolderGetKey(key_holder);
-            size_t segment_index = 0;
-            size_t hash_value = 0;
+
+            // size_t segment_index = 0;
+            // size_t hash_value = 0;
+            // if (map.getSegmentSize() > 0 && !ZeroTraits::check(key))
+            // {
+            //     hash_value = map.hash(key);
+            //     segment_index = hash_value % map.getSegmentSize();
+            // }
+
+            // auto & internalMap = map.getSegmentTable(segment_index);
+            size_t segment_index = map.getSegmentSize();
             if (map.getSegmentSize() > 0 && !ZeroTraits::check(key))
-            {
-                hash_value = map.hash(key);
-                segment_index = hash_value % map.getSegmentSize();
-            }
+                segment_index = stream_id;
             auto & internalMap = map.getSegmentTable(segment_index);
+
             /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-            auto it = map.getSegmentSize() > 0 ? internalMap.find(key, hash_value) : internalMap.find(key);
+            // auto it = map.getSegmentSize() > 0 ? internalMap.find(key, hash_value) : internalMap.find(key);
+            auto it = internalMap.find(key);
 
             if (it != internalMap.end())
             {
@@ -1047,6 +1069,7 @@ void NO_INLINE joinBlockImplTypeCase(
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
 void joinBlockImplType(
+    size_t stream_id,
     const Map & map,
     size_t rows,
     const ColumnRawPtrs & key_columns,
@@ -1061,6 +1084,7 @@ void joinBlockImplType(
 {
     if (null_map)
         joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, true>(
+            stream_id,
             map,
             rows,
             key_columns,
@@ -1074,6 +1098,7 @@ void joinBlockImplType(
             collators);
     else
         joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, false>(
+            stream_id,
             map,
             rows,
             key_columns,
@@ -1241,7 +1266,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-void Join::joinBlockImpl(Block & block, const Maps & maps) const
+void Join::joinBlockImpl(size_t stream_id, Block & block, const Maps & maps) const
 {
     size_t keys_size = key_names_left.size();
     ColumnRawPtrs key_columns(keys_size);
@@ -1349,6 +1374,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
 #define M(TYPE)                                                                                                                                \
     case Join::Type::TYPE:                                                                                                                     \
         joinBlockImplType<KIND, STRICTNESS, typename KeyGetterForType<Join::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
+            stream_id,                                                                                                                         \
             *maps.TYPE,                                                                                                                        \
             rows,                                                                                                                              \
             key_columns,                                                                                                                       \
@@ -1648,7 +1674,7 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
 }
 
 
-void Join::joinBlock(Block & block) const
+void Join::joinBlock(size_t stream_id, Block & block) const
 {
     //    std::cerr << "joinBlock: " << block.dumpStructure() << "\n";
 
@@ -1664,25 +1690,25 @@ void Join::joinBlock(Block & block) const
     checkTypesOfKeys(block, sample_block_with_keys);
 
     if (kind == ASTTableJoin::Kind::Left && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(block, maps_any);
+        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(stream_id, block, maps_any);
     else if (kind == ASTTableJoin::Kind::Inner && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any>(block, maps_any);
+        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any>(stream_id, block, maps_any);
     else if (kind == ASTTableJoin::Kind::Left && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(block, maps_all);
+        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(stream_id, block, maps_all);
     else if (kind == ASTTableJoin::Kind::Inner && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(block, maps_all);
+        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(stream_id, block, maps_all);
     else if (kind == ASTTableJoin::Kind::Full && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(block, maps_any_full);
+        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(stream_id, block, maps_any_full);
     else if (kind == ASTTableJoin::Kind::Right && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any>(block, maps_any_full);
+        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any>(stream_id, block, maps_any_full);
     else if (kind == ASTTableJoin::Kind::Full && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(block, maps_all_full);
+        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(stream_id, block, maps_all_full);
     else if (kind == ASTTableJoin::Kind::Right && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(block, maps_all_full);
+        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(stream_id, block, maps_all_full);
     else if (kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any>(block, maps_any);
+        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any>(stream_id, block, maps_any);
     else if (kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::All>(block, maps_all);
+        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::All>(stream_id, block, maps_all);
     else if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::All)
         joinBlockImplCross<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>(block);
     else if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::Any)

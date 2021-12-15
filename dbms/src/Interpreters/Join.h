@@ -113,7 +113,7 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    void joinBlock(Block & block) const;
+    void joinBlock(size_t stream_id, Block & block) const;
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
@@ -321,7 +321,7 @@ private:
     void checkTypesOfKeys(const Block & block_left, const Block & block_right) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImpl(Block & block, const Maps & maps) const;
+    void joinBlockImpl(size_t stream_id, Block & block, const Maps & maps) const;
 
     /** Handle non-equal join conditions
       *

@@ -135,9 +135,10 @@ ExpressionAction ExpressionAction::arrayJoin(const NameSet & array_joined_column
     return a;
 }
 
-ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_)
+ExpressionAction ExpressionAction::ordinaryJoin(size_t stream_id, std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_)
 {
     ExpressionAction a;
+    a.stream_id = stream_id;
     a.type = JOIN;
     a.join = join_;
     a.columns_added_by_join = columns_added_by_join_;
@@ -398,7 +399,7 @@ void ExpressionAction::execute(Block & block) const
 
     case JOIN:
     {
-        join->joinBlock(block);
+        join->joinBlock(stream_id, block);
         break;
     }
 

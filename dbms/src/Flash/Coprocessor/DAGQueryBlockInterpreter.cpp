@@ -611,12 +611,25 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     for (const auto & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
-    ExpressionActionsChain chain;
-    dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
-    pipeline.streams = left_pipeline.streams;
+
+    size_t stream_id = 0;
+    for (auto & stream : pipeline.streams)
+    {
+        ExpressionActionsChain chain;
+        dag_analyzer.appendJoin(stream_id, chain, right_query, columns_added_by_join);
+        pipeline.streams = left_pipeline.streams;
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log);
+        stream_id++;
+    }
+
     /// add join input stream
     if (is_tiflash_right_join)
     {
+        // Give it an expression chain instance, but createStreamWithNonJoinedDataIfFullOrRightJoin only need to
+        // know the type of join...
+        ExpressionActionsChain chain;
+        dag_analyzer.appendJoin(stream_id, chain, right_query, columns_added_by_join);
+
         for (size_t i = 0; i < join_build_concurrency; i++)
             pipeline.streams_with_non_joined_data.push_back(chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
                 pipeline.firstStream()->getHeader(),
@@ -624,8 +637,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
                 join_build_concurrency,
                 settings.max_block_size));
     }
-    for (auto & stream : pipeline.streams)
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log);
 
     /// add a project to remove all the useless column
     NamesWithAliases project_cols;

@@ -81,6 +81,7 @@ public:
     bool array_join_is_left = false;
 
     /// For JOIN
+    size_t stream_id = 0;
     std::shared_ptr<const Join> join;
     NamesAndTypesList columns_added_by_join;
 
@@ -100,7 +101,7 @@ public:
     static ExpressionAction project(const NamesWithAliases & projected_columns_);
     static ExpressionAction project(const Names & projected_columns_);
     static ExpressionAction arrayJoin(const NameSet & array_joined_columns, bool array_join_is_left, const Context & context);
-    static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
+    static ExpressionAction ordinaryJoin(size_t stream_id, std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
 
     /// Which columns necessary to perform this action.
     Names getNeededColumns() const;

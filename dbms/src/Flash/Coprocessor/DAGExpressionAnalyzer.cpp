@@ -994,13 +994,14 @@ String DAGExpressionAnalyzer::appendDurationCast(
 }
 
 void DAGExpressionAnalyzer::appendJoin(
+    size_t stream_id,
     ExpressionActionsChain & chain,
     SubqueryForSet & join_query,
     const NamesAndTypesList & columns_added_by_join) const
 {
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
-    actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
+    actions->add(ExpressionAction::ordinaryJoin(stream_id, join_query.join, columns_added_by_join));
 }
 
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
