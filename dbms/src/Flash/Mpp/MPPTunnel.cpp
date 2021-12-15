@@ -208,11 +208,6 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 template <typename Writer>
 void MPPTunnelBase<Writer>::waitForFinish()
 {
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        if (finished)
-            return;
-    }
     waitForConsumerFinish(/*allow_throw=*/true);
 }
 
@@ -253,10 +248,10 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
 {
     std::unique_lock<std::mutex> lk(mu);
-    // must setState in the critical area to keep consistent with `finished` from outside.
-    consumer_state.setState(err_msg);
     send_queue.finish();
     finished = true;
+    // must setState in the critical area to keep consistent with `finished` from outside.
+    consumer_state.setState(err_msg);
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
