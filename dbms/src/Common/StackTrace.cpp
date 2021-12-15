@@ -299,6 +299,7 @@ StackTrace::StackTrace(NoCapture)
 {
 }
 
+#if USE_LLVM_STYLE_UNWIND
 namespace
 {
 struct UnwindInfo
@@ -322,6 +323,7 @@ static _Unwind_Reason_Code tiflash_unwind_callback(_Unwind_Context * context, vo
 }
 
 } // namespace
+#endif // USE_LLVM_STYLE_UNWIND
 
 void StackTrace::tryCapture()
 {
