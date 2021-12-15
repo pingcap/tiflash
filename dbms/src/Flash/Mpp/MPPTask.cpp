@@ -313,7 +313,7 @@ void MPPTask::runImpl()
             continue;
 
         FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-        if (writer->dagContext().isRootMPPTask())
+        if (dag_context->isRootMPPTask())
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
         else
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
