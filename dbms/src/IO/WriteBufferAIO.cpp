@@ -95,6 +95,16 @@ void WriteBufferAIO::sync()
         throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);
 }
 
+void WriteBufferAIO::close()
+{
+    flush();
+
+    if (fd != -1)
+        ::close(fd);
+
+    fd = -1;
+}
+
 void WriteBufferAIO::nextImpl()
 {
     if (!offset())

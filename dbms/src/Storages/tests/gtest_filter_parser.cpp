@@ -71,7 +71,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     DAGContext dag_context(dag_request);
     ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(ctx, /*regions*/ RegionInfoMap{}, /*retry_regions*/ RegionInfoList{}, dag_request, std::make_shared<LogWithPrefix>(log, ""), false);
+    DAGQuerySource dag(ctx);
     auto query_block = *dag.getRootQueryBlock();
     std::vector<const tipb::Expr *> conditions;
     if (query_block.children[0]->selection != nullptr)
@@ -430,7 +430,7 @@ try
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx.getTimezoneInfo();
         setTimezoneByOffset(timezone_info, 28800);
-        convertTimeZoneByOffset(origin_time_stamp, converted_time, -timezone_info.timezone_offset, time_zone_utc);
+        convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
 
         auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
