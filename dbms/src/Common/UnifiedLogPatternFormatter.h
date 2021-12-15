@@ -9,6 +9,7 @@ namespace DB
 {
 class WriteBuffer;
 
+/// https://github.com/tikv/rfcs/blob/ed764d7d014c420ee0cbcde99597020c4f75346d/text/0018-unified-log-format.md
 class UnifiedLogPatternFormatter : public Poco::PatternFormatter
 {
 public:

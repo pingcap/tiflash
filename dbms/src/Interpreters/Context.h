@@ -7,7 +7,15 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <common/MultiVersion.h>
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #include <grpc++/grpc++.h>
+#pragma clang diagnostic pop
+#else
+#include <grpc++/grpc++.h>
+#endif
 
 #include <chrono>
 #include <condition_variable>
@@ -40,7 +48,6 @@ class ExternalDictionaries;
 class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
-class Cluster;
 class Compiler;
 class MarkCache;
 class UncompressedCache;
@@ -51,7 +58,6 @@ class ProcessList;
 class ProcessListElement;
 class Macros;
 struct Progress;
-class Clusters;
 class QueryLog;
 class IDatabase;
 class DDLGuard;
@@ -397,14 +403,6 @@ public:
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    Clusters & getClusters() const;
-    std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
-    std::shared_ptr<Cluster> tryGetCluster(const std::string & cluster_name) const;
-    void setClustersConfig(const ConfigurationPtr & config, const String & config_name = "remote_servers");
-    /// Sets custom cluster, but doesn't update configuration
-    void setCluster(const String & cluster_name, const std::shared_ptr<Cluster> & cluster);
-    void reloadClusterConfig();
-
     Compiler & getCompiler();
 
     /// Call after initialization before using system logs. Call for global context.
@@ -476,6 +474,8 @@ private:
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
 };
+
+using ContextPtr = std::shared_ptr<Context>;
 
 
 /// Puts an element into the map, erases it in the destructor.

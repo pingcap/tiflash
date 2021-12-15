@@ -41,6 +41,7 @@ public:
     void sync() override;
     std::string getFileName() const override { return filename; }
     int getFD() const override { return fd; }
+    void close() override;
 
 private:
     void nextImpl() override;
