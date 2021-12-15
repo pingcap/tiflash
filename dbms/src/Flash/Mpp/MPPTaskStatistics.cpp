@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
@@ -38,14 +39,52 @@ Int64 toNanoseconds(MPPTaskStatistics::Timestamp timestamp)
 {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp.time_since_epoch()).count();
 }
+
+Int64 parseId(const String & executor_id)
+{
+    auto split_index = executor_id.find('_');
+    if (split_index == String::npos || split_index == (executor_id.size() - 1))
+    {
+        throw TiFlashException("Illegal executor_id: " + executor_id, Errors::Coprocessor::Internal);
+    }
+    return std::stoi(executor_id.substr(split_index + 1, executor_id.size()));
+}
+
+String executorsToJson(const std::map<String, ExecutorStatisticsPtr> & executor_statistics_map)
+{
+    FmtBuffer buffer;
+    buffer.append("[");
+    buffer.joinStr(
+        executor_statistics_map.cbegin(),
+        executor_statistics_map.cend(),
+        [](const auto & s, FmtBuffer & fb) {
+            fb.append(s.second->toJson());
+        },
+        ",");
+    buffer.append("]");
+    return buffer.toString();
+}
 } // namespace
+
+void MPPTaskStatistics::initializeExecutorDag(DAGContext * dag_context)
+{
+    assert(dag_context);
+    assert(dag_context->dag_request);
+    assert(dag_context->is_mpp_task);
+    const auto & root_executor = dag_context->dag_request->root_executor();
+    assert(root_executor.has_exchange_sender());
+    sender_executor_id = parseId(root_executor.executor_id());
+    executor_statistics_collector.initialize(dag_context);
+}
 
 String MPPTaskStatistics::toJson() const
 {
     return fmt::format(
-        R"({{"query_tso":{},"task_id":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
+        R"({{"query_tso":{},"task_id":{},"sender_executor_id":{},"executors":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
+        sender_executor_id,
+        executorsToJson(executor_statistics_collector.getResult()),
         host,
         toNanoseconds(task_init_timestamp),
         toNanoseconds(compile_start_timestamp),
