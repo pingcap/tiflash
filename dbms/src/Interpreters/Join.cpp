@@ -517,69 +517,100 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
     Arena & pool)
 {
     KeyGetter key_getter(key_columns, key_sizes, collators);
-    std::vector<std::string> sort_key_containers;
-    sort_key_containers.resize(key_columns.size());
-    size_t segment_size = map.getSegmentSize();
-    /// when inserting with lock, first calculate and save the segment index for each row, then
-    /// insert the rows segment by segment to avoid too much conflict. This will introduce some overheads:
-    /// 1. key_getter.getKey will be called twice, here we do not cache key because it can not be cached
-    /// with relatively low cost(if key is stringRef, just cache a stringRef is meaningless, we need to cache the whole `sort_key_containers`)
-    /// 2. hash value is calculated twice, maybe we can refine the code to cache the hash value
-    /// 3. extra memory to store the segment index info
-    std::vector<std::vector<size_t>> segment_index_info;
-    if (has_null_map && rows_not_inserted_to_map)
+    std::vector<std::string> sort_key_containers(key_columns.size());
+
+    for (size_t i = 0; i < rows; ++i)
     {
-        segment_index_info.resize(segment_size + 1);
-    }
-    else
-    {
-        segment_index_info.resize(segment_size);
-    }
-    size_t rows_per_seg = rows / segment_index_info.size();
-    for (size_t i = 0; i < segment_index_info.size(); i++)
-    {
-        segment_index_info[i].reserve(rows_per_seg);
-    }
-    for (size_t i = 0; i < rows; i++)
-    {
-        if (has_null_map && (*null_map)[i])
-        {
-            if (rows_not_inserted_to_map)
-                segment_index_info[segment_index_info.size() - 1].push_back(i);
-            continue;
-        }
-        auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
-        auto key = keyHolderGetKey(key_holder);
-        size_t segment_index = 0;
-        size_t hash_value = 0;
-        if (!ZeroTraits::check(key))
-        {
-            hash_value = map.hash(key);
-            segment_index = hash_value % segment_size;
-        }
-        segment_index_info[segment_index].push_back(i);
-        keyHolderDiscardKey(key_holder);
-    }
-    for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
-    {
-        size_t segment_index = (insert_index + stream_index) % segment_index_info.size();
-        if (segment_index == segment_size)
+        if constexpr (has_null_map)
         {
             /// null value
-            /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
-            for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
+            if (rows_not_inserted_to_map && (*null_map)[i])
             {
                 /// for right/full out join, need to record the rows not inserted to map
-                auto elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-                insertRowToList(rows_not_inserted_to_map, elem, stored_block, segment_index_info[segment_index][i]);
+                auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
+                continue;
             }
+        }
+
+        Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(
+            map.getSegmentTable(stream_index),
+            key_getter,
+            stored_block,
+            i,
+            pool,
+            sort_key_containers);
+    }
+
+    return;
+
+    // Original code:
+    {
+        KeyGetter key_getter(key_columns, key_sizes, collators);
+        std::vector<std::string> sort_key_containers;
+        sort_key_containers.resize(key_columns.size());
+        size_t segment_size = map.getSegmentSize();
+        /// when inserting with lock, first calculate and save the segment index for each row, then
+        /// insert the rows segment by segment to avoid too much conflict. This will introduce some overheads:
+        /// 1. key_getter.getKey will be called twice, here we do not cache key because it can not be cached
+        /// with relatively low cost(if key is stringRef, just cache a stringRef is meaningless, we need to cache the whole `sort_key_containers`)
+        /// 2. hash value is calculated twice, maybe we can refine the code to cache the hash value
+        /// 3. extra memory to store the segment index info
+        std::vector<std::vector<size_t>> segment_index_info;
+        if (has_null_map && rows_not_inserted_to_map)
+        {
+            segment_index_info.resize(segment_size + 1);
         }
         else
         {
-            std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
-            for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
+            segment_index_info.resize(segment_size);
+        }
+        size_t rows_per_seg = rows / segment_index_info.size();
+        for (size_t i = 0; i < segment_index_info.size(); i++)
+        {
+            segment_index_info[i].reserve(rows_per_seg);
+        }
+        for (size_t i = 0; i < rows; i++)
+        {
+            if (has_null_map && (*null_map)[i])
             {
-                Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(segment_index), key_getter, stored_block, segment_index_info[segment_index][i], pool, sort_key_containers);
+                if (rows_not_inserted_to_map)
+                    segment_index_info[segment_index_info.size() - 1].push_back(i);
+                continue;
+            }
+            auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+            auto key = keyHolderGetKey(key_holder);
+            size_t segment_index = 0;
+            size_t hash_value = 0;
+            if (!ZeroTraits::check(key))
+            {
+                hash_value = map.hash(key);
+                segment_index = hash_value % segment_size;
+            }
+            segment_index_info[segment_index].push_back(i);
+            keyHolderDiscardKey(key_holder);
+        }
+        for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
+        {
+            size_t segment_index = (insert_index + stream_index) % segment_index_info.size();
+            if (segment_index == segment_size)
+            {
+                /// null value
+                /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
+                for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
+                {
+                    /// for right/full out join, need to record the rows not inserted to map
+                    auto elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                    insertRowToList(rows_not_inserted_to_map, elem, stored_block, segment_index_info[segment_index][i]);
+                }
+            }
+            else
+            {
+                std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
+                for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
+                {
+                    Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(segment_index), key_getter, stored_block, segment_index_info[segment_index][i], pool, sort_key_containers);
+                }
             }
         }
     }
@@ -731,12 +762,15 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     std::shared_lock lock(rwlock);
     Block * stored_block = nullptr;
+
+    // TODO: this lock can be enliminated
     {
         std::lock_guard<std::mutex> lk(blocks_lock);
         blocks.push_back(block);
         stored_block = &blocks.back();
         original_blocks.push_back(block);
     }
+
     if (build_set_exceeded.load())
         return;
     if (!insertFromBlockInternal(stored_block, stream_index))
