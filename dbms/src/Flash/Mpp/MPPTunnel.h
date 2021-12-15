@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Common/MPMCQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/MPMCQueue.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -89,6 +89,7 @@ public:
     const LogWithPrefixPtr & getLogger() const { return log; }
 
     void consumerFinish(const String & err_msg);
+
 private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
@@ -141,6 +142,7 @@ private:
         {
             promise.set_value(state);
         }
+
     private:
         std::future<String> future;
         std::promise<String> promise;

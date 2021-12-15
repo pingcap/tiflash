@@ -44,7 +44,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             if (!finished)
                 writeDone();
         }
-        waitForConsumerFinish(/*allow_throw=*/ false);
+        waitForConsumerFinish(/*allow_throw=*/false);
     }
     catch (...)
     {
@@ -82,7 +82,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
             return;
         }
     }
-    waitForConsumerFinish(/*allow_throw=*/ false);
+    waitForConsumerFinish(/*allow_throw=*/false);
 }
 
 template <typename Writer>
@@ -113,7 +113,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         }
     }
     // push failed, wait consumer for the final state
-    waitForConsumerFinish(/*allow_throw=*/ true);
+    waitForConsumerFinish(/*allow_throw=*/true);
 }
 
 /// to avoid being blocked when pop(), we should send nullptr into send_queue in all cases
@@ -163,10 +163,10 @@ void MPPTunnelBase<Writer>::writeDone()
             throw Exception("write to tunnel which is already closed," + consumer_state.getState());
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrCancelled(lk);
-        
+
         send_queue.finish();
     }
-    waitForConsumerFinish(/*allow_throw=*/ true);
+    waitForConsumerFinish(/*allow_throw=*/true);
 }
 
 template <typename Writer>
@@ -213,7 +213,7 @@ void MPPTunnelBase<Writer>::waitForFinish()
         if (finished)
             return;
     }
-    waitForConsumerFinish(/*allow_throw=*/ true);
+    waitForConsumerFinish(/*allow_throw=*/true);
 }
 
 template <typename Writer>
@@ -235,7 +235,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::
         LOG_TRACE(log, "start waitUntilConnectedOrCancelled");
         auto res = !cv_for_connected.wait_for(lk, timeout, connected_or_cancelled);
         LOG_TRACE(log, "end waitUntilConnectedOrCancelled");
-        
+
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
