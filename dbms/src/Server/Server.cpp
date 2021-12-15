@@ -421,7 +421,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "tiflash proxy thread is joined");
     });
 
+<<<<<<< HEAD
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
+=======
+        /// Init and register flash service.
+        flash_service = std::make_unique<FlashService>(server);
+        diagnostics_service = std::make_unique<DiagnosticsService>(server);
+        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
+        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
+        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1));
+        builder.RegisterService(flash_service.get());
+        LOG_INFO(log, "Flash service registered");
+        builder.RegisterService(diagnostics_service.get());
+        LOG_INFO(log, "Diagnostics service registered");
+>>>>>>> 8463cef05a (Fix ha test random failure (#3649))
 
     // print necessary grpc log.
     grpc_log = &Logger::get("grpc");
