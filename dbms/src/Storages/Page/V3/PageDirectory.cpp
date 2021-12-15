@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Common/LogWithPrefix.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
@@ -28,6 +29,17 @@ std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 
             return iter->second.entry;
     }
     return std::nullopt;
+}
+
+PageDirectory::PageDirectory()
+    : sequence(0)
+    , log(getLogWithPrefix(nullptr, "PageDirectory"))
+{
+}
+
+void PageDirectory::restore()
+{
+    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const

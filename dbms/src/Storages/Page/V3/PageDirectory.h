@@ -29,6 +29,10 @@ using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 class PageDirectory
 {
 public:
+    PageDirectory();
+
+    void restore();
+
     PageDirectorySnapshotPtr createSnapshot() const;
 
     PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const;
