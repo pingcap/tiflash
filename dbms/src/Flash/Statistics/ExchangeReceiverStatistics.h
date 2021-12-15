@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <common/types.h>
 

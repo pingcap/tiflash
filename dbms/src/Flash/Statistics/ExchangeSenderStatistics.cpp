@@ -97,7 +97,7 @@ void ExchangeSenderStatistics::collectRuntimeDetail()
     size_t i = 0;
     for (const auto & tunnel : tunnel_set->getTunnels())
     {
-        mpp_tunnel_connection_details[i++].connection_profile_info = tunnel->getConnectionProfileInfo();
+        mpp_tunnel_details[i++].connection_profile_info = tunnel->getConnectionProfileInfo();
     }
 
     visitBlockInputStreams(

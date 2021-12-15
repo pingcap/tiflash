@@ -3,6 +3,8 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <functional>
+
 namespace DB
 {
 std::vector<const tipb::Executor *> getChildren(const tipb::Executor & executor);
@@ -20,14 +22,15 @@ void traverseExecutors(const tipb::DAGRequest * dag_request, FF && f)
     }
     else // dag_request->has_root_executor()
     {
-        static auto traverse_tree = [](auto && self, const tipb::Executor & executor, FF && f) {
+        std::function<void(const tipb::Executor & executor)> traverse_tree;
+        traverse_tree = [&](const tipb::Executor & executor) {
             f(executor);
             for (const auto & child : getChildren(executor))
             {
-                self(*child, std::forward<FF>(f));
+                traverse_tree(*child);
             }
         };
-        traverse_tree(traverse_tree, dag_request->root_executor(), f);
+        traverse_tree(dag_request->root_executor());
     }
 }
 } // namespace DB
