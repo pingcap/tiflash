@@ -9,12 +9,12 @@
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 #include <boost/algorithm/string/replace.hpp>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
@@ -51,13 +51,11 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
 
-    std::stringstream ss;
     auto mapped = mappedDatabase(context, database_name);
     if (mapped == std::nullopt)
-        ss << "Database " << database_name << " not found.";
+        output(fmt::format("Database {} not found.", database_name));
     else
-        ss << mapped.value();
-    output(ss.str());
+        output(fmt::format(mapped.value()));
 }
 
 void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -71,15 +69,13 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
     if (args.size() == 3)
         qualify = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value) == "true";
 
-    std::stringstream ss;
     auto mapped = mappedTable(context, database_name, table_name);
     if (mapped == std::nullopt)
-        ss << "Table " << database_name << "." << table_name << " not found.";
+        output(fmt::format("Table {}.{} not found.", database_name, table_name));
     else if (qualify)
-        ss << mapped->first << "." << mapped->second;
+        output(fmt::format("{}.{}", mapped->first, mapped->second));
     else
-        ss << mapped->second;
-    output(ss.str());
+        output(fmt::format(mapped->second));
 }
 
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)
