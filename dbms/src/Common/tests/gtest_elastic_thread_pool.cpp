@@ -4,7 +4,6 @@
 
 namespace DB::tests
 {
-
 void scheduleTaskSet(size_t thd_set_size, std::vector<std::future<void>> & futures, ElasticThreadPool & pool, ElasticThreadPool::Job job)
 {
     for (size_t i = 0; i < thd_set_size; i++)
