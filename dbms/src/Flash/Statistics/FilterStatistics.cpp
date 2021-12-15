@@ -1,4 +1,3 @@
-#include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsUtils.h>

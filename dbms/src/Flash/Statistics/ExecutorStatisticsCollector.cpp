@@ -12,11 +12,12 @@
 
 namespace DB
 {
-ExecutorStatisticsCollector::ExecutorStatisticsCollector(DAGContext & dag_context_)
-    : dag_context(dag_context_)
+void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 {
-    assert(dag_context.dag_request);
-    traverseExecutors(dag_context.dag_request, [&](const tipb::Executor & executor) {
+    assert(dag_context_);
+    dag_context = dag_context_;
+    assert(dag_context->dag_request);
+    traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
         assert(executor.has_executor_id());
         const auto & executor_id = executor.executor_id();
         if (!append<
@@ -39,7 +40,8 @@ ExecutorStatisticsCollector::ExecutorStatisticsCollector(DAGContext & dag_contex
 
 void ExecutorStatisticsCollector::collectRuntimeDetails()
 {
-    assert(res.size() == dag_context.getProfileStreamsMap().size());
+    assert(dag_context);
+    assert(res.size() == dag_context->getProfileStreamsMap().size());
     for (const auto & entry : res)
     {
         entry.second->collectRuntimeDetail();

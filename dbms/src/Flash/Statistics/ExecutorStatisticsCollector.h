@@ -10,14 +10,15 @@ namespace DB
 {
 class ExecutorStatisticsCollector
 {
-    explicit ExecutorStatisticsCollector(DAGContext & dag_context_);
+public:
+    void initialize(DAGContext * dag_context_);
 
     void collectRuntimeDetails();
 
-    const std::map<String, ExecutorStatisticsPtr> & getResult() { return res; }
+    const std::map<String, ExecutorStatisticsPtr> & getResult() const { return res; }
 
 private:
-    DAGContext & dag_context;
+    DAGContext * dag_context = nullptr;
 
     std::map<String, ExecutorStatisticsPtr> res;
 
@@ -26,7 +27,7 @@ private:
     {
         if (T::hit(executor_id))
         {
-            res[executor_id] = std::make_shared<T>(executor, dag_context);
+            res[executor_id] = std::make_shared<T>(executor, *dag_context);
             return true;
         }
         return false;
@@ -39,6 +40,4 @@ private:
         return (doAppend<Ts>(executor_id, executor) || ...);
     }
 };
-
-std::map<String, ExecutorStatisticsPtr> initExecutorStatistics(DAGContext & dag_context);
 } // namespace DB
