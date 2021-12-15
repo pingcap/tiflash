@@ -524,26 +524,28 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
 
     for (size_t i = 0; i < rows; ++i)
     {
-        if constexpr (has_null_map)
+        /// null value
+        if (has_null_map && (*null_map)[i])
         {
-            /// null value
-            if (rows_not_inserted_to_map && (*null_map)[i])
+            if (rows_not_inserted_to_map)
             {
                 /// for right/full out join, need to record the rows not inserted to map
                 auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
                 insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
-                continue;
             }
+
+            continue;
         }
 
         // TODO: what does ZeroTraits do?
         auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
         auto key = keyHolderGetKey(key_holder);
-        size_t segment_index = ZeroTraits::check(key) ? map.getSegmentSize() : stream_index;
+        bool is_zero = ZeroTraits::check(key);
+        size_t segment_index = is_zero ? map.getSegmentSize() - 1 : stream_index;
         keyHolderDiscardKey(key_holder);
 
         std::unique_lock lock(map.getSegmentMutex(segment_index), std::defer_lock);
-        if (segment_index == map.getSegmentSize())
+        if (is_zero)
             lock.lock();
 
         Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(
@@ -1032,9 +1034,7 @@ void NO_INLINE joinBlockImplTypeCase(
             // }
 
             // auto & internalMap = map.getSegmentTable(segment_index);
-            size_t segment_index = map.getSegmentSize();
-            if (map.getSegmentSize() > 0 && !ZeroTraits::check(key))
-                segment_index = stream_id;
+            size_t segment_index = ZeroTraits::check(key) ? map.getSegmentSize() - 1 : stream_id;
             auto & internalMap = map.getSegmentTable(segment_index);
 
             /// do not require segment lock because in join, the hash table can not be changed in probe stage.
