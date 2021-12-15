@@ -232,6 +232,9 @@ struct MockSSTReader
     struct Data : std::vector<std::pair<std::string, std::string>>
     {
         Data(const Data &) = delete;
+        Data & operator=(const Data &) = delete;
+        Data(Data &&) = default;
+        Data & operator=(Data &&) = default;
         Data() = default;
     };
 

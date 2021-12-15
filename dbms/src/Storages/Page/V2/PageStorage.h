@@ -22,28 +22,32 @@ namespace DB
 namespace PS::V2
 {
 /**
- * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
+ * A storage system stored pages. Pages are serialized objects referenced by PageID. Store Page with the same PageID
  * will covered the old ones. The file used to persist the Pages called PageFile. The meta data of a Page, like the
  * latest PageFile the Page is stored , the offset in file, and checksum, are cached in memory. Users should call
  * #gc() constantly to clean up the sparse PageFiles and release disk space.
  *
- * This class is multi-threads safe. Support single thread write, and multi threads read.
+ * This class is multi-threads safe. Support multi threads write, and multi threads read.
  */
 class PageStorage : public DB::PageStorage
 {
 public:
     struct ListPageFilesOption
     {
-        ListPageFilesOption() {}
+        ListPageFilesOption()
+            : remove_tmp_files(false)
+            , ignore_legacy(false)
+            , ignore_checkpoint(false)
+            , remove_invalid_files(false)
+        {}
 
-        bool remove_tmp_files = false;
-        bool ignore_legacy = false;
-        bool ignore_checkpoint = false;
-        bool remove_invalid_files = false;
+        bool remove_tmp_files;
+        bool ignore_legacy;
+        bool ignore_checkpoint;
+        bool remove_invalid_files;
     };
 
     using VersionedPageEntries = PageEntriesVersionSetWithDelta;
-    using SnapshotPtr = VersionedPageEntries::SnapshotPtr;
     using WriterPtr = std::unique_ptr<PageFile::Writer>;
     using ReaderPtr = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
@@ -63,7 +67,7 @@ public:
         String toString() const;
         void mergeEdits(const PageEntriesEdit & edit);
 
-        bool equals(const StatisticsInfo & rhs);
+        bool equals(const StatisticsInfo & rhs) const;
     };
 
 public:
@@ -71,7 +75,7 @@ public:
                 PSDiskDelegatorPtr delegator, //
                 const Config & config_,
                 const FileProviderPtr & file_provider_);
-    ~PageStorage(){};
+    ~PageStorage() = default;
 
     void restore() override;
 
@@ -82,6 +86,10 @@ public:
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) override;
 
     DB::PageStorage::SnapshotPtr getSnapshot() override;
+
+    using ConcreteSnapshotRawPtr = VersionedPageEntries::Snapshot *;
+    using ConcreteSnapshotPtr = VersionedPageEntries::SnapshotPtr;
+    ConcreteSnapshotPtr getConcreteSnapshot();
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
 
@@ -95,7 +103,7 @@ public:
 
     void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
-    virtual PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
 
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) override;
 
@@ -107,10 +115,11 @@ public:
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
-    static PageFileSet listAllPageFiles(const FileProviderPtr & file_provider,
-                                        PSDiskDelegatorPtr & delegator,
-                                        Poco::Logger * page_file_log,
-                                        const ListPageFilesOption & option = ListPageFilesOption());
+    static PageFileSet listAllPageFiles(
+        const FileProviderPtr & file_provider,
+        PSDiskDelegatorPtr & delegator,
+        Poco::Logger * page_file_log,
+        const ListPageFilesOption & option = ListPageFilesOption());
 
     static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
     {
@@ -231,10 +240,11 @@ private:
     StatisticsInfo last_gc_statistics;
 
 private:
-    WriterPtr checkAndRenewWriter(WritingPageFile & page_file,
-                                  const String & parent_path_hint,
-                                  WriterPtr && old_writer = nullptr,
-                                  const String & logging_msg = "");
+    WriterPtr checkAndRenewWriter(
+        WritingPageFile & page_file,
+        const String & parent_path_hint,
+        WriterPtr && old_writer = nullptr,
+        const String & logging_msg = "");
 };
 
 } // namespace PS::V2
