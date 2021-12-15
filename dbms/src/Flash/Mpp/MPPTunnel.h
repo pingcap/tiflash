@@ -103,7 +103,7 @@ private:
 
     bool connected; // if the exchange in has connected this tunnel.
 
-    std::atomic<bool> finished; // if the tunnel has finished its connection.
+    bool finished; // if the tunnel has finished its connection.
 
     bool is_local; // if this tunnel used for local environment
 
@@ -117,8 +117,6 @@ private:
     String tunnel_id;
 
     int input_streams_num;
-
-    std::unique_ptr<std::thread> send_thread;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
