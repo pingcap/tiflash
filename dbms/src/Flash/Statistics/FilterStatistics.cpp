@@ -33,10 +33,10 @@ void FilterStatistics::collectRuntimeDetail()
         profile_streams_info.input_streams,
         [&](const BlockInputStreamPtr & stream_ptr) {
             throwFailCastException(
-                castBlockInputStream<IProfilingBlockInputStream>(child_stream_ptr, [&](const IProfilingBlockInputStream & stream) {
+                castBlockInputStream<IProfilingBlockInputStream>(stream_ptr, [&](const IProfilingBlockInputStream & stream) {
                     collectBaseInfo(this, stream.getProfileInfo());
                 }),
-                child_stream_ptr->getName(),
+                stream_ptr->getName(),
                 "IProfilingBlockInputStream");
         },
         [&](const BlockInputStreamPtr & child_stream_ptr) {
