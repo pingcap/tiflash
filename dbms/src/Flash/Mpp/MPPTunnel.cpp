@@ -17,6 +17,7 @@ extern const char exception_during_mpp_close_tunnel[];
 // 2. Each MPPTunnel has an associating consumer, they communicate with each other by a queue.
 // 3. When consumer is alive, MPPTunnel guarantee to send all data (include errors) to consumer.
 // 4. MPPTunnel will close the queue to notify the consumer that no more data.
+// 5. Consumer will close the queue to notify abnormalities. A future is used for receiving the consumer's status.
 
 template <typename Writer>
 MPPTunnelBase<Writer>::MPPTunnelBase(
