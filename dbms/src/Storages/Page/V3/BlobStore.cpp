@@ -4,6 +4,8 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <common/logger_fmt_useful.h>
 
+#include <ext/scope_guard.h>
+
 namespace ProfileEvents
 {
 extern const Event PSMWritePages;
@@ -50,91 +52,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (all_page_data_size != 0)
-    {
-        char * buffer = static_cast<char *>(alloc(all_page_data_size));
-        char * buffer_pos = buffer;
-        BlobFileId blob_id;
-        BlobFileOffset offset_in_file;
-        std::tie(blob_id, offset_in_file) = getPosFromStats(all_page_data_size);
-
-        size_t offset_in_allocated = 0;
-
-        for (auto & write : wb.getWrites())
-        {
-            switch (write.type)
-            {
-            case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT:
-            {
-                ChecksumClass digest;
-                PageEntryV3 entry;
-
-                write.read_buffer->readStrict(buffer_pos, write.size);
-
-                entry.file_id = blob_id;
-                entry.size = write.size;
-                entry.offset = offset_in_file + offset_in_allocated;
-                offset_in_allocated += write.size;
-
-                digest.update(buffer_pos, write.size);
-                entry.checksum = digest.checksum();
-
-                UInt64 field_begin, field_end;
-
-                for (size_t i = 0; i < write.offsets.size(); ++i)
-                {
-                    ChecksumClass field_digest;
-                    field_begin = write.offsets[i].first;
-                    field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
-
-                    field_digest.update(buffer_pos + field_begin, field_end - field_begin);
-                    write.offsets[i].second = field_digest.checksum();
-                }
-
-                if (!write.offsets.empty())
-                {
-                    // we can swap from WriteBatch instead of copying
-                    entry.field_offsets.swap(write.offsets);
-                }
-
-                buffer_pos += write.size;
-
-                if (write.type == WriteBatch::WriteType::PUT)
-                {
-                    edit.put(write.page_id, entry);
-                }
-                else // WriteBatch::WriteType::UPSERT
-                {
-                    edit.upsertPage(write.page_id, entry);
-                }
-
-                break;
-            }
-            case WriteBatch::WriteType::DEL:
-            {
-                edit.del(write.page_id);
-                break;
-            }
-            case WriteBatch::WriteType::REF:
-            {
-                edit.ref(write.page_id, write.ori_page_id);
-                break;
-            }
-            }
-        }
-
-        if (buffer_pos != buffer + all_page_data_size)
-        {
-            removePosFromStats(blob_id, offset_in_file, all_page_data_size);
-            throw Exception("write batch have a invalid total size, or something wrong in parse write batch.",
-                            ErrorCodes::LOGICAL_ERROR);
-        }
-
-        auto blob_file = getBlobFile(blob_id);
-        blob_file->write(buffer, offset_in_file, all_page_data_size, write_limiter);
-    }
-    else
+    if (all_page_data_size == 0)
     {
         for (auto & write : wb.getWrites())
         {
@@ -155,7 +73,93 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                                 ErrorCodes::LOGICAL_ERROR);
             }
         }
+        return edit;
     }
+
+    char * buffer = static_cast<char *>(alloc(all_page_data_size));
+    SCOPE_EXIT({
+        free(buffer, all_page_data_size);
+    });
+    char * buffer_pos = buffer;
+    BlobFileId blob_id;
+    BlobFileOffset offset_in_file;
+    std::tie(blob_id, offset_in_file) = getPosFromStats(all_page_data_size);
+
+    size_t offset_in_allocated = 0;
+
+    for (auto & write : wb.getWrites())
+    {
+        switch (write.type)
+        {
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT:
+        {
+            ChecksumClass digest;
+            PageEntryV3 entry;
+
+            write.read_buffer->readStrict(buffer_pos, write.size);
+
+            entry.file_id = blob_id;
+            entry.size = write.size;
+            entry.offset = offset_in_file + offset_in_allocated;
+            offset_in_allocated += write.size;
+
+            digest.update(buffer_pos, write.size);
+            entry.checksum = digest.checksum();
+
+            UInt64 field_begin, field_end;
+
+            for (size_t i = 0; i < write.offsets.size(); ++i)
+            {
+                ChecksumClass field_digest;
+                field_begin = write.offsets[i].first;
+                field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
+
+                field_digest.update(buffer_pos + field_begin, field_end - field_begin);
+                write.offsets[i].second = field_digest.checksum();
+            }
+
+            if (!write.offsets.empty())
+            {
+                // we can swap from WriteBatch instead of copying
+                entry.field_offsets.swap(write.offsets);
+            }
+
+            buffer_pos += write.size;
+
+            if (write.type == WriteBatch::WriteType::PUT)
+            {
+                edit.put(write.page_id, entry);
+            }
+            else // WriteBatch::WriteType::UPSERT
+            {
+                edit.upsertPage(write.page_id, entry);
+            }
+
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            edit.del(write.page_id);
+            break;
+        }
+        case WriteBatch::WriteType::REF:
+        {
+            edit.ref(write.page_id, write.ori_page_id);
+            break;
+        }
+        }
+    }
+
+    if (buffer_pos != buffer + all_page_data_size)
+    {
+        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
+        throw Exception("write batch have a invalid total size, or something wrong in parse write batch.",
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
+    auto blob_file = getBlobFile(blob_id);
+    blob_file->write(buffer, offset_in_file, all_page_data_size, write_limiter);
 
 
     return edit;
