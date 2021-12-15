@@ -79,6 +79,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
         else
         {
             finished = true;
+            cv_for_connected.notify_all();
             return;
         }
     }
@@ -228,7 +229,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::
     if (timeout.count() > 0)
     {
         LOG_TRACE(log, "start waitUntilConnectedOrCancelled");
-        auto res = !cv_for_connected.wait_for(lk, timeout, connected_or_cancelled);
+        auto res = cv_for_connected.wait_for(lk, timeout, connected_or_cancelled);
         LOG_TRACE(log, "end waitUntilConnectedOrCancelled");
 
         if (!res)
