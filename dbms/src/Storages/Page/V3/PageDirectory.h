@@ -103,12 +103,13 @@ private:
     };
     using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 
-    mutable std::shared_mutex table_rw_mutex;
+private:
     std::atomic<UInt64> sequence;
+    mutable std::shared_mutex table_rw_mutex;
     using MVCCMapType = std::unordered_map<PageId, VersionedPageEntriesPtr>;
     MVCCMapType mvcc_table_directory;
 
-    std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
+    mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
     WALStore wal;
 };

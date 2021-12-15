@@ -3,6 +3,7 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
 
+#include <memory>
 #include <mutex>
 
 namespace DB
@@ -30,7 +31,9 @@ std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 
 
 PageDirectorySnapshotPtr PageDirectory::createSnapshot() const
 {
-    return std::make_shared<PageDirectorySnapshot>(sequence.load());
+    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load());
+    snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
+    return snap;
 }
 
 PageIDAndEntryV3 PageDirectory::get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
@@ -155,6 +158,14 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 
 bool PageDirectory::gc()
 {
+    // Cleanup released snapshots
+    for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
+    {
+        if (iter->expired())
+            iter = snapshots.erase(iter);
+        else
+            ++iter;
+    }
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
