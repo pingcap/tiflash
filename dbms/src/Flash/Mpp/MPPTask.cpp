@@ -287,7 +287,6 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "task not in initializing state, skip running");
         return;
     }
-    mpp_task_statistics.start();
 
     Stopwatch stopwatch;
     GET_METRIC(tiflash_coprocessor_request_count, type_run_mpp_task).Increment();
@@ -309,6 +308,7 @@ void MPPTask::runImpl()
             /// current task is not registered yet, so need to check the task status explicitly
             throw Exception("task not in running state, may be cancelled");
         }
+        mpp_task_statistics.start();
         auto from = io.in;
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
