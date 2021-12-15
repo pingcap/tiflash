@@ -18,7 +18,11 @@
 #endif
 
 #if USE_UNWIND
+#if USE_LLVM_STYLE_UNWIND
+#include <unwind.h>
+#else
 #include <libunwind.h>
+#endif
 #endif
 
 std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused]] const ucontext_t & context)
@@ -295,11 +299,41 @@ StackTrace::StackTrace(NoCapture)
 {
 }
 
+namespace
+{
+struct UnwindInfo
+{
+    size_t depth;
+    size_t limit;
+    void ** data;
+};
+
+static _Unwind_Reason_Code tiflash_unwind_callback(_Unwind_Context * context, void * arg)
+{
+    auto * info = static_cast<UnwindInfo *>(arg);
+    if (info->depth < info->limit)
+    {
+        if (auto pc = _Unwind_GetIP(context))
+        {
+            info->data[info->depth++] = reinterpret_cast<void *>(pc);
+        }
+    }
+    return _URC_NO_REASON;
+}
+
+} // namespace
+
 void StackTrace::tryCapture()
 {
     size = 0;
 #if USE_UNWIND
+#if USE_LLVM_STYLE_UNWIND
+    auto info = UnwindInfo{0, capacity, frame_pointers.data()};
+    _Unwind_Backtrace(tiflash_unwind_callback, &info);
+    size = info.depth;
+#else
     size = unw_backtrace(frame_pointers.data(), capacity);
+#endif
     __msan_unpoison(frame_pointers.data(), size * sizeof(frame_pointers[0]));
 #endif
 }
