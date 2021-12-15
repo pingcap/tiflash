@@ -48,6 +48,10 @@ public:
             double sm_valid_rate = 1.0;
 
             std::mutex sm_lock;
+
+            BlobFileOffset getPosFromStat(size_t buf_size);
+
+            void removePosFromStat(BlobFileOffset offset, size_t buf_size);
         };
 
         using BlobStatPtr = std::shared_ptr<BlobStat>;
@@ -64,10 +68,6 @@ public:
         void eraseStat(BlobFileId blob_file_id);
 
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size);
-
-        BlobFileOffset getPosFromStat(BlobStatPtr stat, size_t buf_size);
-
-        void removePosFromStat(BlobStatPtr stat, BlobFileOffset offset, size_t buf_size);
 
         BlobStatPtr fileIdToStat(BlobFileId file_id);
 
@@ -104,7 +104,7 @@ private:
 
     std::pair<BlobFileId, BlobFileOffset> getPosFromStats(size_t size);
 
-    void removePosFromStats(BlobFileId file_id, BlobFileOffset offset, size_t size);
+    void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
     String getBlobFilePath(BlobFileId blob_id);
 

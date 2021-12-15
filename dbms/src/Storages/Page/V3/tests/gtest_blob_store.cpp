@@ -78,38 +78,38 @@ TEST_F(BlobStoreTest, testStat)
     ASSERT_EQ(blob_file_id, UINT16_MAX);
     ASSERT_TRUE(stat);
 
-    auto offset = stats.getPosFromStat(stat, 10);
+    auto offset = stat->getPosFromStat(10);
     ASSERT_EQ(offset, 0);
 
-    offset = stats.getPosFromStat(stat, 100);
+    offset = stat->getPosFromStat(100);
     ASSERT_EQ(offset, 10);
 
-    offset = stats.getPosFromStat(stat, 20);
+    offset = stat->getPosFromStat(20);
     ASSERT_EQ(offset, 110);
 
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20);
     ASSERT_EQ(stat->sm_valid_size, 10 + 100 + 20);
     ASSERT_EQ(stat->sm_valid_rate, 1);
 
-    stats.removePosFromStat(stat, 10, 100);
+    stat->removePosFromStat(10, 100);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20);
     ASSERT_LE(stat->sm_valid_rate, 1);
 
-    offset = stats.getPosFromStat(stat, 110);
+    offset = stat->getPosFromStat(110);
     ASSERT_EQ(offset, 130);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 110);
     ASSERT_LE(stat->sm_valid_rate, 1);
 
-    offset = stats.getPosFromStat(stat, 90);
+    offset = stat->getPosFromStat(90);
     ASSERT_EQ(offset, 10);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 110 + 90);
     ASSERT_LE(stat->sm_valid_rate, 1);
 
     // Unmark the last range
-    stats.removePosFromStat(stat, 130, 110);
+    stat->removePosFromStat(130, 110);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 90);
     ASSERT_LE(stat->sm_valid_rate, 1);
@@ -122,7 +122,7 @@ TEST_F(BlobStoreTest, testStat)
      * Total size should plus 10, rather than 120.
      * And the postion return should be last range freed.
      */
-    offset = stats.getPosFromStat(stat, 120);
+    offset = stat->getPosFromStat(120);
     ASSERT_EQ(offset, 130);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110 + 10);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 90 + 120);
@@ -138,11 +138,11 @@ TEST_F(BlobStoreTest, testFullStats)
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 
     stat = stats.createStat(0);
-    offset = stats.getPosFromStat(stat, BLOBFILE_LIMIT_SIZE - 1);
+    offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1);
     ASSERT_EQ(offset, 0);
 
     // Can't get pos from a full stat
-    offset = stats.getPosFromStat(stat, 100);
+    offset = stat->getPosFromStat(100);
     ASSERT_EQ(offset, UINT64_MAX);
 
     // Stat internal property should not changed
@@ -157,14 +157,14 @@ TEST_F(BlobStoreTest, testFullStats)
 
     // A new stat can use
     stat = stats.createStat(blob_file_id);
-    offset = stats.getPosFromStat(stat, 100);
+    offset = stat->getPosFromStat(100);
     ASSERT_EQ(offset, 0);
 
     // Remove the stat which id is 0 , now remain the stat which id is 1
     stats.eraseStat(0);
 
     // Then full the stat which id 1
-    offset = stats.getPosFromStat(stat, BLOBFILE_LIMIT_SIZE - 100);
+    offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 100);
     ASSERT_EQ(offset, 100);
 
     // Then choose stat , it should return the stat id 0

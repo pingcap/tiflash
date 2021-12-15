@@ -52,7 +52,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     if (all_page_data_size != 0)
     {
-        char * buffer = (char *)alloc(all_page_data_size);
+        char * buffer = static_cast<char *>(alloc(all_page_data_size));
         char * buffer_pos = buffer;
         BlobFileId blob_id;
         BlobFileOffset offset_in_file;
@@ -92,7 +92,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                     write.offsets[i].second = field_digest.checksum();
                 }
 
-                if (write.offsets.size() != 0)
+                if (!write.offsets.empty())
                 {
                     // we can swap from WriteBatch instead of copying
                     entry.field_offsets.swap(write.offsets);
@@ -178,7 +178,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 
     // Get Postion from single stat
     auto lock_stat = blob_stats.statLock(stat);
-    BlobFileOffset offset = blob_stats.getPosFromStat(stat, size);
+    BlobFileOffset offset = stat->getPosFromStat(size);
 
     // Can't insert into this spacemap
     if (offset == INVALID_BLOBFILE_OFFSET)
@@ -193,7 +193,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
-    blob_stats.removePosFromStat(blob_stats.fileIdToStat(blob_id), offset, size);
+    blob_stats.fileIdToStat(blob_id)->removePosFromStat(offset, size);
 }
 
 
@@ -213,7 +213,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         buf_size += p.second.size;
     }
 
-    char * data_buf = (char *)alloc(buf_size);
+    char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
     });
@@ -260,10 +260,10 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
-    auto & [page_id, entry] = id_entry;
+    const auto & [page_id, entry] = id_entry;
     size_t buf_size = entry.size;
 
-    char * data_buf = (char *)alloc(buf_size);
+    char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
     });
@@ -359,15 +359,19 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
 void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id)
 {
     BlobStatPtr stat = nullptr;
+    bool found = false;
 
-    for (auto it = stats_map.begin(); it != stats_map.end(); it++)
+    for (auto & stat_in_map : stats_map)
     {
-        stat = *it;
+        stat = stat_in_map;
         if (stat->id == blob_file_id)
+        {
+            found = true;
             break;
+        }
     }
 
-    if (!stat)
+    if (!found)
     {
         LOG_FMT_ERROR(log, "No exist BlobStat which [BlobFileId={}]", blob_file_id);
         return;
@@ -392,7 +396,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
             break;
         }
 
-        for (auto stat : stats_map)
+        for (auto & stat : stats_map)
         {
             if (stat->sm_max_caps >= buf_size
                 && stat->sm_total_size + buf_size < file_limit_size
@@ -430,26 +434,26 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     }
 }
 
-BlobFileOffset BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf_size)
+BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size)
 {
     BlobFileOffset offset = 0;
     UInt64 max_cap = 0;
 
-    std::tie(offset, max_cap) = stat->smap->searchInsertOffset(buf_size);
+    std::tie(offset, max_cap) = smap->searchInsertOffset(buf_size);
 
     /**
      * Whatever `searchInsertOffset` success or failed,
      * Max capability still need update.
      */
-    stat->sm_max_caps = max_cap;
+    sm_max_caps = max_cap;
     if (offset != INVALID_BLOBFILE_OFFSET)
     {
-        if (offset + buf_size > stat->sm_total_size)
+        if (offset + buf_size > sm_total_size)
         {
             // This file must be expanded
-            auto expand_size = buf_size - (stat->sm_total_size - offset);
-            stat->sm_total_size += expand_size;
-            stat->sm_valid_size += buf_size;
+            auto expand_size = buf_size - (sm_total_size - offset);
+            sm_total_size += expand_size;
+            sm_valid_size += buf_size;
         }
         else
         {
@@ -458,27 +462,27 @@ BlobFileOffset BlobStore::BlobStats::getPosFromStat(BlobStatPtr stat, size_t buf
              * Current blob file is not expanded.
              * Only update valid size.
              */
-            stat->sm_valid_size += buf_size;
+            sm_valid_size += buf_size;
         }
 
-        stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
+        sm_valid_rate = sm_valid_size * 1.0 / sm_total_size;
     }
     return offset;
 }
 
-void BlobStore::BlobStats::removePosFromStat(BlobStatPtr stat, BlobFileOffset offset, size_t buf_size)
+void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, size_t buf_size)
 {
-    if (!stat->smap->markFree(offset, buf_size))
+    if (!smap->markFree(offset, buf_size))
     {
-        stat->smap->logStats();
+        smap->logStats();
         throw Exception(fmt::format("[offset={} , buf_size={}] is invalid.",
                                     offset,
                                     buf_size),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    stat->sm_valid_size -= buf_size;
-    stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
+    sm_valid_size -= buf_size;
+    sm_valid_rate = sm_valid_size * 1.0 / sm_total_size;
 }
 
 BlobStatPtr BlobStore::BlobStats::fileIdToStat(BlobFileId file_id)
