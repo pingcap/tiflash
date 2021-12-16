@@ -193,12 +193,13 @@ Unlike TiKV, which uses [RocksDB](https://github.com/tikv/rocksdb) as KvEngine d
   - Build real RSM like TiKV but no actual info in data CFs.
   - Communicate with other components as a raftstore.
   - Expose region meta, data and other necessary info to TiFlash.
-- Region Snapshot Persister
-  - Persist whole region cache in memory by apply-state as region snapshot atomically.
+- RSM in TiFlash
+  - Maintain RSM through interfaces from raftstore-proxy.
+  - Persist whole region cache in memory by apply-state as `region snapshot` atomically.
 - Committed table records in column storage
   - Store committed transaction data by strong schema.
-  - Support MVCC by tso
-  - Support table data GC
+  - Support MVCC by tso.
+  - Support table data GC.
 
 Redundancy is a practical way to guarantee `Idempotency` and `External Consistency`, which means updating region meta should be lazy while adding data but advanced while removing region.
 
@@ -214,7 +215,7 @@ After the feature [Async Commit](https://pingcap.github.io/tidb-dev-guide/unders
 After current region peer has applied to latest committed index, it's available to check table locks(like TiKV does) and try to resolve them.
 
 Epoch(`version`, `conf version`) is one of important properties to present region meta changing.
-Latest `GC Safe Point` should always be smaller than start-ts of transaction read.
+Latest `GC Safepoint` should always be smaller than start-ts of transaction read.
 Both of them shall be double checked even after getting immutable snapshot information from storage.
 
 The logic about **Resolve Lock** is complex.
