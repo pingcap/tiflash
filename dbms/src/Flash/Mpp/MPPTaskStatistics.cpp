@@ -2,6 +2,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
+#include <Flash/Statistics/parseIdFromExecutorId.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
@@ -40,16 +41,6 @@ Int64 toNanoseconds(MPPTaskStatistics::Timestamp timestamp)
     return std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp.time_since_epoch()).count();
 }
 
-Int64 parseId(const String & executor_id)
-{
-    auto split_index = executor_id.find('_');
-    if (split_index == String::npos || split_index == (executor_id.size() - 1))
-    {
-        throw TiFlashException("Illegal executor_id: " + executor_id, Errors::Coprocessor::Internal);
-    }
-    return std::stoi(executor_id.substr(split_index + 1, executor_id.size()));
-}
-
 String executorsToJson(const std::map<String, ExecutorStatisticsPtr> & executor_statistics_map)
 {
     FmtBuffer buffer;
@@ -73,7 +64,7 @@ void MPPTaskStatistics::initializeExecutorDag(DAGContext * dag_context)
     assert(dag_context->is_mpp_task);
     const auto & root_executor = dag_context->dag_request->root_executor();
     assert(root_executor.has_exchange_sender());
-    sender_executor_id = parseId(root_executor.executor_id());
+    sender_executor_id = parseIdFromExecutorId(root_executor.executor_id());
     executor_statistics_collector.initialize(dag_context);
 }
 

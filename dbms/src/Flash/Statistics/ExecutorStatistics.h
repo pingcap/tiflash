@@ -5,6 +5,7 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
+#include <Flash/Statistics/parseIdFromExecutorId.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <common/types.h>
@@ -26,23 +27,14 @@ public:
     {
         assert(executor->has_executor_id());
         executor_id = executor->executor_id();
-
-        auto parse_id = [](const String & executor_id_) -> Int64 {
-            auto split_index = executor_id_.find('_');
-            if (split_index == String::npos || split_index == (executor_id_.size() - 1))
-            {
-                throw TiFlashException("Illegal executor_id: " + executor_id_, Errors::Coprocessor::Internal);
-            }
-            return std::stoi(executor_id_.substr(split_index + 1, executor_id_.size()));
-        };
+        id = parseIdFromExecutorId(executor_id);
 
         type = ExecutorImpl::type;
-        id = parse_id(executor_id);
 
         for (const auto * child : getChildren(*executor))
         {
             assert(child->has_executor_id());
-            children.push_back(parse_id(child->executor_id()));
+            children.push_back(parseIdFromExecutorId(child->executor_id()));
         }
     }
 
