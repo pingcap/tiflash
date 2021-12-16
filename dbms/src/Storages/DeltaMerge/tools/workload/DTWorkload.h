@@ -12,7 +12,7 @@ class Context;
 namespace DB::DM
 {
 class DeltaMergeStore;
-class ColumnDefine;
+struct ColumnDefine;
 using ColumnDefines = std::vector<ColumnDefine>;
 } // namespace DB::DM
 
@@ -27,8 +27,8 @@ class KeyGenerator;
 class TimestampGenerator;
 class DataGenerator;
 class TableGenerator;
-class TableInfo;
-class WorkloadOptions;
+struct TableInfo;
+struct WorkloadOptions;
 class HandleLock;
 class SharedHandleTable;
 

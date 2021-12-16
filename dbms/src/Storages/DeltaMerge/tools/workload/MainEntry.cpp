@@ -5,6 +5,7 @@
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
+#include <signal.h>
 
 #include <fstream>
 #include <random>

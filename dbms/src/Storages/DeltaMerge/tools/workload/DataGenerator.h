@@ -4,7 +4,7 @@
 namespace DB::DM::tests
 {
 struct WorkloadOptions;
-class TableInfo;
+struct TableInfo;
 class KeyGenerator;
 class TimestampGenerator;
 
