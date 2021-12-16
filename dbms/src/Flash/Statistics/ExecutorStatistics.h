@@ -5,7 +5,6 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
-#include <Flash/Statistics/parseIdFromExecutorId.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <common/types.h>
@@ -27,13 +26,12 @@ public:
     {
         assert(executor->has_executor_id());
         executor_id = executor->executor_id();
-        id = parseIdFromExecutorId(executor_id);
 
         type = ExecutorImpl::type;
 
         getChildren(*executor).forEach([&](const tipb::Executor & child) {
             assert(child.has_executor_id());
-            children.push_back(parseIdFromExecutorId(child.executor_id()));
+            children.push_back(child.executor_id());
         });
     }
 
@@ -41,10 +39,16 @@ public:
     {
         FmtBuffer fmt_buffer;
         fmt_buffer.fmtAppend(
-            R"({{"id":{},"type":"{}","children":[{}],"outbound_rows":{},"outbound_blocks":{},"outbound_bytes":{},"execution_time_ns":{})",
-            id,
-            type,
-            fmt::join(children, ","),
+            R"({{"id":"{}","type":"{}","children":[)",
+            executor_id,
+            type);
+        fmt_buffer.joinStr(
+            children.cbegin(),
+            children.cend(),
+            [](const String & child, FmtBuffer & bf) { bf.fmtAppend(R"("{}")", child); },
+            ",");
+        fmt_buffer.fmtAppend(
+            R"(],"outbound_rows":{},"outbound_blocks":{},"outbound_bytes":{},"execution_time_ns":{})",
             outbound_rows,
             outbound_blocks,
             outbound_bytes,
@@ -70,10 +74,9 @@ public:
 
 protected:
     String executor_id;
-    Int64 id;
     String type;
 
-    std::vector<Int64> children;
+    std::vector<String> children;
 
     size_t outbound_rows = 0;
     size_t outbound_blocks = 0;

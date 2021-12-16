@@ -45,7 +45,7 @@ struct MPPTaskStatistics
     String error_message;
 
     /// executor dag
-    Int64 sender_executor_id;
+    String sender_executor_id;
     ExecutorStatisticsCollector executor_statistics_collector;
 
     /// resource
