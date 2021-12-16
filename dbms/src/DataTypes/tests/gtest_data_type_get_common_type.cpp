@@ -75,43 +75,7 @@ try
     EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Date MyDate")));
     EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Decimal(43,4) Float")));
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-
-    bool print_stack_trace = true;
-
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    if (std::string::npos != embedded_stack_trace_pos && !print_stack_trace)
-        text.resize(embedded_stack_trace_pos);
-
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl
-              << std::endl;
-
-    if (print_stack_trace && std::string::npos == embedded_stack_trace_pos)
-    {
-        std::cerr << "Stack trace:" << std::endl
-                  << e.getStackTrace().toString();
-    }
-
-    throw;
-}
-catch (const Poco::Exception & e)
-{
-    std::cerr << "Poco::Exception: " << e.displayText() << std::endl;
-    throw;
-}
-catch (const std::exception & e)
-{
-    std::cerr << "std::exception: " << e.what() << std::endl;
-    throw;
-}
-catch (...)
-{
-    std::cerr << "Unknown exception" << std::endl;
-    throw;
-}
-}
+CATCH
 
 TEST(DataTypeTest, getMostSubtype)
 try
