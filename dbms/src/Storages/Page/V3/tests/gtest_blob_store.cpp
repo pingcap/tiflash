@@ -59,7 +59,7 @@ TEST_F(BlobStoreTest, testStats)
 
 TEST_F(BlobStoreTest, testStat)
 {
-    UInt16 blob_file_id = 0;
+    BlobFileId blob_file_id = 0;
     BlobStore::BlobStats::BlobStatPtr stat;
 
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
@@ -75,7 +75,7 @@ TEST_F(BlobStoreTest, testStat)
 
     stats.createStat(0);
     std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
-    ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_OFFSET);
+    ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
     ASSERT_TRUE(stat);
 
     auto offset = stat->getPosFromStat(10);
@@ -131,9 +131,9 @@ TEST_F(BlobStoreTest, testStat)
 
 TEST_F(BlobStoreTest, testFullStats)
 {
-    UInt16 blob_file_id = 0;
+    BlobFileId blob_file_id = 0;
     BlobStore::BlobStats::BlobStatPtr stat;
-    UInt64 offset = 0;
+    BlobFileOffset offset = 0;
 
     BlobStats stats(&Poco::Logger::get("BlobStoreTest"), config);
 

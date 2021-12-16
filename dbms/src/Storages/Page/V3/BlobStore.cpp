@@ -159,9 +159,17 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto blob_file = getBlobFile(blob_id);
-    blob_file->write(buffer, offset_in_file, all_page_data_size, write_limiter);
-
+    try
+    {
+        auto blob_file = getBlobFile(blob_id);
+        blob_file->write(buffer, offset_in_file, all_page_data_size, write_limiter);
+    }
+    catch (DB::Exception & e)
+    {
+        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
+        LOG_FMT_ERROR(log, "[Blobid={}, offset_in_file={}, size={}] write failed.", blob_id, offset_in_file, all_page_data_size);
+        throw e;
+    }
 
     return edit;
 }
