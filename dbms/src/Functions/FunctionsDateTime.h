@@ -1355,7 +1355,7 @@ struct DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, use_utc_tim
 
             const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column);
             std::function<int(size_t)> get_value_func;
-            if (col_from_string)
+            if (delta_const_column)
             {
                 // string date add const int interval
                 get_value_func = [&](size_t) -> int {
