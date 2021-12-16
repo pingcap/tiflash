@@ -42,7 +42,7 @@ TEST(ElasticThdPool, TestThdSet)
     EXPECT_EQ(pool.getAliveCnt(), thd_set_size + 1);
 
     //wait background task to shrink
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     EXPECT_EQ(pool.getAvailableCnt(), init_pool_cap);
     EXPECT_EQ(pool.getAliveCnt(), init_pool_cap);
 }
@@ -83,7 +83,7 @@ TEST(ElasticThdPool, TestMultiThdSet)
     EXPECT_EQ(pool.getAliveCnt(), thd_set_size + thd_set_size + 1);
 
     //wait background task to shrink
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     EXPECT_EQ(pool.getAvailableCnt(), pool.getIdleBufferSize());
     EXPECT_EQ(pool.getAliveCnt(), thd_set_size + pool.getIdleBufferSize());
 
@@ -91,7 +91,7 @@ TEST(ElasticThdPool, TestMultiThdSet)
     waitTasks(futures);
 
     //wait background task to shrink
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     EXPECT_EQ(pool.getAvailableCnt(), init_pool_cap);
     EXPECT_EQ(pool.getAliveCnt(), init_pool_cap);
 }
