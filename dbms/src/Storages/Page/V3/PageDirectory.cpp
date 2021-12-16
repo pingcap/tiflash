@@ -106,33 +106,41 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 {
     std::unique_lock write_lock(table_rw_mutex); // TODO: It is totally serialized, make it a pipeline
     UInt64 last_sequence = sequence.load();
+
+    // stage 1, get the entry to be ref
+    auto snap = createSnapshot();
+    for (auto & r : edit.getRecords())
+    {
+        if (r.type != WriteBatch::WriteType::REF)
+        {
+            continue;
+        }
+        auto iter = mvcc_table_directory.find(r.ori_page_id);
+        if (iter == mvcc_table_directory.end())
+        {
+            throw Exception(fmt::format("Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1), ErrorCodes::LOGICAL_ERROR);
+        }
+        if (auto entry = iter->second->getEntry(last_sequence); entry)
+        {
+            // copy the entry to be ref
+            r.entry = *entry;
+        }
+        else
+        {
+            // Just log a warning cause we have already persist edit to WAL, we can NOT rollback WAL
+            throw Exception(fmt::format("Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1), ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    // stage 2, persisted the changes to WAL
     // wal.apply(edit);
 
-    // stage 1, nothing to rollback
+    // stage 3, create entry version list for pageId. nothing need to be rollback
     std::unordered_map<PageId, PageLock> updating_locks;
     std::vector<VersionedPageEntriesPtr> updating_pages;
     updating_pages.reserve(edit.size());
-    for (auto & r : edit.getRecords())
+    for (const auto & r : edit.getRecords())
     {
-        if (r.type == WriteBatch::WriteType::REF)
-        {
-            auto iter = mvcc_table_directory.find(r.ori_page_id);
-            if (iter == mvcc_table_directory.end())
-            {
-                // Just log a warning cause we have already persist edit to WAL, we can NOT rollback WAL
-                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={} is ignored", r.page_id, r.ori_page_id, last_sequence + 1);
-            }
-            if (auto entry = iter->second->getEntry(last_sequence); entry)
-            {
-                r.entry = *entry;
-            }
-            else
-            {
-                // Just log a warning cause we have already persist edit to WAL, we can NOT rollback WAL
-                LOG_FMT_WARNING(log, "Trying to add ref from {} to non-exist {} with sequence={} is ignored", r.page_id, r.ori_page_id, last_sequence + 1);
-            }
-        }
-
         auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
         if (created)
         {
@@ -142,7 +150,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         updating_pages.emplace_back(iter->second);
     }
 
-    // stage 2, there are no rollback since we already persist `edit` to WAL, just ignore error if any
+    // stage 4, there are no rollback since we already persist `edit` to WAL, just ignore error if any
     const auto & records = edit.getRecords();
     for (size_t idx = 0; idx < records.size(); ++idx)
     {
