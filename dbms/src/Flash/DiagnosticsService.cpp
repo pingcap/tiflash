@@ -13,6 +13,7 @@
 
 #include <ext/scope_guard.h>
 #include <memory>
+#include <vector>
 
 /*
 #ifdef __linux__
@@ -1076,7 +1077,7 @@ std::list<std::string> getFilesToSearch(IServer & server, Poco::Logger * log, co
     auto error_log_file_prefix = server.config().getString("logger.errorlog", "*");
     auto tracing_log_file_prefix = server.config().getString("logger.tracing_log", "*");
     // ignore tiflash error log and mpp task tracing log
-    auto ignore_log_file_prefixes = {error_log_file_prefix, tracing_log_file_prefix};
+    auto ignore_log_file_prefixes = std::vector{error_log_file_prefix, tracing_log_file_prefix};
 
     {
         auto log_file_prefix = server.config().getString("logger.log");

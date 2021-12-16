@@ -25,7 +25,7 @@
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
-#include <Flash/Mpp/MPPTaskTracingLogger.h>
+#include <Flash/Mpp/getMPPTaskTracingLogger.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
@@ -796,7 +796,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         createDirectory(tracing_log_path);
         std::cerr << "Logging tracing log to " << tracing_log_path << std::endl;
         Poco::AutoPtr<Poco::SourceFilterChannel> source = new Poco::SourceFilterChannel;
-        source->setSource(DB::MPPTaskTracingLogger::tracing_log_source);
+        source->setSource(DB::tracing_log_source);
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> tracing_log = new FormattingChannel(pf);

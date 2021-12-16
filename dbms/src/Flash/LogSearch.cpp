@@ -392,7 +392,7 @@ static const std::string gz_suffix = ".gz";
 // if timestamp of log file could be told, return whether it can be filtered.
 bool FilterFileByDatetime(
     const std::string & path,
-    std::initializer_list<std::string> ignore_log_file_prefixes,
+    const std::vector<std::string> & ignore_log_file_prefixes,
     const int64_t start_time)
 {
     static const std::string date_format_example = "0000-00-00-00:00:00.000";

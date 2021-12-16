@@ -1,0 +1,10 @@
+#include <Flash/Mpp/getMPPTaskLog.h>
+#include <Flash/Mpp/getMPPTaskTracingLogger.h>
+
+namespace DB
+{
+LogWithPrefixPtr getMPPTaskTracingLogger(const MPPTaskId & mpp_task_id)
+{
+    return getMPPTaskLog(tracing_log_source, mpp_task_id);
+}
+} // namespace DB

@@ -2,7 +2,6 @@
 
 #include <Common/LogWithPrefix.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Flash/Mpp/MPPTaskTracingLogger.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <common/StringRef.h>
@@ -28,11 +27,9 @@ struct MPPTaskStatistics
 
     void initializeExecutorDAG(DAGContext * dag_context);
 
-    String toJson() const;
+    void logTracingJson();
 
-    void logStats();
-
-    MPPTaskTracingLogger logger;
+    const LogWithPrefixPtr logger;
 
     /// common
     const MPPTaskId id;

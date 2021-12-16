@@ -6,11 +6,11 @@
 
 #include <boost/noncopyable.hpp>
 #include <fstream>
-#include <initializer_list>
 #include <istream>
 #include <memory>
 #include <optional>
 #include <variant>
+#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -120,7 +120,7 @@ void ReadLogFile(const std::string & path, std::function<void(std::istream &)> &
 
 bool FilterFileByDatetime(
     const std::string & path,
-    std::initializer_list<std::string> ignore_log_file_prefixes,
+    const std::vector<std::string> & ignore_log_file_prefixes,
     const int64_t start_time);
 
 

@@ -268,7 +268,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     }
 
     mpp_task_statistics.initializeExecutorDAG(dag_context.get());
-    mpp_task_statistics.logStats();
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::preprocess()
@@ -375,7 +375,7 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "finish task which was cancelled before");
 
     mpp_task_statistics.end(status.load(), err_msg);
-    mpp_task_statistics.logStats();
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)
