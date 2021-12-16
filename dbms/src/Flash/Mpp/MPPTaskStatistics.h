@@ -4,6 +4,7 @@
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskTracingLogger.h>
 #include <Flash/Mpp/TaskStatus.h>
+#include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <common/StringRef.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>
@@ -25,6 +26,8 @@ struct MPPTaskStatistics
 
     void end(const TaskStatus & status_, StringRef error_message_ = "");
 
+    void initializeExecutorDAG(DAGContext * dag_context);
+
     String toJson() const;
 
     void logStats();
@@ -41,6 +44,10 @@ struct MPPTaskStatistics
     Timestamp task_end_timestamp;
     TaskStatus status;
     String error_message;
+
+    /// executor dag
+    String sender_executor_id;
+    ExecutorStatisticsCollector executor_statistics_collector;
 
     /// resource
     Int64 working_time = 0;

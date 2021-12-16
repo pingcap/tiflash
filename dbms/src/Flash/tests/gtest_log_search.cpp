@@ -8,13 +8,13 @@ namespace DB
 {
 namespace tests
 {
-class LogSearch_Test : public ::testing::Test
+class LogSearchTest : public ::testing::Test
 {
 public:
     void SetUp() override {}
 };
 
-TEST_F(LogSearch_Test, LogSearch)
+TEST_F(LogSearchTest, LogSearch)
 {
     std::string s = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
     std::string s_bad1 = "[2020/4/4 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
@@ -72,7 +72,7 @@ TEST_F(LogSearch_Test, LogSearch)
     }
 }
 
-TEST_F(LogSearch_Test, SearchDir)
+TEST_F(LogSearchTest, SearchDir)
 {
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"/1/test-err.log"}, 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"", ""}, 0));
