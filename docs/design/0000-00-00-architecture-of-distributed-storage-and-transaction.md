@@ -187,7 +187,7 @@ Before actually writing data into column storage, old data within [start-key, en
 
 ##### Region Snapshot
 
-Unlike TiKV, which can use [RocksDB](https://github.com/tikv/rocksdb) as KvEngine directly, TiFlash can maintain multi-raft RSM in several parts:
+Unlike TiKV, which uses [RocksDB](https://github.com/tikv/rocksdb) as KvEngine directly, TiFlash can maintain multi-raft RSM in several parts:
 
 - RSM in raftstore-proxy
   - Build real RSM like TiKV but no actual info in data CFs.
