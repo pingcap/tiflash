@@ -68,8 +68,8 @@ public:
 
     /**
      * Search a span that can fit in `size`.
-     * If such span is found, it will also return a hint of the max capacity available
-     * in this SpaceMap.
+     * If such span is found.
+     * It will mark that span to be used and also return a hint of the max capacity available in this SpaceMap. 
      * 
      * return value is <insert_offset, max_cap>:
      *  insert_offset : start offset for the inserted space
