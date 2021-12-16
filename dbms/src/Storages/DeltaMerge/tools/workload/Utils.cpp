@@ -1,6 +1,6 @@
 #include <Storages/DeltaMerge/tools/workload/Utils.h>
-#include <fmt/ranges.h>
 #include <fmt/chrono.h>
+#include <fmt/ranges.h>
 
 namespace DB::DM::tests
 {
