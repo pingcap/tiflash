@@ -43,7 +43,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
-    , mpp_task_statistics(log, id, meta.address())
+    , mpp_task_statistics(id, meta.address())
 {}
 
 MPPTask::~MPPTask()

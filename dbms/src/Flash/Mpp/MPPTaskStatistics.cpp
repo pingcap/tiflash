@@ -1,4 +1,3 @@
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <fmt/format.h>
@@ -6,8 +5,8 @@
 
 namespace DB
 {
-MPPTaskStatistics::MPPTaskStatistics(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_)
-    : log(getMPPTaskLog(log_, "mpp_task_tracing"))
+MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_)
+    : logger(id_)
     , id(id_)
     , host(std::move(address_))
     , task_init_timestamp(Clock::now())
@@ -29,7 +28,7 @@ void MPPTaskStatistics::end(const TaskStatus & status_, StringRef error_message_
 
 void MPPTaskStatistics::logStats()
 {
-    log->debug(toJson());
+    logger.log(toJson());
 }
 
 namespace

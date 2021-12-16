@@ -25,6 +25,7 @@
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
+#include <Flash/Mpp/MPPTaskTracingLogger.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
@@ -735,7 +736,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
 
     bool is_daemon = config.getBool("application.runAsDaemon", true);
 
-    // Split log and error log.
+    // Split log, error log and tracing log.
     Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
 
     auto log_level = normalize(config.getString("logger.level", "debug"));
@@ -786,6 +787,30 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         level->setChannel(errorlog);
         split->addChannel(level);
         errorlog->open();
+    }
+
+    const auto tracing_log_path = config.getString("logger.tracing_log", "");
+    if (!tracing_log_path.empty())
+    {
+        createDirectory(tracing_log_path);
+        std::cerr << "Logging tracing log to " << tracing_log_path << std::endl;
+        Poco::AutoPtr<Poco::MPPTaskTracingChannel> tracing = new Poco::MPPTaskTracingChannel;
+        Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
+        pf->setProperty("times", "local");
+        Poco::AutoPtr<FormattingChannel> tracing_log = new FormattingChannel(pf);
+        tracing_log_file = new Poco::TiFlashLogFileChannel;
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(tracing_log_path).absolute().toString());
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
+        tracing_log->setChannel(tracing_log_file);
+        tracing->setChannel(tracing_log);
+        split->addChannel(tracing);
+        tracing_log->open();
     }
 
     /// "dynamic_layer_selection" is needed only for Yandex.Metrika, that share part of ClickHouse code.
@@ -860,6 +885,8 @@ void BaseDaemon::closeLogs()
         log_file->close();
     if (error_log_file)
         error_log_file->close();
+    if (tracing_log_file)
+        tracing_log_file->close();
 
     if (!log_file)
         logger().warning("Logging to console but received signal to close log file (ignoring).");

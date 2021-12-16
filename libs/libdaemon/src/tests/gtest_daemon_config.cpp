@@ -76,6 +76,7 @@ max_rows_in_set = 455
 dt_page_gc_low_write_prob = 0.2
 [logger]
 errorlog = "./tmp/log/tiflash_error.log"
+tracing_log = "./tmp/log/tiflash_tracing.log"
 level = "debug"
 log = "./tmp/log/tiflash.log"
 size = "1K"
@@ -88,6 +89,7 @@ dt_page_gc_low_write_prob = 0.2
 [logger]
 count = 20
 errorlog = "./tmp/log/tiflash_error.log"
+tracing_log = "./tmp/log/tiflash_tracing.log"
 level = "debug"
 log = "./tmp/log/tiflash.log"
 size = "1M"
@@ -101,6 +103,7 @@ max_rows_in_set = 455
 dt_page_gc_low_write_prob = 0.2
 [logger]
 errorlog = "./tmp/log/tiflash_error.log"
+tracing_log = "./tmp/log/tiflash_tracing.log"
 level = "debug"
 log = "./tmp/log/tiflash.log"
 size = "1K"
@@ -113,6 +116,7 @@ dt_page_gc_low_write_prob = 0.2
 [logger]
 count = 1
 errorlog = "./tmp/log/tiflash_error.log"
+tracing_log = "./tmp/log/tiflash_tracing.log"
 level = "debug"
 log = "./tmp/log/tiflash.log"
 size = "1"
