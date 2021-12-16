@@ -16,7 +16,6 @@ namespace DB
 {
 namespace tests
 {
-
 class FunctionBench : public benchmark::Fixture
 {
 protected:
@@ -106,7 +105,9 @@ protected:
 };
 
 
-class LeastBench : public FunctionBench {};
+class LeastBench : public FunctionBench
+{
+};
 
 BENCHMARK_DEFINE_F(LeastBench, bench1)
 (benchmark::State & state [[maybe_unused]])
