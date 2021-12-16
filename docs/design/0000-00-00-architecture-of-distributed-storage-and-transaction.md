@@ -44,7 +44,7 @@ To guarantee `Snapshot Isolation`, there are a few important safeguard mechanism
 
 - `Replica Read` makes sure that the raft state machine of region peers are correct and have engough context.
 - `Resolve Lock` checks whether related table records are protected by locks and tries to resolve them.
-- `MVCC(Multiversion concurrency control)` read table records by specific version presented by `Timestamp Oracle`.
+- `MVCC(Multiversion concurrency control)` read table records by specific version presented by `TSO(Timestamp Oracle)`.
 
 ### Distributed Storage Framework
 
