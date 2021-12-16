@@ -41,8 +41,11 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         {
             std::unique_lock lock(mu);
-            if (!finished)
-                writeDone();
+            if (finished)
+                return;
+            /// make sure to finish the tunnel after it is connected
+            waitUntilConnectedOrCancelled(lk);
+            send_queue.finish();
         }
         waitForConsumerFinish(/*allow_throw=*/false);
     }

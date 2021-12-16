@@ -25,7 +25,7 @@ namespace DB
  * The lifecycle of a MPPTunnel can be indicated by `connected` and `finished`:
  * | Stage                          | `connected` | `finished` |
  * |--------------------------------|-------------|------------|
- * | After constructed              | false       | true       |
+ * | After constructed              | false       | false      |
  * | After `close` before `connect` | false       | true       |
  * | After `connect`                | true        | false      |
  * | After `consumerFinish`         | true        | true       |
