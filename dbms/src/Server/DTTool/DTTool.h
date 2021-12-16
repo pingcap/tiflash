@@ -1,10 +1,18 @@
 #pragma once
 #include <Common/TiFlashBuildInfo.h>
+#include <Common/UnifiedLogPatternFormatter.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/File.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
+#include <Poco/PatternFormatter.h>
 #include <Server/IServer.h>
+#include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <pingcap/Config.h>
 #include <daemon/BaseDaemon.h>
 
 #include <ext/scope_guard.h>
@@ -252,5 +260,76 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
 
 template <class Func, class Args>
 inline const std::string CLIService<Func, Args>::TiFlashProxyConfig::config_prefix = "flash.proxy";
+
+namespace detail {
+using namespace DB;
+class ImitativeEnv {
+    DB::ContextPtr createImitativeContext(const std::string& workdir) {
+        using namespace DB;
+        // set itself as global context
+        global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
+        global_context->setGlobalContext(*global_context);
+        global_context->setApplicationType(DB::Context::ApplicationType::SERVER);
+
+        global_context->initializeTiFlashMetrics();
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+        global_context->initializeFileProvider(key_manager, false);
+
+        // Theses global variables should be initialized by the following order
+        // 1. capacity
+        // 2. path pool
+        // 3. TMTContext
+        auto path = Poco::Path{workdir}.absolute().toString();
+        global_context->initializePathCapacityMetric(0, {path}, {}, {}, {});
+        global_context->setPathPool(
+            {path},
+            {path},
+            Strings{},
+            true,
+            global_context->getPathCapacity(),
+            global_context->getFileProvider());
+        TiFlashRaftConfig raft_config;
+
+        raft_config.ignore_databases = {"default", "system"};
+        raft_config.engine = TiDB::StorageEngine::DT;
+        raft_config.disable_bg_flush = true;
+        global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
+
+        global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
+
+        global_context->getTMTContext().restore();
+        return global_context;
+    }
+
+    void setupLogger() {
+        Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cout);
+        Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
+        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
+        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
+        Poco::Logger::root().setChannel(formatting_channel);
+        Poco::Logger::root().setLevel("trace");
+    }
+
+    ContextPtr global_context {};
+
+public:
+
+    ImitativeEnv(const std::string& workdir) {
+        setupLogger();
+        createImitativeContext(workdir);
+    }
+
+    ~ImitativeEnv() {
+        global_context->getTMTContext().setStatusTerminated();
+        global_context->shutdown();
+        global_context.reset();
+    }
+
+    ContextPtr getContext() {
+        return global_context;
+    }
+
+};
+} // namespace detail
 
 } // namespace DTTool

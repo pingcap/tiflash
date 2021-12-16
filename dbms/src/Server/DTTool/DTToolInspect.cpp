@@ -18,6 +18,7 @@ static constexpr char INSPECT_HELP[] =
     "  --config-file Tiflash config file.\n"
     "  --check       Iterate data files to check integrity.\n"
     "  --file-id     Target DMFile ID.\n"
+    "  --imitative   Use imitative context instead. (encryption is not supported in this mode)\n"
     "  --workdir     Target directory.";
 
 // clang-format on
@@ -138,13 +139,14 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
     bpo::variables_map vm;
     bpo::positional_options_description positional;
     bool check = false;
-
+    bool imitative = false;
     // clang-format off
     options.add_options()
         ("help", "")
         ("check", bpo::bool_switch(&check))
         ("workdir", bpo::value<std::string>()->required())
         ("file-id", bpo::value<size_t>()->required())
+        ("imitative", bpo::bool_switch(&imitative))
         ("config-file", bpo::value<std::string>()->required());
     // clang-format on
 
@@ -162,12 +164,28 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
             return 0;
         }
         bpo::notify(vm);
+
+        if (imitative && vm.count("config-file"))
+        {
+            std::cerr << "config-file is not allowed in imitative mode" << std::endl;
+            return -EINVAL;
+        }
+
         auto workdir = vm["workdir"].as<std::string>();
         auto file_id = vm["file-id"].as<size_t>();
         auto config_file = vm["config-file"].as<std::string>();
         auto args = InspectArgs{check, file_id, workdir};
-        CLIService service(inspectServiceMain, args, config_file, ffi_function);
-        return service.run({""});
+
+        if (imitative)
+        {
+            auto env = detail::ImitativeEnv{args.workdir};
+            return inspectServiceMain(*env.getContext(), args);
+        }
+        else
+        {
+            CLIService service(inspectServiceMain, args, config_file, ffi_function);
+            return service.run({""});
+        }
     }
     catch (const boost::wrapexcept<boost::program_options::required_option> & exception)
     {

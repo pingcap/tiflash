@@ -1,3 +1,4 @@
+#pragma once
 #include <Core/Types.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
@@ -34,7 +35,6 @@ public:
     TiFlashRaftConfig() = default;
 
     static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
-
 };
 
 } // namespace DB
