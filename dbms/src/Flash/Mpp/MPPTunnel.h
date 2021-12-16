@@ -93,7 +93,6 @@ public:
 private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
-    /// to avoid being blocked when pop(), we should send nullptr into send_queue
     void sendLoop();
 
     void waitForConsumerFinish(bool allow_throw);
@@ -130,22 +129,23 @@ private:
         {
         }
 
-        String getState()
+        // before finished, must be called without protection of mu
+        String getError()
         {
             future.wait();
             return future.get();
         }
 
-        void setState(const String & state)
+        void setError(const String & err_msg)
         {
-            promise.set_value(state);
+            promise.set_value(err_msg);
         }
 
     private:
         std::promise<String> promise;
         std::shared_future<String> future;
     };
-    ConsumerState consumer_state; // do not need to be guarded by mu
+    ConsumerState consumer_state;
 
     const LogWithPrefixPtr log;
 };

@@ -104,7 +104,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         std::unique_lock<std::mutex> lk(mu);
         waitUntilConnectedOrCancelled(lk);
         if (finished)
-            throw Exception("write to tunnel which is already closed," + consumer_state.getState());
+            throw Exception("write to tunnel which is already closed," + consumer_state.getError());
 
         if (send_queue.push(std::make_shared<mpp::MPPDataPacket>(data)))
         {
@@ -164,7 +164,7 @@ void MPPTunnelBase<Writer>::writeDone()
     {
         std::unique_lock<std::mutex> lk(mu);
         if (finished)
-            throw Exception("write to tunnel which is already closed," + consumer_state.getState());
+            throw Exception("write to tunnel which is already closed," + consumer_state.getError());
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrCancelled(lk);
 
@@ -218,7 +218,7 @@ void MPPTunnelBase<Writer>::waitForFinish()
 template <typename Writer>
 void MPPTunnelBase<Writer>::waitForConsumerFinish(bool allow_throw)
 {
-    String err_msg = consumer_state.getState(); // may blocking
+    String err_msg = consumer_state.getError(); // may blocking
     if (allow_throw && !err_msg.empty())
         throw Exception("Consumer exits unexpected, " + err_msg);
 }
@@ -251,11 +251,13 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrCancelled(std::unique_lock<std::
 template <typename Writer>
 void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg)
 {
-    std::unique_lock<std::mutex> lk(mu);
+    // must finish send_queue outside of the critical area to avoid deadlock with write.
     send_queue.finish();
+
+    std::unique_lock<std::mutex> lk(mu);
     finished = true;
-    // must setState in the critical area to keep consistent with `finished` from outside.
-    consumer_state.setState(err_msg);
+    // must call setError in the critical area to keep consistent with `finished` from outside.
+    consumer_state.setError(err_msg);
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
