@@ -28,3 +28,6 @@ target_link_libraries (strings_position dbms gtest_main clickhouse_functions)
 add_executable (least_greatest gtest_functions_least_greatest.cpp)
 target_link_libraries (least_greatest dbms gtest_main clickhouse_functions)
 
+add_executable (bench_least bench_function_least.cpp)
+target_link_libraries (bench_least dbms gtest benchmark::benchmark_main clickhouse_functions)
+

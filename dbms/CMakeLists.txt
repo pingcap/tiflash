@@ -260,6 +260,11 @@ if (ENABLE_TESTS)
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
     endmacro()
 
+    macro(grep_bench_sources BASE_DIR DST_VAR)
+        # Cold match files that are not in tests/ directories
+        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "bench*.cpp")
+    endmacro()
+
     # attach all dbms gtest sources
     grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
@@ -278,6 +283,19 @@ if (ENABLE_TESTS)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
+
+    grep_bench_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_bench_sources)
+    add_executable(bench_dbms EXCLUDE_FROM_ALL
+        ${dbms_bench_sources}
+    )
+    target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+    target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_BENCH)
+
+    target_link_libraries(bench_dbms benchmark::benchmark_main gtest dbms clickhouse_functions)
+
+    target_compile_options(bench_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
+    add_check(bench_dbms)
+
 endif ()
 
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")

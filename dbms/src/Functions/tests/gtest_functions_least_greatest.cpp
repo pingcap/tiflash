@@ -550,14 +550,6 @@ try
             func_name,
             createConstColumn<Nullable<String>>(2, "sahdka"),
             createConstColumn<Nullable<String>>(2, "sahdkb")));
-
-    // date
-    // ASSERT_COLUMN_EQ(
-    //     createConstColumn<Nullable<DataTypeDate>>(2, "sahdkb"),
-    //     executeFunction(
-    //         func_name,
-    //         createConstColumn<Nullable<String>>(2, "sahdka"),
-    //         createConstColumn<Nullable<String>>(2, "sahdkb")));
 }
 CATCH
 
@@ -627,6 +619,5 @@ try
     }
 }
 CATCH
-
 
 } // namespace DB::tests
