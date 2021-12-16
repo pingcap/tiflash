@@ -147,7 +147,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("workdir", bpo::value<std::string>()->required())
         ("file-id", bpo::value<size_t>()->required())
         ("imitative", bpo::bool_switch(&imitative))
-        ("config-file", bpo::value<std::string>()->required());
+        ("config-file", bpo::value<std::string>());
     // clang-format on
 
     bpo::store(bpo::command_line_parser(opts)
@@ -168,6 +168,11 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         if (imitative && vm.count("config-file"))
         {
             std::cerr << "config-file is not allowed in imitative mode" << std::endl;
+            return -EINVAL;
+        }
+        else if (!imitative && !vm.count("config-file"))
+        {
+            std::cerr << "config-file is required in proxy mode" << std::endl;
             return -EINVAL;
         }
 

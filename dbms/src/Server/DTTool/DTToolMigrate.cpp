@@ -256,7 +256,7 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("algorithm", bpo::value<std::string>()->default_value("xxh3"))
         ("frame", bpo::value<size_t>()->default_value(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE))
         ("workdir", bpo::value<std::string>()->required())
-        ("config-file", bpo::value<std::string>()->required())
+        ("config-file", bpo::value<std::string>())
         ("file-id", bpo::value<size_t>()->required())
         ("dry", bpo::bool_switch(&dry_mode))
         ("compression", bpo::value<std::string>()->default_value("lz4"))
@@ -284,6 +284,11 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         if (imitative && vm.count("config-file"))
         {
             std::cerr << "config-file is not allowed in imitative mode" << std::endl;
+            return -EINVAL;
+        }
+        else if (!imitative && !vm.count("config-file"))
+        {
+            std::cerr << "config-file is required in proxy mode" << std::endl;
             return -EINVAL;
         }
 
