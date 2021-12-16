@@ -90,7 +90,7 @@ public:
     const DAGSchema & getOutputSchema() const { return schema; }
 
     using BlockQueue = std::queue<Block>;
-    static constexpr size_t num_streams = 16;
+
     std::atomic<size_t> num_upstreams = 0;
 
     ExchangeReceiverResult nextResult(size_t upstream_id, BlockQueue & block_queue, const DataTypes & expected_types);
@@ -123,7 +123,10 @@ private:
     // std::condition_variable cv;
     /// should lock `mu` when visit these members
     // RecyclableBuffer<ReceivedMessage> res_buffer;
+
+    size_t num_streams = 1;
     MultiStreamRingBuffer<ReceivedMessage> ringbuf;
+
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;

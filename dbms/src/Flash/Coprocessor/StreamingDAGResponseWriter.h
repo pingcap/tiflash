@@ -34,7 +34,8 @@ public:
         tipb::EncodeType encodeType_,
         std::vector<tipb::FieldType> result_field_types,
         DAGContext & dag_context_,
-        const LogWithPrefixPtr & log_);
+        const LogWithPrefixPtr & log_,
+        Int64 num_streams_ = 1);
     void write(const Block & block) override;
     void finishWrite() override;
 
@@ -56,6 +57,8 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     LogWithPrefixPtr log;
+
+    Int64 num_streams = 1;
 };
 
 } // namespace DB

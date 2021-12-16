@@ -35,7 +35,8 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     tipb::EncodeType encode_type_,
     std::vector<tipb::FieldType> result_field_types_,
     DAGContext & dag_context_,
-    const LogWithPrefixPtr & log_)
+    const LogWithPrefixPtr & log_,
+    Int64 num_streams_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
     , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
@@ -43,6 +44,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
+    , num_streams(num_streams_)
 {
     log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("StreamingDAGResponseWriter"), "");
 
@@ -228,8 +230,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         return;
     }
 
-    constexpr size_t num_buckets = 16;
-    size_t num_chunks = num_buckets * partition_num;
+    size_t num_chunks = num_streams * partition_num;
 
     // partition tuples in blocks
     // 1) compute partition id
@@ -291,7 +292,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
             auto & chunk_block = dest_blocks[chunk_id];
             chunk_block.setColumns(std::move(dest_tbl_cols[chunk_id]));
 
-            size_t part_id = chunk_id / num_buckets;
+            size_t part_id = chunk_id / num_streams;
             responses_row_count[part_id] += chunk_block.rows();
             chunk_codec_stream[part_id]->encode(chunk_block, 0, chunk_block.rows());
             packet[part_id].add_chunks(chunk_codec_stream[part_id]->getString());

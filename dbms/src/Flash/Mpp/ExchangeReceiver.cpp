@@ -22,6 +22,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , max_buffer_size(std::max(source_num, max_streams_) * 2)
 
     // , res_buffer(max_buffer_size)
+    , num_streams(max_streams)
     , ringbuf(num_streams, max_buffer_size)
 
     , live_connections(pb_exchange_receiver.encoded_task_meta_size())
