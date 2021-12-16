@@ -1178,6 +1178,13 @@ void BaseDaemon::defineOptions(Poco::Util::OptionSet & _options)
             .binding("logger.errorlog"));
 
     _options.addOption(
+        Poco::Util::Option("tracing-log-file", "T", "use given log file for mpp task tracing only")
+            .required(false)
+            .repeatable(false)
+            .argument("<file>")
+            .binding("logger.tracing_log"));
+
+    _options.addOption(
         Poco::Util::Option("pid-file", "P", "use given pidfile")
             .required(false)
             .repeatable(false)

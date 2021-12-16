@@ -392,16 +392,18 @@ static const std::string gz_suffix = ".gz";
 // if timestamp of log file could be told, return whether it can be filtered.
 bool FilterFileByDatetime(
     const std::string & path,
-    const std::string & error_log_file_prefix,
+    std::initializer_list<std::string> ignore_log_file_prefixes,
     const int64_t start_time)
 {
     static const std::string date_format_example = "0000-00-00-00:00:00.000";
     static const std::string raftstore_proxy_date_format_example = "0000-00-00-00:00:00.000000000";
     static const char * date_format = "%d-%d-%d-%d:%d:%d.%d";
 
-    // ignore tiflash error log
-    if (!error_log_file_prefix.empty() && startsWith(path, error_log_file_prefix))
-        return true;
+    for (const auto & ignore_log_file_prefix : ignore_log_file_prefixes)
+    {
+        if (!ignore_log_file_prefix.empty() && startsWith(path, ignore_log_file_prefix))
+            return true;
+    }
     if (endsWith(path, gz_suffix))
     {
         if (path.size() <= gz_suffix.size() + date_format_example.size())

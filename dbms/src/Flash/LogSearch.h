@@ -6,6 +6,7 @@
 
 #include <boost/noncopyable.hpp>
 #include <fstream>
+#include <initializer_list>
 #include <istream>
 #include <memory>
 #include <optional>
@@ -119,7 +120,7 @@ void ReadLogFile(const std::string & path, std::function<void(std::istream &)> &
 
 bool FilterFileByDatetime(
     const std::string & path,
-    const std::string & error_log_file_prefix,
+    std::initializer_list<std::string> ignore_log_file_prefixes,
     const int64_t start_time);
 
 
