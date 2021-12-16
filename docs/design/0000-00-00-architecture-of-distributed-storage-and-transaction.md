@@ -29,7 +29,7 @@ Each peer has a `Durable Write Ahead Log`(DWAL).
 All peers append each action as an entry in the log immediately as they recieve it.
 When the quorum (the majority) of peers have confirmed that the entry exists in their log, the leader commits the log, each peer then can apply the action to their state machine.
 TiFlash relies on the [TiDB Engine Extensions Library](https://github.com/pingcap/tidb-engine-ext)(works as `Raft Store` dynamic library) to maintain multi-raft RSM.
-A `TIFLASH REPLICA` of a table can be regarded as a collection of multiple learner peers(region range of peer intersects with record data range of the table) in TiFlash store.
+A `TIFLASH REPLICA` of table is an abstrac concept which can be regarded as a collection of multiple learner peers(region range of peer intersects with record data range of the table) in TiFlash store.
 
 A database transaction, by definition, must be atomic, consistent, isolated and durable.
 Transaction writing proposed by TiDB must follow `Percolator Model`.
@@ -44,7 +44,7 @@ To guarantee `Snapshot Isolation`, there are a few important safeguard mechanism
 
 - `Replica Read` makes sure that the raft state machine of region peers are correct and have engough context.
 - `Resolve Lock` checks whether related table records are protected by locks and tries to resolve them.
-- `MVCC(Multiversion concurrency control)` read table records by specific version provided by `Timestamp Oracle`.
+- `MVCC(Multiversion concurrency control)` read table records by specific version presented by `Timestamp Oracle`.
 
 ### Distributed Storage Framwork
 
