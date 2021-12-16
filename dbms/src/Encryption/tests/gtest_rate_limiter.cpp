@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <ctime>
+#include <random>
 #include <thread>
 
 #ifdef __linux__
@@ -24,12 +25,13 @@ namespace tests
 {
 TEST(WriteLimiterTest, Rate)
 {
-    srand((unsigned)time(NULL));
-    auto write = [](const WriteLimiterPtr & write_limiter, UInt64 max_request_size) {
+    std::default_random_engine e;
+    e.seed(time(nullptr));
+    auto write = [&e](const WriteLimiterPtr & write_limiter, UInt64 max_request_size) {
         AtomicStopwatch watch;
         while (watch.elapsedSeconds() < 4)
         {
-            auto size = rand() % max_request_size + 1;
+            auto size = e() % max_request_size + 1;
             write_limiter->request(size);
         }
     };
