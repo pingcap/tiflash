@@ -1,9 +1,10 @@
-#include <iostream>
-#include <cstring>
-#include <thread>
-#include <pcg_random.hpp>
 #include <Common/ArrayCache.h>
 #include <IO/ReadHelpers.h>
+
+#include <cstring>
+#include <iostream>
+#include <pcg_random.hpp>
+#include <thread>
 
 
 template <typename Cache>
@@ -56,8 +57,7 @@ int main(int argc, char ** argv)
     std::vector<std::thread> threads;
     for (size_t i = 0; i < num_threads; ++i)
     {
-        threads.emplace_back([&]
-        {
+        threads.emplace_back([&] {
             pcg64 generator(randomSeed());
 
             for (size_t i = 0; i < num_iterations; ++i)
@@ -67,23 +67,21 @@ int main(int argc, char ** argv)
 
                 cache.getOrSet(
                     key,
-                    [=]{ return size; },
-                    [=](void * /*ptr*/, int & payload)
-                    {
+                    [=] { return size; },
+                    [=](void * /*ptr*/, int & payload) {
                         payload = i;
-                //        memset(ptr, i, size);
+                        //        memset(ptr, i, size);
                     },
                     nullptr);
 
-            //    printStats(cache);
+                //    printStats(cache);
             }
         });
     }
 
     std::atomic_bool stop{};
 
-    std::thread stats_thread([&]
-    {
+    std::thread stats_thread([&] {
         while (!stop)
         {
             usleep(100000);
@@ -99,7 +97,7 @@ int main(int argc, char ** argv)
 
     return 0;
 
-/*
+    /*
     using Cache = ArrayCache<int, int>;
     Cache cache(64 * 1024 * 1024);
 

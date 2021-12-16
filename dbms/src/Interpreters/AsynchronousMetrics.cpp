@@ -9,7 +9,6 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/StorageMergeTree.h>
 #include <common/config_common.h>
 
 #include <chrono>
@@ -34,7 +33,6 @@ struct MallocExtensionInitializer
 
 namespace DB
 {
-
 AsynchronousMetrics::~AsynchronousMetrics()
 {
     try
@@ -142,8 +140,6 @@ void AsynchronousMetrics::update()
         double max_dt_meta_oldest_snapshot_lifetime = 0.0;
         size_t max_dt_background_tasks_length = 0;
 
-        size_t max_part_count_for_partition = 0;
-
         for (const auto & db : databases)
         {
             for (auto iterator = db.second->getIterator(context); iterator->isValid(); iterator->next())
@@ -158,10 +154,6 @@ void AsynchronousMetrics::update()
                     calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
                     calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
                 }
-                else if (StorageMergeTree * table_merge_tree = dynamic_cast<StorageMergeTree *>(table.get()); table_merge_tree)
-                {
-                    calculateMax(max_part_count_for_partition, table_merge_tree->getData().getMaxPartsCountForPartition());
-                }
             }
         }
 
@@ -169,7 +161,6 @@ void AsynchronousMetrics::update()
         set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
         set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
-        set("MaxPartCountForPartition", max_part_count_for_partition);
     }
 
 #if USE_TCMALLOC

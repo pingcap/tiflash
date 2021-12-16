@@ -119,6 +119,8 @@ mv "${BUILD_DIR}/libs/libdaemon/src/tests/gtests_libdaemon" "${INSTALL_DIR}/"
 
 ccache -s
 
+ls -lh "${INSTALL_DIR}"
+
 if [[ ${UPDATE_CCACHE} == "true" ]]; then
   cd ${SRCPATH}
   rm -rf ccache.tar

@@ -1,12 +1,10 @@
-#include <AggregateFunctions/registerAggregateFunctions.h>
-
-#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
 
 
 namespace DB
 {
-
 void registerAggregateFunctionAvg(AggregateFunctionFactory &);
 void registerAggregateFunctionCount(AggregateFunctionFactory &);
 void registerAggregateFunctionGroupArray(AggregateFunctionFactory &);
@@ -69,4 +67,4 @@ void registerAggregateFunctions()
     }
 }
 
-}
+} // namespace DB

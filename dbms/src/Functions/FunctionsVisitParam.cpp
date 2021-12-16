@@ -1,20 +1,40 @@
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsVisitParam.h>
-#include <Functions/FunctionsStringSearch.h>
 #include <Functions/FunctionsString.h>
+#include <Functions/FunctionsStringSearch.h>
 #include <Functions/FunctionsURL.h>
+#include <Functions/FunctionsVisitParam.h>
 
 
 namespace DB
 {
-
-struct NameVisitParamHas           { static constexpr auto name = "visitParamHas"; };
-struct NameVisitParamExtractUInt   { static constexpr auto name = "visitParamExtractUInt"; };
-struct NameVisitParamExtractInt    { static constexpr auto name = "visitParamExtractInt"; };
-struct NameVisitParamExtractFloat  { static constexpr auto name = "visitParamExtractFloat"; };
-struct NameVisitParamExtractBool   { static constexpr auto name = "visitParamExtractBool"; };
-struct NameVisitParamExtractRaw    { static constexpr auto name = "visitParamExtractRaw"; };
-struct NameVisitParamExtractString { static constexpr auto name = "visitParamExtractString"; };
+struct NameVisitParamHas
+{
+    static constexpr auto name = "visitParamHas";
+};
+struct NameVisitParamExtractUInt
+{
+    static constexpr auto name = "visitParamExtractUInt";
+};
+struct NameVisitParamExtractInt
+{
+    static constexpr auto name = "visitParamExtractInt";
+};
+struct NameVisitParamExtractFloat
+{
+    static constexpr auto name = "visitParamExtractFloat";
+};
+struct NameVisitParamExtractBool
+{
+    static constexpr auto name = "visitParamExtractBool";
+};
+struct NameVisitParamExtractRaw
+{
+    static constexpr auto name = "visitParamExtractRaw";
+};
+struct NameVisitParamExtractString
+{
+    static constexpr auto name = "visitParamExtractString";
+};
 
 
 using FunctionVisitParamHas = FunctionsStringSearch<ExtractParamImpl<HasParam>, NameVisitParamHas>;
@@ -24,7 +44,6 @@ using FunctionVisitParamExtractFloat = FunctionsStringSearch<ExtractParamImpl<Ex
 using FunctionVisitParamExtractBool = FunctionsStringSearch<ExtractParamImpl<ExtractBool>, NameVisitParamExtractBool>;
 using FunctionVisitParamExtractRaw = FunctionsStringSearchToString<ExtractParamToStringImpl<ExtractRaw>, NameVisitParamExtractRaw>;
 using FunctionVisitParamExtractString = FunctionsStringSearchToString<ExtractParamToStringImpl<ExtractString>, NameVisitParamExtractString>;
-
 
 
 void registerFunctionsVisitParam(FunctionFactory & factory)
@@ -38,4 +57,4 @@ void registerFunctionsVisitParam(FunctionFactory & factory)
     factory.registerFunction<FunctionVisitParamExtractString>();
 }
 
-}
+} // namespace DB

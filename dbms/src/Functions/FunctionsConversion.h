@@ -1756,16 +1756,15 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 2)
-            throw Exception("Function " + getName() + " only accept 2 arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(fmt::format("Function {} only accept 2 arguments", getName()), ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         // TODO: Maybe FixedString?
         if (!removeNullable(arguments[0].type)->isString())
-            throw Exception("First argument for function " + getName() + " must be String, but get " + arguments[0].type->getName(),
+            throw Exception(fmt::format("First argument for function {} must be String, but get {}", getName(), arguments[0].type->getName()),
                             ErrorCodes::ILLEGAL_COLUMN);
         if (!removeNullable(arguments[1].type)->isString())
-            throw Exception(
-                "Second argument for function " + getName() + " must be String, but get " + arguments[1].type->getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(fmt::format("Second argument for function {} must be String, but get {}", getName(), arguments[1].type->getName()),
+                            ErrorCodes::ILLEGAL_COLUMN);
 
         if constexpr (std::is_same_v<Name, NameStrToDateDatetime>)
         {
@@ -1780,7 +1779,7 @@ public:
         }
         else
         {
-            throw Exception("Unknown name for FunctionStrToDate:" + getName(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Unknown name for FunctionStrToDate: {}", getName()), ErrorCodes::LOGICAL_ERROR);
         }
     }
 
@@ -1794,7 +1793,7 @@ public:
         const ColumnString * input_raw_col = nullptr;
         if (input_column->isColumnNullable())
         {
-            auto null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
+            const auto * null_input_column = checkAndGetColumn<ColumnNullable>(input_column.get());
             input_raw_col = checkAndGetColumn<ColumnString>(null_input_column->getNestedColumnPtr().get());
         }
         else
@@ -1844,7 +1843,7 @@ public:
             const ColumnString * format_raw_col = nullptr;
             if (format_column->isColumnNullable())
             {
-                auto null_format_column = checkAndGetColumn<ColumnNullable>(format_column.get());
+                const auto * null_format_column = checkAndGetColumn<ColumnNullable>(format_column.get());
                 format_raw_col = checkAndGetColumn<ColumnString>(null_format_column->getNestedColumnPtr().get());
             }
             else
@@ -1852,6 +1851,14 @@ public:
                 format_raw_col = checkAndGetColumn<ColumnString>(format_column.get());
             }
 
+            String str_input_const;
+            StringRef str_ref;
+            if (input_column->isColumnConst())
+            {
+                const auto & input_const = checkAndGetColumnConst<ColumnString>(input_column.get());
+                str_input_const = input_const->getValue<String>();
+                str_ref = StringRef(str_input_const);
+            }
             for (size_t i = 0; i < num_rows; ++i)
             {
                 // Set null for either null input or null format
@@ -1876,7 +1883,10 @@ public:
 
                 const auto format_ref = format_raw_col->getDataAt(i);
                 auto parser = MyDateTimeParser(format_ref.toString());
-                const auto str_ref = input_raw_col->getDataAt(i);
+                if (!input_column->isColumnConst())
+                {
+                    str_ref = input_raw_col->getDataAt(i);
+                }
                 if (auto parse_res = parser.parseAsPackedUInt(str_ref); parse_res)
                 {
                     datetime_res[i] = *parse_res;
@@ -1937,11 +1947,12 @@ struct ToIntMonotonicity
         if (checkDataType<DataTypeFloat32>(&type)
             || checkDataType<DataTypeFloat64>(&type))
         {
-            Float64 left_float = left.get<Float64>();
-            Float64 right_float = right.get<Float64>();
-
-            if (left_float >= std::numeric_limits<T>::min() && left_float <= std::numeric_limits<T>::max()
-                && right_float >= std::numeric_limits<T>::min() && right_float <= std::numeric_limits<T>::max())
+            auto left_float = left.get<Float64>();
+            auto right_float = right.get<Float64>();
+            auto float_min = static_cast<Float64>(std::numeric_limits<T>::min());
+            auto float_max = static_cast<Float64>(std::numeric_limits<T>::max());
+            if (left_float >= float_min && left_float <= float_max
+                && right_float >= float_min && right_float <= float_max)
                 return {true};
 
             return {};

@@ -1,16 +1,13 @@
 #pragma once
 
-#include <DataTypes/DataTypeAggregateFunction.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnAggregateFunction.h>
-#include <DataTypes/DataTypeAggregateFunction.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
 
 
 namespace DB
 {
-
-
 /** Not an aggregate function, but an adapter of aggregate functions,
   * Aggregate functions with the `Merge` suffix accept `DataTypeAggregateFunction` as an argument
   * (state of the aggregate function obtained earlier using the aggregate function with the `State` suffix)
@@ -30,7 +27,7 @@ public:
 
         if (!data_type || data_type->getFunctionName() != nested_func->getName())
             throw Exception("Illegal type " + argument.getName() + " of argument for aggregate function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     String getName() const override
@@ -101,4 +98,4 @@ public:
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
-}
+} // namespace DB

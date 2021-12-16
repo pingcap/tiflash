@@ -100,20 +100,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                                      + " children is not supported",
                                  false);
 
-    /// Only support `column` `op` `constant` now.
-
-    // TODO: test cases:
-    // c1 < 100
-    // 100 < c1
-    // c1 + 1 < 100
-    // (c1 + 1) * c2 < 100
-    // c1 < 100 - 1
-    // 100 + 1 < c1
-    // c1 * c2 < 100
-    // 100 < c1 * c2
-    // ABS(c1) = 100
-    // 1 = 1
-    // c1 = c2
+    /// Only support `column` `op` `literal` now.
 
     Attr attr;
     Field value;
@@ -172,7 +159,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     if (timezone_info.is_name_based)
                         convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
                     else if (timezone_info.timezone_offset != 0)
-                        convertTimeZoneByOffset(from_time, result_time, -timezone_info.timezone_offset, time_zone_utc);
+                        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
                     value = Field(result_time);
                 }
             }
@@ -197,12 +184,12 @@ inline RSOperatorPtr parseTiCompareExpr( //
             filter_type_with_direction = FilterParser::RSFilterType::Less;
             break;
         case FilterParser::RSFilterType::GreaterEqual:
-            filter_type_with_direction = FilterParser::RSFilterType::LessEuqal;
+            filter_type_with_direction = FilterParser::RSFilterType::LessEqual;
             break;
         case FilterParser::RSFilterType::Less:
             filter_type_with_direction = FilterParser::RSFilterType::Greater;
             break;
-        case FilterParser::RSFilterType::LessEuqal:
+        case FilterParser::RSFilterType::LessEqual:
             filter_type_with_direction = FilterParser::RSFilterType::GreaterEqual;
             break;
             // Commutative operators, ignored.
@@ -232,7 +219,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
     case FilterParser::RSFilterType::Less:
         op = createLess(attr, value, -1);
         break;
-    case FilterParser::RSFilterType::LessEuqal:
+    case FilterParser::RSFilterType::LessEqual:
         op = createLessEqual(attr, value, -1);
         break;
     default:
@@ -305,7 +292,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         case FilterParser::RSFilterType::Greater:
         case FilterParser::RSFilterType::GreaterEqual:
         case FilterParser::RSFilterType::Less:
-        case FilterParser::RSFilterType::LessEuqal:
+        case FilterParser::RSFilterType::LessEqual:
             op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info, log);
             break;
 
@@ -443,13 +430,13 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     {tipb::ScalarFuncSig::LTDuration, FilterParser::RSFilterType::Less},
     {tipb::ScalarFuncSig::LTJson, FilterParser::RSFilterType::Less},
 
-    {tipb::ScalarFuncSig::LEInt, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEReal, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEString, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEDecimal, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LETime, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEDuration, FilterParser::RSFilterType::LessEuqal},
-    {tipb::ScalarFuncSig::LEJson, FilterParser::RSFilterType::LessEuqal},
+    {tipb::ScalarFuncSig::LEInt, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEReal, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEString, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEDecimal, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LETime, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEDuration, FilterParser::RSFilterType::LessEqual},
+    {tipb::ScalarFuncSig::LEJson, FilterParser::RSFilterType::LessEqual},
 
     {tipb::ScalarFuncSig::GTInt, FilterParser::RSFilterType::Greater},
     {tipb::ScalarFuncSig::GTReal, FilterParser::RSFilterType::Greater},

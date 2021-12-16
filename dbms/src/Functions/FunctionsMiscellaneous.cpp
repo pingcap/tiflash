@@ -24,13 +24,11 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsMiscellaneous.h>
-#include <Interpreters/Cluster.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Set.h>
 #include <Poco/Net/DNS.h>
 #include <Storages/IStorage.h>
-#include <Storages/getStructureOfRemoteTable.h>
 
 #include <cmath>
 #include <ext/bit_cast.h>
@@ -1836,18 +1834,11 @@ void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & 
     String table_name = get_string_from_block(arguments[arg++]);
     String column_name = get_string_from_block(arguments[arg++]);
 
-    bool has_column;
+    bool has_column = false;
     if (host_name.empty())
     {
         const StoragePtr & table = global_context.getTable(database_name, table_name);
         has_column = table->hasColumn(column_name);
-    }
-    else
-    {
-        std::vector<std::vector<String>> host_names = {{host_name}};
-        auto cluster = std::make_shared<Cluster>(global_context.getSettings(), host_names, !user_name.empty() ? user_name : "default", password, global_context.getTCPPort(), false);
-        auto remote_columns = getStructureOfRemoteTable(*cluster, database_name, table_name, global_context);
-        has_column = remote_columns.hasPhysical(column_name);
     }
 
     block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(has_column));

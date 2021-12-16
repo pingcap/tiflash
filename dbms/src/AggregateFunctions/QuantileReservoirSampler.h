@@ -5,10 +5,9 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
 /** Quantile calculation with "reservoir sample" algorithm.
@@ -78,4 +77,4 @@ struct QuantileReservoirSampler
     }
 };
 
-}
+} // namespace DB

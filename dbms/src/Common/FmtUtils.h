@@ -4,9 +4,6 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
-#include <iterator>
-#include <string>
-
 namespace DB
 {
 class FmtBuffer
@@ -30,6 +27,45 @@ public:
     std::string toString() const
     {
         return fmt::to_string(buffer);
+    }
+
+    template <typename Iter>
+    FmtBuffer & joinStr(
+        Iter first,
+        Iter end)
+    {
+        return joinStr(first, end, ", ");
+    }
+
+    template <typename Iter>
+    FmtBuffer & joinStr(
+        Iter first,
+        Iter end,
+        StringRef delimiter)
+    {
+        auto func = [](const auto & s, FmtBuffer & fb) {
+            fb.append(s);
+        };
+        return joinStr(first, end, func, delimiter);
+    }
+
+    template <typename Iter, typename FF>
+    FmtBuffer & joinStr(
+        Iter first,
+        Iter end,
+        FF && toStringFunc, // void (const auto &, FmtBuffer &)
+        StringRef delimiter)
+    {
+        if (first == end)
+            return *this;
+        toStringFunc(*first, *this);
+        ++first;
+        for (; first != end; ++first)
+        {
+            append(delimiter);
+            toStringFunc(*first, *this);
+        }
+        return *this;
     }
 
     void resize(size_t count) { buffer.resize(count); }

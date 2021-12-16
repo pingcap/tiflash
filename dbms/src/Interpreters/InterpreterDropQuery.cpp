@@ -7,8 +7,9 @@
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Poco/File.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-#include <Storages/StorageMergeTree.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 
@@ -40,9 +41,6 @@ BlockIO InterpreterDropQuery::execute()
     ASTDropQuery & drop = typeid_cast<ASTDropQuery &>(*query_ptr);
 
     checkAccess(drop);
-
-    if (!drop.cluster.empty())
-        throw Exception("Should not run into `executeDDLQueryOnCluster`");
 
     String path = context.getPath();
     String current_database = context.getCurrentDatabase();

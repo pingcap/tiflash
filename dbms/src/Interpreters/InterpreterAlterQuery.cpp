@@ -1,50 +1,43 @@
+#include <Common/escapeForFileName.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/copyData.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-
+#include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ParserCreateQuery.h>
-#include <IO/copyData.h>
-#include <IO/ReadBufferFromFile.h>
-#include <Common/escapeForFileName.h>
-#include <DataTypes/DataTypeFactory.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
-
-#include <Storages/MutableSupport.h>
-#include <Storages/StorageMergeTree.h>
-
 #include <Poco/FileStream.h>
+#include <Storages/MutableSupport.h>
 
 #include <algorithm>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int BAD_ARGUMENTS;
-    extern const int ILLEGAL_COLUMN;
-}
+extern const int LOGICAL_ERROR;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int BAD_ARGUMENTS;
+extern const int ILLEGAL_COLUMN;
+} // namespace ErrorCodes
 
 
 InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, const Context & context_)
-    : query_ptr(query_ptr_), context(context_)
+    : query_ptr(query_ptr_)
+    , context(context_)
 {
 }
 
 BlockIO InterpreterAlterQuery::execute()
 {
     auto & alter = typeid_cast<ASTAlterQuery &>(*query_ptr);
-
-    if (!alter.cluster.empty())
-        throw Exception("Should not run into `executeDDLQueryOnCluster`");
 
     const String & table_name = alter.table;
     String database_name = alter.database.empty() ? context.getCurrentDatabase() : alter.database;
@@ -59,25 +52,25 @@ BlockIO InterpreterAlterQuery::execute()
     {
         switch (command.type)
         {
-            case PartitionCommand::DROP_PARTITION:
-                table->dropPartition(query_ptr, command.partition, command.detach, context);
-                break;
+        case PartitionCommand::DROP_PARTITION:
+            table->dropPartition(query_ptr, command.partition, command.detach, context);
+            break;
 
-            case PartitionCommand::ATTACH_PARTITION:
-                table->attachPartition(command.partition, command.part, context);
-                break;
+        case PartitionCommand::ATTACH_PARTITION:
+            table->attachPartition(command.partition, command.part, context);
+            break;
 
-            case PartitionCommand::FETCH_PARTITION:
-                table->fetchPartition(command.partition, command.from, context);
-                break;
+        case PartitionCommand::FETCH_PARTITION:
+            table->fetchPartition(command.partition, command.from, context);
+            break;
 
-            case PartitionCommand::FREEZE_PARTITION:
-                table->freezePartition(command.partition, command.with_name, context);
-                break;
+        case PartitionCommand::FREEZE_PARTITION:
+            table->freezePartition(command.partition, command.with_name, context);
+            break;
 
-            case PartitionCommand::CLEAR_COLUMN:
-                table->clearColumnInPartition(command.partition, command.column_name, context);
-                break;
+        case PartitionCommand::CLEAR_COLUMN:
+            table->clearColumnInPartition(command.partition, command.column_name, context);
+            break;
         }
     }
 
@@ -93,7 +86,9 @@ BlockIO InterpreterAlterQuery::execute()
 
 void InterpreterAlterQuery::parseAlter(
     const ASTAlterQuery::ParameterContainer & params_container,
-    AlterCommands & out_alter_commands, PartitionCommands & out_partition_commands, StoragePtr table)
+    AlterCommands & out_alter_commands,
+    PartitionCommands & out_partition_commands,
+    StoragePtr table)
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
@@ -108,8 +103,7 @@ void InterpreterAlterQuery::parseAlter(
 
             const auto & ast_col_decl = typeid_cast<const ASTColumnDeclaration &>(*params.col_decl);
 
-            if (ast_col_decl.name == MutableSupport::version_column_name ||
-                ast_col_decl.name == MutableSupport::delmark_column_name)
+            if (ast_col_decl.name == MutableSupport::version_column_name || ast_col_decl.name == MutableSupport::delmark_column_name)
                 throw Exception("Internal column name can not be used: " + ast_col_decl.name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
             command.column_name = ast_col_decl.name;
@@ -137,8 +131,7 @@ void InterpreterAlterQuery::parseAlter(
 
                 const Field & column_name = typeid_cast<const ASTIdentifier &>(*(params.column)).name;
 
-                if (column_name == MutableSupport::version_column_name ||
-                    column_name == MutableSupport::delmark_column_name)
+                if (column_name == MutableSupport::version_column_name || column_name == MutableSupport::delmark_column_name)
                 {
                     FieldVisitorToString to_string;
                     auto err_msg = "Internal column name can not be dropped: " + applyVisitor(to_string, column_name);
@@ -155,8 +148,7 @@ void InterpreterAlterQuery::parseAlter(
                 command.type = AlterCommand::DROP_COLUMN;
                 command.column_name = typeid_cast<const ASTIdentifier &>(*(params.column)).name;
 
-                if (command.column_name == MutableSupport::version_column_name ||
-                    command.column_name == MutableSupport::delmark_column_name)
+                if (command.column_name == MutableSupport::version_column_name || command.column_name == MutableSupport::delmark_column_name)
                     throw Exception("Internal column name can not be dropped: " + command.column_name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
                 out_alter_commands.emplace_back(std::move(command));
@@ -169,8 +161,7 @@ void InterpreterAlterQuery::parseAlter(
 
             const auto & ast_col_decl = typeid_cast<const ASTColumnDeclaration &>(*params.col_decl);
 
-            if (ast_col_decl.name == MutableSupport::version_column_name ||
-                ast_col_decl.name == MutableSupport::delmark_column_name)
+            if (ast_col_decl.name == MutableSupport::version_column_name || ast_col_decl.name == MutableSupport::delmark_column_name)
                 throw Exception("Internal column name can not be modified: " + ast_col_decl.name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
             command.column_name = ast_col_decl.name;
@@ -227,11 +218,11 @@ void InterpreterAlterQuery::PartitionCommands::validate(const IStorage * table)
             if (!table->getColumns().hasPhysical(column_name))
             {
                 throw Exception("Wrong column name. Cannot find column " + column_name + " to clear it from partition",
-                    DB::ErrorCodes::ILLEGAL_COLUMN);
+                                DB::ErrorCodes::ILLEGAL_COLUMN);
             }
         }
     }
 }
 
 
-}
+} // namespace DB

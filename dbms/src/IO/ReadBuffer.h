@@ -74,8 +74,7 @@ public:
             next();
     }
 
-    virtual ~ReadBuffer() {}
-
+    virtual ~ReadBuffer() = default;
 
     /** Unlike std::istream, it returns true if all data was read
       *  (and not in case there was an attempt to read after the end).
