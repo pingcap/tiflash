@@ -563,7 +563,7 @@ try
     { // Ref 3-> 999
         PageEntriesEdit edit;
         edit.ref(3, 999);
-        ASSERT_NO_THROW({ dir.apply(std::move(edit)); });
+        ASSERT_THROW({ dir.apply(std::move(edit)); }, DB::Exception);
     }
     auto snap1 = dir.createSnapshot();
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
