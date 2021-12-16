@@ -43,27 +43,6 @@ public:
     bool gc();
 
 private:
-    // `apply` with create a version={directory.sequence, epoch=0}.
-    // After data compaction and page entries need to be updated, will create
-    // some entries with a version={old_sequence, epoch=old_epoch+1}.
-    struct VersionType
-    {
-        UInt64 sequence; // The write sequence
-        UInt64 epoch; // The GC epoch
-
-        explicit VersionType(UInt64 seq)
-            : sequence(seq)
-            , epoch(0)
-        {}
-
-        bool operator<(const VersionType & rhs) const
-        {
-            if (sequence == rhs.sequence)
-                return epoch < rhs.epoch;
-            return sequence < rhs.sequence;
-        }
-    };
-
     struct EntryOrDelete
     {
         bool is_delete;
@@ -91,20 +70,20 @@ private:
 
         void createNewVersion(UInt64 seq, const PageEntryV3 & entry)
         {
-            entries.emplace(VersionType(seq), entry);
+            entries.emplace(PageVersionType(seq), entry);
         }
 
         void createDelete(UInt64 seq)
         {
-            entries.emplace(VersionType(seq), EntryOrDelete(/*del*/ true));
+            entries.emplace(PageVersionType(seq), EntryOrDelete(/*del*/ true));
         }
 
-        std::optional<PageEntryV3> getEntry(UInt64 seq);
+        std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
     private:
         mutable std::mutex m;
         // Entries sorted by version
-        std::map<VersionType, EntryOrDelete> entries;
+        std::map<PageVersionType, EntryOrDelete> entries;
     };
     using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 

@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
 #include <Common/LogWithPrefix.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_fmt_useful.h>
@@ -18,11 +19,11 @@ extern const int PS_ENTRY_NO_VALID_VERSION;
 } // namespace ErrorCodes
 namespace PS::V3
 {
-std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 seq)
+std::optional<PageEntryV3> PageDirectory::VersionedPageEntries::getEntry(UInt64 seq) const
 {
     auto page_lock = acquireLock();
     // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
-    if (auto iter = MapUtils::findLess(entries, VersionType(seq + 1));
+    if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
         iter != entries.end())
     {
         if (!iter->second.is_delete)
@@ -111,6 +112,9 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     auto snap = createSnapshot();
     for (auto & r : edit.getRecords())
     {
+        // Set the version of inserted entries
+        r.version = PageVersionType(last_sequence + 1);
+
         if (r.type != WriteBatch::WriteType::REF)
         {
             continue;
