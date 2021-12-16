@@ -18,14 +18,14 @@ class ElasticThreadPool
 public:
     using Job = std::function<void()>;
     static std::unique_ptr<ElasticThreadPool> glb_instance;
-    struct Thd
+    struct Worker
     {
-        explicit Thd(ElasticThreadPool * thd_pool)
+        explicit Worker(ElasticThreadPool * thd_pool)
             : end_syn(false)
             , state(0)
             , thd(std::make_shared<std::thread>([this, thd_pool] {
                 thd_pool->pre_worker();
-                thd_pool->worker(this);
+                thd_pool->work(this);
             }))
         {}
         std::atomic_bool end_syn; //someone wants it end
@@ -67,12 +67,12 @@ protected:
     std::atomic<bool> shutdown = false;
 
     std::queue<Job> jobs;
-    std::shared_ptr<std::vector<std::shared_ptr<Thd>>> threads;
+    std::shared_ptr<std::vector<std::shared_ptr<Worker>>> threads;
     std::thread bk_thd;
 
     void backgroundJob();
 
-    void worker(Thd * thdctx);
+    void work(Worker * thdctx);
 
     std::future<void> schedule0(std::shared_ptr<std::promise<void>> p, Job job);
 

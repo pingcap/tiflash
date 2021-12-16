@@ -45,13 +45,13 @@ ElasticThreadPool::ElasticThreadPool(size_t m_size, std::chrono::milliseconds re
     , recycle_period(recycle_period_)
     , idle_buffer_size(idle_buffer_size_)
     , pre_worker(pre_worker_)
-    , threads(std::make_shared<std::vector<std::shared_ptr<Thd>>>())
+    , threads(std::make_shared<std::vector<std::shared_ptr<Worker>>>())
     , bk_thd(std::thread([this] { backgroundJob(); }))
 {
     threads->reserve(m_size);
     for (size_t i = 0; i < m_size; ++i)
     {
-        threads->emplace_back(std::make_shared<Thd>(this));
+        threads->emplace_back(std::make_shared<Worker>(this));
     }
 }
 
@@ -65,7 +65,7 @@ std::future<void> ElasticThreadPool::schedule0(std::shared_ptr<std::promise<void
         {
             available_cnt++;
             alive_cnt++;
-            threads->emplace_back(std::make_shared<Thd>(this));
+            threads->emplace_back(std::make_shared<Worker>(this));
         }
 
         jobs.push(std::move(job));
@@ -118,7 +118,7 @@ bool ElasticThreadPool::shrink(std::chrono::milliseconds wait_interval)
         }
         auto old_threads = threads;
         lock.unlock();
-        auto new_threads = std::make_shared<std::vector<std::shared_ptr<Thd>>>();
+        auto new_threads = std::make_shared<std::vector<std::shared_ptr<Worker>>>();
         int cnt_cleaned = 0;
         for (auto & thd_ctx : *old_threads)
         {
@@ -160,7 +160,7 @@ void ElasticThreadPool::backgroundJob()
     }
 }
 
-void ElasticThreadPool::worker(Thd * thdctx)
+void ElasticThreadPool::work(Worker * thdctx)
 {
     while (!thdctx->end_syn)
     {

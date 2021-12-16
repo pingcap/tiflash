@@ -61,8 +61,8 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     for (size_t index = 0; index < source_num; ++index)
     {
-        futures.emplace_back(ElasticThreadPool::glb_instance->schedule([this, idx = index] {
-            this->readLoop(idx);
+        futures.emplace_back(ElasticThreadPool::glb_instance->schedule([this, index] {
+            this->readLoop(index);
         }));
     }
 }
