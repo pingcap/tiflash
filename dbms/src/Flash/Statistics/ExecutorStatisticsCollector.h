@@ -26,7 +26,7 @@ private:
     std::map<String, ExecutorStatisticsPtr> res;
 
     template <typename T>
-    inline bool doAppend(const String & executor_id, const tipb::Executor * executor)
+    bool doAppend(const String & executor_id, const tipb::Executor * executor)
     {
         if (T::isMatch(executor))
         {
@@ -37,7 +37,7 @@ private:
     }
 
     template <typename... Ts>
-    inline bool append(const String & executor_id, const tipb::Executor * executor)
+    bool append(const String & executor_id, const tipb::Executor * executor)
     {
         assert(res.find(executor_id) == res.end());
         return (doAppend<Ts>(executor_id, executor) || ...);

@@ -17,7 +17,6 @@ struct ExchangeSenderImpl
     }
 };
 
-template class ExecutorStatistics<ExchangeSenderImpl>;
 using ExchangeSenderStatisticsBase = ExecutorStatistics<ExchangeSenderImpl>;
 
 class ExchangeSenderStatistics : public ExchangeSenderStatisticsBase

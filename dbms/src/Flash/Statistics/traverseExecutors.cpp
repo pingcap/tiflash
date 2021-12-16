@@ -3,7 +3,7 @@
 
 namespace DB
 {
-std::vector<const tipb::Executor *> getChildren(const tipb::Executor & executor)
+Children getChildren(const tipb::Executor & executor)
 {
     switch (executor.tp())
     {
@@ -14,18 +14,18 @@ std::vector<const tipb::Executor *> getChildren(const tipb::Executor & executor)
     case tipb::ExecType::TypeIndexScan:
         throw TiFlashException("IndexScan is not supported", Errors::Coprocessor::Unimplemented);
     case tipb::ExecType::TypeSelection:
-        return {&executor.selection().child()};
+        return Children{&executor.selection().child()};
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
-        return {&executor.aggregation().child()};
+        return Children{&executor.aggregation().child()};
     case tipb::ExecType::TypeTopN:
-        return {&executor.topn().child()};
+        return Children{&executor.topn().child()};
     case tipb::ExecType::TypeLimit:
-        return {&executor.limit().child()};
+        return Children{&executor.limit().child()};
     case tipb::ExecType::TypeProjection:
-        return {&executor.projection().child()};
+        return Children{&executor.projection().child()};
     case tipb::ExecType::TypeExchangeSender:
-        return {&executor.exchange_sender().child()};
+        return Children{&executor.exchange_sender().child()};
     case tipb::ExecType::TypeExchangeReceiver:
         return {};
     case tipb::ExecType::TypeKill:

@@ -46,7 +46,7 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
 {
     assert(dag_context);
     assert(dag_context->dag_request);
-    assert(dag_context->is_mpp_task);
+    assert(dag_context->isMPPTask());
     const auto & root_executor = dag_context->dag_request->root_executor();
     assert(root_executor.has_exchange_sender());
     sender_executor_id = parseIdFromExecutorId(root_executor.executor_id());

@@ -17,7 +17,6 @@ struct ExchangeReceiverImpl
     }
 };
 
-template class ExecutorStatistics<ExchangeReceiverImpl>;
 using ExchangeReceiverStatisticsBase = ExecutorStatistics<ExchangeReceiverImpl>;
 
 class ExchangeReceiverStatistics : public ExchangeReceiverStatisticsBase

@@ -31,11 +31,10 @@ public:
 
         type = ExecutorImpl::type;
 
-        for (const auto * child : getChildren(*executor))
-        {
-            assert(child->has_executor_id());
-            children.push_back(parseIdFromExecutorId(child->executor_id()));
-        }
+        getChildren(*executor).forEach([&](const tipb::Executor & child) {
+            assert(child.has_executor_id());
+            children.push_back(parseIdFromExecutorId(child.executor_id()));
+        });
     }
 
     virtual String toJson() const override
