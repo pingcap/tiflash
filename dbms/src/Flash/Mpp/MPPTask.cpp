@@ -26,14 +26,11 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char hang_in_execution[];
 extern const char exception_before_mpp_register_non_root_mpp_task[];
 extern const char exception_before_mpp_register_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
-extern const char exception_during_mpp_non_root_task_run[];
-extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
@@ -311,12 +308,6 @@ void MPPTask::runImpl()
 
         while (from->read())
             continue;
-
-        FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-        if (dag_context->isRootMPPTask())
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
-        else
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
 
         from->readSuffix();
         finishWrite();
