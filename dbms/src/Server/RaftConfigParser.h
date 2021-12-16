@@ -15,7 +15,6 @@ class LayeredConfiguration;
 
 namespace DB
 {
-
 struct TiFlashRaftConfig
 {
     const std::string engine_key = "engine";
