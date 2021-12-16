@@ -504,7 +504,9 @@ struct SenderHelper
         }
 
         tipb::DAGRequest dag_request;
-        *dag_request.mutable_root_executor() = tipb::Executor{};
+        tipb::Executor root_executor;
+        root_executor.set_executor_id("ExchangeSender_100");
+        *dag_request.mutable_root_executor() = root_executor;
 
         dag_context = std::make_unique<DAGContext>(dag_request);
         dag_context->final_concurrency = concurrency; // just for execution_summary
