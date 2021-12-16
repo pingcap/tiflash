@@ -132,7 +132,6 @@ public:
         if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
             return;
 
-        //std::cerr << "cancelling\n";
         processor.cancel(kill);
     }
 
@@ -209,27 +208,18 @@ protected:
             processor.process();
         }
 
-        if constexpr (ignore_block)
-        {
-            /// TODO: respect exception_callback later.
-            finalize(); /// We only care the final result.
-        }
-        else
-        {
-            /// We will wait until the next block is ready or an exception is thrown.
-            //std::cerr << "popping\n";
-            output_queue.pop(received_payload);
+        /// We will wait until the next block is ready or an exception is thrown.
+        output_queue.pop(received_payload);
 
-            if (received_payload.exception)
-            {
-                if (exception_callback)
-                    exception_callback();
-                std::rethrow_exception(received_payload.exception);
-            }
-
-            if (!received_payload.block)
-                all_read = true;
+        if (received_payload.exception)
+        {
+            if (exception_callback)
+                exception_callback();
+            std::rethrow_exception(received_payload.exception);
         }
+
+        if (!received_payload.block)
+            all_read = true;
 
         return received_payload.block;
     }
