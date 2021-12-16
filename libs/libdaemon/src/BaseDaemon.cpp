@@ -37,6 +37,7 @@
 #include <Poco/Exception.h>
 #include <Poco/Ext/LevelFilterChannel.h>
 #include <Poco/Ext/ReloadableSplitterChannel.h>
+#include <Poco/Ext/SourceFilterChannel.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Poco/Ext/TiFlashLogFileChannel.h>
 #include <Poco/File.h>
@@ -794,7 +795,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     {
         createDirectory(tracing_log_path);
         std::cerr << "Logging tracing log to " << tracing_log_path << std::endl;
-        Poco::AutoPtr<Poco::MPPTaskTracingChannel> tracing = new Poco::MPPTaskTracingChannel;
+        Poco::AutoPtr<Poco::SourceFilterChannel> source = new Poco::SourceFilterChannel;
+        source->setSource(DB::MPPTaskTracingLogger::tracing_log_source);
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
         pf->setProperty("times", "local");
         Poco::AutoPtr<FormattingChannel> tracing_log = new FormattingChannel(pf);
@@ -808,8 +810,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         tracing_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         tracing_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
         tracing_log->setChannel(tracing_log_file);
-        tracing->setChannel(tracing_log);
-        split->addChannel(tracing);
+        source->setChannel(tracing_log);
+        split->addChannel(source);
         tracing_log->open();
     }
 

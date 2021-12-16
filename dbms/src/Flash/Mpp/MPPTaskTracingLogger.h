@@ -2,7 +2,6 @@
 
 #include <Common/LogWithPrefix.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Poco/Channel.h>
 
 namespace DB
 {
@@ -19,26 +18,3 @@ private:
     LogWithPrefixPtr logger;
 };
 } // namespace DB
-
-namespace Poco
-{
-class Foundation_API MPPTaskTracingChannel : public Channel
-{
-public:
-    void log(const Message & msg) override;
-
-    void setChannel(Channel * pChannel);
-
-    Channel * getChannel() const;
-
-    void open() override;
-
-    void close() override;
-
-protected:
-    ~MPPTaskTracingChannel();
-
-private:
-    Channel * channel = nullptr;
-};
-} // namespace Poco
