@@ -3,8 +3,8 @@
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/MockKeyManager.h>
-#include <Poco/File.h>
 #include <Poco/ConsoleChannel.h>
+#include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
@@ -12,8 +12,8 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <pingcap/Config.h>
 #include <daemon/BaseDaemon.h>
+#include <pingcap/Config.h>
 
 #include <ext/scope_guard.h>
 #include <string>
@@ -261,11 +261,13 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
 template <class Func, class Args>
 inline const std::string CLIService<Func, Args>::TiFlashProxyConfig::config_prefix = "flash.proxy";
 
-namespace detail {
+namespace detail
+{
 using namespace DB;
-class ImitativeEnv {
-    DB::ContextPtr createImitativeContext(const std::string& workdir) {
-        using namespace DB;
+class ImitativeEnv
+{
+    DB::ContextPtr createImitativeContext(const std::string & workdir)
+    {
         // set itself as global context
         global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
         global_context->setGlobalContext(*global_context);
@@ -301,7 +303,8 @@ class ImitativeEnv {
         return global_context;
     }
 
-    void setupLogger() {
+    void setupLogger()
+    {
         Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cout);
         Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
         formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
@@ -310,25 +313,26 @@ class ImitativeEnv {
         Poco::Logger::root().setLevel("trace");
     }
 
-    ContextPtr global_context {};
+    ContextPtr global_context{};
 
 public:
-
-    ImitativeEnv(const std::string& workdir) {
+    ImitativeEnv(const std::string & workdir)
+    {
         setupLogger();
         createImitativeContext(workdir);
     }
 
-    ~ImitativeEnv() {
+    ~ImitativeEnv()
+    {
         global_context->getTMTContext().setStatusTerminated();
         global_context->shutdown();
         global_context.reset();
     }
 
-    ContextPtr getContext() {
+    ContextPtr getContext()
+    {
         return global_context;
     }
-
 };
 } // namespace detail
 
