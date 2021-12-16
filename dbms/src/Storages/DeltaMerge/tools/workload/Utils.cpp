@@ -1,24 +1,17 @@
 #include <Storages/DeltaMerge/tools/workload/Utils.h>
 #include <fmt/ranges.h>
+#include <fmt/chrono.h>
 
 namespace DB::DM::tests
 {
 std::string localTime()
 {
-    time_t t = ::time(nullptr);
-    std::stringstream ss;
-    struct tm local_tm;
-    ss << std::put_time(localtime_r(&t, &local_tm), "%Y%m%d_%X");
-    return ss.str();
+    return fmt::format("{:%Y%m%d%H%M%S}", fmt::localtime(time(nullptr)));
 }
 
 std::string localDate()
 {
-    time_t t = ::time(nullptr);
-    std::stringstream ss;
-    struct tm local_tm;
-    ss << std::put_time(localtime_r(&t, &local_tm), "%Y%m%d");
-    return ss.str();
+    return fmt::format("{:%Y%m%d}", fmt::localtime(::time(nullptr)));
 }
 
 std::string fieldToString(const DataTypePtr & data_type, const Field & f)
