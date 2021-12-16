@@ -205,7 +205,7 @@ int benchEntry(const std::vector<std::string> & opts)
 
     bpo::notify(vm);
 
-    if (vm.count("help"))
+    if (vm.count("help") != 0)
     {
         std::cout << BENCH_HELP << std::endl;
         return 0;
