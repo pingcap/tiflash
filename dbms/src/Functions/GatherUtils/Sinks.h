@@ -1,19 +1,16 @@
 #pragma once
 
-#include <Functions/GatherUtils/IArraySink.h>
-
-#include <Columns/ColumnVector.h>
 #include <Columns/ColumnArray.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
-
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnVector.h>
 #include <Common/typeid_cast.h>
+#include <Functions/GatherUtils/IArraySink.h>
 
 namespace DB::GatherUtils
 {
-
 template <typename T>
 struct NumericArraySource;
 
@@ -43,7 +40,8 @@ struct NumericArraySink : public ArraySinkImpl<NumericArraySink<T>>
     ColumnArray::Offset current_offset = 0;
 
     NumericArraySink(ColumnArray & arr, size_t column_size)
-            : elements(typeid_cast<ColumnVector<T> &>(arr.getData()).getData()), offsets(arr.getOffsets())
+        : elements(typeid_cast<ColumnVector<T> &>(arr.getData()).getData())
+        , offsets(arr.getOffsets())
     {
         offsets.resize(column_size);
     }
@@ -80,7 +78,8 @@ struct StringSink
     ColumnString::Offset current_offset = 0;
 
     StringSink(ColumnString & col, size_t column_size)
-            : elements(col.getChars()), offsets(col.getOffsets())
+        : elements(col.getChars())
+        , offsets(col.getOffsets())
     {
         offsets.resize(column_size);
     }
@@ -120,7 +119,9 @@ struct FixedStringSink
     ColumnString::Offset current_offset = 0;
 
     FixedStringSink(ColumnFixedString & col, size_t column_size)
-            : elements(col.getChars()), string_size(col.getN()), total_rows(column_size)
+        : elements(col.getChars())
+        , string_size(col.getN())
+        , total_rows(column_size)
     {
         elements.resize(column_size * string_size);
     }
@@ -160,7 +161,8 @@ struct GenericArraySink : public ArraySinkImpl<GenericArraySink>
     ColumnArray::Offset current_offset = 0;
 
     GenericArraySink(ColumnArray & arr, size_t column_size)
-            : elements(arr.getData()), offsets(arr.getOffsets())
+        : elements(arr.getData())
+        , offsets(arr.getOffsets())
     {
         offsets.resize(column_size);
     }
@@ -197,7 +199,8 @@ struct NullableArraySink : public ArraySink
     NullMap & null_map;
 
     NullableArraySink(ColumnArray & arr, NullMap & null_map, size_t column_size)
-            : ArraySink(arr, column_size), null_map(null_map)
+        : ArraySink(arr, column_size)
+        , null_map(null_map)
     {
     }
 
@@ -211,4 +214,4 @@ struct NullableArraySink : public ArraySink
 };
 
 
-}
+} // namespace DB::GatherUtils

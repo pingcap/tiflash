@@ -72,9 +72,9 @@ extern const int AIO_SUBMIT_ERROR;
 } // namespace ErrorCodes
 
 
-class AIOContextPool : public ext::singleton<AIOContextPool>
+class AIOContextPool : public ext::Singleton<AIOContextPool>
 {
-    friend class ext::singleton<AIOContextPool>;
+    friend class ext::Singleton<AIOContextPool>;
 
     static const auto max_concurrent_events = 128;
     static const auto timeout_sec = 1;

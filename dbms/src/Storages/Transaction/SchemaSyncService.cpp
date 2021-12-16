@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/SchemaSyncService.h>
@@ -18,7 +19,9 @@ extern const int DEADLOCK_AVOIDED;
 } // namespace ErrorCodes
 
 SchemaSyncService::SchemaSyncService(DB::Context & context_)
-    : context(context_), background_pool(context_.getBackgroundPool()), log(&Poco::Logger::get("SchemaSyncService"))
+    : context(context_)
+    , background_pool(context_.getBackgroundPool())
+    , log(&Poco::Logger::get("SchemaSyncService"))
 {
     handle = background_pool.addTask(
         [&, this] {
@@ -44,8 +47,8 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
             catch (const Exception & e)
             {
                 LOG_ERROR(log,
-                    __PRETTY_FUNCTION__ << ": " << stage << " failed by " << e.displayText()
-                                        << " \n stack : " << e.getStackTrace().toString());
+                          __PRETTY_FUNCTION__ << ": " << stage << " failed by " << e.displayText()
+                                              << " \n stack : " << e.getStackTrace().toString());
             }
             catch (const Poco::Exception & e)
             {
@@ -60,9 +63,15 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
         false);
 }
 
-SchemaSyncService::~SchemaSyncService() { background_pool.removeTask(handle); }
+SchemaSyncService::~SchemaSyncService()
+{
+    background_pool.removeTask(handle);
+}
 
-bool SchemaSyncService::syncSchemas() { return context.getTMTContext().getSchemaSyncer()->syncSchemas(context); }
+bool SchemaSyncService::syncSchemas()
+{
+    return context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+}
 
 template <typename DatabaseOrTablePtr>
 inline bool isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safe_point)
@@ -103,10 +112,10 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
 
     // Physically drop tables
     bool succeeded = true;
-    for (auto & storage_ : storages_to_gc)
+    for (auto & storage_ptr : storages_to_gc)
     {
         // Get a shared_ptr from weak_ptr, it should always success.
-        auto storage = storage_.lock();
+        auto storage = storage_ptr.lock();
         if (unlikely(!storage))
             continue;
 

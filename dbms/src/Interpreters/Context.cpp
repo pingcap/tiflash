@@ -1,5 +1,6 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
+#include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -12,18 +13,14 @@
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/RateLimiter.h>
-#include <IO/PersistedCache.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
-#include <Interpreters/Cluster.h>
 #include <Interpreters/Compiler.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ExternalDictionaries.h>
 #include <Interpreters/ExternalModels.h>
 #include <Interpreters/ISecurityManager.h>
-#include <Interpreters/InterserverIOHandler.h>
-#include <Interpreters/PartLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/Quota.h>
@@ -38,15 +35,12 @@
 #include <Poco/Mutex.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/CompressionSettingsSelector.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
-#include <Storages/MergeTree/MergeList.h>
-#include <Storages/MergeTree/MergeTreeSettings.h>
-#include <Storages/PartPathSelector.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -54,6 +48,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <boost/functional/hash/hash.hpp>
 #include <map>
@@ -92,6 +87,10 @@ extern const int SESSION_NOT_FOUND;
 extern const int SESSION_IS_LOCKED;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char force_context_path[];
+} // namespace FailPoints
 
 
 /** Set of known objects (environment), that could be used in query.
@@ -110,9 +109,6 @@ struct ContextShared
     mutable std::mutex external_dictionaries_mutex;
     mutable std::mutex external_models_mutex;
 
-    String interserver_io_host; /// The host name by which this server is available for other servers.
-    UInt16 interserver_io_port = 0; /// and port.
-
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
@@ -130,16 +126,13 @@ struct ContextShared
     std::shared_ptr<ISecurityManager> security_manager; /// Known users.
     Quotas quotas; /// Known quotas for resource use.
     mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
-    mutable PersistedCachePtr persisted_cache; /// The persisted cache of compressed blocks written in fast(er) disk device.
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
-    MergeList merge_list; /// The list of executable merge (for (Replicated)?MergeTree)
     ViewDependencies view_dependencies; /// Current dependencies
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
-    InterserverIOHandler interserver_io_handler; /// Handler for interserver communication.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
@@ -147,13 +140,11 @@ struct ContextShared
     std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
     /// Rules for selecting the compression settings, depending on the size of the part.
     mutable std::unique_ptr<CompressionSettingsSelector> compression_settings_selector;
-    std::unique_ptr<MergeTreeSettings> merge_tree_settings; /// Settings of MergeTree* engines.
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
     SchemaSyncServicePtr schema_sync_service; /// Schema sync service instance.
-    PartPathSelectorPtr part_path_selector_ptr; /// PartPathSelector service instance.
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
@@ -178,12 +169,6 @@ struct ContextShared
     std::chrono::steady_clock::duration close_interval = std::chrono::seconds(1);
     std::chrono::steady_clock::time_point close_cycle_time = std::chrono::steady_clock::now();
     UInt64 close_cycle = 0;
-
-    /// Clusters for distributed tables
-    /// Initialized on demand (on distributed storages initialization) since Settings should be initialized
-    std::unique_ptr<Clusters> clusters;
-    ConfigurationPtr clusters_config; /// Soteres updated configs
-    mutable std::mutex clusters_mutex; /// Guards clusters and clusters_config
 
     bool shutdown_called = false;
 
@@ -304,11 +289,6 @@ Context::~Context()
 }
 
 
-InterserverIOHandler & Context::getInterserverIOHandler()
-{
-    return shared->interserver_io_handler;
-}
-
 std::unique_lock<std::recursive_mutex> Context::getLock() const
 {
     ProfileEvents::increment(ProfileEvents::ContextLock);
@@ -323,14 +303,6 @@ ProcessList & Context::getProcessList()
 const ProcessList & Context::getProcessList() const
 {
     return shared->process_list;
-}
-MergeList & Context::getMergeList()
-{
-    return shared->merge_list;
-}
-const MergeList & Context::getMergeList() const
-{
-    return shared->merge_list;
 }
 
 
@@ -503,6 +475,8 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
 String Context::getPath() const
 {
     auto lock = getLock();
+    // Now we only make this failpoint for gtest_database.
+    fiu_return_on(FailPoints::force_context_path, fmt::format("{}{}/", shared->path, "DatabaseTiFlashTest"));
     return shared->path;
 }
 
@@ -1370,32 +1344,12 @@ UncompressedCachePtr Context::getUncompressedCache() const
     return shared->uncompressed_cache;
 }
 
-
 void Context::dropUncompressedCache() const
 {
     auto lock = getLock();
     if (shared->uncompressed_cache)
         shared->uncompressed_cache->reset();
 }
-
-
-void Context::setPersistedCache(size_t max_size_in_bytes, const std::string & persisted_path)
-{
-    auto lock = getLock();
-
-    if (shared->persisted_cache)
-        throw Exception("Persisted cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-
-    shared->persisted_cache = std::make_shared<PersistedCache>(max_size_in_bytes, shared->path, persisted_path);
-}
-
-
-PersistedCachePtr Context::getPersistedCache() const
-{
-    auto lock = getLock();
-    return shared->persisted_cache;
-}
-
 
 DBGInvoker & Context::getDBGInvoker() const
 {
@@ -1546,22 +1500,6 @@ PathCapacityMetricsPtr Context::getPathCapacity() const
     return shared->path_capacity_ptr;
 }
 
-void Context::initializePartPathSelector(std::vector<std::string> && all_normal_path, std::vector<std::string> && all_fast_path)
-{
-    auto lock = getLock();
-    if (shared->part_path_selector_ptr)
-        throw Exception("PartPathSelector instance has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->part_path_selector_ptr = std::make_shared<PartPathSelector>(std::move(all_normal_path), std::move(all_fast_path));
-}
-
-PartPathSelector & Context::getPartPathSelector()
-{
-    auto lock = getLock();
-    if (!shared->part_path_selector_ptr)
-        throw Exception("PartPathSelector is not initialized.", ErrorCodes::LOGICAL_ERROR);
-    return *shared->part_path_selector_ptr;
-}
-
 void Context::initializeSchemaSyncService()
 {
     auto lock = getLock();
@@ -1620,91 +1558,12 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
-void Context::setInterserverIOAddress(const String & host, UInt16 port)
-{
-    shared->interserver_io_host = host;
-    shared->interserver_io_port = port;
-}
-
-
-std::pair<String, UInt16> Context::getInterserverIOAddress() const
-{
-    if (shared->interserver_io_host.empty() || shared->interserver_io_port == 0)
-        throw Exception("Parameter 'interserver_http_port' required for replication is not specified in configuration file.",
-                        ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-    return {shared->interserver_io_host, shared->interserver_io_port};
-}
-
 UInt16 Context::getTCPPort() const
 {
     auto lock = getLock();
 
     auto & config = getConfigRef();
     return config.getInt("tcp_port");
-}
-
-
-std::shared_ptr<Cluster> Context::getCluster(const std::string & cluster_name) const
-{
-    auto res = getClusters().getCluster(cluster_name);
-
-    if (!res)
-        throw Exception("Requested cluster '" + cluster_name + "' not found", ErrorCodes::BAD_GET);
-
-    return res;
-}
-
-
-std::shared_ptr<Cluster> Context::tryGetCluster(const std::string & cluster_name) const
-{
-    return getClusters().getCluster(cluster_name);
-}
-
-
-void Context::reloadClusterConfig()
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-    auto & config = shared->clusters_config ? *shared->clusters_config : getConfigRef();
-    shared->clusters = std::make_unique<Clusters>(config, settings);
-}
-
-
-Clusters & Context::getClusters() const
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-    if (!shared->clusters)
-    {
-        auto & config = shared->clusters_config ? *shared->clusters_config : getConfigRef();
-        shared->clusters = std::make_unique<Clusters>(config, settings);
-    }
-
-    return *shared->clusters;
-}
-
-
-/// On repeating calls updates existing clusters and adds new clusters, doesn't delete old clusters
-void Context::setClustersConfig(const ConfigurationPtr & config, const String & config_name)
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-
-    shared->clusters_config = config;
-
-    if (!shared->clusters)
-        shared->clusters = std::make_unique<Clusters>(*shared->clusters_config, settings, config_name);
-    else
-        shared->clusters->updateClusters(*shared->clusters_config, settings, config_name);
-}
-
-
-void Context::setCluster(const String & cluster_name, const std::shared_ptr<Cluster> & cluster)
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-
-    if (!shared->clusters)
-        throw Exception("Clusters are not set", ErrorCodes::LOGICAL_ERROR);
-
-    shared->clusters->setCluster(cluster_name, cluster);
 }
 
 
@@ -1757,47 +1616,6 @@ QueryLog * Context::getQueryLog()
 }
 
 
-PartLog * Context::getPartLog(const String & part_database)
-{
-    auto lock = getLock();
-
-    auto & config = getConfigRef();
-    if (!config.has("part_log"))
-        return nullptr;
-
-    /// System logs are shutting down.
-    if (!system_logs)
-        return nullptr;
-
-    String database = config.getString("part_log.database", "system");
-
-    /// Will not log operations on system tables (including part_log itself).
-    /// It doesn't make sense and not allow to destruct PartLog correctly due to infinite logging and flushing,
-    /// and also make troubles on startup.
-    if (part_database == database)
-        return nullptr;
-
-    if (!system_logs->part_log)
-    {
-        if (shared->shutdown_called)
-            throw Exception("Logical error: part log should be destroyed before tables shutdown", ErrorCodes::LOGICAL_ERROR);
-
-        if (!global_context)
-            throw Exception("Logical error: no global context for part log", ErrorCodes::LOGICAL_ERROR);
-
-        String table = config.getString("part_log.table", "part_log");
-        String partition_by = config.getString("query_log.partition_by", "toYYYYMM(event_date)");
-        size_t flush_interval_milliseconds = config.getUInt64("part_log.flush_interval_milliseconds", DEFAULT_QUERY_LOG_FLUSH_INTERVAL_MILLISECONDS);
-
-        String engine = "ENGINE = MergeTree PARTITION BY (" + partition_by + ") ORDER BY (event_date, event_time) SETTINGS index_granularity = 1024";
-
-        system_logs->part_log = std::make_unique<PartLog>(*global_context, database, table, engine, flush_interval_milliseconds);
-    }
-
-    return system_logs->part_log.get();
-}
-
-
 CompressionSettings Context::chooseCompressionSettings(size_t part_size, double part_size_ratio) const
 {
     auto lock = getLock();
@@ -1814,21 +1632,6 @@ CompressionSettings Context::chooseCompressionSettings(size_t part_size, double 
     }
 
     return shared->compression_settings_selector->choose(part_size, part_size_ratio);
-}
-
-
-const MergeTreeSettings & Context::getMergeTreeSettings()
-{
-    auto lock = getLock();
-
-    if (!shared->merge_tree_settings)
-    {
-        auto & config = getConfigRef();
-        shared->merge_tree_settings = std::make_unique<MergeTreeSettings>();
-        shared->merge_tree_settings->loadFromConfig("merge_tree", config);
-    }
-
-    return *shared->merge_tree_settings;
 }
 
 

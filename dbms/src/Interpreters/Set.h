@@ -11,7 +11,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SetVariants.h>
 #include <Parsers/IAST.h>
-#include <Storages/MergeTree/BoolMask.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/logger_useful.h>
 
@@ -177,33 +176,5 @@ using Sets = std::vector<SetPtr>;
 
 class IFunction;
 using FunctionPtr = std::shared_ptr<IFunction>;
-
-/// Class for mayBeTrueInRange function.
-class MergeTreeSetIndex
-{
-public:
-    /** Mapping for tuple positions from Set::set_elements to
-      * position of pk index and data type of this pk column
-      * and functions chain applied to this column.
-      */
-    struct KeyTuplePositionMapping
-    {
-        size_t tuple_index;
-        size_t key_index;
-        std::vector<FunctionBasePtr> functions;
-    };
-
-    MergeTreeSetIndex(const SetElements & set_elements, std::vector<KeyTuplePositionMapping> && indexes_mapping_);
-
-    size_t size() const { return ordered_set.size(); }
-
-    BoolMask mayBeTrueInRange(const std::vector<Range> & key_ranges, const DataTypes & data_types);
-
-private:
-    using OrderedTuples = std::vector<std::vector<FieldWithInfinity>>;
-    OrderedTuples ordered_set;
-
-    std::vector<KeyTuplePositionMapping> indexes_mapping;
-};
 
 } // namespace DB

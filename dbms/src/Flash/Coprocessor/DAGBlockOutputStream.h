@@ -15,7 +15,6 @@
 
 namespace DB
 {
-
 /// Serializes the stream of blocks in TiDB DAG response format.
 class DAGBlockOutputStream : public IBlockOutputStream
 {

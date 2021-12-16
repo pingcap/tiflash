@@ -69,12 +69,14 @@ def main():
             if diff_res:
                 print('Error: found files NOT formatted')
                 print(''.join(diff_res))
+                print(''.join(run_cmd('git diff')))
                 exit(-1)
             else:
                 print("Format check passed")
         else:
             cmd = 'clang-format -i {}'.format(' '.join(files_to_format))
-            subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait()
+            if subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait():
+                exit(-1)
             print("Finish code format")
     else:
         print('No file to format')

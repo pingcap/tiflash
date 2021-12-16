@@ -25,8 +25,8 @@
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/StringTokenizer.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -42,6 +42,7 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
+extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
 
 using TiDB::DatumFlat;
@@ -49,7 +50,6 @@ using TiDB::TableInfo;
 
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
-using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
 static const String ENCODE_TYPE_NAME = "encode_type";
 static const String TZ_OFFSET_NAME = "tz_offset";
 static const String TZ_NAME_NAME = "tz_name";
@@ -68,18 +68,6 @@ void setServiceAddr(const std::string & addr)
 }
 } // namespace Debug
 
-struct DAGProperties
-{
-    String encode_type = "";
-    Int64 tz_offset = 0;
-    String tz_name = "";
-    Int32 collator = 0;
-    bool is_mpp_query = false;
-    bool use_broadcast_join = false;
-    Int32 mpp_partition_num = 1;
-    Timestamp start_ts = DEFAULT_MAX_READ_TSO;
-    Int32 mpp_timeout = 10;
-};
 
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"equals", tipb::ScalarFuncSig::EQInt},
@@ -168,47 +156,10 @@ DAGColumnInfo toNullableDAGColumnInfo(DAGColumnInfo & input)
     return output;
 }
 
-
-enum QueryTaskType
-{
-    DAG,
-    MPP_DISPATCH
-};
-
-struct QueryTask
-{
-    std::shared_ptr<tipb::DAGRequest> dag_request;
-    TableID table_id;
-    DAGSchema result_schema;
-    QueryTaskType type;
-    Int64 task_id;
-    Int64 partition_id;
-    bool is_root_task;
-    QueryTask(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryTaskType type_, Int64 task_id_, Int64 partition_id_, bool is_root_task_)
-        : dag_request(std::move(request))
-        , table_id(table_id_)
-        , result_schema(result_schema_)
-        , type(type_)
-        , task_id(task_id_)
-        , partition_id(partition_id_)
-        , is_root_task(is_root_task_)
-    {}
-};
-
-using QueryTasks = std::vector<QueryTask>;
-
-using MakeResOutputStream = std::function<BlockInputStreamPtr(BlockInputStreamPtr)>;
-
-std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
-    Context & context,
-    const String & query,
-    SchemaFetcher schema_fetcher,
-    const DAGProperties & properties);
-
 class UniqRawResReformatBlockOutputStream : public IProfilingBlockInputStream
 {
 public:
-    UniqRawResReformatBlockOutputStream(const BlockInputStreamPtr & in_)
+    explicit UniqRawResReformatBlockOutputStream(const BlockInputStreamPtr & in_)
         : in(in_)
     {}
 
@@ -231,7 +182,7 @@ protected:
             {
                 ColumnWithTypeAndName & ori_column = block.getByPosition(i);
 
-                if (std::string::npos != ori_column.name.find_first_of(UniqRawResName))
+                if (std::string::npos != ori_column.name.find_first_of(uniq_raw_res_name))
                 {
                     MutableColumnPtr mutable_holder = ori_column.column->cloneEmpty();
 
@@ -263,16 +214,16 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 
-DAGProperties getDAGProperties(String prop_string)
+DAGProperties getDAGProperties(const String & prop_string)
 {
     DAGProperties ret;
     if (prop_string.empty())
         return ret;
     std::unordered_map<String, String> properties;
     Poco::StringTokenizer string_tokens(prop_string, ",");
-    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    for (const auto & string_token : string_tokens)
     {
-        Poco::StringTokenizer tokens(*it, ":");
+        Poco::StringTokenizer tokens(string_token, ":");
         if (tokens.count() != 2)
             continue;
         properties[Poco::toLower(tokens[0])] = tokens[1];
@@ -373,7 +324,9 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         root_tm.set_partition_id(-1);
         std::shared_ptr<ExchangeReceiver> exchange_receiver
             = std::make_shared<ExchangeReceiver>(
-                std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster()),
+                std::make_shared<GRPCReceiverContext>(context.getTMTContext().getKVCluster(),
+                                                      context.getTMTContext().getMPPTaskManager(),
+                                                      context.getSettings().enable_local_tunnel),
                 tipb_exchange_receiver,
                 root_tm,
                 10,
@@ -752,8 +705,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                 astToPB(input, child_ast, child, collator_id, context);
             }
             // for like need to add the third argument
-            tipb::Expr * constant_expr = expr->add_children();
-            constructInt64LiteralTiExpr(*constant_expr, 92);
+            *expr->add_children() = constructInt64LiteralTiExpr(92);
             return;
         }
         case tipb::ScalarFuncSig::FromUnixTime2Arg:
@@ -836,7 +788,6 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
             expr->set_sig(it_sig->second);
             auto * ft = expr->mutable_field_type();
             ft->set_tp(TiDB::TypeLongLong);
-            std::cerr << ft->flag() << std::endl;
             ft->set_flag(TiDB::ColumnFlagUnsigned);
             ft->set_collate(collator_id);
             break;
@@ -1272,7 +1223,7 @@ struct Aggregation : public Executor
                 ft->set_flag(agg_func->children(0).field_type().flag());
                 ft->set_collate(collator_id);
             }
-            else if (func->name == UniqRawResName)
+            else if (func->name == uniq_raw_res_name)
             {
                 agg_func->set_tp(tipb::ApproxCountDistinct);
                 auto ft = agg_func->mutable_field_type();
@@ -1932,7 +1883,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
             {
                 ci = children_ci[0];
             }
-            else if (func->name == UniqRawResName)
+            else if (func->name == uniq_raw_res_name)
             {
                 has_uniq_raw_res = true;
                 ci.tp = TiDB::TypeString;
@@ -2460,10 +2411,15 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
     RegionInfoMap regions;
-    RegionInfoList retry_regions;
 
     regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
-    DAGDriver driver(context, dag_request, regions, retry_regions, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+
+    DAGContext dag_context(dag_request);
+    dag_context.regions_for_local_read = regions;
+    dag_context.log = std::make_shared<LogWithPrefix>(log, "");
+    context.setDAGContext(&dag_context);
+
+    DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;

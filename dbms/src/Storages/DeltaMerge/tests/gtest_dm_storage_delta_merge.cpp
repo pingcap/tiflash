@@ -34,7 +34,7 @@ namespace DM
 {
 namespace tests
 {
-TEST(StorageDeltaMerge_test, ReadWriteCase1)
+TEST(StorageDeltaMergeTest, ReadWriteCase1)
 try
 {
     // prepare block data
@@ -47,13 +47,12 @@ try
         "col2"));
 
     Context ctx = DMTestEnv::getContext();
-    StoragePtr storage;
+    std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
     // create table
     {
         NamesAndTypesList names_and_types_list{
-            //{"col1", std::make_shared<DataTypeUInt64>()},
             {"col1", std::make_shared<DataTypeInt64>()},
             {"col2", std::make_shared<DataTypeString>()},
         };
@@ -63,13 +62,12 @@ try
             column_names.push_back(name_type.name);
         }
 
-        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
-        Poco::File path(path_name);
-        if (path.exists())
+        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_ReadWriteCase1");
+        if (Poco::File path(path_name); path.exists())
             path.remove(true);
 
         // primary_expr_ast
-        const String table_name = "tmp_table";
+        const String table_name = "t_1233";
         ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
@@ -100,7 +98,7 @@ try
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
     BlockInputStreams ins = storage->read(column_names, query_info, ctx, stage2, 8192, 1);
-    ASSERT_EQ(ins.size(), 1UL);
+    ASSERT_EQ(ins.size(), 1);
     BlockInputStreamPtr in = ins[0];
     in->readPrefix();
 
@@ -127,20 +125,42 @@ try
     in->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
 
-
+    auto store_status = storage->status();
+    Block status = store_status->read();
+    ColumnPtr col_name = status.getByName("Name").column;
+    ColumnPtr col_value = status.getByName("Value").column;
+    for (size_t i = 0; i < col_name->size(); i++)
+    {
+        if (col_name->getDataAt(i) == String("segment_count"))
+        {
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(1)));
+        }
+        else if (col_name->getDataAt(i) == String("total_rows"))
+        {
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(num_rows_read)));
+        }
+    }
+    auto delta_store = storage->getStore();
+    size_t total_segment_rows = 0;
+    auto segment_stats = delta_store->getSegmentStats();
+    for (auto & stat : segment_stats)
+    {
+        total_segment_rows += stat.rows;
+    }
+    EXPECT_EQ(total_segment_rows, num_rows_read);
     storage->drop();
 }
 CATCH
 
-TEST(StorageDeltaMerge_test, Rename)
+TEST(StorageDeltaMergeTest, Rename)
 try
 {
     Context ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
-    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
-    const String table_name = "tmp_table";
+    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_Rename");
+    const String table_name = "t_1234";
     const String db_name = "default";
     // create table
     {
@@ -155,8 +175,7 @@ try
             column_names.push_back(name_type.name);
         }
 
-        Poco::File path(path_name);
-        if (path.exists())
+        if (Poco::File path(path_name); path.exists())
         {
             path.remove(true);
         }
@@ -207,28 +226,29 @@ try
         ASSERT_TRUE(storage->storeInited());
     }
 
-    // Rename table name
-    String new_table_name = "new_" + storage->getTableName();
+    // TiFlash always use t_{table_id} as table name
+    String new_table_name = storage->getTableName();
     storage->rename(path_name, new_db_name, new_table_name, new_table_name);
     ASSERT_EQ(storage->getTableName(), new_table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
+
+    storage->drop();
 }
 CATCH
 
-TEST(StorageDeltaMerge_test, HandleCol)
+TEST(StorageDeltaMergeTest, HandleCol)
 try
 {
     Context ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
-    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
-    const String table_name = "tmp_table";
+    const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_HandleCol");
+    const String table_name = "t_1235";
     const String db_name = "default";
     // create table
     {
         NamesAndTypesList names_and_types_list{
-            //{"col1", std::make_shared<DataTypeUInt64>()},
             {"col1", std::make_shared<DataTypeInt64>()},
             {"col2", std::make_shared<DataTypeString>()},
         };
@@ -238,8 +258,7 @@ try
             column_names.push_back(name_type.name);
         }
 
-        Poco::File path(path_name);
-        if (path.exists())
+        if (Poco::File path(path_name); path.exists())
         {
             path.remove(true);
         }
@@ -270,15 +289,17 @@ try
     auto sort_desc2 = store->getPrimarySortDescription();
 
     ASSERT_EQ(pk_type->getTypeId(), pk_type2->getTypeId());
-    ASSERT_EQ(sort_desc.size(), 1u);
-    ASSERT_EQ(sort_desc2.size(), 1u);
+    ASSERT_EQ(sort_desc.size(), 1);
+    ASSERT_EQ(sort_desc2.size(), 1);
     ASSERT_EQ(sort_desc.front().column_name, sort_desc2.front().column_name);
     ASSERT_EQ(sort_desc.front().direction, sort_desc2.front().direction);
     ASSERT_EQ(sort_desc.front().nulls_direction, sort_desc2.front().nulls_direction);
+
+    storage->drop();
 }
 CATCH
 
-TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
+TEST(StorageDeltaMergeInternalTest, GetMergedQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo region;
@@ -292,13 +313,13 @@ TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
     regions.emplace_back(region);
 
     auto ranges = ::DB::getQueryRanges(regions, 1, false, 1);
-    ASSERT_EQ(ranges.size(), 3UL);
+    ASSERT_EQ(ranges.size(), 3);
     ASSERT_RANGE_EQ(ranges[0].toHandleRange(), ::DB::DM::HandleRange(100, 250));
     ASSERT_RANGE_EQ(ranges[1].toHandleRange(), ::DB::DM::HandleRange(300, 400));
     ASSERT_RANGE_EQ(ranges[2].toHandleRange(), ::DB::DM::HandleRange(425, 475));
 }
 
-TEST(StorageDeltaMerge_internal_test, GetMergedQueryRangesCommonHandle)
+TEST(StorageDeltaMergeInternalTest, GetMergedQueryRangesCommonHandle)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo region;
@@ -312,13 +333,13 @@ TEST(StorageDeltaMerge_internal_test, GetMergedQueryRangesCommonHandle)
     regions.emplace_back(region);
 
     auto ranges = ::DB::getQueryRanges(regions, 1, true, 2);
-    ASSERT_EQ(ranges.size(), 3UL);
+    ASSERT_EQ(ranges.size(), 3);
     ASSERT_ROWKEY_RANGE_EQ(ranges[0], DMTestEnv::getRowKeyRangeForClusteredIndex(100, 250, 2));
     ASSERT_ROWKEY_RANGE_EQ(ranges[1], DMTestEnv::getRowKeyRangeForClusteredIndex(300, 400, 2));
     ASSERT_ROWKEY_RANGE_EQ(ranges[2], DMTestEnv::getRowKeyRangeForClusteredIndex(425, 475, 2));
 }
 
-TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
+TEST(StorageDeltaMergeInternalTest, MergedUnsortedQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo region;
@@ -344,11 +365,11 @@ TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
     regions.emplace_back(region);
 
     auto ranges = ::DB::getQueryRanges(regions, 1, false, 1);
-    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_EQ(ranges.size(), 1);
     ASSERT_RANGE_EQ(ranges[0].toHandleRange(), DB::DM::HandleRange(1961680, 2950532));
 }
 
-TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRangesCommonHandle)
+TEST(StorageDeltaMergeInternalTest, MergedUnsortedQueryRangesCommonHandle)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo region;
@@ -374,11 +395,11 @@ TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRangesCommonHandle)
     regions.emplace_back(region);
 
     auto ranges = ::DB::getQueryRanges(regions, 1, true, 2);
-    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_EQ(ranges.size(), 1);
     ASSERT_ROWKEY_RANGE_EQ(ranges[0], DMTestEnv::getRowKeyRangeForClusteredIndex(1961680, 2950532, 2));
 }
 
-TEST(StorageDeltaMerge_internal_test, GetFullQueryRanges)
+TEST(StorageDeltaMergeInternalTest, GetFullQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo region;
@@ -386,12 +407,12 @@ TEST(StorageDeltaMerge_internal_test, GetFullQueryRanges)
     regions.emplace_back(region);
 
     auto ranges = ::DB::getQueryRanges(regions, 1, false, 1);
-    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_EQ(ranges.size(), 1);
     const auto full_range = ::DB::DM::HandleRange::newAll();
     ASSERT_RANGE_EQ(ranges[0].toHandleRange(), full_range);
 }
 
-TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
+TEST(StorageDeltaMergeInternalTest, OverlapQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo region;
@@ -408,7 +429,7 @@ TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
     ASSERT_ANY_THROW(auto ranges = ::DB::getQueryRanges(regions, 1, false, 1));
 }
 
-TEST(StorageDeltaMerge_internal_test, OverlapQueryRangesCommonHandle)
+TEST(StorageDeltaMergeInternalTest, OverlapQueryRangesCommonHandle)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo region;
@@ -425,7 +446,7 @@ TEST(StorageDeltaMerge_internal_test, OverlapQueryRangesCommonHandle)
     ASSERT_ANY_THROW(auto ranges = ::DB::getQueryRanges(regions, 1, true, 2));
 }
 
-TEST(StorageDeltaMerge_internal_test, WeirdRange)
+TEST(StorageDeltaMergeInternalTest, WeirdRange)
 {
     // [100, 200), [200, MAX]
     MvccQueryInfo::RegionsQueryInfo regions;
@@ -436,11 +457,11 @@ TEST(StorageDeltaMerge_internal_test, WeirdRange)
     regions.emplace_back(region);
 
     auto ranges = ::DB::getQueryRanges(regions, 1, false, 1);
-    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_EQ(ranges.size(), 1);
     ASSERT_RANGE_EQ(ranges[0].toHandleRange(), DB::DM::HandleRange(100, DB::DM::HandleRange::MAX));
 }
 
-TEST(StorageDeltaMerge_internal_test, WeirdRangeCommonHandle)
+TEST(StorageDeltaMergeInternalTest, WeirdRangeCommonHandle)
 {
     // [100, 200), [200, MAX), [MAX, MAX)
     MvccQueryInfo::RegionsQueryInfo regions;
@@ -455,11 +476,11 @@ TEST(StorageDeltaMerge_internal_test, WeirdRangeCommonHandle)
     regions.emplace_back(region);
 
     auto ranges = ::DB::getQueryRanges(regions, 1, true, 2);
-    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_EQ(ranges.size(), 1);
     ASSERT_ROWKEY_RANGE_EQ(ranges[0], DMTestEnv::getRowKeyRangeForClusteredIndex(100, DB::DM::HandleRange::MAX, 2));
 }
 
-TEST(StorageDeltaMerge_internal_test, RangeSplit)
+TEST(StorageDeltaMergeInternalTest, RangeSplit)
 {
     {
         MvccQueryInfo::RegionsQueryInfo regions;
@@ -475,37 +496,37 @@ TEST(StorageDeltaMerge_internal_test, RangeSplit)
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 0);
-            ASSERT_EQ(ranges.size(), 2UL);
+            ASSERT_EQ(ranges.size(), 2);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 1);
-            ASSERT_EQ(ranges.size(), 2UL);
+            ASSERT_EQ(ranges.size(), 2);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 2);
-            ASSERT_EQ(ranges.size(), 2ul);
+            ASSERT_EQ(ranges.size(), 2);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 3);
-            ASSERT_EQ(ranges.size(), 3ul);
+            ASSERT_EQ(ranges.size(), 3);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 4);
-            ASSERT_EQ(ranges.size(), 4ul);
+            ASSERT_EQ(ranges.size(), 4);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 5);
-            ASSERT_EQ(ranges.size(), 4ul);
+            ASSERT_EQ(ranges.size(), 4);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 100);
-            ASSERT_EQ(ranges.size(), 4ul);
+            ASSERT_EQ(ranges.size(), 4);
         }
     }
 
@@ -523,37 +544,37 @@ TEST(StorageDeltaMerge_internal_test, RangeSplit)
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 0);
-            ASSERT_EQ(ranges.size(), 3ul);
+            ASSERT_EQ(ranges.size(), 3);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 1);
-            ASSERT_EQ(ranges.size(), 3ul);
+            ASSERT_EQ(ranges.size(), 3);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 2);
-            ASSERT_EQ(ranges.size(), 3ul);
+            ASSERT_EQ(ranges.size(), 3);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 3);
-            ASSERT_EQ(ranges.size(), 3ul);
+            ASSERT_EQ(ranges.size(), 3);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 4);
-            ASSERT_EQ(ranges.size(), 4ul);
+            ASSERT_EQ(ranges.size(), 4);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 5);
-            ASSERT_EQ(ranges.size(), 4ul);
+            ASSERT_EQ(ranges.size(), 4);
         }
 
         {
             auto ranges = DB::getQueryRanges(regions, 1, true, 2, 100);
-            ASSERT_EQ(ranges.size(), 4ul);
+            ASSERT_EQ(ranges.size(), 4);
         }
     }
 }

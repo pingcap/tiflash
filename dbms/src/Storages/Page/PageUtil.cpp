@@ -44,6 +44,13 @@ extern const char force_split_io_size_4k[];
 
 namespace PageUtil
 {
+UInt32 randInt(const UInt32 min, const UInt32 max)
+{
+    static thread_local std::mt19937 generator;
+    std::uniform_int_distribution<UInt32> distribution(min, max);
+    return distribution(generator);
+}
+
 void syncFile(WritableFilePtr & file)
 {
     if (-1 == file->fsync())

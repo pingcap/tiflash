@@ -1,16 +1,21 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
-#include <Storages/IManageableStorage.h>
+#include <Storages/Transaction/Types.h>
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
+class Context;
+
 class GCManager
 {
 public:
-    GCManager(Context & context)
-        : global_context{context.getGlobalContext()}
-        , log(&Poco::Logger::get("GCManager")){};
+    explicit GCManager(Context & context);
 
     ~GCManager() = default;
 

@@ -1,5 +1,5 @@
-#include <Functions/GatherUtils/Selectors.h>
 #include <Functions/GatherUtils/Algorithms.h>
+#include <Functions/GatherUtils/Selectors.h>
 
 namespace DB::GatherUtils
 {
@@ -17,4 +17,4 @@ void sliceFromRightConstantOffsetBounded(IArraySource & src, IArraySink & sink, 
 {
     SliceFromRightConstantOffsetBoundedSelectArraySource::select(src, sink, offset, length);
 }
-}
+} // namespace DB::GatherUtils

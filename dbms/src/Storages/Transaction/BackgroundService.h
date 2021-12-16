@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
@@ -16,11 +16,12 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
+class BackgroundProcessingPool;
 
 class BackgroundService : boost::noncopyable
 {
 public:
-    BackgroundService(TMTContext &);
+    explicit BackgroundService(TMTContext &);
 
     ~BackgroundService();
 

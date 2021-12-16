@@ -46,10 +46,6 @@ catchError {
             def label = "tidb-ci-test"
             util.runTest(label, "tics/tests/tidb-ci", tidbBranch)
         },
-        "gtest": {
-            def label = "gtest"
-            util.runTest(label, "tics/tests/gtest", tidbBranch)
-        },
         "delta merge test": {
             def label = "delta-merge-test"
             util.runTest(label, "tics/tests/delta-merge-test", tidbBranch)
@@ -61,10 +57,6 @@ catchError {
         "fullstack test2": {
             def label = "fullstack-test2"
             util.runTest(label, "tics/tests/fullstack-test2", tidbBranch)
-        },
-        "mutable test": {
-            def label = "mutable-test"
-            util.runTest(label, "tics/tests/mutable-test", tidbBranch)
         },
     )
 }

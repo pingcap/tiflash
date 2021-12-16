@@ -17,9 +17,6 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
 class PosixRandomAccessFile : public RandomAccessFile
 {
-protected:
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
-
 public:
     PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_ = nullptr);
 
@@ -40,6 +37,7 @@ public:
     void close() override;
 
 private:
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
     std::string file_name;
     int fd;
     ReadLimiterPtr read_limiter;

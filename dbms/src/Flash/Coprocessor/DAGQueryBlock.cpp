@@ -64,10 +64,10 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
 
 /// construct DAGQueryBlock from a tree struct based executors, which is the
 /// format after supporting join in dag request
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
-    : id(id_)
+DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator & id_generator)
+    : id(id_generator.nextBlockID())
     , root(&root_)
-    , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
+    , qb_column_prefix("__QB_" + std::to_string(id) + "_")
     , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
@@ -118,7 +118,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
         case tipb::ExecType::TypeExchangeSender:
             GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
             assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
-            exchangeServer_name = current->executor_id();
+            exchange_sender_name = current->executor_id();
             current = &current->exchange_sender().child();
             break;
         case tipb::ExecType::TypeIndexScan:
@@ -138,8 +138,8 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
         if (source->join().children_size() != 2)
             throw TiFlashException("Join executor children size not equal to 2", Errors::Coprocessor::BadRequest);
         GET_METRIC(tiflash_coprocessor_executor_count, type_join).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0)));
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1)));
+        children.push_back(std::make_shared<DAGQueryBlock>(source->join().children(0), id_generator));
+        children.push_back(std::make_shared<DAGQueryBlock>(source->join().children(1), id_generator));
     }
     else if (current->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
@@ -148,7 +148,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
     else if (current->tp() == tipb::ExecType::TypeProjection)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_projection).Increment();
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->projection().child()));
+        children.push_back(std::make_shared<DAGQueryBlock>(source->projection().child(), id_generator));
     }
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {

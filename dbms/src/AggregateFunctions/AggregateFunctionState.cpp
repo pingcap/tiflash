@@ -1,17 +1,16 @@
-#include <AggregateFunctions/AggregateFunctionState.h>
-#include <AggregateFunctions/AggregateFunctionMerge.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/AggregateFunctionMerge.h>
+#include <AggregateFunctions/AggregateFunctionState.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 class AggregateFunctionCombinatorState final : public IAggregateFunctionCombinator
 {
@@ -24,7 +23,9 @@ public:
     }
 
     AggregateFunctionPtr transformAggregateFunction(
-        const AggregateFunctionPtr & nested_function, const DataTypes & arguments, const Array & params) const override
+        const AggregateFunctionPtr & nested_function,
+        const DataTypes & arguments,
+        const Array & params) const override
     {
         return std::make_shared<AggregateFunctionState>(nested_function, arguments, params);
     }
@@ -56,4 +57,4 @@ DataTypePtr AggregateFunctionState::getReturnType() const
     return ptr;
 }
 
-}
+} // namespace DB

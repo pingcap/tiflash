@@ -1,19 +1,17 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <cmath>
 
 namespace DB
 {
-
 namespace
 {
-
 /// This function returns true if both values are large and comparable.
 /// It is used to calculate the mean value by merging two sources.
 /// It means that if the sizes of both sources are large and comparable, then we must apply a special
@@ -30,7 +28,7 @@ bool areComparable(UInt64 a, UInt64 b)
     return (((1 - static_cast<Float64>(res.first) / res.second) < sensitivity) && (res.first > threshold));
 }
 
-}
+} // namespace
 
 /** Statistical aggregate functions
   * varSamp - sample variance
@@ -274,7 +272,7 @@ public:
 
         ++count;
 
-        left_mean +=  left_delta / count;
+        left_mean += left_delta / count;
         right_mean += right_delta / count;
         co_moment += (left_val - left_mean) * (right_val - old_right_mean);
 
@@ -357,8 +355,8 @@ private:
 template <typename T, typename U, typename Op, bool compute_marginal_moments = false>
 class AggregateFunctionCovariance final
     : public IAggregateFunctionDataHelper<
-        CovarianceData<T, U, Op, compute_marginal_moments>,
-        AggregateFunctionCovariance<T, U, Op, compute_marginal_moments>>
+          CovarianceData<T, U, Op, compute_marginal_moments>,
+          AggregateFunctionCovariance<T, U, Op, compute_marginal_moments>>
 {
 public:
     String getName() const override { return Op::name; }
@@ -464,4 +462,4 @@ using AggregateFunctionCovarPopStable = AggregateFunctionCovariance<T, U, Aggreg
 template <typename T, typename U>
 using AggregateFunctionCorrStable = AggregateFunctionCovariance<T, U, AggregateFunctionCorrImpl, true>;
 
-}
+} // namespace DB

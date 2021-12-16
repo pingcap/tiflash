@@ -71,14 +71,6 @@ public:
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionInfoMap = std::unordered_map<RegionID, TableID>;
 
-    struct TableOptimizeChecker
-    {
-        std::mutex mutex;
-        bool is_checking = false;
-        std::atomic<double> OVERLAP_THRESHOLD = 1.0;
-        Timepoint last_check_time = Clock::now();
-    };
-
     using DirtyRegions = std::unordered_set<RegionID>;
     using TableToOptimize = std::unordered_set<TableID>;
 
@@ -121,8 +113,6 @@ public:
     void shrinkRegionRange(const Region & region);
 
     void removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &);
-
-    TableID popOneTableToOptimize();
 
     bool tryFlushRegions();
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
@@ -168,16 +158,11 @@ public:
                                                                     RegionVersion conf_version,
                                                                     Poco::Logger * log);
 
-    void checkTableOptimize();
-    void checkTableOptimize(TableID, const double);
-    void setTableCheckerThreshold(double);
-
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys);
 
 private:
     friend class MockTiDB;
-    friend class StorageMergeTree;
     friend class StorageDeltaMerge;
 
     Table & getOrCreateTable(const TableID table_id);
@@ -195,15 +180,12 @@ private:
     TableMap tables;
     RegionInfoMap regions;
     DirtyRegions dirty_regions;
-    TableToOptimize table_to_optimize;
 
     FlushThresholds flush_thresholds;
 
     Context * const context;
 
     mutable std::mutex mutex;
-
-    mutable TableOptimizeChecker table_checker;
 
     Poco::Logger * log;
 };
