@@ -130,7 +130,7 @@ private:
 
     struct ParallelMergeData
     {
-        ElasticThreadPool * pool;
+        std::vector<std::future<void>> tasks;
 
         /// Now one of the merging threads receives next blocks for the merge. This operation must be done sequentially.
         std::mutex get_next_blocks_mutex;
@@ -150,9 +150,7 @@ private:
         /// An event by which the main thread is telling merging threads that it is possible to process the next group of blocks.
         std::condition_variable have_space;
 
-        explicit ParallelMergeData()
-            : pool(ElasticThreadPool::glb_instance.get())
-        {}
+        explicit ParallelMergeData() {}
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;

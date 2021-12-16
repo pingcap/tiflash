@@ -194,13 +194,11 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
 
     if (merging_threads > 1)
     {
-        auto & pool = parallel_merge_data->pool;
-
         /** Create threads that will receive and merge blocks.
           */
 
         for (size_t i = 0; i < merging_threads; ++i)
-            pool->schedule([this] { mergeThread(); });
+            parallel_merge_data->tasks.emplace_back(ElasticThreadPool::glb_instance->schedule([this] { mergeThread(); }));
     }
 }
 
@@ -288,8 +286,8 @@ void MergingAggregatedMemoryEfficientBlockInputStream::finalize()
 
     LOG_TRACE(log, "Waiting for threads to finish");
 
-    // if (parallel_merge_data)
-    // parallel_merge_data->pool.wait();
+    if (parallel_merge_data)
+        waitTasks(parallel_merge_data->tasks);
 
     LOG_TRACE(log, "Waited for threads to finish");
 }

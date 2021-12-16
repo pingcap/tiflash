@@ -1456,8 +1456,8 @@ public:
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
-        // if (parallel_merge_data)
-        // parallel_merge_data->pool.wait();
+        if (parallel_merge_data)
+            waitTasks(parallel_merge_data->tasks);
     }
 
 protected:
@@ -1564,11 +1564,9 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        ElasticThreadPool * pool;
+        std::vector<std::future<void>> tasks;
 
-        explicit ParallelMergeData()
-            : pool(ElasticThreadPool::glb_instance.get())
-        {}
+        explicit ParallelMergeData() {}
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;
@@ -1579,8 +1577,8 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool->schedule(
-            ([this, num] { thread(num); }));
+        parallel_merge_data->tasks.emplace_back(ElasticThreadPool::glb_instance->schedule(
+            ([this, num] { thread(num); })));
     }
 
     void thread(Int32 bucket_num)
