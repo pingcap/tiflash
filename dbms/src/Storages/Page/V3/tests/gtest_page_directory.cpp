@@ -1,6 +1,5 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
-#include <Common/joinStr.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
@@ -93,13 +92,13 @@ String toString(const PageIDAndEntriesV3 & entries)
 {
     FmtBuffer buf;
     buf.append("[");
-    joinStr(
+    buf.joinStr(
         entries.begin(),
         entries.end(),
-        buf,
         [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
             buf.fmtAppend("<{},{}>", id_entry.first, toString(id_entry.second));
-        });
+        },
+        ", ");
     buf.append("]");
     return buf.toString();
 }
