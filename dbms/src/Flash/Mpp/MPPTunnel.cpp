@@ -44,7 +44,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             if (finished)
                 return;
             /// make sure to finish the tunnel after it is connected
-            waitUntilConnectedOrCancelled(lk);
+            waitUntilConnectedOrCancelled(lock);
             send_queue.finish();
         }
         waitForConsumerFinish(/*allow_throw=*/false);
