@@ -65,15 +65,11 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
-    /// Only the first writer can trigger failpoint.
-    if (should_send_exec_summary_at_last)
-    {
-        FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-        if (dag_context.isRootMPPTask())
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
-        else
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
-    }
+    FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
+    if (dag_context.isRootMPPTask())
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
+    else
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
 
     if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
