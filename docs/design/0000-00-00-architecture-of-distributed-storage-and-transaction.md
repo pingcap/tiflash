@@ -46,7 +46,7 @@ To guarantee `Snapshot Isolation`, there are a few important safeguard mechanism
 - `Resolve Lock` checks whether related table records are protected by locks and tries to resolve them.
 - `MVCC(Multiversion concurrency control)` read table records by specific version presented by `Timestamp Oracle`.
 
-### Distributed Storage Framwork
+### Distributed Storage Framework
 
 ![tiflash-distributed-architecture](./images/tiflash-distributed-architecture.svg)
 
