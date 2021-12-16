@@ -12,8 +12,6 @@ public:
     UInt64 offset = 0; // The offset of page data in file
     UInt64 checksum = 0; // The checksum of whole page data
 
-    UInt32 ref = 1; // for ref counting
-
     // The offset to the begining of specify field.
     PageFieldOffsetChecksums field_offsets{};
 };

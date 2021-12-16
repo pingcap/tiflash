@@ -54,6 +54,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     if (all_page_data_size == 0)
     {
+        // Shortcut for WriteBatch that don't need to persist blob data.
         for (auto & write : wb.getWrites())
         {
             switch (write.type)
@@ -167,14 +168,15 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
 std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 {
-    BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
     BlobStatPtr stat;
 
     {
         auto lock_stats = blob_stats.lock();
+        BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
         std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, config.file_limit_size);
 
-        if (blob_file_id != INVALID_BLOBFILE_ID)
+        // No valid stat for puting data with `size`, create a new one
+        if (stat == nullptr)
         {
             stat = blob_stats.createStat(blob_file_id);
         }
@@ -188,7 +190,10 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     if (offset == INVALID_BLOBFILE_OFFSET)
     {
         stat->smap->logStats();
-        throw Exception("Get postion from BlobStat Failed, it may caused by `sm_max_caps` is no corrent.",
+        throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no corrent. [size={}, max_caps={}, BlobFileId={}]",
+                                    size,
+                                    stat->sm_max_caps,
+                                    stat->id),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -289,9 +294,9 @@ void BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, 
 }
 
 
-String BlobStore::getBlobFilePath(BlobFileId blob_id)
+String BlobStore::getBlobFilePath(BlobFileId blob_id) const
 {
-    return path + "/" + "blobfile_" + DB::toString(blob_id);
+    return path + "/blobfile_" + DB::toString(blob_id);
 }
 
 BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
@@ -344,7 +349,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id)
 
     stat = std::make_shared<BlobStat>();
 
-    LOG_FMT_DEBUG(log, "Created a new BlobStat which [BlobFileId= {}]", blob_file_id);
+    LOG_FMT_DEBUG(log, "Created a new BlobStat [BlobFileId= {}]", blob_file_id);
     stat->id = blob_file_id;
     stat->smap = SpaceMap::createSpaceMap(static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()), 0, config.file_limit_size);
     stat->sm_max_caps = config.file_limit_size;
@@ -377,11 +382,11 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id)
 
     if (!found)
     {
-        LOG_FMT_ERROR(log, "No exist BlobStat which [BlobFileId={}]", blob_file_id);
+        LOG_FMT_ERROR(log, "No exist BlobStat [BlobFileId={}]", blob_file_id);
         return;
     }
 
-    LOG_FMT_DEBUG(log, "Eease BlobStat from maps which [BlobFileId={}]", blob_file_id);
+    LOG_FMT_DEBUG(log, "Erase BlobStat from maps [BlobFileId={}]", blob_file_id);
 
     stats_map.remove(stat);
     old_ids.emplace_back(blob_file_id);
@@ -390,7 +395,7 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id)
 std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size)
 {
     BlobStatPtr stat_ptr = nullptr;
-    BlobFileId littest_valid_rate = 2;
+    BlobFileId smallest_valid_rate = 2;
 
     do
     {
@@ -400,13 +405,13 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
             break;
         }
 
-        for (auto & stat : stats_map)
+        for (const auto & stat : stats_map)
         {
             if (stat->sm_max_caps >= buf_size
                 && stat->sm_total_size + buf_size < file_limit_size
-                && stat->sm_valid_rate < littest_valid_rate)
+                && stat->sm_valid_rate < smallest_valid_rate)
             {
-                littest_valid_rate = stat->sm_valid_size;
+                smallest_valid_rate = stat->sm_valid_size;
                 stat_ptr = stat;
             }
         }
@@ -479,9 +484,10 @@ void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, si
     if (!smap->markFree(offset, buf_size))
     {
         smap->logStats();
-        throw Exception(fmt::format("[offset={} , buf_size={}] is invalid.",
+        throw Exception(fmt::format("Remove postion from BlobStat failed, [offset={} , buf_size={}, BlobFileId={}] is invalid.",
                                     offset,
-                                    buf_size),
+                                    buf_size,
+                                    id),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
