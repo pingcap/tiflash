@@ -25,14 +25,11 @@ public:
     template <typename FF>
     void forEach(FF && f)
     {
-        if (!left)
+        if (left)
         {
-            return;
-        }
-        f(*left);
-        if (right)
-        {
-            f(*right);
+            f(*left);
+            if (right)
+                f(*right);
         }
     }
 
