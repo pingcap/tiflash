@@ -324,7 +324,7 @@ try
     }
 
     {
-        auto snap = storage->getSnapshot();
+        auto snap = storage->getConcreteSnapshot();
         auto ref_entry = snap->version()->find(1);
         ASSERT_FALSE(ref_entry);
 
@@ -345,7 +345,7 @@ try
     storage = reopenWithConfig(config);
 
     {
-        auto snap = storage->getSnapshot();
+        auto snap = storage->getConcreteSnapshot();
         auto ref_entry = snap->version()->find(1);
         ASSERT_FALSE(ref_entry);
 
