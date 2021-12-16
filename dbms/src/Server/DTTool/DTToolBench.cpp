@@ -262,7 +262,7 @@ int benchEntry(const std::vector<std::string> & opts)
         }
         auto workdir = vm["workdir"].as<std::string>() + "/.tmp";
         auto env = detail::ImitativeEnv{workdir, encryption};
-        // env is up, use logger from then on
+        // env is up, use logger from now on
         SCOPE_EXIT({
             if (Poco::File file(workdir); file.exists())
             {
@@ -309,7 +309,7 @@ int benchEntry(const std::vector<std::string> & opts)
         for (size_t i = 0, count = 1; i < size; count++)
         {
             auto block_size = engine() % (size - i) + 1;
-            std::cout << "generating block with size: " << block_size << std::endl;
+            LOG_FMT_INFO(logger, "generating block with size: {}", block_size);
             blocks.push_back(DTTool::Bench::createBlock(column, i, block_size, field, engine, effective_size));
             i += block_size;
             DB::DM::DMFileBlockOutputStream::BlockProperty property{};
@@ -361,7 +361,7 @@ int benchEntry(const std::vector<std::string> & opts)
         LOG_FMT_INFO(logger, "average write time: {} ns", (static_cast<double>(write_records) / static_cast<double>(repeat)));
         LOG_FMT_INFO(
             logger,
-            "throughput (MB/s): ",
+            "throughput (MB/s): {}",
             (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(write_records) / 1024 / 1024));
 
         // Read
@@ -386,10 +386,7 @@ int benchEntry(const std::vector<std::string> & opts)
                     DB::DM::IdSetPtr{});
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
-                    asm volatile(""
-                                 :
-                                 : "r,m"(stream.read())
-                                 : "memory");
+                    TIFLASH_NO_OPTIMIZE(stream.read());
                 }
                 stream.readSuffix();
             }
@@ -402,7 +399,7 @@ int benchEntry(const std::vector<std::string> & opts)
         LOG_FMT_INFO(logger, "average read time: {} ns", (static_cast<double>(read_records) / static_cast<double>(repeat)));
         LOG_FMT_INFO(
             logger,
-            "throughput (MB/s): ",
+            "throughput (MB/s): {}",
             (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(read_records) / 1024 / 1024));
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> & e)
