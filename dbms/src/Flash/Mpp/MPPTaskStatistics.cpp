@@ -57,7 +57,7 @@ String executorsToJson(const std::map<String, ExecutorStatisticsPtr> & executor_
 }
 } // namespace
 
-void MPPTaskStatistics::initializeExecutorDag(DAGContext * dag_context)
+void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
 {
     assert(dag_context);
     assert(dag_context->dag_request);

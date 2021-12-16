@@ -6,7 +6,7 @@ namespace DB
 {
 Int64 parseIdFromExecutorId(const String & executor_id)
 {
-    auto split_index = executor_id.find('_');
+    auto split_index = executor_id.find_last_of('_');
     if (split_index == String::npos || split_index == (executor_id.size() - 1))
     {
         throw TiFlashException("Fail to parse id from executor_id: " + executor_id, Errors::Coprocessor::Internal);

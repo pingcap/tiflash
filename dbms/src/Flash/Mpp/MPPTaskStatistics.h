@@ -25,7 +25,7 @@ struct MPPTaskStatistics
 
     void end(const TaskStatus & status_, StringRef error_message_ = "");
 
-    void initializeExecutorDag(DAGContext * dag_context);
+    void initializeExecutorDAG(DAGContext * dag_context);
 
     String toJson() const;
 
