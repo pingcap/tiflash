@@ -4,7 +4,7 @@
 namespace DB
 {
 MPPTaskTracingLogger::MPPTaskTracingLogger(const MPPTaskId & mpp_task_id)
-: logger(getMPPTaskLog(tracing_log_source, mpp_task_id))
+    : logger(getMPPTaskLog(tracing_log_source, mpp_task_id))
 {}
 
 void MPPTaskTracingLogger::log(const std::string & msg)
@@ -52,4 +52,4 @@ void MPPTaskTracingChannel::log(const Message & msg)
     if ((DB::MPPTaskTracingLogger::tracing_log_source == msg.getSource()) && channel)
         channel->log(msg);
 }
-} // namespace Poco 
+} // namespace Poco

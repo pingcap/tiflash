@@ -7,38 +7,38 @@
 namespace DB
 {
 class MPPTaskTracingLogger
-    {
-    public:
-        static constexpr auto tracing_log_source = "mpp_task_tracing";
+{
+public:
+    static constexpr auto tracing_log_source = "mpp_task_tracing";
 
-        explicit MPPTaskTracingLogger(const MPPTaskId & mpp_task_id);
+    explicit MPPTaskTracingLogger(const MPPTaskId & mpp_task_id);
 
-        void log(const std::string & msg);
+    void log(const std::string & msg);
 
-    private:
-        LogWithPrefixPtr logger;
-    };
+private:
+    LogWithPrefixPtr logger;
+};
 } // namespace DB
 
 namespace Poco
 {
 class Foundation_API MPPTaskTracingChannel : public Channel
-    {
-    public:
-        void log(const Message & msg) override;
+{
+public:
+    void log(const Message & msg) override;
 
-        void setChannel(Channel * pChannel);
+    void setChannel(Channel * pChannel);
 
-        Channel * getChannel() const;
+    Channel * getChannel() const;
 
-        void open() override;
+    void open() override;
 
-        void close() override;
+    void close() override;
 
-    protected:
-        ~MPPTaskTracingChannel();
+protected:
+    ~MPPTaskTracingChannel();
 
-    private:
-        Channel * channel = nullptr;
-    };
-} // namespace Poco 
+private:
+    Channel * channel = nullptr;
+};
+} // namespace Poco
