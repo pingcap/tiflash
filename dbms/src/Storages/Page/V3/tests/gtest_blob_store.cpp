@@ -75,7 +75,7 @@ TEST_F(BlobStoreTest, testStat)
 
     stats.createStat(0);
     std::tie(stat, blob_file_id) = stats.chooseStat(10, BLOBFILE_LIMIT_SIZE);
-    ASSERT_EQ(blob_file_id, UINT16_MAX);
+    ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_OFFSET);
     ASSERT_TRUE(stat);
 
     auto offset = stat->getPosFromStat(10);
@@ -143,7 +143,7 @@ TEST_F(BlobStoreTest, testFullStats)
 
     // Can't get pos from a full stat
     offset = stat->getPosFromStat(100);
-    ASSERT_EQ(offset, UINT64_MAX);
+    ASSERT_EQ(offset, INVALID_BLOBFILE_OFFSET);
 
     // Stat internal property should not changed
     ASSERT_EQ(stat->sm_total_size, BLOBFILE_LIMIT_SIZE - 1);

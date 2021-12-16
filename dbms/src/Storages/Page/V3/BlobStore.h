@@ -70,12 +70,12 @@ public:
         /**
          * Choose a available `BlobStat` from `BlobStats`.
          * 
-         * If we can't find any usable locations to fit `buf_size` in the existed stats.
+         * If we can't find any usable span to fit `buf_size` in the existed stats.
          * Then it will return null `BlobStat` with a available `BlobFileId`. 
          * eq. {nullptr,`BlobFileId`}.
          * The `BlobFileId` can use to create a new `BlobFile`.
          *  
-         * If we do find a usable location to fit `buf_size`.
+         * If we do find a usable span to fit `buf_size`.
          * Then it will return a available `BlobStatPtr` with a `INVALID_BLOBFILE_ID`.
          * eq. {`BlobStatPtr`,INVALID_BLOBFILE_ID}.
          * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
