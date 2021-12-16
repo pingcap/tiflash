@@ -54,7 +54,7 @@ void traverseExecutors(const tipb::DAGRequest * dag_request, FF && f)
             f(executor);
         }
     }
-    else // dag_request->has_root_executor()
+    else /// dag_request->has_root_executor()
     {
         std::function<void(const tipb::Executor & executor)> traverse_tree;
         traverse_tree = [&](const tipb::Executor & executor) {
