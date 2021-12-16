@@ -14,6 +14,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <common/logger_fmt_useful.h>
 #include <pingcap/Config.h>
 
 #include <boost/program_options.hpp>
@@ -55,66 +56,6 @@ ColumnDefinesPtr getDefaultColumns()
     columns->emplace_back(getTagColumnDefine());
     return columns;
 }
-
-void initializeGlobalContext(String tmp_path, bool encryption)
-{
-    // set itself as global context
-    global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
-    global_context->setGlobalContext(*global_context);
-    global_context->setApplicationType(DB::Context::ApplicationType::SERVER);
-
-    global_context->initializeTiFlashMetrics();
-    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(encryption);
-    global_context->initializeFileProvider(key_manager, encryption);
-
-    // Theses global variables should be initialized by the following order
-    // 1. capacity
-    // 2. path pool
-    // 3. TMTContext
-
-    Strings testdata_path = {std::move(tmp_path)};
-    auto abs_path = Poco::Path{tmp_path}.absolute().toString();
-    global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
-
-    global_context->setPathPool(
-        {abs_path},
-        {abs_path},
-        Strings{},
-        true,
-        global_context->getPathCapacity(),
-        global_context->getFileProvider());
-    TiFlashRaftConfig raft_config;
-
-    raft_config.ignore_databases = {"default", "system"};
-    raft_config.engine = TiDB::StorageEngine::TMT;
-    raft_config.disable_bg_flush = false;
-    global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
-
-    global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
-
-    global_context->getTMTContext().restore();
-}
-
-using string = const String;
-Context getContext(const DB::Settings & settings, const String & tmp_path)
-{
-    Context context = *global_context;
-    context.setGlobalContext(*global_context);
-    // Load `testdata_path` as path if it is set.
-    auto abs_path = Poco::Path{tmp_path}.absolute().toString();
-    context.setPath(abs_path);
-    context.setPathPool({abs_path}, {abs_path}, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
-    context.getSettingsRef() = settings;
-    return context;
-}
-
-void shutdown()
-{
-    global_context->getTMTContext().setStatusTerminated();
-    global_context->shutdown();
-    global_context.reset();
-}
-
 
 ColumnDefinesPtr createColumnDefines(size_t column_number)
 {
@@ -320,13 +261,13 @@ int benchEntry(const std::vector<std::string> & opts)
             random = std::random_device{}();
         }
         auto workdir = vm["workdir"].as<std::string>() + "/.tmp";
+        auto env = detail::ImitativeEnv{workdir, encryption};
+        // env is up, use logger from then on
         SCOPE_EXIT({
             if (Poco::File file(workdir); file.exists())
             {
                 file.remove(true);
             }
-
-            DTTool::Bench::shutdown();
         });
         static constexpr char SUMMARY_TEMPLATE_V1[] = "version:    {}\n"
                                                       "column:     {}\n"
@@ -346,21 +287,20 @@ int benchEntry(const std::vector<std::string> & opts)
                                                       "encryption: {}\n"
                                                       "algorithm:  {}";
         DB::DM::DMConfigurationOpt opt = std::nullopt;
+        auto logger = &Poco::Logger::get("DTTool::Bench");
         if (version == 1)
         {
-            std::cout << fmt::format(SUMMARY_TEMPLATE_V1, version, column, size, field, random, encryption, workdir) << std::endl;
+            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V1, version, column, size, field, random, encryption, workdir);
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V2;
         }
         else
         {
-            std::cout << fmt::format(SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_)
-                      << std::endl;
+            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_);
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
         }
 
         // start initialization
-        DTTool::Bench::initializeGlobalContext(workdir, encryption);
         size_t effective_size = 0;
         auto engine = std::mt19937_64{random};
         auto defines = DTTool::Bench::createColumnDefines(column);
@@ -377,11 +317,11 @@ int benchEntry(const std::vector<std::string> & opts)
             property.effective_num_rows = block_size;
             properties.push_back(property);
         }
-        std::cout << "effective_size: " << effective_size << std::endl;
-        std::cout << "start writing" << std::endl;
+        LOG_FMT_INFO(logger, "effective_size: {}", effective_size);
+        LOG_FMT_INFO(logger, "start writing");
         size_t write_records = 0;
         auto settings = DB::Settings();
-        auto db_context = std::make_unique<DB::Context>(DTTool::Bench::getContext(settings, workdir));
+        auto db_context = env.getContext();
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
@@ -415,17 +355,17 @@ int benchEntry(const std::vector<std::string> & opts)
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<nanoseconds>(end - start).count();
             write_records += duration;
-            std::cout << "attempt " << i << " finished in " << duration << " ns" << std::endl;
+            LOG_FMT_INFO(logger, "attemp {} finished in {} ns", i, duration);
         }
 
-        std::cout << "average write time: " << (static_cast<double>(write_records) / static_cast<double>(repeat)) << " ns" << std::endl;
-        std::cout << "throughput (MB/s): "
-                  << static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(write_records)
-                / 1024 / 1024
-                  << std::endl;
+        LOG_FMT_INFO(logger, "average write time: {} ns", (static_cast<double>(write_records) / static_cast<double>(repeat)));
+        LOG_FMT_INFO(
+            logger,
+            "throughput (MB/s): ",
+            (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(write_records) / 1024 / 1024));
 
         // Read
-        std::cout << "start reading" << std::endl;
+        LOG_FMT_INFO(logger, "start reading");
         size_t read_records = 0;
         for (size_t i = 0; i < repeat; ++i)
         {
@@ -433,7 +373,7 @@ int benchEntry(const std::vector<std::string> & opts)
 
             auto start = high_resolution_clock::now();
             {
-                auto stream = DB::DM::DMFileBlockInputStream( //
+                auto stream = DB::DM::DMFileBlockInputStream(
                     *db_context,
                     std::numeric_limits<UInt64>::max(),
                     false,
@@ -456,18 +396,18 @@ int benchEntry(const std::vector<std::string> & opts)
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<nanoseconds>(end - start).count();
             read_records += duration;
-            std::cout << "attempt " << i << " finished in " << duration << " ns" << std::endl;
+            LOG_FMT_INFO(logger, "attemp {} finished in {} ns", i, duration);
         }
 
-        std::cout << "average read time: " << (static_cast<double>(read_records) / static_cast<double>(repeat)) << " ns" << std::endl;
-        std::cout << "throughput (MB/s): "
-                  << static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(read_records)
-                / 1024 / 1024
-                  << std::endl;
+        LOG_FMT_INFO(logger, "average read time: {} ns", (static_cast<double>(read_records) / static_cast<double>(repeat)));
+        LOG_FMT_INFO(
+            logger,
+            "throughput (MB/s): ",
+            (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(read_records) / 1024 / 1024));
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> & e)
     {
-        std::cerr << BENCH_HELP << std::endl;
+        std::cerr << BENCH_HELP << std::endl; // no env available here
         return -EINVAL;
     }
 

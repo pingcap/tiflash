@@ -266,7 +266,7 @@ namespace detail
 using namespace DB;
 class ImitativeEnv
 {
-    DB::ContextPtr createImitativeContext(const std::string & workdir)
+    DB::ContextPtr createImitativeContext(const std::string & workdir, bool encryption = false)
     {
         // set itself as global context
         global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
@@ -274,8 +274,8 @@ class ImitativeEnv
         global_context->setApplicationType(DB::Context::ApplicationType::SERVER);
 
         global_context->initializeTiFlashMetrics();
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
-        global_context->initializeFileProvider(key_manager, false);
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(encryption);
+        global_context->initializeFileProvider(key_manager, encryption);
 
         // Theses global variables should be initialized by the following order
         // 1. capacity
@@ -284,10 +284,10 @@ class ImitativeEnv
         auto path = Poco::Path{workdir}.absolute().toString();
         global_context->initializePathCapacityMetric(0, {path}, {}, {}, {});
         global_context->setPathPool(
-            {path},
-            {path},
-            Strings{},
-            true,
+            /*main_data_paths*/ {path},
+            /*latest_data_paths*/ {path},
+            /*kvstore_paths*/ Strings{},
+            /*enable_raft_compatible_mode*/ true,
             global_context->getPathCapacity(),
             global_context->getFileProvider());
         TiFlashRaftConfig raft_config;
@@ -316,10 +316,10 @@ class ImitativeEnv
     ContextPtr global_context{};
 
 public:
-    ImitativeEnv(const std::string & workdir)
+    ImitativeEnv(const std::string & workdir, bool encryption = false)
     {
         setupLogger();
-        createImitativeContext(workdir);
+        createImitativeContext(workdir, encryption);
     }
 
     ~ImitativeEnv()

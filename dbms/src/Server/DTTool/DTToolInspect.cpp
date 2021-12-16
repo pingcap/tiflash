@@ -165,12 +165,12 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         }
         bpo::notify(vm);
 
-        if (imitative && vm.count("config-file"))
+        if (imitative && vm.count("config-file") != 0)
         {
             std::cerr << "config-file is not allowed in imitative mode" << std::endl;
             return -EINVAL;
         }
-        else if (!imitative && !vm.count("config-file"))
+        else if (!imitative && vm.count("config-file") == 0)
         {
             std::cerr << "config-file is required in proxy mode" << std::endl;
             return -EINVAL;
