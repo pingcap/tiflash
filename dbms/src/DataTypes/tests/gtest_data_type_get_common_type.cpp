@@ -10,8 +10,7 @@ namespace DB
 {
 namespace tests
 {
-
-TEST(DataType_test, getLeastSuperType)
+TEST(DataTypeTest, getLeastSuperType)
 {
     try
     {
@@ -87,11 +86,13 @@ TEST(DataType_test, getLeastSuperType)
         if (std::string::npos != embedded_stack_trace_pos && !print_stack_trace)
             text.resize(embedded_stack_trace_pos);
 
-        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl
+                  << std::endl;
 
         if (print_stack_trace && std::string::npos == embedded_stack_trace_pos)
         {
-            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
+            std::cerr << "Stack trace:" << std::endl
+                      << e.getStackTrace().toString();
         }
 
         throw;
@@ -113,7 +114,7 @@ TEST(DataType_test, getLeastSuperType)
     }
 }
 
-TEST(DataType_test, getMostSubtype)
+TEST(DataTypeTest, getMostSubtype)
 {
     try
     {
@@ -177,11 +178,13 @@ TEST(DataType_test, getMostSubtype)
         if (std::string::npos != embedded_stack_trace_pos && !print_stack_trace)
             text.resize(embedded_stack_trace_pos);
 
-        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl
+                  << std::endl;
 
         if (print_stack_trace && std::string::npos == embedded_stack_trace_pos)
         {
-            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
+            std::cerr << "Stack trace:" << std::endl
+                      << e.getStackTrace().toString();
         }
 
         throw;
@@ -203,7 +206,7 @@ TEST(DataType_test, getMostSubtype)
     }
 }
 
-TEST(DataType_test, isSupportedDataTypeCast)
+TEST(DataTypeTest, isSupportedDataTypeCast)
 {
     try
     {
@@ -269,11 +272,13 @@ TEST(DataType_test, isSupportedDataTypeCast)
         if (std::string::npos != embedded_stack_trace_pos && !print_stack_trace)
             text.resize(embedded_stack_trace_pos);
 
-        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl
+                  << std::endl;
 
         if (print_stack_trace && std::string::npos == embedded_stack_trace_pos)
         {
-            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
+            std::cerr << "Stack trace:" << std::endl
+                      << e.getStackTrace().toString();
         }
 
         throw;
@@ -295,7 +300,7 @@ TEST(DataType_test, isSupportedDataTypeCast)
     }
 }
 
-TEST(DataType_test, NullableProperty)
+TEST(DataTypeTest, NullableProperty)
 try
 {
     std::vector<String> date_cases = {
