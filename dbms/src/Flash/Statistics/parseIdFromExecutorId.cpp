@@ -4,6 +4,7 @@
 
 namespace DB
 {
+/// executor_id format: ${type}_${id}
 Int64 parseIdFromExecutorId(const String & executor_id)
 {
     auto split_index = executor_id.find_last_of('_');

@@ -61,7 +61,7 @@ public:
 
     void collectRuntimeDetail() override
     {
-        throw new Exception("Unsupported");
+        throw Exception("Unsupported");
     }
 
     static bool isMatch(const tipb::Executor * executor)

@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/CommonExecutorImpl.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
@@ -7,6 +8,21 @@
 
 namespace DB
 {
+String ExecutorStatisticsCollector::resToJson() const
+{
+    FmtBuffer buffer;
+    buffer.append("[");
+    buffer.joinStr(
+        res.cbegin(),
+        res.cend(),
+        [](const auto & s, FmtBuffer & fb) {
+            fb.append(s.second->toJson());
+        },
+        ",");
+    buffer.append("]");
+    return buffer.toString();
+}
+
 void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 {
     assert(dag_context_);

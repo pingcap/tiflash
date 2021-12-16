@@ -18,6 +18,8 @@ public:
 
     const std::map<String, ExecutorStatisticsPtr> & getResult() const { return res; }
 
+    String resToJson() const;
+
 private:
     DAGContext * dag_context = nullptr;
 

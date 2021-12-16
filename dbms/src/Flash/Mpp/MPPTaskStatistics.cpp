@@ -40,21 +40,6 @@ Int64 toNanoseconds(MPPTaskStatistics::Timestamp timestamp)
 {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp.time_since_epoch()).count();
 }
-
-String executorsToJson(const std::map<String, ExecutorStatisticsPtr> & executor_statistics_map)
-{
-    FmtBuffer buffer;
-    buffer.append("[");
-    buffer.joinStr(
-        executor_statistics_map.cbegin(),
-        executor_statistics_map.cend(),
-        [](const auto & s, FmtBuffer & fb) {
-            fb.append(s.second->toJson());
-        },
-        ",");
-    buffer.append("]");
-    return buffer.toString();
-}
 } // namespace
 
 void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
@@ -75,7 +60,7 @@ String MPPTaskStatistics::toJson() const
         id.start_ts,
         id.task_id,
         sender_executor_id,
-        executorsToJson(executor_statistics_collector.getResult()),
+        executor_statistics_collector.resToJson(),
         host,
         toNanoseconds(task_init_timestamp),
         toNanoseconds(compile_start_timestamp),
