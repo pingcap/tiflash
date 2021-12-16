@@ -213,9 +213,18 @@ To solve such problem, an optional way is to implement incremental store mode, w
 After the feature [Async Commit](https://pingcap.github.io/tidb-dev-guide/understand-tidb/async-commit.html) and [1PC](https://pingcap.github.io/tidb-dev-guide/understand-tidb/1pc.html), `Read Index` request should contain start-ts of transaction read to resolve memory locks of leader peer in TiKV.
 After current region peer has applied to latest committed index, it's available to check table locks(like TiKV does) and try to resolve them.
 
-The logic about `Resolve Lock` is complex.
-Related behaviors should follow the established process(like TiDB does) in different [Clients](https://github.com/tikv?q=client&type=all).
-
 Epoch(`version`, `conf version`) is one of important properties to present region meta changing.
 Latest `GC Safe Point` should always be smaller than start-ts of transaction read.
 Both of them shall be double checked even after getting immutable snapshot information from storage.
+
+The logic about **Resolve Lock** is complex.
+Related behaviors should follow the established process(like TiDB does) in different [Clients](https://github.com/tikv?q=client&type=all).
+No detail will be discussed here.
+
+## Notice
+
+To understand the architecture shown above, please learn those first:
+
+- Source code about raftstore, rocksdb, transaction modules in [TiKV](https://github.com/tikv/tikv)
+- Source code about DDL, transaction modules in [TiDB](https://github.com/pingcap/tidb)
+- `Placement Rules`, scheduler modules in [PD](https://github.com/tikv/pd)
