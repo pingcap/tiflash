@@ -285,15 +285,20 @@ if (ENABLE_TESTS)
     add_check(gtests_dbms)
 
     grep_bench_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_bench_sources)
+    message("${dbms_bench_sources}")
     add_executable(bench_dbms EXCLUDE_FROM_ALL
-        ${dbms_bench_sources}
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Functions/tests/bench_function_least.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/FunctionTestUtils.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
-    target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_BENCH)
 
-    target_link_libraries(bench_dbms benchmark::benchmark_main gtest dbms clickhouse_functions)
+    target_link_libraries(bench_dbms gtest dbms benchmark clickhouse_functions)
 
-    target_compile_options(bench_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(bench_dbms)
 
 endif ()

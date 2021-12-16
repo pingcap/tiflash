@@ -6,11 +6,12 @@
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
 #include <common/types.h>
 
-#include <cstddef>
 #include <vector>
+
 
 namespace DB
 {
@@ -18,10 +19,9 @@ namespace tests
 {
 class FunctionBench : public benchmark::Fixture
 {
-protected:
-    void SetUp(const ::benchmark::State & /*state*/) override
+public:
+    void SetUp(const benchmark::State &) override
     {
-        initializeDAGContext();
         try
         {
             DB::registerFunctions();
@@ -32,38 +32,21 @@ protected:
         }
     }
 
-public:
-    FunctionBench()
-        : context(TiFlashTestEnv::getContext())
-    {}
-
-    virtual void initializeDAGContext()
+    template <typename... Args>
+    ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
     {
-        dag_context_ptr = std::make_unique<DAGContext>(1024);
-        context.setDAGContext(dag_context_ptr.get());
+        ColumnsWithTypeAndName vec({first_column, columns...});
+        return executeFunction(context, func_name, vec);
     }
 
     template <typename... Args>
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
+    ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
     {
         ColumnsWithTypeAndName vec({first_column, columns...});
-        return executeFunction(func_name, vec);
+        return executeFunction(context, func_name, argument_column_numbers, vec);
     }
 
-    template <typename... Args>
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
-    {
-        ColumnsWithTypeAndName vec({first_column, columns...});
-        return executeFunction(func_name, argument_column_numbers, vec);
-    }
-
-    DAGContext & getDAGContext()
-    {
-        assert(dag_context_ptr != nullptr);
-        return *dag_context_ptr;
-    }
-
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns)
+    static ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnsWithTypeAndName & columns)
     {
         auto & factory = FunctionFactory::instance();
 
@@ -83,7 +66,7 @@ public:
         return block.getByPosition(columns.size());
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+    static ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
     {
         auto & factory = FunctionFactory::instance();
         Block block(columns);
@@ -98,10 +81,6 @@ public:
         func->execute(block, argument_column_numbers, columns.size());
         return block.getByPosition(columns.size());
     }
-
-protected:
-    Context context;
-    std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
 
@@ -111,6 +90,7 @@ class LeastBench : public FunctionBench
 
 BENCHMARK_DEFINE_F(LeastBench, bench1)
 (benchmark::State & state [[maybe_unused]])
+try
 {
     const String & func_name = "tidbLeast";
     std::vector<Int64> c1;
@@ -118,7 +98,7 @@ BENCHMARK_DEFINE_F(LeastBench, bench1)
     std::vector<Int64> c3;
     std::vector<Int64> res;
 
-    for (size_t i = 0; i < 10000000; ++i)
+    for (size_t i = 0; i < 100; ++i)
     {
         c1.push_back(i);
         c2.push_back(i + 1);
@@ -128,20 +108,35 @@ BENCHMARK_DEFINE_F(LeastBench, bench1)
     std::vector<Int64> cc1 = c1;
     std::vector<Int64> cc2 = c2;
     std::vector<Int64> cc3 = c3;
-    std::vector<Int64> cres = res;
-    for (size_t i = 0; i < 100; ++i)
+    std::vector<Int64> cres = res; // todo figure out how to support nullable test...
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+
+    for (auto _ : state)
     {
-        ASSERT_COLUMN_EQ(
-            createColumn<Int64>(res),
-            executeFunction(
-                func_name,
-                createColumn<Int64>(cc1),
-                createColumn<Int64>(cc2),
-                createColumn<Int64>(cc3)));
+        executeFunction(
+            context,
+            func_name,
+            createColumn<Int64>(cc1),
+            createColumn<Int64>(cc2),
+            createColumn<Int64>(cc3));
     }
 }
-BENCHMARK_REGISTER_F(LeastBench, bench1)->Iterations(200);
-BENCHMARK_MAIN();
+CATCH
+BENCHMARK_REGISTER_F(LeastBench, bench1)->Iterations(100);
+
 } // namespace tests
 
 } // namespace DB
+
+int main(int argc, char * argv[])
+{
+    benchmark::Initialize(&argc, argv);
+    DB::tests::TiFlashTestEnv::setupLogger();
+    DB::tests::TiFlashTestEnv::initializeGlobalContext();
+    if (::benchmark::ReportUnrecognizedArguments(argc, argv))
+        return 1;
+    ::benchmark::RunSpecifiedBenchmarks();
+    DB::tests::TiFlashTestEnv::shutdown();
+    ::benchmark::Shutdown();
+    return 0;
+}

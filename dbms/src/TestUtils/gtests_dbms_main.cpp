@@ -1,6 +1,5 @@
 #include <Common/FailPoint.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
 namespace DB::FailPoints
 {
 extern const char force_set_dtfile_exist_when_acquire_id[];
