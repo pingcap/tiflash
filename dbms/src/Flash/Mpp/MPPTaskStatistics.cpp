@@ -26,6 +26,10 @@ void MPPTaskStatistics::end(const TaskStatus & status_, StringRef error_message_
     task_end_timestamp = Clock::now();
     status = status_;
     error_message.assign(error_message_.data, error_message_.size);
+    if (executor_statistics_collector.isInitialized())
+    {
+        executor_statistics_collector.collectRuntimeDetails();
+    }
 }
 
 void MPPTaskStatistics::logStats()

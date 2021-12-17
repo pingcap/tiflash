@@ -66,14 +66,6 @@ enum SqlMode
 
     ALLOW_INVALID_DATES = 1ul << 32ul,
 };
-
-template <typename MAP>
-const auto & getAndAssertFromMap(const MAP & map, const String & key)
-{
-    auto it = map.find(key);
-    assert(it != map.end());
-    return it->second;
-}
 } // namespace
 
 bool strictSqlMode(UInt64 sql_mode)
@@ -96,11 +88,6 @@ std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap()
     return profile_streams_map;
 }
 
-const ProfileStreamsInfo & DAGContext::getProfileStreams(const String & executor_id)
-{
-    return getAndAssertFromMap(profile_streams_map, executor_id);
-}
-
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMapForJoinBuildSide()
 {
     return profile_streams_map_for_join_build_side;
@@ -114,11 +101,6 @@ std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAlias
 std::map<String, JoinBuildSideInfo> & DAGContext::getJoinBuildSideInfoMap()
 {
     return join_build_side_info_map;
-}
-
-const JoinBuildSideInfo & DAGContext::getJoinBuildSideInfo(const String & executor_id)
-{
-    return getAndAssertFromMap(join_build_side_info_map, executor_id);
 }
 
 std::map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()

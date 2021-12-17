@@ -92,11 +92,9 @@ public:
     {}
 
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
-    const ProfileStreamsInfo & getProfileStreams(const String & executor_id);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     std::map<String, JoinBuildSideInfo> & getJoinBuildSideInfoMap();
-    const JoinBuildSideInfo & getJoinBuildSideInfo(const String & executor_id);
     std::map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);

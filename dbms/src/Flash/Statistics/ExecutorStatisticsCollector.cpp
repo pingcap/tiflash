@@ -54,7 +54,6 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 void ExecutorStatisticsCollector::collectRuntimeDetails()
 {
     assert(dag_context);
-    assert(res.size() == dag_context->getProfileStreamsMap().size());
     for (const auto & entry : res)
     {
         entry.second->collectRuntimeDetail();
