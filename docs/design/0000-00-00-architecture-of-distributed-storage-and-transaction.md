@@ -169,17 +169,17 @@ The content of each CF:
 - `LOCK`: `key` -> `lock_info(lock_type, primary_lock, lock_version, ...)`
 - `WRITE`: `(key, commit_ts)` -> `write_info(write_type, start_ts, [short_value], ...)`
 
-In concept of `Snapshot Isolation`, all deletion operations proposed by transaction process are logical, which means `Put` a key-value with write_type `D`(delete).
-The whole transaction process is quite complex, but for TiFlash which used for reading, except write_type `P` or `D`, others like `L`(lock) or `R`(rollback) can be ignored safely.
-TiFlash will try to find committed data(legal values in WRITE CF) and transform related message into complete table records by schema.
+In the concept of `Snapshot Isolation`, all deletion operations proposed by the transaction process are logical, which means `Put` a key-value with write_type `D`(delete).
+While the whole transaction process is quite complex, TiFlash only deals with the transaction reads, and thus write_types except `P`(Put) and `D`(Delete) along with others such as `L`(Lock) and `R`(Rollback) can be ignored safely.
+TiFlash will find committed data(legal values in WRITE CF) and transform related messages into complete table records by its schema.
 
 **admin command** is one of [AdminCmdType](https://tikv.github.io/doc/kvproto/raft_cmdpb/enum.AdminCmdType.html).
-In most of FFI functions, raftstore-proxy will add apply result(include region meta) as a parameter.
-TiFlash can use such parameter to maintain RSM directly.
-To reduce IOPS and make table records flushed into column storage by large batch(friendly for column storage), another mechanism(takes timeout, write-throughput, size, etc. into account) is designed to reduce frequency of executing `CompactLog` command.
+In most FFI functions, raftstore-proxy will provide the apply result(including region meta) as a parameter.
+TiFlash can use such parameters to maintain RSM directly.
+We also designed another mechanism to reduce the frequency of executing the `CompactLog` command, which takes the timeout, write-throughput, size, etc., into account to minimize IOPS and flush table records into column storage by large batch(friendly for column storage).
 
 **apply region snapshot** functions aim to transform TiKV's region snapshot into TiFlash's.
-Before actually writing data into column storage, old data within [start-key, end-key) of new region must be strictly deleted.
+Before actually writing data into column storage, old data within [start-key, end-key) of the new region must be strictly deleted.
 
 ##### Region Snapshot
 
@@ -197,13 +197,13 @@ Unlike TiKV, which uses [RocksDB](https://github.com/tikv/rocksdb) as KvEngine d
   - Support MVCC by ts.
   - Support table data GC.
 
-Redundancy is a practical way to guarantee `Idempotency` and `External Consistency`, which means updating region meta should be lazy while adding data but advanced while removing region.
+Redundancy is a practical way to guarantee `Idempotency` and `External Consistency`, which means updating region meta should be lazy while adding data but advanced while removing the region.
 
-Persisting whole region cache as snapshot can help to avoid using `WAL` but might bring more overhead when there are lots of uncommitted data.
+Persisting the whole region cache as a snapshot can help avoid using `WAL` but might bring more overhead when there are lots of uncommitted data.
 It may happen if somehow a quite large transaction is blocked for a long time.
-But for most normal scenarios, transaction will be committed or rollbacked quickly, which means the frequent operations towards LOCK/DEFAULT won't cause excessive remained data in memory.
+But for most normal scenarios, the transaction will be committed or rollbacked quickly, which means the frequent operations towards LOCK/DEFAULT won't cause excessive remained data in memory.
 
-To solve such problem, an optional way is to implement incremental store mode, which needs to use another key-value storage or other semi-structured engine as intermediate buffers.
+A possible solution is implementing incremental store mode, which uses another key-value storage or other semi-structured engines as intermediate buffers.
 
 #### Learner Read
 
@@ -211,15 +211,15 @@ A learner does not participate in leader elections, nor is it part of a quorum f
 Log replication from the leader to a learner is asynchronous.
 The strong consistency between the leader and the learner is enforced during the read time.
 After the feature [Async Commit](https://pingcap.github.io/tidb-dev-guide/understand-tidb/async-commit.html) and [1PC](https://pingcap.github.io/tidb-dev-guide/understand-tidb/1pc.html), `Read Index` request should contain start-ts of transaction read to resolve memory locks of leader peer in TiKV.
-After current region peer has applied to latest committed index, it's available to check table locks(like TiKV does) and try to resolve them.
+After the current region peer has applied to the latest committed index, it's available to check table locks(like TiKV does) and try to resolve them.
 
-Epoch(`version`, `conf version`) is one of important properties to present region meta changing.
-Latest `GC Safepoint` should always be smaller than start-ts of transaction read.
-Both of them shall be double checked even after getting immutable snapshot information from storage.
+Epoch(`version`, `conf version`) is one of the important properties to present region meta changing.
+The latest `GC Safepoint` should always be smaller than start-ts of transaction read.
+We shall double-check both of them even after getting immutable snapshot information from storage.
 
 The logic about **Resolve Lock** is complex.
 Related behaviors should follow the established process(like TiDB does) in different [Clients](https://github.com/tikv?q=client&type=all).
-No detail will be discussed here.
+This document will not discuss the details herein.
 
 ## Notice
 
