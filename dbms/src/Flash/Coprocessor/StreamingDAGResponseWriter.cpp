@@ -1,4 +1,3 @@
-#include <Common/FailPoint.h>
 #include <Common/LogWithPrefix.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -17,13 +16,6 @@ namespace ErrorCodes
 extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
-
-namespace FailPoints
-{
-extern const char hang_in_execution[];
-extern const char exception_during_mpp_non_root_task_run[];
-extern const char exception_during_mpp_root_task_run[];
-} // namespace FailPoints
 
 inline void serializeToPacket(mpp::MPPDataPacket & packet, const tipb::SelectResponse & response)
 {
@@ -65,12 +57,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
-    FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-    if (dag_context.isRootMPPTask())
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
-    else
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
-
     if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
     size_t rows = block.rows();
