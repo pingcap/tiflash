@@ -81,7 +81,7 @@ Related modifications cannot be witnessed from outside until meets safe-point.
 - Fsync region snapshot in `raftstore-proxy` atomically
 - Make RaftEngine only gc raft log whose index is smaller than persisted apply-state
 - `engine-store` should tell and ignore raft commands with outdated apply-state during apply process
-- `engine-store` should recover from middle step by overwriting and must NOT provide services until caught up with latest state
+- `engine-store` should recover from middle step by overwriting and won't provide services until caught up with latest state
 
 Such architecture inherited several important features from TiKV naturally, such as distributed fault tolerance/recovery, automatic re-balancing, etc.
 It's also convenient for PD to maintain this kind of storage system by existing way as long as it works as `raft store`.
