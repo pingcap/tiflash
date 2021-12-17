@@ -461,7 +461,6 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateDurationInt, "cast"},
     //{tipb::ScalarFuncSig::SubDateDatetimeReal, "cast"},
     //{tipb::ScalarFuncSig::SubDateDatetimeDecimal, "cast"},
-    {tipb::ScalarFuncSig::AddDateStringReal, "date_add"},
     //{tipb::ScalarFuncSig::AddDateIntReal, "cast"},
     //{tipb::ScalarFuncSig::AddDateIntDecimal, "cast"},
     //{tipb::ScalarFuncSig::AddDateDatetimeReal, "cast"},
@@ -565,6 +564,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     //{tipb::ScalarFuncSig::AddDateStringString, "cast"},
     {tipb::ScalarFuncSig::AddDateStringInt, "date_add"},
+    {tipb::ScalarFuncSig::AddDateStringReal, "date_add"},
     //{tipb::ScalarFuncSig::AddDateStringDecimal, "cast"},
     //{tipb::ScalarFuncSig::AddDateIntString, "cast"},
     //{tipb::ScalarFuncSig::AddDateIntInt, "cast"},
@@ -573,6 +573,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     //{tipb::ScalarFuncSig::SubDateStringString, "cast"},
     {tipb::ScalarFuncSig::SubDateStringInt, "date_sub"},
+    {tipb::ScalarFuncSig::SubDateStringReal, "date_sub"},
     //{tipb::ScalarFuncSig::SubDateStringDecimal, "cast"},
     //{tipb::ScalarFuncSig::SubDateIntString, "cast"},
     //{tipb::ScalarFuncSig::SubDateIntInt, "cast"},
