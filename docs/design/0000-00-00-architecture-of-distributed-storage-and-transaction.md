@@ -6,7 +6,7 @@
 
 There is already a distributed `OLTP`(Online transaction processing) storage product [TiKV](https://github.com/tikv/tikv).
 To make TiDB applicable to the `HTAP`(Hybrid transaction/analytical processing) scenario, we need a specialized analytical engine called `TiFlash`, to enhance the ability of real-time analytics.
-Unlike other typical `OLAP`(Online analytical processing) databases which only guarantee `Eventual Consistency`, TiFlash is built on the same distributed infrastructure(`Multi-raft RSM`, `Percolator Transaction Model`) like TiKV and plays the same role(`raft store`) in the cluster as well.
+Unlike other typical `OLAP`(Online analytical processing) databases which only guarantee `Eventual Consistency`, TiFlash is built on the same distributed infrastructure(`Multi-raft RSM`, `Percolator Transaction Model`) like TiKV.
 TiFlash is designed to provide `Strong Consistency` read services.
 It means any other component, like TiDB or TiSpark, can access TiFlash and TiKV by the same protocol which ensures consistency is snapshot read.
 
