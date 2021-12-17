@@ -115,7 +115,7 @@ We must persist the region snapshot when executing commands about `split`, `merg
 Because such commands will change the core properties of multi-raft RSM, such as `version`, `conf version`, `start/end key`.
 Ignorable admin command `CompactLog` may trigger raft log GC in `RaftEngine`.
 Thus, to execute such commands, it's required to persist region snapshot.
-But for normal-write, the decision of persisting can be pushed down to `engine-store`.
+But while executing normal-write command, which won't change region meta, the decision of persisting can be pushed down to `engine-store`.
 
 When the region in the current store is illegal or pending removal, it will execute a `destroy-peer` task to clean useless data.
 
