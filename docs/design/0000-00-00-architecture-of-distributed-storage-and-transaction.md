@@ -73,7 +73,7 @@ Anyway, because there are at least two asynchronous runtimes in one program, the
 Actually, the raft logs persisted in RaftEngine are the `WAL(Write Ahead Log)` of apply process.
 Index of raft entry within the same region peer is monotonic increasing.
 If process is interrupted at middle step, it should replay from last persisted apply-state after restarted.
-Related modifications cannot be witnessed from outside until meets safe-point.
+Related modifications cannot be witnessed from outside until safe-point is reached.
 
 `Idempotency` is an important property for external consistency, which means such system could handle outdated raft commands. A practical way is like:
 
