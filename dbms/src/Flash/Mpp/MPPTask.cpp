@@ -267,6 +267,9 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     {
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
+
+    mpp_task_statistics.initializeExecutorDAG(dag_context.get());
+    mpp_task_statistics.logStats();
 }
 
 void MPPTask::preprocess()
