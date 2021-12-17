@@ -141,10 +141,10 @@ Encryption is essential for `DBaaS`(database as a service).
 To be compatible with TiKV, a data key manager with the same logic is indispensable, especially for rotating data encryption keys or using the KMS service.
 
 Status services like metrics, CPU/Memory profile(flame graph), or other self-defined stats can effectively support the diagnosis.
-It's suggested to encapsulate those into one status server and let other external components visit through status address.
-Most of original metrics of TiKV could be reused and an optional way is to add specific prefix for each name.
+It's suggested to encapsulate those into one status server and let other external components visit through the status address.
+We could also reuse most of the original metrics of TiKV, and an optional way is to add a specific prefix for each name.
 
-To reduce IOPS(mainly in RaftEngine) and make such system friendly for poor platform, when maintaining DWAL, it's effective to batch raft msg before fsync as long as latency is tolerable.
+When maintaining DWAL, it's practical to batch raft msg before fsync as long as latency is tolerable to reduce IOPS(mainly in RaftEngine) and make it system-friendly with poor performance.
 
 ### Transaction
 
@@ -158,7 +158,7 @@ There are two kinds of raft command: `normal-write`, `admin`.
 **normal-write command** consists of [cmd types](https://tikv.github.io/doc/kvproto/raft_cmdpb/enum.CmdType.html) and key-value pairs towards CFs.
 For now, except cmd type `Put`, `Delete`, `DeleteRange` or `IngestSst`, others are useless.
 
-- `DeleteRange` is ignorable because such type only appears when table is dropped safely(exceed gc safe time) but TiFlash has its own table gc strategy to clean data directly.
+- `DeleteRange` is ignorable because such type only appears when the table is dropped safely(exceed GC safe time), but TiFlash has its own table GC strategy to clean data directly.
 - `Put` means replace into a key-value
 - `Delete` means delete key-value by key
 - `IngestSst` means ingest several TiKV SST files of DEFAULT/WRITE CFs.
