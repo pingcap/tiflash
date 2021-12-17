@@ -67,7 +67,7 @@ enum SqlMode
     ALLOW_INVALID_DATES = 1ul << 32ul,
 };
 
-template<typename MAP>
+template <typename MAP>
 const auto & getAndAssertFromMap(const MAP & map, const String & key)
 {
     auto it = map.find(key);

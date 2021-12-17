@@ -48,10 +48,21 @@ void ExchangeSenderStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
     fmt_buffer.append("]");
 }
 
+void ExchangeSenderStatistics::collectExtraRuntimeDetail()
+{
+    const auto & mpp_tunnels = dag_context.tunnel_set->getTunnels();
+    for (UInt16 i = 0; i < partition_num; ++i)
+    {
+        const auto & connection_profile_info = mpp_tunnels[i]->getConnectionProfileInfo();
+        mpp_tunnel_details[i].packets += connection_profile_info.packets;
+        mpp_tunnel_details[i].bytes += connection_profile_info.bytes;
+    }
+}
+
 ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
     : ExchangeSenderStatisticsBase(executor, dag_context_)
 {
-    assert(dag_context.is_mpp_task);
+    assert(dag_context.isMPPTask());
 
     assert(executor->tp() == tipb::ExecType::TypeExchangeSender);
     const auto & exchange_sender_executor = executor->exchange_sender();

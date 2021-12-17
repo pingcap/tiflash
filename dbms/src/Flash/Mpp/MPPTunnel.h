@@ -2,6 +2,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -56,6 +57,8 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
+    const ConnectionProfileInfo & getConnectionProfileInfo() const { return connection_profile_info; }
+
     bool isLocal() const { return is_local; }
 
     const LogWithPrefixPtr & getLogger() const { return log; }
@@ -99,6 +102,8 @@ private:
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;
+
+    ConnectionProfileInfo connection_profile_info;
 
     const LogWithPrefixPtr log;
 };
