@@ -25,7 +25,7 @@ Then, PD will try to split and schedule `Learner` peer of related regions to TiF
 All peers of the same region make up a `Raft Group`.
 The group represents a `Replicated State Machine`(RSM).
 The `Leader` replicates actions to the followers and learners.
-Each peer has a `Durable Write-ahead Log`(DWAL).
+Each peer maintains a `Durable Write-ahead Log`(DWAL).
 All peers append each action as an entry in the log immediately as they receive it.
 When the quorum (the majority) of peers have confirmed that the entry exists in their log, the leader commits. Each peer then can apply the action to their state machine.
 TiFlash relies on the [TiDB Engine Extensions Library](https://github.com/pingcap/tidb-engine-ext)(works as `Raft Store` dynamic library) to maintain multi-raft RSM.
@@ -75,7 +75,7 @@ Index of raft entry within the same region peer is monotonic increasing.
 If the process is interrupted at the middle step, it should replay from the last persisted apply-state after the restart.
 Until a safe point is reached, related modifications are not visible to others.
 
-`Idempotency` is an essential property for external consistency, which means such a system could handle outdated raft commands. A practical way is like:
+`Idempotency` is an essential property for `External Consistency`, which means such a system could handle outdated raft commands. A practical way is like:
 
 - Fsync snapshot in `engine-store` atomically
 - Fsync region snapshot in `raftstore-proxy` atomically
