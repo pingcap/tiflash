@@ -669,7 +669,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
-        before_agg_streams = pipeline.streams.size();
         BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, taskLogger());
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
@@ -681,6 +680,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             taskLogger());
         pipeline.streams.resize(1);
+        restorePipelineConcurrency(pipeline);
     }
     else
     {
@@ -1079,7 +1079,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // this log measures the concurrent degree in this mpp task
-    LOG_INFO(log, "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
+    LOG_FMT_DEBUG(
+        log,
+        "execution stream size for query block(before aggregation) {} is {}",
+        query_block.qb_column_prefix,
+        pipeline.streams.size());
 
     dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
 
@@ -1118,6 +1122,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
+
+    restorePipelineConcurrency(pipeline, dagContext().final_concurrency, taskLogger());
 
     // execute exchange_sender
     if (query_block.exchangeSender)
@@ -1183,7 +1189,6 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
             collators.emplace_back(nullptr);
         }
     }
-    restoreConcurrency(pipeline, dagContext().final_concurrency, log);
     int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer
@@ -1196,8 +1201,13 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
             context.getSettings().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dagContext());
-        stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), log);
+        stream = std::make_shared<ExchangeSender>(stream, std::move(response_writer), taskLogger());
     });
+}
+
+void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
+{
+    restoreConcurrency(pipeline, dagContext().final_concurrency, taskLogger());
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()
@@ -1208,13 +1218,8 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     {
         size_t concurrency = pipeline.streams.size();
         executeUnion(pipeline, max_streams, taskLogger());
-        if (!query_block.isRootQueryBlock())
-            restoreConcurrency(pipeline, concurrency, taskLogger());
+        restorePipelineConcurrency();
     }
-
-    /// expand concurrency after agg
-    if (!query_block.isRootQueryBlock())
-        restoreConcurrency(pipeline, before_agg_streams, taskLogger());
 
     return pipeline.streams;
 }
