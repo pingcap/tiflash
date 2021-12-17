@@ -1,4 +1,3 @@
-#include <Common/TiFlashException.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>

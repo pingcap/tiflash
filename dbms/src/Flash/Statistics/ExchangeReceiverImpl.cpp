@@ -6,7 +6,7 @@ namespace DB
 String ExchangeReceiveDetail::toJson() const
 {
     return fmt::format(
-        R"({{receiver_source_task_id":{},"packets":{},"bytes":{}}})",
+        R"({{"receiver_source_task_id":{},"packets":{},"bytes":{}}})",
         receiver_source_task_id,
         packets,
         bytes);

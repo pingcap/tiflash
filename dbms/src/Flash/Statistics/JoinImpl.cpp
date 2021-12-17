@@ -1,4 +1,3 @@
-#include <Common/TiFlashException.h>
 #include <Flash/Statistics/JoinImpl.h>
 #include <Interpreters/Join.h>
 
