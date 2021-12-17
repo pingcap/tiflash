@@ -71,7 +71,7 @@ Not like KvEngine, storage system(called `engine-store`) under such framework sh
 
 Anyway, because there are at least two asynchronous runtimes in one program, the best practice of such raft store is to guarantee `External Consistency` by `region snapshot`.
 Actually, the raft logs persisted in RaftEngine are the `WAL(Write Ahead Log)` of apply process.
-Index of raft entry within same region peer is monotonic increasing.
+Index of raft entry within the same region peer is monotonic increasing.
 If process is interrupted at middle step, it should replay from last persisted apply-state after restarted.
 Related modifications cannot be witnessed from outside until meets safe-point.
 
@@ -118,7 +118,7 @@ Ignorable admin command `CompactLog` may trigger raft log gc in `RaftEngine`.
 So it's required to persist region snapshot if decide to execute such command.
 But for normal-write, the decision of persisting can be pushed down to `engine-store`.
 
-When the region in current store is illegal or pending remove, the task about `destroy-peer` will be executed to clean useless data.
+When the region in current store is illegal or pending removing, the task about `destroy-peer` will be executed to clean useless data.
 
 ![txn-log-replication](./images/txn-log-replication.svg)
 
@@ -160,7 +160,7 @@ There are two kinds of raft command: `normal-write`, `admin`.
 **normal-write command** consists of [cmd types](https://tikv.github.io/doc/kvproto/raft_cmdpb/enum.CmdType.html) and key-value pairs towards CFs.
 For now, except cmd type `Put`, `Delete`, `DeleteRange` or `IngestSst`, others are useless.
 
-- `DeleteRange` is ignorable becuase such type only appears when table is dropped safely(exceed gc safe time) but TiFlash has its own table gc strategy to clean data directly.
+- `DeleteRange` is ignorable because such type only appears when table is dropped safely(exceed gc safe time) but TiFlash has its own table gc strategy to clean data directly.
 - `Put` means replace into a key-value
 - `Delete` means delete key-value by key
 - `IngestSst` means ingest several TiKV sst files of DEFAULT/WRITE CFs.
@@ -222,7 +222,7 @@ No detail will be discussed here.
 
 ## Notice
 
-To understand the architecture shown above, please learn those first:
+To understand the architecture shown above, please refer to those first:
 
 - Source code about raftstore, rocksdb, transaction modules in [TiKV](https://github.com/tikv/tikv)
 - Source code about DDL, transaction modules in [TiDB](https://github.com/pingcap/tidb)
