@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <sys/types.h>
 
 #ifndef O_DIRECT
 #define O_DIRECT 00040000
