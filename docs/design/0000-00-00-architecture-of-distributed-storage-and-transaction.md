@@ -80,7 +80,7 @@ Until a safe point is reached, related modifications are not visible to others.
 - Fsync snapshot in `engine-store` atomically
 - Fsync region snapshot in `raftstore-proxy` atomically
 - Make RaftEngine only GC raft log whose index is smaller than persisted apply-state
-- `engine-store` should tell and ignore raft commands with outdated apply-state during apply process
+- `engine-store` should screen out raft commands with outdated apply-state during apply process
 - `engine-store` should recover from the middle step by overwriting and must NOT provide services until caught up with the latest state
 
 Such architecture inherited several important features from TiKV, such as distributed fault tolerance/recovery, automatic re-balancing, etc.
