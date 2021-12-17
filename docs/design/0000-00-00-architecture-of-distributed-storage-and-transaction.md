@@ -210,6 +210,7 @@ A possible solution is implementing incremental store mode, which uses another k
 A learner does not participate in leader elections, nor is it part of a quorum for log replication.
 Log replication from the leader to a learner is asynchronous.
 The strong consistency between the leader and the learner is enforced during the read time.
+
 After the feature [Async Commit](https://pingcap.github.io/tidb-dev-guide/understand-tidb/async-commit.html) and [1PC](https://pingcap.github.io/tidb-dev-guide/understand-tidb/1pc.html), `Read Index` request should contain start-ts of transaction read to resolve memory locks of leader peer in TiKV.
 After the current region peer has applied to the latest committed index, it's available to check table locks(like TiKV does) and try to resolve them.
 
