@@ -1,6 +1,6 @@
 # Architecture Of Distributed Storage Engine And Transaction Layer
 
-- Author: [Zhigao Tong](http://github.com/solotzg)
+- Author(s): [Zhigao Tong](http://github.com/solotzg), [birdstorm](https://github.com/birdstorm), [CalvinNeo](https://github.com/CalvinNeo)
 
 ## Introduction
 
