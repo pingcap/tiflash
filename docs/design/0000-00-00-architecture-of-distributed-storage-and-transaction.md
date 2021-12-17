@@ -51,7 +51,7 @@ To guarantee `Snapshot Isolation`, there are a few essential safeguard mechanism
 ![tiflash-distributed-architecture](./images/tiflash-distributed-architecture.svg)
 
 [TiDB Engine Extensions Library](https://github.com/pingcap/tidb-engine-ext)(hereafter referred to as `raftstore-proxy` or `tiflash-proxy`) is a TiKV based `c dynamic library` for extending storage system in `TiDB` cluster.
-This library aims to export the current multi-raft framework to other engines and make them be able to provide services(read/write) as `raft store` directly.
+This library aims to export the current multi-raft framework to other engines and make them able to provide services(read/write) as `raft store` directly.
 
 Generally speaking, there are two storage components in TiKV for maintaining multi-raft RSM: `RaftEngine` and `KvEngine`.
 KvEngine is mainly used for applying raft command and providing key-value services.
