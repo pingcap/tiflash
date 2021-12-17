@@ -208,6 +208,7 @@ But for most normal scenarios, transaction will be committed or rollbacked quick
 To solve such problem, an optional way is to implement incremental store mode, which needs to use another key-value storage or other semi-structured engine as intermediate buffers.
 
 #### Learner Read
+
 A learner does not participate in leader elections, nor is it part of a quorum for log replication.
 Log replication from the leader to a learner is asynchronous.
 The strong consistency between the leader and the learner is enforced during the read time.
