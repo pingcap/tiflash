@@ -188,7 +188,7 @@ Before actually writing data into column storage, old data within [start-key, en
 Unlike TiKV, which uses [RocksDB](https://github.com/tikv/rocksdb) as KvEngine directly, TiFlash can maintain multi-raft RSM in several parts:
 
 - RSM in raftstore-proxy
-  - Build real RSM like TiKV but no actual info in data CFs.
+  - Build real RSM like TiKV without adding actual info in data CFs.
   - Communicate with other components as a raftstore.
   - Expose region meta, data and other necessary info to TiFlash.
 - RSM in TiFlash
@@ -208,7 +208,9 @@ But for most normal scenarios, transaction will be committed or rollbacked quick
 To solve such problem, an optional way is to implement incremental store mode, which needs to use another key-value storage or other semi-structured engine as intermediate buffers.
 
 #### Learner Read
-
+A learner does not participate in leader elections, nor is it part of a quorum for log replication.
+Log replication from the leader to a learner is asynchronous.
+The strong consistency between the leader and the learner is enforced during the read time.
 After the feature [Async Commit](https://pingcap.github.io/tidb-dev-guide/understand-tidb/async-commit.html) and [1PC](https://pingcap.github.io/tidb-dev-guide/understand-tidb/1pc.html), `Read Index` request should contain start-ts of transaction read to resolve memory locks of leader peer in TiKV.
 After current region peer has applied to latest committed index, it's available to check table locks(like TiKV does) and try to resolve them.
 
