@@ -95,12 +95,12 @@ The structure used by different runtimes through interfaces must have the same m
 
 It's feasible to refactor TiKV source code and extract parts of the necessary process into interfaces. The main categories are like:
 
-- apply normal-write raft command
-- apply admin raft command
-- peer detect: destroy peer
-- snapshot: pre-handle/apply region snapshot
+- applying normal-write raft command
+- applying admin raft command
+- peer detection: destroy peer
+- snapshotting: pre-handle/apply region snapshot
 - SST file reader
-- apply `IngestSst` command
+- applying `IngestSst` command
 - replica read: batch read-index
 - encryption: get file; new file; delete file; link file; rename file;
 - status services: metrics; CPU profile; config; thread stats; self-defined API;
