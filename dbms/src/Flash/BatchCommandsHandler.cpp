@@ -55,7 +55,7 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
             return;
         }
 
-        CoprocessorContext cop_context(context, cop_req.context(), batch_commands_context.grpc_server_context);
+        CoprocessorContext cop_context(*context, cop_req.context(), batch_commands_context.grpc_server_context);
         CoprocessorHandler cop_handler(cop_context, &cop_req, cop_resp);
 
         ret = cop_handler.execute();

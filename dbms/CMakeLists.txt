@@ -81,12 +81,9 @@ add_headers_and_sources(dbms src/Storages/Page/V2/gc)
 if (ENABLE_V3_PAGESTORAGE)
     add_headers_and_sources(dbms src/Storages/Page/V3)
     add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
-endif()
-add_headers_and_sources(dbms src/Storages/Page/)
-if (ENABLE_V3_PAGESTORAGE)
-    add_headers_and_sources(dbms src/Storages/Page/V3)
     add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
 endif()
+add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
@@ -270,14 +267,12 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/FunctionTestUtils.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
-    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions tiflash-dttool-lib)
+    target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions tiflash-dttool-lib)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)

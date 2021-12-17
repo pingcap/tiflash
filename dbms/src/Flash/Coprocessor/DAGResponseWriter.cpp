@@ -103,14 +103,6 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
 
         current.time_processed_ns += dag_context.compile_time_ns;
         fillTiExecutionSummary(response.add_execution_summaries(), current, p.first, delta_mode);
-        /// do not have an easy and meaningful way to get the execution summary for exchange sender
-        /// executor, however, TiDB requires execution summary for all the executors, so just return
-        /// its child executor's execution summary
-        if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
-        {
-            current.concurrency = dag_context.final_concurrency;
-            fillTiExecutionSummary(response.add_execution_summaries(), current, dag_context.exchange_sender_executor_id, delta_mode);
-        }
     }
     for (auto & p : merged_remote_execution_summaries)
     {
@@ -126,24 +118,20 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
 
 DAGResponseWriter::DAGResponseWriter(
     Int64 records_per_chunk_,
-    tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_,
     DAGContext & dag_context_)
     : records_per_chunk(records_per_chunk_)
-    , encode_type(encode_type_)
-    , result_field_types(std::move(result_field_types_))
     , dag_context(dag_context_)
 {
     for (auto & p : dag_context.getProfileStreamsMap())
     {
         local_executors.insert(p.first);
     }
-    if (encode_type == tipb::EncodeType::TypeCHBlock)
+    if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         records_per_chunk = -1;
     }
-    if (encode_type != tipb::EncodeType::TypeCHBlock && encode_type != tipb::EncodeType::TypeChunk
-        && encode_type != tipb::EncodeType::TypeDefault)
+    if (dag_context.encode_type != tipb::EncodeType::TypeCHBlock && dag_context.encode_type != tipb::EncodeType::TypeChunk
+        && dag_context.encode_type != tipb::EncodeType::TypeDefault)
     {
         throw TiFlashException(
             "Only Default/Arrow/CHBlock encode type is supported in DAGBlockOutputStream.",

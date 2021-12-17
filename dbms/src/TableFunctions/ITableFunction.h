@@ -1,12 +1,11 @@
 #pragma once
 
-#include <string>
 #include <memory>
+#include <string>
 
 
 namespace DB
 {
-
 class Context;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
@@ -34,7 +33,7 @@ public:
     /// Create storage according to the query.
     StoragePtr execute(const ASTPtr & ast_function, const Context & context) const;
 
-    virtual ~ITableFunction() {};
+    virtual ~ITableFunction() = default;
 
 private:
     virtual StoragePtr executeImpl(const ASTPtr & ast_function, const Context & context) const = 0;
@@ -43,4 +42,4 @@ private:
 using TableFunctionPtr = std::shared_ptr<ITableFunction>;
 
 
-}
+} // namespace DB

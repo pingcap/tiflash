@@ -22,7 +22,6 @@ extern const int UNKNOWN_OVERFLOW_MODE;
 extern const int ILLEGAL_OVERFLOW_MODE;
 extern const int UNKNOWN_TOTALS_MODE;
 extern const int UNKNOWN_COMPRESSION_METHOD;
-extern const int UNKNOWN_DISTRIBUTED_PRODUCT_MODE;
 extern const int UNKNOWN_GLOBAL_SUBQUERIES_METHOD;
 extern const int CANNOT_PARSE_BOOL;
 extern const int INVALID_CONFIG_PARAMETER;
@@ -899,83 +898,6 @@ enum class DistributedProductMode
     GLOBAL, /// Convert to global query
     ALLOW /// Enable
 };
-
-struct SettingDistributedProductMode
-{
-public:
-    bool changed = false;
-
-    SettingDistributedProductMode(DistributedProductMode x)
-        : value(x)
-    {}
-
-    operator DistributedProductMode() const { return value; }
-    SettingDistributedProductMode & operator=(DistributedProductMode x)
-    {
-        set(x);
-        return *this;
-    }
-
-    static DistributedProductMode getDistributedProductMode(const String & s)
-    {
-        if (s == "deny")
-            return DistributedProductMode::DENY;
-        if (s == "local")
-            return DistributedProductMode::LOCAL;
-        if (s == "global")
-            return DistributedProductMode::GLOBAL;
-        if (s == "allow")
-            return DistributedProductMode::ALLOW;
-
-        throw Exception("Unknown distributed product mode: '" + s + "', must be one of 'deny', 'local', 'global', 'allow'",
-                        ErrorCodes::UNKNOWN_DISTRIBUTED_PRODUCT_MODE);
-    }
-
-    String toString() const
-    {
-        const char * strings[] = {"deny", "local", "global", "allow"};
-        if (value < DistributedProductMode::DENY || value > DistributedProductMode::ALLOW)
-            throw Exception("Unknown distributed product mode", ErrorCodes::UNKNOWN_DISTRIBUTED_PRODUCT_MODE);
-        return strings[static_cast<size_t>(value)];
-    }
-
-    void set(DistributedProductMode x)
-    {
-        value = x;
-        changed = true;
-    }
-
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
-
-    void set(const String & x)
-    {
-        set(getDistributedProductMode(x));
-    }
-
-    void set(ReadBuffer & buf)
-    {
-        String x;
-        readBinary(x, buf);
-        set(x);
-    }
-
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
-
-    DistributedProductMode get() const
-    {
-        return value;
-    }
-
-private:
-    DistributedProductMode value;
-};
-
 
 struct SettingString
 {

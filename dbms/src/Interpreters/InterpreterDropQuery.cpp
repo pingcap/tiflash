@@ -42,9 +42,6 @@ BlockIO InterpreterDropQuery::execute()
 
     checkAccess(drop);
 
-    if (!drop.cluster.empty())
-        throw Exception("Should not run into `executeDDLQueryOnCluster`");
-
     String path = context.getPath();
     String current_database = context.getCurrentDatabase();
 
