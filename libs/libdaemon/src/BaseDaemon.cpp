@@ -25,7 +25,7 @@
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
-#include <Flash/Mpp/getMPPTaskTracingLogger.h>
+#include <Flash/Mpp/getMPPTaskTracingLog.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFileDescriptor.h>

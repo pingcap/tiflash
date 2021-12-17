@@ -1,5 +1,5 @@
 #include <Flash/Mpp/getMPPTaskLog.h>
-#include <Flash/Mpp/getMPPTaskTracingLogger.h>
+#include <Flash/Mpp/getMPPTaskTracingLog.h>
 
 namespace DB
 {

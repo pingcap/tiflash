@@ -1,8 +1,7 @@
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
-#include <Flash/Mpp/getMPPTaskTracingLogger.h>
+#include <Flash/Mpp/getMPPTaskTracingLog.h>
 #include <common/logger_fmt_useful.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
@@ -10,7 +9,7 @@
 namespace DB
 {
 MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_)
-    : logger(getMPPTaskTracingLogger(id_))
+    : logger(getMPPTaskTracingLog(id_))
     , id(id_)
     , host(std::move(address_))
     , task_init_timestamp(Clock::now())
