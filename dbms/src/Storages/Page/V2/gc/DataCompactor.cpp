@@ -172,8 +172,8 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
             files_without_valid_pages.emplace(page_file);
             continue;
         }
-
-        if (likely(config.gc_force_hardlink_rate <= 1.0) && valid_rate > config.gc_force_hardlink_rate && file_size > config.file_max_size)
+        LOG_INFO(log, "Debug in here, config.gc_force_hardlink_rate : " << config.gc_force_hardlink_rate);
+        if (likely(config.gc_force_hardlink_rate <= 1.0) && valid_rate > config.gc_force_hardlink_rate)
         {
             hardlink_candidates.emplace(page_file);
             continue;
