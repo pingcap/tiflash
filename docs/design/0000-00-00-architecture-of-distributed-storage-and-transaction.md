@@ -100,8 +100,8 @@ It's feasible to refactor TiKV source code and extract parts of necessary proces
 - apply admin raft command
 - peer detect: destroy peer
 - snapshot: pre-handle/apply region snapshot
-- sst file reader
-- apply ingest-sst command
+- SST file reader
+- apply `IngestSst` command
 - replica read: batch read-index
 - encryption: get file; new file; delete file; link file; rename file;
 - status services: metrics; cpu profile; get config; thread stats; self-defined api;
@@ -131,8 +131,8 @@ When leader peer has gc raft log or other peers can not proceed RSM in current c
 However, the region snapshot data, which in form of TiKV `SST` file, is really hard to used by other storage system directly.
 To accelerate the speed of applying region snapshot data, the normal process has been separated into several parts:
 
-- `SST File Reader` to read key-value one by one from sst files.
-- Multi-thread pool to pre-handle sst files into self-defined structure of `engine-store`.
+- `SST File Reader` to read key-value one by one from SST files.
+- Multi-thread pool to pre-handle SST files into self-defined structure of `engine-store`.
 - Apply self-defined structure by original sequence
 
 Interfaces about `IngestSst` is the core to be compatible with `TiDB Lighting` and `BR` for `HTAP` scenario.
@@ -163,7 +163,7 @@ For now, except cmd type `Put`, `Delete`, `DeleteRange` or `IngestSst`, others a
 - `DeleteRange` is ignorable because such type only appears when table is dropped safely(exceed gc safe time) but TiFlash has its own table gc strategy to clean data directly.
 - `Put` means replace into a key-value
 - `Delete` means delete key-value by key
-- `IngestSst` means ingest several TiKV sst files of DEFAULT/WRITE CFs.
+- `IngestSst` means ingest several TiKV SST files of DEFAULT/WRITE CFs.
 
 The content of each CF:
 
