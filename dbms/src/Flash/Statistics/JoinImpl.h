@@ -26,10 +26,7 @@ public:
 
 private:
     size_t hash_table_bytes = 0;
-    size_t inbound_rows_for_build = 0;
-    size_t inbound_blocks_for_build = 0;
-    size_t inbound_bytes_for_build = 0;
-    UInt64 process_time_ns_for_build = 0;
+    String build_side_child;
 
 protected:
     void appendExtraJson(FmtBuffer &) const override;

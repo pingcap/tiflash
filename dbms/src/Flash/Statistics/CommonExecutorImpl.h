@@ -5,19 +5,6 @@
 
 namespace DB
 {
-struct AggImpl
-{
-    static constexpr bool has_extra_info = false;
-
-    static constexpr auto type = "Agg";
-
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_aggregation();
-    }
-};
-using AggStatistics = ExecutorStatistics<AggImpl>;
-
 struct FilterImpl
 {
     static constexpr bool has_extra_info = false;

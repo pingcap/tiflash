@@ -569,6 +569,19 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         other_condition_expr,
         max_block_size_for_cross_join);
 
+    JoinBuildSideInfo join_build_side_info;
+    if (query_block.children.size() != 2)
+    {
+        throw TiFlashException("Join query block must have 2 child", Errors::BroadcastJoin::Internal);
+    }
+    size_t build_side_index = swap_join_side ? 1 : 0;
+    const auto * build_side_executor = query_block.children[swap_join_side]->root;
+    assert(build_side_executor);
+    assert(build_side_executor->has_executor_id());
+    join_build_side_info.build_side_executor_id = build_side_executor->executor_id();
+    join_build_side_info.join_ptr = join_ptr;
+    dagContext().getJoinBuildSideInfoMap()[query_block.source_name] = join_build_side_info;
+
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
     right_pipeline.transform(

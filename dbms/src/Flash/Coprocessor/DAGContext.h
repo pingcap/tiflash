@@ -23,6 +23,15 @@ struct ProfileStreamsInfo
     UInt32 qb_id;
     BlockInputStreams input_streams;
 };
+
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
+struct JoinBuildSideInfo
+{
+    String build_side_executor_id;
+    JoinPtr join_ptr;
+};
+
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
@@ -86,6 +95,8 @@ public:
     const ProfileStreamsInfo & getProfileStreams(const String & executor_id);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
+    std::map<String, JoinBuildSideInfo> & getJoinBuildSideInfoMap();
+    const JoinBuildSideInfo & getJoinBuildSideInfo(const String & executor_id);
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -166,6 +177,8 @@ private:
     /// qb_id_to_join_alias_map is a map that maps query block id to all the join_build_subquery_names
     /// in this query block and all its children query block
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
+    /// join_build_side_info_map is a map that maps from executor_id to JoinBuildSideInfo
+    std::map<std::string, JoinBuildSideInfo> join_build_side_info_map;
     BlockInputStreams remote_block_input_streams;
     UInt64 flags;
     UInt64 sql_mode;
