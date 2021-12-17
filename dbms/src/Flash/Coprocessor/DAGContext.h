@@ -134,7 +134,6 @@ public:
     const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
 
     const tipb::DAGRequest * dag_request;
-    size_t final_concurrency = 1;
     Int64 compile_time_ns;
     String table_scan_executor_id = "";
     bool collect_execution_summaries;

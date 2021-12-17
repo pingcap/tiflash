@@ -1085,8 +1085,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block.qb_column_prefix,
         pipeline.streams.size());
 
-    dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
-
     if (res.before_aggregation)
     {
         // execute aggregation
@@ -1123,7 +1121,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
-    restorePipelineConcurrency(pipeline, dagContext().final_concurrency, taskLogger());
+    restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
     if (query_block.exchangeSender)
@@ -1207,7 +1205,7 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
 
 void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
 {
-    restoreConcurrency(pipeline, dagContext().final_concurrency, taskLogger());
+    restoreConcurrency(pipeline, max_streams, taskLogger());
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()
@@ -1216,9 +1214,8 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     executeImpl(pipeline);
     if (!pipeline.streams_with_non_joined_data.empty())
     {
-        size_t concurrency = pipeline.streams.size();
         executeUnion(pipeline, max_streams, taskLogger());
-        restorePipelineConcurrency();
+        restorePipelineConcurrency(pipeline);
     }
 
     return pipeline.streams;
