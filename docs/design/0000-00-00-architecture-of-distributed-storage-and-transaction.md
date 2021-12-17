@@ -25,7 +25,7 @@ Then, PD will try to split and schedule `Learner` peer of related regions to TiF
 All peers of same region make up a `Raft Group`.
 The group represents a `Replicated State Machine`(RSM).
 The `Leader` replicates actions to the followers and learners.
-Each peer has a `Durable Write Ahead Log`(DWAL).
+Each peer has a `Durable Write-ahead Log`(DWAL).
 All peers append each action as an entry in the log immediately as they receive it.
 When the quorum (the majority) of peers have confirmed that the entry exists in their log, the leader commits. Each peer then can apply the action to their state machine.
 TiFlash relies on the [TiDB Engine Extensions Library](https://github.com/pingcap/tidb-engine-ext)(works as `Raft Store` dynamic library) to maintain multi-raft RSM.
@@ -70,7 +70,7 @@ The `engine-store` must have the ability to deal with raft commands to handle qu
 The `region snapshot` presents the complete region information(data/meta/apply-state) at a specific apply-state.
 
 Anyway, because there are at least two asynchronous runtimes in one program, the best practice of such raft store is to guarantee `External Consistency` by `region snapshot`.
-The raft logs persisted in RaftEngine are the `WAL(Write Ahead Log)` of the apply process.
+The raft logs persisted in RaftEngine are the `WAL(Write-ahead Log)` of the apply process.
 Index of raft entry within the same region peer is monotonic increasing.
 If the process is interrupted at the middle step, it should replay from the last persisted apply-state after the restart.
 Related modifications cannot be witnessed from outside until safe-point is reached.
