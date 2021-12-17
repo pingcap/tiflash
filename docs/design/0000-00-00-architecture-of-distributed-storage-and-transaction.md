@@ -5,10 +5,10 @@
 ## Introduction
 
 There is already a distributed `OLTP`(Online transaction processing) storage product [TiKV](https://github.com/tikv/tikv).
-In order to make TiDB applicable to `HTAP`(Hybrid transaction/analytical processing) scenario, we need an specialized analytical engine called `TiFlash`, to enhance the ability of realtime analytics.
-Unlike other typical `OLAP`(Online analytical processing) databases which only guarantee `Eventual Consistency`, TiFlash is built on same distributed infrastructure(`Multi-raft RSM`, `Percolator Transaction Model`) like TiKV and plays the same role(`raft store`) in cluster as well.
-TiFlash is designed to provide `Strong Consistency` read services, which means
-any other component, like TiDB or TiSpark, is able to access TiFlash and TiKV by same protocol which ensures consistency is snapshot read.
+To make TiDB applicable to the `HTAP`(Hybrid transaction/analytical processing) scenario, we need a specialized analytical engine called `TiFlash`, to enhance the ability of real-time analytics.
+Unlike other typical `OLAP`(Online analytical processing) databases which only guarantee `Eventual Consistency`, TiFlash is built on the same distributed infrastructure(`Multi-raft RSM`, `Percolator Transaction Model`) like TiKV and plays the same role(`raft store`) in the cluster as well.
+TiFlash is designed to provide `Strong Consistency` read services.
+It means any other component, like TiDB or TiSpark, can access TiFlash and TiKV by the same protocol which ensures consistency is snapshot read.
 
 ## Design
 
@@ -16,33 +16,33 @@ any other component, like TiDB or TiSpark, is able to access TiFlash and TiKV by
 
 ![tiflash-overall](./images/tiflash-overall.svg)
 
-After one TiFlash node deployed into TiDB cluster, it will register necessary properties(labels with `engine`:`tiflash`, address, runtime information, etc.) to [Placement driver](https://github.com/tikv/pd)(hereafter referred to as `PD`) as a `raft store`.
+After one TiFlash node is deployed into the TiDB cluster, it will register necessary properties(labels with `engine`:`tiflash`, address, runtime information, etc.) to [Placement driver](https://github.com/tikv/pd)(hereafter referred to as `PD`) as a `raft store`.
 
 PD will not schedule any region peer to TiFlash store if there is no [Placement Rules](https://docs.pingcap.com/tidb/stable/configure-placement-rules) set by TiFlash.
-After TiDB has executed the `DDL` job which tries to set `TIFLASH REPLICA` for specific table, `Replica Manager` module will translate related jobs into `Placement Rules` and update to PD.
+After TiDB has executed the `DDL` job, which tries to set `TIFLASH REPLICA` for the specific table, the `Replica Manager` module will translate related jobs into `Placement Rules` and update them to PD.
 Then, PD will try to split and schedule `Learner` peer of related regions to TiFlash store by corresponding rules.
 
 All peers of same region make up a `Raft Group`.
 The group represents a `Replicated State Machine`(RSM).
 The `Leader` replicates actions to the followers and learners.
 Each peer has a `Durable Write Ahead Log`(DWAL).
-All peers append each action as an entry in the log immediately as they recieve it.
-When the quorum (the majority) of peers have confirmed that the entry exists in their log, the leader commits the log, each peer then can apply the action to their state machine.
+All peers append each action as an entry in the log immediately as they receive it.
+When the quorum (the majority) of peers have confirmed that the entry exists in their log, the leader commits. Each peer then can apply the action to their state machine.
 TiFlash relies on the [TiDB Engine Extensions Library](https://github.com/pingcap/tidb-engine-ext)(works as `Raft Store` dynamic library) to maintain multi-raft RSM.
-A `TIFLASH REPLICA` of table is an abstract concept which can be regarded as a collection of multiple learner peers(region range of peer intersects with record data range of the table) in TiFlash store.
+A `TIFLASH REPLICA` of the table is an abstract concept that can be regarded as a collection of multiple learner peers(region range of peer intersects with the record data range of the table) in the TiFlash store.
 
-A database transaction, by definition, must be atomic, consistent, isolated and durable.
-Transaction writing proposed by TiDB must follow `Percolator Model`.
-Key-value engine of TiKV provides a feature named Column Family (hereafter referred to as CF).
+A database transaction, by definition, must be atomic, consistent, isolated, and durable.
+Transaction writing proposed by TiDB must follow the `Percolator Model`.
+The key-value engine of TiKV provides a feature named Column Family (hereafter referred to as CF).
 The three CFs: `DEFAULT`, `LOCK` and `WRITE`, correspond to Percolator's `data column`, `lock column` and `write column` respectively.
 TiFlash builds abstract layers of `Region` from `Raft Store` and applies raft commands with writing operations towards these CFs.
-TiFlash fetches `Table Schema`(generated by TiDB) from TiKV and try to write the committed records into strong schema-aware column storage.
+TiFlash fetches `Table Schema`(generated by TiDB) from TiKV and tries to write the committed records into strong schema-aware column storage.
 
-`Transaction Read Protocol`(like coprocessor or mpp) is the basic protocol used to read table data or execute sub-tasks in `raft store`.
+`Transaction Read Protocol`(like coprocessor or MPP) is the basic protocol used to read table data or execute sub-tasks in `raft store`.
 `Region Peer` is the minimal unit for transaction reading.
-To guarantee `Snapshot Isolation`, there are a few important safeguard mechanisms:
+To guarantee `Snapshot Isolation`, there are a few essential safeguard mechanisms:
 
-- `Replica Read` makes sure that the raft state machine of region peers are correct and have enough context.
+- `Replica Read` ensures that the raft state machine of region peer is correct and has enough context.
 - `Resolve Lock` checks whether related table records are protected by locks and tries to resolve them.
 - `MVCC(Multiversion concurrency control)` read table records by specific version(Timestamp, hereafter referred to as ts) provided by PD.
 
@@ -51,16 +51,16 @@ To guarantee `Snapshot Isolation`, there are a few important safeguard mechanism
 ![tiflash-distributed-architecture](./images/tiflash-distributed-architecture.svg)
 
 [TiDB Engine Extensions Library](https://github.com/pingcap/tidb-engine-ext)(hereafter referred to as `raftstore-proxy` or `tiflash-proxy`) is a TiKV based `c dynamic library` for extending storage system in `TiDB` cluster.
-This library aims to export current multi-raft framework to other engines and make them be able to provide services(read/write) as `raft store` directly.
+This library aims to export the current multi-raft framework to other engines and make them be able to provide services(read/write) as `raft store` directly.
 
-Generally speaking, there are two storage components, `RaftEngine` and `KvEngine`, in TiKV for maintaining multi-raft RSM.
+Generally speaking, there are two storage components in TiKV for maintaining multi-raft RSM: `RaftEngine` and `KvEngine`.
 KvEngine is mainly used for applying raft command and providing key-value services.
-Each time raft log has been committed in RaftEngine, it will be parsed into normal/admin raft command and be handled by apply process.
+Each raft log committed in the RaftEngine will be parsed into a corresponding normal/admin raft command and handled by the apply process.
 Multiple modifications about region data/meta/apply-state will be encapsulated into one `Write Batch` and written into KvEngine atomically.
 Maybe replacing KvEngine by `Engine Traits` is an option.
-But for other storage system, it's not easy to guarantee atomicity while writing/reading dynamic key-value pair(such as meta/apply-state) and patterned data(strong schema) together.
-Besides, there are a few modules and components(like importer or lighting) reply on the SST format of KvEngine in TiKV.
-It may take a lot of cost to achieve such replacing.
+But it's not easy to guarantee atomicity while writing/reading dynamic key-value pair(such as meta/apply-state) and patterned data(strong schema) together for other storage systems.
+Besides, a few modules and components(like importer or lighting) reply on the SST format of KvEngine in TiKV.
+It may cost a lot to achieve such a replacement.
 
 In order to bring few intrusive modifications against original logic of TiKV, it's suggested to let apply process work as usual but only persist meta and state information.
 It means that, each place where may write normal region data, must be replaced with related interfaces.
