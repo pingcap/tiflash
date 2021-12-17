@@ -97,6 +97,7 @@ public:
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
     std::map<String, JoinBuildSideInfo> & getJoinBuildSideInfoMap();
     const JoinBuildSideInfo & getJoinBuildSideInfo(const String & executor_id);
+    std::map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -138,8 +139,6 @@ public:
         return mpp_task_id;
     }
 
-    BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
-
     std::pair<bool, double> getTableScanThroughput();
 
     const RegionInfoMap & getRegionsForLocalRead() const { return regions_for_local_read; }
@@ -179,7 +178,9 @@ private:
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
     /// join_build_side_info_map is a map that maps from executor_id to JoinBuildSideInfo
     std::map<std::string, JoinBuildSideInfo> join_build_side_info_map;
-    BlockInputStreams remote_block_input_streams;
+    /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
+    /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
+    std::map<String, BlockInputStreams> inbound_io_input_streams_map;
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;

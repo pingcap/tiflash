@@ -239,26 +239,27 @@ void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMe
 }
 
 template <typename RPCContext>
-Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
+DecodeChunksDetail ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
 {
     assert(recv_msg != nullptr);
-    Int64 rows = 0;
+    DecodeChunksDetail detail;
 
     int chunk_size = recv_msg->packet->chunks_size();
     if (chunk_size == 0)
-        return rows;
+        return detail;
 
+    detail.packet_bytes = recv_msg->packet->ByteSizeLong();
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
     for (int i = 0; i < chunk_size; i++)
     {
         Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
-        rows += block.rows();
+        detail.rows += block.rows();
         if (unlikely(block.rows() == 0))
             continue;
         assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
         block_queue.push(std::move(block));
     }
-    return rows;
+    return detail;
 }
 
 template <typename RPCContext>
@@ -314,7 +315,9 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 if (!resp_ptr->chunks().empty())
                 {
                     assert(recv_msg->packet->chunks().empty());
-                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
+                    auto detail = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
+                    result.rows = detail.rows;
+                    result.packet_bytes = detail.packet_bytes;
                 }
             }
         }
@@ -325,7 +328,9 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
         if (!result.meet_error && !recv_msg->packet->chunks().empty())
         {
             assert(result.rows == 0);
-            result.rows = decodeChunks(recv_msg, block_queue, expected_types);
+            auto detail = decodeChunks(recv_msg, block_queue, expected_types);
+            result.rows = detail.rows;
+            result.packet_bytes = detail.packet_bytes;
         }
     }
     returnEmptyMsg(recv_msg);

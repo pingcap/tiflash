@@ -4,9 +4,9 @@
 
 namespace DB
 {
-struct ConnectionProfileInfo
+struct DecodeChunksDetail
 {
-    size_t packets = 0;
-    size_t bytes = 0;
+    UInt64 rows = 0;
+    UInt64 packet_bytes = 0;
 };
 } // namespace DB

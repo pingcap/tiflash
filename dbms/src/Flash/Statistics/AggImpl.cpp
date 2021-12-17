@@ -3,7 +3,7 @@
 
 namespace DB
 {
-void AggStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
+void AggStatistics::appendExtraJson(FmtBuffer &) const
 {
 }
 

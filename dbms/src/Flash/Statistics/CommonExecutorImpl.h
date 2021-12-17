@@ -44,19 +44,6 @@ struct ProjectImpl
 };
 using ProjectStatistics = ExecutorStatistics<ProjectImpl>;
 
-struct TableScanImpl
-{
-    static constexpr bool has_extra_info = false;
-
-    static constexpr auto type = "TableScan";
-
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return executor->has_tbl_scan();
-    }
-};
-using TableScanStatistics = ExecutorStatistics<TableScanImpl>;
-
 struct TopNImpl
 {
     static constexpr bool has_extra_info = false;
