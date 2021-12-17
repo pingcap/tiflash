@@ -573,7 +573,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     size_t stream_index = 0;
     right_pipeline.transform(
         [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, stream_index++, taskLogger()); });
-    executeUnion(right_pipeline, max_streams, taskLogger());
+    executeUnion(right_pipeline, max_streams, taskLogger(), /*ignore_block=*/true);
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = join_ptr;

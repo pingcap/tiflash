@@ -27,10 +27,10 @@ struct OutputData<StreamUnionMode::Basic>
     std::exception_ptr exception;
 
     OutputData() {}
-    OutputData(Block & block_)
+    explicit OutputData(Block & block_)
         : block(block_)
     {}
-    OutputData(std::exception_ptr & exception_)
+    explicit OutputData(std::exception_ptr & exception_)
         : exception(exception_)
     {}
 };
@@ -48,7 +48,7 @@ struct OutputData<StreamUnionMode::ExtraInfo>
         : block(block_)
         , extra_info(extra_info_)
     {}
-    OutputData(std::exception_ptr & exception_)
+    explicit OutputData(std::exception_ptr & exception_)
         : exception(exception_)
     {}
 };
@@ -68,14 +68,14 @@ struct OutputData<StreamUnionMode::ExtraInfo>
   *   extracts blocks information; In this case all sources should support such mode.
   */
 
-template <StreamUnionMode mode = StreamUnionMode::Basic>
+template <StreamUnionMode mode = StreamUnionMode::Basic, bool ignore_block = false>
 class UnionBlockInputStream final : public IProfilingBlockInputStream
 {
 public:
     using ExceptionCallback = std::function<void()>;
 
 private:
-    using Self = UnionBlockInputStream<mode>;
+    using Self = UnionBlockInputStream<mode, ignore_block>;
 
 public:
     UnionBlockInputStream(
@@ -132,7 +132,6 @@ public:
         if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
             return;
 
-        //std::cerr << "cancelling\n";
         processor.cancel(kill);
     }
 
@@ -160,7 +159,6 @@ protected:
             _UnionBlockInputStreamImpl::OutputData<mode> res;
             while (true)
             {
-                //std::cerr << "popping\n";
                 output_queue.pop(res);
 
                 if (res.exception)
@@ -211,7 +209,6 @@ protected:
         }
 
         /// We will wait until the next block is ready or an exception is thrown.
-        //std::cerr << "popping\n";
         output_queue.pop(received_payload);
 
         if (received_payload.exception)
@@ -230,7 +227,6 @@ protected:
     /// Called either after everything is read, or after cancel.
     void readSuffix() override
     {
-        //std::cerr << "readSuffix\n";
         if (!all_read && !isCancelled())
             throw Exception("readSuffix called before all data is read", ErrorCodes::LOGICAL_ERROR);
 
@@ -246,8 +242,9 @@ private:
         if constexpr (mode == StreamUnionMode::ExtraInfo)
             return received_payload.extra_info;
         else
-            throw Exception("Method getBlockExtraInfo is not supported for mode StreamUnionMode::Basic",
-                            ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(
+                "Method getBlockExtraInfo is not supported for mode StreamUnionMode::Basic",
+                ErrorCodes::NOT_IMPLEMENTED);
     }
 
 private:
@@ -265,23 +262,25 @@ private:
 
     struct Handler
     {
-        Handler(Self & parent_)
+        explicit Handler(Self & parent_)
             : parent(parent_)
         {}
 
         void onBlock(Block & block, size_t /*thread_num*/)
         {
-            parent.output_queue.push(Payload(block));
+            if constexpr (!ignore_block)
+                parent.output_queue.emplace(Payload(block));
         }
 
         void onBlock(Block & block, BlockExtraInfo & extra_info, size_t /*thread_num*/)
         {
-            parent.output_queue.push(Payload(block, extra_info));
+            if constexpr (!ignore_block)
+                parent.output_queue.emplace(block, extra_info);
         }
 
         void onFinish()
         {
-            parent.output_queue.push(Payload());
+            parent.output_queue.emplace();
         }
 
         void onFinishThread(size_t /*thread_num*/)
@@ -290,13 +289,11 @@ private:
 
         void onException(std::exception_ptr & exception, size_t /*thread_num*/)
         {
-            //std::cerr << "pushing exception\n";
-
             /// The order of the rows matters. If it is changed, then the situation is possible,
-            ///  when before exception, an empty block (end of data) will be put into the queue,
-            ///  and the exception is lost.
+            /// when before exception, an empty block (end of data) will be put into the queue,
+            /// and the exception is lost.
 
-            parent.output_queue.push(exception);
+            parent.output_queue.emplace(exception);
             /// can not cancel parent inputStream or the exception might be lost
             parent.processor.cancel(false); /// Does not throw exceptions.
         }
