@@ -18,7 +18,7 @@ It means any other component, like TiDB or TiSpark, can access TiFlash and TiKV 
 
 After one TiFlash node is deployed into the TiDB cluster, it will register necessary properties(labels with `engine`:`tiflash`, address, runtime information, etc.) to [Placement driver](https://github.com/tikv/pd)(hereafter referred to as `PD`) as a `raft store`.
 
-PD will not schedule any region peer to TiFlash store if there is no [Placement Rules](https://docs.pingcap.com/tidb/stable/configure-placement-rules) set by TiFlash.
+PD will not schedule any region peer to TiFlash store if there is no [Placement Rules](https://docs.pingcap.com/tidb/stable/configure-placement-rules) related to TiFlash.
 After TiDB has executed the `DDL` job, which tries to set `TIFLASH REPLICA` for the specific table, the `Replica Manager` module will translate related jobs into `Placement Rules` and update them to PD.
 Then, PD will try to split and schedule `Learner` peer of related regions to TiFlash store by corresponding rules.
 
