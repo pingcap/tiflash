@@ -30,13 +30,13 @@ void checkColumnSize(size_t expected, size_t actual)
             ErrorCodes::LOGICAL_ERROR);
 }
 
-void checkDataTypeName(const String & expected, const String & actual)
+void checkDataTypeName(size_t column_index, const String & expected, const String & actual)
 {
     if (expected != actual)
         throw Exception(
             fmt::format(
                 "NativeBlockInputStream schema mismatch at column {}, expected {}, actual {}",
-                i,
+                column_index,
                 expected,
                 actual),
             ErrorCodes::LOGICAL_ERROR);
@@ -194,7 +194,7 @@ Block NativeBlockInputStream::readImpl()
         readBinary(type_name, istr);
         if (header)
         {
-            checkDataTypeName(header_datatypes[i].name, type_name);
+            checkDataTypeName(i, header_datatypes[i].name, type_name);
             column.type = header_datatypes[i].type;
         }
         else
