@@ -1,6 +1,5 @@
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Statistics/AggImpl.h>
 #include <Flash/Statistics/CommonExecutorImpl.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>

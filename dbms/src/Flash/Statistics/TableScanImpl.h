@@ -28,15 +28,15 @@ using TableScanStatisticsBase = ExecutorStatistics<TableScanImpl>;
 
 class TableScanStatistics : public TableScanStatisticsBase
 {
-    public:
-        TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
+public:
+    TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
-    private:
-        TableScanDetail local_table_scan_detail;
-        TableScanDetail cop_table_scan_detail;
+private:
+    TableScanDetail local_table_scan_detail;
+    TableScanDetail cop_table_scan_detail;
 
-    protected:
-        void appendExtraJson(FmtBuffer &) const override;
-        void collectExtraRuntimeDetail() override;
+protected:
+    void appendExtraJson(FmtBuffer &) const override;
+    void collectExtraRuntimeDetail() override;
 };
 } // namespace DB
