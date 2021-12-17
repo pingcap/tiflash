@@ -578,7 +578,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     {
         throw TiFlashException("Join query block must have 2 child", Errors::BroadcastJoin::Internal);
     }
-    size_t build_side_index = swap_join_side ? 1 : 0;
+    size_t build_side_index = swap_join_side ? 0 : 1;
     const auto * build_side_executor = query_block.children[build_side_index]->root;
     assert(build_side_executor);
     assert(build_side_executor->has_executor_id());
