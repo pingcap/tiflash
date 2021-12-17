@@ -24,7 +24,7 @@ String exchangeTypeToString(const tipb::ExchangeType & exchange_type)
 void ExchangeSenderStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
     fmt_buffer.fmtAppend(
-        R"(,"partition_num":{},"sender_target_task_ids":[{}],"exchange_type":"{}")",
+        R"("partition_num":{},"sender_target_task_ids":[{}],"exchange_type":"{}")",
         partition_num,
         fmt::join(sender_target_task_ids, ","),
         exchangeTypeToString(exchange_type));

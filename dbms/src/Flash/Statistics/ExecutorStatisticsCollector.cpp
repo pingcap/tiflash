@@ -4,6 +4,7 @@
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
 #include <Flash/Statistics/ExecutorStatisticsCollector.h>
+#include <Flash/Statistics/JoinImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
 
 namespace DB
