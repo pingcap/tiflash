@@ -6,7 +6,6 @@
 #include <Poco/FileChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
-#include <common/logger_fmt_useful.h>
 #include <common/logger_useful.h>
 #include <gtest/gtest.h>
 

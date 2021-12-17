@@ -9,7 +9,6 @@
 #include <Poco/Message.h>
 #include <Poco/PatternFormatter.h>
 #include <benchmark/benchmark.h>
-#include <common/logger_fmt_useful.h>
 #include <common/logger_useful.h>
 
 #include <iomanip>
