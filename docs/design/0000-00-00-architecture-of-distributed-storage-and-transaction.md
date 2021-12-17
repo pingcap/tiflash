@@ -44,7 +44,7 @@ To guarantee `Snapshot Isolation`, there are a few important safeguard mechanism
 
 - `Replica Read` makes sure that the raft state machine of region peers are correct and have enough context.
 - `Resolve Lock` checks whether related table records are protected by locks and tries to resolve them.
-- `MVCC(Multiversion concurrency control)` read table records by specific version provided by PD.
+- `MVCC(Multiversion concurrency control)` read table records by specific version(Timestamp, hereafter referred to as ts) provided by PD.
 
 ### Distributed Storage Framework
 
@@ -196,7 +196,7 @@ Unlike TiKV, which uses [RocksDB](https://github.com/tikv/rocksdb) as KvEngine d
   - Persist whole region cache in memory by apply-state as `region snapshot` atomically.
 - Committed table records in column storage
   - Store committed transaction data by strong schema.
-  - Support MVCC by tso.
+  - Support MVCC by ts.
   - Support table data GC.
 
 Redundancy is a practical way to guarantee `Idempotency` and `External Consistency`, which means updating region meta should be lazy while adding data but advanced while removing region.
