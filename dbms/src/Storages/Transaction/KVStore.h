@@ -125,6 +125,7 @@ private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;
+    friend struct CopGenTester;
     friend class RegionMockTest;
     friend void RegionBench::concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
     using DBGInvokerPrinter = std::function<void(const std::string &)>;

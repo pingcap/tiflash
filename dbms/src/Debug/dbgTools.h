@@ -1,6 +1,8 @@
 #pragma once
 
+#include <kvproto/raft_cmdpb.pb.h>
 #include <Parsers/IAST.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
 
 #include <optional>
 
@@ -29,6 +31,10 @@ RegionPtr createRegion(
     const TiDB::TableInfo & table_info, RegionID region_id, std::vector<Field> & start_keys, std::vector<Field> & end_keys);
 
 void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
+
+void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & key, const TiKVValue & value, UInt64 prewrite_ts,
+    UInt64 commit_ts, bool del, const String pk = "pk");
+
 
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
     ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del = {});

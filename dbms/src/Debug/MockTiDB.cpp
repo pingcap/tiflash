@@ -255,7 +255,14 @@ TableID MockTiDB::newTable(
     table_info->id = table_id_allocator++;
     table_info->update_timestamp = tso;
 
-    auto table = std::make_shared<Table>(database_name, databases[database_name], table_name, std::move(*table_info));
+    return addTable(database_name, std::move(*table_info));
+}
+
+TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)
+{
+    auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
+    String qualified_name = database_name + "." + table_info.name;
+
     tables_by_id.emplace(table->table_info.id, table);
     tables_by_name.emplace(qualified_name, table);
 
@@ -268,6 +275,7 @@ TableID MockTiDB::newTable(
     version_diff[version] = diff;
 
     return table->table_info.id;
+
 }
 
 Field getDefaultValue(const ASTPtr & default_value_ast)

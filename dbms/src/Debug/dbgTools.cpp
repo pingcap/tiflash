@@ -99,7 +99,7 @@ void setupDelRequest(raft_cmdpb::Request * req, const std::string & cf, const Ti
 }
 
 void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & key, const TiKVValue & value, UInt64 prewrite_ts,
-    UInt64 commit_ts, bool del, const String pk = "pk")
+    UInt64 commit_ts, bool del, const String pk)
 {
     TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
     const TiKVKey & lock_key = key;

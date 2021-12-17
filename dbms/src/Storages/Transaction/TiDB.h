@@ -317,11 +317,15 @@ struct TableInfo
 
     TableInfo & operator=(const TableInfo &) = default;
 
+    explicit TableInfo(Poco::JSON::Object::Ptr json);
+
     explicit TableInfo(const String & table_info_json);
 
     String serialize() const;
 
     void deserialize(const String & json_str);
+
+    void deserialize(Poco::JSON::Object::Ptr json);
 
     // The meaning of this ID changed after we support TiDB partition table.
     // It is the physical table ID, i.e. table ID for non-partition table,
