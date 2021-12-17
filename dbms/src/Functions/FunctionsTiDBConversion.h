@@ -1033,9 +1033,9 @@ struct TiDBConvertToDecimal
         size_t pos = 0;
         if (decimal_parts.int_part.data[pos] == '+' || decimal_parts.int_part.data[pos] == '-')
         {
-            pos++;
             if (decimal_parts.int_part.data[pos] == '-')
                 is_negative = true;
+            pos++;
         }
         Int256 max_value = DecimalMaxValue::get(prec);
 
