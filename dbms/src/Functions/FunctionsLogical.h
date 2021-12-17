@@ -275,7 +275,7 @@ private:
         return true;
     }
 
-    bool convertOnlyNullToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null) const
+    bool convertOnlyNullToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null)
     {
         if (!column->onlyNull())
             return false;
@@ -321,7 +321,7 @@ private:
         return true;
     }
 
-    void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null) const
+    void convertToUInt8(const IColumn * column, UInt8Container & res, UInt8Container & res_not_null, UInt8Container & input_has_null)
     {
         if (!convertTypeToUInt8<Int8>(column, res, res_not_null)
             && !convertTypeToUInt8<Int16>(column, res, res_not_null)
