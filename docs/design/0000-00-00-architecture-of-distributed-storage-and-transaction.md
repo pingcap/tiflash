@@ -55,46 +55,45 @@ This library aims to export the current multi-raft framework to other engines an
 
 Generally speaking, there are two storage components in TiKV for maintaining multi-raft RSM: `RaftEngine` and `KvEngine`.
 KvEngine is mainly used for applying raft command and providing key-value services.
-Each raft log committed in the RaftEngine will be parsed into a corresponding normal/admin raft command and handled by the apply process.
+RaftEngine will parse its own committed raft log into corresponding normal/admin raft commands which will be handled by the apply process.
 Multiple modifications about region data/meta/apply-state will be encapsulated into one `Write Batch` and written into KvEngine atomically.
 Maybe replacing KvEngine by `Engine Traits` is an option.
 But it's not easy to guarantee atomicity while writing/reading dynamic key-value pair(such as meta/apply-state) and patterned data(strong schema) together for other storage systems.
 Besides, a few modules and components(like importer or lighting) reply on the SST format of KvEngine in TiKV.
 It may cost a lot to achieve such a replacement.
 
-In order to bring few intrusive modifications against original logic of TiKV, it's suggested to let apply process work as usual but only persist meta and state information.
-It means that, each place where may write normal region data, must be replaced with related interfaces.
-Not like KvEngine, storage system(called `engine-store`) under such framework should be aware of transition about multi-raft state machine from these interfaces.
-`engine-store` must have the ability of dealing with raft commands, so as to handle queries with region epoch.
+It's suggested to let the apply process work as usual but only persist meta and state information to bring a few intrusive modifications against the original logic of TiKV.
+i.e., we must replace everywhere that may write normal region data with related interfaces.
+Unlike KvEngine, the storage system(called `engine-store`) under such a framework should be aware of the transition about multi-raft RSM from these interfaces.
+The `engine-store` must have the ability to deal with raft commands to handle queries with region epoch.
 
-`region snapshot` presents the whole information of a region(data/meta/apply-state) at a specific apply-state.
+The `region snapshot` presents the complete region information(data/meta/apply-state) at a specific apply-state.
 
 Anyway, because there are at least two asynchronous runtimes in one program, the best practice of such raft store is to guarantee `External Consistency` by `region snapshot`.
-Actually, the raft logs persisted in RaftEngine are the `WAL(Write Ahead Log)` of apply process.
+The raft logs persisted in RaftEngine are the `WAL(Write Ahead Log)` of the apply process.
 Index of raft entry within the same region peer is monotonic increasing.
-If process is interrupted at middle step, it should replay from last persisted apply-state after restarted.
+If the process is interrupted at the middle step, it should replay from the last persisted apply-state after the restart.
 Related modifications cannot be witnessed from outside until safe-point is reached.
 
-`Idempotency` is an important property for external consistency, which means such system could handle outdated raft commands. A practical way is like:
+`Idempotency` is an essential property for external consistency, which means such a system could handle outdated raft commands. A practical way is like:
 
 - Fsync snapshot in `engine-store` atomically
 - Fsync region snapshot in `raftstore-proxy` atomically
-- Make RaftEngine only gc raft log whose index is smaller than persisted apply-state
+- Make RaftEngine only GC raft log whose index is smaller than persisted apply-state
 - `engine-store` should tell and ignore raft commands with outdated apply-state during apply process
-- `engine-store` should recover from middle step by overwriting and won't provide services until caught up with latest state
+- `engine-store` should recover from the middle step by overwriting and must NOT provide services until caught up with the latest state
 
-Such architecture inherited several important features from TiKV naturally, such as distributed fault tolerance/recovery, automatic re-balancing, etc.
-It's also convenient for PD to maintain this kind of storage system by existing way as long as it works as `raft store`.
+Such architecture inherited several important features from TiKV, such as distributed fault tolerance/recovery, automatic re-balancing, etc.
+It's also convenient for PD to maintain this kind of storage system by the existing way as long as it works as `raft store`.
 
 #### Interfaces
 
-Since the program language `Rust`, which TiKV is based on, has zero-cost abstractions.
-It's very easy to let different threads interact with each other by `FFI`(Foreign Function Interface).
+Since the program language `Rust`, which TiKV uses, has zero-cost abstractions, it's straightforward to let different threads interact with each other by `FFI`(Foreign Function Interface).
 Such mode brings almost no overhead.
-However, any caller must be quite clear about the boundary of safe/unsafe operations exactly.
-The structure used by different runtimes through interfaces must have same memory layout.
+However, any caller must be pretty clear about the exact safe/unsafe operations boundary.
+The structure used by different runtimes through interfaces must have the same memory layout.
 
-It's feasible to refactor TiKV source code and extract parts of necessary process into interfaces. The main categories are like:
+It's feasible to refactor TiKV source code and extract parts of the necessary process into interfaces. The main categories are like:
 
 - apply normal-write raft command
 - apply admin raft command
@@ -104,45 +103,44 @@ It's feasible to refactor TiKV source code and extract parts of necessary proces
 - apply `IngestSst` command
 - replica read: batch read-index
 - encryption: get file; new file; delete file; link file; rename file;
-- status services: metrics; cpu profile; get config; thread stats; self-defined api;
+- status services: metrics; CPU profile; config; thread stats; self-defined API;
 - store stats: key/bytes R/W stats; disk stats; storage `engine-store` stats;
 - tools/utils
 
-TiKV can perform split or merge on regions to make the partitions more flexible.
-When the size of a region exceeds the limit, it will be divided into two or more regions, and the range may change like `[a, c) -> [a, b) + [b, c)`.
-When the sizes of two sibling regions are small enough, they will be merged into a bigger region, and the range may change like `[a, b) + [b, c) -> [a, c)`.
+TiKV can split or merge regions to make the partitions more flexible.
+When the size of a region exceeds the limit, it will split into two or more regions, and its range would change from `[a, c)` to `[a, b) and [b, c)`.
+When the sizes of two consecutive regions are small enough, TiKV will merge them into one, and their range would change from `[a, b) and [b, c)` to `[a, c)`.
 
-To apply admin raft command safely, region snapshot must be persisted when executing commands about `split`, `merge` and `change peer`.
+We must persist the region snapshot when executing commands about `split`, `merge`, and `change peer` to safely apply the admin raft command.
 Because such commands will change the core properties of multi-raft RSM, such as `version`, `conf version`, `start/end key`.
-Ignorable admin command `CompactLog` may trigger raft log gc in `RaftEngine`.
-So it's required to persist region snapshot if decide to execute such command.
+Ignorable admin command `CompactLog` may trigger raft log GC in `RaftEngine`.
+Thus, to execute such commands, it's required to persist region snapshot.
 But for normal-write, the decision of persisting can be pushed down to `engine-store`.
 
-When the region in current store is illegal or pending removing, the task about `destroy-peer` will be executed to clean useless data.
+When the region in the current store is illegal or pending removal, it will execute a `destroy-peer` task to clean useless data.
 
 ![txn-log-replication](./images/txn-log-replication.svg)
 
-According to the basic transaction log replication, each writing action must be committed or applied by leader peer before returning success ack to client.
-When any peer tries to respond queries, it should get latest committed-index from leader and wait until apply-state caught up, in order to make sure it has had enough context.
-No matter for learner/follower or even leader, `Read Index` is an effective choice to check latest `Lease`.
-Because it's easy to make any peer of region group provide read service under same logic as long as overhead of read-index itself is insignificant.
+According to the basic transaction log replication, a leader peer must commit or apply each writing action before returning success ACK to the client.
+When any peer tries to respond to queries, it should get the latest committed index from the leader and wait until the apply-state catches up to ensure it has enough context.
+For learners/followers or even leaders, the `Read Index` is a practical choice to check the latest `Lease` because it's easy to make any peer of region group provide read service under the same logic as the overhead of read-index itself is insignificant.
 
-When leader peer has gc raft log or other peers can not proceed RSM in current context, other peers can request region snapshot from leader.
-However, the region snapshot data, which in form of TiKV `SST` file, is really hard to used by other storage system directly.
-To accelerate the speed of applying region snapshot data, the normal process has been separated into several parts:
+When the leader peer has a GC raft log or other peers can not proceed with RSM in the current context, other peers can request a region snapshot from the leader.
+However, the region snapshot data, whose format is TiKV's `SST` file, is not usually used by other storage systems directly.
+The standard process has been divided into several parts to accelerate the speed of applying region snapshot data:
 
-- `SST File Reader` to read key-value one by one from SST files.
-- Multi-thread pool to pre-handle SST files into self-defined structure of `engine-store`.
+- `SST File Reader` to read key-value one by one from SST files
+- Multi-thread pool to pre-handle SST files into the self-defined structure of `engine-store`
 - Apply self-defined structure by original sequence
 
-Interfaces about `IngestSst` is the core to be compatible with `TiDB Lighting` and `BR` for `HTAP` scenario.
+Interfaces about `IngestSst` are the core to be compatible with `TiDB Lighting` and `BR` for the `HTAP` scenario.
 It can substantially speed up data loading/restoring.
-`SST File Reader` is also quite useful while applying `IngestSst` raft command.
+`SST File Reader` is also useful when applying the `IngestSst` raft command.
 
-Encryption is an important feature for `DBaaS`(database as a service).
-To be compatible with TiKV, a data key manager with same logic is indispensable, especially for rotating data encryption key or using KMS service.
+Encryption is essential for `DBaaS`(database as a service).
+To be compatible with TiKV, a data key manager with the same logic is indispensable, especially for rotating data encryption keys or using the KMS service.
 
-Status services like metrics, cpu/mem profile(flame graph) or other self-defined stats can provide effective support for diagnosis.
+Status services like metrics, CPU/Memory profile(flame graph), or other self-defined stats can effectively support the diagnosis.
 It's suggested to encapsulate those into one status server and let other external components visit through status address.
 Most of original metrics of TiKV could be reused and an optional way is to add specific prefix for each name.
 
