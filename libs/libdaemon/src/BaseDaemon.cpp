@@ -11,7 +11,9 @@
 #include <sys/types.h>
 
 #if USE_UNWIND
+#ifndef USE_LLVM_LIBUNWIND
 #define UNW_LOCAL_ONLY
+#endif
 #include <libunwind.h>
 #endif
 
@@ -182,9 +184,13 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
     char buf[buf_size];
     DB::WriteBufferFromFileDescriptor out(signal_pipe.write_fd, buf_size, buf);
 
+    unw_context_t unw_context;
+    unw_getcontext(&unw_context);
+
     DB::writeBinary(sig, out);
     DB::writePODBinary(*info, out);
     DB::writePODBinary(*reinterpret_cast<const ucontext_t *>(context), out);
+    DB::writePODBinary(unw_context, out);
     DB::writeBinary(Poco::ThreadNumber::get(), out);
 
     out.next();
@@ -199,28 +205,20 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
 static bool already_printed_stack_trace = false;
 
 #if USE_UNWIND
-size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, ucontext_t & context)
+size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, unw_context_t & unw_context)
 {
     if (already_printed_stack_trace)
         return 0;
 
     unw_cursor_t cursor;
 
-#ifdef __aarch64__
-    // translate context for aarch64
-    unw_context_t unw_context;
-    unw_context.uc_flags = context.uc_flags;
-    unw_context.uc_link = context.uc_link;
-    unw_context.uc_stack = context.uc_stack;
-    unw_context.uc_sigmask = context.uc_sigmask;
-    std::memcpy(&unw_context.uc_mcontext, &context.uc_mcontext, sizeof(unw_context.uc_mcontext));
-    unw_context_t * context_ptr = &unw_context;
-#else
-    ucontext_t * context_ptr = &context;
-#endif
-
-    if (unw_init_local2(&cursor, context_ptr, UNW_INIT_SIGNAL_FRAME) < 0)
+#ifdef USE_LLVM_LIBUNWIND
+    if (unw_init_local(&cursor, &unw_context) < 0)
         return 0;
+#else
+    if (unw_init_local2(&cursor, unw_context, UNW_INIT_SIGNAL_FRAME) < 0)
+        return 0;
+#endif
 
     size_t i = 0;
     for (; i < max_frames; ++i)
@@ -301,13 +299,15 @@ public:
             {
                 siginfo_t info;
                 ucontext_t context;
+                unw_context_t unw_context;
                 ThreadNumber thread_num;
 
                 DB::readPODBinary(info, in);
                 DB::readPODBinary(context, in);
+                DB::readPODBinary(unw_context, in);
                 DB::readBinary(thread_num, in);
 
-                onFault(sig, info, context, thread_num);
+                onFault(sig, info, context, unw_context, thread_num);
             }
         }
     }
@@ -322,7 +322,7 @@ private:
         LOG_ERROR(log, "(from thread " << thread_num << ") " << message);
     }
 
-    void onFault(int sig, siginfo_t & info, ucontext_t & context, ThreadNumber thread_num) const
+    void onFault(int sig, siginfo_t & info, ucontext_t & context, unw_context_t & unw_context, ThreadNumber thread_num) const
     {
         LOG_ERROR(log, "########################################");
         LOG_ERROR(log, "(from thread " << thread_num << ") "
@@ -492,7 +492,7 @@ private:
         void * frames[max_frames];
 
 #if USE_UNWIND
-        int frames_size = backtraceLibUnwind(frames, max_frames, context);
+        int frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
 
         if (frames_size)
         {

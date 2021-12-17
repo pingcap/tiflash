@@ -208,22 +208,34 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
+    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" ON)
+    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" ON)
+
+
     set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
+
+    # since we are using tiflash proxy, static linking will result in ODR problem.
+    # we use shared libraries for runtime libs
 
     if (USE_LIBCXX)
         set (CMAKE_CXX_FLAGS             "${CMAKE_CXX_FLAGS} -stdlib=libc++") # Ok for clang6, for older can cause 'not used option' warning
         set (CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -D_LIBCPP_DEBUG=0") # More checks in debug build.
-        if (MAKE_STATIC_LIBRARIES)
-            link_libraries (-Wl,-Bstatic -stdlib=libc++ c++ c++abi -Wl,-Bdynamic)
-        else ()
-            link_libraries (-stdlib=libc++ c++ c++abi)
-        endif ()
-
+        link_libraries (-stdlib=libc++ c++ c++abi)
         if (LIBCXX_PATH)
-#            include_directories (BEFORE SYSTEM "${LIBCXX_PATH}/include" "${LIBCXX_PATH}/include/c++/v1")
             link_directories ("${LIBCXX_PATH}/lib")
         endif ()
     endif ()
+
+    if (USE_LLVM_LIBUNWIND)
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind")
+        link_libraries (-unwindlib=libunwind unwind)
+    endif()
+
+    if (USE_LLVM_COMPILER_RT)
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rtlib=compiler-rt")
+        link_libraries (-rtlib=compiler-rt)
+    endif()
+
 endif ()
 
 if (USE_STATIC_LIBRARIES AND HAVE_NO_PIE)
