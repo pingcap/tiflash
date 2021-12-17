@@ -14,7 +14,6 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <common/logger_fmt_useful.h>
 #include <pingcap/Config.h>
 
 #include <boost/program_options.hpp>

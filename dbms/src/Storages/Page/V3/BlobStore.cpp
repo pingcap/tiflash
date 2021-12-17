@@ -2,7 +2,6 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/V3/BlobStore.h>
-#include <common/logger_fmt_useful.h>
 
 #include <ext/scope_guard.h>
 
