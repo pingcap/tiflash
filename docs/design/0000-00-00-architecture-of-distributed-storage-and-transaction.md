@@ -111,8 +111,7 @@ TiKV can split or merge regions to make the partitions more flexible.
 When the size of a region exceeds the limit, it will split into two or more regions, and its range would change from `[a, c)` to `[a, b) and [b, c)`.
 When the sizes of two consecutive regions are small enough, TiKV will merge them into one, and their range would change from `[a, b) and [b, c)` to `[a, c)`.
 
-We must persist the region snapshot when executing commands about `split`, `merge`, and `change peer` to safely apply the admin raft command.
-Because such commands will change the core properties of multi-raft RSM, such as `version`, `conf version`, `start/end key`.
+We must persist the region snapshot when executing admin raft commands about `split`, `merge` or `change peer` because such commands will change the core properties(`version`, `conf version`, `start/end key`) of multi-raft RSM.
 Ignorable admin command `CompactLog` may trigger raft log GC in `RaftEngine`.
 Thus, to execute such commands, it's required to persist region snapshot.
 But while executing normal-write command, which won't change region meta, the decision of persisting can be pushed down to `engine-store`.
