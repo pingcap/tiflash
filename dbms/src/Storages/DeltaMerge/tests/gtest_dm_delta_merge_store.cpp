@@ -174,14 +174,14 @@ public:
 
     std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
     {
-        auto file_id      = context.storage_pool.newDataPageId();
+        auto delegator    = context.path_pool.getStableDiskDelegator();
+        auto file_id      = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        auto delegate     = context.path_pool.getStableDiskDelegator();
-        auto store_path   = delegate.choosePath();
+        auto store_path   = delegator.choosePath();
         auto dmfile       = writeIntoNewDMFile(
             context, std::make_shared<ColumnDefines>(store->getTableColumns()), input_stream, file_id, store_path, false);
 
-        delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
+        delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
         auto &      pk_column = block.getByPosition(0).column;
         auto        min_pk    = pk_column->getInt(0);

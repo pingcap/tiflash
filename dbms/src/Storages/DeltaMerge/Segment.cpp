@@ -125,16 +125,16 @@ StableValueSpacePtr createNewStable(DMContext &                 context,
                                     WriteBatches &              wbs,
                                     bool                        need_rate_limit)
 {
-    auto delegate   = context.path_pool.getStableDiskDelegator();
-    auto store_path = delegate.choosePath();
+    auto delegator   = context.path_pool.getStableDiskDelegator();
+    auto store_path = delegator.choosePath();
 
-    PageId dmfile_id = context.storage_pool.newDataPageId();
+    PageId dmfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path, need_rate_limit);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dmfile_id, 0);
-    delegate.addDTFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
+    delegator.addDTFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
 
     return stable;
 }
@@ -215,16 +215,14 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     switch (version)
     {
-    case SegmentFormat::V1:
-    {
+    case SegmentFormat::V1: {
         HandleRange range;
         readIntBinary(range.start, buf);
         readIntBinary(range.end, buf);
         rowkey_range = RowKeyRange::fromHandleRange(range);
         break;
     }
-    case SegmentFormat::V2:
-    {
+    case SegmentFormat::V2: {
         rowkey_range = RowKeyRange::deserialize(buf);
         break;
     }
@@ -370,7 +368,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
 
         stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_range, 0);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
-            stream, columns_to_read, max_version, is_common_handle);
+            stream, columns_to_read, max_version, is_common_handle, dm_context.query_id);
 
         return stream;
     };
@@ -379,7 +377,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
     if (read_ranges.size() == 1)
     {
         LOG_TRACE(log,
-                  "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
+                  "Segment [" << segment_id << "] is read by max_version: " << max_version << ", 1"
                               << " range: " << DB::DM::toDebugString(read_ranges));
         RowKeyRange real_range = rowkey_range.shrink(read_ranges[0]);
         if (real_range.none())
@@ -398,8 +396,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         }
 
         LOG_TRACE(log,
-                  "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", "
-                              << DB::toString(streams.size()) << " ranges: " << DB::DM::toDebugString(read_ranges));
+                  "Segment [" << segment_id << "] is read by max_version: " << max_version << ", " << streams.size()
+                              << " ranges: " << DB::DM::toDebugString(read_ranges));
 
         if (streams.empty())
             stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(*read_info.read_columns));
@@ -855,8 +853,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         auto file_id          = dmfile->fileId();
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto my_dmfile_id    = storage_pool.newDataPageId();
-        auto other_dmfile_id = storage_pool.newDataPageId();
+        auto my_dmfile_id    = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto other_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
         wbs.data.putRefPage(my_dmfile_id, file_id);
         wbs.data.putRefPage(other_dmfile_id, file_id);
@@ -1472,7 +1470,7 @@ bool Segment::placeDelete(const DMContext &           dm_context,
     {
         RowKeyValueRef first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
         auto           place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
-                                                  : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+                                                            : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
         auto compacted_index = update_delta_tree.getCompactedEntries();
 

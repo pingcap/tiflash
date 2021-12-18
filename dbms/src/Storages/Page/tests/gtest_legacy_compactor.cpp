@@ -188,9 +188,12 @@ try
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        auto reader = page_file.createMetaMergingReader();
-        reader->moveNext();
-        mergine_queue.push(std::move(reader));
+        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file); //
+            reader->hasNext())
+        {
+            reader->moveNext();
+            mergine_queue.push(std::move(reader));
+        }
     }
 
     DB::PageStorage::StatisticsInfo   debug_info;

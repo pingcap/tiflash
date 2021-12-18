@@ -70,6 +70,8 @@ struct DMContext : private boost::noncopyable
     const bool enable_relevant_place;
     const bool enable_skippable_place;
 
+    const String query_id;
+
 public:
     DMContext(const Context &      db_context_,
               StoragePathPool &    path_pool_,
@@ -78,7 +80,8 @@ public:
               const NotCompress &  not_compress_,
               bool                 is_common_handle_,
               size_t               rowkey_column_size_,
-              const DB::Settings & settings)
+              const DB::Settings & settings,
+              const String &       query_id_ = "")
         : db_context(db_context_),
           metrics(db_context.getTiFlashMetrics()),
           path_pool(path_pool_),
@@ -100,9 +103,11 @@ public:
           read_delta_only(settings.dt_read_delta_only),
           read_stable_only(settings.dt_read_stable_only),
           enable_relevant_place(settings.dt_enable_relevant_place),
-          enable_skippable_place(settings.dt_enable_skippable_place)
+          enable_skippable_place(settings.dt_enable_skippable_place),
+          query_id(query_id_)
     {
     }
+
 };
 
 } // namespace DM

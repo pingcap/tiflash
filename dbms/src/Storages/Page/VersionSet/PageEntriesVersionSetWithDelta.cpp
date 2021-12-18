@@ -1,8 +1,17 @@
 #include <Common/CurrentMetrics.h>
+#include <Common/FailPoint.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>
+
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+
+#include <pcg_random.hpp>
+#include <thread>
+#endif
+
 
 namespace CurrentMetrics
 {
@@ -11,6 +20,10 @@ extern const Metric PSMVCCSnapshotsList;
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_slow_page_storage_list_all_live_files[];
+} // namespace FailPoints
 
 //==========================================================================================
 // PageEntriesVersionSetWithDelta
@@ -48,7 +61,7 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
 PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mutex> && lock, bool need_scan_page_ids)
 {
     /// Collect live files is costly, we save SnapshotPtrs and scan them without lock.
-    (void)lock; // Note read_write_mutex must be hold.
+    // Note read_write_mutex must be hold.
     std::vector<SnapshotPtr> valid_snapshots;
     const size_t             snapshots_size_before_clean   = snapshots.size();
     double                   longest_living_seconds        = 0.0;
@@ -63,21 +76,25 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         }
         else
         {
+            fiu_do_on(FailPoints::random_slow_page_storage_list_all_live_files, {
+                pcg64                     rng(randomSeed());
+                std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
+                std::this_thread::sleep_for(ms);
+            });
             const auto snapshot_lifetime = snapshot_or_invalid->elapsedSeconds();
             if (snapshot_lifetime > longest_living_seconds)
             {
                 longest_living_seconds        = snapshot_lifetime;
                 longest_living_from_thread_id = snapshot_or_invalid->t_id;
             }
-            // Save valid snapshot.
-            valid_snapshots.emplace_back(snapshot_or_invalid);
+            valid_snapshots.emplace_back(snapshot_or_invalid); // Save valid snapshot and release them without lock later
             iter++;
         }
     }
     // Create a temporary latest snapshot by using `current`
     valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current));
 
-    lock.unlock(); // Notice: unlock
+    lock.unlock(); // Notice: unlock and we should free those valid snapshots without locking
 
     // Plus 1 for eliminating the counting of temporary snapshot of `current`
     const size_t num_invalid_snapshot_to_clean = snapshots_size_before_clean + 1 - valid_snapshots.size();

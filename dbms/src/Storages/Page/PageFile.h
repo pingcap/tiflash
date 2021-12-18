@@ -49,7 +49,7 @@ public:
         WritableFilePtr data_file;
         WritableFilePtr meta_file;
 
-        Clock::time_point last_write_time;
+        Clock::time_point last_write_time; // use to free idle writers
     };
 
     /// Reader is safe to used by multi threads.
@@ -107,10 +107,16 @@ public:
         }
     };
 
+    class MetaMergingReader;
+    using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
+
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
+        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file);
+
+        MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
 
         ~MetaMergingReader();
 
@@ -157,7 +163,8 @@ public:
         }
 
     private:
-        void initialize();
+
+        void initialize(std::optional<size_t> max_meta_offset);
 
     private:
         PageFile & page_file;
@@ -175,7 +182,6 @@ public:
         size_t meta_file_offset = 0;
         size_t data_file_offset = 0;
     };
-    using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
 
     struct MergingPtrComparator
     {
@@ -247,7 +253,6 @@ public:
     /// Destroy underlying system files.
     void destroy() const;
 
-    MetaMergingReaderPtr createMetaMergingReader() { return std::make_unique<MetaMergingReader>(*this); }
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
