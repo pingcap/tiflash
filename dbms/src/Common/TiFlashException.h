@@ -23,6 +23,7 @@ namespace DB
 ///   - Use clang-format to format your code
 ///   - Use semicolon(;) to split errors
 ///   - After adding an error, please execute `tiflash errgen <tics-dir>/errors.toml`
+
 #define ERROR_CLASS_LIST                                                                                                    \
     C(PageStorage,                                                                                                          \
         E(FileSizeNotMatch, "Some files' size don't match their metadata.",                                                 \
@@ -55,6 +56,9 @@ namespace DB
         E(Internal, "TiFlash DDL internal error.",                                                                          \
             "Please contact with developer, \n"                                                                             \
             "better providing information about your cluster(log, topology information etc.).",                             \
+            "");                                                                                                            \
+        E(StaleSchema, "Schema is stale and need to reload all schema.",                                                    \
+            "This error will be recover by reload all schema automatically.",                                               \
             "");)                                                                                                           \
     C(Coprocessor,                                                                                                          \
         E(BadRequest, "Bad TiDB coprocessor request.",                                                                      \
@@ -127,6 +131,7 @@ struct TiFlashError
     const std::string description;
 
     std::string standardName() const { return "FLASH:" + error_class + ":" + error_code; }
+    bool is(const TiFlashError & other) const { return error_class == other.error_class && error_code == other.error_code; }
 };
 
 namespace Errors
