@@ -27,6 +27,9 @@ struct MPPTaskStatistics
 
     void initializeExecutorDAG(DAGContext * dag_context);
 
+    /// return exchange sender runtime statistics
+    BaseRuntimeStatistics collectRuntimeStatistics();
+
     String toJson() const;
 
     void logStats();

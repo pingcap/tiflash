@@ -18,8 +18,6 @@ public:
 
     const std::map<String, ExecutorStatisticsPtr> & getResult() const { return res; }
 
-    bool isInitialized() const { return dag_context != nullptr; }
-
     String resToJson() const;
 
 private:

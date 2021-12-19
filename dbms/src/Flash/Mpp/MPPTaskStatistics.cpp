@@ -26,10 +26,6 @@ void MPPTaskStatistics::end(const TaskStatus & status_, StringRef error_message_
     task_end_timestamp = Clock::now();
     status = status_;
     error_message.assign(error_message_.data, error_message_.size);
-    if (executor_statistics_collector.isInitialized())
-    {
-        executor_statistics_collector.collectRuntimeDetails();
-    }
 }
 
 void MPPTaskStatistics::logStats()
@@ -54,6 +50,18 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
     assert(root_executor.has_exchange_sender());
     sender_executor_id = root_executor.executor_id();
     executor_statistics_collector.initialize(dag_context);
+}
+
+BaseRuntimeStatistics MPPTaskStatistics::collectRuntimeStatistics()
+{
+    executor_statistics_collector.collectRuntimeDetails();
+    const auto & executor_statistics_res = executor_statistics_collector.getResult();
+    auto it = executor_statistics_res.find(sender_executor_id);
+    if (it != executor_statistics_res.end())
+    {
+        return it->second->getBaseRuntimeStatistics();
+    }
+    return {};
 }
 
 String MPPTaskStatistics::toJson() const

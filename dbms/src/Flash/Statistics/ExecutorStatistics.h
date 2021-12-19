@@ -96,12 +96,6 @@ protected:
 
     std::vector<String> children;
 
-    size_t outbound_rows = 0;
-    size_t outbound_blocks = 0;
-    size_t outbound_bytes = 0;
-
-    UInt64 execution_time_ns = 0;
-
     DAGContext & dag_context;
 
     virtual void appendExtraJson(FmtBuffer &) const {}
