@@ -315,6 +315,8 @@ struct TableInfo
 
     TableInfo(const TableInfo &) = default;
 
+    TableInfo & operator=(const TableInfo &) = default;
+
     explicit TableInfo(const String & table_info_json);
 
     String serialize() const;

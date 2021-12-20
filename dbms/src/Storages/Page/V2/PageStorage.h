@@ -34,16 +34,20 @@ class PageStorage : public DB::PageStorage
 public:
     struct ListPageFilesOption
     {
-        ListPageFilesOption() {}
+        ListPageFilesOption()
+            : remove_tmp_files(false)
+            , ignore_legacy(false)
+            , ignore_checkpoint(false)
+            , remove_invalid_files(false)
+        {}
 
-        bool remove_tmp_files = false;
-        bool ignore_legacy = false;
-        bool ignore_checkpoint = false;
-        bool remove_invalid_files = false;
+        bool remove_tmp_files;
+        bool ignore_legacy;
+        bool ignore_checkpoint;
+        bool remove_invalid_files;
     };
 
     using VersionedPageEntries = PageEntriesVersionSetWithDelta;
-    using SnapshotPtr = VersionedPageEntries::SnapshotPtr;
     using WriterPtr = std::unique_ptr<PageFile::Writer>;
     using ReaderPtr = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
@@ -63,7 +67,7 @@ public:
         String toString() const;
         void mergeEdits(const PageEntriesEdit & edit);
 
-        bool equals(const StatisticsInfo & rhs);
+        bool equals(const StatisticsInfo & rhs) const;
     };
 
 public:
@@ -82,6 +86,10 @@ public:
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {}) override;
 
     DB::PageStorage::SnapshotPtr getSnapshot() override;
+
+    using ConcreteSnapshotRawPtr = VersionedPageEntries::Snapshot *;
+    using ConcreteSnapshotPtr = VersionedPageEntries::SnapshotPtr;
+    ConcreteSnapshotPtr getConcreteSnapshot();
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
 

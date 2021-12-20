@@ -29,7 +29,7 @@ using RegionPtr = std::shared_ptr<Region>;
 class InterpreterDAG : public IInterpreter
 {
 public:
-    InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const LogWithPrefixPtr & log_);
+    InterpreterDAG(Context & context_, const DAGQuerySource & dag_);
 
     ~InterpreterDAG() = default;
 
@@ -39,19 +39,13 @@ private:
     BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets);
     void initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block);
 
-private:
+    DAGContext & dagContext() const { return *context.getDAGContext(); }
+
     Context & context;
-
     const DAGQuerySource & dag;
-
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
-
     // key: source_name of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_maps;
-
-    const bool keep_session_timezone_info;
-
-    LogWithPrefixPtr log;
 };
 } // namespace DB
