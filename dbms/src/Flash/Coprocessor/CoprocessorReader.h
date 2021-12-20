@@ -3,7 +3,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/DecodeChunksDetail.h>
+#include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -33,22 +33,19 @@ struct CoprocessorReaderResult
     String error_msg;
     bool eof;
     String req_info = "cop request";
-    UInt64 rows;
-    UInt64 packet_bytes;
+    DecodeDetail decode_detail;
 
     CoprocessorReaderResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
         bool meet_error_ = false,
         const String & error_msg_ = "",
         bool eof_ = false,
-        UInt64 rows_ = 0,
-        UInt64 packet_bytes_ = 0)
+        DecodeDetail decode_detail_ = {})
         : resp(resp_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
-        , rows(rows_)
-        , packet_bytes(packet_bytes_)
+        , decode_detail(decode_detail_)
     {}
 };
 
@@ -81,9 +78,9 @@ public:
 
     void cancel() { resp_iter.cancel(); }
 
-    static DecodeChunksDetail decodeChunks(std::shared_ptr<tipb::SelectResponse> & resp, std::queue<Block> & block_queue, const DataTypes & expected_types, const DAGSchema & schema)
+    static DecodeDetail decodeChunks(std::shared_ptr<tipb::SelectResponse> & resp, std::queue<Block> & block_queue, const DataTypes & expected_types, const DAGSchema & schema)
     {
-        DecodeChunksDetail detail;
+        DecodeDetail detail;
         int chunk_size = resp->chunks_size();
         if (chunk_size == 0)
             return detail;
@@ -137,7 +134,7 @@ public:
                                        "maybe the version of some TiFlash node in the cluster is not match with this one",
                         false};
             auto detail = decodeChunks(resp, block_queue, expected_types, schema);
-            return {resp, false, "", false, detail.rows, detail.packet_bytes};
+            return {resp, false, "", false, detail};
         }
         else
         {

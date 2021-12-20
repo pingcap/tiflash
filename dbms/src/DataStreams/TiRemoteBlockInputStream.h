@@ -133,17 +133,23 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             }
         }
 
+        const auto & decode_detail = result.decode_detail;
+
         auto index = 0;
         if constexpr (is_streaming_reader)
             index = result.call_index;
-        ++connection_profile_infos[index].packets;
-        connection_profile_infos[index].bytes += result.packet_bytes;
 
-        total_rows += result.rows;
-        LOG_TRACE(
+        ++connection_profile_infos[index].packets;
+        connection_profile_infos[index].bytes += decode_detail.packet_bytes;
+
+        total_rows += decode_detail.rows;
+        LOG_FMT_TRACE(
             log,
-            fmt::format("recv {} rows from remote for {}, total recv row num: {}", result.rows, result.req_info, total_rows));
-        if (result.rows == 0)
+            "recv {} rows from remote for {}, total recv row num: {}",
+            decode_detail.rows,
+            result.req_info,
+            total_rows);
+        if (decode_detail.rows == 0)
             return fetchRemoteResult();
         return true;
     }

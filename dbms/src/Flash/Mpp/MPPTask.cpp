@@ -322,11 +322,10 @@ void MPPTask::runImpl()
         auto return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_FMT_DEBUG(
             log,
-            "finish write with {} rows, {} blocks, {} bytes, {} ns",
+            "finish write with {} rows, {} blocks, {} bytes",
             return_statistics.rows,
             return_statistics.blocks,
-            return_statistics.bytes,
-            return_statistics.execution_time_ns);
+            return_statistics.bytes);
     }
     catch (Exception & e)
     {

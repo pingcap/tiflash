@@ -4,9 +4,10 @@
 
 namespace DB
 {
-struct DecodeChunksDetail
+///
+struct DecodeDetail
 {
-    UInt64 rows = 0;
+    Int64 rows = 0;
     UInt64 packet_bytes = 0;
 };
 } // namespace DB

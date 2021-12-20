@@ -81,6 +81,8 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
+    void recordBuildSideInfo(size_t build_side_index, const JoinPtr & join_ptr);
+
     void executeRemoteQueryImpl(
         DAGPipeline & pipeline,
         const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,

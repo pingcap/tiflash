@@ -285,7 +285,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     auto schema = std::move(storage_interpreter.dag_schema);
     auto null_stream_if_empty = std::move(storage_interpreter.null_stream_if_empty);
 
-    // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
+    // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!region_retry.empty())
     {
 #ifndef NDEBUG
@@ -573,18 +573,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         other_condition_expr,
         max_block_size_for_cross_join);
 
-    JoinBuildSideInfo join_build_side_info;
-    if (query_block.children.size() != 2)
-    {
-        throw TiFlashException("Join query block must have 2 child", Errors::BroadcastJoin::Internal);
-    }
-    size_t build_side_index = swap_join_side ? 0 : 1;
-    const auto * build_side_executor = query_block.children[build_side_index]->root;
-    assert(build_side_executor);
-    assert(build_side_executor->has_executor_id());
-    join_build_side_info.build_side_executor_id = build_side_executor->executor_id();
-    join_build_side_info.join_ptr = join_ptr;
-    dagContext().getJoinBuildSideInfoMap()[query_block.source_name] = join_build_side_info;
+    recordBuildSideInfo(swap_join_side ? 0 : 1, join_ptr);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
@@ -627,6 +616,15 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
     }
     executeProject(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
+}
+
+void DAGQueryBlockInterpreter::recordBuildSideInfo(size_t build_side_index, const JoinPtr & join_ptr)
+{
+    const auto * build_side_root_executor = query_block.children[build_side_index]->root;
+    JoinBuildSideInfo join_build_side_info;
+    join_build_side_info.build_side_root_executor_id = build_side_root_executor->executor_id();
+    join_build_side_info.join_ptr = join_ptr;
+    dagContext().getJoinBuildSideInfoMap()[query_block.source_name] = std::move(join_build_side_info);
 }
 
 void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)

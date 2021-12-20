@@ -19,7 +19,7 @@ void JoinStatistics::collectExtraRuntimeDetail()
     {
         const auto & join_build_side_info = it->second;
         hash_table_bytes = join_build_side_info.join_ptr->getTotalByteCount();
-        build_side_child = join_build_side_info.build_side_executor_id;
+        build_side_child = join_build_side_info.build_side_root_executor_id;
     }
 }
 

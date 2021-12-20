@@ -25,7 +25,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
 {
-    for (int i = 0; i < exc.field_types_size(); i++)
+    for (int i = 0; i < exc.field_types_size(); ++i)
     {
         String name = "exchange_receiver_" + std::to_string(i);
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
@@ -102,7 +102,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
-        for (int i = 0; i < MAX_RETRY_TIMES; i++)
+        for (int i = 0; i < MAX_RETRY_TIMES; ++i)
         {
             auto reader = rpc_context->makeReader(req, task_meta.address());
             reader->initialize();
@@ -239,10 +239,10 @@ void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMe
 }
 
 template <typename RPCContext>
-DecodeChunksDetail ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
+DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
 {
     assert(recv_msg != nullptr);
-    DecodeChunksDetail detail;
+    DecodeDetail detail;
 
     int chunk_size = recv_msg->packet->chunks_size();
     if (chunk_size == 0)
@@ -250,7 +250,7 @@ DecodeChunksDetail ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_pt
 
     detail.packet_bytes = recv_msg->packet->ByteSizeLong();
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
-    for (int i = 0; i < chunk_size; i++)
+    for (int i = 0; i < chunk_size; ++i)
     {
         Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
         detail.rows += block.rows();
@@ -315,9 +315,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 if (!resp_ptr->chunks().empty())
                 {
                     assert(recv_msg->packet->chunks().empty());
-                    auto detail = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
-                    result.rows = detail.rows;
-                    result.packet_bytes = detail.packet_bytes;
+                    result.decode_detail = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
                 }
             }
         }
@@ -327,10 +325,8 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
         }
         if (!result.meet_error && !recv_msg->packet->chunks().empty())
         {
-            assert(result.rows == 0);
-            auto detail = decodeChunks(recv_msg, block_queue, expected_types);
-            result.rows = detail.rows;
-            result.packet_bytes = detail.packet_bytes;
+            assert(result.decode_detail.rows == 0);
+            result.decode_detail = decodeChunks(recv_msg, block_queue, expected_types);
         }
     }
     returnEmptyMsg(recv_msg);

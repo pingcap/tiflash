@@ -98,12 +98,12 @@ std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAlias
     return qb_id_to_join_alias_map;
 }
 
-std::map<String, JoinBuildSideInfo> & DAGContext::getJoinBuildSideInfoMap()
+std::unordered_map<String, JoinBuildSideInfo> & DAGContext::getJoinBuildSideInfoMap()
 {
     return join_build_side_info_map;
 }
 
-std::map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
+std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
 {
     return inbound_io_input_streams_map;
 }
