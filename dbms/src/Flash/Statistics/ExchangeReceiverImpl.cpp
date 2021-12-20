@@ -62,9 +62,7 @@ ExchangeReceiverStatistics::ExchangeReceiverStatistics(const tipb::Executor * ex
             throw Exception("parse task meta error!");
         receiver_source_task_ids.push_back(sender_task.task_id());
 
-        ExchangeReceiveDetail detail;
-        detail.receiver_source_task_id = sender_task.task_id();
-        exchange_receive_details.push_back(std::move(detail));
+        exchange_receive_details.emplace_back(sender_task.task_id());
     }
 }
 } // namespace DB

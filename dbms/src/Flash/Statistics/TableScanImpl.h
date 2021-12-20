@@ -10,6 +10,10 @@ struct TableScanDetail : public ConnectionProfileInfo
 {
     bool is_local;
 
+    explicit TableScanDetail(bool is_local_)
+        : is_local(is_local_)
+    {}
+
     String toJson() const;
 };
 
@@ -32,8 +36,8 @@ public:
     TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
 
 private:
-    TableScanDetail local_table_scan_detail;
-    TableScanDetail cop_table_scan_detail;
+    TableScanDetail local_table_scan_detail{true};
+    TableScanDetail cop_table_scan_detail{false};
 
 protected:
     void appendExtraJson(FmtBuffer &) const override;

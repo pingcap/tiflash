@@ -12,6 +12,12 @@ struct MPPTunnelDetail : public ConnectionProfileInfo
     Int64 sender_target_task_id;
     bool is_local;
 
+    MPPTunnelDetail(String tunnel_id_, Int64 sender_target_task_id_, bool is_local_)
+        : tunnel_id(std::move(tunnel_id_))
+        , sender_target_task_id(sender_target_task_id_)
+        , is_local(is_local_)
+    {}
+
     String toJson() const;
 };
 

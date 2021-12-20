@@ -10,6 +10,10 @@ struct ExchangeReceiveDetail : public ConnectionProfileInfo
 {
     Int64 receiver_source_task_id;
 
+    explicit ExchangeReceiveDetail(Int64 receiver_source_task_id_)
+        : receiver_source_task_id(receiver_source_task_id_)
+    {}
+
     String toJson() const;
 };
 

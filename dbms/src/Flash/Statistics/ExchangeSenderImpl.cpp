@@ -54,8 +54,8 @@ void ExchangeSenderStatistics::collectExtraRuntimeDetail()
     for (UInt16 i = 0; i < partition_num; ++i)
     {
         const auto & connection_profile_info = mpp_tunnels[i]->getConnectionProfileInfo();
-        mpp_tunnel_details[i].packets += connection_profile_info.packets;
-        mpp_tunnel_details[i].bytes += connection_profile_info.bytes;
+        mpp_tunnel_details[i].packets = connection_profile_info.packets;
+        mpp_tunnel_details[i].bytes = connection_profile_info.bytes;
     }
 }
 
@@ -82,11 +82,7 @@ ExchangeSenderStatistics::ExchangeSenderStatistics(const tipb::Executor * execut
         sender_target_task_ids.push_back(task_meta.task_id());
 
         const auto & mpp_tunnel = mpp_tunnels[i];
-        MPPTunnelDetail detail;
-        detail.tunnel_id = mpp_tunnel->id();
-        detail.sender_target_task_id = task_meta.task_id();
-        detail.is_local = mpp_tunnel->isLocal();
-        mpp_tunnel_details.push_back(std::move(detail));
+        mpp_tunnel_details.emplace_back(mpp_tunnel->id(), task_meta.task_id(), mpp_tunnel->isLocal());
     }
 }
 } // namespace DB
