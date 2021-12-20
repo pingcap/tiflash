@@ -172,7 +172,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
             files_without_valid_pages.emplace(page_file);
             continue;
         }
-        LOG_INFO(log, "Debug in here, config.gc_force_hardlink_rate : " << config.gc_force_hardlink_rate);
+
         if (likely(config.gc_force_hardlink_rate <= 1.0) && valid_rate > config.gc_force_hardlink_rate)
         {
             hardlink_candidates.emplace(page_file);
@@ -370,9 +370,10 @@ DataCompactor<SnapshotPtr>::migratePages( //
             PageFile::Type::Temp,
             page_file_log);
 
-        LOG_INFO(log, "GC decide to link "
-                     << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
-                     << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
+        LOG_INFO(log,
+                 storage_name << "GC decide to link "
+                              << "PageFile_" << hard_link_file.getFileId() << "_" << hard_link_file.getLevel() << " to "
+                              << "PageFile_" << page_file.getFileId() << "_" << page_file.getLevel());
 
         PageEntriesEdit edit_;
         if (!hard_link_file.linkFrom(const_cast<PageFile &>(page_file), compact_seq, edit_))

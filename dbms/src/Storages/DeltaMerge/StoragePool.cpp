@@ -38,15 +38,12 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     {
     case StorageType::Log:
         SET_CONFIG(log);
-        LOG_INFO(&Poco::Logger::get("StoragePool"), "StoragePool - Log : " << config.toDebugString());
         break;
     case StorageType::Data:
         SET_CONFIG(data);
-        LOG_INFO(&Poco::Logger::get("StoragePool"), "StoragePool - Data : " << config.toDebugString());
         break;
     case StorageType::Meta:
         SET_CONFIG(meta);
-        LOG_INFO(&Poco::Logger::get("StoragePool"), "StoragePool - Meta : " << config.toDebugString());
         break;
     default:
         throw Exception("Unknown subtype in extractConfig: " + DB::toString(static_cast<Int32>(subtype)));
@@ -78,8 +75,7 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
     , max_data_page_id(0)
     , max_meta_page_id(0)
     , global_context(global_ctx)
-{
-}
+{}
 
 void StoragePool::restore()
 {
