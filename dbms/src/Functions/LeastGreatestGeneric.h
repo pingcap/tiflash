@@ -267,8 +267,7 @@ public:
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
-        if (typeid_cast<const DataTypeString *>(removeNullable(result_type).get())
-            || kind == LeastGreatest::Greatest) //YWQ: A hack, make Greatest use non-vectorised implementation.
+        if (kind == LeastGreatest::Greatest) //YWQ: A hack, make Greatest use non-vectorised implementation.
         {
             auto function = FunctionTiDBLeastGreatestGeneric<kind, SpecializedFunction>::create(context);
             function->setCollator(collator);

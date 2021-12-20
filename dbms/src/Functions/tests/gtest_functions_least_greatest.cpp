@@ -141,6 +141,21 @@ try
                 std::make_tuple(15, 3),
                 {DecimalField64(9244, 3)})));
 
+
+    // decimal if overflow
+    // ASSERT_COLUMN_EQ(
+    //     createColumn<Nullable<DecimalField256>>(
+    //         std::make_tuple(65, 0),
+    //         {DecimalField256(99999999999999999999999999999999999999999999999999999999999999999, 0)}),
+    //     executeFunction(
+    //         func_name,
+    //         createColumn<Nullable<Decimal32>>(
+    //             std::make_tuple(7, 5),
+    //             {DecimalField32(3223456, 5)}),
+    //         createColumn<Nullable<Decimal64>>(
+    //             std::make_tuple(15, 3),
+    //             {DecimalField64(9244, 3)})));
+
     // real least
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>(

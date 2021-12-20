@@ -128,6 +128,113 @@ struct GreatestBaseImpl<A, B, false>
         else
             c = b;
     }
+
+    // string_string
+    static void process(
+        const ColumnString::Chars_t & a_data,
+        const ColumnString::Offsets & a_offsets,
+        const ColumnString::Chars_t & b_data,
+        const ColumnString::Offsets & b_offsets,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets,
+        size_t i)
+    {
+        size_t a_size;
+        size_t b_size;
+        int res;
+        if (i == 0)
+        {
+            a_size = a_offsets[0] - 1;
+            b_size = b_offsets[0] - 1;
+            res = memcmp(&a_data[0], &b_data[0], std::min(a_size, b_size));
+            if (res > 0)
+            {
+                memcpy(&c_data[0], &a_data[0], a_size);
+                c_offsets.push_back(a_size + 1);
+            }
+            else
+            {
+                memcpy(&c_data[0], &b_data[0], b_size);
+                c_offsets.push_back(b_size + 1);
+            }
+        }
+        else
+        {
+            a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+            b_size = b_offsets[i] - b_offsets[i - 1] - 1;
+            res = memcmp(&a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], std::min(a_size, b_size));
+
+            if (res > 0)
+            {
+                memcpy(&c_data[c_offsets.back()], &a_data[a_offsets[i - 1]], a_size);
+                c_offsets.push_back(c_offsets.back() + a_size + 1);
+            }
+            else
+            {
+                memcpy(&c_data[c_offsets.back()], &b_data[b_offsets[i - 1]], b_size);
+                c_offsets.push_back(c_offsets.back() + b_size + 1);
+            }
+        }
+    }
+
+    // string_constant
+    static void process(
+        const ColumnString::Chars_t & a_data,
+        const ColumnString::Offsets & a_offsets,
+        const String & b,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets,
+        size_t i)
+    {
+        const char * b_data = reinterpret_cast<const char *>(b.data());
+        ColumnString::Offset b_size = b.size();
+        size_t a_size;
+        if (i == 0)
+        {
+            a_size = a_offsets[0] - 1;
+            int res = memcmp(&a_data[0], b_data, std::min(a_offsets[0], b_size));
+            if (res > 0)
+            {
+                memcpy(&c_data[0], &a_data[0], a_size);
+                c_offsets.push_back(a_size + 1);
+            }
+            else
+            {
+                memcpy(&c_data[0], &b_data[0], b_size);
+                c_offsets.push_back(b_size + 1);
+            }
+        }
+        else
+        {
+            a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+            int res = memcmp(&a_data[a_offsets[i - 1]], b_data, std::min(a_offsets[i] - a_offsets[i - 1], b_size));
+
+            if (res > 0)
+            {
+                memcpy(&c_data[c_offsets.back()], &a_data[a_offsets[i - 1]], a_size);
+                c_offsets.push_back(c_offsets.back() + a_size + 1);
+            }
+            else
+            {
+                memcpy(&c_data[c_offsets.back()], &b_data[0], b_size);
+                c_offsets.push_back(c_offsets.back() + b_size + 1);
+            }
+        }
+    }
+
+    // constant_constant
+    static void process(
+        const std::string & a,
+        const std::string & b,
+        std::string & c)
+    {
+        int res = memcmp(a.data(), b.data(), std::min(a.size(), b.size()));
+
+        if (res > 0)
+            c = a;
+        else
+            c = b;
+    }
 };
 
 template <typename A, typename B>

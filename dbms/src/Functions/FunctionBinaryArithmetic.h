@@ -581,7 +581,7 @@ private:
 template <typename Op>
 struct StringOperationWithCollatorImpl
 {
-    static void NO_INLINE string_vector_string_vector(
+    static void NO_INLINE stringVectorStringVector(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
@@ -599,7 +599,7 @@ struct StringOperationWithCollatorImpl
         }
     }
 
-    static void NO_INLINE string_vector_constant(
+    static void NO_INLINE stringVectorConstant(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const std::string & b,
@@ -615,7 +615,7 @@ struct StringOperationWithCollatorImpl
         }
     }
 
-    static void constant_string_vector(
+    static void constantStringVector(
         const std::string & a,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
@@ -623,16 +623,70 @@ struct StringOperationWithCollatorImpl
         ColumnString::Chars_t & c_data,
         ColumnString::Offsets & c_offsets)
     {
-        StringOperationWithCollatorImpl::string_vector_constant(b_data, b_offsets, a, collator, c_data, c_offsets);
+        StringOperationWithCollatorImpl::stringVectorConstant(b_data, b_offsets, a, collator, c_data, c_offsets);
     }
 
-    static void constant_constant(
+    static void constantConstant(
         const std::string & a,
         const std::string & b,
         const TiDB::TiDBCollatorPtr & collator,
         std::string & c)
     {
         Op::process(collator, a, b, c);
+    }
+};
+
+template <typename Op>
+struct StringOperationImpl
+{
+    static void NO_INLINE stringVectorStringVector(
+        const ColumnString::Chars_t & a_data,
+        const ColumnString::Offsets & a_offsets,
+        const ColumnString::Chars_t & b_data,
+        const ColumnString::Offsets & b_offsets,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets)
+    {
+        size_t size = a_offsets.size();
+        c_data.reserve(std::max(a_data.size(), b_data.size()));
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            Op::process(a_data, a_offsets, b_data, b_offsets, c_data, c_offsets, i);
+        }
+    }
+
+    static void NO_INLINE stringVectorConstant(
+        const ColumnString::Chars_t & a_data,
+        const ColumnString::Offsets & a_offsets,
+        const std::string & b,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets)
+    {
+        size_t size = a_offsets.size();
+        c_data.reserve(std::max(a_data.size(), b.size() * size));
+        for (size_t i = 0; i < size; ++i)
+        {
+            Op::process(a_data, a_offsets, b, c_data, c_offsets, i);
+        }
+    }
+
+    static void constantStringVector(
+        const std::string & a,
+        const ColumnString::Chars_t & b_data,
+        const ColumnString::Offsets & b_offsets,
+        ColumnString::Chars_t & c_data,
+        ColumnString::Offsets & c_offsets)
+    {
+        StringOperationImpl::stringVectorConstant(b_data, b_offsets, a, c_data, c_offsets);
+    }
+
+    static void constantConstant(
+        const std::string & a,
+        const std::string & b,
+        std::string & c)
+    {
+        Op::process(a, b, c);
     }
 };
 
@@ -1351,7 +1405,7 @@ public:
         if (collator != nullptr)
             return executeStringWithCollator(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
         else
-            return false;
+            return executeStringWithoutCollator(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
     }
 
 
@@ -1370,7 +1424,7 @@ public:
         if (c0_const && c1_const)
         {
             String res;
-            StringImpl::constant_constant(c0_const->getValue<String>(), c1_const->getValue<String>(), collator, res);
+            StringImpl::constantConstant(c0_const->getValue<String>(), c1_const->getValue<String>(), collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(c0_const->size(), toField(res));
             return true;
         }
@@ -1379,7 +1433,7 @@ public:
             auto c_res = ColumnString::create();
 
             if (c0_string && c1_string)
-                StringImpl::string_vector_string_vector(
+                StringImpl::stringVectorStringVector(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
                     c1_string->getChars(),
@@ -1388,7 +1442,7 @@ public:
                     c_res->getChars(),
                     c_res->getOffsets());
             else if (c0_string && c1_const)
-                StringImpl::string_vector_constant(
+                StringImpl::stringVectorConstant(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
                     c1_const->getValue<String>(),
@@ -1396,11 +1450,67 @@ public:
                     c_res->getChars(),
                     c_res->getOffsets());
             else if (c0_const && c1_string)
-                StringImpl::constant_string_vector(
+                StringImpl::constantStringVector(
                     c0_const->getValue<String>(),
                     c1_string->getChars(),
                     c1_string->getOffsets(),
                     collator,
+                    c_res->getChars(),
+                    c_res->getOffsets());
+            else
+                throw Exception("Illegal columns "
+                                    + c0->getName() + " and " + c1->getName()
+                                    + " of arguments of function " + getName(),
+                                ErrorCodes::ILLEGAL_COLUMN);
+
+            block.getByPosition(result).column = std::move(c_res);
+            return true;
+        }
+    }
+
+    bool executeStringWithoutCollator(
+        Block & block,
+        size_t result,
+        const IColumn * c0,
+        const IColumn * c1,
+        const ColumnString * c0_string,
+        const ColumnString * c1_string,
+        const ColumnConst * c0_const,
+        const ColumnConst * c1_const) const
+    {
+        using StringImpl = StringOperationImpl<Op<int, int>>;
+
+        if (c0_const && c1_const)
+        {
+            String res;
+            StringImpl::constantConstant(c0_const->getValue<String>(), c1_const->getValue<String>(), res);
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(c0_const->size(), toField(res));
+            return true;
+        }
+        else
+        {
+            auto c_res = ColumnString::create();
+
+            if (c0_string && c1_string)
+                StringImpl::stringVectorStringVector(
+                    c0_string->getChars(),
+                    c0_string->getOffsets(),
+                    c1_string->getChars(),
+                    c1_string->getOffsets(),
+                    c_res->getChars(),
+                    c_res->getOffsets());
+            else if (c0_string && c1_const)
+                StringImpl::stringVectorConstant(
+                    c0_string->getChars(),
+                    c0_string->getOffsets(),
+                    c1_const->getValue<String>(),
+                    c_res->getChars(),
+                    c_res->getOffsets());
+            else if (c0_const && c1_string)
+                StringImpl::constantStringVector(
+                    c0_const->getValue<String>(),
+                    c1_string->getChars(),
+                    c1_string->getOffsets(),
                     c_res->getChars(),
                     c_res->getOffsets());
             else

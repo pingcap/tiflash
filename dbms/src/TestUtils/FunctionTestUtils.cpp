@@ -115,7 +115,7 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     auto bp = factory.tryGet(func_name, context);
     if (!bp)
         throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(arguments, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)); // ywq todo
+    auto func = bp->build(arguments);
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, argument_column_numbers, columns.size());
     return block.getByPosition(columns.size());
