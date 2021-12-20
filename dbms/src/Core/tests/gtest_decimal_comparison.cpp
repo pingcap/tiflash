@@ -1,5 +1,4 @@
 #include <Core/DecimalComparison.h>
-#include <TestUtils/FunctionTestUtils.h>
 #include <common/arithmeticOverflow.h>
 
 namespace DB
