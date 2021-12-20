@@ -18,7 +18,6 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <common/logger_fmt_useful.h>
 
 #include <atomic>
 #include <ext/scope_guard.h>
