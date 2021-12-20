@@ -1469,6 +1469,9 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
 
     LOG_FMT_TRACE(log, "{} delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", __PRETTY_FUNCTION__, delete_rows, delete_bytes, stable_rows, stable_bytes);
 
+    // for small tables, the data may just reside in delta and stable_rows may be 0,
+    //   so the `=` in `>=` is needed to cover the scenario when set tiflash replica of small tables to 0.
+    //   (i.e. `actual_delete_range` is not none, but `delete_rows` and `stable_rows` are both 0).
     bool should_compact = (delete_rows >= stable_rows * ratio_threshold) || (delete_bytes >= stable_bytes * ratio_threshold);
     return should_compact;
 }
