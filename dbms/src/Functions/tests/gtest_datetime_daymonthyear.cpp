@@ -28,6 +28,31 @@ protected:
         testFor<isconst, nullable, DataTypeMyDate, MyDate>(year, month, day, MyDate{year, month, day});
     }
 
+    template <bool isconst, bool nullable>
+    void testEmptyForDateTime()
+    {
+        testEmptyFor<isconst, nullable, DataTypeMyDateTime, MyDateTime>();
+    }
+
+    template <bool isconst, bool nullable>
+    void testEmptyForDate()
+    {
+        testEmptyFor<isconst, nullable, DataTypeMyDate, MyDate>();
+    }
+
+    void assertDayMonthYear(const ColumnWithTypeAndName & column, const ColumnWithTypeAndName & result_day, const ColumnWithTypeAndName & result_month, const ColumnWithTypeAndName & result_year)
+    {
+        ASSERT_COLUMN_EQ(
+            result_day,
+            executeFunction(ToDayOfMonthImpl::name, column));
+        ASSERT_COLUMN_EQ(
+            result_month,
+            executeFunction(ToMonthImpl::name, column));
+        ASSERT_COLUMN_EQ(
+            result_year,
+            executeFunction(ToYearImpl::name, column));
+    }
+
     template <bool isconst, bool nullable, typename DT, typename V>
     void testFor(UInt16 year, UInt8 month, UInt8 day, V raw_input)
     {
@@ -89,31 +114,97 @@ protected:
         }
 
 
-        ASSERT_COLUMN_EQ(
-            result_day,
-            executeFunction(ToDayOfMonthImpl::name, column));
-        ASSERT_COLUMN_EQ(
-            result_month,
-            executeFunction(ToMonthImpl::name, column));
-        ASSERT_COLUMN_EQ(
-            result_year,
-            executeFunction(ToYearImpl::name, column));
+        assertDayMonthYear(column, result_day, result_month, result_year);
+    }
+
+
+    template <bool isconst, bool nullable, typename DT, typename V>
+    void testEmptyFor()
+    {
+        ColumnWithTypeAndName column;
+        ColumnWithTypeAndName result_year, result_month, result_day;
+        if constexpr (isconst)
+        {
+            if constexpr (nullable)
+            {
+                column = ColumnWithTypeAndName(
+                    createConstColumn<Nullable<typename DT::FieldType>>(1,
+                                                                        {})
+                        .column,
+                    makeNullable(std::make_shared<DT>()),
+                    "result");
+                result_day = createConstColumn<Nullable<UInt8>>(1, {});
+                result_month = createConstColumn<Nullable<UInt8>>(1, {});
+                result_year = createConstColumn<Nullable<UInt16>>(1, {});
+            }
+            else
+            {
+                column = ColumnWithTypeAndName(
+                    createConstColumn<typename DT::FieldType>(1,
+                                                              {})
+                        .column,
+                    std::make_shared<DT>(),
+                    "result");
+                result_day = createConstColumn<UInt8>(1, {});
+                result_month = createConstColumn<UInt8>(1, {});
+                result_year = createConstColumn<UInt16>(1, {});
+            }
+        }
+        else
+        {
+            if constexpr (nullable)
+            {
+                column = ColumnWithTypeAndName(
+                    createColumn<Nullable<typename DT::FieldType>>(
+                        {})
+                        .column,
+                    makeNullable(std::make_shared<DT>()),
+                    "result");
+                result_day = createColumn<Nullable<UInt8>>({});
+                result_month = createColumn<Nullable<UInt8>>({});
+                result_year = createColumn<Nullable<UInt16>>({});
+            }
+            else
+            {
+                column = ColumnWithTypeAndName(
+                    createColumn<typename DT::FieldType>(
+                        {})
+                        .column,
+                    std::make_shared<DT>(),
+                    "result");
+                result_day = createColumn<UInt8>({});
+                result_month = createColumn<UInt8>({});
+                result_year = createColumn<UInt16>({});
+            }
+        }
+
+        assertDayMonthYear(column, result_day, result_month, result_year);
     }
 };
 
 TEST_F(TestDateTimeDayMonthYear, dayMonthYearTest)
 try
 {
+    testEmptyForDate<true, true>();
+    testEmptyForDate<true, false>();
+    testEmptyForDate<false, true>();
+    testEmptyForDate<false, true>();
+
+    testEmptyForDateTime<true, true>();
+    testEmptyForDateTime<true, false>();
+    testEmptyForDateTime<false, true>();
+    testEmptyForDateTime<false, false>();
+
+
+    // Scan day, month and year. There is no matter if the Date/DateTime is invalid,
+    // since you can just ignore the invalid cases,
+    // and we ensure function extracts correct member info from MyDateTime.
     for (UInt16 year = 1990; year <= 2050; year++)
     {
         for (UInt8 month = 1; month < 12; month++)
         {
             for (UInt8 day = 1; day < 31; day++)
             {
-                // There is no matter if the Date/DateTime is invalid,
-                // since you can just ignore the invalid cases,
-                // and we ensure function extracts correct member info from MyDateTime.
-
                 //DateTime const nullable
                 testForDateTime<true, true>(year, month, day);
                 //DateTime const non-nullable
@@ -131,6 +222,7 @@ try
                 testForDate<false, true>(year, month, day);
                 //Date non-const non-nullable
                 testForDate<false, false>(year, month, day);
+
             }
         }
     }
