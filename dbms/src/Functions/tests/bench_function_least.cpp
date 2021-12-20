@@ -1,6 +1,4 @@
 #include <Core/Field.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
@@ -9,7 +7,6 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
-#include <common/types.h>
 
 #include <vector>
 
@@ -82,6 +79,8 @@ public:
         func->execute(block, argument_column_numbers, columns.size());
         return block.getByPosition(columns.size());
     }
+
+    const size_t data_size = 10000000;
 };
 
 
@@ -99,7 +98,7 @@ try
     std::vector<Int64> c3;
     std::vector<Int64> res;
 
-    for (size_t i = 0; i < 100; ++i)
+    for (size_t i = 0; i < data_size; ++i)
     {
         c1.push_back(i);
         c2.push_back(i + 1);
@@ -143,7 +142,7 @@ try
     auto c2 = data_types[0]->createColumn();
     auto c3 = data_types[0]->createColumn();
     auto res = data_types[0]->createColumn();
-    for (int i = 0; i < 100; ++i)
+    for (size_t i = 0; i < data_size; ++i)
     {
         if (i % 2)
             c1->insert(Null());
@@ -189,7 +188,7 @@ try
     std::vector<Int64> c3;
     std::vector<Int64> res;
 
-    for (size_t i = 0; i < 100; ++i)
+    for (size_t i = 0; i < data_size; ++i)
     {
         c1.push_back(i);
         c2.push_back(i + 1);
@@ -233,7 +232,7 @@ try
     auto c2 = data_types[0]->createColumn();
     auto c3 = data_types[0]->createColumn();
     auto res = data_types[0]->createColumn();
-    for (int i = 0; i < 100; ++i)
+    for (size_t i = 0; i < data_size; ++i)
     {
         if (i % 2)
             c1->insert(Null());
