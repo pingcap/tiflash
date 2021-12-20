@@ -299,7 +299,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
 
                 auto & cache_block = p->getCache()->block;
                 bool is_overflow
-                    = cache_block.rows() >= context.delta_cache_limit_rows || cache_block.bytes() >= context.delta_cache_limit_bytes;
+                    = cache_block.bytes() >= context.delta_cache_limit_bytes;
                 bool is_same_schema = isSameSchema(block, cache_block);
                 if (!is_overflow && is_same_schema)
                 {

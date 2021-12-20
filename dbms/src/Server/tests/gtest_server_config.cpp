@@ -174,6 +174,7 @@ dt_storage_pool_data_gc_max_valid_rate = 0.5
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_pack_size, 8388608);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
     }
     global_ctx.setSettings(origin_settings);
