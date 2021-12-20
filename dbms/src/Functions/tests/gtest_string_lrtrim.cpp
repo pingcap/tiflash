@@ -113,18 +113,18 @@ try
 
     // ltrim(column)
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "\t aa \t", "", {}, ""}),
-        executeFunction("tidbLTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " "})));
+        createColumn<Nullable<String>>({"xx aa", "xxaa xx ", "\t aa \t", "", {}, "", "\n\t"}),
+        executeFunction("tidbLTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
     ASSERT_COLUMN_EQ(
-        createColumn<String>({"xx aa", "xxaa xx ", "\t aa \t", "", {}, ""}),
-        executeFunction("tidbLTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " "})));
+        createColumn<String>({"xx aa", "xxaa xx ", "\t aa \t", "", {}, "", "\n\t"}),
+        executeFunction("tidbLTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
     // rtrim(column)
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}, ""}),
-        executeFunction("tidbRTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " "})));
+        createColumn<Nullable<String>>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}, "", "\n\t"}),
+        executeFunction("tidbRTrim", createColumn<Nullable<String>>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
     ASSERT_COLUMN_EQ(
-        createColumn<String>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}, ""}),
-        executeFunction("tidbRTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " "})));
+        createColumn<String>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}, "", "\n\t"}),
+        executeFunction("tidbRTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
 
 
     // ltrim(column) Nullable<String> ASCII group and non-ASCII group
