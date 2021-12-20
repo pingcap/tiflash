@@ -28,6 +28,20 @@ void MPPTaskStatistics::end(const TaskStatus & status_, StringRef error_message_
     error_message.assign(error_message_.data, error_message_.size);
 }
 
+void MPPTaskStatistics::recordReadWaitIndex(DAGContext & dag_context)
+{
+    if (dag_context.has_read_wait_index)
+    {
+        read_wait_index_start_timestamp = dag_context.read_wait_index_start_timestamp;
+        read_wait_index_end_timestamp = dag_context.read_wait_index_end_timestamp;
+    }
+    else
+    {
+        read_wait_index_start_timestamp = compile_start_timestamp;
+        read_wait_index_end_timestamp = compile_start_timestamp;
+    }
+}
+
 void MPPTaskStatistics::logStats()
 {
     log->debug(toJson());

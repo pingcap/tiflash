@@ -136,6 +136,7 @@ public:
     const tipb::DAGRequest * dag_request;
     size_t final_concurrency = 1;
     Int64 compile_time_ns;
+    bool has_read_wait_index = false;
     Clock::time_point read_wait_index_start_timestamp;
     Clock::time_point read_wait_index_end_timestamp;
     String table_scan_executor_id = "";
