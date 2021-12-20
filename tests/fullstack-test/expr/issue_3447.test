@@ -1,0 +1,15 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t(a char(5));
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values ('0.1'), ('-0.1'), ('0.0'), ('-1'), ('a0.1'), ('0x01');
+
+func> wait_table test t
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t where a;
++------+
+| a    |
++------+
+| 0.1  |
+| -0.1 |
+| -1   |
+| 0x01 |
++------+
