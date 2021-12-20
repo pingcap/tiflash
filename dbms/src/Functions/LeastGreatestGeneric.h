@@ -194,7 +194,7 @@ public:
             for (size_t arg = 1; arg < num_arguments; ++arg)
             {
                 int cmp_result;
-                if (typeid_cast<const DataTypeString *>(result_type.get()))
+                if (typeid_cast<const DataTypeString *>(result_type.get()) && collator != nullptr)
                     cmp_result = converted_columns[arg]->compareAtWithCollation(row_num, row_num, *converted_columns[best_arg], 1, *collator.get());
                 else
                     cmp_result = converted_columns[arg]->compareAt(row_num, row_num, *converted_columns[best_arg], 1);

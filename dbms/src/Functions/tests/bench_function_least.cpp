@@ -2,6 +2,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
@@ -59,7 +60,7 @@ public:
         if (!bp)
             throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
 
-        auto func = bp->build(columns, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY));
+        auto func = bp->build(columns);
 
         block.insert({nullptr, func->getReturnType(), "res"});
         func->execute(block, cns, columns.size());
@@ -76,7 +77,7 @@ public:
         auto bp = factory.tryGet(func_name, context);
         if (!bp)
             throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-        auto func = bp->build(arguments, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY));
+        auto func = bp->build(arguments);
         block.insert({nullptr, func->getReturnType(), "res"});
         func->execute(block, argument_column_numbers, columns.size());
         return block.getByPosition(columns.size());
@@ -88,8 +89,8 @@ class LeastBench : public FunctionBench
 {
 };
 
-BENCHMARK_DEFINE_F(LeastBench, bench1)
-(benchmark::State & state [[maybe_unused]])
+BENCHMARK_DEFINE_F(LeastBench, benchVec)
+(benchmark::State & state)
 try
 {
     const String & func_name = "tidbLeast";
@@ -108,7 +109,6 @@ try
     std::vector<Int64> cc1 = c1;
     std::vector<Int64> cc2 = c2;
     std::vector<Int64> cc3 = c3;
-    std::vector<Int64> cres = res; // todo figure out how to support nullable test...
     auto context = DB::tests::TiFlashTestEnv::getContext();
 
     for (auto _ : state)
@@ -122,10 +122,155 @@ try
     }
 }
 CATCH
-BENCHMARK_REGISTER_F(LeastBench, bench1)->Iterations(100);
+BENCHMARK_REGISTER_F(LeastBench, benchVec)->Iterations(100);
+
+BENCHMARK_DEFINE_F(LeastBench, benchVecWithNullable)
+(benchmark::State & state)
+try
+{
+    const String & func_name = "tidbLeast";
+    std::vector<DataTypePtr> data_types = {
+        makeDataType<Nullable<Int64>>(),
+        makeDataType<Nullable<UInt64>>(),
+        makeDataType<Nullable<Float64>>(),
+        makeDataType<Nullable<Decimal32>>(9, 3),
+        makeDataType<Nullable<Decimal64>>(18, 6),
+        makeDataType<Nullable<Decimal128>>(38, 10),
+        makeDataType<Nullable<Decimal256>>(65, 20),
+        makeDataType<Nullable<String>>()};
+
+    auto c1 = data_types[0]->createColumn();
+    auto c2 = data_types[0]->createColumn();
+    auto c3 = data_types[0]->createColumn();
+    auto res = data_types[0]->createColumn();
+    for (int i = 0; i < 100; ++i)
+    {
+        if (i % 2)
+            c1->insert(Null());
+        else
+            c1->insert(Field(static_cast<Int64>(i)));
+        if (i % 2)
+            c2->insert(Null());
+        else
+            c2->insert(Field(static_cast<Int64>(i + 1)));
+        if (i % 2)
+            c3->insert(Null());
+        else
+            c3->insert(Field(static_cast<Int64>(i + 2)));
+        if (i % 2)
+            res->insert(Null());
+        else
+            res->insert(Field(static_cast<Int64>(i + 2)));
+    }
+    auto col1 = ColumnWithTypeAndName(std::move(c1), data_types[0], "col1");
+    auto col2 = ColumnWithTypeAndName(std::move(c2), data_types[0], "col2");
+    auto col3 = ColumnWithTypeAndName(std::move(c3), data_types[0], "col3");
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+    for (auto _ : state)
+    {
+        executeFunction(
+            context,
+            func_name,
+            {col1,
+             col2,
+             col3});
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(LeastBench, benchVecWithNullable)->Iterations(100);
+
+BENCHMARK_DEFINE_F(LeastBench, benchNormal)
+(benchmark::State & state)
+try
+{
+    const String & func_name = "tidbGreatest";
+    std::vector<Int64> c1;
+    std::vector<Int64> c2;
+    std::vector<Int64> c3;
+    std::vector<Int64> res;
+
+    for (size_t i = 0; i < 100; ++i)
+    {
+        c1.push_back(i);
+        c2.push_back(i + 1);
+        c3.push_back(i + 2);
+        res.push_back(i);
+    }
+    std::vector<Int64> cc1 = c1;
+    std::vector<Int64> cc2 = c2;
+    std::vector<Int64> cc3 = c3;
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+
+    for (auto _ : state)
+    {
+        executeFunction(
+            context,
+            func_name,
+            createColumn<Int64>(cc1),
+            createColumn<Int64>(cc2),
+            createColumn<Int64>(cc3));
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(LeastBench, benchNormal)->Iterations(100);
+
+BENCHMARK_DEFINE_F(LeastBench, benchNormalWithNullable)
+(benchmark::State & state)
+try
+{
+    const String & func_name = "tidbGreatest";
+    std::vector<DataTypePtr> data_types = {
+        makeDataType<Nullable<Int64>>(),
+        makeDataType<Nullable<UInt64>>(),
+        makeDataType<Nullable<Float64>>(),
+        makeDataType<Nullable<Decimal32>>(9, 3),
+        makeDataType<Nullable<Decimal64>>(18, 6),
+        makeDataType<Nullable<Decimal128>>(38, 10),
+        makeDataType<Nullable<Decimal256>>(65, 20),
+        makeDataType<Nullable<String>>()};
+
+    auto c1 = data_types[0]->createColumn();
+    auto c2 = data_types[0]->createColumn();
+    auto c3 = data_types[0]->createColumn();
+    auto res = data_types[0]->createColumn();
+    for (int i = 0; i < 100; ++i)
+    {
+        if (i % 2)
+            c1->insert(Null());
+        else
+            c1->insert(Field(static_cast<Int64>(i)));
+        if (i % 2)
+            c2->insert(Null());
+        else
+            c2->insert(Field(static_cast<Int64>(i + 1)));
+        if (i % 2)
+            c3->insert(Null());
+        else
+            c3->insert(Field(static_cast<Int64>(i + 2)));
+        if (i % 2)
+            res->insert(Null());
+        else
+            res->insert(Field(static_cast<Int64>(i + 2)));
+    }
+    auto col1 = ColumnWithTypeAndName(std::move(c1), data_types[0], "col1");
+    auto col2 = ColumnWithTypeAndName(std::move(c2), data_types[0], "col2");
+    auto col3 = ColumnWithTypeAndName(std::move(c3), data_types[0], "col3");
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+    for (auto _ : state)
+    {
+        executeFunction(
+            context,
+            func_name,
+            {col1,
+             col2,
+             col3});
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(LeastBench, benchNormalWithNullable)->Iterations(100);
+
 
 } // namespace tests
-
 } // namespace DB
 
 int main(int argc, char * argv[])
