@@ -354,7 +354,7 @@ LearnerReadSnapshot doLearnerRead(
                     region_to_query.bypass_lock_ts,
                     region_to_query.version,
                     region_to_query.conf_version,
-                    log);
+                    log->getLog());
 
                 std::visit(
                     variant_op::overloaded{
