@@ -1458,7 +1458,7 @@ public:
         {
             if (!arguments[0].type->isDateOrDateTime() && !arguments[0].type->isString())
                 throw Exception{
-                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() + ". Should be a date or a date with time or string",
+                    fmt::format("Illegal type {} of argument of function {}. Should be a date or a date with time or string", arguments[0].type->getName(), getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
         else
@@ -1520,7 +1520,7 @@ public:
         else if (checkDataType<DataTypeString>(from_type))
             DateTimeAddIntervalImpl<DataTypeString::FieldType, Transform, true>::execute(block, arguments, result);
         else
-            throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
+            throw Exception(fmt::format("Illegal type {} of argument of function {}", block.getByPosition(arguments[0]).type->getName(), getName()),
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
