@@ -1,5 +1,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
@@ -143,10 +144,12 @@ LearnerReadSnapshot doLearnerRead(
     MvccQueryInfo & mvcc_query_info_,
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,
-    TMTContext & tmt,
+    Context & context,
     Poco::Logger * log)
 {
     assert(log != nullptr);
+
+    auto & tmt = context.getTMTContext();
 
     MvccQueryInfoWrap mvcc_query_info(mvcc_query_info_, tmt, table_id);
     const auto & regions_info = mvcc_query_info.getRegionsInfo();
@@ -403,6 +406,12 @@ LearnerReadSnapshot doLearnerRead(
               "[Learner Read] batch read index | wait index cost "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
                   << " ms totally, regions_num=" << num_regions << ", concurrency=" << concurrent_num);
+
+    if (auto * dag_context = context.getDAGContext())
+    {
+        dag_context->read_wait_index_start_timestamp = start_time;
+        dag_context->read_wait_index_end_timestamp = end_time;
+    }
 
     return regions_snapshot;
 }

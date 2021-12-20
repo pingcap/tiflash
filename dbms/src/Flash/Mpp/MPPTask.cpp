@@ -277,6 +277,8 @@ void MPPTask::preprocess()
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.compile_start_timestamp = start_time;
     mpp_task_statistics.compile_end_timestamp = end_time;
+    mpp_task_statistics.read_wait_index_start_timestamp = dag_context->read_wait_index_start_timestamp;
+    mpp_task_statistics.read_wait_index_end_timestamp = dag_context->read_wait_index_end_timestamp;
 }
 
 void MPPTask::runImpl()
