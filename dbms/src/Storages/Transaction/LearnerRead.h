@@ -31,7 +31,7 @@ doLearnerRead(
     size_t num_streams,
     bool wait_index_timeout_as_region_not_found,
     Context & context,
-    Poco::Logger * log);
+    const LogWithPrefixPtr & log);
 
 // After getting stream from storage, we must make sure regions' version haven't changed after learner read.
 // If some regions' version changed, this function will throw `RegionException`.
@@ -39,6 +39,6 @@ void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info,
     const LearnerReadSnapshot & regions_snapshot,
     TMTContext & tmt,
-    Poco::Logger * log);
+    const LogWithPrefixPtr & log);
 
 } // namespace DB
