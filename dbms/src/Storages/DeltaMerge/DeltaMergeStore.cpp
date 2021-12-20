@@ -1479,17 +1479,6 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     if (!updateGCSafePoint())
         return 0;
 
-    {
-        std::shared_lock lock(read_write_mutex);
-        // avoid gc on empty tables
-        if (segments.size() == 1)
-        {
-            const auto & seg = segments.begin()->second;
-            if (seg->getStable()->getRows() == 0)
-                return 0;
-        }
-    }
-
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
     LOG_FMT_DEBUG(log,
                   "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
