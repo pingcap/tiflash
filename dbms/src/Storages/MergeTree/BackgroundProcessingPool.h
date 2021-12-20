@@ -73,6 +73,8 @@ public:
     /// if multi == false, this task can only be called by one thread at same time.
     /// If interval_ms is zero, this task will be scheduled with `sleep_seconds`.
     /// If interval_ms is not zero, this task will be scheduled with `interval_ms`.
+    ///   But at each scheduled time, there may be multiple threads try to run the same task,
+    ///   and then execute the same task one by one in sequential order even if `multi` is false.
     TaskHandle addTask(const Task & task, const bool multi = true, const size_t interval_ms = 0);
     void removeTask(const TaskHandle & task);
 
