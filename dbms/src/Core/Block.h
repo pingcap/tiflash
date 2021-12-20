@@ -25,10 +25,13 @@ class Context;
 class Block
 {
 private:
+    static constexpr size_t min_columns_need_index = 8;
+
     using Container = ColumnsWithTypeAndName;
     using IndexByName = std::map<String, size_t>;
 
     Container data;
+    /// only used when columns >= min_columns_need_index
     IndexByName index_by_name;
 
 public:
@@ -134,6 +137,8 @@ public:
 private:
     void eraseImpl(size_t position);
     void initializeIndexByName();
+    void updateNameIndex(const String & name, size_t position);
+    bool contains(const String & name) const;
 };
 
 using Blocks = std::vector<Block>;

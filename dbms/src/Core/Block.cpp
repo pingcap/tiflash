@@ -37,8 +37,11 @@ Block::Block(const ColumnsWithTypeAndName & data_)
 
 void Block::initializeIndexByName()
 {
-    for (size_t i = 0, size = data.size(); i < size; ++i)
-        index_by_name[data[i].name] = i;
+    if (data.size() >= min_columns_need_index)
+    {
+        for (size_t i = 0, size = data.size(); i < size; ++i)
+            index_by_name[data[i].name] = i;
+    }
 }
 
 
@@ -53,8 +56,8 @@ void Block::insert(size_t position, const ColumnWithTypeAndName & elem)
         if (name_pos.second >= position)
             ++name_pos.second;
 
-    index_by_name[elem.name] = position;
     data.emplace(data.begin() + position, elem);
+    updateNameIndex(elem.name, position);
 }
 
 void Block::insert(size_t position, ColumnWithTypeAndName && elem)
@@ -68,33 +71,33 @@ void Block::insert(size_t position, ColumnWithTypeAndName && elem)
         if (name_pos.second >= position)
             ++name_pos.second;
 
-    index_by_name[elem.name] = position;
     data.emplace(data.begin() + position, std::move(elem));
+    updateNameIndex(elem.name, position);
 }
 
 
 void Block::insert(const ColumnWithTypeAndName & elem)
 {
-    index_by_name[elem.name] = data.size();
     data.emplace_back(elem);
+    updateNameIndex(elem.name, data.size() - 1);
 }
 
 void Block::insert(ColumnWithTypeAndName && elem)
 {
-    index_by_name[elem.name] = data.size();
     data.emplace_back(std::move(elem));
+    updateNameIndex(elem.name, data.size() - 1);
 }
 
 
 void Block::insertUnique(const ColumnWithTypeAndName & elem)
 {
-    if (index_by_name.end() == index_by_name.find(elem.name))
+    if (!contains(elem.name))
         insert(elem);
 }
 
 void Block::insertUnique(ColumnWithTypeAndName && elem)
 {
-    if (index_by_name.end() == index_by_name.find(elem.name))
+    if (!contains(elem.name))
         insert(std::move(elem));
 }
 
@@ -203,11 +206,23 @@ bool Block::has(const std::string & name) const
 
 size_t Block::getPositionByName(const std::string & name) const
 {
-    auto it = index_by_name.find(name);
-    if (index_by_name.end() == it)
+    if (index_by_name.empty())
+    {
+        for (size_t i = 0, sz = columns(); i < sz; ++i)
+        {
+            if (data[i].name == name)
+                return i;
+        }
         throw Exception("Not found column " + name + " in block. There are only columns: " + dumpNames(), ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+    }
+    else
+    {
+        auto it = index_by_name.find(name);
+        if (index_by_name.end() == it)
+            throw Exception("Not found column " + name + " in block. There are only columns: " + dumpNames(), ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
 
-    return it->second;
+        return it->second;
+    }
 }
 
 
@@ -360,8 +375,19 @@ Block Block::sortColumns() const
 {
     Block sorted_block;
 
-    for (const auto & name : index_by_name)
-        sorted_block.insert(data[name.second]);
+    if (index_by_name.empty())
+    {
+        std::map<String, size_t> name_index;
+        for (size_t i = 0, size = data.size(); i < size; ++i)
+            name_index[data[i].name] = i;
+        for (const auto & name : name_index)
+            sorted_block.insert(data[name.second]);
+    }
+    else
+    {
+        for (const auto & name : index_by_name)
+            sorted_block.insert(data[name.second]);
+    }
 
     return sorted_block;
 }
@@ -557,6 +583,29 @@ void Block::updateHash(SipHash & hash) const
     for (size_t row_no = 0, num_rows = rows(); row_no < num_rows; ++row_no)
         for (const auto & col : data)
             col.column->updateHashWithValue(row_no, hash);
+}
+
+void Block::updateNameIndex(const String & name, size_t position)
+{
+    if (data.size() >= min_columns_need_index || !index_by_name.empty())
+        index_by_name[name] = position;
+}
+
+bool Block::contains(const String & name) const
+{
+    if (index_by_name.empty())
+    {
+        for (const auto & col : data)
+        {
+            if (col.name == name)
+                return true;
+        }
+        return false;
+    }
+    else
+    {
+        return index_by_name.count(name) != 0;
+    }
 }
 
 } // namespace DB
