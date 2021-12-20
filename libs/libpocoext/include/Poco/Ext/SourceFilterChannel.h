@@ -4,6 +4,7 @@
 
 namespace Poco
 {
+/// This channel sends messages only the specified source.
 class Foundation_API SourceFilterChannel : public Channel
 {
 public:

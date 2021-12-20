@@ -795,6 +795,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     {
         createDirectory(tracing_log_path);
         std::cerr << "Logging tracing log to " << tracing_log_path << std::endl;
+        /// to filter the tracing log.
         Poco::AutoPtr<Poco::SourceFilterChannel> source = new Poco::SourceFilterChannel;
         source->setSource(DB::tracing_log_source);
         Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
