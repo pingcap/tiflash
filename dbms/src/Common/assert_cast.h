@@ -14,7 +14,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_CAST;
-}
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 } // namespace DB
 
 /** Perform static_cast in release build.

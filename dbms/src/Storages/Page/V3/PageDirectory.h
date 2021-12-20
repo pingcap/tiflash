@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/Page/Page.h>
+#include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -11,7 +12,7 @@
 
 namespace DB::PS::V3
 {
-class PageDirectorySnapshot
+class PageDirectorySnapshot : public DB::PageStorageSnapshot
 {
 public:
 };

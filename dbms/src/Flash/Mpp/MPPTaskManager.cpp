@@ -1,6 +1,8 @@
+#include <Common/FmtUtils.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
 
+#include <string>
 #include <thread>
 #include <unordered_map>
 
@@ -62,17 +64,17 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         cv.notify_all();
     }
     LOG_WARNING(log, fmt::format("Begin cancel query: {}", query_id));
-    std::stringstream ss;
-    ss << "Remaining task in query " + std::to_string(query_id) + " are: ";
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("Remaining task in query {} are: ", query_id);
     // TODO: cancel tasks in order rather than issuing so many threads to cancel tasks
     std::vector<std::thread> cancel_workers;
     for (const auto & task : task_set.task_map)
     {
-        ss << task.first.toString() << " ";
+        fmt_buf.fmtAppend("{} ", task.first.toString());
         std::thread t(&MPPTask::cancel, task.second, std::ref(reason));
         cancel_workers.push_back(std::move(t));
     }
-    LOG_WARNING(log, ss.str());
+    LOG_WARNING(log, fmt_buf.toString());
     for (auto & worker : cancel_workers)
     {
         worker.join();

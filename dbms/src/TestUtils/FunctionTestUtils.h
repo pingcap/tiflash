@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/UnifiedLogPatternFormatter.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
@@ -8,6 +7,7 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -194,6 +194,7 @@ ColumnPtr makeConstColumn(const DataTypePtr & data_type, size_t size, const Infe
     return data_type->createColumnConst(size, makeField(value));
 }
 
+ColumnWithTypeAndName createOnlyNullColumnConst(size_t size, const String & name = "");
 ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name = "");
 
 template <typename T>
@@ -247,6 +248,8 @@ ColumnWithTypeAndName createConstColumn(
     DataTypePtr data_type = std::apply(makeDataType<T, Args...>, data_type_args);
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
+
+ColumnWithTypeAndName createNullableDateTimeColumn(std::initializer_list<std::optional<MyDateTime>> init, int fraction);
 
 // parse a string into decimal field.
 template <typename T>

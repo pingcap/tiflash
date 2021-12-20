@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Parsers/ASTQueryWithOnCluster.h>
 #include <Parsers/ASTQueryWithOutput.h>
 #include <Parsers/IAST.h>
 
@@ -8,11 +7,9 @@
 
 namespace DB
 {
-
-
 /** RENAME query
   */
-class ASTRenameQuery : public ASTQueryWithOutput, public ASTQueryWithOnCluster
+class ASTRenameQuery : public ASTQueryWithOutput
 {
 public:
     struct Table
@@ -21,7 +18,10 @@ public:
         String table;
 
         Table() = default;
-        Table(String db, String tbl) : database(std::move(db)), table(std::move(tbl)) {}
+        Table(String db, String tbl)
+            : database(std::move(db))
+            , table(std::move(tbl))
+        {}
     };
 
     struct Element
@@ -45,23 +45,6 @@ public:
         return res;
     }
 
-    ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override
-    {
-        auto query_ptr = clone();
-        auto & query = static_cast<ASTRenameQuery &>(*query_ptr);
-
-        query.cluster.clear();
-        for (Element & elem : query.elements)
-        {
-            if (elem.from.database.empty())
-                elem.from.database = new_database;
-            if (elem.to.database.empty())
-                elem.to.database = new_database;
-        }
-
-        return query_ptr;
-    }
-
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {
@@ -76,8 +59,6 @@ protected:
                           << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
                           << (!it->to.database.empty() ? backQuoteIfNeed(it->to.database) + "." : "") << backQuoteIfNeed(it->to.table);
         }
-
-        formatOnCluster(settings);
     }
 };
 

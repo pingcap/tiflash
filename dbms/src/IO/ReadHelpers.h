@@ -83,6 +83,17 @@ inline void readChar(char & x, ReadBuffer & buf)
         throwReadAfterEOF();
 }
 
+inline void readChar(unsigned char & x, ReadBuffer & buf)
+{
+    if (!buf.eof())
+    {
+        x = static_cast<unsigned char>(*buf.position());
+        ++buf.position();
+    }
+    else
+        throwReadAfterEOF();
+}
+
 
 /// Read POD-type in native format
 template <typename T>

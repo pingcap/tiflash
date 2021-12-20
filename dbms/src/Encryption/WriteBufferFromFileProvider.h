@@ -26,7 +26,7 @@ public:
 
     ~WriteBufferFromFileProvider() override;
 
-    void close();
+    void close() override;
 
     std::string getFileName() const override { return file->getFileName(); }
 

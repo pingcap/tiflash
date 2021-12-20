@@ -17,7 +17,11 @@ extern const char force_set_page_data_compact_batch[];
 namespace PS::V2
 {
 template <typename SnapshotPtr>
-DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage, PageStorage::Config gc_config, const WriteLimiterPtr & write_limiter_, const ReadLimiterPtr & read_limiter_)
+DataCompactor<SnapshotPtr>::DataCompactor(
+    const PageStorage & storage,
+    PageStorage::Config gc_config,
+    const WriteLimiterPtr & write_limiter_,
+    const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name)
     , delegator(storage.delegator)
     , file_provider(storage.getFileProvider())
@@ -554,7 +558,7 @@ void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos,
 }
 
 
-template class DataCompactor<PageStorage::SnapshotPtr>;
+template class DataCompactor<PageStorage::ConcreteSnapshotPtr>;
 #ifndef NDEBUG
 template class DataCompactor<DB::PS::V2::tests::MockSnapshotPtr>;
 #endif

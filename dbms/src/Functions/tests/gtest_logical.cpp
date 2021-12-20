@@ -42,7 +42,7 @@ try
         createColumn<Nullable<UInt8>>({{}, 0}),
         executeFunction(
             func_name,
-            createOnlyNullColumn(2),
+            createOnlyNullColumnConst(2),
             createColumn<Nullable<UInt8>>({1, 0})));
 }
 CATCH
@@ -78,7 +78,7 @@ try
         createColumn<Nullable<UInt8>>({1, {}}),
         executeFunction(
             func_name,
-            createOnlyNullColumn(2),
+            createOnlyNullColumnConst(2),
             createColumn<Nullable<UInt8>>({1, 0})));
 }
 CATCH
@@ -111,10 +111,10 @@ try
             createConstColumn<Nullable<UInt8>>(1, 1)));
     // only null
     ASSERT_COLUMN_EQ(
-        createOnlyNullColumn(2),
+        createOnlyNullColumnConst(2),
         executeFunction(
             func_name,
-            createOnlyNullColumn(2),
+            createOnlyNullColumnConst(2),
             createColumn<Nullable<UInt8>>({1, 0})));
 }
 CATCH
@@ -138,10 +138,10 @@ try
             createConstColumn<Nullable<UInt8>>(1, 1)));
     // only null
     ASSERT_COLUMN_EQ(
-        createOnlyNullColumn(1),
+        createOnlyNullColumnConst(1),
         executeFunction(
             func_name,
-            createOnlyNullColumn(1)));
+            createOnlyNullColumnConst(1)));
 }
 CATCH
 
