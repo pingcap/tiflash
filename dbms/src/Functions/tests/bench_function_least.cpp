@@ -3,6 +3,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
 
+#include <random>
 
 namespace DB
 {
@@ -81,19 +82,15 @@ public:
     {
         FunctionBench::SetUp(state);
         initCols();
+        initCols2();
     }
 
 public:
+    const size_t data_size_random = 30000;
     const size_t data_size = 10000000;
+    const size_t col_num = 1000;
     std::vector<DataTypePtr> data_types = {
-        makeDataType<Nullable<Int64>>(),
-        makeDataType<Nullable<UInt64>>(),
-        makeDataType<Nullable<Float64>>(),
-        makeDataType<Nullable<Decimal32>>(9, 3),
-        makeDataType<Nullable<Decimal64>>(18, 6),
-        makeDataType<Nullable<Decimal128>>(38, 10),
-        makeDataType<Nullable<Decimal256>>(65, 20),
-        makeDataType<Nullable<String>>()};
+        makeDataType<Nullable<Int64>>()};
 
     ColumnWithTypeAndName col1;
     ColumnWithTypeAndName col2;
@@ -101,10 +98,13 @@ public:
     ColumnWithTypeAndName col_nullable1;
     ColumnWithTypeAndName col_nullable2;
     ColumnWithTypeAndName col_nullable3;
+    std::vector<ColumnWithTypeAndName> v_col;
+
 
 private:
     void initCols()
     {
+        std::default_random_engine e;
         auto c1 = data_types[0]->createColumn();
         auto c2 = data_types[0]->createColumn();
         auto c3 = data_types[0]->createColumn();
@@ -113,21 +113,21 @@ private:
         auto c_nullable3 = data_types[0]->createColumn();
         for (size_t i = 0; i < data_size; ++i)
         {
-            c1->insert(Field(static_cast<Int64>(i)));
-            c2->insert(Field(static_cast<Int64>(i + 1)));
-            c3->insert(Field(static_cast<Int64>(i + 2)));
+            c1->insert(Field(static_cast<Int64>(e())));
+            c2->insert(Field(static_cast<Int64>(e())));
+            c3->insert(Field(static_cast<Int64>(e())));
             if (i % 2)
                 c_nullable1->insert(Null());
             else
-                c_nullable1->insert(Field(static_cast<Int64>(i)));
+                c_nullable1->insert(Field(static_cast<Int64>(e())));
             if (i % 2)
                 c_nullable2->insert(Null());
             else
-                c_nullable2->insert(Field(static_cast<Int64>(i + 1)));
+                c_nullable2->insert(Field(static_cast<Int64>(e())));
             if (i % 2)
                 c_nullable3->insert(Null());
             else
-                c_nullable3->insert(Field(static_cast<Int64>(i + 2)));
+                c_nullable3->insert(Field(static_cast<Int64>(e())));
         }
         col1 = ColumnWithTypeAndName(std::move(c1), data_types[0], "col1");
         col2 = ColumnWithTypeAndName(std::move(c2), data_types[0], "col2");
@@ -135,6 +135,34 @@ private:
         col_nullable1 = ColumnWithTypeAndName(std::move(c_nullable1), data_types[0], "col_nullable1");
         col_nullable2 = ColumnWithTypeAndName(std::move(c_nullable2), data_types[0], "col_nullable2");
         col_nullable3 = ColumnWithTypeAndName(std::move(c_nullable3), data_types[0], "col_nullable3");
+    }
+
+    void initCols2()
+    {
+        std::vector<DataTypePtr> col_types;
+
+        std::default_random_engine e;
+        for (size_t i = 0; i < col_num; ++i)
+        {
+            col_types.push_back(data_types[e() % data_types.size()]);
+        }
+        std::vector<MutableColumnPtr> cols;
+        for (size_t i = 0; i < col_num; ++i)
+        {
+            cols.push_back(col_types[i]->createColumn());
+        }
+
+        for (size_t i = 0; i < data_size_random; ++i)
+        {
+            for (size_t j = 0; j < col_num; j++)
+            {
+                cols[j]->insert(static_cast<Int64>(e()));
+            }
+        }
+        for (size_t i = 0; i < col_num; ++i)
+        {
+            v_col.push_back(ColumnWithTypeAndName(std::move(cols[i]), col_types[i], "col"));
+        }
     }
 };
 
@@ -213,6 +241,41 @@ try
 }
 CATCH
 BENCHMARK_REGISTER_F(LeastBench, benchNormalWithNullable)->Iterations(100);
+
+
+BENCHMARK_DEFINE_F(LeastBench, benchVecMoreCols)
+(benchmark::State & state)
+try
+{
+    const String & func_name = "tidbLeast";
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+    for (auto _ : state)
+    {
+        executeFunction(
+            context,
+            func_name,
+            v_col);
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(LeastBench, benchVecMoreCols)->Iterations(100);
+
+BENCHMARK_DEFINE_F(LeastBench, benchNormalMoreCols)
+(benchmark::State & state)
+try
+{
+    const String & func_name = "tidbGreatest";
+    auto context = DB::tests::TiFlashTestEnv::getContext();
+    for (auto _ : state)
+    {
+        executeFunction(
+            context,
+            func_name,
+            v_col);
+    }
+}
+CATCH
+BENCHMARK_REGISTER_F(LeastBench, benchNormalMoreCols)->Iterations(100);
 
 } // namespace tests
 } // namespace DB
