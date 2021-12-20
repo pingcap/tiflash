@@ -1460,6 +1460,9 @@ bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, dou
 bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, const RowKeyRange & segment_range, double ratio_threshold, Poco::Logger * log)
 {
     auto delete_range = snap->delta->getSquashDeleteRange();
+    if (delete_range.none())
+        return false;
+
     auto [delete_rows, delete_bytes] = snap->stable->getApproxRowsAndBytes(context, delete_range.shrink(segment_range));
 
     auto stable_rows = snap->stable->getRows();
