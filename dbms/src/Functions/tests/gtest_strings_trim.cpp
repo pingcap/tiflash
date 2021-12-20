@@ -876,16 +876,16 @@ try
                         createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
                         createConstColumn<Nullable<Int8>>(5, 3)));
 
-    //test NULL and "" case
+    //different trim policy
     for (int i = 0; i < 3; i++)
     {
+        //test NULL and "" case
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "", "", {}, "", "", ""}),
             executeFunction("tidbTrim",
                             createColumn<Nullable<String>>({"", "", "", "", "", "", ""}),
                             createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
                             createConstColumn<Nullable<Int8>>(7, i)));
-
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({{}, {}, {}, {}, {}, {}, {}}),
             executeFunction("tidbTrim",
@@ -893,6 +893,7 @@ try
                             createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
                             createConstColumn<Nullable<Int8>>(7, i)));
 
+        //test symmetry string case: ASCII & non-ASCII
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "x", "", "x", "", "x", {}}),
             executeFunction("tidbTrim",
@@ -909,7 +910,7 @@ try
                             createConstColumn<Nullable<Int8>>(6, i)));
     }
 
-    //test ws cases
+    //test non-ASCII cases
     InferredDataInitializerList<Nullable<String>> results_columns_ws_with_core_text[] = {
         {" 波 波 ", "啊 波 波 啊", " 波 波 ", "啊 波 波 啊", " 波 波 "}, //default(both)
         {" 波 波 ", "啊 波 波 啊", " 波 波 ", "啊 波 波 啊", " 波 波 "}, //both
