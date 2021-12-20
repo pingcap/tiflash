@@ -1,4 +1,3 @@
-#include <Common/FmtUtils.h>
 #include <Common/LogWithPrefix.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -258,15 +257,13 @@ LearnerReadSnapshot doLearnerRead(
             GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
             const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
 
-            FmtBuffer fmt_buffer;
-            fmt_buffer.fmtAppend(
-                "Batch read index, original size {}, send & get {} message, cost {}ms",
+            LOG_FMT_DEBUG(
+                log,
+                "Batch read index, original size {}, send & get {} message, cost {}ms{}",
                 ori_batch_region_size,
                 batch_read_index_req.size(),
-                read_index_elapsed_ms);
-            if (cached_size)
-                fmt_buffer.fmtAppend(", {} in cache", cached_size);
-            LOG_DEBUG(log, fmt_buffer.toString());
+                read_index_elapsed_ms,
+                (cached_size != 0) ? (fmt::format(", {} in cache", cached_size)) : "");
 
             watch.restart(); // restart to count the elapsed of wait index
         }
