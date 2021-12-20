@@ -144,7 +144,21 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
     }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
 
-    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
+    bool is_root_mpp_task = false;
+    const auto & exchange_sender = dag_req->root_executor().exchange_sender();
+    if (exchange_sender.encoded_task_meta_size() == 1)
+    {
+        /// root mpp task always has 1 task_meta because there is only one TiDB
+        /// node for each mpp query
+        mpp::TaskMeta task_meta;
+        if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(0)))
+        {
+            throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
+        }
+        is_root_mpp_task = task_meta.task_id() == -1;
+    }
+    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta(), is_root_mpp_task);
+
     context.setDAGContext(dag_context.get());
 
     // register task.
