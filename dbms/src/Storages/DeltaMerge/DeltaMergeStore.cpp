@@ -1249,6 +1249,18 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         }
         return false;
     };
+    auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
+        size_t my_segment_bytes = my_segment->getEstimatedBytes();
+        auto my_should_split = my_segment_bytes >= dm_context->segment_force_split_bytes;
+        if (my_should_split && !my_segment->isSplitForbidden())
+        {
+            if (segmentSplit(*dm_context, my_segment, true).first)
+                return true;
+            else
+                return false;
+        }
+        return false;
+    };
     auto try_bg_merge = [&]() {
         SegmentPtr merge_sibling;
         if (should_merge && (merge_sibling = getMergeSibling()))
@@ -1283,6 +1295,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     if (thread_type == ThreadType::Write)
     {
+        if (try_fg_split(segment))
+            return;
         if (SegmentPtr new_segment = try_fg_merge_delta(); new_segment)
         {
             // After merge delta, we better check split immediately.
@@ -1606,10 +1620,16 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
+    if (is_foreground)
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_fg).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
+    }
     Stopwatch watch_seg_split;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds()); });
-
+    SCOPE_EXIT({ is_foreground ? GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_fg).Observe(watch_seg_split.elapsedSeconds()) : GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds()); });
     WriteBatches wbs(storage_pool, dm_context.getWriteLimiter());
 
     auto range = segment->getRowKeyRange();

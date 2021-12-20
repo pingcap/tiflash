@@ -20,7 +20,6 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
-#include <common/logger_fmt_useful.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
