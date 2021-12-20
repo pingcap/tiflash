@@ -16,8 +16,20 @@ namespace tests
 class TestDateTimeDayMonthYear : public DB::tests::FunctionTest
 {
 protected:
-    template <bool isconst, bool nullable, typename T>
+    template <bool isconst, bool nullable>
     void testForDateTime(UInt16 year, UInt8 month, UInt8 day)
+    {
+        testFor<isconst, nullable, DataTypeMyDateTime, MyDateTime>(year, month, day, MyDateTime{year, month, day, 0, 0, 0, 0});
+    }
+
+    template <bool isconst, bool nullable>
+    void testForDate(UInt16 year, UInt8 month, UInt8 day)
+    {
+        testFor<isconst, nullable, DataTypeMyDate, MyDate>(year, month, day, MyDate{year, month, day});
+    }
+
+    template <bool isconst, bool nullable, typename DT, typename V>
+    void testFor(UInt16 year, UInt8 month, UInt8 day, V raw_input)
     {
         ColumnWithTypeAndName column;
         ColumnWithTypeAndName result_year, result_month, result_day;
@@ -26,10 +38,10 @@ protected:
             if constexpr (nullable)
             {
                 column = ColumnWithTypeAndName(
-                    createConstColumn<T>(1,
-                                         {MyDateTime{year, month, day, 0, 0, 0, 0}.toPackedUInt()})
+                    createConstColumn<Nullable<typename DT::FieldType>>(1,
+                                                                        {raw_input.toPackedUInt()})
                         .column,
-                    makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+                    makeNullable(std::make_shared<DT>()),
                     "result");
                 result_day = createConstColumn<Nullable<UInt8>>(1, {day});
                 result_month = createConstColumn<Nullable<UInt8>>(1, {month});
@@ -38,10 +50,10 @@ protected:
             else
             {
                 column = ColumnWithTypeAndName(
-                    createConstColumn<T>(1,
-                                         {MyDateTime{year, month, day, 0, 0, 0, 0}.toPackedUInt()})
+                    createConstColumn<typename DT::FieldType>(1,
+                                                              {raw_input.toPackedUInt()})
                         .column,
-                    std::make_shared<DataTypeMyDateTime>(0),
+                    std::make_shared<DT>(),
                     "result");
                 result_day = createConstColumn<UInt8>(1, {day});
                 result_month = createConstColumn<UInt8>(1, {month});
@@ -53,10 +65,10 @@ protected:
             if constexpr (nullable)
             {
                 column = ColumnWithTypeAndName(
-                    createColumn<T>(
-                        {MyDateTime{year, month, day, 0, 0, 0, 0}.toPackedUInt()})
+                    createColumn<Nullable<typename DT::FieldType>>(
+                        {raw_input.toPackedUInt()})
                         .column,
-                    makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+                    makeNullable(std::make_shared<DT>()),
                     "result");
                 result_day = createColumn<Nullable<UInt8>>({day});
                 result_month = createColumn<Nullable<UInt8>>({month});
@@ -65,10 +77,10 @@ protected:
             else
             {
                 column = ColumnWithTypeAndName(
-                    createColumn<T>(
-                        {MyDateTime{year, month, day, 0, 0, 0, 0}.toPackedUInt()})
+                    createColumn<typename DT::FieldType>(
+                        {raw_input.toPackedUInt()})
                         .column,
-                    std::make_shared<DataTypeMyDateTime>(0),
+                    std::make_shared<DT>(),
                     "result");
                 result_day = createColumn<UInt8>({day});
                 result_month = createColumn<UInt8>({month});
@@ -100,16 +112,25 @@ try
             {
                 // There is no matter if the Date/DateTime is invalid,
                 // since you can just ignore the invalid cases,
-                // and we just ensure function can extract correct member info from MyDateTime.
+                // and we ensure function extracts correct member info from MyDateTime.
 
-                //const nullable
-                testForDateTime<false, true, Nullable<DataTypeMyDateTime::FieldType>>(year, month, day);
-                //const non-nullable
-                testForDateTime<false, false, DataTypeMyDateTime::FieldType>(year, month, day);
-                //non-const nullable
-                testForDateTime<true, true, Nullable<DataTypeMyDateTime::FieldType>>(year, month, day);
-                //non-const non-nullable
-                testForDateTime<true, false, DataTypeMyDateTime::FieldType>(year, month, day);
+                //DateTime const nullable
+                testForDateTime<true, true>(year, month, day);
+                //DateTime const non-nullable
+                testForDateTime<true, false>(year, month, day);
+                //DateTime non-const nullable
+                testForDateTime<false, true>(year, month, day);
+                //DateTime non-const non-nullable
+                testForDateTime<false, false>(year, month, day);
+
+                //Date const nullable
+                testForDate<true, true>(year, month, day);
+                //Date const non-nullable
+                testForDate<true, false>(year, month, day);
+                //Date non-const nullable
+                testForDate<false, true>(year, month, day);
+                //Date non-const non-nullable
+                testForDate<false, false>(year, month, day);
             }
         }
     }
