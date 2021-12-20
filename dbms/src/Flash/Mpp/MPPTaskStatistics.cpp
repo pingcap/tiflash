@@ -2,7 +2,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/getMPPTaskTracingLog.h>
-#include <common/logger_fmt_useful.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
