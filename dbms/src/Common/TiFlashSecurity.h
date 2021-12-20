@@ -57,7 +57,7 @@ public:
             }
             if (miss_ca_path && miss_cert_path && miss_key_path)
             {
-                LOG_INFO(log, "No security config is set.");
+                LOG_FMT_INFO(log, "No security config is set.");
             }
             else if (miss_ca_path || miss_cert_path || miss_key_path)
             {
@@ -66,9 +66,12 @@ public:
             else
             {
                 has_tls_config = true;
-                LOG_INFO(
+                LOG_FMT_INFO(
                     log,
-                    "security config is set: ca path is " << ca_path << " cert path is " << cert_path << " key path is " << key_path);
+                    "security config is set: ca path is {} cert path is {} key path is {}",
+                    ca_path,
+                    cert_path,
+                    key_path);
             }
 
             if (config.has("security.cert_allowed_cn") && has_tls_config)

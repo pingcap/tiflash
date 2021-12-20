@@ -1079,7 +1079,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // this log measures the concurrent degree in this mpp task
-    LOG_INFO(log, "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
+    LOG_FMT_INFO(log, "execution stream size for query block(before aggregation) {} is {}", query_block.qb_column_prefix, pipeline.streams.size());
 
     dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
 

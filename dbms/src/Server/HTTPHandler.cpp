@@ -181,7 +181,7 @@ void HTTPHandler::processQuery(
     Poco::Net::HTTPServerResponse & response,
     Output & used_output)
 {
-    LOG_TRACE(log, "Request URI: " << request.getURI());
+    LOG_FMT_TRACE(log, "Request URI: {}", request.getURI());
 
     std::istream & istr = request.stream();
 
@@ -614,7 +614,7 @@ void HTTPHandler::handleRequest(Poco::Net::HTTPServerRequest & request, Poco::Ne
         }
 
         processQuery(request, params, response, used_output);
-        LOG_INFO(log, "Done processing query");
+        LOG_FMT_INFO(log, "Done processing query");
     }
     catch (...)
     {

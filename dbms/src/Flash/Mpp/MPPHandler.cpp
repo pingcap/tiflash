@@ -51,25 +51,25 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
         }
         task->run();
-        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
+        LOG_FMT_INFO(log, "processing dispatch is over; the time cost is {} ms", std::to_string(stopwatch.elapsedMilliseconds()));
     }
     catch (Exception & e)
     {
-        LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
+        LOG_FMT_ERROR(log, "dispatch task meet error : {}", e.displayText());
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
         handleError(task, e.displayText());
     }
     catch (std::exception & e)
     {
-        LOG_ERROR(log, "dispatch task meet error : " << e.what());
+        LOG_FMT_ERROR(log, "dispatch task meet error : {}", e.what());
         auto * err = response->mutable_error();
         err->set_msg(e.what());
         handleError(task, e.what());
     }
     catch (...)
     {
-        LOG_ERROR(log, "dispatch task meet fatal error");
+        LOG_FMT_ERROR(log, "dispatch task meet fatal error");
         auto * err = response->mutable_error();
         err->set_msg("fatal error");
         handleError(task, "fatal error");

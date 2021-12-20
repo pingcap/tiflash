@@ -65,13 +65,13 @@ static void logQuery(const String & query, const Context & context)
     const auto & initial_query_id = context.getClientInfo().initial_query_id;
     const auto & current_user = context.getClientInfo().current_user;
 
-    LOG_DEBUG(&Poco::Logger::get("executeQuery"),
-              fmt::format("(from {}{}, query_id: {}{}) {}",
-                          context.getClientInfo().current_address.toString(),
-                          (current_user != "default" ? ", user: " + context.getClientInfo().current_user : ""),
-                          current_query_id,
-                          (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
-                          joinLines(query)));
+    LOG_FMT_DEBUG(&Poco::Logger::get("executeQuery"),
+                  "(from {}{}, query_id: {}{}) {}",
+                  context.getClientInfo().current_address.toString(),
+                  (current_user != "default" ? ", user: " + context.getClientInfo().current_user : ""),
+                  current_query_id,
+                  (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
+                  joinLines(query));
 }
 
 
@@ -95,12 +95,12 @@ static void setExceptionStackTrace(QueryLogElement & elem)
 /// Log exception (with query info) into text log (not into system table).
 static void logException(Context & context, QueryLogElement & elem)
 {
-    LOG_ERROR(&Poco::Logger::get("executeQuery"),
-              fmt::format("{} (from {}) (in query: {}){}",
-                          elem.exception,
-                          context.getClientInfo().current_address.toString(),
-                          joinLines(elem.query),
-                          (!elem.stack_trace.empty() ? ", Stack trace:\n\n" + elem.stack_trace : "")));
+    LOG_FMT_ERROR(&Poco::Logger::get("executeQuery"),
+                  "{} (from {}) (in query: {}){}",
+                  elem.exception,
+                  context.getClientInfo().current_address.toString(),
+                  joinLines(elem.query),
+                  (!elem.stack_trace.empty() ? ", Stack trace:\n\n" + elem.stack_trace : ""));
 }
 
 
@@ -309,14 +309,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (elem.read_rows != 0)
                 {
-                    LOG_INFO(&Poco::Logger::get("executeQuery"),
-                             std::fixed << std::setprecision(3)
-                                        << fmt::format("Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
-                                                       elem.read_rows,
-                                                       formatReadableSizeWithBinarySuffix(elem.read_bytes),
-                                                       elapsed_seconds,
-                                                       static_cast<size_t>(elem.read_rows / elapsed_seconds),
-                                                       formatReadableSizeWithBinarySuffix(elem.read_bytes / elapsed_seconds)));
+                    LOG_FMT_INFO(&Poco::Logger::get("executeQuery"),
+                                 "Read {} rows, {} in {:.3f} sec., {} rows/sec., {}/sec.",
+                                 elem.read_rows,
+                                 formatReadableSizeWithBinarySuffix(elem.read_bytes),
+                                 elapsed_seconds,
+                                 static_cast<size_t>(elem.read_rows / elapsed_seconds),
+                                 formatReadableSizeWithBinarySuffix(elem.read_bytes / elapsed_seconds));
                 }
 
                 if (log_queries)
@@ -364,7 +363,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 std::stringstream log_str;
                 log_str << "Query pipeline:\n";
                 res.in->dumpTree(log_str);
-                LOG_DEBUG(&Poco::Logger::get("executeQuery"), log_str.str());
+                LOG_FMT_DEBUG(&Poco::Logger::get("executeQuery"), log_str.str());
             }
         }
     }

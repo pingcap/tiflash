@@ -79,7 +79,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
     std::sort(file_names.begin(), file_names.end());
 
     size_t total_tables = file_names.size();
-    LOG_INFO(log, "Total " << total_tables << " tables.");
+    LOG_FMT_INFO(log, "Total {} tables.", total_tables);
 
     String data_path = context.getPath() + "data/" + escapeForFileName(name) + "/";
 
@@ -94,7 +94,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
             /// Messages, so that it's not boring to wait for the server to load for a long time.
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
-                LOG_INFO(log, std::fixed << std::setprecision(2) << tables_processed * 100.0 / total_tables << "%");
+                LOG_FMT_INFO(log, "{:.2f}%", tables_processed * 100 / total_tables);
                 watch.restart();
             }
 
@@ -340,7 +340,7 @@ void DatabaseOrdinary::drop(const Context & context)
 {
     if (context.getFileProvider()->isEncryptionEnabled())
     {
-        LOG_WARNING(log, "Encryption is enabled. There may be some encryption info left.");
+        LOG_FMT_WARNING(log, "Encryption is enabled. There may be some encryption info left.");
     }
     // Remove data dir for this database
     const String database_data_path = getDataPath();

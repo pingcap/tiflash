@@ -1,6 +1,6 @@
+#include <Columns/ColumnsNumber.h>
 #include <Common/FieldVisitors.h>
 #include <DataStreams/CollapsingSortedBlockInputStream.h>
-#include <Columns/ColumnsNumber.h>
 
 /// Maximum number of messages about incorrect data in the log.
 #define MAX_ERROR_MESSAGES 10
@@ -8,20 +8,19 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int INCORRECT_DATA;
-    extern const int LOGICAL_ERROR;
-}
+extern const int INCORRECT_DATA;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 void CollapsingSortedBlockInputStream::reportIncorrectData()
 {
     std::stringstream s;
     s << "Incorrect data: number of rows with sign = 1 (" << count_positive
-        << ") differs with number of rows with sign = -1 (" << count_negative
-        << ") by more than one (for key: ";
+      << ") differs with number of rows with sign = -1 (" << count_negative
+      << ") by more than one (for key: ";
 
     for (size_t i = 0, size = current_key.size(); i < size; ++i)
     {
@@ -50,7 +49,7 @@ void CollapsingSortedBlockInputStream::insertRows(MutableColumns & merged_column
         /// If all the rows in the input streams was collapsed, we still want to give at least one block in the result.
         if (last_in_stream && merged_rows == 0 && !blocks_written)
         {
-            LOG_INFO(log, "All rows collapsed");
+            LOG_FMT_INFO(log, "All rows collapsed");
             ++merged_rows;
             for (size_t i = 0; i < num_columns; ++i)
                 merged_columns[i]->insertFrom(*(*last_positive.columns)[i], last_positive.row_num);
@@ -196,7 +195,7 @@ void CollapsingSortedBlockInputStream::merge(MutableColumns & merged_columns, st
         }
         else
             throw Exception("Incorrect data: Sign = " + toString(sign) + " (must be 1 or -1).",
-                ErrorCodes::INCORRECT_DATA);
+                            ErrorCodes::INCORRECT_DATA);
 
         if (!current->isLast())
         {
@@ -216,4 +215,4 @@ void CollapsingSortedBlockInputStream::merge(MutableColumns & merged_columns, st
     finished = true;
 }
 
-}
+} // namespace DB

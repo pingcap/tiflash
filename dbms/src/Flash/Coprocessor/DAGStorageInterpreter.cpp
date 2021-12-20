@@ -315,10 +315,11 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             ++iter;
                         }
                     }
-                    LOG_WARNING(log,
-                                "RegionException after read from storage, regions ["
-                                    << buffer.toString() << "], message: " << e.message()
-                                    << (regions_query_info.empty() ? "" : ", retry to read from local"));
+                    LOG_FMT_WARNING(log,
+                                    "RegionException after read from storage, regions [{}], message: {}{}",
+                                    buffer.toString(),
+                                    e.message(),
+                                    (regions_query_info.empty() ? "" : ", retry to read from local"));
                     if (unlikely(regions_query_info.empty()))
                         break; // no available region in local, break retry loop
                     continue; // continue to retry read from local storage
@@ -335,7 +336,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             buffer.fmtAppend("{},", iter->first);
                         }
                     }
-                    LOG_WARNING(log, "RegionException after read from storage, regions [" << buffer.toString() << "], message: " << e.message());
+                    LOG_FMT_WARNING(log, "RegionException after read from storage, regions [{}], message: {}", buffer.toString(), e.message());
                     break; // break retry loop
                 }
             }
@@ -423,10 +424,15 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
     };
 
     auto log_schema_version = [&](const String & result, Int64 storage_schema_version) {
-        LOG_INFO(
+        LOG_FMT_INFO(
             log,
-            __PRETTY_FUNCTION__ << " Table " << table_id << " schema " << result << " Schema version [storage, global, query]: "
-                                << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version << "].");
+            "{} Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].",
+            __PRETTY_FUNCTION__,
+            table_id,
+            result,
+            storage_schema_version,
+            global_schema_version,
+            query_schema_version);
     };
 
     auto sync_schema = [&] {
@@ -434,8 +440,7 @@ std::tuple<ManageableStoragePtr, TableStructureLockHolder> DAGStorageInterpreter
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-
-        LOG_INFO(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
+        LOG_FMT_INFO(log, "{} Table {} schema sync cost {}ms.", __PRETTY_FUNCTION__, table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.
@@ -525,7 +530,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
         buffer.append(")");
         return buffer.toString();
     };
-    LOG_INFO(log, print_retry_regions());
+    LOG_FMT_INFO(log, print_retry_regions());
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;
