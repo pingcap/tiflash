@@ -12,6 +12,7 @@
 #include <Storages/StorageFactory.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <sstream>
 
@@ -144,7 +145,7 @@ StoragePtr DatabaseWithOwnTablesBase::detachTable(const String & table_name)
         std::lock_guard<std::mutex> lock(mutex);
         auto it = tables.find(table_name);
         if (it == tables.end())
-            throw Exception("Table " + name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+            throw Exception(fmt::format("Table {}.{} dosen't exist.", name, table_name), ErrorCodes::UNKNOWN_TABLE);
         res = it->second;
         tables.erase(it);
     }
@@ -156,7 +157,7 @@ void DatabaseWithOwnTablesBase::attachTable(const String & table_name, const Sto
 {
     std::lock_guard<std::mutex> lock(mutex);
     if (!tables.emplace(table_name, table).second)
-        throw Exception("Table " + name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception(fmt::format("Table {}.{} already exists.", name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
 }
 
 void DatabaseWithOwnTablesBase::shutdown()
@@ -261,7 +262,7 @@ std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log
             filenames.push_back(dir_it.name());
         else
             throw Exception(
-                "Incorrect file extension: " + dir_it.name() + " in metadata directory " + meta_dir,
+                fmt::format("Incorrect file extension: {} in metadata directory {}", dir_it.name(), meta_dir),
                 ErrorCodes::INCORRECT_FILE_NAME);
     }
     return filenames;
@@ -314,8 +315,10 @@ void loadTable(Context & context,
     }
     catch (const Exception & e)
     {
-        throw Exception("Cannot create table from metadata file " + table_metadata_path + ", error: " + e.displayText() + ", stack trace:\n"
-                            + e.getStackTrace().toString(),
+        throw Exception(fmt::format("Cannot create table from metadata file {}, error: {}, stack trace:\n{}",
+                                    table_metadata_path,
+                                    e.displayText(),
+                                    e.getStackTrace().toString()),
                         ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
     }
 }
