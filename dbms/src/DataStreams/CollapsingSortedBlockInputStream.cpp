@@ -3,6 +3,7 @@
 #include <Common/FmtUtils.h>
 #include <DataStreams/CollapsingSortedBlockInputStream.h>
 #include <common/logger_useful.h>
+#include <iterator>
 
 /// Maximum number of messages about incorrect data in the log.
 #define MAX_ERROR_MESSAGES 10
@@ -24,12 +25,10 @@ void CollapsingSortedBlockInputStream::reportIncorrectData()
         "Incorrect data: number of rows with sign = 1 ({}) differs with number of rows with sign = -1 ({}) by more than one (for key: ",
         count_positive,
         count_negative);
-    for (size_t i = 0, size = current_key.size(); i < size; ++i)
-    {
-        if (i != 0)
-            fmt_buf.append(", ");
-        fmt_buf.append(applyVisitor(FieldVisitorToString(), (*(*current_key.columns)[i])[current_key.row_num]));
-    }
+
+    fmt_buf.joinStr(std::begin(*current_key.columns), std::end(*current_key.columns), [this](const auto arg, FmtBuffer & fb) {
+        fb.append(applyVisitor(FieldVisitorToString(), (*arg)[current_key.row_num]));
+    }, ", ");
     fmt_buf.append(").");
 
     /** Fow now we limit ourselves to just logging such situations,
