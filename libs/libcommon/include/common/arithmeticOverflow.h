@@ -103,18 +103,4 @@ inline bool mulOverflow(__int128 x, __int128 y, __int128 & res)
     unsigned __int128 b = (y > 0) ? y : -y;
     return (a * b) / b != a;
 }
-
-template <>
-inline bool mulOverflow(DB::Int256 x, DB::Int256 y, DB::Int256 & res)
-{
-    try
-    {
-        res = x * y;
-    }
-    catch (std::overflow_error &)
-    {
-        return true;
-    }
-    return false;
-}
 } // namespace common
