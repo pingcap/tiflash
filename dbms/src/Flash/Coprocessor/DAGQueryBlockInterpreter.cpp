@@ -268,10 +268,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
     DAGStorageInterpreter storage_interpreter(context, query_block, ts, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
-    /// record local io input stream
-    auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
-    pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
-
     analyzer = std::move(storage_interpreter.analyzer);
     need_add_cast_column_flag_for_tablescan = std::move(storage_interpreter.is_need_add_cast_column);
 
@@ -303,6 +299,10 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, DAGPipeline
         sort(ranges.begin(), ranges.end());
         executeRemoteQueryImpl(pipeline, ranges, *dag_req, *schema);
     }
+
+    /// record local and remote io input stream
+    auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
+    pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
 
     if (pipeline.streams.empty())
     {
@@ -909,7 +909,6 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;
     size_t rest_task = all_tasks.size() % concurrent_num;
-    auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
     for (size_t i = 0, task_start = 0; i < concurrent_num; i++)
     {
         size_t task_end = task_start + task_per_thread;
@@ -922,7 +921,6 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, taskLogger());
         pipeline.streams.push_back(input);
-        table_scan_io_input_streams.push_back(input);
         task_start = task_end;
     }
 }
