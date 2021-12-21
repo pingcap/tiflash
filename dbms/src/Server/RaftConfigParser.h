@@ -1,3 +1,4 @@
+#pragma once
 #include <Core/Types.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
@@ -14,7 +15,6 @@ class LayeredConfiguration;
 
 namespace DB
 {
-
 struct TiFlashRaftConfig
 {
     const std::string engine_key = "engine";
@@ -34,7 +34,6 @@ public:
     TiFlashRaftConfig() = default;
 
     static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
-
 };
 
 } // namespace DB
