@@ -5,8 +5,6 @@
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
-#include <iterator>
-
 /// Maximum number of messages about incorrect data in the log.
 #define MAX_ERROR_MESSAGES 10
 
