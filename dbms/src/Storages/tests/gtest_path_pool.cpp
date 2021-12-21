@@ -321,5 +321,39 @@ try
     }
 }
 CATCH
+
+static void createIfNotExist(const String & path)
+{
+    if (Poco::File file(path); !file.exists())
+        file.createDirectories();
+}
+
+TEST(PathCapcatity, FsStats)
+try
+{
+    std::string main_data_path = TiFlashTestEnv::getTemporaryPath() + "/main";
+    createIfNotExist(main_data_path);
+    
+    std::string latest_data_path = TiFlashTestEnv::getTemporaryPath() + "/lastest";
+    createIfNotExist(latest_data_path);
+    
+    size_t global_capacity_quota = 10;
+    size_t capacity = 100;
+    {
+        PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {capacity}, {latest_data_path}, {capacity});
+
+        FsStats fs_stats = path_capacity.getFsStats();
+        EXPECT_EQ(fs_stats.capacity_size, 2 * capacity); // summing the capacity of main and latest path
+    }
+
+    {
+        PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {}, {latest_data_path}, {});
+
+        FsStats fs_stats = path_capacity.getFsStats();
+        EXPECT_EQ(fs_stats.capacity_size, global_capacity_quota); // Use `global_capacity_quota` when `main_capacity_quota_` is empty
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
