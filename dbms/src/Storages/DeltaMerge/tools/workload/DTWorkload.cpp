@@ -15,7 +15,6 @@
 #include <Storages/DeltaMerge/tools/workload/TimestampGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/Utils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <common/logger_fmt_useful.h>
 #include <cpptoml.h>
 
 namespace DB::DM::tests
