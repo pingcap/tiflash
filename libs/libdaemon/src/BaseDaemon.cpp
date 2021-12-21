@@ -184,6 +184,8 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
     char buf[buf_size];
     DB::WriteBufferFromFileDescriptor out(signal_pipe.write_fd, buf_size, buf);
 
+    // different arch, different unwinder will have different definition for unwind
+    // context; therefore, we catpure unw_context_t instead of ucontext_t
     unw_context_t unw_context;
     unw_getcontext(&unw_context);
 
@@ -213,6 +215,8 @@ size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, unw_context_t &
     unw_cursor_t cursor;
 
 #ifdef USE_LLVM_LIBUNWIND
+    // LLVM does not require UNW_INIT_SIGNAL_FRAME (assuming that signal frame CFIs are set correctly)
+    // see https://lists.llvm.org/pipermail/llvm-dev/2021-December/154419.html
     if (unw_init_local(&cursor, &unw_context) < 0)
         return 0;
 #else
