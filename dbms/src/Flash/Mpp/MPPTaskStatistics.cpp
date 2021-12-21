@@ -52,7 +52,9 @@ void MPPTaskStatistics::logTracingJson()
 {
     LOG_FMT_INFO(
         logger,
-        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
+        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}",)"
+        R"("task_init_timestamp":{},"compile_start_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},)"
+        R"("status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         sender_executor_id,
