@@ -53,6 +53,7 @@ class CoprocessorReader
 {
 public:
     static constexpr bool is_streaming_reader = false;
+    static constexpr auto name = "CoprocessorReader";
 
 private:
     DAGSchema schema;
@@ -77,7 +78,11 @@ public:
 
     void cancel() { resp_iter.cancel(); }
 
-    static Int64 decodeChunks(std::shared_ptr<tipb::SelectResponse> & resp, std::queue<Block> & block_queue, const DataTypes & expected_types, const DAGSchema & schema)
+    static Int64 decodeChunks(
+        const std::shared_ptr<tipb::SelectResponse> & resp,
+        std::queue<Block> & block_queue,
+        const Block & header,
+        const DAGSchema & schema)
     {
         Int64 rows = 0;
         int chunk_size = resp->chunks_size();
@@ -91,7 +96,7 @@ public:
             switch (resp->encode_type())
             {
             case tipb::EncodeType::TypeCHBlock:
-                block = CHBlockChunkCodec().decode(chunk.rows_data(), schema);
+                block = CHBlockChunkCodec(header).decode(chunk.rows_data(), schema);
                 break;
             case tipb::EncodeType::TypeChunk:
                 block = ArrowChunkCodec().decode(chunk.rows_data(), schema);
@@ -107,31 +112,33 @@ public:
 
             if (unlikely(block.rows() == 0))
                 continue;
-            assertBlockSchema(expected_types, block, "CoprocessorReader decode chunks");
+            /// CHBlockChunkCodec::decode already checked the schema.
+            if (resp->encode_type() != tipb::EncodeType::TypeCHBlock)
+                assertBlockSchema(header, block, "CoprocessorReader decode chunks");
             block_queue.push(std::move(block));
         }
         return rows;
     }
-    CoprocessorReaderResult nextResult(size_t upstream_id [[maybe_unused]], std::queue<Block> & block_queue, const DataTypes & expected_types)
+
+    CoprocessorReaderResult nextResult(size_t upstream_id [[maybe_unused]], std::queue<Block> & block_queue, const Block & header)
     {
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
-        {
             return {nullptr, true, result.error.message(), false};
-        }
         if (!has_next)
-        {
             return {nullptr, false, "", true};
-        }
-        const std::string & data = result.data();
-        std::shared_ptr<tipb::SelectResponse> resp = std::make_shared<tipb::SelectResponse>();
-        if (resp->ParseFromString(data))
+
+        auto resp = std::make_shared<tipb::SelectResponse>();
+        if (resp->ParseFromString(result.data()))
         {
             if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock)
-                return {nullptr, true, "Encode type of coprocessor response is not CHBlock, "
-                                       "maybe the version of some TiFlash node in the cluster is not match with this one",
-                        false};
-            auto rows = decodeChunks(resp, block_queue, expected_types, schema);
+                return {
+                    nullptr,
+                    true,
+                    "Encode type of coprocessor response is not CHBlock, "
+                    "maybe the version of some TiFlash node in the cluster is not match with this one",
+                    false};
+            auto rows = decodeChunks(resp, block_queue, header, schema);
             return {resp, false, "", false, rows};
         }
         else
@@ -140,7 +147,6 @@ public:
         }
     }
 
-    size_t getSourceNum() { return 1; }
-    String getName() { return "CoprocessorReader"; }
+    size_t getSourceNum() const { return 1; }
 };
 } // namespace DB

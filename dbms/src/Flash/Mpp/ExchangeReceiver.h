@@ -74,6 +74,7 @@ class ExchangeReceiverBase
 {
 public:
     static constexpr bool is_streaming_reader = true;
+    static constexpr auto name = "ExchangeReceiver";
 
 public:
     ExchangeReceiverBase(
@@ -93,15 +94,17 @@ public:
 
     std::atomic<size_t> num_upstreams = 0;
 
-    ExchangeReceiverResult nextResult(size_t upstream_id, BlockQueue & block_queue, const DataTypes & expected_types);
+    ExchangeReceiverResult nextResult(size_t upstream_id, BlockQueue & block_queue, const Block & header);
 
     // void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
     void clearMessage(std::shared_ptr<ReceivedMessage> & recv_msg);
 
-    Int64 decodeChunks(size_t upstream_id, std::shared_ptr<ReceivedMessage> & recv_msg, BlockQueue & block_queue, const DataTypes & expected_types);
+    Int64 decodeChunks(size_t upstream_id, std::shared_ptr<ReceivedMessage> & recv_msg, BlockQueue & block_queue, const Block & header);
 
-    size_t getSourceNum() { return source_num; }
-    String getName() { return "ExchangeReceiver"; }
+    size_t getSourceNum() const
+    {
+        return source_num;
+    }
 
 private:
     void setUpConnection();

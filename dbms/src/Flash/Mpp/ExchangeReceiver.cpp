@@ -290,7 +290,7 @@ void ExchangeReceiverBase<RPCContext>::clearMessage(std::shared_ptr<ReceivedMess
 }
 
 template <typename RPCContext>
-Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(size_t upstream_id, std::shared_ptr<ReceivedMessage> & recv_msg, BlockQueue & block_queue, const DataTypes & expected_types)
+Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(size_t upstream_id, std::shared_ptr<ReceivedMessage> & recv_msg, BlockQueue & block_queue, const Block & header)
 {
     assert(recv_msg != nullptr);
     Int64 rows = 0;
@@ -300,20 +300,20 @@ Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(size_t upstream_id, std::sh
         return rows;
 
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
+    CHBlockChunkCodec codec(header);
     for (int i = upstream_id; i < chunk_size; i += num_streams)
     {
-        Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
+        Block block = codec.decode(recv_msg->packet->chunks(i), schema);
         rows += block.rows();
         if (unlikely(block.rows() == 0))
             continue;
-        assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
         block_queue.push(std::move(block));
     }
     return rows;
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(size_t upstream_id, std::queue<Block> & block_queue, const DataTypes & expected_types)
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(size_t upstream_id, std::queue<Block> & block_queue, const Block & header)
 {
     std::shared_ptr<ReceivedMessage> recv_msg;
 
@@ -393,7 +393,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(size_t upstr
                 if (!resp_ptr->chunks().empty())
                 {
                     assert(recv_msg->packet->chunks().empty());
-                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
+                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, header, schema);
                 }
             }
         }
@@ -404,7 +404,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(size_t upstr
         if (!result.meet_error && !recv_msg->packet->chunks().empty())
         {
             assert(result.rows == 0);
-            result.rows = decodeChunks(upstream_id, recv_msg, block_queue, expected_types);
+            result.rows = decodeChunks(upstream_id, recv_msg, block_queue, header);
         }
     }
 
