@@ -388,6 +388,8 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
         hard_link_file.setFormal();
         gc_file_edit.concate(edit_);
+        // After the hard link file is created, the original file will be removed later and subtract its data size from the delegator.
+        // So we need to increase the data size for the hard link file for correctness on the disk data usage in a longer time dimension.
         delegator->addPageFileUsedSize(
             hard_link_file.fileIdLevel(),
             hard_link_file.getDataFileSize(),
