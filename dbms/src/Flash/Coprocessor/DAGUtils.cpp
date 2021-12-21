@@ -680,10 +680,11 @@ void assertBlockSchema(
 
         if (!expected->equals(*actual))
             throw Exception(
-                fmt::format("Block schema mismatch in {}: different types: expected {}, got {}",
-                            context_description,
-                            expected->getName(),
-                            actual->getName()));
+                fmt::format(
+                    "Block schema mismatch in {}: different types: expected {}, got {}",
+                    context_description,
+                    expected->getName(),
+                    actual->getName()));
     }
 }
 
