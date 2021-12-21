@@ -51,6 +51,9 @@ if (NOT USE_LLVM_LIBUNWIND)
     endif ()
     message (STATUS "Using unwind=${USE_UNWIND}: ${UNWIND_INCLUDE_DIR} : ${UNWIND_LIBRARY}")
 else()
+    # TODO: 
+    # LLVM exposes libunwind.h recently, but it is not yet avaiable in 13.0.0
+    # https://lists.llvm.org/pipermail/llvm-dev/2021-December/154418.html
     find_library (UNWIND_LIBRARY unwind)
     set(UNWIND_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libunwind-llvm")
     set (USE_UNWIND 1)
