@@ -1,0 +1,123 @@
+FROM centos:7
+
+RUN  yum install -y epel-release centos-release-scl && \
+     yum install -y git perl wget cmake3 glibc-static zsh diffutils ninja-build devtoolset-10 && \
+     yum -y install 'perl(Data::Dumper)' && \
+     yum clean all -y
+
+ENV PATH="/usr/local/bin/:${PATH}"
+ENV LIBRARY_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/:${LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/:${LD_LIBRARY_PATH}"
+ENV CPLUS_INCLUDE_PATH="/usr/local/include/x86_64-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH}"
+
+RUN  source scl_source enable devtoolset-10 && \
+     git clone https://github.com/llvm/llvm-project --depth=1 -b llvmorg-13.0.0 && \
+     mkdir -p llvm-project/build && \
+     cd llvm-project/build && \
+     cmake3 -DCMAKE_BUILD_TYPE=Release \
+        -GNinja \
+        -DLLVM_ENABLE_PROJECTS="clang;lld" \
+        -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind" \
+        -DLLVM_TARGETS_TO_BUILD=Native \
+        -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON \
+        -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
+        ../llvm && \
+     ninja && \
+     ninja install && \
+     cd ../.. && \
+     rm -rf llvm-project/build && \
+     mkdir -p llvm-project/build && \
+     cd llvm-project/build && \
+     cmake3 -DCMAKE_BUILD_TYPE=Release \
+        -GNinja \
+        -DLLVM_ENABLE_PROJECTS="clang;lld;polly" \
+        -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind;openmp" \
+        -DLLVM_TARGETS_TO_BUILD=Native \
+        -DLIBCXXABI_USE_COMPILER_RT=ON \
+        -DLIBCXXABI_USE_LLVM_UNWINDER=ON \
+        -DLIBUNWIND_USE_COMPILER_RT=ON \
+        -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON \
+        -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
+        -DCLANG_DEFAULT_LINKER=lld \
+        -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
+        -DCLANG_DEFAULT_RTLIB=compiler-rt \
+        -DCLANG_DEFAULT_UNWINDLIB=libunwind \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=clang \
+        -DLLVM_ENABLE_LIBCXX=ON \
+        -DLLVM_ENABLE_LLD=ON \
+        -DLIBOMP_LIBFLAGS="-lm" \
+        ../llvm && \
+     ninja && \
+     ninja install && \
+     cd ../.. && \
+     rm -rf llvm-project
+
+ENV  CC=clang
+ENV  CXX=clang++
+ENV  LD=ld.lld
+
+RUN  wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1l.tar.gz && \
+     tar xvf OpenSSL_1_1_1l.tar.gz && \
+     cd openssl-OpenSSL_1_1_1l && \
+     ./config -fPIC no-shared no-afalgeng --prefix=/usr/local/opt/openssl --openssldir=/usr/local/opt/openssl -static && \
+     NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)} && \
+     make -j ${NPROC} && \
+     make install_sw install_ssldirs && \
+     cd .. && \
+     rm -rf openssl-OpenSSL_1_1_1l && \ 
+     rm -rf OpenSSL_1_1_1l.tar.gz
+
+RUN  wget https://dl.google.com/go/go1.17.linux-amd64.tar.gz && \
+     tar -C /usr/local -xzvf go1.17.linux-amd64.tar.gz && \
+     rm -rf go1.17.linux-amd64.tar.gz
+
+ENV  PATH="$PATH:/usr/local/go/bin"
+RUN  curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly
+COPY cargo-config /root/.cargo/config
+ENV OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
+
+RUN  NPROC=$(nproc || grep -c ^processor /proc/cpuinfo) && \
+     wget https://github.com/curl/curl/releases/download/curl-7_80_0/curl-7.80.0.tar.gz && \
+     tar zxf curl-7.80.0.tar.gz && \
+     cd curl-7.80.0 && \
+     ./configure --with-openssl=/usr/local/opt/openssl --disable-shared && \
+     make -j ${NPROC} && \
+     make install && \
+     cd .. && \
+     rm -rf curl-7.80.0 && \
+     rm -rf curl-7.80.0.tar.gz
+
+RUN git clone https://github.com/grpc/grpc.git -b v1.26.0 --depth=1 --recursive && \
+    mkdir -p grpc/build && \
+    cd grpc/build && \
+    cmake3 .. -DgRPC_BUILD_TESTS=OFF \
+	     -DCMAKE_BUILD_TYPE=Release \
+              -DLINKER_NAME=lld \
+              -GNinja \
+              -DCMAKE_C_COMPILER=clang \
+              -DCMAKE_CXX_COMPILER=clang++ \
+              -DCMAKE_C_FLAGS="${CFLAGS} -DPTRACE_O_EXITKILL=0x100000 -w" \
+              -DCMAKE_CXX_FLAGS="${CXXFLAGS} -DPTRACE_O_EXITKILL=0x100000 -w" && \
+    ninja && \
+    ninja install && \
+    cd .. && \
+    rm -rf build && \
+    mkdir build && \
+    cd build && \
+    cmake3 .. -DgRPC_BUILD_TESTS=OFF \
+              -DCMAKE_BUILD_TYPE=Release \
+              -GNinja \
+              -DgRPC_INSTALL=ON \
+              -DgRPC_PROTOBUF_PROVIDER=package \
+              -DgRPC_ZLIB_PROVIDER=package \
+              -DgRPC_CARES_PROVIDER=package \
+              -DgRPC_SSL_PROVIDER=package \
+              -DCMAKE_C_COMPILER=clang \
+              -DCMAKE_CXX_COMPILER=clang++ \
+              -DCMAKE_C_FLAGS="${CFLAGS} -DPTRACE_O_EXITKILL=0x100000 -w" \                        
+              -DCMAKE_CXX_FLAGS="${CXXFLAGS} -DPTRACE_O_EXITKILL=0x100000 -w" && \
+    ninja && \
+    ninja install && \
+    cd ../.. && \
+    rm -rf grpc
