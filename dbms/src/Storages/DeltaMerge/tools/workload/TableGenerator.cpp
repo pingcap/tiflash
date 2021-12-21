@@ -1,8 +1,8 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
-#include <Storages/DeltaMerge/tests/workload/Options.h>
-#include <Storages/DeltaMerge/tests/workload/TableGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/Options.h>
+#include <Storages/DeltaMerge/tools/workload/TableGenerator.h>
 #include <fmt/ranges.h>
 
 #include <random>

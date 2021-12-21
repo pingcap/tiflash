@@ -3,7 +3,7 @@
 
 namespace DB::DM::tests
 {
-class WorkloadOptions;
+struct WorkloadOptions;
 
 struct TableInfo
 {
