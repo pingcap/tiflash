@@ -35,7 +35,7 @@ struct WorkloadOptions
     uint64_t read_thread_count;
     uint64_t read_stream_count;
 
-    bool daily_test;
+    std::string testing_type;
 
     bool log_write_request;
 

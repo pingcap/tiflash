@@ -33,17 +33,16 @@ DB::Settings createSettings(const std::string & fname)
     return settings;
 }
 
-DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_)
+DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_)
     : log(&Poco::Logger::get("DTWorkload"))
     , opts(std::make_unique<WorkloadOptions>(opts_))
+    , table_info(std::make_unique<TableInfo>(table_info_))
     , handle_table(handle_table_)
     , writing_threads(0)
 {
     auto settings = createSettings(opts_.config_file);
     context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext(settings, opts_.work_dirs));
 
-    table_gen = TableGenerator::create(opts_);
-    table_info = std::make_unique<TableInfo>(table_gen->get());
     auto v = table_info->toStrings();
     for (const auto & s : v)
     {

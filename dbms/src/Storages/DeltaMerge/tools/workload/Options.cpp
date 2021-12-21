@@ -29,7 +29,7 @@ std::string WorkloadOptions::toString(std::string seperator) const
         fmt::format("config_file {}{}", config_file, seperator) + //
         fmt::format("read_thread_count {}{}", read_thread_count, seperator) + //
         fmt::format("read_stream_count {}{}", read_stream_count, seperator) + //
-        fmt::format("daily_test {}{}", daily_test, seperator) + //
+        fmt::format("testing_type {}{}", testing_type, seperator) + //
         fmt::format("log_write_request {}{}", log_write_request, seperator);
 }
 
@@ -47,7 +47,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("max_write_per_sec", value<uint64_t>()->default_value(0), "") //
         //
         ("table", value<std::string>()->default_value("constant"), "constant/random") //
-        ("pk_type", value<std::string>()->default_value(""), "tidb_rowid/pk_is_handle64") //
+        ("pk_type", value<std::string>()->default_value("tidb_rowid"), "tidb_rowid") //
         ("columns_count", value<uint64_t>()->default_value(0), "0 means random columns count") //
         //
         ("failpoints,F", value<std::vector<std::string>>()->multitoken(), "failpoint(s) to enable: fp1 fp2 fp3...") //
@@ -67,7 +67,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("read_thread_count", value<uint64_t>()->default_value(1), "") //
         ("read_stream_count", value<uint64_t>()->default_value(4), "") //
         //
-        ("daily_test", value<bool>()->default_value(false), "") //
+        ("testing_type", value<std::string>()->default_value(""), "daily_perf/daily_random") //
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
         ;
@@ -89,6 +89,10 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     table = vm["table"].as<std::string>();
     pk_type = vm["pk_type"].as<std::string>();
+    if (pk_type != "tidb_rowid")
+    {
+        return {false, fmt::format("pk_type must be tidb_rowid.")};
+    }
     columns_count = vm["columns_count"].as<uint64_t>();
 
     if (vm.count("failpoints"))
@@ -125,7 +129,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     read_thread_count = vm["read_thread_count"].as<uint64_t>();
     read_stream_count = vm["read_stream_count"].as<uint64_t>();
 
-    daily_test = vm["daily_test"].as<bool>();
+    testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
 
     return {true, toString()};

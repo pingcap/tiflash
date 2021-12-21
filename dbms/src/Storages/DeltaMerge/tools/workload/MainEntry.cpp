@@ -77,6 +77,11 @@ void print(Poco::Logger * log, uint64_t i, const BasicStatistics & stat, Workloa
     LOG_INFO(log, s);
 }
 
+void outputResultHeader()
+{
+    std::cout << "Date,Table Schema,Workload,Init Seconds,Write Speed(rows count),Read Speed(rows count)" << std::endl;
+}
+
 void outputResult(Poco::Logger * log, const std::vector<BasicStatistics> & stats, WorkloadOptions & opts)
 {
     BasicStatistics total_stat;
@@ -88,8 +93,8 @@ void outputResult(Poco::Logger * log, const std::vector<BasicStatistics> & stats
         total_stat.read_count += stat.read_count;
         total_stat.read_sec += stat.read_sec;
     }
-    // Date Workload MaxInitSec WriteQPS ReadQPS
-    auto s = fmt::format("{}, {}, {}, {}, {}", localDate(), opts.write_key_distribution, total_stat.init_sec, total_stat.write_count / total_stat.write_sec, total_stat.read_count / total_stat.read_sec);
+    // Date, Table Schema, Workload, Init Seconds, Write Speed(rows count), Read Speed(rows count)
+    auto s = fmt::format("{},{},{},{:.2f},{:.2f},{:.2f}", localDate(), opts.table, opts.write_key_distribution, total_stat.init_sec, total_stat.write_count / total_stat.write_sec, total_stat.read_count / total_stat.read_sec);
     LOG_INFO(log, s);
     std::cout << s << std::endl;
 }
@@ -110,10 +115,13 @@ void run(WorkloadOptions & opts)
     {
         // HandleTable is a unordered_map that stores handle->timestamp for data verified.
         auto handle_table = createHandleTable(opts);
+        // Table Schema
+        auto table_gen = TableGenerator::create(opts);
+        auto table_info = table_gen->get();
         // In this for loop, destory DeltaMergeStore gracefully and recreate it.
         for (uint64_t i = 0; i < opts.verify_round; i++)
         {
-            DTWorkload workload(opts, handle_table);
+            DTWorkload workload(opts, handle_table, table_info);
             workload.run(i);
             basic_stats.emplace_back(workload.getStat());
             print(log, i, basic_stats.back(), opts);
@@ -205,12 +213,26 @@ void runAndRandomKill(WorkloadOptions & opts)
     }
 }
 
-void dailyTest(WorkloadOptions & opts)
+void dailyPerformanceTest(WorkloadOptions & opts)
 {
+    outputResultHeader();
     std::vector<std::string> workloads{"uniform", "normal", "incremental"};
     for (const auto & w : workloads)
     {
         opts.write_key_distribution = w;
+        ::run(opts);
+    }
+}
+
+void dailyRandomTest(WorkloadOptions & opts)
+{
+    outputResultHeader();
+    static std::random_device rd;
+    static std::mt19937_64 rand_gen(rd());
+    opts.table = "random";
+    for (int i = 0; i < 3; i++)
+    {
+        opts.columns_count = rand_gen() % 40 + 10; // 10~49 columns.
         ::run(opts);
     }
 }
@@ -227,9 +249,13 @@ int DTWorkload::mainEntry(int argc, char ** argv)
 
     TiFlashTestEnv::initializeGlobalContext(opts.work_dirs);
 
-    if (opts.daily_test)
+    if (opts.testing_type == "daily_perf")
     {
-        dailyTest(opts);
+        dailyPerformanceTest(opts);
+    }
+    else if (opts.testing_type == "daily_random")
+    {
+        dailyRandomTest(opts);
     }
     else
     {

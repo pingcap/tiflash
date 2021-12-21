@@ -231,7 +231,7 @@ private:
 
     std::string randomString()
     {
-        static constexpr int max_size = 1024 * 4; // 4KB
+        static constexpr int max_size = 1024; // 1KB
         int size = rand_gen() % max_size + 1;
         std::string str(size, 0);
         std::generate_n(str.begin(), str.size(), [this]() { return charset[rand_gen() % charset.size()]; });
