@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
@@ -27,22 +28,23 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     {
         String pd_service_addrs = config.getString("raft.pd_addr");
         Poco::StringTokenizer string_tokens(pd_service_addrs, ",");
-        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+        for (const auto & string_token : string_tokens)
         {
-            res.pd_addrs.push_back(*it);
+            res.pd_addrs.push_back(string_token);
         }
-        LOG_INFO(log, "Found pd addrs: " << pd_service_addrs);
+        LOG_FMT_INFO(log, "Found pd addrs: {}", pd_service_addrs);
     }
     else
     {
-        LOG_INFO(log, "Not found pd addrs.");
+        LOG_FMT_INFO(log, "Not found pd addrs.");
     }
 
     if (config.has("raft.ignore_databases"))
     {
         String ignore_dbs = config.getString("raft.ignore_databases");
         Poco::StringTokenizer string_tokens(ignore_dbs, ",");
-        std::stringstream ss;
+        FmtBuffer fmt_buf;
+
         bool first = true;
         for (auto string_token : string_tokens)
         {
@@ -51,10 +53,10 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
             if (first)
                 first = false;
             else
-                ss << ", ";
-            ss << string_token;
+                fmt_buf.append(", ");
+            fmt_buf.append(string_token);
         }
-        LOG_INFO(log, "Found ignore databases:" << ss.str());
+        LOG_FMT_INFO(log, "Found ignore databases: {}", fmt_buf.toString());
     }
 
     if (config.has("raft.storage_engine"))
@@ -133,7 +135,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         break;
     }
 
-    LOG_INFO(log, fmt::format("Default storage engine [type={}] [snapshot.method={}]", static_cast<Int64>(res.engine), applyMethodToString(res.snapshot_apply_method)));
+    LOG_FMT_INFO(log, "Default storage engine [type={}] [snapshot.method={}]", static_cast<Int64>(res.engine), applyMethodToString(res.snapshot_apply_method));
 
     return res;
 }

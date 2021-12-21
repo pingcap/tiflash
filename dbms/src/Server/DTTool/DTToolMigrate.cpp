@@ -173,9 +173,9 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             args.file_id,
             args.no_keep};
         auto src_file = DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
-        LOG_INFO(logger, "source version: " << (src_file->getConfiguration() ? 2 : 1));
-        LOG_INFO(logger, "source bytes: " << src_file->getBytesOnDisk());
-        LOG_INFO(logger, "migration temporary directory: " << keeper.migration_temp_dir.path().c_str());
+        LOG_FMT_INFO(logger, "source version: {}", (src_file->getConfiguration() ? 2 : 1));
+        LOG_FMT_INFO(logger, "source bytes: {}", src_file->getBytesOnDisk());
+        LOG_FMT_INFO(logger, "migration temporary directory: {}", keeper.migration_temp_dir.path().c_str());
         DB::DM::DMConfigurationOpt option{};
 
         // if new format is the target, we construct a config file.
@@ -192,13 +192,13 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             throw DB::Exception(fmt::format("invalid dmfile version: {}", args.version));
         }
 
-        LOG_INFO(logger, "creating new dmfile");
+        LOG_FMT_INFO(logger, "creating new dmfile");
         auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), false, std::move(option));
 
-        LOG_INFO(logger, "creating input stream");
+        LOG_FMT_INFO(logger, "creating input stream");
         auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);
 
-        LOG_INFO(logger, "creating output stream");
+        LOG_FMT_INFO(logger, "creating output stream");
         auto output_stream = DB::DM::DMFileBlockOutputStream(
             context,
             new_file,
@@ -215,7 +215,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         // iterate all blocks and rewrite them to new dmfile
         while (auto block = input_stream->read())
         {
-            LOG_INFO(logger, "migrating block " << counter++ << " ( size: " << block.bytes() << " )");
+            LOG_FMT_INFO(logger, "migrating block {} ( size: {} )", counter++, block.bytes());
             if (!args.dry_mode)
                 output_stream.write(
                     block,
@@ -230,13 +230,13 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             keeper.markSuccess();
         }
 
-        LOG_INFO(logger, "checking meta status for new file");
+        LOG_FMT_INFO(logger, "checking meta status for new file");
         if (!args.dry_mode)
         {
             DB::DM::DMFile::restore(context.getFileProvider(), args.file_id, 1, keeper.migration_temp_dir.path(), DB::DM::DMFile::ReadMetaMode::all());
         }
     }
-    LOG_INFO(logger, "migration finished");
+    LOG_FMT_INFO(logger, "migration finished");
 
     return 0;
 }
