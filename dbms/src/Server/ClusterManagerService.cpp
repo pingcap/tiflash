@@ -69,7 +69,7 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
     args.push_back("--config");
     args.push_back(config_path);
 
-    LOG_FMT_INFO(log, "Registered timed cluster manager task at rate {} seconds");
+    LOG_FMT_INFO(log, "Registered timed cluster manager task at rate {} seconds", task_interval);
 
     timer.scheduleAtFixedRate(
         FunctionTimerTask::create([bin_path, args] { return runService(bin_path, args); }),
