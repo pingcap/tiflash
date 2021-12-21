@@ -16,6 +16,7 @@
 #include <Poco/DirectoryIterator.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -110,7 +111,9 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
         auto begin = file_names.begin() + i * bunch_size;
         auto end = (i + 1 == num_bunches) ? file_names.end() : (file_names.begin() + (i + 1) * bunch_size);
 
-        auto task = std::bind(task_function, begin, end);
+        auto task = [task_function, begin, end] {
+            return task_function(begin, end);
+        };
 
         if (thread_pool)
             thread_pool->schedule(task);
@@ -144,7 +147,7 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
     {
         std::lock_guard<std::mutex> lock(mutex);
         if (tables.find(table_name) != tables.end())
-            throw Exception("Table " + name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+            throw Exception(fmt::format("Table {}.{} already exists.", name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
     }
 
     String table_metadata_path = getTableMetadataPath(table_name);
@@ -169,7 +172,7 @@ void DatabaseOrdinary::createTable(const Context & context, const String & table
         {
             std::lock_guard<std::mutex> lock(mutex);
             if (!tables.emplace(table_name, table).second)
-                throw Exception("Table " + name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+                throw Exception(fmt::format("Table {}.{} already exists.", name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
         }
 
         context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path, EncryptionPath(table_metadata_path, ""), true);
@@ -217,13 +220,13 @@ void DatabaseOrdinary::renameTable(
     StoragePtr table = tryGetTable(context, table_name);
 
     if (!table)
-        throw Exception("Table " + name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+        throw Exception(fmt::format("Table {}.{} doesn't exist.", name, table_name), ErrorCodes::UNKNOWN_TABLE);
 
     /// Notify the table that it is renamed. If the table does not support renaming, exception is thrown.
     try
     {
         table->rename(
-            context.getPath() + "/data/" + escapeForFileName(to_database_concrete->name) + "/",
+            fmt::format("{}/data/{}/", context.getPath(), escapeForFileName(to_database_concrete->name)),
             to_database_concrete->name,
             to_table_name);
     }
@@ -242,7 +245,7 @@ void DatabaseOrdinary::renameTable(
 
     ASTPtr ast = DatabaseLoading::getQueryFromMetadata(context, detail::getTableMetadataPath(metadata_path, table_name));
     if (!ast)
-        throw Exception("There is no metadata file for table " + table_name, ErrorCodes::FILE_DOESNT_EXIST);
+        throw Exception(fmt::format("There is no metadata file for table {}", table_name), ErrorCodes::FILE_DOESNT_EXIST);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
     ast_create_query.table = to_table_name;
 
@@ -281,7 +284,7 @@ ASTPtr DatabaseOrdinary::getCreateTableQueryImpl(const Context & context, const 
 
         auto msg = has_table ? "There is no CREATE TABLE query for table " : "There is no metadata file for table ";
 
-        throw Exception(msg + table_name, ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
+        throw Exception(fmt::format("{}{}", msg, table_name), ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
     }
 
     return ast;
@@ -306,7 +309,7 @@ ASTPtr DatabaseOrdinary::getCreateDatabaseQuery(const Context & context) const
     if (!ast)
     {
         /// Handle databases (such as default) for which there are no database.sql files.
-        String query = "CREATE DATABASE " + backQuoteIfNeed(name) + " ENGINE = Ordinary";
+        String query = fmt::format("CREATE DATABASE {} ENGINE = Ordinary", backQuoteIfNeed(name));
         ParserCreateQuery parser;
         ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0);
     }
