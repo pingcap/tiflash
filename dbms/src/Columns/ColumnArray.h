@@ -115,6 +115,11 @@ public:
         return scatterImpl<ColumnArray>(num_columns, selector);
     }
 
+    void scatterTo(ScatterColumns & columns, const Selector & selector) const override
+    {
+        scatterToImpl<ColumnArray>(columns, selector);
+    }
+
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     void forEachSubcolumn(ColumnCallback callback) override

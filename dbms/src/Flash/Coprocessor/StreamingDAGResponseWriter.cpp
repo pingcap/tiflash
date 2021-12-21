@@ -193,15 +193,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
-    // std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
-    std::unique_ptr<ChunkCodecStream> codec;
-    if (encode_type == tipb::EncodeType::TypeDefault)
-        codec = DefaultChunkCodec().newCodecStream(result_field_types);
-    else if (encode_type == tipb::EncodeType::TypeChunk)
-        codec = ArrowChunkCodec().newCodecStream(result_field_types);
-    else if (encode_type == tipb::EncodeType::TypeCHBlock)
-        codec = CHBlockChunkCodec().newCodecStream(result_field_types);
-
     std::vector<mpp::MPPDataPacket> packet(partition_num);
 
     std::vector<size_t> responses_row_count(partition_num);
@@ -233,69 +224,89 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     // 2) partition each row
     // 3) encode each chunk and send it
     std::vector<String> partition_key_containers(collators.size());
+
+    size_t num_columns = 0, num_rows = 0;
+    std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
+
     for (auto & block : input_blocks)
     {
-        std::vector<Block> dest_blocks(num_chunks);
-        std::vector<MutableColumns> dest_tbl_cols(num_chunks);
+        num_rows += block.rows();
 
         for (size_t i = 0; i < block.columns(); ++i)
         {
             if (ColumnPtr converted = block.getByPosition(i).column->convertToFullColumnIfConst())
-            {
                 block.getByPosition(i).column = converted;
-            }
         }
+    }
 
-        for (size_t i = 0; i < num_chunks; ++i)
-        {
-            dest_tbl_cols[i] = block.cloneEmptyColumns();
-            dest_blocks[i] = block.cloneEmpty();
-        }
+    const auto header = input_blocks.front().cloneEmpty();
+    num_columns = header.columns();
 
+    scattered.resize(num_columns);
+    for (size_t i = 0; i < num_columns; ++i)
+        header.getByPosition(i).column->initializeScatterColumns(scattered[i], num_chunks, num_rows);
+
+    // partition every block into scattered
+    WeakHash32 hash(0);
+    IColumn::Selector selector;
+    for (auto & block : input_blocks)
+    {
         size_t rows = block.rows();
-        WeakHash32 hash(rows);
+        hash.reset(rows);
+        selector.resize(rows);
 
         // get hash values by all partition key columns
         for (size_t i = 0; i < partition_col_ids.size(); i++)
         {
-            block.getByPosition(partition_col_ids[i]).column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
+            auto & column = block.getByPosition(partition_col_ids[i]).column;
+            column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
         }
-        const auto & hash_data = hash.getData();
 
         // partition each row
-        IColumn::Selector selector(rows);
-        for (size_t row = 0; row < rows; ++row)
+        const auto & hash_data = hash.getData();
+        for (size_t i = 0; i < rows; ++i)
         {
             /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
-            selector[row] = hash_data[row]; /// [0, 2^32)
-            selector[row] *= num_chunks; /// [0, partition_num * 2^32), selector stores 64 bit values.
-            selector[row] >>= 32u; /// [0, partition_num)
+            selector[i] = hash_data[i]; /// [0, 2^32)
+            selector[i] *= num_chunks; /// [0, partition_num * 2^32), selector stores 64 bit values.
+            selector[i] >>= 32u; /// [0, partition_num)
         }
 
-        for (size_t col_id = 0; col_id < block.columns(); ++col_id)
+        for (size_t i = 0; i < block.columns(); ++i)
         {
             // Scatter columns to different partitions
-            auto scattered_columns = block.getByPosition(col_id).column->scatter(num_chunks, selector);
-            for (size_t part_id = 0; part_id < num_chunks; ++part_id)
-            {
-                dest_tbl_cols[part_id][col_id] = std::move(scattered_columns[part_id]);
-            }
-        }
-
-        // serialize each partitioned block and write it to its destination
-        for (size_t chunk_id = 0; chunk_id < num_chunks; ++chunk_id)
-        {
-            auto & chunk_block = dest_blocks[chunk_id];
-            chunk_block.setColumns(std::move(dest_tbl_cols[chunk_id]));
-
-            size_t part_id = chunk_id / num_streams;
-            responses_row_count[part_id] += chunk_block.rows();
-            codec->encode(chunk_block, 0, chunk_block.rows());
-            packet[part_id].add_chunks(codec->getString());
-            codec->clear();
+            const auto & column = block.getByPosition(i).column;
+            column->scatterTo(scattered[i], selector);
         }
     }
 
+    // encode chunks
+    std::unique_ptr<ChunkCodecStream> codec;
+    if (encode_type == tipb::EncodeType::TypeDefault)
+        codec = DefaultChunkCodec().newCodecStream(result_field_types);
+    else if (encode_type == tipb::EncodeType::TypeChunk)
+        codec = ArrowChunkCodec().newCodecStream(result_field_types);
+    else if (encode_type == tipb::EncodeType::TypeCHBlock)
+        codec = CHBlockChunkCodec().newCodecStream(result_field_types);
+
+    // serialize each partitioned block and write it to its destination
+    for (size_t chunk_id = 0; chunk_id < num_chunks; ++chunk_id)
+    {
+        MutableColumns columns;
+        columns.reserve(num_columns);
+        for (size_t col_id = 0; col_id < num_columns; ++col_id)
+            columns.emplace_back(std::move(scattered[col_id][chunk_id]));
+
+        auto block = header.cloneWithColumns(std::move(columns));
+
+        size_t part_id = chunk_id / num_streams;
+        responses_row_count[part_id] += block.rows();
+        codec->encode(block, 0, block.rows());
+        packet[part_id].add_chunks(codec->getString());
+        codec->clear();
+    }
+
+    // send packets
     for (auto part_id = 0; part_id < partition_num; ++part_id)
     {
         if constexpr (send_exec_summary_at_last)
