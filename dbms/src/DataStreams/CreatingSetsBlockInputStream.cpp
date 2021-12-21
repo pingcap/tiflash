@@ -111,7 +111,7 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setFinishBuildTable(false);
             }
         }
-        std::shared_ptr<ThreadManager> thd_manager = ThreadManager::generateThreadManager();
+        std::shared_ptr<ThreadManager> thd_manager = ThreadManager::createThreadManager();
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)

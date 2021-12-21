@@ -72,7 +72,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    auto thd_manager = ThreadManager::generateThreadManager(true);
+    auto thd_manager = ThreadManager::createThreadManager(true);
     thd_manager->schedule([this] { this->shared_from_this()->runImpl(); });
 }
 

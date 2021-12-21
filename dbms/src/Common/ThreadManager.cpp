@@ -6,8 +6,7 @@
 
 namespace DB
 {
-
-std::shared_ptr<ThreadManager> ThreadManager::generateThreadManager(bool detach_if_possible)
+std::shared_ptr<ThreadManager> ThreadManager::createThreadManager(bool detach_if_possible)
 {
     if (ElasticThreadPool::glb_instance)
         return std::make_shared<ElasticThreadManager>();

@@ -58,7 +58,7 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
-    thd_manager = ThreadManager::generateThreadManager();
+    thd_manager = ThreadManager::createThreadManager();
     for (size_t index = 0; index < source_num; ++index)
     {
         thd_manager->schedule([this, index] {

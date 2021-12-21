@@ -15,7 +15,6 @@
 #include <thread>
 
 
-
 /** Allows to process multiple block input streams (sources) in parallel, using specified number of threads.
   * Reads (pulls) blocks from any available source and passes it to specified handler.
   *
@@ -108,7 +107,7 @@ public:
     void process()
     {
         if (thd_manager == nullptr)
-            thd_manager = ThreadManager::generateThreadManager();
+            thd_manager = ThreadManager::createThreadManager();
         active_threads = max_threads;
         for (size_t i = 0; i < max_threads; ++i)
         {
