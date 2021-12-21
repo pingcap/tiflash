@@ -162,7 +162,7 @@ public:
 
 private:
     /// Hold io for correcting the destruction order.
-    Block io;
+    BlockIO io;
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
     std::map<String, ProfileStreamsInfo> profile_streams_map;
     /// profile_streams_map_for_join_build_side is a map that maps from join_build_subquery_name to
