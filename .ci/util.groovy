@@ -79,6 +79,10 @@ def runBuilderClosure(label, Closure body) {
                     alwaysPullImage: true, ttyEnabled: true, command: 'cat',
                     resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
                     resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
+            containerTemplate(name: 'builder-llvm', image: 'hub.pingcap.net/tiflash/tiflash-llvm-base:amd64',
+                    alwaysPullImage: true, ttyEnabled: true, command: 'cat',
+                    resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
+                    resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
     ],
     volumes: [
             nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
@@ -142,7 +146,7 @@ def runTest(label, name, testPath, tidbBranch) {
                     container("docker") {
                         sh """
                         pwd
-                        DOWNLOAD_TAR=true COMMIT_HASH=${params.ghprbActualCommit} PULL_ID=${params.ghprbPullId} TAR_PATH=./tests/.build bash -e release-centos7/build/fetch-ci-build.sh
+                        DOWNLOAD_TAR=true COMMIT_HASH=${params.ghprbActualCommit} PULL_ID=${params.ghprbPullId} TAR_PATH=./tests/.build bash -e release-centos7-llvm/scripts/fetch-ci-build.sh
                         """
                     }
                 }
@@ -175,22 +179,22 @@ def runUnitTests(label, CURWS, NPROC) {
         dir("${CURWS}/tics") {
             stage("Build") {
                 timeout(time: 70, unit: 'MINUTES') {
-                    container("builder") {
-                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} UPDATE_CCACHE=false ${CURWS}/tics/release-centos7/build/build-tiflash-ut-coverage.sh"
+                    container("builder-llvm") {
+                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} UPDATE_CCACHE=false ${CURWS}/tics/release-centos7-llvm/scripts/build-tiflash-ut-coverage.sh"
                     }
                 }
             }
             stage("Tests") {
                 timeout(time: 50, unit: 'MINUTES') {
-                    container("builder") {
-                        sh "NPROC=${NPROC_UT} /build/tics/release-centos7/build/run-ut.sh"
+                    container("builder-llvm") {
+                        sh "NPROC=${NPROC_UT} /build/tics/release-centos7-llvm/scripts/run-ut.sh"
                     }
                 }
             }
             stage("Show UT Coverage") {
                 timeout(time: 5, unit: 'MINUTES') {
-                    container("builder") {
-                        sh "NPROC=${NPROC} /build/tics/release-centos7/build/upload-ut-coverage.sh"
+                    container("builder-llvm") {
+                        sh "NPROC=${NPROC} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
                         sh """
                         cp /tmp/tiflash_gcovr_coverage.xml ./
                         cp /tmp/tiflash_gcovr_coverage.res ./

@@ -33,7 +33,7 @@ catchError {
             timeout(time: 60, unit: 'MINUTES') {
                 container("golang") {
                     sh  """
-                        COMMIT_HASH=${params.ghprbActualCommit} PULL_ID=${params.ghprbPullId} TAR_PATH=${curws}/tics/tests/.build bash -e ${curws}/tics/release-centos7/build/fetch-ci-build.sh
+                        COMMIT_HASH=${params.ghprbActualCommit} PULL_ID=${params.ghprbPullId} TAR_PATH=${curws}/tics/tests/.build bash -e ${curws}/tics/release-centos7-llvm/scripts/fetch-ci-build.sh
                         """
                 }
             }
