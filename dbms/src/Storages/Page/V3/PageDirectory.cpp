@@ -4,7 +4,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/WriteBatch.h>
-#include <common/logger_fmt_useful.h>
+#include <common/logger_useful.h>
 
 #include <memory>
 #include <mutex>
@@ -131,7 +131,6 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         }
         else
         {
-            // Just log a warning cause we have already persist edit to WAL, we can NOT rollback WAL
             throw Exception(fmt::format("Trying to add ref from {} to non-exist {} with sequence={}", r.page_id, r.ori_page_id, last_sequence + 1), ErrorCodes::LOGICAL_ERROR);
         }
     }
@@ -162,10 +161,12 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         switch (r.type)
         {
         case WriteBatch::WriteType::PUT:
+            [[fallthrough]];
         case WriteBatch::WriteType::UPSERT:
+            [[fallthrough]];
         case WriteBatch::WriteType::REF:
         {
-            // Append a new version for this page
+            // Put/upsert/ref all should append a new version for this page
             updating_pages[idx]->createNewVersion(last_sequence + 1, records[idx].entry);
             updating_locks.erase(records[idx].page_id);
             break;
