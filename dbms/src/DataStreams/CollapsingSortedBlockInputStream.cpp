@@ -3,6 +3,8 @@
 #include <Common/FmtUtils.h>
 #include <DataStreams/CollapsingSortedBlockInputStream.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
+
 #include <iterator>
 
 /// Maximum number of messages about incorrect data in the log.
@@ -26,9 +28,13 @@ void CollapsingSortedBlockInputStream::reportIncorrectData()
         count_positive,
         count_negative);
 
-    fmt_buf.joinStr(std::begin(*current_key.columns), std::end(*current_key.columns), [this](const auto arg, FmtBuffer & fb) {
-        fb.append(applyVisitor(FieldVisitorToString(), (*arg)[current_key.row_num]));
-    }, ", ");
+    fmt_buf.joinStr(
+        std::begin(*current_key.columns),
+        std::end(*current_key.columns),
+        [this](const auto arg, FmtBuffer & fb) {
+            fb.append(applyVisitor(FieldVisitorToString(), (*arg)[current_key.row_num]));
+        },
+        ", ");
     fmt_buf.append(").");
 
     /** Fow now we limit ourselves to just logging such situations,
@@ -111,7 +117,7 @@ Block CollapsingSortedBlockInputStream::readImpl()
     init(merged_columns);
 
     if (has_collation)
-        throw Exception("Logical error: " + getName() + " does not support collations", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Logical error: {} does not support collations", getName()), ErrorCodes::LOGICAL_ERROR);
 
     if (merged_columns.empty())
         return {};
