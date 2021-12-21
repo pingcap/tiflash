@@ -115,7 +115,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 }
                 return;
             }
-            for (auto & block : input_blocks)
+            for (const auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
                 packet.add_chunks(chunk_codec_stream->getString());
@@ -134,10 +134,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 }
                 return;
             }
-            for (auto & block : input_blocks)
+            for (const auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
-                auto dag_chunk = response.add_chunks();
+                auto * dag_chunk = response.add_chunks();
                 dag_chunk->set_rows_data(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
@@ -157,14 +157,14 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         }
 
         Int64 current_records_num = 0;
-        for (auto & block : input_blocks)
+        for (const auto & block : input_blocks)
         {
             size_t rows = block.rows();
             for (size_t row_index = 0; row_index < rows;)
             {
                 if (current_records_num >= records_per_chunk)
                 {
-                    auto dag_chunk = response.add_chunks();
+                    auto * dag_chunk = response.add_chunks();
                     dag_chunk->set_rows_data(chunk_codec_stream->getString());
                     chunk_codec_stream->clear();
                     current_records_num = 0;
@@ -178,7 +178,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
 
         if (current_records_num > 0)
         {
-            auto dag_chunk = response.add_chunks();
+            auto * dag_chunk = response.add_chunks();
             dag_chunk->set_rows_data(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
@@ -193,24 +193,20 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
-    std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
+    // std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
+    std::unique_ptr<ChunkCodecStream> codec;
+    if (encode_type == tipb::EncodeType::TypeDefault)
+        codec = DefaultChunkCodec().newCodecStream(result_field_types);
+    else if (encode_type == tipb::EncodeType::TypeChunk)
+        codec = ArrowChunkCodec().newCodecStream(result_field_types);
+    else if (encode_type == tipb::EncodeType::TypeCHBlock)
+        codec = CHBlockChunkCodec().newCodecStream(result_field_types);
+
     std::vector<mpp::MPPDataPacket> packet(partition_num);
 
     std::vector<size_t> responses_row_count(partition_num);
     for (auto i = 0; i < partition_num; ++i)
     {
-        if (encode_type == tipb::EncodeType::TypeDefault)
-        {
-            chunk_codec_stream[i] = DefaultChunkCodec().newCodecStream(result_field_types);
-        }
-        else if (encode_type == tipb::EncodeType::TypeChunk)
-        {
-            chunk_codec_stream[i] = ArrowChunkCodec().newCodecStream(result_field_types);
-        }
-        else if (encode_type == tipb::EncodeType::TypeCHBlock)
-        {
-            chunk_codec_stream[i] = CHBlockChunkCodec().newCodecStream(result_field_types);
-        }
         if constexpr (send_exec_summary_at_last)
         {
             /// Sending the response to only one node, default the first one.
@@ -294,9 +290,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
 
             size_t part_id = chunk_id / num_streams;
             responses_row_count[part_id] += chunk_block.rows();
-            chunk_codec_stream[part_id]->encode(chunk_block, 0, chunk_block.rows());
-            packet[part_id].add_chunks(chunk_codec_stream[part_id]->getString());
-            chunk_codec_stream[part_id]->clear();
+            codec->encode(chunk_block, 0, chunk_block.rows());
+            packet[part_id].add_chunks(codec->getString());
+            codec->clear();
         }
     }
 
