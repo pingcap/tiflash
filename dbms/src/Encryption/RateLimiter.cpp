@@ -308,12 +308,13 @@ Int64 ReadLimiter::refreshAvailableBalance()
     Int64 bytes = getIOStatistic();
     if (bytes < last_stat_bytes)
     {
-        LOG_FMT_WARNING(log,
-                        "last_stat {}:{} current_stat {}:{}",
-                        last_stat_time.time_since_epoch().count(),
-                        last_stat_bytes,
-                        us.time_since_epoch().count(),
-                        bytes);
+        LOG_FMT_WARNING(
+            log,
+            "last_stat {}:{} current_stat {}:{}",
+            last_stat_time.time_since_epoch().count(),
+            last_stat_bytes,
+            us.time_since_epoch().count(),
+            bytes);
     }
     else
     {
@@ -714,17 +715,19 @@ IOLimitTuner::TuneResult IOLimitTuner::tune() const
         max_write_bytes_per_sec,
         rw_tuned);
     auto [max_bg_read_bytes_per_sec, max_fg_read_bytes_per_sec, read_tuned] = tuneRead(max_read_bytes_per_sec);
-    LOG_FMT_INFO(log,
-                 "tuneRead: bg_read {} fg_read {} read_tuned {}",
-                 max_bg_read_bytes_per_sec,
-                 max_fg_read_bytes_per_sec,
-                 read_tuned);
+    LOG_FMT_INFO(
+        log,
+        "tuneRead: bg_read {} fg_read {} read_tuned {}",
+        max_bg_read_bytes_per_sec,
+        max_fg_read_bytes_per_sec,
+        read_tuned);
     auto [max_bg_write_bytes_per_sec, max_fg_write_bytes_per_sec, write_tuned] = tuneWrite(max_write_bytes_per_sec);
-    LOG_FMT_INFO(log,
-                 "tuneWrite: bg_write {} fg_write {} write_tuned {}",
-                 max_bg_write_bytes_per_sec,
-                 max_fg_write_bytes_per_sec,
-                 write_tuned);
+    LOG_FMT_INFO(
+        log,
+        "tuneWrite: bg_write {} fg_write {} write_tuned {}",
+        max_bg_write_bytes_per_sec,
+        max_fg_write_bytes_per_sec,
+        write_tuned);
     return {.max_bg_read_bytes_per_sec = max_bg_read_bytes_per_sec,
             .max_fg_read_bytes_per_sec = max_fg_read_bytes_per_sec,
             .read_tuned = read_tuned || rw_tuned,

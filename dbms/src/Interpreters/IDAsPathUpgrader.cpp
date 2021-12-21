@@ -24,6 +24,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -135,10 +136,11 @@ void renamePath(const String & old_path, const String & new_path, Poco::Logger *
     }
     else
     {
+        std::string err_msg = fmt::format(R"(Path "{}" is missing.)", old_path);
         if (must_success)
-            throw Exception("Path \"" + old_path + "\" is missing.");
+            throw Exception(err_msg);
         else
-            LOG_FMT_WARNING(log, "Path \"{}\" is missing.", old_path);
+            LOG_FMT_WARNING(log, err_msg);
     }
 }
 
@@ -491,10 +493,11 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
         catch (Poco::Exception & e)
         {
             const int wait_seconds = 3;
-            LOG_FMT_ERROR(log,
-                          "Upgrade failed because fetch schema error: {}\nWe will sleep for {} seconds and try again.",
-                          e.displayText(),
-                          wait_seconds);
+            LOG_FMT_ERROR(
+                log,
+                "Upgrade failed because fetch schema error: {}\nWe will sleep for {} seconds and try again.",
+                e.displayText(),
+                wait_seconds);
             ::sleep(wait_seconds);
         }
     }
@@ -626,12 +629,13 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             if (db_name_escaped == db_name && table_name_escaped == table.name())
                 continue;
 
-            LOG_FMT_INFO(log,
-                         "table `{}`.`{}` fixing name escape to `{}`.`{}`",
-                         db_name,
-                         table.name(),
-                         db_name_escaped,
-                         table_name_escaped);
+            LOG_FMT_INFO(
+                log,
+                "table `{}`.`{}` fixing name escape to `{}`.`{}`",
+                db_name,
+                table.name(),
+                db_name_escaped,
+                table_name_escaped);
             // Table's metadata don't need to fix.
 
             // Fix data path. It was create by DatabaseOrdinary and StorageDeltaMerge,
@@ -672,12 +676,13 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
                 auto escaped_extra_path = table.getExtraDirectory(extra_root_path, db_info, /*escape_db*/ true, /*escape_tbl*/ true);
                 renamePath(not_escaped_extra_path, escaped_extra_path, log, false);
             }
-            LOG_FMT_INFO(log,
-                         "table `{}`.`{}` fixing name escape to `{}`.`{}` done.",
-                         db_name,
-                         table.name(),
-                         db_name_escaped,
-                         table_name_escaped);
+            LOG_FMT_INFO(
+                log,
+                "table `{}`.`{}` fixing name escape to `{}`.`{}` done.",
+                db_name,
+                table.name(),
+                db_name_escaped,
+                table_name_escaped);
         }
 
         if (db_name != db_name_escaped)
@@ -711,12 +716,13 @@ void IDAsPathUpgrader::resolveConflictDirectories()
             if (auto iter = databases.find(new_tbl_name); iter != databases.end())
             {
                 conflict_databases.insert(iter->first);
-                LOG_FMT_INFO(log,
-                             "Detect cyclic renaming between table `{}`.`{}`(new name:{}) and database `{}`",
-                             db_name,
-                             table.name(),
-                             new_tbl_name,
-                             iter->first);
+                LOG_FMT_INFO(
+                    log,
+                    "Detect cyclic renaming between table `{}`.`{}`(new name:{}) and database `{}`",
+                    db_name,
+                    table.name(),
+                    new_tbl_name,
+                    iter->first);
             }
         }
 
@@ -726,11 +732,12 @@ void IDAsPathUpgrader::resolveConflictDirectories()
         if (auto iter = databases.find(new_database_name); iter != databases.end())
         {
             conflict_databases.insert(iter->first);
-            LOG_FMT_INFO(log,
-                         "Detect cyclic renaming between database `{}`(new name:{}) and database `{}`",
-                         db_name,
-                         new_database_name,
-                         iter->first);
+            LOG_FMT_INFO(
+                log,
+                "Detect cyclic renaming between database `{}`(new name:{}) and database `{}`",
+                db_name,
+                new_database_name,
+                iter->first);
         }
     }
     LOG_FMT_INFO(log, "Detect {} cyclic renaming", conflict_databases.size());
@@ -807,12 +814,13 @@ void IDAsPathUpgrader::renameTable(
     const TableDiskInfo & table)
 {
     const auto mapped_table_name = table.newName();
-    LOG_FMT_INFO(log,
-                 "table `{}`.`{}` to `{}`.`{}` renaming",
-                 db_name,
-                 table.name(),
-                 mapped_db_name,
-                 mapped_table_name);
+    LOG_FMT_INFO(
+        log,
+        "table `{}`.`{}` to `{}`.`{}` renaming",
+        db_name,
+        table.name(),
+        mapped_db_name,
+        mapped_table_name);
 
     String old_tbl_data_path;
     {
@@ -848,12 +856,13 @@ void IDAsPathUpgrader::renameTable(
         TiDB::TableInfo table_info = table.getInfo(); // get a copy
         if (table_info.is_partition_table)
         {
-            LOG_FMT_INFO(log,
-                         "partition table `{}`.`{}` to `{}`.`{}` update table info",
-                         db_name,
-                         table.name(),
-                         mapped_db_name,
-                         mapped_table_name);
+            LOG_FMT_INFO(
+                log,
+                "partition table `{}`.`{}` to `{}`.`{}` update table info",
+                db_name,
+                table.name(),
+                mapped_db_name,
+                mapped_table_name);
             // Old partition name is "${table_name}_${physical_id}" while new name is "t_${physical_id}"
             // If it is a partition table, we need to update TiDB::TableInfo::name
             do
@@ -882,12 +891,13 @@ void IDAsPathUpgrader::renameTable(
             file.remove();
     }
 
-    LOG_FMT_INFO(log,
-                 "table `{}`.`{}` to `{}`.`{}` rename done.",
-                 db_name,
-                 table.name(),
-                 mapped_db_name,
-                 mapped_table_name);
+    LOG_FMT_INFO(
+        log,
+        "table `{}`.`{}` to `{}`.`{}` rename done.",
+        db_name,
+        table.name(),
+        mapped_db_name,
+        mapped_table_name);
 }
 
 void IDAsPathUpgrader::doUpgrade()

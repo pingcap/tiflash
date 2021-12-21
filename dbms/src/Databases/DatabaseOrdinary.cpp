@@ -94,7 +94,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
             /// Messages, so that it's not boring to wait for the server to load for a long time.
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
-                LOG_FMT_INFO(log, "{:.2f}%", tables_processed * 100 / total_tables);
+                LOG_FMT_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
                 watch.restart();
             }
 

@@ -19,7 +19,6 @@ extern const int LOGICAL_ERROR;
 
 void CollapsingSortedBlockInputStream::reportIncorrectData()
 {
-    std::stringstream s;
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend(
         "Incorrect data: number of rows with sign = 1 ({}) differs with number of rows with sign = -1 ({}) by more than one (for key: ",
@@ -31,7 +30,6 @@ void CollapsingSortedBlockInputStream::reportIncorrectData()
             fmt_buf.append(", ");
         fmt_buf.append(applyVisitor(FieldVisitorToString(), (*(*current_key.columns)[i])[current_key.row_num]));
     }
-
     fmt_buf.append(").");
 
     /** Fow now we limit ourselves to just logging such situations,
@@ -197,7 +195,7 @@ void CollapsingSortedBlockInputStream::merge(MutableColumns & merged_columns, st
             last_is_positive = false;
         }
         else
-            throw Exception("Incorrect data: Sign = " + toString(sign) + " (must be 1 or -1).",
+            throw Exception(fmt::format("Incorrect data: Sign = {} (must be 1 or -1).", sign),
                             ErrorCodes::INCORRECT_DATA);
 
         if (!current->isLast())

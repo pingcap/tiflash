@@ -51,7 +51,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_non_root_task_run);
         }
         task->run();
-        LOG_FMT_INFO(log, "processing dispatch is over; the time cost is {} ms", std::to_string(stopwatch.elapsedMilliseconds()));
+        LOG_FMT_INFO(log, "processing dispatch is over; the time cost is {} ms", stopwatch.elapsedMilliseconds());
     }
     catch (Exception & e)
     {

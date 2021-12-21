@@ -150,7 +150,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         if (region_info.key_ranges.empty())
         {
             throw TiFlashException(
-                "Income key ranges is empty for region: " + std::to_string(region_info.region_id),
+                fmt::format("Income key ranges is empty for region: {}", region_info.region_id),
                 Errors::Coprocessor::BadRequest);
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
@@ -349,7 +349,7 @@ void MPPTask::runImpl()
     {
         writeErrToAllTunnels(err_msg);
     }
-    LOG_FMT_INFO(log, "task ends, time cost is {} ms.", std::to_string(stopwatch.elapsedMilliseconds()));
+    LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
     unregisterTask();
 
     if (switchStatus(RUNNING, FINISHED))

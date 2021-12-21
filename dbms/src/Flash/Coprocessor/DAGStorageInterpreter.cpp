@@ -315,11 +315,12 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                             ++iter;
                         }
                     }
-                    LOG_FMT_WARNING(log,
-                                    "RegionException after read from storage, regions [{}], message: {}{}",
-                                    buffer.toString(),
-                                    e.message(),
-                                    (regions_query_info.empty() ? "" : ", retry to read from local"));
+                    LOG_FMT_WARNING(
+                        log,
+                        "RegionException after read from storage, regions [{}], message: {}{}",
+                        buffer.toString(),
+                        e.message(),
+                        (regions_query_info.empty() ? "" : ", retry to read from local"));
                     if (unlikely(regions_query_info.empty()))
                         break; // no available region in local, break retry loop
                     continue; // continue to retry read from local storage
