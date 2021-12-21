@@ -6,6 +6,7 @@
 #endif
 
 #include <limits>
+#include <common/arithmeticOverflow.h>
 
 #if !defined(__GLIBCXX_BITSIZE_INT_N_0) && defined(__SIZEOF_INT128__)
 namespace std
