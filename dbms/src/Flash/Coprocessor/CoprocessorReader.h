@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/Timeline.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
@@ -112,9 +113,11 @@ public:
         }
         return rows;
     }
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
+    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types, Timeline::Timer & timer)
     {
+        timer.switchTo(Timeline::PULL);
         auto && [result, has_next] = resp_iter.next();
+        timer.switchTo(Timeline::SELF);
         if (!result.error.empty())
         {
             return {nullptr, true, result.error.message(), false};

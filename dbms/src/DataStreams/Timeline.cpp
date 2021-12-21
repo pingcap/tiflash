@@ -108,8 +108,47 @@ Int64 Timeline::getCounter(CounterType type) const
     return sum[type];
 }
 
+void Timeline::merge(const Timeline & other)
+{
+    last_ts = std::max(last_ts, other.last_ts);
+    for (size_t i = 0; i < num_counters; ++i)
+        sum[i] += other.sum[i];
+
+    auto events_iter = events.begin();
+    auto other_events_iter = other.events.begin();
+    while (events_iter != events.end() && other_events_iter != other.events.end())
+    {
+        if (events_iter->ts >= other_events_iter->ts)
+        {
+            for (size_t i = 0; i < num_counters; ++i)
+            {
+                events_iter->count[i] += other_events_iter->count[i];
+            }
+            ++other_events_iter;
+        }
+        else
+        {
+            ++events_iter;
+        }
+    }
+}
+
 void Timeline::flushBuffer()
 {
     checkAndAddEvent(true);
+}
+
+Timeline & Timeline::merge(Timeline & left, Timeline & right)
+{
+    if (left.events.size() >= right.events.size())
+    {
+        left.merge(right);
+        return left;
+    }
+    else
+    {
+        right.merge(left);
+        return right;
+    }
 }
 } // namespace DB

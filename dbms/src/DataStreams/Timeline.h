@@ -81,6 +81,10 @@ public:
 
     Int64 getCounter(CounterType type) const;
 
+    void merge(const Timeline & other);
+
+    static Timeline & merge(Timeline & left, Timeline & right);
+
 private:
     friend class Timer;
 

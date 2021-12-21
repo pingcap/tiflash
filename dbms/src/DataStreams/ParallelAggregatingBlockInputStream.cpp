@@ -60,8 +60,6 @@ void ParallelAggregatingBlockInputStream::cancel(bool kill)
 
 Block ParallelAggregatingBlockInputStream::readImpl()
 {
-    auto timer = newTimer(Timeline::SELF);
-
     if (!executed)
     {
         Aggregator::CancellationHook hook = [&]() {
@@ -69,7 +67,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         };
         aggregator.setCancellationHook(hook);
 
-        execute(&timer);
+        execute();
 
         if (isCancelledOrThrowIfKilled())
             return {};
@@ -112,6 +110,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         executed = true;
     }
 
+    auto timer = newTimer(Timeline::SELF);
     Block res;
     if (isCancelledOrThrowIfKilled() || !impl)
         return res;
@@ -136,8 +135,7 @@ ParallelAggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
 
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
 {
-    /// thread safe?
-    auto timer = parent.newTimer(Timeline::SELF);
+    auto timer = parent.threads_timeline[thread_num].newTimer(Timeline::SELF);
 
     parent.aggregator.executeOnBlock(
         block,
@@ -153,7 +151,7 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
 
 void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_num)
 {
-    auto timer = parent.newTimer(Timeline::SELF);
+    auto timer = parent.threads_timeline[thread_num].newTimer(Timeline::SELF);
 
     if (!parent.isCancelled() && parent.aggregator.hasTemporaryFiles())
     {
@@ -170,8 +168,6 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
 
 void ParallelAggregatingBlockInputStream::Handler::onFinish()
 {
-    auto timer = parent.newTimer(Timeline::SELF);
-
     if (!parent.isCancelled() && parent.aggregator.hasTemporaryFiles())
     {
         /// It may happen that some data has not yet been flushed,
@@ -195,14 +191,30 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
         parent.processor.cancel(false);
 }
 
+namespace
+{
+Timeline & mergeThreadsTimeline(std::vector<Timeline> & threads_timeline)
+{
+    assert(threads_timeline.size());
+    auto * cur = &threads_timeline[0];
+    for (size_t i = 1; i < threads_timeline.size(); ++i)
+    {
+        cur = &Timeline::merge(*cur, threads_timeline[i]);
+    }
+    return *cur;
+}
+} // namespace
 
-void ParallelAggregatingBlockInputStream::execute(Timeline::Timer * timer)
+void ParallelAggregatingBlockInputStream::execute()
 {
     many_data.resize(max_threads);
     exceptions.resize(max_threads);
 
     for (size_t i = 0; i < max_threads; ++i)
+    {
         threads_data.emplace_back(keys_size, aggregates_size);
+        threads_timeline.emplace_back();
+    }
 
     LOG_TRACE(log, "Aggregating");
 
@@ -212,17 +224,7 @@ void ParallelAggregatingBlockInputStream::execute(Timeline::Timer * timer)
         elem = std::make_shared<AggregatedDataVariants>();
 
     processor.process();
-
-    if (timer != nullptr)
-    {
-        timer->pause();
-        processor.wait();
-        timer->resume();
-    }
-    else
-    {
-        processor.wait();
-    }
+    processor.wait();
 
     rethrowFirstException(exceptions);
 
@@ -230,6 +232,10 @@ void ParallelAggregatingBlockInputStream::execute(Timeline::Timer * timer)
         return;
 
     double elapsed_seconds = watch.elapsedSeconds();
+
+    info.timeline = Timeline::merge(info.timeline, mergeThreadsTimeline(threads_timeline));
+
+    auto timer = newTimer(Timeline::SELF);
 
     size_t total_src_rows = 0;
     size_t total_src_bytes = 0;

@@ -88,7 +88,7 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types);
+    ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types, Timeline::Timer & timer);
 
     void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
 
