@@ -1670,22 +1670,20 @@ void Context::checkTableCanBeDropped(const String & database, const String & tab
     String table_size_str = formatReadableSizeWithDecimalSuffix(table_size);
     String max_table_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_table_size_to_drop);
 
-    std::string exception_msg = fmt::format("Table {}.{} was not dropped.\n"
+    std::string exception_msg = fmt::format("Table {0}.{1} was not dropped.\n"
                                             "Reason:\n"
-                                            "1. Table size({}) is greater than max_table_size_to_drop ({})\n"
-                                            "2. File '{}' intended to force DROP {}\n",
+                                            "1. Table size({2}) is greater than max_table_size_to_drop ({3})\n"
+                                            "2. File '{4}' intended to force DROP {5}\n",
                                             "How to fix this:\n"
-                                            "1.  Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
-                                            "2. Either create forcing file {} and make sure that ClickHouse has write permission for it.\n"
-                                            "Example:\nsudo touch '{}' && sudo chmod 666 '{}'",
+                                            "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
+                                            "2. Either create forcing file {4} and make sure that ClickHouse has write permission for it.\n"
+                                            "Example:\nsudo touch '{4}' && sudo chmod 666 '{4}'",
                                             backQuoteIfNeed(database),
                                             backQuoteIfNeed(table),
                                             table_size_str,
                                             max_table_size_to_drop_str,
                                             force_file.path(),
                                             (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"),
-                                            force_file.path(),
-                                            force_file.path(),
                                             force_file.path());
 
     throw Exception(exception_msg, ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
