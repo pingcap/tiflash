@@ -27,9 +27,7 @@ static void runService(const std::string & bin_path, const std::vector<std::stri
     catch (DB::Exception & e)
     {
         FmtBuffer fmt_buf;
-        fmt_buf.append("(while running `");
-        fmt_buf.append(bin_path);
-        fmt_buf.append(" ");
+        fmt_buf.fmtAppend("(while running `{} ", bin_path);
         fmt_buf.joinStr(std::begin(args), std::end(args), " ");
         fmt_buf.append("`)");
         e.addMessage(fmt_buf.toString());
