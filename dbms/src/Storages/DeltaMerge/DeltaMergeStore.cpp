@@ -1443,7 +1443,7 @@ bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, dou
         return true;
 
     auto & property = seg->getStable()->getStableProperty();
-    LOG_FMT_TRACE(log, "{} {}", __PRETTY_FUNCTION__, property.toDebugString());
+    LOG_TRACE(log, __PRETTY_FUNCTION__ << property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -1467,7 +1467,9 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     auto stable_rows = snap->stable->getRows();
     auto stable_bytes = snap->stable->getBytes();
 
-    LOG_FMT_TRACE(log, "{} delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", __PRETTY_FUNCTION__, delete_rows, delete_bytes, stable_rows, stable_bytes);
+    LOG_TRACE(log,
+              __PRETTY_FUNCTION__ << " delete range rows [" << delete_rows << "], delete_bytes [" << delete_bytes << "] stable_rows ["
+                                  << stable_rows << "] stable_bytes [" << stable_bytes << "]");
 
     // 1. for small tables, the data may just reside in delta and stable_rows may be 0,
     //   so the `=` in `>=` is needed to cover the scenario when set tiflash replica of small tables to 0.
@@ -1501,12 +1503,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
-    LOG_FMT_DEBUG(log,
-                  "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
-                  table_name,
-                  next_gc_check_key.toDebugString(),
-                  gc_safe_point,
-                  limit);
+    LOG_DEBUG(log,
+              "GC on table " << table_name << " start with key: " << next_gc_check_key.toDebugString() << ", gc_safe_point: " << gc_safe_point << ", max gc limit: " << limit);
 
     UInt64 check_segments_num = 0;
     Int64 gc_segments_num = 0;
@@ -1586,27 +1584,21 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
-                    LOG_FMT_INFO(log,
-                                 "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
-                                 segment_id,
-                                 segment_range.toDebugString(),
-                                 table_name);
+                    LOG_INFO(log,
+                             "GC-merge-delta done Segment [" << segment_id << "] [range=" << segment_range.toDebugString()
+                                                             << "] [table=" << table_name << "]");
                 }
                 else
                 {
-                    LOG_FMT_INFO(log,
-                                 "GC aborted on Segment [{}] [range={}] [table={}]",
-                                 segment_id,
-                                 segment_range.toDebugString(),
-                                 table_name);
+                    LOG_INFO(log,
+                             "GC aborted on Segment [" << segment_id << "] [range=" << segment_range.toDebugString() << "] [table=" << table_name
+                                                       << "]");
                 }
             }
             if (!finish_gc_on_segment)
-                LOG_FMT_DEBUG(log,
-                              "GC is skipped Segment [{}] [range={}] [table={}]",
-                              segment_id,
-                              segment_range.toDebugString(),
-                              table_name);
+                LOG_DEBUG(log,
+                          "GC is skipped Segment [" << segment_id << "] [range=" << segment_range.toDebugString() << "] [table=" << table_name
+                                                    << "]");
         }
         catch (Exception & e)
         {
@@ -1616,7 +1608,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
     }
 
-    LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    LOG_DEBUG(log, "Finish GC on " << gc_segments_num << " segments [table=" + table_name + "]");
     return gc_segments_num;
 }
 
