@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/RecyclableBuffer.h>
+#include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -15,7 +16,6 @@
 #include <future>
 #include <mutex>
 #include <thread>
-#include "Common/ThreadManager.h"
 
 namespace DB
 {

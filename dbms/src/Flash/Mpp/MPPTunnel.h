@@ -2,6 +2,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/ThreadManager.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
@@ -15,7 +16,6 @@
 #include <memory>
 #include <mutex>
 #include <thread>
-#include "Common/ThreadManager.h"
 
 namespace DB
 {

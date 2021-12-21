@@ -1,14 +1,13 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/ElasticThreadPool.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 
 #include <thread>
-#include "Common/ThreadManager.h"
 
 namespace DB
 {

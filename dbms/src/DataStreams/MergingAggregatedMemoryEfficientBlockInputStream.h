@@ -1,14 +1,13 @@
 #pragma once
 
 #include <Common/ConcurrentBoundedQueue.h>
-#include <Common/ElasticThreadPool.h>
 #include <Common/LogWithPrefix.h>
+#include <Common/ThreadManager.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <common/ThreadPool.h>
 
 #include <condition_variable>
-#include "Common/ThreadManager.h"
 
 
 namespace DB

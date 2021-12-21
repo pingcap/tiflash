@@ -1,5 +1,4 @@
 #include <Common/CPUAffinityManager.h>
-#include <Common/ElasticThreadPool.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>

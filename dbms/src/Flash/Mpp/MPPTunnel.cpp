@@ -1,4 +1,3 @@
-#include <Common/ElasticThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>

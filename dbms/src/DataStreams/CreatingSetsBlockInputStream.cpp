@@ -1,6 +1,6 @@
-#include <Common/ElasticThreadPool.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -10,7 +10,6 @@
 #include <Storages/IStorage.h>
 
 #include <iomanip>
-#include "Common/ThreadManager.h"
 
 
 namespace DB

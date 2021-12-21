@@ -1,9 +1,9 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <Common/ElasticThreadPool.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <Common/setThreadName.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <common/logger_useful.h>
@@ -13,7 +13,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
-#include "Common/ThreadManager.h"
+
 
 
 /** Allows to process multiple block input streams (sources) in parallel, using specified number of threads.
