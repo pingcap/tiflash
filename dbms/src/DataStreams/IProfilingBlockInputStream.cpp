@@ -105,10 +105,6 @@ Timeline::Timer IProfilingBlockInputStream::newTimer(Timeline::CounterType type,
     return info.timeline.newTimer(type, running);
 }
 
-namespace
-{
-}
-
 Int64 IProfilingBlockInputStream::getWorkingTime()
 {
     auto working_time = info.timeline.getCounter(Timeline::SELF);

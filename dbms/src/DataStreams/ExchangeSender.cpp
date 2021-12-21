@@ -22,9 +22,16 @@ Block ExchangeSender::readImpl()
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
     }
 
-    Block block = children.back()->read();
+    Block block;
+    {
+        auto timer = newTimer(Timeline::PULL);
+        block = children.back()->read();
+    }
+
     if (block)
+    {
         writer->write(block);
+    }
     return block;
 }
 } // namespace DB

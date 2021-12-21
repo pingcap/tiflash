@@ -176,11 +176,14 @@ public:
     }
     Block readImpl() override
     {
+        auto timer = newTimer(Timeline::SELF);
         if (block_queue.empty())
         {
+            timer.switchTo(Timeline::PULL);
             if (!fetchRemoteResult())
                 return {};
         }
+        timer.switchTo(Timeline::SELF);
         // todo should merge some blocks to make sure the output block is big enough
         Block block = block_queue.front();
         block_queue.pop();
