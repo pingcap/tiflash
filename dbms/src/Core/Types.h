@@ -166,3 +166,20 @@ template <> struct TypeId<Float32>  { static constexpr const TypeIndex value = T
 template <> struct TypeId<Float64>  { static constexpr const TypeIndex value = TypeIndex::Float64;  };
 
 }
+
+namespace common
+{
+template <>
+inline bool mulOverflow(DB::Int256 x, DB::Int256 y, DB::Int256 & res)
+{
+    try
+    {
+        res = x * y;
+    }
+    catch (std::overflow_error &)
+    {
+        return true;
+    }
+    return false;
+}
+} // namespace common
