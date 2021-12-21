@@ -401,7 +401,7 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
     if (unlikely(iter == pool.dt_file_path_map.end()))
-        throw Exception(fmt::format("Cannot find DMFile for id {}",file_id));
+        throw Exception(fmt::format("Cannot find DMFile for id {}", file_id));
     UInt32 index = iter->second;
     const auto file_size = pool.main_path_infos[index].file_size_map.at(file_id);
     pool.dt_file_path_map.erase(file_id);

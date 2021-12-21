@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -32,6 +33,7 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
+#include <fmt/core.h>
 
 #include <random>
 
@@ -88,9 +90,14 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_INFO(log,
-             __FILE__ << " " << __func__ << " TableName " << table_column_info->table_name << " ordinary " << columns.ordinary.toString()
-                      << " materialized " << columns.materialized.toString());
+    LOG_FMT_INFO(
+        log,
+        "{} {} TableName {} ordinary {} materialized {}",
+        __FILE__,
+        __func__,
+        table_column_info->table_name,
+        columns.ordinary.toString(),
+        columns.materialized.toString());
 
     auto & pk_expr_ast = table_column_info->pk_expr_ast;
     auto & handle_column_define = table_column_info->handle_column_define;
@@ -169,12 +176,12 @@ void StorageDeltaMerge::updateTableColumnInfo()
             {
                 if (!col.type->isValueRepresentedByInteger())
                 {
-                    throw Exception("pk column " + col.name + " is not representable by integer");
+                    throw Exception(fmt::format("pk column {} is not representable by integer", col.name));
                 }
                 pks_combined_bytes += col.type->getSizeOfValueInMemory();
                 if (pks_combined_bytes > sizeof(Handle))
                 {
-                    throw Exception("pk columns exceeds size limit :" + DB::toString(sizeof(Handle)));
+                    throw Exception(fmt::format("pk columns exceeds size limit :{}", sizeof(Handle)));
                 }
             }
             if (pks.size() == 1)
@@ -241,17 +248,20 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
         // Unknown bug, throw an exception.
         std::stringstream ss;
-        ss << "[";
-        for (const auto & k : pks)
-            ss << k << ",";
-        ss << "]";
-        std::stringstream columns_stream;
-        columns_stream << "[";
-        for (const auto & col : all_columns)
-            columns_stream << col.name << ",";
-        columns_stream << "]";
-        throw Exception("Can not create table without primary key. Primary keys should be:" + ss.str()
-                        + ", but only these columns are found:" + columns_stream.str());
+        FmtBuffer fmt_buf;
+        fmt_buf.append("Can not create table without primary key. Primary keys should be:");
+        fmt_buf.append("[");
+        fmt_buf.joinStr(pks.begin(), pks.end(), ",");
+        fmt_buf.append("], but only these columns are found:[");
+        fmt_buf.joinStr(
+            all_columns.begin(),
+            all_columns.end(),
+            [](const auto & arg, FmtBuffer & fb) {
+                fb.append(arg.name);
+            },
+            ",");
+        fmt_buf.append("]");
+        throw Exception(fmt_buf.toString());
     }
     assert(!table_column_defines.empty());
 
@@ -409,7 +419,7 @@ public:
     }
     catch (DB::Exception & e)
     {
-        e.addMessage("(while writing to table `" + store->getDatabaseName() + "`.`" + store->getTableName() + "`)");
+        e.addMessage(fmt::format("(while writing to table `{}`.`{}`)", store->getDatabaseName(), store->getTableName()));
         throw;
     }
 
@@ -482,7 +492,7 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
         }
         if (!ok)
         {
-            throw Exception("The column-id in written block is not properly set [name=" + name + "] [id=" + DB::toString(cid) + "]");
+            throw Exception(fmt::format("The column-id in written block is not properly set [name={}] [id={}]", name, cid);
         }
     }
 #endif
@@ -545,7 +555,7 @@ std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
             return ids;
     }
 
-    throw Exception("Unable to parse segment IDs in literal form: `" + partition_ast.fields_str.toString() + "`");
+    throw Exception(fmt::format("Unable to parse segment IDs in literal form: `{}`", partition_ast.fields_str.toString()));
 }
 
 BlockInputStreams StorageDeltaMerge::read(
@@ -604,7 +614,7 @@ BlockInputStreams StorageDeltaMerge::read(
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
 
-    LOG_DEBUG(log, "Read with tso: " << mvcc_query_info.read_tso);
+    LOG_FMT_DEBUG(log, "Read with tso: {}", mvcc_query_info.read_tso);
 
     // Check whether tso is smaller than TiDB GcSafePoint
     const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
@@ -654,10 +664,17 @@ BlockInputStreams StorageDeltaMerge::read(
 
     if (unlikely(log->trace()))
     {
-        std::stringstream ss_merged_range;
-        for (const auto & range : ranges)
-            ss_merged_range << range.toDebugString() << ",";
-        LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges << " merged, " << ss_merged_range.str());
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend("reading ranges: orig, {} merged, ", str_query_ranges);
+        fmt_buf.joinStr(
+            ranges.begin(),
+            ranges.end(),
+            [](const auto & arg, FmtBuffer & fb) {
+                fb.append(arg.toDebugString());
+            },
+            ",");
+        fmt_buf.append(",");
+        LOG_FMT_TRACE(log, fmt_buf.toString());
     }
 
     /// Get Rough set filter from query
@@ -682,10 +699,10 @@ BlockInputStreams StorageDeltaMerge::read(
             rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
         }
         if (likely(rs_operator != DM::EMPTY_FILTER))
-            LOG_DEBUG(log, "Rough set filter: " << rs_operator->toDebugString());
+            LOG_FMT_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
     }
     else
-        LOG_DEBUG(log, "Rough set filter is disabled.");
+        LOG_FMT_DEBUG(log, "Rough set filter is disabled.");
 
     auto streams = store->read(
         context,
@@ -701,7 +718,7 @@ BlockInputStreams StorageDeltaMerge::read(
     /// Ensure read_tso info after read.
     check_read_tso(mvcc_query_info.read_tso);
 
-    LOG_TRACE(log, "[ranges: " << ranges.size() << "] [streams: " << streams.size() << "]");
+    LOG_FMT_TRACE(log, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
     return streams;
 }
@@ -822,13 +839,13 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
     auto delete_range = getRange(store, context, total_rows, delete_rows);
     size_t actual_delete_rows = getRows(store, context, delete_range);
     if (actual_delete_rows != delete_rows)
-        LOG_ERROR(log, "Expected delete rows: " << delete_rows << ", got: " << actual_delete_rows);
+        LOG_FMT_ERROR(log, "Expected delete rows: {}, got: {}", delete_rows, actual_delete_rows);
 
     store->deleteRange(context, context.getSettingsRef(), delete_range);
 
     size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     if (after_delete_rows != total_rows - delete_rows)
-        LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows) << ", got: " << after_delete_rows);
+        LOG_FMT_ERROR(log, "Rows after delete range not match, expected: {}, got: {}", (total_rows - delete_rows), after_delete_rows);
 }
 
 std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(bool need_block)
@@ -998,10 +1015,14 @@ try
                 // this exception and avoid of reading broken data, they have truncate that table.
                 if (table_info && table_info.value().get().replica_info.count == 0)
                 {
-                    LOG_WARNING(log,
-                                "Accept lossy column data type modification. Table (id:" + DB::toString(table_info.value().get().id)
-                                    + ") modify column " + command.column_name + "(" + DB::toString(command.column_id) + ") from "
-                                    + col_iter->type->getName() + " to " + command.data_type->getName());
+                    LOG_FMT_WARNING(log,
+                                    "Accept lossy column data type modification. Table (id:{})"
+                                    " modify column {}({}) from {} to {}",
+                                    table_info.value().get().id,
+                                    command.column_name,
+                                    command.column_id,
+                                    col_iter->type->getName(),
+                                    command.data_type->getName());
                 }
                 else
                 {
