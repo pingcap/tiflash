@@ -1274,11 +1274,10 @@ String Segment::simpleInfo() const
 
 String Segment::info() const
 {
-    return fmt::format("{[id:{}], [next:{}], [epoch:{}], [range:{}], [rowkey_range:{}], [delta rows:{}], [delta bytes:{}], [delete ranges:{}], [stable({}):rows:{}, bytes:{}]}",
+    return fmt::format("[id:{}], [next:{}], [epoch:{}], [rowkey_range:{}], [delta rows:{}], [delta bytes:{}], [delete ranges:{}], [stable({}):rows:{}, bytes:{}]",
                        segment_id,
                        next_segment_id,
                        epoch,
-                       rowkey_range.toDebugString(),
                        rowkey_range.toDebugString(),
                        delta->getRows(),
                        delta->getBytes(),
