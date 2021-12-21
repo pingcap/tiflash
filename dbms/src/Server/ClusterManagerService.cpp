@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/FunctionTimerTask.h>
 #include <Common/ShellCommand.h>
 #include <Interpreters/Context.h>
@@ -25,13 +26,13 @@ static void runService(const std::string & bin_path, const std::vector<std::stri
     }
     catch (DB::Exception & e)
     {
-        std::stringstream ss;
-        ss << bin_path;
+        FmtBuffer fmt_buf;
+        fmt_buf.append("(while running `");
+        fmt_buf.append(bin_path);
         for (const auto & arg : args)
-        {
-            ss << " " << arg;
-        }
-        e.addMessage("(while running `" + ss.str() + "`)");
+            fmt_buf.fmtAppend(" {}", arg);
+        fmt_buf.append("`)");
+        e.addMessage(fmt_buf.toString());
     }
 }
 

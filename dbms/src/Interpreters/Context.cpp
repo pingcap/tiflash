@@ -1,6 +1,7 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -1667,20 +1668,29 @@ void Context::checkTableCanBeDropped(const String & database, const String & tab
 
     String table_size_str = formatReadableSizeWithDecimalSuffix(table_size);
     String max_table_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_table_size_to_drop);
-    std::stringstream ostr;
+    FmtBuffer fmt_buf;
 
-    ostr << "Table " << backQuoteIfNeed(database) << "." << backQuoteIfNeed(table) << " was not dropped.\n"
-         << "Reason:\n"
-         << "1. Table size (" << table_size_str << ") is greater than max_table_size_to_drop (" << max_table_size_to_drop_str << ")\n"
-         << "2. File '" << force_file.path() << "' intended to force DROP "
-         << (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist") << "\n";
+    fmt_buf.fmtAppend("Table {}.{} was not dropped.\n"
+                      "Reason:\n"
+                      "1. Table size({}) is greater than max_table_size_to_drop ({})\n"
+                      "2. File '{}' intended to force DROP {}\n",
+                      backQuoteIfNeed(database),
+                      backQuoteIfNeed(table),
+                      table_size_str,
+                      max_table_size_to_drop_str,
+                      force_file.path(),
+                      (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"));
 
-    ostr << "How to fix this:\n"
-         << "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
-         << "2. Either create forcing file " << force_file.path() << " and make sure that ClickHouse has write permission for it.\n"
-         << "Example:\nsudo touch '" << force_file.path() << "' && sudo chmod 666 '" << force_file.path() << "'";
 
-    throw Exception(ostr.str(), ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
+    fmt_buf.fmtAppend("How to fix this:\n"
+                      "1.  Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
+                      "2. Either create forcing file {} and make sure that ClickHouse has write permission for it.\n"
+                      "Example:\nsudo touch '{}' && sudo chmod 666 '{}'",
+                      force_file.path(),
+                      force_file.path(),
+                      force_file.path());
+
+    throw Exception(fmt_buf.toString(), ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
 }
 
 
