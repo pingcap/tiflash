@@ -177,7 +177,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
 
-    return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ true, tmt, log->getLog());
+    return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ true, tmt, log);
 }
 
 /// Will assign region_retry
@@ -209,7 +209,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             }
             if (mvcc_query_info->regions_query_info.empty())
                 return {};
-            return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ false, tmt, log->getLog());
+            return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ false, tmt, log);
         }
         catch (const LockException & e)
         {
@@ -279,7 +279,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     region_ids.insert(info.region_id);
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log->getLog());
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
         }
         catch (RegionException & e)
