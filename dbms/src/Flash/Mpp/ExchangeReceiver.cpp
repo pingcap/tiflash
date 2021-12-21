@@ -45,7 +45,7 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         cv.notify_all();
     }
 
-    waitTasks(futures);
+    thd_manager->wait();
 }
 
 template <typename RPCContext>
@@ -59,11 +59,12 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
+    thd_manager = ThreadManager::generateThreadManager();
     for (size_t index = 0; index < source_num; ++index)
     {
-        futures.emplace_back(ElasticThreadPool::glb_instance->schedule([this, index] {
+        thd_manager->schedule([this, index] {
             this->readLoop(index);
-        }));
+        });
     }
 }
 

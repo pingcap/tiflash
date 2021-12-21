@@ -25,6 +25,7 @@
 #include <future>
 #include <iomanip>
 #include <thread>
+#include "Common/ThreadManager.h"
 
 
 namespace ProfileEvents
@@ -1457,7 +1458,7 @@ public:
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
         if (parallel_merge_data)
-            waitTasks(parallel_merge_data->tasks);
+            parallel_merge_data->thd_manager->wait();
     }
 
 protected:
@@ -1511,7 +1512,7 @@ protected:
         {
             if (!parallel_merge_data)
             {
-                parallel_merge_data = std::make_unique<ParallelMergeData>();
+                parallel_merge_data = std::make_unique<ParallelMergeData>(threads);
                 for (size_t i = 0; i < threads; ++i)
                     scheduleThreadForNextBucket();
             }
@@ -1564,9 +1565,11 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        std::vector<std::future<void>> tasks;
+        std::shared_ptr<ThreadManager> thd_manager;
 
-        explicit ParallelMergeData() {}
+        explicit ParallelMergeData(size_t threads)
+            : thd_manager(ThreadManager::createElasticOrFixedThreadManager(threads))
+        {}
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;
@@ -1577,8 +1580,7 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->tasks.emplace_back(ElasticThreadPool::glb_instance->schedule(
-            ([this, num] { thread(num); })));
+        parallel_merge_data->thd_manager->schedule([this, num] { thread(num); });
     }
 
     void thread(Int32 bucket_num)

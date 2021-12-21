@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include "Common/ThreadManager.h"
 
 namespace DB
 {
@@ -96,7 +97,7 @@ private:
 
     int input_streams_num;
 
-    std::future<void> future;
+    std::shared_ptr<ThreadManager> thd_manager;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;

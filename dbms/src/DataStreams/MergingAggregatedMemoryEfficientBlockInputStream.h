@@ -8,6 +8,7 @@
 #include <common/ThreadPool.h>
 
 #include <condition_variable>
+#include "Common/ThreadManager.h"
 
 
 namespace DB
@@ -130,7 +131,7 @@ private:
 
     struct ParallelMergeData
     {
-        std::vector<std::future<void>> tasks;
+        std::shared_ptr<ThreadManager> thd_manager;
 
         /// Now one of the merging threads receives next blocks for the merge. This operation must be done sequentially.
         std::mutex get_next_blocks_mutex;
@@ -150,7 +151,9 @@ private:
         /// An event by which the main thread is telling merging threads that it is possible to process the next group of blocks.
         std::condition_variable have_space;
 
-        explicit ParallelMergeData() {}
+        explicit ParallelMergeData(size_t max_threads)
+            : thd_manager(ThreadManager::createElasticOrFixedThreadManager(max_threads))
+        {}
     };
 
     std::unique_ptr<ParallelMergeData> parallel_merge_data;

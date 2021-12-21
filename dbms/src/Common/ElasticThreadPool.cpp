@@ -6,9 +6,9 @@
 
 #include "MemoryTracker.h"
 
-std::unique_ptr<ElasticThreadPool> ElasticThreadPool::glb_instance = std::make_unique<ElasticThreadPool>(200, std::chrono::milliseconds(300000), 50, [] { setThreadName("glb-thd-pool"); });
+std::unique_ptr<ElasticThreadPool> ElasticThreadPool::glb_instance;
 
-std::function<void()> ElasticThreadPool::newJob(std::shared_ptr<std::promise<void>> p, Job job)
+ElasticThreadPool::Job ElasticThreadPool::newJob(std::shared_ptr<std::promise<void>> p, Job job)
 {
     auto memory_tracker = current_memory_tracker;
     return [&, p, memory_tracker, job] {

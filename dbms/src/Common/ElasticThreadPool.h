@@ -28,7 +28,7 @@ public:
                 thd_pool->work(this);
             }))
         {}
-        std::atomic_bool end_syn; //someone wants it end
+        std::atomic_bool end_syn; // someone wants it end
         std::atomic_int state; // 0.idle 1.working 2.ended
         std::shared_ptr<std::thread> thd;
     };
@@ -76,7 +76,7 @@ protected:
 
     std::future<void> schedule0(std::shared_ptr<std::promise<void>> p, Job job);
 
-    std::function<void()> newJob(std::shared_ptr<std::promise<void>> p, Job job);
+    Job newJob(std::shared_ptr<std::promise<void>> p, Job job);
 };
 
 inline void waitTask(std::future<void> & f)

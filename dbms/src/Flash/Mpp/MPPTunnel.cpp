@@ -31,6 +31,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
+    , thd_manager(ThreadManager::generateThreadManager())
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
     , log(getMPPTaskLog(log_, tunnel_id))
 {
@@ -45,7 +46,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             writeDone();
         if (!is_local)
         {
-            waitTask(future);
+            thd_manager->wait();
         }
         /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
         clearSendQueue();
@@ -236,10 +237,9 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        future = ElasticThreadPool::glb_instance->schedule(
-            ([this] {
-                this->sendLoop();
-            }));
+        thd_manager->schedule([this] {
+            this->sendLoop();
+        });
     }
     connected = true;
     cv_for_connected.notify_all();

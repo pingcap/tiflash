@@ -10,6 +10,7 @@
 #include <Storages/IStorage.h>
 
 #include <iomanip>
+#include "Common/ThreadManager.h"
 
 
 namespace DB
@@ -111,7 +112,7 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setFinishBuildTable(false);
             }
         }
-        std::vector<std::future<void>> futures;
+        std::shared_ptr<ThreadManager> thd_manager = ThreadManager::generateThreadManager();
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
@@ -120,13 +121,12 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    futures.emplace_back(ElasticThreadPool::glb_instance->schedule(
-                        ([this, &item = elem.second] { this->createOne(item); })));
+                    thd_manager->schedule(([this, &item = elem.second] { this->createOne(item); }));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
         }
-        waitTasks(futures);
+        thd_manager->wait();
 
         if (!exception_from_workers.empty())
             std::rethrow_exception(exception_from_workers.front());

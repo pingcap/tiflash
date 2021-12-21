@@ -2,6 +2,7 @@
 #include <Common/ElasticThreadPool.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
@@ -72,8 +73,8 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    ElasticThreadPool::glb_instance->schedule(
-        ([this] { this->shared_from_this()->runImpl(); }));
+    auto thd_manager = ThreadManager::generateThreadManager(true);
+    thd_manager->schedule([this] { this->shared_from_this()->runImpl(); });
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)

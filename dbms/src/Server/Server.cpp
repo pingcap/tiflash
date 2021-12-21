@@ -1190,6 +1190,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
     }
 
+    /// setting up elastic thread pool
+    ElasticThreadPool::glb_instance = settings.enable_elastic_threadpool ? std::make_unique<ElasticThreadPool>(200, std::chrono::milliseconds(300000), 50, [] { setThreadName("glb-thd-pool"); }) : nullptr;
+
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
 

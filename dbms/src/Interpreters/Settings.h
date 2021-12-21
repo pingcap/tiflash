@@ -331,6 +331,7 @@ struct Settings
     M(SettingUInt64, max_network_bandwidth_for_all_users, 0, "The maximum speed of data exchange over the network in bytes per second for all concurrently running queries. Zero means "                                                \
                                                              "unlimited.")                                                                                                                                                              \
                                                                                                                                                                                                                                         \
+    M(SettingBool, enable_elastic_threadpool, false, "Enable elastic thread pool for thread create usages.")                                                                                                                            \
     M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};

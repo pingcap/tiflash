@@ -15,6 +15,7 @@
 #include <future>
 #include <mutex>
 #include <thread>
+#include "Common/ThreadManager.h"
 
 namespace DB
 {
@@ -111,7 +112,7 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::vector<std::future<void>> futures;
+    std::shared_ptr<ThreadManager> thd_manager;
     DAGSchema schema;
 
     std::mutex mu;

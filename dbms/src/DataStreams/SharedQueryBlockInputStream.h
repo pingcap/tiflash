@@ -8,6 +8,7 @@
 #include <Flash/Mpp/getMPPTaskLog.h>
 
 #include <thread>
+#include "Common/ThreadManager.h"
 
 namespace DB
 {
@@ -50,7 +51,8 @@ public:
             return;
         read_prefixed = true;
         /// Start reading thread.
-        future = ElasticThreadPool::glb_instance->schedule(([this] { this->fetchBlocks(); }));
+        thd_manager = ThreadManager::generateThreadManager();
+        thd_manager->schedule([this] { this->fetchBlocks(); });
     }
 
     void readSuffix() override
@@ -60,7 +62,7 @@ public:
         if (read_suffixed)
             return;
         read_suffixed = true;
-        waitTask(future);
+        thd_manager->wait();
         if (!exception_msg.empty())
             throw Exception(exception_msg);
     }
@@ -134,7 +136,7 @@ private:
 
     std::thread thread;
     std::mutex mutex;
-    std::future<void> future;
+    std::shared_ptr<ThreadManager> thd_manager;
 
     std::string exception_msg;
 

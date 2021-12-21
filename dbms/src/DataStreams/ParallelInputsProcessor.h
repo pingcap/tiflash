@@ -13,6 +13,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include "Common/ThreadManager.h"
 
 
 /** Allows to process multiple block input streams (sources) in parallel, using specified number of threads.
@@ -106,11 +107,12 @@ public:
     /// Start background threads, start work.
     void process()
     {
+        if (thd_manager == nullptr)
+            thd_manager = ThreadManager::generateThreadManager();
         active_threads = max_threads;
         for (size_t i = 0; i < max_threads; ++i)
         {
-            futures.emplace_back(ElasticThreadPool::glb_instance->schedule(
-                ([this, i] { this->thread(i); })));
+            thd_manager->schedule(([this, i] { this->thread(i); }));
         }
     }
 
@@ -144,7 +146,8 @@ public:
     {
         if (joined_threads)
             return;
-        waitTasks(futures);
+        if (thd_manager)
+            thd_manager->wait();
         joined_threads = true;
     }
 
@@ -309,7 +312,7 @@ private:
     /// Streams.
     using ThreadsData = std::vector<std::thread>;
     ThreadsData threads;
-    std::vector<std::future<void>> futures;
+    std::shared_ptr<ThreadManager> thd_manager;
 
     /** A set of available sources that are not currently processed by any thread.
       * Each thread takes one source from this set, takes a block out of the source (at this moment the source does the calculations)
