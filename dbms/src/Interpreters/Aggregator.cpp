@@ -1456,7 +1456,7 @@ public:
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
-        if (parallel_merge_data)
+        if (parallel_merge_data && parallel_merge_data->thd_manager)
             parallel_merge_data->thd_manager->wait();
     }
 

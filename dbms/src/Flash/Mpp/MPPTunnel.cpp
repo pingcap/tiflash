@@ -43,7 +43,7 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         if (!finished)
             writeDone();
-        if (!is_local)
+        if (!is_local && thd_manager)
         {
             thd_manager->wait();
         }

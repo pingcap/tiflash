@@ -125,7 +125,9 @@ void CreatingSetsBlockInputStream::createAll()
                 }
             }
         }
-        thd_manager->wait();
+
+        if (thd_manager)
+            thd_manager->wait();
 
         if (!exception_from_workers.empty())
             std::rethrow_exception(exception_from_workers.front());

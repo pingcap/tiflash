@@ -43,8 +43,8 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         state = ExchangeReceiverState::CLOSED;
         cv.notify_all();
     }
-
-    thd_manager->wait();
+    if (thd_manager)
+        thd_manager->wait();
 }
 
 template <typename RPCContext>

@@ -61,7 +61,8 @@ public:
         if (read_suffixed)
             return;
         read_suffixed = true;
-        thd_manager->wait();
+        if (thd_manager)
+            thd_manager->wait();
         if (!exception_msg.empty())
             throw Exception(exception_msg);
     }
