@@ -309,7 +309,7 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = dag_context->getRootInputStream();
+        auto from = dag_context->getBlockIO().in;
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
 

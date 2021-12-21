@@ -184,11 +184,9 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
 }
 
-void DAGContext::attachBlockIO(const BlockIO & io)
+void DAGContext::attachBlockIO(const BlockIO & io_)
 {
-    process_list_entry = io.process_list_entry;
-    in = io.in;
-    out = io.out;
+    io = io_;
 }
 
 } // namespace DB
