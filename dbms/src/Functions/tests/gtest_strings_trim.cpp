@@ -893,7 +893,7 @@ try
                             createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
                             createConstColumn<Nullable<Int8>>(7, i)));
 
-        //test symmetry string case: ASCII & non-ASCII
+        //test repeated pattern: ASCII & non-ASCII
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "x", "", "x", "", "x", {}}),
             executeFunction("tidbTrim",
