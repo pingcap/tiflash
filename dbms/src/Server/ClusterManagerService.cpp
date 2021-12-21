@@ -29,8 +29,8 @@ static void runService(const std::string & bin_path, const std::vector<std::stri
         FmtBuffer fmt_buf;
         fmt_buf.append("(while running `");
         fmt_buf.append(bin_path);
-        for (const auto & arg : args)
-            fmt_buf.fmtAppend(" {}", arg);
+        fmt_buf.append(" ");
+        fmt_buf.joinStr(std::begin(args), std::end(args), " ");
         fmt_buf.append("`)");
         e.addMessage(fmt_buf.toString());
     }
