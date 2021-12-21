@@ -147,7 +147,12 @@ static void call_default_signal_handler(int sig)
 
 
 using ThreadNumber = decltype(Poco::ThreadNumber::get());
-static const size_t buf_size = sizeof(int) + sizeof(siginfo_t) + sizeof(ucontext_t) + sizeof(ThreadNumber);
+static const size_t buf_size
+    = sizeof(int)
+    + sizeof(siginfo_t)
+    + sizeof(ucontext_t)
+    + sizeof(unw_context_t)
+    + sizeof(ThreadNumber);
 
 using signal_function = void(int, siginfo_t *, void *);
 
