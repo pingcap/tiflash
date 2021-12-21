@@ -11,6 +11,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 #include <fmt/format.h>
 
 #include <random>
@@ -107,7 +108,7 @@ StoragePathPool::StoragePathPool( //
     , log(&Poco::Logger::get("StoragePathPool"))
 {
     if (unlikely(database.empty() || table.empty()))
-        throw Exception("Can NOT create StoragePathPool [database=" + database + "] [table=" + table + "]", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Can NOT create StoragePathPool [database={}] [table={}]", database, table), ErrorCodes::LOGICAL_ERROR);
 
     for (const auto & p : main_data_paths)
     {
@@ -155,7 +156,7 @@ StoragePathPool & StoragePathPool::operator=(const StoragePathPool & rhs)
 void StoragePathPool::rename(const String & new_database, const String & new_table, bool clean_rename)
 {
     if (unlikely(new_database.empty() || new_table.empty()))
-        throw Exception("Can not rename for PathPool to " + new_database + "." + new_table);
+        throw Exception(fmt::format("Can not rename for PathPool to {}.{}", new_database, new_table));
 
     if (likely(clean_rename))
     {
@@ -229,7 +230,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
             else
             {
                 // just ignore and keep that directory if it is not empty
-                LOG_WARNING(log, "Can not remove directory: " << path_info.path << ", it is not empty");
+                LOG_FMT_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
             }
         }
     }
@@ -252,7 +253,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
             else
             {
                 // just ignore and keep that directory if it is not empty
-                LOG_WARNING(log, "Can not remove directory: " << path_info.path << ", it is not empty");
+                LOG_FMT_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
             }
         }
     }
@@ -262,7 +263,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
 // private methods
 //==========================================================================================
 
-String StoragePathPool::getStorePath(const String & extra_path_root, const String & database_name, const String & table_name)
+String StoragePathPool::getStorePath(const String & extra_path_root, const String & database_name, const String & table_name) const
 {
     if (likely(!path_need_database_name))
         return getNormalizedPath(extra_path_root + "/" + escapeForFileName(table_name));
@@ -272,11 +273,11 @@ String StoragePathPool::getStorePath(const String & extra_path_root, const Strin
 
 void StoragePathPool::renamePath(const String & old_path, const String & new_path)
 {
-    LOG_INFO(log, "Renaming " << old_path << " to " << new_path);
+    LOG_FMT_INFO(log, "Renaming {} to {}", old_path, new_path);
     if (auto file = Poco::File{old_path}; file.exists())
         file.renameTo(new_path);
     else
-        LOG_WARNING(log, "Path \"" << old_path << "\" is missed.");
+        LOG_FMT_WARNING(log, "Path \"{}\" is missed.", old_path);
 }
 
 //==========================================================================================
@@ -302,12 +303,12 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
     // If available space is limited by the quota, then write down a GC-ed file can make
     // some files be deleted later.
     if (total_available_size == 0)
-        LOG_WARNING(log, "No available space for all disks, choose randomly.");
+        LOG_FMT_WARNING(log, "No available space for all disks, choose randomly.");
     std::vector<double> ratio;
-    for (size_t i = 0; i < stats.size(); ++i)
+    for (auto & stat : stats)
     {
         if (likely(total_available_size != 0))
-            ratio.push_back(1.0 * stats[i].avail_size / total_available_size);
+            ratio.push_back(1.0 * stat.avail_size / total_available_size);
         else
         {
             // No available space for all disks, choose randomly
@@ -315,14 +316,14 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
         }
     }
 
-    double rand_number = (double)rand() / RAND_MAX;
+    double rand_number = static_cast<double>(rand()) / RAND_MAX;
     double ratio_sum = 0.0;
     for (size_t i = 0; i < ratio.size(); i++)
     {
         ratio_sum += ratio[i];
         if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
         {
-            LOG_INFO(log, "Choose path [index=" << i << "] " << log_msg);
+            LOG_FMT_INFO(log, "Choose path [index={}] {}", i, log_msg);
             return path_generator(paths, i);
         }
     }
@@ -336,9 +337,9 @@ String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetrics
 Strings StableDiskDelegator::listPaths() const
 {
     std::vector<String> paths;
-    for (size_t i = 0; i < pool.main_path_infos.size(); ++i)
+    for (auto & main_path_info : pool.main_path_infos)
     {
-        paths.push_back(pool.main_path_infos[i].path + "/" + StoragePathPool::STABLE_FOLDER_NAME);
+        paths.push_back(main_path_info.path + "/" + StoragePathPool::STABLE_FOLDER_NAME);
     }
     return paths;
 }
@@ -360,7 +361,7 @@ String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exis
     if (likely(iter != pool.dt_file_path_map.end()))
         return pool.main_path_infos[iter->second].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
     if (likely(throw_on_not_exist))
-        throw Exception("Can not find path for DMFile [id=" + toString(file_id) + "]");
+        throw Exception(fmt::format("Can not find path for DMFile [id={}]", file_id));
     return "";
 }
 
@@ -400,7 +401,7 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
     if (unlikely(iter == pool.dt_file_path_map.end()))
-        throw Exception("Cannot find DMFile for id " + toString(file_id));
+        throw Exception(fmt::format("Cannot find DMFile for id {}",file_id));
     UInt32 index = iter->second;
     const auto file_size = pool.main_path_infos[index].file_size_map.at(file_id);
     pool.dt_file_path_map.erase(file_id);
@@ -427,9 +428,9 @@ Strings PSDiskDelegatorMulti::listPaths() const
 {
     // The delta data could be stored in all direcotries.
     std::vector<String> paths;
-    for (size_t i = 0; i < pool.latest_path_infos.size(); ++i)
+    for (auto & latest_path_info : pool.latest_path_infos)
     {
-        paths.push_back(pool.latest_path_infos[i].path + "/" + path_prefix);
+        paths.push_back(latest_path_info.path + "/" + path_prefix);
     }
     return paths;
 }
@@ -448,7 +449,7 @@ String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
             return path_generator(pool.latest_path_infos, iter->second);
     }
 
-    const String log_msg = "[type=ps_multi] [database=" + pool.database + "] [table=" + pool.table + "]";
+    const String log_msg = fmt::format("[type=ps_multi] [database={}] [table={}]", pool.database, pool.table);
     return genericChoosePath(pool.latest_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
 }
 
@@ -470,7 +471,7 @@ size_t PSDiskDelegatorMulti::addPageFileUsedSize(
         }
     }
     if (unlikely(index == UINT32_MAX))
-        throw Exception("Unrecognized path " + upper_path);
+        throw Exception(fmt::format("Unrecognized path {}", upper_path));
 
     {
         std::lock_guard<std::mutex> lock{pool.mutex};
@@ -489,7 +490,7 @@ String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) 
     auto iter = page_path_map.find(id_lvl);
     if (likely(iter != page_path_map.end()))
         return pool.latest_path_infos[iter->second].path + "/" + path_prefix;
-    throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
+    throw Exception(fmt::format("Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second));
 }
 
 void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path)
@@ -628,7 +629,7 @@ size_t PSDiskDelegatorRaft::addPageFileUsedSize(
         }
     }
     if (unlikely(index == UINT32_MAX))
-        throw Exception("Unrecognized path " + upper_path);
+        throw Exception(fmt::format("Unrecognized path {}", upper_path));
 
     {
         std::lock_guard<std::mutex> lock{mutex};
@@ -647,7 +648,7 @@ String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) c
     auto iter = page_path_map.find(id_lvl);
     if (likely(iter != page_path_map.end()))
         return raft_path_infos[iter->second].path;
-    throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
+    throw Exception(fmt::format("Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second));
 }
 
 void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path)
