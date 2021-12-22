@@ -9,4 +9,5 @@ install_dir="$SRCPATH/release-centos7-llvm/tiflash"
 
 cd ${SRCPATH}/cluster_manage
 ./release.sh
+mkdir -p "$install_dir/flash_cluster_manager"
 cp -r dist/flash_cluster_manager "$install_dir/flash_cluster_manager"
