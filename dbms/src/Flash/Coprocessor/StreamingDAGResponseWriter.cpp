@@ -343,6 +343,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         resetBlockCodec();
 
         // disassemble the block back to scatter columns
+        columns = block.mutateColumns();
         for (size_t col_id = 0; col_id < num_columns; ++col_id)
         {
             columns[col_id]->popBack(columns[col_id]->size()); // clear column
