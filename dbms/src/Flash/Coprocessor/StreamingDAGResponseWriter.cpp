@@ -259,7 +259,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::prePartition(Block & block)
     }
 
     // compute hash values
-    hash.reset(nextPowOfTwo(num_rows));
+    hash.getData().reserve(nextPowOfTwo(num_rows));
+    hash.reset(num_rows);
     for (size_t i = 0; i < partition_col_ids.size(); ++i)
     {
         const auto & column = block.getByPosition(partition_col_ids[i]).column;
@@ -267,7 +268,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::prePartition(Block & block)
     }
 
     // fill selector array with most significant bits of hash values
-    selector.resize(nextPowOfTwo(num_rows));
+    selector.reserve(nextPowOfTwo(num_rows));
+    selector.resize(num_rows);
     const auto & hash_data = hash.getData();
     for (size_t i = 0; i < num_rows; ++i)
     {
