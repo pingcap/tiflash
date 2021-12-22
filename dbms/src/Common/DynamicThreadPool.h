@@ -56,7 +56,12 @@ private:
     };
 
 public:
-    explicit DynamicThreadPool(size_t initial_size);
+    template <typename Duration>
+    DynamicThreadPool(size_t initial_size, Duration auto_shrink_cooldown)
+        : dynamic_auto_shrink_cooldown(std::chrono::duration_cast<std::chrono::nanoseconds>(auto_shrink_cooldown))
+    {
+        init();
+    }
 
     ~DynamicThreadPool();
 
@@ -69,7 +74,16 @@ public:
         return std::move(future);
     }
 
+    struct ThreadCount
+    {
+        Int32 fixed = 0;
+        Int32 dynamic = 0;
+    };
+
+    ThreadCount threadCount() const;
+
 private:
+    void init();
     void scheduleTask(TaskPtr task);
     bool scheduledToFixedThread(TaskPtr & task);
     bool scheduledToExistedDynamicThread(TaskPtr & task);
@@ -77,6 +91,8 @@ private:
 
     void fixed_work(size_t index);
     void dynamic_work(TaskPtr initial_task);
+
+    const std::chrono::nanoseconds dynamic_auto_shrink_cooldown;
 
     std::vector<std::thread> fixed_threads;
     // Each fixed thread interacts with outside via a Queue.

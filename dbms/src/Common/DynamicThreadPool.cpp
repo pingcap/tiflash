@@ -2,16 +2,6 @@
 
 namespace DB
 {
-DynamicThreadPool::DynamicThreadPool(size_t initial_size)
-    : idle_fixed_queues(initial_size)
-{
-    for (size_t i = 0; i < initial_size; ++i)
-        fixed_queues.emplace_back(std::make_unique<Queue>(2)); // reserve 2 slots to avoid blocking: one schedule, one dtor.
-
-    for (size_t i = 0; i < initial_size; ++i)
-        fixed_threads.emplace_back(ThreadFactory(true, "FixedThread").newThread(&DynamicThreadPool::fixed_work, this, i));
-}
-
 DynamicThreadPool::~DynamicThreadPool()
 {
     for (auto & queue : fixed_queues)
@@ -31,6 +21,23 @@ DynamicThreadPool::~DynamicThreadPool()
     // TODO: maybe use a latch is more elegant.
     while (alive_dynamic_threads.load() != 0)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
+}
+
+DynamicThreadPool::ThreadCount DynamicThreadPool::threadCount() const
+{
+    ThreadCount cnt;
+    cnt.fixed = fixed_threads.size();
+    cnt.dynamic = alive_dynamic_threads.load();
+    return cnt;
+}
+
+void DynamicThreadPool::init()
+{
+    for (size_t i = 0; i < initial_size; ++i)
+        fixed_queues.emplace_back(std::make_unique<Queue>(2)); // reserve 2 slots to avoid blocking: one schedule, one dtor.
+
+    for (size_t i = 0; i < initial_size; ++i)
+        fixed_threads.emplace_back(ThreadFactory(true, "FixedThread").newThread(&DynamicThreadPool::fixed_work, this, i));
 }
 
 void DynamicThreadPool::scheduleTask(TaskPtr task)
@@ -88,7 +95,6 @@ void DynamicThreadPool::dynamic_work(TaskPtr initial_task)
 {
     initial_task->execute();
 
-    static constexpr auto timeout = std::chrono::minutes(10);
     DynamicNode node;
     while (true)
     {
@@ -97,7 +103,7 @@ void DynamicThreadPool::dynamic_work(TaskPtr initial_task)
             if (in_destructing)
                 break;
             node.prepend(&dynamic_idle_head); // prepend to reuse hot threads so that cold threads have chance to exit
-            node.cv.wait_for(lock, timeout);
+            node.cv.wait_for(lock, dynamic_auto_shrink_cooldown);
             node.detach();
         }
 

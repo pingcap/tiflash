@@ -10,7 +10,7 @@ class DynamicThreadPoolTest : public ::testing::Test
 TEST_F(DynamicThreadPoolTest, TestInterDependent)
 try
 {
-    DynamicThreadPool pool(1);
+    DynamicThreadPool pool(1, std::chrono::seconds(1));
     std::atomic<int> a = 0;
 
     auto f0 = pool.schedule([&] {
