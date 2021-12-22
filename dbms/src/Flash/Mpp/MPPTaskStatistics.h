@@ -47,8 +47,8 @@ private:
     Timestamp task_end_timestamp;
     Timestamp compile_start_timestamp;
     Timestamp compile_end_timestamp;
-    Timestamp read_wait_index_start_timestamp;
-    Timestamp read_wait_index_end_timestamp;
+    Timestamp read_wait_index_start_timestamp{Clock::duration::zero()};
+    Timestamp read_wait_index_end_timestamp{Clock::duration::zero()};
     TaskStatus status;
     String error_message;
 
