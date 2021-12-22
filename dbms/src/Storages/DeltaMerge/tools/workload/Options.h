@@ -35,7 +35,11 @@ struct WorkloadOptions
     uint64_t read_thread_count;
     uint64_t read_stream_count;
 
-    std::string toString() const;
+    std::string testing_type;
+
+    bool log_write_request;
+
+    std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
     void initFailpoints() const;
 };
