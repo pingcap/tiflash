@@ -77,11 +77,6 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
     }
 }
 
-CHBlockChunkCodec::CHBlockChunkCodec(const Block & header_)
-    : header(header_)
-{
-}
-
 std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
 {
     return std::make_unique<CHBlockChunkCodecStream>(field_types);
@@ -90,20 +85,18 @@ std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::v
 Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
 {
     ReadBufferFromString read_buffer(str);
-    if (header)
-    {
-        /// in this case, ignore schema
-        NativeBlockInputStream block_in(read_buffer, header, 0, /*align_column_name_with_header=*/true);
-        return block_in.read();
-    }
-    else
-    {
-        std::vector<String> output_names;
-        for (const auto & c : schema)
-            output_names.push_back(c.first);
-        NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names));
-        return block_in.read();
-    }
+    std::vector<String> output_names;
+    for (const auto & c : schema)
+        output_names.push_back(c.first);
+    NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names));
+    return block_in.read();
+}
+
+Block CHBlockChunkCodec::decode(const String & str, const Block & header)
+{
+    ReadBufferFromString read_buffer(str);
+    NativeBlockInputStream block_in(read_buffer, header, 0, /*align_column_name_with_header=*/true);
+    return block_in.read();
 }
 
 } // namespace DB

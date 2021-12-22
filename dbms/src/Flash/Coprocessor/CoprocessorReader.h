@@ -96,7 +96,7 @@ public:
             switch (resp->encode_type())
             {
             case tipb::EncodeType::TypeCHBlock:
-                block = CHBlockChunkCodec(header).decode(chunk.rows_data(), schema);
+                block = CHBlockChunkCodec::decode(chunk.rows_data(), header);
                 break;
             case tipb::EncodeType::TypeChunk:
                 block = ArrowChunkCodec().decode(chunk.rows_data(), schema);

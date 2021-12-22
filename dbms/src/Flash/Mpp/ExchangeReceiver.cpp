@@ -252,10 +252,9 @@ Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(
         return rows;
 
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
-    CHBlockChunkCodec codec(header);
     for (int i = 0; i < chunk_size; i++)
     {
-        Block block = codec.decode(recv_msg->packet->chunks(i), schema);
+        Block block = CHBlockChunkCodec::decode(recv_msg->packet->chunks(i), header);
         rows += block.rows();
         if (unlikely(block.rows() == 0))
             continue;
