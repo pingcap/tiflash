@@ -5,16 +5,20 @@ RUN  yum install -y epel-release centos-release-scl && \
      yum -y install 'perl(Data::Dumper)' && \
      yum clean all -y
 
-ENV PATH="/usr/local/bin/:${PATH}"
+ENV PATH="/opt/cmake/bin:/usr/local/bin/:${PATH}"
 ENV LIBRARY_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/:${LIBRARY_PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/:${LD_LIBRARY_PATH}"
 ENV CPLUS_INCLUDE_PATH="/usr/local/include/x86_64-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH}"
+
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-linux-x86_64.sh && \
+    sh cmake-3.22.1-linux-x86_64.sh --prefix /opt/cmake --skip-license --exclude-subdir && \
+    rm -rf cmake-3.22.1-linux-x86_64.sh
 
 RUN  source scl_source enable devtoolset-10 && \
      git clone https://github.com/llvm/llvm-project --depth=1 -b llvmorg-13.0.0 && \
      mkdir -p llvm-project/build && \
      cd llvm-project/build && \
-     cmake3 -DCMAKE_BUILD_TYPE=Release \
+     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
         -DLLVM_ENABLE_PROJECTS="clang;lld" \
         -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind" \
@@ -28,7 +32,7 @@ RUN  source scl_source enable devtoolset-10 && \
      rm -rf llvm-project/build && \
      mkdir -p llvm-project/build && \
      cd llvm-project/build && \
-     cmake3 -DCMAKE_BUILD_TYPE=Release \
+     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
         -DLLVM_ENABLE_PROJECTS="clang;lld;polly" \
         -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind;openmp" \
@@ -92,7 +96,7 @@ RUN  NPROC=$(nproc || grep -c ^processor /proc/cpuinfo) && \
 RUN git clone https://github.com/grpc/grpc.git -b v1.26.0 --depth=1 --recursive && \
     mkdir -p grpc/build && \
     cd grpc/build && \
-    cmake3 .. -DgRPC_BUILD_TESTS=OFF \
+    cmake .. -DgRPC_BUILD_TESTS=OFF \
 	     -DCMAKE_BUILD_TYPE=Release \
               -DLINKER_NAME=lld \
               -GNinja \
@@ -106,7 +110,7 @@ RUN git clone https://github.com/grpc/grpc.git -b v1.26.0 --depth=1 --recursive 
     rm -rf build && \
     mkdir build && \
     cd build && \
-    cmake3 .. -DgRPC_BUILD_TESTS=OFF \
+    cmake .. -DgRPC_BUILD_TESTS=OFF \
               -DCMAKE_BUILD_TYPE=Release \
               -GNinja \
               -DgRPC_INSTALL=ON \

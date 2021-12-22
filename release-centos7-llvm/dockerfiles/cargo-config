@@ -9,3 +9,6 @@ linker = "/usr/local/bin/clang"
 rustflags = [
     "-C", "link-arg=-fuse-ld=lld"
 ]
+
+[profile.release]
+rpath = true
