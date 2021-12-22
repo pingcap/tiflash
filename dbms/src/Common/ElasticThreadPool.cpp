@@ -116,11 +116,11 @@ bool ElasticThreadPool::shrink(std::chrono::milliseconds wait_interval)
                 return true;
             cnt_to_clean = 0;
         }
-        auto old_threads = threads;
+        std::vector<std::shared_ptr<Worker>> old_threads = *threads;
         lock.unlock();
         auto new_threads = std::make_shared<std::vector<std::shared_ptr<Worker>>>();
         int cnt_cleaned = 0;
-        for (auto & thd_ctx : *old_threads)
+        for (auto & thd_ctx : old_threads)
         {
             if (thd_ctx->state != 2)
             {
