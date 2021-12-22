@@ -315,7 +315,7 @@ void CPUAffinityManager::checkThreadCPUAffinity() const
         LOG_FMT_INFO(log, "Thread: {} {} bind on CPU: {}", t.first, t.second, cpuSetToString(cpu_set));
         if (isQueryThread(t.second) && !CPU_EQUAL(&cpu_set, &query_cpu_set))
         {
-            LOG_FMT_ERROR(log, "Thread: {} {}  is query thread and bind CPU info is error.", t.first, t.second);
+            LOG_FMT_ERROR(log, "Thread: {} {} is query thread and bind CPU info is error.", t.first, t.second);
         }
         else if (!isQueryThread(t.second) && !CPU_EQUAL(&cpu_set, &other_cpu_set))
         {
