@@ -76,9 +76,10 @@ private:
 
     tipb::DAGRequest dag_req;
 
-    // dag_context holds inputstreams and memory_tracker, so it should be destructed after context.
-    std::unique_ptr<DAGContext> dag_context;
     ContextPtr context;
+    // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
+    // before `context`.
+    std::unique_ptr<DAGContext> dag_context;
     MemoryTracker * memory_tracker = nullptr;
 
     std::atomic<TaskStatus> status{INITIALIZING};
