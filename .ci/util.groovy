@@ -82,6 +82,10 @@ def runClosure(label, Closure body) {
                     alwaysPullImage: true, ttyEnabled: true, command: 'cat',
                     resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
                     resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
+            containerTemplate(name: 'builder-llvm', image: 'hub.pingcap.net/tiflash/tiflash-llvm-base:amd64',
+                    alwaysPullImage: true, ttyEnabled: true, command: 'cat',
+                    resourceRequestCpu: '5000m', resourceRequestMemory: '10Gi',
+                    resourceLimitCpu: '10000m', resourceLimitMemory: '30Gi'),
     ],
     volumes: [
             nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
