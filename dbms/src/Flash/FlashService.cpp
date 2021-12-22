@@ -226,7 +226,7 @@ grpc::Status FlashService::Coprocessor(
     tunnel->connect(writer);
     LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
     tunnel->waitForFinish();
-    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), std::to_string(stopwatch.elapsedMilliseconds()));
+    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;
@@ -239,7 +239,7 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_FMT_DEBUG(log, "{}: cancel mpp task request: ", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "{}: cancel mpp task request: {}", __PRETTY_FUNCTION__, request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -299,7 +299,7 @@ grpc::Status FlashService::BatchCommands(
             GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
         });
 
-        LOG_FMT_DEBUG(log, "{}: Handling batch commands: ", __PRETTY_FUNCTION__, request.DebugString());
+        LOG_FMT_DEBUG(log, "{}: Handling batch commands: {}", __PRETTY_FUNCTION__, request.DebugString());
 
         BatchCommandsContext batch_commands_context(
             *context,
@@ -391,7 +391,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     }
     catch (const std::exception & e)
     {
-        LOG_FMT_ERROR(log, ": std exception: {}", __PRETTY_FUNCTION__, e.what());
+        LOG_FMT_ERROR(log, "{}: std exception: {}", __PRETTY_FUNCTION__, e.what());
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
     }
     catch (...)
