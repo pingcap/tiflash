@@ -36,11 +36,7 @@ void MPPTaskStatistics::recordReadWaitIndex(DAGContext & dag_context)
         read_wait_index_start_timestamp = dag_context.read_wait_index_start_timestamp;
         read_wait_index_end_timestamp = dag_context.read_wait_index_end_timestamp;
     }
-    else
-    {
-        read_wait_index_start_timestamp = compile_start_timestamp;
-        read_wait_index_end_timestamp = compile_start_timestamp;
-    }
+    // else keep zero timestamp
 }
 
 namespace
@@ -87,5 +83,16 @@ void MPPTaskStatistics::logTracingJson()
         error_message,
         working_time,
         memory_peak);
+}
+
+void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
+{
+    memory_peak = memory_peak_;
+}
+
+void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp)
+{
+    compile_start_timestamp = start_timestamp;
+    compile_end_timestamp = end_timestamp;
 }
 } // namespace DB
