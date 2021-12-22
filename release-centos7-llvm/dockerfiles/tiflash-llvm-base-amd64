@@ -1,0 +1,14 @@
+FROM centos:7
+
+COPY misc /misc
+
+RUN sh /misc/bake_llvm_base_amd64.sh
+
+ENV PATH="/opt/cmake/bin:/usr/local/bin/:${PATH}:/usr/local/go/bin:/root/.cargo/bin" \
+    LIBRARY_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/:${LIBRARY_PATH}" \
+    LD_LIBRARY_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/:${LD_LIBRARY_PATH}" \
+    CPLUS_INCLUDE_PATH="/usr/local/include/x86_64-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH}" \
+    CC=clang \
+    CXX=clang++ \
+    LD=ld.lld
+
