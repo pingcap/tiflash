@@ -1242,17 +1242,20 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = removeNullable(arguments[arg_idx]).get();
-            if (!arg->isStringOrFixedString())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            if (!arguments[arg_idx]->onlyNull())
+            {
+                const auto * arg = removeNullable(arguments[arg_idx]).get();
+                if (!arg->isStringOrFixedString())
+                    throw Exception{
+                        fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), (arg_idx + 1), getName()),
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            }
         }
 
         return makeNullable(std::make_shared<DataTypeString>());
@@ -1270,7 +1273,7 @@ public:
         auto res = ColumnString::create();
         StringSink sink(*res, rows);
 
-        for (size_t row = 0; row < rows; row++)
+        for (size_t row = 0; row < rows; ++row)
         {
             if (block.getByPosition(arguments[0]).column->isNullAt(row))
             {
