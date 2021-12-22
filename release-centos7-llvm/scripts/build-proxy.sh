@@ -24,10 +24,7 @@ export CXXFLAGS="-w"
 
 # override cc-rs default STL lib
 export CXXSTDLIB="c++"
-
-# set CMAKE executable
-export CMAKE=cmake3
-
+export CMAKE="/opt/cmake/bin/cmake"
 # Keep C++ runtime libs to be linked dynamically (ODR safe). 
 # Rustc seems resolve static lib on default even when the
 # above flag is set to "dylib=c++"
