@@ -24,6 +24,9 @@
 #if ENABLE_TIFLASH_DTTOOL
 #include <Server/DTTool/DTTool.h>
 #endif
+#if ENABLE_TIFLASH_DTWORKLOAD
+#include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
+#endif
 #include <Common/StringUtils/StringUtils.h>
 #include <Server/DTTool/DTTool.h>
 
@@ -130,6 +133,9 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #endif
 #if ENABLE_TIFLASH_DTTOOL
     {"dttool", DTTool::mainEntryTiFlashDTTool},
+#endif
+#if ENABLE_TIFLASH_DTWORKLOAD
+    {"dtworkload", DB::DM::tests::DTWorkload::mainEntry},
 #endif
     {"version", mainEntryVersion},
     {"errgen", mainExportError}};
