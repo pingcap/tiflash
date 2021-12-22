@@ -9,6 +9,43 @@ namespace tests
 {
 class StringMatch : public FunctionTest
 {
+protected:
+    static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
+    {
+        return createColumn<Nullable<String>>(v);
+    }
+
+    static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<UInt64>> & v)
+    {
+        return createColumn<Nullable<UInt8>>(v);
+    }
+
+    static ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
+    {
+        std::vector<String> strings;
+        strings.reserve(v.size());
+        for (std::optional<String> s : v)
+        {
+            strings.push_back(s.value());
+        }
+        return createColumn<String>(strings);
+    }
+
+    static ColumnWithTypeAndName toVec(const std::vector<std::optional<UInt64>> & v)
+    {
+        std::vector<UInt64> ints;
+        ints.reserve(v.size());
+        for (std::optional<UInt64> i : v)
+        {
+            ints.push_back(i.value());
+        }
+        return createColumn<UInt8>(ints);
+    }
+
+    static ColumnWithTypeAndName toConst(const String & s)
+    {
+        return createConstColumn<String>(1, s);
+    }
 };
 
 TEST_F(StringMatch, Like3ArgsVectorWithVector)
@@ -139,6 +176,64 @@ try
     }
 }
 CATCH
+
+TEST_F(StringMatch, LikeVectorWithVector)
+{
+    std::vector<std::optional<String>> haystack = {"", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab"};
+    std::vector<std::optional<String>> needle = {"", "a", "", "%", "a%", "%a", "a%", "ab", "ab", "a%", "aaab%", "aab%a%aab%b", "_", "_b__", "_b_"};
+    std::vector<std::optional<UInt64>> expect = {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0};
+    ASSERT_COLUMN_EQ(
+        toNullableVec(expect),
+        executeFunction(
+            "like",
+            toNullableVec(haystack),
+            toNullableVec(needle)));
+
+    ASSERT_COLUMN_EQ(
+        toVec(expect),
+        executeFunction(
+            "like",
+            toVec(haystack),
+            toVec(needle)));
+}
+
+TEST_F(StringMatch, LikeConstWithVector)
+{
+    std::vector<std::optional<String>> needle = {"", "a", "", "%", "a%", "%a", "a%", "ab", "ab", "a%", "aaab%", "aab%a%aab%b", "_", "_b__", "_b_"};
+    std::vector<std::optional<UInt64>> expect = {0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0};
+    ASSERT_COLUMN_EQ(
+        toNullableVec(expect),
+        executeFunction(
+            "like",
+            toConst("abcaba"),
+            toNullableVec(needle)));
+
+    ASSERT_COLUMN_EQ(
+        toVec(expect),
+        executeFunction(
+            "like",
+            toConst("abcaba"),
+            toVec(needle)));
+}
+
+TEST_F(StringMatch, LikeVectorWithConst)
+{
+    std::vector<std::optional<String>> haystack = {"", "a", "", "a", "a", "a", "ab", "ab", "a%", "aaaa", "aaaa", "aabaababaabbab", "a", "abab", "abab"};
+    std::vector<std::optional<UInt64>> expect = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0};
+    ASSERT_COLUMN_EQ(
+        toNullableVec(expect),
+        executeFunction(
+            "like",
+            toNullableVec(haystack),
+            toConst("%aa%")));
+
+    ASSERT_COLUMN_EQ(
+        toVec(expect),
+        executeFunction(
+            "like",
+            toVec(haystack),
+            toConst("%aa%")));
+}
 } // namespace tests
 
 } // namespace DB
