@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <variant>
+#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -119,7 +120,7 @@ void ReadLogFile(const std::string & path, std::function<void(std::istream &)> &
 
 bool FilterFileByDatetime(
     const std::string & path,
-    const std::string & error_log_file_prefix,
+    const std::vector<std::string> & ignore_log_file_prefixes,
     const int64_t start_time);
 
 

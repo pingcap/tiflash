@@ -46,5 +46,3 @@ target_link_libraries(dm_test_delta_index_manager dbms gtest_main clickhouse_fun
 add_subdirectory (bank EXCLUDE_FROM_ALL)
 
 add_subdirectory (stress EXCLUDE_FROM_ALL)
-
-add_subdirectory (workload EXCLUDE_FROM_ALL)
