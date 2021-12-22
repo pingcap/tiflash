@@ -35,35 +35,14 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
-GRPCReceiverContext::GRPCReceiverContext(pingcap::kv::Cluster * cluster_, std::shared_ptr<MPPTaskManager> task_manager_, bool enable_local_tunnel_)
-    : cluster(cluster_)
-    , task_manager(std::move(task_manager_))
-    , enable_local_tunnel(enable_local_tunnel_)
-{}
-
-
-ExchangeRecvRequest GRPCReceiverContext::makeRequest(
-    int index,
-    const tipb::ExchangeReceiver & pb_exchange_receiver,
-    const ::mpp::TaskMeta & task_meta) const
+namespace
 {
-    const auto & meta_raw = pb_exchange_receiver.encoded_task_meta(index);
-    auto sender_task = std::make_unique<mpp::TaskMeta>();
-    if (!sender_task->ParseFromString(meta_raw))
-        throw Exception("parse task meta error!");
-
-    ExchangeRecvRequest req;
-    req.send_task_id = sender_task->task_id();
-    req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-    req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
-    req.req->set_allocated_sender_meta(sender_task.release());
-    return req;
-}
-
-static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager)
+std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
+    const ::mpp::EstablishMPPConnectionRequest * request,
+    const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
-    std::string err_msg;
+    String err_msg;
     MPPTunnelPtr tunnel = nullptr;
     {
         MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
@@ -78,17 +57,55 @@ static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(const 
     }
     if (!tunnel->isLocal())
     {
-        std::string err_msg("EstablishMPPConnectionLocal into a remote channel !");
+        String err_msg("EstablishMPPConnectionLocal into a remote channel !");
         return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
     }
     tunnel->connect(nullptr);
     return std::make_tuple(tunnel, grpc::Status::OK);
 }
+} // namespace
 
-std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request, const std::string & recv_addr) const
+GRPCReceiverContext::GRPCReceiverContext(
+    const tipb::ExchangeReceiver & exchange_receiver_meta_,
+    const mpp::TaskMeta & task_meta_,
+    pingcap::kv::Cluster * cluster_,
+    std::shared_ptr<MPPTaskManager> task_manager_,
+    bool enable_local_tunnel_,
+    bool enable_async_grpc_)
+    : exchange_receiver_meta(exchange_receiver_meta_)
+    , task_meta(task_meta_)
+    , cluster(cluster_)
+    , task_manager(std::move(task_manager_))
+    , enable_local_tunnel(enable_local_tunnel_)
+    , enable_async_grpc(enable_async_grpc_)
+{}
+
+ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
 {
-    bool is_local = enable_local_tunnel && request.req->sender_meta().address() == recv_addr;
-    if (is_local)
+    const auto & meta_raw = exchange_receiver_meta.encoded_task_meta(index);
+    auto sender_task = std::make_unique<mpp::TaskMeta>();
+    if (!sender_task->ParseFromString(meta_raw))
+        throw Exception("parse task meta error!");
+
+    ExchangeRecvRequest req;
+    req.source_index = index;
+    req.is_local = enable_local_tunnel && sender_task->address() == task_meta.address();
+    req.send_task_id = sender_task->task_id();
+    req.recv_task_id = task_meta.task_id();
+    req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
+    req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
+    req.req->set_allocated_sender_meta(sender_task.release());
+    return req;
+}
+
+bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request)
+{
+    return enable_async_grpc && !request.is_local;
+}
+
+std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
+{
+    if (request.is_local)
     {
         auto [tunnel, status] = establishMPPConnectionLocal(request.req.get(), task_manager);
         if (!status.ok())
@@ -105,6 +122,17 @@ std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const Exch
             &reader->client_context,
             *reader->call);
         return reader;
+    }
+}
+
+void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
+{
+    schema.clear();
+    for (int i = 0; i < exchange_receiver_meta.field_types_size(); i++)
+    {
+        String name = "exchange_receiver_" + std::to_string(i);
+        ColumnInfo info = TiDB::fieldTypeToColumnInfo(exchange_receiver_meta.field_types(i));
+        schema.push_back(std::make_pair(name, info));
     }
 }
 

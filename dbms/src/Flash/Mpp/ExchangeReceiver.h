@@ -77,8 +77,7 @@ public:
 public:
     ExchangeReceiverBase(
         std::shared_ptr<RPCContext> rpc_context_,
-        const ::tipb::ExchangeReceiver & exc,
-        const ::mpp::TaskMeta & meta,
+        size_t source_num_,
         size_t max_streams_,
         const LogWithPrefixPtr & log_);
 
@@ -98,9 +97,11 @@ public:
     String getName() { return "ExchangeReceiver"; }
 
 private:
-    void setUpConnection();
+    using Request = typename RPCContext::RequestType;
 
-    void readLoop(size_t source_index);
+    void setUpConnection();
+    void readLoop(Request req);
+    void reactor(std::vector<Request> async_requests);
 
     std::shared_ptr<RPCContext> rpc_context;
 

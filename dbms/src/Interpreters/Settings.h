@@ -73,7 +73,7 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingLoadBalancing, load_balancing, LoadBalancing::RANDOM, "Which replicas (among healthy replicas) to preferably send a query to (on the first attempt) for distributed processing.")                                          \
                                                                                                                                                                                                                                         \
-    M(SettingTotalsMode, totals_mode, TotalsMode::AFTER_HAVING_EXCLUSIVE, "How to calculate TOTALS when HAVING is present, as well as when max_rows_to_group_by and group_by_overflow_mode = ‘any’ are "                            \
+    M(SettingTotalsMode, totals_mode, TotalsMode::AFTER_HAVING_EXCLUSIVE, "How to calculate TOTALS when HAVING is present, as well as when max_rows_to_group_by and group_by_overflow_mode = ‘any’ are "                                \
                                                                           "present.")                                                                                                                                                   \
     M(SettingFloat, totals_auto_threshold, 0.5, "The threshold for totals_mode = 'auto'.")                                                                                                                                              \
                                                                                                                                                                                                                                         \
@@ -331,7 +331,8 @@ struct Settings
     M(SettingUInt64, max_network_bandwidth_for_all_users, 0, "The maximum speed of data exchange over the network in bytes per second for all concurrently running queries. Zero means "                                                \
                                                              "unlimited.")                                                                                                                                                              \
                                                                                                                                                                                                                                         \
-    M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")
+    M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")                                                                                                                                    \
+    M(SettingBool, enable_async_grpc, false, "Enable async grpc in MPP.")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

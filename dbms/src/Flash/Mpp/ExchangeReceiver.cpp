@@ -7,31 +7,50 @@
 
 namespace DB
 {
+namespace
+{
+String getReceiverStateStr(const ExchangeReceiverState & s)
+{
+    switch (s)
+    {
+    case ExchangeReceiverState::NORMAL:
+        return "NORMAL";
+    case ExchangeReceiverState::ERROR:
+        return "ERROR";
+    case ExchangeReceiverState::CANCELED:
+        return "CANCELED";
+    case ExchangeReceiverState::CLOSED:
+        return "CLOSED";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+enum class AsyncRequestStage
+{
+};
+
+struct AsyncRequestStat
+{
+};
+} // namespace
+
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     std::shared_ptr<RPCContext> rpc_context_,
-    const ::tipb::ExchangeReceiver & exc,
-    const ::mpp::TaskMeta & meta,
+    size_t source_num_,
     size_t max_streams_,
     const std::shared_ptr<LogWithPrefix> & log_)
     : rpc_context(std::move(rpc_context_))
-    , pb_exchange_receiver(exc)
-    , source_num(pb_exchange_receiver.encoded_task_meta_size())
-    , task_meta(meta)
+    , source_num(source_num_)
     , max_streams(max_streams_)
     , max_buffer_size(std::max(source_num, max_streams_) * 2)
     , res_buffer(max_buffer_size)
-    , live_connections(pb_exchange_receiver.encoded_task_meta_size())
+    , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
 {
-    for (int i = 0; i < exc.field_types_size(); i++)
-    {
-        String name = "exchange_receiver_" + std::to_string(i);
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
-        schema.push_back(std::make_pair(name, info));
-    }
-
+    rpc_context->fillSchema(schema);
     setUpConnection();
 }
 
@@ -61,50 +80,43 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
+    std::vector<Request> async_requests;
+
     for (size_t index = 0; index < source_num; ++index)
     {
-        auto t = ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, index);
-        workers.push_back(std::move(t));
+        auto req = rpc_context->makeRequest(index);
+        if (rpc_context->supportAsync(req))
+            async_requests.push_back(std::move(req));
+        else
+            workers.push_back(ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, std::move(req)));
     }
-}
 
-static inline String getReceiverStateStr(const ExchangeReceiverState & s)
-{
-    switch (s)
-    {
-    case ExchangeReceiverState::NORMAL:
-        return "NORMAL";
-    case ExchangeReceiverState::ERROR:
-        return "ERROR";
-    case ExchangeReceiverState::CANCELED:
-        return "CANCELED";
-    case ExchangeReceiverState::CLOSED:
-        return "CLOSED";
-    default:
-        return "UNKNOWN";
-    }
+    if (!async_requests.empty())
+        workers.push_back(ThreadFactory(true, "RecvReactor").newThread(&ExchangeReceiverBase<RPCContext>::reactor, this, std::move(async_requests)));
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
+void ExchangeReceiverBase<RPCContext>::reactor(std::vector<Request> async_requests)
+{
+    CPUAffinityManager::getInstance().bindSelfQueryThread();
+    UNUSED(async_requests);
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
 
-    Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
-    Int64 recv_task_id = task_meta.task_id();
     static const Int32 MAX_RETRY_TIMES = 10;
     try
     {
-        auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
-        send_task_id = req.send_task_id;
-        String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
-        LOG_DEBUG(log, "begin start and read : " << req.debugString());
+        String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
         auto status = RPCContext::getStatusOK();
         for (int i = 0; i < MAX_RETRY_TIMES; i++)
         {
-            auto reader = rpc_context->makeReader(req, task_meta.address());
+            auto reader = rpc_context->makeReader(req);
             reader->initialize();
             std::shared_ptr<ReceivedMessage> recv_msg;
             bool has_data = false;
@@ -128,7 +140,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     }
                 }
                 recv_msg->req_info = req_info;
-                recv_msg->source_index = source_index;
+                recv_msg->source_index = req.source_index;
                 bool success = reader->read(recv_msg->packet);
                 if (!success)
                 {
@@ -217,7 +229,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         copy_live_conn = live_connections;
         cv.notify_all();
     }
-    LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
+    LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", req.send_task_id, req.recv_task_id, copy_live_conn));
 
     if (copy_live_conn == 0)
         LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
