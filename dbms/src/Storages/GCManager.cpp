@@ -83,12 +83,7 @@ bool GCManager::work()
     if (iter == storages.end())
         iter = storages.begin();
     next_table_id = iter->first;
-<<<<<<< HEAD
     LOG_FMT_INFO(log, "End GC and next gc will start with table id: {}", next_table_id);
-=======
-    LOG_INFO(log, "End GC and next gc will start with table id: " << next_table_id);
-    gc_check_stop_watch.restart();
->>>>>>> 8097705ed3b6a7f9cfed7b2cbcd8f9b7e9b45949
     // Always return false
     return false;
 }
