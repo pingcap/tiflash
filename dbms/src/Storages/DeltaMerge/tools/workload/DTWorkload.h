@@ -12,7 +12,7 @@ class Context;
 namespace DB::DM
 {
 class DeltaMergeStore;
-class ColumnDefine;
+struct ColumnDefine;
 using ColumnDefines = std::vector<ColumnDefine>;
 } // namespace DB::DM
 
@@ -27,15 +27,17 @@ class KeyGenerator;
 class TimestampGenerator;
 class DataGenerator;
 class TableGenerator;
-class TableInfo;
-class WorkloadOptions;
+struct TableInfo;
+struct WorkloadOptions;
 class HandleLock;
 class SharedHandleTable;
 
 class DTWorkload
 {
 public:
-    DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_);
+    static int mainEntry(int argc, char ** argv);
+
+    DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_);
     ~DTWorkload();
 
     void run(uint64_t r);
@@ -79,7 +81,6 @@ private:
 
     std::unique_ptr<Context> context;
     std::unique_ptr<WorkloadOptions> opts;
-    std::unique_ptr<TableGenerator> table_gen;
     std::unique_ptr<TableInfo> table_info;
     std::unique_ptr<KeyGenerator> key_gen;
     std::unique_ptr<TimestampGenerator> ts_gen;
