@@ -30,8 +30,8 @@ mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so
 
 BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
-#rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
-cd ${BUILD_DIR}
+rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
+
 # TODO: remove -DENABLE_TIFLASH_DTWORKLOAD=OFF once fixed
 cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
@@ -55,7 +55,7 @@ source ${SCRIPTPATH}/utils/vendor_dependency.sh
 rm -rf ${INSTALL_DIR}/tiflash-runtime
 mkdir -p ${INSTALL_DIR}/tiflash-runtime
 # compress debug symbols
-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
+llvm-objcopy --compress-debug-sections=zlib-gnu "${BUILD_DIR}/dbms/src/Server/tiflash" "${INSTALL_DIR}/tiflash"
 
 # Vendor dependencies
 vendor_dependency "${INSTALL_DIR}/tiflash" libnsl.so    "${INSTALL_DIR}/tiflash-runtime"
