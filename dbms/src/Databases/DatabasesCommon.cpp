@@ -315,11 +315,12 @@ void loadTable(Context & context,
     }
     catch (const Exception & e)
     {
-        throw Exception(fmt::format("Cannot create table from metadata file {}, error: {}, stack trace:\n{}",
-                                    table_metadata_path,
-                                    e.displayText(),
-                                    e.getStackTrace().toString()),
-                        ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
+        throw Exception(
+            fmt::format("Cannot create table from metadata file {}, error: {}, stack trace:\n{}",
+                        table_metadata_path,
+                        e.displayText(),
+                        e.getStackTrace().toString()),
+            ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
     }
 }
 

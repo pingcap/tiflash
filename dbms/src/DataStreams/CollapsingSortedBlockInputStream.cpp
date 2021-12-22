@@ -198,8 +198,9 @@ void CollapsingSortedBlockInputStream::merge(MutableColumns & merged_columns, st
             last_is_positive = false;
         }
         else
-            throw Exception(fmt::format("Incorrect data: Sign = {} (must be 1 or -1).", sign),
-                            ErrorCodes::INCORRECT_DATA);
+            throw Exception(
+                fmt::format("Incorrect data: Sign = {} (must be 1 or -1).", sign),
+                ErrorCodes::INCORRECT_DATA);
 
         if (!current->isLast())
         {
