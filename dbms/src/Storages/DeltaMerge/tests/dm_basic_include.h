@@ -26,7 +26,6 @@ namespace tests
 // Add this so that we can call typeFromString under namespace DB::DM::tests
 using DB::tests::typeFromString;
 
-#ifdef DBMS_PUBLIC_GTEST
 /// helper functions for comparing HandleRange
 inline ::testing::AssertionResult HandleRangeCompare(
     const char * lhs_expr,
@@ -55,7 +54,6 @@ inline ::testing::AssertionResult RowKeyRangeCompare(
 #define GET_GTEST_FULL_NAME                                                                     \
     (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." \
      + ::testing::UnitTest::GetInstance()->current_test_info()->name())
-#endif
 
 inline Strings createNumberStrings(size_t beg, size_t end)
 {
@@ -308,7 +306,6 @@ public:
         return block;
     }
 
-#ifdef DBMS_PUBLIC_GTEST
     static void verifyClusteredIndexValue(const String & value, Int64 ans, size_t rowkey_column_size)
     {
         size_t cursor = 0;
@@ -322,7 +319,6 @@ public:
         EXPECT_EQ(k, rowkey_column_size);
         EXPECT_EQ(cursor, value.size());
     }
-#endif
 
     static RowKeyRange getRowKeyRangeForClusteredIndex(Int64 start, Int64 end, size_t rowkey_column_size)
     {

@@ -10,7 +10,6 @@ namespace DB
 {
 namespace tests
 {
-#ifdef DBMS_PUBLIC_GTEST
 template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typename ActualDisplayT>
 ::testing::AssertionResult assertEqual(
     const char * expected_expr,
@@ -118,7 +117,6 @@ ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, co
     func->execute(block, argument_column_numbers, columns.size());
     return block.getByPosition(columns.size());
 }
-#endif
 
 ColumnWithTypeAndName createOnlyNullColumnConst(size_t size, const String & name)
 {
