@@ -6,6 +6,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 #include <fstream>
 #include <random>
@@ -163,7 +164,7 @@ void randomKill(WorkloadOptions & opts, pid_t pid)
         std::cerr << fmt::format("{} kill pid {} succ.", localTime(), pid) << std::endl;
     }
     int status = 0;
-    wait(&status);
+    ::wait(&status);
 }
 
 void doRunAndRandomKill(WorkloadOptions & opts)

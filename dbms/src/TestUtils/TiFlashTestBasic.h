@@ -22,7 +22,9 @@
 #pragma clang diagnostic ignored "-Wsign-compare"
 #endif
 
+#ifdef DBMS_PUBLIC_GTEST
 #include <gtest/gtest.h>
+#endif
 
 #if !__clang__
 #pragma GCC diagnostic pop
@@ -54,6 +56,7 @@ namespace tests
         throw;                                                                       \
     }
 
+#ifdef DBMS_PUBLIC_GTEST
 /// helper functions for comparing DataType
 ::testing::AssertionResult DataTypeCompare(
     const char * lhs_expr,
@@ -63,6 +66,7 @@ namespace tests
 
 #define ASSERT_DATATYPE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
 #define EXPECT_DATATYPE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
+#endif
 
 // A simple helper for getting DataType from type name
 inline DataTypePtr typeFromString(const String & str)
@@ -158,6 +162,7 @@ private:
     TiFlashTestEnv() = delete;
 };
 
+#ifdef DBMS_PUBLIC_GTEST
 #define CHECK_TESTS_WITH_DATA_ENABLED                                                     \
     if (!TiFlashTestEnv::isTestsWithDataEnabled())                                        \
     {                                                                                     \
@@ -169,6 +174,6 @@ private:
                      test_info->name()));                                                 \
         return;                                                                           \
     }
-
+#endif
 } // namespace tests
 } // namespace DB

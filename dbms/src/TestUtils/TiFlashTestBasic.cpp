@@ -87,6 +87,7 @@ void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
     Poco::Logger::root().setLevel(level);
 }
 
+#ifdef DBMS_PUBLIC_GTEST
 ::testing::AssertionResult DataTypeCompare(
     const char * lhs_expr,
     const char * rhs_expr,
@@ -98,5 +99,5 @@ void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
     else
         return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs->getName(), rhs->getName(), false);
 }
-
+#endif
 } // namespace DB::tests

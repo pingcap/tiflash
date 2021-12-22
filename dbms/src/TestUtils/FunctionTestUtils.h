@@ -369,6 +369,7 @@ ColumnWithTypeAndName createConstColumn(
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
 
+#ifdef DBMS_PUBLIC_GTEST
 ::testing::AssertionResult dataTypeEqual(
     const DataTypePtr & expected,
     const DataTypePtr & actual);
@@ -456,6 +457,6 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
-
+#endif
 } // namespace tests
 } // namespace DB
