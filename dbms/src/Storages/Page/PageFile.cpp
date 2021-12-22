@@ -1273,7 +1273,7 @@ bool PageFile::linkFrom(PageFile & page_file, WriteBatch::SequenceID sid, PageEn
     }
     catch (DB::Exception & e)
     {
-        LOG_WARNING(page_file.log, "failed to link page file. error meesgae : " + e.message());
+        LOG_WARNING(page_file.log, "failed to link page file. error message : " + e.message());
     }
     return false;
 }
