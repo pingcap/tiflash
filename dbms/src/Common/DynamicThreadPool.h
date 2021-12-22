@@ -1,7 +1,9 @@
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ExecutableTask.h>
+#include <Common/packTask.h>
 
 #include <boost/lockfree/queue.hpp>
 #include <chrono>
@@ -12,49 +14,8 @@ namespace DB
 class DynamicThreadPool
 {
 private:
-    class ITask
-    {
-    public:
-        ITask() = default;
-
-        virtual ~ITask() = default;
-        ITask(const ITask & rhs) = delete;
-        ITask & operator=(const ITask & rhs) = delete;
-        ITask(ITask && other) = default;
-        ITask & operator=(ITask && other) = default;
-
-        /**
-         * Run the task.
-         */
-        virtual void execute() = 0;
-    };
-
-    template <typename Func>
-    class Task : public ITask
-    {
-    public:
-        Task(Func && func_)
-            : func{std::move(func_)}
-        {}
-
-        ~Task() override = default;
-        Task(Task && other) = default;
-        Task & operator=(Task && other) = default;
-
-        /**
-         * Run the task.
-         */
-        void execute() override
-        {
-            func();
-        }
-
-    private:
-        Func func;
-    };
-
-    using TaskPtr = std::shared_ptr<ITask>;
-    using Queue = ConcurrentBoundedQueue<TaskPtr>;
+    using TaskPtr = std::unique_ptr<IExecutableTask>;
+    using Queue = MPMCQueue<TaskPtr>;
 
     // used for dynamic threads
     struct DynamicNode
@@ -95,138 +56,27 @@ private:
     };
 
 public:
-    explicit DynamicThreadPool(size_t initial_size)
-        : idle_fixed_queues(initial_size)
-    {
-        for (size_t i = 0; i < initial_size; ++i)
-            fixed_queues.emplace_back(std::make_unique<Queue>(2)); // reserve 2 slots to avoid blocking: one schedule, one dtor.
+    explicit DynamicThreadPool(size_t initial_size);
 
-        for (size_t i = 0; i < initial_size; ++i)
-            fixed_threads.emplace_back(ThreadFactory(true, "FixedThread").newThread(&DynamicThreadPool::fixed_work, this, i));
-    }
-
-    ~DynamicThreadPool()
-    {
-        for (auto & queue : fixed_queues)
-            queue->push(nullptr);
-
-        for (auto & thread : fixed_threads)
-            thread.join();
-
-        {
-            std::unique_lock lock(dynamic_mutex);
-            in_destructing = true;
-            // do not need to detach node here
-            for (auto * node = dynamic_idle_head.next; node != &dynamic_idle_head; node = node->next)
-                node->cv.notify_one();
-        }
-
-        // TODO: maybe use a latch is more elegant.
-        while (alive_dynamic_threads.load() != 0)
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
+    ~DynamicThreadPool();
 
     template <typename Func, typename... Args>
     auto schedule(Func && func, Args &&... args)
     {
-        // capature our task into lambda with all its parameters
-        auto capture = [func = std::forward<Func>(func),
-                        args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
-            // run the task with the parameters provided
-            return std::apply(std::move(func), std::move(args));
-        };
-
-        // get return type of our task
-        using TaskResult = std::invoke_result_t<decltype(capture)>;
-
-        // create package_task to capture exceptions
-        using PackagedTask = std::packaged_task<TaskResult()>;
-        PackagedTask task{std::move(capture)};
-
-        // get future for obtaining future result
-        auto result_future = task.get_future();
-        scheduleTask(std::make_unique<Task<PackagedTask>>(std::move(task)));
-
-        return std::move(result_future);
+        auto task = packTask(std::forward<Func>(func), std::forward<Args>(args)...);
+        auto future = task.get_future();
+        scheduleTask(std::make_unique<ExecutableTask<decltype(task)>>(std::move(task)));
+        return std::move(future);
     }
 
 private:
-    void scheduleTask(TaskPtr task)
-    {
-        if (!scheduledToFixedThread(task) && !scheduledToExistedDynamicThread(task))
-            scheduledToNewDynamicThread(task);
-    }
+    void scheduleTask(TaskPtr task);
+    bool scheduledToFixedThread(TaskPtr & task);
+    bool scheduledToExistedDynamicThread(TaskPtr & task);
+    void scheduledToNewDynamicThread(TaskPtr & task);
 
-    bool scheduledToFixedThread(TaskPtr & task)
-    {
-        Queue * queue = nullptr;
-        if (idle_fixed_queues.pop(queue))
-        {
-            queue->push(std::move(task));
-            return true;
-        }
-        return false;
-    }
-
-    bool scheduledToExistedDynamicThread(TaskPtr & task)
-    {
-        std::unique_lock lock(dynamic_mutex);
-        if (dynamic_idle_head.noFollowers())
-            return false;
-        DynamicNode * node = dynamic_idle_head.next;
-        // detach node to avoid assigning two tasks to node.
-        node->detach();
-        node->task = std::move(task);
-        node->cv.notify_one();
-        return true;
-    }
-
-    void scheduledToNewDynamicThread(TaskPtr & task)
-    {
-        alive_dynamic_threads.fetch_add(1);
-        std::thread t = ThreadFactory(true, "DynamicThread").newThread(&DynamicThreadPool::dynamic_work, this, std::move(task));
-        t.detach();
-    }
-
-    void fixed_work(size_t index)
-    {
-        Queue * queue = fixed_queues[index].get();
-        while (true)
-        {
-            idle_fixed_queues.push(queue);
-            TaskPtr task;
-            queue->pop(task);
-            if (!task)
-                break;
-            task->execute();
-        }
-    }
-
-    void dynamic_work(TaskPtr initial_task)
-    {
-        initial_task->execute();
-
-        static constexpr auto timeout = std::chrono::minutes(10);
-        DynamicNode node;
-        while (true)
-        {
-            {
-                std::unique_lock lock(dynamic_mutex);
-                if (in_destructing)
-                    break;
-                node.prepend(&dynamic_idle_head); // prepend to reuse hot threads so that cold threads have chance to exit
-                node.cv.wait_for(lock, timeout);
-                node.detach();
-            }
-
-            TaskPtr & task = node.task;
-            if (!task) // may be timeout or cancelled
-                break;
-            task->execute();
-            task.reset();
-        }
-        alive_dynamic_threads.fetch_sub(1);
-    }
+    void fixed_work(size_t index);
+    void dynamic_work(TaskPtr initial_task);
 
     std::vector<std::thread> fixed_threads;
     // Each fixed thread interacts with outside via a Queue.
