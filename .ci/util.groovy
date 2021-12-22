@@ -179,22 +179,22 @@ def runUnitTests(label, CURWS, NPROC) {
         dir("${CURWS}/tics") {
             stage("Build") {
                 timeout(time: 70, unit: 'MINUTES') {
-                    container("builder") {
-                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} UPDATE_CCACHE=false ${CURWS}/tics/release-centos7/build/build-tiflash-ut-coverage.sh"
+                    container("builder-llvm") {
+                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} UPDATE_CCACHE=false ${CURWS}/tics/release-centos7-llvm/scripts/build-tiflash-ut-coverage.sh"
                     }
                 }
             }
             stage("Tests") {
                 timeout(time: 50, unit: 'MINUTES') {
-                    container("builder") {
-                        sh "NPROC=${NPROC_UT} /build/tics/release-centos7/build/run-ut.sh"
+                    container("builder-llvm") {
+                        sh "NPROC=${NPROC_UT} /build/tics/release-centos7-llvm/scripts/run-ut.sh"
                     }
                 }
             }
             stage("Show UT Coverage") {
                 timeout(time: 5, unit: 'MINUTES') {
-                    container("builder") {
-                        sh "NPROC=${NPROC} /build/tics/release-centos7/build/upload-ut-coverage.sh"
+                    container("builder-llvm") {
+                        sh "NPROC=${NPROC} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
                         sh """
                         cp /tmp/tiflash_gcovr_coverage.xml ./
                         cp /tmp/tiflash_gcovr_coverage.res ./
