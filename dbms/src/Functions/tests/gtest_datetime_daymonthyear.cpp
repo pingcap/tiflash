@@ -222,7 +222,6 @@ try
                 testForDate<false, true>(year, month, day);
                 //Date non-const non-nullable
                 testForDate<false, false>(year, month, day);
-
             }
         }
     }
