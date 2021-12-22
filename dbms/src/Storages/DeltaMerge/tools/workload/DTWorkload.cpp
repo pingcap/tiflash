@@ -3,7 +3,6 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
 #include <Storages/DeltaMerge/tools/workload/DataGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/Handle.h>
@@ -14,7 +13,7 @@
 #include <Storages/DeltaMerge/tools/workload/TableGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/TimestampGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/Utils.h>
-#include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <cpptoml.h>
 
 namespace DB::DM::tests
