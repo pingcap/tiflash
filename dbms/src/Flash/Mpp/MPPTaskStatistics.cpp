@@ -1,14 +1,15 @@
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
+#include <Flash/Mpp/getMPPTaskTracingLog.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-MPPTaskStatistics::MPPTaskStatistics(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_)
-    : log(getMPPTaskLog(log_, "mpp_task_tracing"))
+MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_)
+    : logger(getMPPTaskTracingLog(id_))
     , id(id_)
     , host(std::move(address_))
     , task_init_timestamp(Clock::now())
@@ -26,11 +27,6 @@ void MPPTaskStatistics::end(const TaskStatus & status_, StringRef error_message_
     task_end_timestamp = Clock::now();
     status = status_;
     error_message.assign(error_message_.data, error_message_.size);
-}
-
-void MPPTaskStatistics::logStats()
-{
-    log->debug(toJson());
 }
 
 namespace
@@ -64,10 +60,13 @@ BaseRuntimeStatistics MPPTaskStatistics::collectRuntimeStatistics()
     return {};
 }
 
-String MPPTaskStatistics::toJson() const
+void MPPTaskStatistics::logTracingJson()
 {
-    return fmt::format(
-        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}","task_init_timestamp":{},"compile_start_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
+    LOG_FMT_INFO(
+        logger,
+        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}",)"
+        R"("task_init_timestamp":{},"compile_start_timestamp":{},"compile_end_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},)"
+        R"("status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         sender_executor_id,

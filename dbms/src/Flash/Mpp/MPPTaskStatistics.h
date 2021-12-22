@@ -19,7 +19,7 @@ struct MPPTaskStatistics
     using Clock = std::chrono::system_clock;
     using Timestamp = Clock::time_point;
 
-    MPPTaskStatistics(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_);
+    MPPTaskStatistics(const MPPTaskId & id_, String address_);
 
     void start();
 
@@ -30,11 +30,9 @@ struct MPPTaskStatistics
     /// return exchange sender runtime statistics
     BaseRuntimeStatistics collectRuntimeStatistics();
 
-    String toJson() const;
+    void logTracingJson();
 
-    void logStats();
-
-    const LogWithPrefixPtr log;
+    const LogWithPrefixPtr logger;
 
     /// common
     const MPPTaskId id;

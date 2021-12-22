@@ -1,6 +1,6 @@
 #include <Encryption/RateLimiter.h>
-#include <Storages/DeltaMerge/tests/workload/Limiter.h>
-#include <Storages/DeltaMerge/tests/workload/Options.h>
+#include <Storages/DeltaMerge/tools/workload/Limiter.h>
+#include <Storages/DeltaMerge/tools/workload/Options.h>
 #include <fmt/core.h>
 
 #include <cmath>
