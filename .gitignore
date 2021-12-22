@@ -268,3 +268,4 @@ CoverageReport
 
 # installation and sysroot path
 release-centos7-llvm/tiflash
+release-centos7-llvm/build-release
