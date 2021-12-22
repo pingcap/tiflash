@@ -18,7 +18,7 @@ struct BatchCommandsContext
 
     /// Context creation function for each individual command - they should be handled isolated,
     /// given that context is being used to pass arguments regarding queries.
-    using DBContextCreationFunc = std::function<std::tuple<Context, grpc::Status>(const grpc::ServerContext *)>;
+    using DBContextCreationFunc = std::function<std::tuple<ContextPtr, grpc::Status>(const grpc::ServerContext *)>;
     DBContextCreationFunc db_context_creation_func;
 
     const grpc::ServerContext & grpc_server_context;

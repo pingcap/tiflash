@@ -1,10 +1,10 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/joinStr.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
+#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -119,30 +119,27 @@ MakeRegionQueryInfos(
 
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
-    const DAGQuerySource & dag_,
     const DAGQueryBlock & query_block_,
     const tipb::TableScan & ts,
     const std::vector<const tipb::Expr *> & conditions_,
-    size_t max_streams_,
-    const LogWithPrefixPtr & log_)
+    size_t max_streams_)
     : context(context_)
-    , dag(dag_)
     , query_block(query_block_)
     , table_scan(ts)
     , conditions(conditions_)
     , max_streams(max_streams_)
-    , log(log_)
+    , log(getMPPTaskLog(*context.getDAGContext(), "DAGStorageInterpreter"))
     , table_id(ts.table_id())
     , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())
     , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
-    log = log_ != nullptr ? log_ : std::make_shared<LogWithPrefix>(&Poco::Logger::get("DAGStorageInterpreter"), "");
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
-    if (dag.isBatchCopOrMpp())
+    const DAGContext & dag_context = *context.getDAGContext();
+    if (dag_context.isBatchCop() || dag_context.isMPPTask())
         learner_read_snapshot = doBatchCopLearnerRead();
     else
         learner_read_snapshot = doCopLearnerRead();
@@ -158,7 +155,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     if (!mvcc_query_info->regions_query_info.empty())
         doLocalRead(pipeline, settings.max_block_size);
 
-    for (auto & region_info : dag.getRegionsForRemoteRead())
+    for (auto & region_info : dag_context.getRegionsForRemoteRead())
         region_retry.emplace_back(region_info);
 
     null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns));
@@ -170,7 +167,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
 {
     auto [info_retry, status] = MakeRegionQueryInfos(
-        dag.getRegions(),
+        context.getDAGContext()->getRegionsForLocalRead(),
         {},
         tmt,
         *mvcc_query_info,
@@ -180,13 +177,14 @@ LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
     if (info_retry)
         throw RegionException({info_retry->begin()->get().region_id}, status);
 
-    return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ true, tmt, log->getLog());
+    return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ true, tmt, log);
 }
 
 /// Will assign region_retry
 LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 {
-    if (dag.getRegions().empty())
+    const auto & regions_for_local_read = context.getDAGContext()->getRegionsForLocalRead();
+    if (regions_for_local_read.empty())
         return {};
     std::unordered_set<RegionID> force_retry;
     for (;;)
@@ -195,7 +193,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         {
             region_retry.clear();
             auto [retry, status] = MakeRegionQueryInfos(
-                dag.getRegions(),
+                regions_for_local_read,
                 force_retry,
                 tmt,
                 *mvcc_query_info,
@@ -211,7 +209,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             }
             if (mvcc_query_info->regions_query_info.empty())
                 return {};
-            return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ false, tmt, log->getLog());
+            return doLearnerRead(table_id, *mvcc_query_info, max_streams, /*wait_index_timeout_as_region_not_found*/ false, tmt, log);
         }
         catch (const LockException & e)
         {
@@ -237,6 +235,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 
 void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block_size)
 {
+    const DAGContext & dag_context = *context.getDAGContext();
     SelectQueryInfo query_info;
     /// to avoid null point exception
     query_info.query = makeDummyQuery();
@@ -280,17 +279,17 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                     region_ids.insert(info.region_id);
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log->getLog());
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
         }
         catch (RegionException & e)
         {
             /// Recover from region exception when super batch is enable
-            if (dag.isBatchCopOrMpp())
+            if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
                 // clean all streams from local because we are not sure the correctness of those streams
                 pipeline.streams.clear();
-                const auto & dag_regions = dag.getRegions();
+                const auto & dag_regions = dag_context.getRegionsForLocalRead();
                 FmtBuffer buffer;
                 // Normally there is only few regions need to retry when super batch is enabled. Retry to read
                 // from local first. However, too many retry in different places may make the whole process
@@ -506,6 +505,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> DAGS
 
 std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorageInterpreter::buildRemoteTS()
 {
+    const DAGContext & dag_context = *context.getDAGContext();
     if (region_retry.empty())
         return std::make_tuple(std::nullopt, std::nullopt);
 
@@ -517,10 +517,9 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     auto print_retry_regions = [this] {
         FmtBuffer buffer;
         buffer.fmtAppend("Start to retry {} regions (", region_retry.size());
-        joinStr(
+        buffer.joinStr(
             region_retry.cbegin(),
             region_retry.cend(),
-            buffer,
             [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
             ",");
         buffer.append(")");
@@ -574,10 +573,11 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
     /// do not collect execution summaries because in this case because the execution summaries
     /// will be collected by CoprocessorBlockInputStream
     dag_req.set_collect_execution_summaries(false);
-    if (dag.getDAGRequest().has_time_zone_name() && !dag.getDAGRequest().time_zone_name().empty())
-        dag_req.set_time_zone_name(dag.getDAGRequest().time_zone_name());
-    if (dag.getDAGRequest().has_time_zone_offset())
-        dag_req.set_time_zone_offset(dag.getDAGRequest().time_zone_offset());
+    const auto & original_dag_req = *dag_context.dag_request;
+    if (original_dag_req.has_time_zone_name() && !original_dag_req.time_zone_name().empty())
+        dag_req.set_time_zone_name(original_dag_req.time_zone_name());
+    if (original_dag_req.has_time_zone_offset())
+        dag_req.set_time_zone_offset(original_dag_req.time_zone_offset());
     return std::make_tuple(dag_req, schema);
 }
 

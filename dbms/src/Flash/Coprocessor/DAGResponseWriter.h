@@ -48,7 +48,9 @@ struct ExecutionSummary
 class DAGResponseWriter
 {
 public:
-    DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_);
+    DAGResponseWriter(
+        Int64 records_per_chunk_,
+        DAGContext & dag_context_);
     void fillTiExecutionSummary(
         tipb::ExecutorExecutionSummary * execution_summary,
         ExecutionSummary & current,
@@ -58,11 +60,10 @@ public:
     virtual void write(const Block & block) = 0;
     virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;
+    const DAGContext & dagContext() const { return dag_context; }
 
 protected:
     Int64 records_per_chunk;
-    tipb::EncodeType encode_type;
-    std::vector<tipb::FieldType> result_field_types;
     DAGContext & dag_context;
     std::unordered_map<String, ExecutionSummary> previous_execution_stats;
     std::unordered_set<String> local_executors;
