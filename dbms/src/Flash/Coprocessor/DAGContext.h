@@ -82,6 +82,7 @@ public:
         , warning_count(0)
     {}
 
+    void attachBlockIO(const BlockIO & io_);
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
@@ -133,6 +134,11 @@ public:
     const RegionInfoMap & getRegionsForLocalRead() const { return regions_for_local_read; }
     const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
 
+    const BlockIO & getBlockIO() const
+    {
+        return io;
+    }
+
     const tipb::DAGRequest * dag_request;
     size_t final_concurrency = 1;
     Int64 compile_time_ns;
@@ -158,6 +164,8 @@ public:
     tipb::EncodeType encode_type = tipb::EncodeType::TypeDefault;
 
 private:
+    /// Hold io for correcting the destruction order.
+    BlockIO io;
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
     std::map<String, ProfileStreamsInfo> profile_streams_map;
     /// profile_streams_map_for_join_build_side is a map that maps from join_build_subquery_name to

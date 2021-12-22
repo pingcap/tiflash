@@ -272,7 +272,7 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     DAGQuerySource dag(*context);
-    io = executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    executeQuery(dag, *context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.compile_start_timestamp = start_time;
@@ -310,7 +310,7 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = io.in;
+        auto from = dag_context->getBlockIO().in;
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
 
