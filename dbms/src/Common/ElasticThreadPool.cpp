@@ -139,9 +139,9 @@ bool ElasticThreadPool::shrink(std::chrono::milliseconds wait_interval)
         int new_thds = 0;
         {
             std::unique_lock<std::mutex> lock2(mutex);
-            for (size_t i = old_threads_size; i < old_threads->size(); i++)
+            for (size_t i = old_threads_size; i < threads->size(); i++)
             { //update new threads created during this loop
-                new_threads->push_back(old_threads->at(i));
+                new_threads->push_back(threads->at(i));
                 new_thds++;
             }
             threads = new_threads; //update threads
