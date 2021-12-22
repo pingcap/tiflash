@@ -1683,8 +1683,7 @@ void Context::checkTableCanBeDropped(const String & database, const String & tab
                                             table_size_str,
                                             max_table_size_to_drop_str,
                                             force_file.path(),
-                                            (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"),
-                                            force_file.path());
+                                            (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"));
 
     throw Exception(exception_msg, ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
 }
