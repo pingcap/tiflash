@@ -6,7 +6,7 @@ namespace DB
 {
 struct ConnectionProfileInfo
 {
-    size_t packets = 0;
-    size_t bytes = 0;
+    Int64 packets = 0;
+    Int64 bytes = 0;
 };
 } // namespace DB
