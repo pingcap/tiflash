@@ -40,7 +40,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
-    , mpp_task_statistics(log, id, meta.address())
+    , mpp_task_statistics(id, meta.address())
 {}
 
 MPPTask::~MPPTask()
@@ -265,7 +265,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     }
 
     mpp_task_statistics.initializeExecutorDAG(dag_context.get());
-    mpp_task_statistics.logStats();
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::preprocess()
@@ -362,7 +362,7 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "finish task which was cancelled before");
 
     mpp_task_statistics.end(status.load(), err_msg);
-    mpp_task_statistics.logStats();
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)

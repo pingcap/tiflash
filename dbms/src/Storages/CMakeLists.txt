@@ -1,6 +1,7 @@
 add_subdirectory (System)
 add_subdirectory (Page)
 add_subdirectory (DeltaMerge/File/dtpb)
+add_subdirectory (DeltaMerge/tools)
 
 if (ENABLE_TESTS)
     add_subdirectory (tests EXCLUDE_FROM_ALL)
