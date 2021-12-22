@@ -1,14 +1,15 @@
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
+#include <Flash/Mpp/getMPPTaskTracingLog.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-MPPTaskStatistics::MPPTaskStatistics(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_)
-    : log(getMPPTaskLog(log_, "mpp_task_tracing"))
+MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_)
+    : logger(getMPPTaskTracingLog(id_))
     , id(id_)
     , host(std::move(address_))
     , task_init_timestamp(Clock::now())
@@ -42,11 +43,6 @@ void MPPTaskStatistics::recordReadWaitIndex(DAGContext & dag_context)
     }
 }
 
-void MPPTaskStatistics::logStats()
-{
-    log->debug(toJson());
-}
-
 namespace
 {
 Int64 toNanoseconds(MPPTaskStatistics::Timestamp timestamp)
@@ -66,10 +62,15 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
     executor_statistics_collector.initialize(dag_context);
 }
 
-String MPPTaskStatistics::toJson() const
+void MPPTaskStatistics::logTracingJson()
 {
-    return fmt::format(
-        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}","task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{},"compile_start_timestamp":{},"compile_end_timestamp":{},"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{},"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
+    LOG_FMT_INFO(
+        logger,
+        R"({{"query_tso":{},"task_id":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
+        R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
+        R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
+        R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
+        R"(,"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
         sender_executor_id,
