@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Poco/Logger.h>
+
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -10,8 +12,6 @@
 #include <queue>
 #include <thread>
 #include <vector>
-
-#include "Poco/Logger.h"
 
 class ElasticThreadPool
 {

@@ -1,8 +1,6 @@
-#include "ThreadManager.h"
-
 #include <Common/ElasticThreadPool.h>
-
-#include "ThreadFactory.h"
+#include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 
 namespace DB
 {
