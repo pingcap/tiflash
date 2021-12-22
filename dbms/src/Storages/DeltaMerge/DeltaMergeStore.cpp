@@ -1253,7 +1253,7 @@ bool DeltaMergeStore::updateGCSafePoint()
     if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
     {
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
-            /* ignore_cache= */ false,
+                                                                  /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
         latest_gc_safe_point.store(safe_point, std::memory_order_release);
         return true;
@@ -1443,16 +1443,11 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         segment->setLastCheckGCSafePoint(gc_safe_point);
         dm_context->min_version = gc_safe_point;
 
-
         try
         {
             // Check whether we should apply gc on this segment
-            const bool should_compact
-                = GC::shouldCompactDeltaWithStable(*dm_context,
-                                                      segment_snap,
-                                                      segment_range,
-                                                      global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc,
-                                                      log);
+            const bool should_compact = GC::shouldCompactDeltaWithStable(
+                *dm_context, segment_snap, segment_range, global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc, log);
             bool finish_gc_on_segment = false;
             if (should_compact)
             {
@@ -1712,13 +1707,14 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         check(dm_context.db_context);
 }
 
-SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground, SegmentSnapshotPtr segment_snap)
+SegmentPtr
+DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground, SegmentSnapshotPtr segment_snap)
 {
     LOG_DEBUG(log,
               (is_foreground ? "Foreground" : "Background")
                   << " merge delta, segment [" << segment->segmentId() << "], safe point:" << dm_context.min_version);
 
-    ColumnDefinesPtr   schema_snap;
+    ColumnDefinesPtr schema_snap;
     {
         std::shared_lock lock(read_write_mutex);
 
