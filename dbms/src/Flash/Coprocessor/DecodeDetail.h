@@ -8,7 +8,7 @@ namespace DB
 struct DecodeDetail
 {
     Int64 rows = 0;
-    //// byte size of origin packet.
+    // byte size of origin packet.
     Int64 packet_bytes = 0;
 };
 } // namespace DB

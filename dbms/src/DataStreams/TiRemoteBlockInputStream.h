@@ -133,9 +133,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             }
         }
 
-        const DecodeDetail & decode_detail = result.decode_detail;
+        const auto & decode_detail = result.decode_detail;
 
-        auto index = 0;
+        size_t index = 0;
         if constexpr (is_streaming_reader)
             index = result.call_index;
 
