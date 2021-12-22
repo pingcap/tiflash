@@ -200,16 +200,6 @@ static inline size_t nextPowOfTwo(size_t n)
 }
 
 template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::updateScatterSizeHint()
-{
-    for (size_t i = 0; i < num_chunks; ++i)
-    {
-        size_t & v = scatter_size_hint[i];
-        v = std::max(v, nextPowOfTwo(scattered.front()[i]->size()));
-    }
-}
-
-template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::resetScatterColumns()
 {
     scattered.resize(num_columns);
@@ -222,7 +212,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::resetScatterColumns()
         for (size_t chunk_id = 0; chunk_id < num_chunks; ++chunk_id)
         {
             scattered[col_id].emplace_back(column->cloneEmpty());
-            scattered[col_id][chunk_id]->reserve(scatter_size_hint[chunk_id]);
+            scattered[col_id][chunk_id]->reserve(initial_size_hint);
         }
     }
 }
@@ -251,9 +241,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::prePartition(Block & block)
         num_chunks = num_streams * partition_num;
         partition_key_containers.resize(collators.size());
 
-        scatter_size_hint.resize(num_chunks);
-        for (size_t & v : scatter_size_hint)
-            v = initial_size_hint;
         resetScatterColumns();
 
         inited = true;
@@ -325,8 +312,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     // 3) encode each chunk and send it
     // NOTE: 1) and 2) are already done in prePartition
 
-    updateScatterSizeHint();
-
     // encode chunks
     if (!codec)
     {
@@ -341,6 +326,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     // serialize each partitioned block and write it to its destination
     for (size_t chunk_id = 0; chunk_id < num_chunks; ++chunk_id)
     {
+        // assemble scatter columns into a block
         MutableColumns columns;
         columns.reserve(num_columns);
         for (size_t col_id = 0; col_id < num_columns; ++col_id)
@@ -348,15 +334,21 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
 
         auto block = header.cloneWithColumns(std::move(columns));
 
+        // encode into packet
         size_t part_id = chunk_id / num_streams;
         responses_row_count[part_id] += block.rows();
 
         codec->encode(block, 0, block.rows());
         packet[part_id].add_chunks(codec->getString()); // std::move?
         resetBlockCodec();
-    }
 
-    resetScatterColumns();
+        // disassemble the block back to scatter columns
+        for (size_t col_id = 0; col_id < num_columns; ++col_id)
+        {
+            columns[col_id]->popBack(columns[col_id]->size()); // clear column
+            scattered[col_id][chunk_id] = std::move(columns[col_id]);
+        }
+    }
 
     // send packets
     for (auto part_id = 0; part_id < partition_num; ++part_id)

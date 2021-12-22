@@ -68,10 +68,8 @@ private:
     std::vector<String> partition_key_containers;
 
     static constexpr size_t initial_size_hint = 1024;
-    std::vector<size_t> scatter_size_hint; // size = num_chunks
 
     std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
-    void updateScatterSizeHint();
     void resetScatterColumns();
 
     std::unique_ptr<ChunkCodecStream> codec;
