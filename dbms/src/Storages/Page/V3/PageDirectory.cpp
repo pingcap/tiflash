@@ -203,17 +203,69 @@ void PageDirectory::apply(PageEntriesEdit && edit)
     sequence.fetch_add(1);
 }
 
+
+std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::deleteAndGC(const std::map<UInt64, short> & alive_seq)
+{
+    auto page_lock = acquireLock();
+    std::list<PageEntryV3> del_entries;
+    bool all_deleted = true;
+
+    for (auto iter = entries.begin(); iter != entries.end(); iter++)
+    {
+        // Already deleted, no need put in `del_entries`
+        if (iter->second.is_delete)
+        {
+            continue;
+        }
+
+        // TBD : do compact
+        if (auto seq_it = alive_seq.find(iter->first.sequence); seq_it == alive_seq.end())
+        {
+            iter->second.is_delete = true;
+            del_entries.emplace_back(std::move(iter->second.entry));
+        }
+        else
+        {
+            all_deleted = false;
+        }
+    }
+
+    return std::make_pair(del_entries, all_deleted);
+}
+
 bool PageDirectory::gc()
 {
+    std::map<UInt64, short> alive_seq;
     // Cleanup released snapshots
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
         if (iter->expired())
             iter = snapshots.erase(iter);
         else
+        {
+            alive_seq.insert({iter->lock()->sequence, 1});
             ++iter;
+        }
     }
-    throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+
+    for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); iter++)
+    {
+        const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(alive_seq);
+        if (!del_entries.empty())
+        {
+            // TBD : delete entry in BlobStore
+        }
+
+        if (all_deleted)
+        {
+            std::unique_lock write_lock(table_rw_mutex);
+            iter = mvcc_table_directory.erase(iter);
+        }
+    }
+
+    // TBD : call blobstore GC.
+
+    return true;
 }
 
 } // namespace PS::V3

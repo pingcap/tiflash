@@ -80,6 +80,8 @@ private:
 
         std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
+        std::pair<std::list<PageEntryV3>, bool> deleteAndGC(const std::map<UInt64, short> & alive_seq);
+
     private:
         mutable std::mutex m;
         // Entries sorted by version
