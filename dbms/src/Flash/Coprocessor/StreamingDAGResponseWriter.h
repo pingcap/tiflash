@@ -45,7 +45,7 @@ private:
     template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     template <bool send_exec_summary_at_last>
-    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response);
 
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
@@ -59,6 +59,25 @@ private:
     LogWithPrefixPtr log;
 
     Int64 num_streams = 1;
+
+    bool inited = false;
+    Block header;
+    size_t num_columns, num_chunks;
+    WeakHash32 hash;
+    IColumn::Selector selector;
+    std::vector<String> partition_key_containers;
+
+    static constexpr size_t initial_size_hint = 1024;
+    std::vector<size_t> scatter_size_hint; // size = num_chunks
+
+    std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
+    void updateScatterSizeHint();
+    void resetScatterColumns();
+
+    std::unique_ptr<ChunkCodecStream> codec;
+    void resetBlockCodec();
+
+    void prePartition(Block & block);
 };
 
 } // namespace DB
