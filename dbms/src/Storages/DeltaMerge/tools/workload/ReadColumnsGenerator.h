@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/DeltaMerge/tests/workload/TableGenerator.h>
+#include <Storages/DeltaMerge/tools/workload/TableGenerator.h>
 
 #include <random>
 
