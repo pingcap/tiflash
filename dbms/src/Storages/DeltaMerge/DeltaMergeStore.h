@@ -157,6 +157,7 @@ public:
         BG_MergeDelta,
         BG_Compact,
         BG_Flush,
+        BG_GC,
     };
 
     enum TaskType
@@ -323,6 +324,9 @@ public:
     /// Compact fregment packs into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
+    /// Iterator over all segments and apply gc jobs.
+    UInt64 onSyncGc(Int64 limit);
+
     /// Apply `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //
                      const OptionTableInfoConstRef table_info,
@@ -367,7 +371,9 @@ private:
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
-    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground, SegmentSnapshotPtr segment_snap = nullptr);
+
+    bool updateGCSafePoint();
 
     bool handleBackgroundTask(bool heavy);
 
@@ -417,7 +423,9 @@ private:
 
     MergeDeltaTaskPool background_tasks;
 
-    DB::Timestamp latest_gc_safe_point = 0;
+    std::atomic<DB::Timestamp> latest_gc_safe_point = 0;
+
+    RowKeyValue next_gc_check_key;
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
