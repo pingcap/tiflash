@@ -217,6 +217,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::resetScatterColumns()
     {
         auto & column = header.getByPosition(col_id).column;
 
+        scattered.clear();
         scattered[col_id].reserve(num_chunks);
         for (size_t chunk_id = 0; chunk_id < num_chunks; ++chunk_id)
         {
