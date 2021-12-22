@@ -18,49 +18,14 @@ private:
     using Queue = MPMCQueue<TaskPtr>;
 
     // used for dynamic threads
-    struct DynamicNode
-    {
-        DynamicNode()
-        {
-            next = this;
-            prev = this;
-        }
-
-        /// valid when call on a single node whose next and prev is itself.
-        void prepend(DynamicNode * head)
-        {
-            next = head->next;
-            prev = head;
-            head->next->prev = this;
-            head->next = this;
-        }
-
-        /// valid when call on a single node whose next and prev is itself.
-        void detach()
-        {
-            prev->next = next;
-            next->prev = prev;
-            next = this;
-            prev = this;
-        }
-
-        bool noFollowers() const
-        {
-            return next == prev;
-        }
-
-        DynamicNode * next;
-        DynamicNode * prev;
-        std::condition_variable cv;
-        TaskPtr task;
-    };
+    struct DynamicNode;
 
 public:
     template <typename Duration>
     DynamicThreadPool(size_t initial_size, Duration auto_shrink_cooldown)
         : dynamic_auto_shrink_cooldown(std::chrono::duration_cast<std::chrono::nanoseconds>(auto_shrink_cooldown))
     {
-        init();
+        init(initial_size);
     }
 
     ~DynamicThreadPool();
@@ -83,7 +48,7 @@ public:
     ThreadCount threadCount() const;
 
 private:
-    void init();
+    void init(size_t initial_size);
     void scheduleTask(TaskPtr task);
     bool scheduledToFixedThread(TaskPtr & task);
     bool scheduledToExistedDynamicThread(TaskPtr & task);
@@ -100,7 +65,7 @@ private:
     boost::lockfree::queue<Queue *> idle_fixed_queues;
 
     std::mutex dynamic_mutex;
-    DynamicNode dynamic_idle_head;
+    std::unique_ptr<DynamicNode> dynamic_idle_head;
     bool in_destructing = false;
 
     std::atomic<Int64> alive_dynamic_threads = 0;
