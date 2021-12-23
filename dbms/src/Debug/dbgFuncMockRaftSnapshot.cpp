@@ -573,7 +573,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleBlock(Context & context, con
     auto & tmt = context.getTMTContext();
     auto block_cache = GenRegionPreDecodeBlockData(region, tmt.getContext());
     fmt_buf.append(", pre-decode block cache");
-    fmt_buf.fmtAppend(" {{ schema_version: ?, data_list size: {}, block row: {} col: {} bytes: {}}}", block_cache->data_list_read.size(), block_cache->block.rows(), block_cache->block.columns(), block_cache->block.bytes());
+    fmt_buf.fmtAppend(" {{ schema_version: ?, data_list size: {}, block row: {} col: {} bytes: {} }}", block_cache->data_list_read.size(), block_cache->block.rows(), block_cache->block.columns(), block_cache->block.bytes());
     GLOBAL_REGION_MAP.insertRegionCache(region_name, {region, std::move(block_cache)});
     output(fmt_buf.toString());
 }
