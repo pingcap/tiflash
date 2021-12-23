@@ -94,8 +94,8 @@ inline constexpr size_t getFileNameOffset(T (&/*str*/)[1])
     return 0;
 }
 
-template <typename S, typename Ignored, typename... Args>
-std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
+template <typename S, typename... Args>
+std::string toCheckedFmtStr(const S & format, Args &&... args)
 {
     // The first arg is the same as `format`, just ignore
     // Apply `make_args_checked` for checks `format` validity at compile time.
@@ -111,17 +111,16 @@ std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
 ///  and the latter arguments treat as values to substitute.
 /// If only one argument is provided, it is threat as message without substitutions.
 
-#define LOG_GET_FIRST_ARG(arg, ...) arg
-#define LOG_FMT_IMPL(logger, PRIORITY, ...)                                         \
+#define LOG_FMT_IMPL(logger, PRIORITY, format_string, ...)                          \
     do                                                                              \
     {                                                                               \
         if ((logger)->is((PRIORITY)))                                               \
         {                                                                           \
-            std::string formatted_message = LogFmtDetails::numArgs(__VA_ARGS__) > 1 \
+            std::string formatted_message = LogFmtDetails::numArgs(__VA_ARGS__) > 0 \
                 ? LogFmtDetails::toCheckedFmtStr(                                   \
-                    FMT_STRING(LOG_GET_FIRST_ARG(__VA_ARGS__)),                     \
+                    FMT_STRING(format_string),                                      \
                     __VA_ARGS__)                                                    \
-                : LogFmtDetails::firstArg(__VA_ARGS__);                             \
+                : format_string;                                                    \
             Poco::Message poco_message(                                             \
                 /*source*/ (logger)->name(),                                        \
                 /*text*/ formatted_message,                                         \
