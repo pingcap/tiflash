@@ -2,9 +2,10 @@
 
 #include <Common/ThreadFactory.h>
 #include <Common/UnaryCallback.h>
-#include <boost/fiber/all.hpp>
 #include <grpc++/grpc++.h>
+
 #include <atomic>
+#include <boost/fiber/all.hpp>
 
 namespace DB
 {
@@ -24,6 +25,7 @@ public:
     }
 
     using Callback = UnaryCallback<bool>;
+
 private:
     explicit GRPCCompletionQueuePool(size_t count)
         : queues(count)
@@ -37,9 +39,10 @@ private:
         auto & q = queues[index];
         while (true)
         {
-            void* got_tag = nullptr;
+            void * got_tag = nullptr;
             bool ok = false;
-            if (!q.Next(&got_tag, &ok)) {
+            if (!q.Next(&got_tag, &ok))
+            {
                 break;
             }
             reinterpret_cast<Callback *>(got_tag)->execute(ok);
@@ -50,4 +53,4 @@ private:
     std::vector<::grpc::CompletionQueue> queues;
     std::vector<std::thread> workers;
 };
-} // namespace
+} // namespace DB

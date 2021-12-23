@@ -178,17 +178,17 @@ void GRPCReceiverContext::makeAsyncReader(
     auto proxy = std::make_unique<MakeReaderCallbackProxy>();
     proxy->callback = callback;
 
-    auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(request); 
+    auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequestAsync(
         request.req->sender_meta().address(),
         &reader->client_context,
         *reader->call,
         GRPCCompletionQueuePool::Instance()->pickQueue(),
         proxy.get());
-    proxy->reader = std::move(reader); 
+    proxy->reader = std::move(reader);
     proxy.release();
 }
-    
+
 void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
 {
     schema.clear();

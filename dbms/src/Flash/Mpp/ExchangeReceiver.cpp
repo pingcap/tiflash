@@ -51,7 +51,9 @@ struct MakeReaderCallback : public UnaryCallback<std::unique_ptr<typename RPCCon
     ReactorTrigger * trigger = nullptr;
     std::unique_ptr<typename RPCContext::ReaderType> reader;
 
-    explicit MakeReaderCallback(ReactorTrigger * trigger_) : trigger(trigger_) {}
+    explicit MakeReaderCallback(ReactorTrigger * trigger_)
+        : trigger(trigger_)
+    {}
 
     void execute(std::unique_ptr<typename RPCContext::ReaderType> & res) override
     {
@@ -88,7 +90,9 @@ struct FinishCallback : public UnaryCallback<typename RPCContext::StatusType>
     ReactorTrigger * trigger = nullptr;
     Status status = RPCContext::getStatusOK();
 
-    explicit FinishCallback(ReactorTrigger * trigger_) : trigger(trigger_) {}
+    explicit FinishCallback(ReactorTrigger * trigger_)
+        : trigger(trigger_)
+    {}
 
     void execute(Status & res) override
     {
