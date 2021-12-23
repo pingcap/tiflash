@@ -25,12 +25,20 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
+template <bool batch>
+const tipb::DAGRequest & DAGDriver<batch>::dagRequest() const
+{
+    return *context.getDAGContext()->dag_request;
+}
+
 template <>
-DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_, bool internal_)
+DAGDriver<false>::DAGDriver(
+    Context & context_,
+    UInt64 start_ts,
+    UInt64 schema_ver,
+    tipb::SelectResponse * dag_response_,
+    bool internal_)
     : context(context_)
-    , dag_request(dag_request_)
-    , regions(regions_)
-    , retry_regions(retry_regions_)
     , dag_response(dag_response_)
     , writer(nullptr)
     , internal(internal_)
@@ -40,15 +48,17 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
-    context.getTimezoneInfo().resetByDAGRequest(dag_request);
+    context.getTimezoneInfo().resetByDAGRequest(dagRequest());
 }
 
 template <>
-DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const RegionInfoMap & regions_, const RegionInfoList & retry_regions_, UInt64 start_ts, UInt64 schema_ver, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, bool internal_)
+DAGDriver<true>::DAGDriver(
+    Context & context_,
+    UInt64 start_ts,
+    UInt64 schema_ver,
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
+    bool internal_)
     : context(context_)
-    , dag_request(dag_request_)
-    , regions(regions_)
-    , retry_regions(retry_regions_)
     , writer(writer_)
     , internal(internal_)
     , log(&Poco::Logger::get("DAGDriver"))
@@ -57,7 +67,7 @@ DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_requ
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
-    context.getTimezoneInfo().resetByDAGRequest(dag_request);
+    context.getTimezoneInfo().resetByDAGRequest(dagRequest());
 }
 
 template <bool batch>
@@ -65,9 +75,8 @@ void DAGDriver<batch>::execute()
 try
 {
     auto start_time = Clock::now();
-    DAGContext dag_context(dag_request);
-    context.setDAGContext(&dag_context);
-    DAGQuerySource dag(context, regions, retry_regions, dag_request, std::make_shared<LogWithPrefix>(&Poco::Logger::get("CoprocessorHandler"), ""), batch);
+    DAGQuerySource dag(context);
+    DAGContext & dag_context = *context.getDAGContext();
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
@@ -85,8 +94,6 @@ try
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<UnaryDAGResponseWriter>(
             dag_response,
             context.getSettings().dag_records_per_chunk,
-            dag.getEncodeType(),
-            dag.getResultFieldTypes(),
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
@@ -117,10 +124,7 @@ try
             context.getSettings().dag_records_per_chunk,
             context.getSettings().batch_send_min_limit,
             true,
-            dag.getEncodeType(),
-            dag.getResultFieldTypes(),
-            dag_context,
-            nullptr);
+            dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }

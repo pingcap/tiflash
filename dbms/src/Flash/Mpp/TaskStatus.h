@@ -1,5 +1,7 @@
 #pragma once
 
+#include <common/StringRef.h>
+
 namespace DB
 {
 enum TaskStatus
@@ -9,5 +11,6 @@ enum TaskStatus
     FINISHED,
     CANCELLED,
 };
-} // namespace DB
 
+StringRef taskStatusToString(const TaskStatus & status);
+} // namespace DB

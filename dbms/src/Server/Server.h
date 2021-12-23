@@ -1,8 +1,8 @@
 #pragma once
 
-#include "IServer.h"
-
 #include <daemon/BaseDaemon.h>
+
+#include "IServer.h"
 
 /** Server provides three interfaces:
   * 1. HTTP - simple interface for any applications.
@@ -11,14 +11,13 @@
   *     - data is transferred by columns;
   *     - data is transferred compressed;
   *    Allows to get more information in response.
-  * 3. Interserver HTTP - for replication.
   */
 
 
 namespace DB
 {
-
-class Server : public BaseDaemon, public IServer
+class Server : public BaseDaemon
+    , public IServer
 {
 public:
     Poco::Util::LayeredConfiguration & config() const override
@@ -61,4 +60,4 @@ private:
     class TcpHttpServersHolder;
 };
 
-}
+} // namespace DB

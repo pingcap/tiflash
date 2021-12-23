@@ -1,5 +1,5 @@
+#include <Common/FmtUtils.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
-#include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncFailPoint.h>
@@ -12,25 +12,21 @@
 #include <Debug/dbgFuncSchemaName.h>
 #include <Parsers/ASTLiteral.h>
 
-#include <cstring>
 #include <thread>
 
 namespace DB
 {
-
 void dbgFuncEcho(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
-    for (auto it = args.begin(); it != args.end(); ++it)
-        output((*it)->getColumnName());
+    for (const auto & arg : args)
+        output(arg->getColumnName());
 }
 
 void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     const Int64 t = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     std::this_thread::sleep_for(std::chrono::milliseconds(t));
-    std::stringstream res;
-    res << "sleep " << t << " ms.";
-    output(res.str());
+    output(fmt::format("sleep {} ms.", t));
 }
 
 DBGInvoker::DBGInvoker()
@@ -70,8 +66,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
     regSchemalessFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
     regSchemalessFunc("remove_region", dbgFuncRemoveRegion);
-    regSchemalessFunc("find_region_by_range", ClusterManage::findRegionByRange);
-    regSchemalessFunc("check_table_optimize", ClusterManage::checkTableOptimize);
+    regSchemalessFunc("find_region_by_range", dbgFuncFindRegionByRange);
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
@@ -156,19 +151,27 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
 }
 
 BlockInputStreamPtr DBGInvoker::invokeSchemaless(
-    Context & context, const std::string & name, const SchemalessDBGFunc & func, const ASTs & args)
+    Context & context,
+    const std::string & name,
+    const SchemalessDBGFunc & func,
+    const ASTs & args)
 {
-    std::stringstream col_name;
-    col_name << name << "(";
-    for (size_t i = 0; i < args.size(); ++i)
-    {
-        std::string arg = args[i]->getColumnName();
-        col_name << normalizeArg(arg) << ((i + 1 == args.size()) ? "" : ", ");
-    }
-    col_name << ")";
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("{}(", name);
+    fmt_buf.joinStr(
+        args.cbegin(),
+        args.cend(),
+        [](const auto & arg, FmtBuffer & fb) {
+            std::string column_name = arg->getColumnName();
+            fb.append(normalizeArg(column_name));
+        },
+        ", ");
+    fmt_buf.append(")");
 
-    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(col_name.str());
-    Printer printer = [&](const std::string & s) { res->append(s); };
+    std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(fmt_buf.toString());
+    Printer printer = [&](const std::string & s) {
+        res->append(s);
+    };
 
     func(context, args, printer);
 

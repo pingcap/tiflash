@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 void registerFunctionsEmbeddedDictionaries(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionRegionToCity>();
@@ -18,4 +17,4 @@ void registerFunctionsEmbeddedDictionaries(FunctionFactory & factory)
     factory.registerFunction<FunctionRegionToName>();
 }
 
-}
+} // namespace DB

@@ -66,14 +66,14 @@ void PosixWritableFile::close()
 ssize_t PosixWritableFile::write(char * buf, size_t size)
 {
     if (write_limiter)
-        write_limiter->request(static_cast<UInt64>(size));
+        write_limiter->request(size);
     return ::write(fd, buf, size);
 }
 
 ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const
 {
     if (write_limiter)
-        write_limiter->request(static_cast<UInt64>(size));
+        write_limiter->request(size);
     return ::pwrite(fd, buf, size, offset);
 }
 

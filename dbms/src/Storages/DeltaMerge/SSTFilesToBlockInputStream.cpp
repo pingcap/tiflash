@@ -28,7 +28,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     RegionPtr region_,
     const SSTViewVec & snaps_,
     const TiFlashRaftProxyHelper * proxy_helper_,
-    const DecodingStorageSchemaSnapshot & schema_snap_,
+    DecodingStorageSchemaSnapshotConstPtr schema_snap_,
     Timestamp gc_safepoint_,
     bool force_decode_,
     TMTContext & tmt_,
@@ -36,7 +36,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     : region(std::move(region_))
     , snaps(snaps_)
     , proxy_helper(proxy_helper_)
-    , schema_snap(schema_snap_)
+    , schema_snap(std::move(schema_snap_))
     , tmt(tmt_)
     , gc_safepoint(gc_safepoint_)
     , expected_size(expected_size_)
@@ -250,11 +250,11 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
     const ColId pk_column_id_,
-    const DecodingStorageSchemaSnapshot & schema_snap)
+    const DecodingStorageSchemaSnapshotConstPtr & schema_snap)
     : pk_column_id(pk_column_id_)
     , _raw_child(std::move(child))
 {
-    const bool is_common_handle = schema_snap.is_common_handle;
+    const bool is_common_handle = schema_snap->is_common_handle;
     // Initlize `mvcc_compact_stream`
     // First refine the boundary of blocks. Note that the rows decoded from SSTFiles are sorted by primary key asc, timestamp desc
     // (https://github.com/tikv/tikv/blob/v5.0.1/components/txn_types/src/types.rs#L103-L108).
@@ -262,7 +262,7 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(_raw_child, pk_column_id, is_common_handle);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         stream,
-        *(schema_snap.column_defines),
+        *(schema_snap->column_defines),
         _raw_child->gc_safepoint,
         is_common_handle);
 }

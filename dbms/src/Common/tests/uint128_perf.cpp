@@ -2,15 +2,15 @@
 #include <sched.h>
 #endif
 
+#include <Core/Defines.h>
+#include <Poco/Exception.h>
+#include <common/UInt128.h>
+
 #include <algorithm>
 #include <chrono>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <random>
-
-#include <Poco/Exception.h>
-#include <Core/Defines.h>
-#include <common/UInt128.h>
 
 #ifdef __APPLE__
 #include <common/apple_rt.h>
@@ -53,7 +53,6 @@ void sort_data(std::vector<DB::UInt128> & data)
 
 int main(int /*argc*/, char ** argv)
 {
-
 #if !__x86_64__
     std::cerr << "Only for x86_64 arch" << std::endl;
 #endif
@@ -62,8 +61,9 @@ int main(int /*argc*/, char ** argv)
     const int round = atoi(argv[2]);
 
     std::cerr << "Count: " << count
-        << ", Round: " << round
-        << "Start" << std::endl << std::endl;
+              << ", Round: " << round
+              << "Start" << std::endl
+              << std::endl;
 
     setAffinity();
 
@@ -79,8 +79,8 @@ int main(int /*argc*/, char ** argv)
         std::cerr << ", Time: " << duration.count() << " us." << std::endl;
     }
 
-    std::cerr << std::endl << "End" << std::endl;
+    std::cerr << std::endl
+              << "End" << std::endl;
 
     return 0;
 }
-

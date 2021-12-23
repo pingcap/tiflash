@@ -7,10 +7,9 @@
 
 int main(int, char **)
 {
-    auto worker = []
-    {
+    auto worker = [] {
         for (size_t i = 0; i < 100000000; ++i)
-            __asm__ volatile ("nop");
+            __asm__ volatile("nop");
     };
 
     constexpr size_t num_threads = 4;
@@ -26,7 +25,7 @@ int main(int, char **)
     ThreadPool waiting_pool(num_waiting_threads);
 
     for (size_t i = 0; i < num_waiting_threads; ++i)
-        waiting_pool.schedule([&pool]{ pool.wait(); });
+        waiting_pool.schedule([&pool] { pool.wait(); });
 
     waiting_pool.wait();
 

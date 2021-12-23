@@ -6,7 +6,6 @@
 
 namespace DB
 {
-
 const static Int32 MAX_WORD_BUF_LEN = 9;
 const static Int32 DIGITS_PER_WORD = 9;
 const static Int32 POWERS10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};

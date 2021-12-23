@@ -977,6 +977,14 @@
               "intervalFactor": 1,
               "legendFormat": "Read File-{{instance}}",
               "refId": "C"
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_OpenFileForReadWrite{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "Read & Write File-{{instance}}",
+              "refId": "D"
             }
           ],
           "thresholds": [],

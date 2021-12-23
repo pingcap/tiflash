@@ -70,7 +70,6 @@ add_headers_and_sources(dbms src/Storages/DeltaMerge/FilterParser)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/File)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/Delta)
 add_headers_and_sources(dbms src/Storages/Distributed)
-add_headers_and_sources(dbms src/Storages/MergeTree)
 add_headers_and_sources(dbms src/Storages/Transaction)
 add_headers_and_sources(dbms src/Storages/Page/V1)
 add_headers_and_sources(dbms src/Storages/Page/V1/mvcc)
@@ -79,6 +78,11 @@ add_headers_and_sources(dbms src/Storages/Page/V2)
 add_headers_and_sources(dbms src/Storages/Page/V2/mvcc)
 add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
 add_headers_and_sources(dbms src/Storages/Page/V2/gc)
+if (ENABLE_V3_PAGESTORAGE)
+    add_headers_and_sources(dbms src/Storages/Page/V3)
+    add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
+    add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
+endif()
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
@@ -240,8 +244,6 @@ target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE
 # https://cmake.org/pipermail/cmake/2016-May/063400.html
 target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
 
-add_subdirectory (tests)
-
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
 
@@ -265,14 +267,12 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/FunctionTestUtils.cpp
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
-    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions tiflash-dttool-lib)
+    target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions tiflash-dttool-lib)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)

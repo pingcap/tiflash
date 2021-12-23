@@ -1,5 +1,5 @@
-#include <Functions/GatherUtils/Selectors.h>
 #include <Functions/GatherUtils/Algorithms.h>
+#include <Functions/GatherUtils/Selectors.h>
 
 namespace DB::GatherUtils
 {
@@ -17,4 +17,4 @@ void sliceFromLeftConstantOffsetUnbounded(IArraySource & src, IArraySink & sink,
 {
     SliceFromLeftConstantOffsetUnboundedSelectArraySource::select(src, sink, offset);
 }
-}
+} // namespace DB::GatherUtils

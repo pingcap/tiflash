@@ -1,4 +1,5 @@
 #include <Columns/Collator.h>
+#include <Common/LogWithPrefix.h>
 #include <Common/TiFlashException.h>
 #include <Common/typeid_cast.h>
 #include <Core/Field.h>
@@ -35,10 +36,9 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-#include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/RegionQueryInfo.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -94,7 +94,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     , subquery_depth(subquery_depth_)
     , only_analyze(only_analyze)
     , input(input)
-    , log(&Poco::Logger::get("InterpreterSelectQuery"))
+    , log(getLogWithPrefix(nullptr, "InterpreterSelectQuery"))
 {
     init(required_result_column_names_);
 }
@@ -107,7 +107,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(OnlyAnalyzeTag, const ASTPtr & qu
     , to_stage(QueryProcessingStage::Complete)
     , subquery_depth(0)
     , only_analyze(true)
-    , log(&Poco::Logger::get("InterpreterSelectQuery"))
+    , log(getLogWithPrefix(nullptr, "InterpreterSelectQuery"))
 {
     init({});
 }
@@ -819,23 +819,10 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             query_info.mvcc_query_info->concurrent = 0.0;
         }
 
-        /// PREWHERE optimization
-        {
-            auto optimize_prewhere = [&](auto & merge_tree) {
-                /// Try transferring some condition from WHERE to PREWHERE if enabled and viable
-                if (settings.optimize_move_to_prewhere && query.where_expression && !query.prewhere_expression && !query.final() && storage->supportsPrewhere())
-                    MergeTreeWhereOptimizer{query_info, context, merge_tree.getData(), required_columns, log};
-            };
-
-            if (const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get()))
-                optimize_prewhere(*merge_tree);
-        }
-
         /// PARTITION SELECT only supports MergeTree family now.
         if (const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
         {
-            const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
-            if (select_query->partition_expression_list && !merge_tree)
+            if (select_query->partition_expression_list)
             {
                 throw Exception("PARTITION SELECT only supports MergeTree family.");
             }

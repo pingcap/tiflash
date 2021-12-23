@@ -24,8 +24,8 @@ void MPPHandler::handleError(const MPPTaskPtr & task, String error)
         tryLogCurrentException(log, "Fail to handle error and clean task");
     }
 }
-// execute is responsible for making plan, register tasks and tunnels and start the running thread.
-grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
+// execute is responsible for making plan , register tasks and tunnels and start the running thread.
+grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;
     current_memory_tracker = nullptr; /// to avoid reusing threads in gRPC
@@ -34,8 +34,8 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
         Stopwatch stopwatch;
         task = MPPTask::newTask(task_request.meta(), context);
 
-        auto remote_regions = task->prepare(task_request);
-        for (const auto & region : remote_regions)
+        task->prepare(task_request);
+        for (const auto & region : context->getDAGContext()->getRegionsForRemoteRead())
         {
             auto * retry_region = response->add_retry_regions();
             retry_region->set_id(region.region_id);

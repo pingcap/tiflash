@@ -3,7 +3,6 @@
 
 namespace DB
 {
-
 void registerFunctionsStringArray(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionExtractAll>();
@@ -13,4 +12,4 @@ void registerFunctionsStringArray(FunctionFactory & factory)
     factory.registerFunction<FunctionArrayStringConcat>();
 }
 
-}
+} // namespace DB

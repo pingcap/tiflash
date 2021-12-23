@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class Context;
 
 // Region manipulation tools
@@ -39,5 +38,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
 // Usage:
 //   ./storage-client.sh "DBGInvoke remove_region(region_id)"
 void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+void dbgFuncFindRegionByRange(Context & context, const ASTs & args, DBGInvoker::Printer);
 
 } // namespace DB

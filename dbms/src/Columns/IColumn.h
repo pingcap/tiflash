@@ -128,6 +128,16 @@ public:
     /// Parameter length could be ignored if column values have fixed size.
     virtual void insertData(const char * pos, size_t length) = 0;
 
+    /// decode row data synced from tikv
+    /// only support v2 format row: https://github.com/pingcap/tidb/blob/master/docs/design/2018-07-19-row-format.md
+    /// when the column failed to decoding value from `data`, it will either
+    ///   1) return false if `force_decode` is false
+    ///   2) throw exception to describe why the decoding fails if `force_decode` is true
+    virtual bool decodeTiDBRowV2Datum(size_t /* cursor */, const String & /* raw_value */, size_t /* length */, bool /* force_decode */)
+    {
+        throw Exception("Method decodeTiDBRowV2Datum is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Like getData, but has special behavior for columns that contain variable-length strings.
     /// In this special case inserting data should be zero-ending (i.e. length is 1 byte greater than real string size).
     virtual void insertDataWithTerminatingZero(const char * pos, size_t length)

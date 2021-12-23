@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 class IDataType;
 
 template <typename... Ts, typename F>
@@ -19,4 +18,4 @@ static bool castTypeToEither(const IDataType * input_type, F && f)
     return ((typeid_cast<const Ts *>(type) ? f(*typeid_cast<const Ts *>(type), is_nullable) : false) || ...);
 }
 
-}
+} // namespace DB

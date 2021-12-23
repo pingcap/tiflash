@@ -23,9 +23,6 @@ class DAGDriver
 public:
     DAGDriver(
         Context & context_,
-        const tipb::DAGRequest & dag_request_,
-        const RegionInfoMap & regions_,
-        const RegionInfoList & retry_regions_,
         UInt64 start_ts,
         UInt64 schema_ver,
         tipb::SelectResponse * dag_response_,
@@ -33,9 +30,6 @@ public:
 
     DAGDriver(
         Context & context_,
-        const tipb::DAGRequest & dag_request_,
-        const RegionInfoMap & regions_,
-        const RegionInfoList & retry_regions_,
         UInt64 start_ts,
         UInt64 schema_ver,
         ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer,
@@ -46,13 +40,9 @@ public:
 private:
     void recordError(Int32 err_code, const String & err_msg);
 
-private:
+    const tipb::DAGRequest & dagRequest() const;
+
     Context & context;
-
-    const tipb::DAGRequest & dag_request;
-
-    const RegionInfoMap & regions;
-    const RegionInfoList & retry_regions;
 
     tipb::SelectResponse * dag_response;
 

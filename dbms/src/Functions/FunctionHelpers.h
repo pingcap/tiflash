@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnVector.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
@@ -14,7 +14,6 @@
 
 namespace DB
 {
-
 /// Methods, that helps dispatching over real column types.
 
 template <typename Type>
@@ -117,45 +116,51 @@ struct IGetVecHelper
     static_assert(std::is_arithmetic_v<T>);
     virtual T get(size_t) const = 0;
     virtual ~IGetVecHelper() {}
-    static std::unique_ptr<IGetVecHelper> getHelper(const ColumnVector<T>* p);
-    static std::unique_ptr<IGetVecHelper> getHelper(const ColumnConst* p); 
+    static std::unique_ptr<IGetVecHelper> getHelper(const ColumnVector<T> * p);
+    static std::unique_ptr<IGetVecHelper> getHelper(const ColumnConst * p);
 };
 
 template <typename T>
 struct GetVecHelper : public IGetVecHelper<T>
 {
-    GetVecHelper(const ColumnVector<T>* p_) : p(p_) {}
+    GetVecHelper(const ColumnVector<T> * p_)
+        : p(p_)
+    {}
     T get(size_t i) const override
     {
         return p->getElement(i);
     }
+
 private:
-    const ColumnVector<T>* p;
+    const ColumnVector<T> * p;
 };
 
 template <typename T>
 struct GetConstVecHelper : public IGetVecHelper<T>
 {
-    GetConstVecHelper(const ColumnConst* p_) : value(p_->getValue<T>()) {}
+    GetConstVecHelper(const ColumnConst * p_)
+        : value(p_->getValue<T>())
+    {}
     T get(size_t) const override
     {
         return value;
     }
+
 private:
     T value;
 };
 
 template <typename T>
-std::unique_ptr<IGetVecHelper<T>> IGetVecHelper<T>::getHelper(const ColumnVector<T>* p)
+std::unique_ptr<IGetVecHelper<T>> IGetVecHelper<T>::getHelper(const ColumnVector<T> * p)
 {
     return std::unique_ptr<IGetVecHelper<T>>{new GetVecHelper<T>{p}};
 }
 
 template <typename T>
-std::unique_ptr<IGetVecHelper<T>> IGetVecHelper<T>::getHelper(const ColumnConst* p)
+std::unique_ptr<IGetVecHelper<T>> IGetVecHelper<T>::getHelper(const ColumnConst * p)
 {
     return std::unique_ptr<IGetVecHelper<T>>{new GetConstVecHelper<T>{p}};
 }
 
 
-}
+} // namespace DB

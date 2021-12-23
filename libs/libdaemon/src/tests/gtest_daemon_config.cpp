@@ -2,6 +2,7 @@
 #include <Core/Types.h>
 #include <Poco/Ext/LevelFilterChannel.h>
 #include <Poco/Ext/ReloadableSplitterChannel.h>
+#include <Poco/Ext/SourceFilterChannel.h>
 #include <Poco/Ext/TiFlashLogFileChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -45,21 +46,27 @@ static void verifyChannelConfig(Poco::Channel & channel, Poco::Util::AbstractCon
 {
     if (typeid(channel) == typeid(Poco::TiFlashLogFileChannel))
     {
-        Poco::TiFlashLogFileChannel * fileChannel = dynamic_cast<Poco::TiFlashLogFileChannel *>(&channel);
-        ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_ROTATION), config.getRawString("logger.size", "100M"));
-        ASSERT_EQ(fileChannel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "1"));
+        Poco::TiFlashLogFileChannel * file_channel = dynamic_cast<Poco::TiFlashLogFileChannel *>(&channel);
+        ASSERT_EQ(file_channel->getProperty(Poco::FileChannel::PROP_ROTATION), config.getRawString("logger.size", "100M"));
+        ASSERT_EQ(file_channel->getProperty(Poco::FileChannel::PROP_PURGECOUNT), config.getRawString("logger.count", "10"));
         return;
     }
     if (typeid(channel) == typeid(Poco::LevelFilterChannel))
     {
-        Poco::LevelFilterChannel * levelFilterChannel = dynamic_cast<Poco::LevelFilterChannel *>(&channel);
-        verifyChannelConfig(*levelFilterChannel->getChannel(), config);
+        Poco::LevelFilterChannel * level_filter_channel = dynamic_cast<Poco::LevelFilterChannel *>(&channel);
+        verifyChannelConfig(*level_filter_channel->getChannel(), config);
+        return;
+    }
+    if (typeid(channel) == typeid(Poco::SourceFilterChannel))
+    {
+        Poco::SourceFilterChannel * source_filter_channel = dynamic_cast<Poco::SourceFilterChannel *>(&channel);
+        verifyChannelConfig(*source_filter_channel->getChannel(), config);
         return;
     }
     if (typeid(channel) == typeid(Poco::FormattingChannel))
     {
-        Poco::FormattingChannel * formattingChannel = dynamic_cast<Poco::FormattingChannel *>(&channel);
-        verifyChannelConfig(*formattingChannel->getChannel(), config);
+        Poco::FormattingChannel * formatting_channel = dynamic_cast<Poco::FormattingChannel *>(&channel);
+        verifyChannelConfig(*formatting_channel->getChannel(), config);
     }
 }
 
@@ -68,6 +75,20 @@ try
 {
     DB::Strings tests = {
         R"(
+[application]
+runAsDaemon = false
+[profiles]
+[profiles.default]
+max_rows_in_set = 455
+dt_page_gc_low_write_prob = 0.2
+[logger]
+errorlog = "./tmp/log/tiflash_error.log"
+tracing_log = "./tmp/log/tiflash_tracing.log"
+level = "debug"
+log = "./tmp/log/tiflash.log"
+size = "1K"
+        )",
+        R"(
 [profiles]
 [profiles.default]
 max_rows_in_set = 455
@@ -75,6 +96,7 @@ dt_page_gc_low_write_prob = 0.2
 [logger]
 count = 20
 errorlog = "./tmp/log/tiflash_error.log"
+tracing_log = "./tmp/log/tiflash_tracing.log"
 level = "debug"
 log = "./tmp/log/tiflash.log"
 size = "1M"
@@ -87,8 +109,8 @@ runAsDaemon = false
 max_rows_in_set = 455
 dt_page_gc_low_write_prob = 0.2
 [logger]
-count = 10
 errorlog = "./tmp/log/tiflash_error.log"
+tracing_log = "./tmp/log/tiflash_tracing.log"
 level = "debug"
 log = "./tmp/log/tiflash.log"
 size = "1K"
@@ -101,6 +123,7 @@ dt_page_gc_low_write_prob = 0.2
 [logger]
 count = 1
 errorlog = "./tmp/log/tiflash_error.log"
+tracing_log = "./tmp/log/tiflash_tracing.log"
 level = "debug"
 log = "./tmp/log/tiflash.log"
 size = "1"
