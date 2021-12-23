@@ -107,7 +107,7 @@ void TCPHandler::runImpl()
     {
         if (!connection_context.isDatabaseExist(default_database))
         {
-            Exception e("Database " + default_database + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
+            Exception e(fmt::format("Database {} doesn't exist", default_database), ErrorCodes::UNKNOWN_DATABASE);
             LOG_FMT_WARNING(log, "Code: {}, e.displayText() = {}, Stack trace:\n\n{}", e.code(), e.displayText(), e.getStackTrace().toString());
             default_database = "test";
         }
@@ -334,12 +334,6 @@ void TCPHandler::readData(const Settings & global_settings)
             double elapsed = watch.elapsedSeconds();
             if (elapsed > receive_timeout.totalSeconds())
             {
-                std::stringstream ss;
-
-                ss << "Timeout exceeded while receiving data from client.";
-                ss << " Waited for " << static_cast<size_t>(elapsed) << " seconds,";
-                ss << " timeout is " << receive_timeout.totalSeconds() << " seconds.";
-
                 throw Exception(
                     fmt::format(
                         "Timeout exceeded while receiving data from client."

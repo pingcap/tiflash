@@ -69,11 +69,12 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     }
     if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
     {
-        String error_msg = fmt::format("The array size of \"storage.main.dir\"[size={}] "
-                                       "is not equal to \"storage.main.capacity\"[size={}]. "
-                                       "Please check your configuration file.",
-                                       main_data_paths.size(),
-                                       main_capacity_quota.size());
+        String error_msg = fmt::format(
+            "The array size of \"storage.main.dir\"[size={}] "
+            "is not equal to \"storage.main.capacity\"[size={}]. "
+            "Please check your configuration file.",
+            main_data_paths.size(),
+            main_capacity_quota.size());
         LOG_FMT_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
@@ -102,11 +103,12 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     }
     if (!latest_capacity_quota.empty() && latest_capacity_quota.size() != latest_data_paths.size())
     {
-        String error_msg = fmt::format("The array size of \"storage.main.dir\"[size={}] "
-                                       "is not equal to \"storage.main.capacity\"[size={}]. "
-                                       "Please check your configuration file.",
-                                       latest_data_paths.size(),
-                                       latest_capacity_quota.size());
+        String error_msg = fmt::format(
+            "The array size of \"storage.main.dir\"[size={}] "
+            "is not equal to \"storage.main.capacity\"[size={}]. "
+            "Please check your configuration file.",
+            latest_data_paths.size(),
+            latest_capacity_quota.size());
         LOG_FMT_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
