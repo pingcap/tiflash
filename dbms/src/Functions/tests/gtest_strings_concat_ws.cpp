@@ -20,7 +20,7 @@ try
 {
     std::vector<String> not_null_strings = {"", "www.pingcap", "中文.测.试。。。"};
 
-    /// column, column
+    // column, column
     auto test_not_null_column_column = [&](const String & value) {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", ""}),
@@ -38,7 +38,7 @@ try
             createColumn<Nullable<String>>({{}, {}, {}, {}}),
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
 
-    /// column, const
+    // column, const
     auto test_not_null_column_const = [&](const String & value) {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", ""}),
@@ -56,7 +56,7 @@ try
             createColumn<Nullable<String>>({{}, {}, {}, {}}),
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
 
-    /// const, column
+    // const, column
     auto test_not_null_const_column = [&](const String & value) {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", ""}),
@@ -74,7 +74,7 @@ try
             createConstColumn<Nullable<String>>(4, {}),
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
 
-    /// const, const
+    // const, const
     auto test_const_const = [&](const InferredFieldType<Nullable<String>> & separator, const InferredFieldType<Nullable<String>> & value, const InferredFieldType<Nullable<String>> & result) {
         ASSERT_COLUMN_EQ(
             createConstColumn<Nullable<String>>(1, result),
@@ -95,7 +95,7 @@ try
     test_const_const({}, {}, {});
     test_const_const("中文.测.试。。。", {}, "");
 
-    /// only null
+    // only null
     auto test_const_only_null = [&](const ColumnWithTypeAndName & only_null) {
         ASSERT_COLUMN_EQ(
             only_null.column->isColumnConst() ? createConstColumn<Nullable<String>>(1, "") : createColumn<Nullable<String>>({""}),
@@ -152,6 +152,84 @@ CATCH
 TEST_F(StringTiDBConcatWS, ThreeArgsTest)
 try
 {
+    // test null
+    std::vector<ColumnWithTypeAndName> nulls = {
+        createOnlyNullColumnConst(4),
+        createOnlyNullColumn(4),
+        createColumn<Nullable<String>>({{}, {}, {}, {}}),
+        createConstColumn<Nullable<String>>(4, {})};
+
+    auto test_separator_is_null = [&](const ColumnWithTypeAndName & null_separator) {
+        ASSERT_COLUMN_EQ(
+            null_separator.type->onlyNull() ? createOnlyNullColumnConst(4) : createColumn<Nullable<String>>({{}, {}, {}, {}}),
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                null_separator,
+                createConstColumn<Nullable<String>>(4, "www.pingcap"),
+                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
+    };
+    for (const auto & item : nulls)
+        test_separator_is_null(item);
+
+    auto test_value_is_null = [&](const ColumnWithTypeAndName & null_value) {
+        ASSERT_COLUMN_EQ(
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                createConstColumn<Nullable<String>>(4, "分隔符"),
+                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})),
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                createConstColumn<Nullable<String>>(4, "分隔符"),
+                null_value,
+                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
+        ASSERT_COLUMN_EQ(
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                createConstColumn<Nullable<String>>(4, "分隔符"),
+                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})),
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                createConstColumn<Nullable<String>>(4, "分隔符"),
+                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}),
+                null_value));
+        ASSERT_COLUMN_EQ(
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                createConstColumn<Nullable<String>>(4, "分隔符"),
+                null_value),
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                createConstColumn<Nullable<String>>(4, "分隔符"),
+                null_value,
+                null_value));
+    };
+    for (const auto & item : nulls)
+        test_value_is_null(item);
+
+    // test not null
+    auto test_not_null = [&](const String & separator, const String & first_value, const String & second_value) {
+        String expected_result = first_value + separator + second_value;
+        auto inner_test = [&](bool is_separator_const, bool is_first_value_const, bool is_second_value_const) {
+            bool is_result_const = is_separator_const && is_first_value_const && is_second_value_const;
+            ASSERT_COLUMN_EQ(
+                is_result_const ? createConstColumn<Nullable<String>>(1, expected_result) : createColumn<Nullable<String>>({expected_result}),
+                executeFunction(
+                    StringTiDBConcatWS::func_name,
+                    is_separator_const ? createConstColumn<Nullable<String>>(1, separator) : createColumn<Nullable<String>>({separator}),
+                    is_first_value_const ? createConstColumn<Nullable<String>>(1, first_value) : createColumn<Nullable<String>>({first_value}),
+                    is_second_value_const ? createConstColumn<Nullable<String>>(1, second_value) : createColumn<Nullable<String>>({second_value})));
+        };
+        std::vector<bool> is_consts = {true, false};
+        for (const auto & is_separator_const : is_consts)
+            for (const auto & is_first_value_const : is_consts)
+                for (const auto & is_second_value_const : is_consts)
+                    inner_test(is_separator_const, is_first_value_const, is_second_value_const);
+    };
+    std::vector<String> not_null_strings = {"", "www.pingcap", "中文.测.试。。。", "分隔符"};
+    for (const auto & separator : not_null_strings)
+        for (const auto & first_value : not_null_strings)
+            for (const auto & second_value : not_null_strings)
+                test_not_null(separator, first_value, second_value);
 }
 CATCH
 
