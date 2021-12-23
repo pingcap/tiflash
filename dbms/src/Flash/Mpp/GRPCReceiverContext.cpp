@@ -178,7 +178,7 @@ void GRPCReceiverContext::makeAsyncReader(
     auto reader = std::make_shared<AsyncGrpcExchangePacketReader>(request);
     auto proxy = std::make_unique<MakeReaderCallbackProxy>();
     proxy->callback = callback;
-    proxy->reader = reader
+    proxy->reader = reader;
 
     reader->reader = cluster->rpc_client->sendStreamRequestAsync(
         request.req->sender_meta().address(),
