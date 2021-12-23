@@ -15,6 +15,7 @@
 #include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Net/SecureServerSocket.h>
 #include <daemon/BaseDaemon.h>
+#include <fmt/core.h>
 #include <prometheus/collectable.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
@@ -170,7 +171,7 @@ MetricsPrometheus::MetricsPrometheus(
             std::string job_name = service_addr;
             std::replace(job_name.begin(), job_name.end(), ':', '_');
             std::replace(job_name.begin(), job_name.end(), '.', '_');
-            job_name = "tiflash_" + job_name;
+            job_name = fmt::format("tiflash_{}", job_name);
 
             char hostname[1024];
             ::gethostname(hostname, sizeof(hostname));

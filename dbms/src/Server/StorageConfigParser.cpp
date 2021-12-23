@@ -190,7 +190,7 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
     Poco::trimInPlace(paths);
     if (paths.empty())
         throw Exception(
-            "The configuration \"path\" is empty! [path=" + config.getString("path") + "]",
+            fmt::format("The configuration \"path\" is empty! [path={}]", config.getString("path")),
             ErrorCodes::INVALID_CONFIG_PARAMETER);
     Strings all_normal_path;
     Poco::StringTokenizer string_tokens(paths, ",");

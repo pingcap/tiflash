@@ -64,7 +64,6 @@
 #include <memory>
 
 #include "ClusterManagerService.h"
-#include "Functions/FunctionsURL.h"
 #include "HTTPHandlerFactory.h"
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"
@@ -276,7 +275,7 @@ Poco::Logger * grpc_log = nullptr;
 
 void printGRPCLog(gpr_log_func_args * args)
 {
-    std::string log_msg = std::string(args->file) + ", line number : " + std::to_string(args->line) + ", log msg : " + args->message;
+    String log_msg = fmt::format("{}, line number: {}, log msg : {}", args->file, args->line, args->message);
     if (args->severity == GPR_LOG_SEVERITY_DEBUG)
     {
         LOG_FMT_DEBUG(grpc_log, log_msg);
@@ -468,11 +467,12 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
                 tryLogCurrentException(log, fmt::format("Storage inited fail, [table_id={}]", table_id));
             }
         }
-        LOG_FMT_INFO(log,
-                     "Storage inited finish. [total_count={}] [init_count={}] [error_count={}]",
-                     storages.size(),
-                     init_cnt,
-                     err_cnt);
+        LOG_FMT_INFO(
+            log,
+            "Storage inited finish. [total_count={}] [init_count={}] [error_count={}]",
+            storages.size(),
+            init_cnt,
+            err_cnt);
     };
     if (lazily_init_store)
     {
@@ -783,10 +783,11 @@ public:
         String debug_msg = "Closed all listening sockets.";
 
         if (current_connections)
-            LOG_FMT_DEBUG(log,
-                          "{} Waiting for {} outstanding connections.",
-                          debug_msg,
-                          current_connections);
+            LOG_FMT_DEBUG(
+                log,
+                "{} Waiting for {} outstanding connections.",
+                debug_msg,
+                current_connections);
         else
             LOG_FMT_DEBUG(log, debug_msg);
 
@@ -1010,11 +1011,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             rlim.rlim_cur = config().getUInt("max_open_files", rlim.rlim_max);
             int rc = setrlimit(RLIMIT_NOFILE, &rlim);
             if (rc != 0)
-                LOG_FMT_WARNING(log,
-                                "Cannot set max number of file descriptors to {}"
-                                ". Try to specify max_open_files according to your system limits. error: {}",
-                                rlim.rlim_cur,
-                                strerror(errno));
+                LOG_FMT_WARNING(
+                    log,
+                    "Cannot set max number of file descriptors to {}"
+                    ". Try to specify max_open_files according to your system limits. error: {}",
+                    rlim.rlim_cur,
+                    strerror(errno));
             else
                 LOG_FMT_DEBUG(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
         }
@@ -1229,7 +1231,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // on ARM processors it can show only enabled at current moment cores
             LOG_FMT_INFO(
                 log,
-
                 "Available RAM = {}; physical cores = {}; threads = {}.",
                 formatReadableSizeWithBinarySuffix(getMemoryAmount()),
                 getNumberOfPhysicalCPUCores(),

@@ -82,7 +82,7 @@ StatusFile::~StatusFile()
         LOG_FMT_ERROR(&Poco::Logger::get("StatusFile"), "Cannot close file {}, errno: {}, strerror: {}", path, errno, strerror_r(errno, buf, sizeof(buf)));
 
     if (0 != unlink(path.c_str()))
-        LOG_FMT_ERROR(&Poco::Logger::get("StatusFile"), "Cannot unlink file {}, errno: {}, strerror: ", path, errno, strerror_r(errno, buf, sizeof(buf)));
+        LOG_FMT_ERROR(&Poco::Logger::get("StatusFile"), "Cannot unlink file {}, errno: {}, strerror: {}", path, errno, strerror_r(errno, buf, sizeof(buf)));
 }
 
 } // namespace DB

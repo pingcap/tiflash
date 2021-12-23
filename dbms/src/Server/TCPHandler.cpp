@@ -295,7 +295,7 @@ void TCPHandler::runImpl()
 
         watch.stop();
 
-        LOG_FMT_INFO(log, "Processed in {:.3} sec.", watch.elapsedSeconds());
+        LOG_FMT_INFO(log, "Processed in {:.3f} sec.", watch.elapsedSeconds());
 
         if (network_error)
             break;
@@ -568,7 +568,7 @@ void TCPHandler::receiveHello()
     if (!default_database.empty())
         fmt_buf.fmtAppend(", database: {}", default_database);
     if (!user.empty())
-        fmt_buf.fmtAppend(", user: ", user);
+        fmt_buf.fmtAppend(", user: {}", user);
     fmt_buf.append(".");
     LOG_FMT_DEBUG(log, fmt_buf.toString());
 
@@ -624,8 +624,9 @@ bool TCPHandler::receivePacket()
         return false;
 
     case Protocol::Client::Hello:
-        throw Exception(fmt::format("Unexpected packet {} received from client", Protocol::Client::toString(packet_type)),
-                        ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+        throw Exception(
+            fmt::format("Unexpected packet {} received from client", Protocol::Client::toString(packet_type)),
+            ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 
     case Protocol::Client::TablesStatusRequest:
         if (!state.empty())

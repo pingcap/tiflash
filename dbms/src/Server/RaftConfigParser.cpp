@@ -6,6 +6,7 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -44,18 +45,15 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         String ignore_dbs = config.getString("raft.ignore_databases");
         Poco::StringTokenizer string_tokens(ignore_dbs, ",");
         FmtBuffer fmt_buf;
-
-        bool first = true;
-        for (auto string_token : string_tokens)
-        {
-            string_token = Poco::trimInPlace(string_token);
-            res.ignore_databases.emplace(string_token);
-            if (first)
-                first = false;
-            else
-                fmt_buf.append(", ");
-            fmt_buf.append(string_token);
-        }
+        fmt_buf.joinStr(
+            string_tokens.begin(),
+            string_tokens.end(),
+            [&res](auto arg, FmtBuffer & fb) {
+                arg = Poco::trimInPlace(arg);
+                res.ignore_databases.emplace(arg);
+                fb.append(arg);
+            },
+            ", ");
         LOG_FMT_INFO(log, "Found ignore databases: {}", fmt_buf.toString());
     }
 
@@ -78,8 +76,9 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     if (res.engine == ::TiDB::StorageEngine::TMT)
     {
         if (config.has(disable_bg_flush_conf) && config.getBool(disable_bg_flush_conf))
-            throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
-                            ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw Exception(
+                fmt::format("Illegal arguments: disable background flush while using engine {}", MutableSupport::txn_storage_name),
+                ErrorCodes::INVALID_CONFIG_PARAMETER);
         res.disable_bg_flush = false;
     }
     else if (res.engine == ::TiDB::StorageEngine::DT)
@@ -87,8 +86,9 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         /// If background flush is enabled, read will not triggle schema sync.
         /// Which means that we may get the wrong result with outdated schema.
         if (config.has(disable_bg_flush_conf) && !config.getBool(disable_bg_flush_conf))
-            throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
-                            ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw Exception(
+                fmt::format("Illegal arguments: enable background flush while using engine {}", MutableSupport::delta_tree_storage_name),
+                ErrorCodes::INVALID_CONFIG_PARAMETER);
         res.disable_bg_flush = true;
     }
 
@@ -125,9 +125,9 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         if (res.engine != TiDB::StorageEngine::DT)
         {
             throw Exception(
-                "Illegal arguments: can not use DTFile to store snapshot data when the storage engine is not DeltaTree, [engine="
-                    + DB::toString(static_cast<Int32>(res.engine))
-                    + "] [snapshot method=" + applyMethodToString(res.snapshot_apply_method) + "]",
+                fmt::format("Illegal arguments: can not use DTFile to store snapshot data when the storage engine is not DeltaTree, [engine={}] [snapshot method={}]",
+                            static_cast<Int32>(res.engine),
+                            applyMethodToString(res.snapshot_apply_method)),
                 ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
         break;
