@@ -105,7 +105,7 @@ private:
     Int64 decodeChunks(
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::queue<Block> & block_queue,
-        const DataTypes & expected_types);
+        const Block & header);
 
     void connectionDone(
         const Request & req,
