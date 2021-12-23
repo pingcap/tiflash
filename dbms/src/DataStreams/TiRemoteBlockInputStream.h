@@ -28,7 +28,6 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<ConnectionProfileInfo> connection_profile_infos;
 
     Block sample_block;
-    DataTypes expected_types;
 
     std::queue<Block> block_queue;
 
@@ -107,7 +106,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     bool fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult(block_queue, expected_types);
+        auto result = remote_reader->nextResult(block_queue, sample_block);
         if (result.meet_error)
         {
             LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
@@ -158,7 +157,7 @@ public:
     TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const LogWithPrefixPtr & log_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
-        , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
+        , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
         , log(getMPPTaskLog(log_, getName()))
         , total_rows(0)
@@ -169,7 +168,6 @@ public:
         {
             auto tp = getDataTypeByColumnInfoForComputingLayer(dag_col.second);
             ColumnWithTypeAndName col(tp, dag_col.first);
-            expected_types.push_back(col.type);
             columns.emplace_back(col);
         }
         for (size_t i = 0; i < source_num; i++)

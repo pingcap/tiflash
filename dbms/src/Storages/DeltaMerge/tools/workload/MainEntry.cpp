@@ -3,9 +3,10 @@
 #include <Storages/DeltaMerge/tools/workload/Options.h>
 #include <Storages/DeltaMerge/tools/workload/Utils.h>
 #include <Storages/PathPool.h>
-#include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 #include <fstream>
 #include <random>
@@ -37,7 +38,7 @@ void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
     {
         auto cmd = fmt::format("rm -rf {}", dir);
         LOG_ERROR(log, cmd);
-        system(cmd.c_str());
+        [[maybe_unused]] int ret = system(cmd.c_str());
     }
 }
 
@@ -163,7 +164,7 @@ void randomKill(WorkloadOptions & opts, pid_t pid)
         std::cerr << fmt::format("{} kill pid {} succ.", localTime(), pid) << std::endl;
     }
     int status = 0;
-    wait(&status);
+    ::wait(&status);
 }
 
 void doRunAndRandomKill(WorkloadOptions & opts)

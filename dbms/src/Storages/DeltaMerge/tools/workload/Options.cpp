@@ -1,7 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
 #include <Storages/DeltaMerge/tools/workload/Utils.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/ranges.h>
 
 #include <boost/program_options.hpp>
