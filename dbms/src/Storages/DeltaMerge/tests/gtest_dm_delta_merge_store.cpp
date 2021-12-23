@@ -2197,7 +2197,7 @@ try
             com.column_name = col_name_to_add;
 
             // mock default value
-            // actual ddl is like: ADD COLUMN `date` DateTime DEFAULT '1999-09-09 12:34:56'
+            // actual ddl is like: ADD COLUMN `date` MyDateTime DEFAULT '<packed int of mydatetime>'
             com.default_expression = makeASTFunction(
                 "CAST",
                 std::make_shared<ASTLiteral>(toField(mydatetime_uint)),
