@@ -13,7 +13,7 @@ catchError {
 
     def NPROC = 5
 
-    util.runCheckoutAndBuilderClosure("build-tics-v1", CURWS) {
+    util.runCheckoutAndBuilderClosure("build-tics-v2", CURWS) {
         dir("${CURWS}/tics") {
             stage("Build & Upload") {
                 timeout(time: 70, unit: 'MINUTES') {
