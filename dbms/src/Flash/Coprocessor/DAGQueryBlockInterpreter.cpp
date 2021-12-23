@@ -390,14 +390,15 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
-        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti}};
+        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti},
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftSemi}};
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross},
         {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_AntiLeftOuterSemi}};
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_AntiLeftSemi}};
 
     if (input_streams_vec.size() != 2)
     {
@@ -494,11 +495,11 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
-    if (kind == ASTTableJoin::Kind::Cross_AntiLeftOuterSemi)
-    {
-        columns_added_by_join.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
-        join_output_columns.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
-    }
+//    if (kind == ASTTableJoin::Kind::Cross_AntiLeftSemi)
+//    {
+//        columns_added_by_join.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
+//        join_output_columns.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
+//    }
 
     DataTypes join_key_types;
     getJoinKeyTypes(join, join_key_types);

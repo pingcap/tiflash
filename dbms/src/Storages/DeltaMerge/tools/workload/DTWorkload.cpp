@@ -179,7 +179,7 @@ void DTWorkload::verifyHandle(uint64_t r)
     int stream_count = read_cols_gen->streamCount();
 
     std::atomic<uint64_t> read_count = 0;
-    auto verify = [r, &read_count, &columns, &handle_table = handle_table, &log = log](BlockInputStreamPtr in, uint64_t read_ts) {
+    auto verify = [r, &read_count, &handle_table = handle_table, &log = log](BlockInputStreamPtr in, uint64_t read_ts) {
         while (Block block = in->read())
         {
             read_count.fetch_add(block.rows(), std::memory_order_relaxed);
