@@ -22,11 +22,5 @@ inline auto packTask(Func && func, Args &&... args)
     PackagedTask task{std::move(capture)};
 
     return std::move(task);
-
-    // get future for obtaining future result
-    auto result_future = task.get_future();
-    ExecutableTaskPtr wrapped_task = std::make_shared<ExecutableTask<PackagedTask>>(std::move(task));
-
-    return std::make_tuple(std::move(wrapped_task), std::move(result_future));
 }
 } // namespace DB
