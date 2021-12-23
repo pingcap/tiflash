@@ -3,6 +3,7 @@
 #include <Common/LogWithPrefix.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/TaskStatus.h>
+#include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <common/StringRef.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>
@@ -18,17 +19,17 @@ struct MPPTaskStatistics
     using Clock = std::chrono::system_clock;
     using Timestamp = Clock::time_point;
 
-    MPPTaskStatistics(const LogWithPrefixPtr & log_, const MPPTaskId & id_, String address_);
+    MPPTaskStatistics(const MPPTaskId & id_, String address_);
 
     void start();
 
     void end(const TaskStatus & status_, StringRef error_message_ = "");
 
-    String toJson() const;
+    void initializeExecutorDAG(DAGContext * dag_context);
 
-    void logStats();
+    void logTracingJson();
 
-    const LogWithPrefixPtr log;
+    const LogWithPrefixPtr logger;
 
     /// common
     const MPPTaskId id;
@@ -40,6 +41,10 @@ struct MPPTaskStatistics
     Timestamp task_end_timestamp;
     TaskStatus status;
     String error_message;
+
+    /// executor dag
+    String sender_executor_id;
+    ExecutorStatisticsCollector executor_statistics_collector;
 
     /// resource
     Int64 working_time = 0;

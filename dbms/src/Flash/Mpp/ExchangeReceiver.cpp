@@ -94,6 +94,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
     Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = task_meta.task_id();
+    static const Int32 MAX_RETRY_TIMES = 10;
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
@@ -101,7 +102,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < MAX_RETRY_TIMES; i++)
         {
             auto reader = rpc_context->makeReader(req, task_meta.address());
             reader->initialize();
@@ -171,9 +172,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             }
             else
             {
+                bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
                 LOG_WARNING(
                     log,
-                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                    "EstablishMPPConnectionRequest meets rpc fail for req " << req_info << ". Err code = " << status.error_code()
+                                                                            << ", err msg = " << status.error_message() << ", retriable = " << retriable);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
@@ -236,7 +239,10 @@ void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMe
 }
 
 template <typename RPCContext>
-Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
+Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(
+    const std::shared_ptr<ReceivedMessage> & recv_msg,
+    std::queue<Block> & block_queue,
+    const Block & header)
 {
     assert(recv_msg != nullptr);
     Int64 rows = 0;
@@ -248,18 +254,17 @@ Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMes
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
     for (int i = 0; i < chunk_size; i++)
     {
-        Block block = CHBlockChunkCodec().decode(recv_msg->packet->chunks(i), schema);
+        Block block = CHBlockChunkCodec::decode(recv_msg->packet->chunks(i), header);
         rows += block.rows();
         if (unlikely(block.rows() == 0))
             continue;
-        assertBlockSchema(expected_types, block, "ExchangeReceiver decodes chunks");
         block_queue.push(std::move(block));
     }
     return rows;
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header)
 {
     std::shared_ptr<ReceivedMessage> recv_msg;
     {
@@ -311,7 +316,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 if (!resp_ptr->chunks().empty())
                 {
                     assert(recv_msg->packet->chunks().empty());
-                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, expected_types, schema);
+                    result.rows = CoprocessorReader::decodeChunks(resp_ptr, block_queue, header, schema);
                 }
             }
         }
@@ -322,7 +327,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
         if (!result.meet_error && !recv_msg->packet->chunks().empty())
         {
             assert(result.rows == 0);
-            result.rows = decodeChunks(recv_msg, block_queue, expected_types);
+            result.rows = decodeChunks(recv_msg, block_queue, header);
         }
     }
     returnEmptyMsg(recv_msg);

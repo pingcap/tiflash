@@ -26,14 +26,11 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char hang_in_execution[];
 extern const char exception_before_mpp_register_non_root_mpp_task[];
 extern const char exception_before_mpp_register_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
-extern const char exception_during_mpp_non_root_task_run[];
-extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
@@ -43,7 +40,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
-    , mpp_task_statistics(log, id, meta.address())
+    , mpp_task_statistics(id, meta.address())
 {}
 
 MPPTask::~MPPTask()
@@ -266,13 +263,16 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     {
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
+
+    mpp_task_statistics.initializeExecutorDAG(dag_context.get());
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     DAGQuerySource dag(*context);
-    io = executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    executeQuery(dag, *context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.compile_start_timestamp = start_time;
@@ -309,29 +309,15 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = io.in;
+        auto from = dag_context->getBlockIO().in;
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
 
-        size_t count = 0;
-
-        while (Block block = from->read())
-        {
-            count += block.rows();
-            FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
-            if (dag_context->isRootMPPTask())
-            {
-                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_root_task_run);
-            }
-            else
-            {
-                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
-            }
-        }
+        while (from->read())
+            continue;
 
         from->readSuffix();
         finishWrite();
-        LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
     }
     catch (Exception & e)
     {
@@ -372,7 +358,7 @@ void MPPTask::runImpl()
         LOG_WARNING(log, "finish task which was cancelled before");
 
     mpp_task_statistics.end(status.load(), err_msg);
-    mpp_task_statistics.logStats();
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)
