@@ -656,6 +656,38 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
+
+template <typename GetColumnsFunc, typename GetDataTypeFunc>
+void assertBlockSchema(
+    GetColumnsFunc && get_columns,
+    GetDataTypeFunc && get_datatype,
+    const Block & block,
+    const String & context_description)
+{
+    size_t columns = get_columns();
+    if (block.columns() != columns)
+        throw Exception(
+            fmt::format(
+                "Block schema mismatch in {}: different number of columns: expected {} columns, got {} columns",
+                context_description,
+                columns,
+                block.columns()));
+
+    for (size_t i = 0; i < columns; ++i)
+    {
+        const auto & actual = block.getByPosition(i).type;
+        const auto & expected = get_datatype(i);
+
+        if (!expected->equals(*actual))
+            throw Exception(
+                fmt::format(
+                    "Block schema mismatch in {}: different types: expected {}, got {}",
+                    context_description,
+                    expected->getName(),
+                    actual->getName()));
+    }
+}
+
 } // namespace
 
 bool isScalarFunctionExpr(const tipb::Expr & expr)
@@ -1150,24 +1182,28 @@ grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
     return grpc::StatusCode::INTERNAL;
 }
 
-void assertBlockSchema(const DataTypes & expected_types, const Block & block, const std::string & context_description)
+void assertBlockSchema(
+    const DataTypes & expected_types,
+    const Block & block,
+    const String & context_description)
 {
-    size_t columns = expected_types.size();
-    if (block.columns() != columns)
-        throw Exception("Block schema mismatch in " + context_description + ": different number of columns: expected "
-                        + std::to_string(columns) + " columns, got " + std::to_string(block.columns()) + " columns");
+    assertBlockSchema(
+        [&] { return expected_types.size(); },
+        [&](auto i) { return expected_types[i]; },
+        block,
+        context_description);
+}
 
-    for (size_t i = 0; i < columns; ++i)
-    {
-        const auto & actual = block.getByPosition(i).type;
-        const auto & expected = expected_types[i];
-
-        if (!expected->equals(*actual))
-        {
-            throw Exception("Block schema mismatch in " + context_description + ": different types: expected " + expected->getName()
-                            + ", got " + actual->getName());
-        }
-    }
+void assertBlockSchema(
+    const Block & header,
+    const Block & block,
+    const String & context_description)
+{
+    assertBlockSchema(
+        [&] { return header.columns(); },
+        [&](auto i) { return header.getByPosition(i).type; },
+        block,
+        context_description);
 }
 
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s)
