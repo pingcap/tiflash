@@ -1,34 +1,35 @@
 #include <Common/FailPoint.h>
-#include <Storages/DeltaMerge/tests/workload/Options.h>
-#include <Storages/DeltaMerge/tests/workload/Utils.h>
-#include <TestUtils/TiFlashTestBasic.h>
+#include <Storages/DeltaMerge/tools/workload/Options.h>
+#include <Storages/DeltaMerge/tools/workload/Utils.h>
 #include <fmt/ranges.h>
 
 #include <boost/program_options.hpp>
 
 namespace DB::DM::tests
 {
-std::string WorkloadOptions::toString() const
+std::string WorkloadOptions::toString(std::string seperator) const
 {
-    return fmt::format("max_key_count {}\n", max_key_count) + //
-        fmt::format("write_key_distribution {}\n", write_key_distribution) + //
-        fmt::format("write_count {}\n", write_count) + //
-        fmt::format("write_thread_count {}\n", write_thread_count) + //
-        fmt::format("table {}\n", table) + //
-        fmt::format("pk_type {}\n", pk_type) + //
-        fmt::format("colmuns_count {}\n", columns_count) + //
-        fmt::format("failpoints {}\n", failpoints) + //
-        fmt::format("max_write_per_sec {}\n", max_write_per_sec) + //
-        fmt::format("log_file {}\n", log_file) + //
-        fmt::format("log_level {}\n", log_level) + //
-        fmt::format("verification {}\n", verification) + //
-        fmt::format("verify_round {}\n", verify_round) + //
-        fmt::format("random_kill {}\n", random_kill) + //
-        fmt::format("max_sleep_sec {}\n", max_sleep_sec) + //
-        fmt::format("work_dirs {}\n", work_dirs) + //
-        fmt::format("config_file {}\n", config_file) + //
-        fmt::format("read_thread_count {}\n", read_thread_count) + //
-        fmt::format("read_stream_count {}\n", read_stream_count);
+    return fmt::format("max_key_count {}{}", max_key_count, seperator) + //
+        fmt::format("write_key_distribution {}{}", write_key_distribution, seperator) + //
+        fmt::format("write_count {}{}", write_count, seperator) + //
+        fmt::format("write_thread_count {}{}", write_thread_count, seperator) + //
+        fmt::format("table {}{}", table, seperator) + //
+        fmt::format("pk_type {}{}", pk_type, seperator) + //
+        fmt::format("colmuns_count {}{}", columns_count, seperator) + //
+        fmt::format("failpoints {}{}", failpoints, seperator) + //
+        fmt::format("max_write_per_sec {}{}", max_write_per_sec, seperator) + //
+        fmt::format("log_file {}{}", log_file, seperator) + //
+        fmt::format("log_level {}{}", log_level, seperator) + //
+        fmt::format("verification {}{}", verification, seperator) + //
+        fmt::format("verify_round {}{}", verify_round, seperator) + //
+        fmt::format("random_kill {}{}", random_kill, seperator) + //
+        fmt::format("max_sleep_sec {}{}", max_sleep_sec, seperator) + //
+        fmt::format("work_dirs {}{}", work_dirs, seperator) + //
+        fmt::format("config_file {}{}", config_file, seperator) + //
+        fmt::format("read_thread_count {}{}", read_thread_count, seperator) + //
+        fmt::format("read_stream_count {}{}", read_stream_count, seperator) + //
+        fmt::format("testing_type {}{}", testing_type, seperator) + //
+        fmt::format("log_write_request {}{}", log_write_request, seperator);
 }
 
 std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv[])
@@ -38,14 +39,14 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     desc.add_options() //
         ("help", "produce help message") //
-        ("max_key_count", value<uint64_t>()->default_value(1000000), "") //
+        ("max_key_count", value<uint64_t>()->default_value(2000000), "Default is 200w.") //
         ("write_key_distribution", value<std::string>()->default_value("uniform"), "uniform/normal/incremental") //
-        ("write_count", value<uint64_t>()->default_value(1000000), "") //
-        ("write_thread_count", value<uint64_t>()->default_value(1), "") //
+        ("write_count", value<uint64_t>()->default_value(5000000), "Default is 500w.") //
+        ("write_thread_count", value<uint64_t>()->default_value(4), "") //
         ("max_write_per_sec", value<uint64_t>()->default_value(0), "") //
         //
         ("table", value<std::string>()->default_value("constant"), "constant/random") //
-        ("pk_type", value<std::string>()->default_value(""), "tidb_rowid/pk_is_handle64") //
+        ("pk_type", value<std::string>()->default_value("tidb_rowid"), "tidb_rowid") //
         ("columns_count", value<uint64_t>()->default_value(0), "0 means random columns count") //
         //
         ("failpoints,F", value<std::vector<std::string>>()->multitoken(), "failpoint(s) to enable: fp1 fp2 fp3...") //
@@ -64,6 +65,10 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("read_thread_count", value<uint64_t>()->default_value(1), "") //
         ("read_stream_count", value<uint64_t>()->default_value(4), "") //
+        //
+        ("testing_type", value<std::string>()->default_value(""), "daily_perf/daily_random") //
+        //
+        ("log_write_request", value<bool>()->default_value(false), "") //
         ;
 
     boost::program_options::variables_map vm;
@@ -83,6 +88,10 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     table = vm["table"].as<std::string>();
     pk_type = vm["pk_type"].as<std::string>();
+    if (pk_type != "tidb_rowid")
+    {
+        return {false, fmt::format("pk_type must be tidb_rowid.")};
+    }
     columns_count = vm["columns_count"].as<uint64_t>();
 
     if (vm.count("failpoints"))
@@ -118,6 +127,9 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     read_thread_count = vm["read_thread_count"].as<uint64_t>();
     read_stream_count = vm["read_stream_count"].as<uint64_t>();
+
+    testing_type = vm["testing_type"].as<std::string>();
+    log_write_request = vm["log_write_request"].as<bool>();
 
     return {true, toString()};
 }

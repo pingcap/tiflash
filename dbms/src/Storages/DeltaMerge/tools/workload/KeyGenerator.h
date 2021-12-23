@@ -2,7 +2,7 @@
 #include <memory>
 namespace DB::DM::tests
 {
-class WorkloadOptions;
+struct WorkloadOptions;
 
 class KeyGenerator
 {
