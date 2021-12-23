@@ -97,7 +97,7 @@ inline constexpr size_t getFileNameOffset(T (&/*str*/)[1])
 template <typename S, typename Ignored, typename... Args>
 std::string toCheckedFmtStr(const S & format, const Ignored &, Args &&... args)
 {
-    // The first arg is the same as `format`, just ignore
+    // The second arg is the same as `format`, just ignore
     // Apply `make_args_checked` for checks `format` validity at compile time.
     // https://fmt.dev/latest/api.html#argument-lists
     return fmt::vformat(format, fmt::make_args_checked<Args...>(format, args...));
