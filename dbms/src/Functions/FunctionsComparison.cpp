@@ -91,11 +91,11 @@ void FunctionComparison<GreaterOrEqualsOp, NameGreaterOrEquals>::executeTupleImp
 
 template <>
 void FunctionComparison<CmpOp, NameStrcmp>::executeTupleImpl(
-        [[maybe_unused]] Block & block,
-        [[maybe_unused]] size_t result,
-        [[maybe_unused]] const ColumnsWithTypeAndName & x,
-        [[maybe_unused]] const ColumnsWithTypeAndName & y,
-        [[maybe_unused]] size_t tuple_size) const
+    [[maybe_unused]] Block & block,
+    [[maybe_unused]] size_t result,
+    [[maybe_unused]] const ColumnsWithTypeAndName & x,
+    [[maybe_unused]] const ColumnsWithTypeAndName & y,
+    [[maybe_unused]] size_t tuple_size) const
 {
     throw DB::Exception("Strcmp can not be used with tuple");
 }

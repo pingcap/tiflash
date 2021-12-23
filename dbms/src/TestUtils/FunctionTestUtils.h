@@ -431,8 +431,10 @@ private:
     std::vector<ColumnWithTypeAndName> columns;
     std::initializer_list<Case<R, Args...>> cases;
     bool is_const[sizeof...(Args)] = {false};
+
 public:
-    TestCasesConstructor(std::vector<size_t> const_columns, std::initializer_list<Case<R, Args...>> cases): cases(cases)
+    TestCasesConstructor(std::vector<size_t> const_columns, std::initializer_list<Case<R, Args...>> cases)
+        : cases(cases)
     {
         for (auto col : const_columns)
         {
@@ -453,6 +455,7 @@ public:
     {
         return std::make_pair(result, ColumnsWithTypeAndName(columns));
     }
+
 private:
     template <size_t>
     void addColumn()
@@ -461,9 +464,12 @@ private:
     template <size_t index, typename T, typename... ColArgs>
     void addColumn()
     {
-        if (is_const[index]) {
+        if (is_const[index])
+        {
             columns.push_back(createConstColumn<T>(1, std::get<index>((*cases.begin()).row)));
-        } else {
+        }
+        else
+        {
             InferredDataVector<T> vec;
             vec.reserve(cases.size());
             for (auto & cas : cases)
