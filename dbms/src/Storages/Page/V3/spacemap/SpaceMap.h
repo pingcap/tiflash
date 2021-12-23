@@ -78,6 +78,16 @@ public:
     virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
 
     /**
+     * Get the right margin.
+     */
+    virtual UInt64 getRightMargin();
+
+    /**
+     * Get the current distribution of free span
+     */
+    virtual std::list<std::pair<UInt64, UInt64>> getCurrentDataStats();
+
+    /**
      * Sanity check for correctness
      */
     using CheckerFunc = std::function<bool(size_t idx, UInt64 start, UInt64 end)>;

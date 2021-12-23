@@ -83,7 +83,14 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size);
 
+        std::pair<BlobStatPtr, BlobFileId> chooseNewStat();
+
         BlobStatPtr fileIdToStat(BlobFileId file_id);
+
+        const std::list<BlobStatPtr> getStats()
+        {
+            return stats_map;
+        }
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
@@ -101,6 +108,8 @@ public:
     BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
 
     void restore();
+
+    void gc(std::map<PageEntryV3, std::pair<BlobFileOffset, PageSize>> & copy_list, PageSize & total_page_size);
 
     BlobStats getAllBlobStats();
 

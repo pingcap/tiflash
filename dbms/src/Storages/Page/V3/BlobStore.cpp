@@ -300,6 +300,74 @@ void BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, 
     getBlobFile(blob_id)->read(buffers, offset, size, read_limiter);
 }
 
+/*
+
+void BlobStore::gc()
+{
+    auto & stats_list = blob_stats.getStats();
+
+    for (auto & stat : stats_list)
+    {
+        auto lock = blob_stats.statLock(stat);
+        auto right_margin = stat->smap->getRightMargin();
+
+        // TBD : remove sm_valid_rate
+        bool need_truncate = false;
+        stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
+        assert(stat->sm_valid_rate <= 1.0);
+
+        // Check if GC is required
+        if (stat->sm_valid_rate < 0.2)
+        {
+            LOG_FMT_DEBUG(log,"Current [BlobFileId={}] valid rate is {}, Need do compact GC",stat->id);
+            doCompactGC(stat);
+            need_truncate = true;
+            stat->sm_total_size = stat->sm_valid_size;
+        } else if (stat->sm_valid_rate < 0.6)
+        {
+            LOG_FMT_DEBUG(log,"Current [BlobFileId={}] valid rate is {}, Need do swap GC",stat->id);
+            doSwapGC(stat);
+            // TBD : update sm_total_size
+
+        } else {
+            LOG_FMT_DEBUG(log,"Current [BlobFileId={}] valid rate is {}, No need to GC.",stat->id);
+            need_truncate = right_margin != stat->sm_total_size;
+            if (need_truncate)
+            {
+                stat->sm_total_size = right_margin;
+            }
+        }
+
+        if (need_truncate)
+        {
+            auto blobfile = getBlobFile();
+            // TBD : truncate
+
+        }
+    }
+}
+
+*/
+
+void BlobStore::gc(PageMap & map, std::map<PageID, std::pair<BlobFileOffset, PageSize>> & copy_list, PageSize & total_page_size)
+{
+    char * data_buf = static_cast<char *>(alloc(total_page_size));
+    MemHolder mem_holder = createMemHolder(data_buf, [&, total_page_size](char * p) {
+        free(p, total_page_size);
+    });
+
+    // const auto & [stat, file_id] = blob_stats.chooseNewStat();
+
+    for (auto & [page_id, page] : map)
+    {
+    }
+}
+
+// void doCompactGC(BlobStatPtr stat)
+// {
+
+// }
+
 
 String BlobStore::getBlobFilePath(BlobFileId blob_id) const
 {
@@ -399,6 +467,26 @@ void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id)
     old_ids.emplace_back(blob_file_id);
 }
 
+std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseNewStat()
+{
+    BlobStatPtr stat_ptr = nullptr;
+
+    /**
+     * If we do have any `old blob id` which may removed by GC.
+     * Then we should get a `old blob id` rather than create a new blob id.
+     * If `old_ids` is empty , we will use the `roll_id` as the new 
+     * id return. After roll_id generate a `BlobStat`, it will been `++`.
+     */
+    if (old_ids.empty())
+    {
+        return std::make_pair(stat_ptr, roll_id);
+    }
+
+    auto rv = std::make_pair(stat_ptr, old_ids.front());
+    old_ids.pop_front();
+    return rv;
+}
+
 std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_size, UInt64 file_limit_size)
 {
     BlobStatPtr stat_ptr = nullptr;
@@ -432,22 +520,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
 
     } while (false);
 
-    /**
-     * If we do have any `old blob id` which may removed by GC.
-     * Then we should get a `old blob id` rather than create a new blob id.
-     * If `old_ids` is empty , we will use the `roll_id` as the new 
-     * id return. After roll_id generate a `BlobStat`, it will been `++`.
-     */
-    if (old_ids.empty())
-    {
-        return std::make_pair(stat_ptr, roll_id);
-    }
-    else
-    {
-        auto rv = std::make_pair(stat_ptr, old_ids.front());
-        old_ids.pop_front();
-        return rv;
-    }
+    return chooseNewStat();
 }
 
 BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size)
