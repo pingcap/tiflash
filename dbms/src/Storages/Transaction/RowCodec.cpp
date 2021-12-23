@@ -383,8 +383,18 @@ bool appendRowV2ToBlockImpl(
         }
         else
         {
-            if (unlikely(column_ids_iter->first == pk_handle_id))
-                throw Exception("pk column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
+            // if pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
+            // we can just ignore the pk value encoded in value part
+            if (column_ids_iter->first == pk_handle_id)
+            {
+                column_ids_iter++;
+                block_column_pos++;
+                if (is_null)
+                    id_null++;
+                else
+                    id_not_null++;
+                continue;
+            }
 
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             const auto * column_info = column_infos[column_ids_iter->second];
@@ -484,8 +494,15 @@ bool appendRowV1ToBlock(
         }
         else
         {
-            if (unlikely(column_ids_iter->first == pk_handle_id))
-                throw Exception("pk column " + std::to_string(pk_handle_id) + " shouldn't be encoded in value when pk_is_handle is true", ErrorCodes::LOGICAL_ERROR);
+            // if pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
+            // we can just ignore the pk value encoded in value part
+            if (column_ids_iter->first == pk_handle_id)
+            {
+                decoded_field_iter++;
+                column_ids_iter++;
+                block_column_pos++;
+                continue;
+            }
 
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             const auto * column_info = column_infos[column_ids_iter->second];
