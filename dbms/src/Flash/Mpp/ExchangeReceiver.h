@@ -73,6 +73,7 @@ class ExchangeReceiverBase
 {
 public:
     static constexpr bool is_streaming_reader = true;
+    static constexpr auto name = "ExchangeReceiver";
 
 public:
     ExchangeReceiverBase(
@@ -88,14 +89,19 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types, Timeline::Timer & timer);
+    ExchangeReceiverResult nextResult(
+        std::queue<Block> & block_queue,
+        const Block & header,
+        Timeline::Timer & timer);
 
     void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
 
-    Int64 decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types);
+    Int64 decodeChunks(
+        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        std::queue<Block> & block_queue,
+        const Block & header);
 
-    size_t getSourceNum() { return source_num; }
-    String getName() { return "ExchangeReceiver"; }
+    size_t getSourceNum() const { return source_num; }
 
 private:
     void setUpConnection();
