@@ -55,7 +55,6 @@
 #include <common/config_common.h>
 #include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
-#include <fmt/core.h>
 #include <sys/resource.h>
 
 #include <boost/algorithm/string/classification.hpp>

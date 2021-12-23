@@ -6,7 +6,6 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <common/logger_useful.h>
-#include <fmt/core.h>
 
 
 namespace DB

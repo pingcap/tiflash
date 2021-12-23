@@ -25,8 +25,6 @@
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <common/logger_useful.h>
-#include <fmt/core.h>
-#include <fmt/format.h>
 
 #include <ext/scope_guard.h>
 #include <iomanip>

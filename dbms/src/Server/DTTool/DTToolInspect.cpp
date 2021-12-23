@@ -1,4 +1,3 @@
-#include <Common/FmtUtils.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -68,15 +67,10 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
             LOG_FMT_INFO(logger, "checksum algorithm: xxh3");
             break;
         }
-        DB::FmtBuffer fmt_buf;
-        fmt_buf.joinStr(
-            conf->getDebugInfo().begin(),
-            conf->getDebugInfo().end(),
-            [](const auto & arg, DB::FmtBuffer & fb) {
-                fb.fmtAppend("{}: {}", arg.first, arg.second);
-            },
-            "");
-        LOG_FMT_INFO(logger, fmt_buf.toString());
+        for (const auto & [name, msg] : conf->getDebugInfo())
+        {
+            LOG_FMT_INFO(logger, "{}: {}", name, msg);
+        }
     }
 
     if (args.check)
