@@ -3,6 +3,7 @@
 #include <Common/LogWithPrefix.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/Snapshot.h>
+#include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -42,6 +43,10 @@ public:
 
     bool gc();
 
+    // FIXME : just for test.
+    bool gcBlobStore();
+    BlobStorePtr blobstore;
+
 private:
     struct EntryOrDelete
     {
@@ -80,7 +85,9 @@ private:
 
         std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
-        std::pair<std::list<PageEntryV3>, bool> deleteAndGC(const std::map<UInt64, short> & alive_seq);
+        PageSize getEntryByBlobId(std::map<BlobFileId, std::list<PageEntryV3>> & blob_ids);
+
+        std::pair<std::list<PageEntryV3>, bool> deleteAndGC(const std::map<UInt64, short> & alive_seq, UInt64 lowest_seq);
 
     private:
         mutable std::mutex m;

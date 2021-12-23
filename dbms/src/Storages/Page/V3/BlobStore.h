@@ -109,9 +109,9 @@ public:
 
     void restore();
 
-    void gc(std::map<PageEntryV3, std::pair<BlobFileOffset, PageSize>> & copy_list, PageSize & total_page_size);
+    void getGCStats(std::map<BlobFileId, std::list<PageEntryV3>> & blob_need_gc);
 
-    BlobStats getAllBlobStats();
+    std::map<PageId, std::pair<BlobFileOffset, PageSize>> gc(std::map<BlobFileId, std::list<PageEntryV3>> entries_need_gc, PageSize & total_page_size);
 
     PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
@@ -147,6 +147,7 @@ private:
 
     DB::LRUCache<BlobFileId, BlobFile> cached_file;
 };
+using BlobStorePtr = std::shared_ptr<BlobStore>;
 
 } // namespace PS::V3
 } // namespace DB

@@ -80,12 +80,12 @@ public:
     /**
      * Get the right margin.
      */
-    virtual UInt64 getRightMargin();
+    virtual UInt64 getRightMargin() = 0;
 
     /**
      * Get the current distribution of free span
      */
-    virtual std::list<std::pair<UInt64, UInt64>> getCurrentDataStats();
+    virtual std::list<std::pair<UInt64, UInt64>> getCurrentDataStats() = 0;
 
     /**
      * Sanity check for correctness

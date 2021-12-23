@@ -204,12 +204,12 @@ void PageDirectory::apply(PageEntriesEdit && edit)
 }
 
 
-std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::deleteAndGC(const std::map<UInt64, short> & alive_seq)
+std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::deleteAndGC(const std::map<UInt64, short> & alive_seq, UInt64 lowest_seq)
 {
-    auto page_lock = acquireLock();
     std::list<PageEntryV3> del_entries;
     bool all_deleted = true;
 
+    auto page_lock = acquireLock();
     for (auto iter = entries.begin(); iter != entries.end(); iter++)
     {
         // Already deleted, no need put in `del_entries`
@@ -218,7 +218,14 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
             continue;
         }
 
-        // TBD : do compact
+        // TBD : use findless replace
+        if (iter->first.sequence < lowest_seq)
+        {
+            iter->second.is_delete = true;
+            del_entries.emplace_back(std::move(iter->second.entry));
+            continue;
+        }
+
         if (auto seq_it = alive_seq.find(iter->first.sequence); seq_it == alive_seq.end())
         {
             iter->second.is_delete = true;
@@ -233,9 +240,33 @@ std::pair<std::list<PageEntryV3>, bool> PageDirectory::VersionedPageEntries::del
     return std::make_pair(del_entries, all_deleted);
 }
 
+PageSize PageDirectory::VersionedPageEntries::getEntryByBlobId(std::map<BlobFileId, std::list<PageEntryV3>> & blob_ids)
+{
+    PageSize single_page_size = 0;
+    for (auto iter = entries.begin(); iter != entries.end(); iter++)
+    {
+        if (iter->second.is_delete)
+        {
+            continue;
+        }
+
+        const auto & entry = iter->second.entry;
+
+        if (auto it = blob_ids.find(entry.file_id); it != blob_ids.end())
+        {
+            single_page_size += entry.size;
+            it->second.emplace_back(iter->second.entry);
+        }
+    }
+
+    return single_page_size;
+}
+
 bool PageDirectory::gc()
 {
     std::map<UInt64, short> alive_seq;
+    UInt64 lowest_seq = UINT64_MAX;
+
     // Cleanup released snapshots
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
@@ -243,6 +274,10 @@ bool PageDirectory::gc()
             iter = snapshots.erase(iter);
         else
         {
+            if (lowest_seq == UINT64_MAX)
+            {
+                lowest_seq = iter->lock()->sequence;
+            }
             alive_seq.insert({iter->lock()->sequence, 1});
             ++iter;
         }
@@ -250,7 +285,7 @@ bool PageDirectory::gc()
 
     for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); iter++)
     {
-        const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(alive_seq);
+        const auto & [del_entries, all_deleted] = iter->second->deleteAndGC(alive_seq, lowest_seq);
         if (!del_entries.empty())
         {
             // TBD : delete entry in BlobStore
@@ -263,7 +298,20 @@ bool PageDirectory::gc()
         }
     }
 
-    // TBD : call blobstore GC.
+    std::map<BlobFileId, std::list<PageEntryV3>> blob_need_gc;
+    blobstore->getGCStats(blob_need_gc);
+    PageSize total_page_size = 0;
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+
+        for (auto iter = mvcc_table_directory.begin(); iter != mvcc_table_directory.end(); iter++)
+        {
+            total_page_size += iter->second->getEntryByBlobId(blob_need_gc);
+        }
+    }
+
+    std::map<PageId, std::pair<BlobFileOffset, PageSize>> copy_list;
+    copy_list = blobstore->gc(blob_need_gc, total_page_size);
 
     return true;
 }
