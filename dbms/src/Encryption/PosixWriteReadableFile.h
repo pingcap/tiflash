@@ -39,6 +39,8 @@ public:
 
     int fsync() override;
 
+    int ftruncate(off_t length) override;
+
     ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
     String getFileName() const override
