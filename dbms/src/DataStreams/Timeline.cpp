@@ -8,11 +8,6 @@ Timeline::Timeline()
     std::fill(std::begin(sum), std::end(sum), 0);
 }
 
-Timeline::~Timeline()
-{
-    checkAndAddEvent(true);
-}
-
 void Timeline::checkAndAddEvent(bool is_final)
 {
     if (batched > 0 && (is_final || batched >= batch_threshold))
@@ -111,8 +106,12 @@ Int64 Timeline::getCounter(CounterType type) const
 void Timeline::merge(const Timeline & other)
 {
     last_ts = std::max(last_ts, other.last_ts);
+    batched += other.batched;
     for (size_t i = 0; i < num_counters; ++i)
+    {
         sum[i] += other.sum[i];
+        count[i] += other.count[i];
+    }
 
     auto events_iter = events.begin();
     auto other_events_iter = other.events.begin();

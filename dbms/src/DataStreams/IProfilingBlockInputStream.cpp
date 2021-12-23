@@ -156,6 +156,7 @@ void IProfilingBlockInputStream::readSuffix()
 
     readSuffixImpl();
     info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    info.timeline.flushBuffer();
 }
 
 

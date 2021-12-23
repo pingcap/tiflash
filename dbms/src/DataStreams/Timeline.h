@@ -39,7 +39,6 @@ public:
     static constexpr size_t num_counters = static_cast<size_t>(NUM_COUNTER_TYPES);
 
     Timeline();
-    ~Timeline();
 
     void track(CounterType type, Int64 ts, Int64 value);
 

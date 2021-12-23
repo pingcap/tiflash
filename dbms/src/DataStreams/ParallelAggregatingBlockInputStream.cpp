@@ -234,6 +234,7 @@ void ParallelAggregatingBlockInputStream::execute()
     double elapsed_seconds = watch.elapsedSeconds();
 
     info.timeline = Timeline::merge(info.timeline, mergeThreadsTimeline(threads_timeline));
+    info.timeline.flushBuffer();
 
     auto timer = newTimer(Timeline::SELF);
 
