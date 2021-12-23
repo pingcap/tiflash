@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/UnaryCallback.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <common/types.h>
@@ -12,13 +13,18 @@
 
 namespace DB
 {
+using MPPDataPacket = mpp::MPPDataPacket;
+using MPPDataPacketPtr = std::shared_ptr<MPPDataPacket>;
+using MPPDataPacketPtrs = std::vector<MPPDataPacketPtr>;
+
 class ExchangePacketReader
 {
 public:
     virtual ~ExchangePacketReader() = default;
-    virtual void initialize() const = 0;
     virtual bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const = 0;
+    virtual void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) const = 0;
     virtual ::grpc::Status finish() const = 0;
+    virtual void finish(UnaryCallback<::grpc::Status> * callback) const = 0;
 };
 
 struct ExchangeRecvRequest
@@ -45,11 +51,30 @@ public:
     /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
     ~GrpcExchangePacketReader() override;
 
-    void initialize() const override;
     bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override;
+    void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) const override;
     ::grpc::Status finish() const override;
+    void finish(UnaryCallback<::grpc::Status> * callback) const override;
 };
 
+class AsyncGrpcExchangePacketReader : public ExchangePacketReader
+{
+public:
+    std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
+    grpc::ClientContext client_context;
+    std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
+
+    explicit AsyncGrpcExchangePacketReader(const ExchangeRecvRequest & req);
+
+    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
+    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
+    ~AsyncGrpcExchangePacketReader() override;
+
+    bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override;
+    void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) const override;
+    ::grpc::Status finish() const override;
+    void finish(UnaryCallback<::grpc::Status> * callback) const override;
+};
 
 class LocalExchangePacketReader : public ExchangePacketReader
 {
@@ -69,9 +94,10 @@ public:
         }
     }
 
-    void initialize() const override {}
     bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override;
+    void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) const override;
     ::grpc::Status finish() const override;
+    void finish(UnaryCallback<::grpc::Status> * callback) const override;
 };
 
 class GRPCReceiverContext
@@ -79,6 +105,7 @@ class GRPCReceiverContext
 public:
     using StatusType = ::grpc::Status;
     using RequestType = ExchangeRecvRequest;
+    using ReaderType = ExchangePacketReader;
 
     explicit GRPCReceiverContext(
         const tipb::ExchangeReceiver & exchange_receiver_meta_,
@@ -93,6 +120,8 @@ public:
     bool supportAsync(const ExchangeRecvRequest & request);
 
     std::shared_ptr<ExchangePacketReader> makeReader(const ExchangeRecvRequest & request) const;
+
+    void makeAsyncReader(const ExchangeRecvRequest & request, UnaryCallback<std::unique_ptr<ExchangePacketReader>> * callback) const;
 
     static StatusType getStatusOK()
     {

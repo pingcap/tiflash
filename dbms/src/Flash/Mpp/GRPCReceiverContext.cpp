@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
 #include <tuple>
@@ -37,6 +38,51 @@ namespace DB
 {
 namespace
 {
+struct MakeReaderCallbackProxy : public UnaryCallback<bool>
+{
+    UnaryCallback<std::unique_ptr<ExchangePacketReader>> * callback = nullptr;
+    std::unique_ptr<ExchangePacketReader> reader;
+
+    void execute(bool & ok) override
+    {
+        if (!ok)
+            reader.reset();
+        callback->execute(reader);
+        delete this;
+    }
+};
+
+struct BatchReadCallbackProxy : public UnaryCallback<bool>
+{
+    UnaryCallback<size_t> * callback = nullptr;
+    size_t read_index = 0;
+    MPPDataPacketPtrs * packets = nullptr;
+    ::grpc::ClientAsyncReader<MPPDataPacket> * reader = nullptr;
+
+    void execute(bool & ok) override
+    {
+        if (!ok || ++read_index == packets->size())
+        {
+            callback->execute(read_index);
+            delete this;
+            return;
+        }
+        reader->Read((*packets)[read_index].get(), this);
+    }
+};
+
+struct FinishCallbackProxy : public UnaryCallback<bool>
+{
+    UnaryCallback<::grpc::Status> * callback = nullptr;
+    ::grpc::Status status = ::grpc::Status::OK;
+
+    void execute(bool &) override
+    {
+        callback->execute(status);
+        delete this;
+    }
+};
+
 std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
     const ::mpp::EstablishMPPConnectionRequest * request,
     const std::shared_ptr<MPPTaskManager> & task_manager)
@@ -125,6 +171,24 @@ std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const Exch
     }
 }
 
+void GRPCReceiverContext::makeAsyncReader(
+    const ExchangeRecvRequest & request,
+    UnaryCallback<std::unique_ptr<ExchangePacketReader>> * callback) const
+{
+    auto proxy = std::make_unique<MakeReaderCallbackProxy>();
+    proxy->callback = callback;
+
+    auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(request); 
+    reader->reader = cluster->rpc_client->sendStreamRequestAsync(
+        request.req->sender_meta().address(),
+        &reader->client_context,
+        *reader->call,
+        GRPCCompletionQueuePool::Instance()->pickQueue(),
+        proxy.get());
+    proxy->reader = std::move(reader); 
+    proxy.release();
+}
+    
 void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
 {
     schema.clear();
@@ -141,7 +205,6 @@ String ExchangeRecvRequest::debugString() const
     return req->DebugString();
 }
 
-
 GrpcExchangePacketReader::GrpcExchangePacketReader(const ExchangeRecvRequest & req)
 {
     call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
@@ -150,14 +213,16 @@ GrpcExchangePacketReader::GrpcExchangePacketReader(const ExchangeRecvRequest & r
 GrpcExchangePacketReader::~GrpcExchangePacketReader()
 {}
 
-void GrpcExchangePacketReader::initialize() const
-{
-    reader->WaitForInitialMetadata();
-}
-
-bool GrpcExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
+bool GrpcExchangePacketReader::read(MPPDataPacketPtr & packet) const
 {
     return reader->Read(packet.get());
+}
+
+void GrpcExchangePacketReader::batchRead(
+    MPPDataPacketPtrs &,
+    UnaryCallback<size_t> *) const
+{
+    throw Exception("GrpcExchangePacketReader::batchRead is not suported");
 }
 
 ::grpc::Status GrpcExchangePacketReader::finish() const
@@ -165,19 +230,71 @@ bool GrpcExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet
     return reader->Finish();
 }
 
-
-bool LocalExchangePacketReader::read(std::shared_ptr<mpp::MPPDataPacket> & packet) const
+void GrpcExchangePacketReader::finish(UnaryCallback<::grpc::Status> *) const
 {
-    std::shared_ptr<mpp::MPPDataPacket> tmp_packet = tunnel->readForLocal();
+    throw Exception("GrpcExchangePacketReader::finish is not suported");
+}
+
+AsyncGrpcExchangePacketReader::AsyncGrpcExchangePacketReader(const ExchangeRecvRequest & req)
+{
+    call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
+}
+
+AsyncGrpcExchangePacketReader::~AsyncGrpcExchangePacketReader()
+{}
+
+bool AsyncGrpcExchangePacketReader::read(MPPDataPacketPtr &) const
+{
+    throw Exception("AsyncGrpcExchangePacketReader::read is not supported");
+}
+
+void AsyncGrpcExchangePacketReader::batchRead(
+    MPPDataPacketPtrs & packets,
+    UnaryCallback<size_t> * callback) const
+{
+    auto proxy = std::make_unique<BatchReadCallbackProxy>();
+    proxy->callback = callback;
+    proxy->packets = &packets;
+    proxy->reader = reader.get();
+    reader->Read(packets[0].get(), proxy.release());
+}
+
+::grpc::Status AsyncGrpcExchangePacketReader::finish() const
+{
+    throw Exception("AsyncGrpcExchangePacketReader::finish is not supported");
+}
+
+void AsyncGrpcExchangePacketReader::finish(UnaryCallback<::grpc::Status> * callback) const
+{
+    auto proxy = std::make_unique<FinishCallbackProxy>();
+    proxy->callback = callback;
+    reader->Finish(&proxy->status, proxy.release());
+}
+
+bool LocalExchangePacketReader::read(MPPDataPacketPtr & packet) const
+{
+    MPPDataPacketPtr tmp_packet = tunnel->readForLocal();
     bool success = tmp_packet != nullptr;
     if (success)
         packet = tmp_packet;
     return success;
 }
 
+void LocalExchangePacketReader::batchRead(
+    MPPDataPacketPtrs &,
+    UnaryCallback<size_t> *) const
+{
+    throw Exception("LocalExchangePacketReader::batchRead is not suported");
+}
+
+
 ::grpc::Status LocalExchangePacketReader::finish() const
 {
     return ::grpc::Status::OK;
 }
 
+void LocalExchangePacketReader::finish(UnaryCallback<::grpc::Status> *) const
+{
+    throw Exception("LocalExchangePacketReader::finish is not suported");
+}
 } // namespace DB

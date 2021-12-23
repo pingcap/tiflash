@@ -26,12 +26,262 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
     }
 }
 
-enum class AsyncRequestStage
+struct ReactorTrigger
 {
+    MPMCQueue<size_t> * queue;
+    size_t source_index;
+
+    ReactorTrigger(
+        MPMCQueue<size_t> * queue_,
+        size_t source_index_)
+        : queue(queue_)
+        , source_index(source_index_)
+    {
+    }
+
+    void trigger()
+    {
+        queue->push(source_index);
+    }
 };
 
+template <typename RPCContext>
+struct MakeReaderCallback : public UnaryCallback<std::unique_ptr<typename RPCContext::ReaderType>>
+{
+    ReactorTrigger * trigger = nullptr;
+    std::unique_ptr<typename RPCContext::ReaderType> reader;
+
+    explicit MakeReaderCallback(ReactorTrigger * trigger_) : trigger(trigger_) {}
+
+    void execute(std::unique_ptr<typename RPCContext::ReaderType> & res) override
+    {
+        reader = std::move(res);
+        trigger->trigger();
+    }
+};
+
+struct BatchReadCallback : public UnaryCallback<size_t>
+{
+    ReactorTrigger * trigger = nullptr;
+    size_t packet_cnt = 0;
+    MPPDataPacketPtrs packets;
+
+    BatchReadCallback(ReactorTrigger * trigger_, size_t batch_packet_count)
+        : trigger(trigger_)
+    {
+        packets.resize(batch_packet_count);
+        for (auto & packet : packets)
+            packet = std::make_shared<MPPDataPacket>();
+    }
+
+    void execute(size_t & res) override
+    {
+        packet_cnt = res;
+        trigger->trigger();
+    }
+};
+
+template <typename RPCContext>
+struct FinishCallback : public UnaryCallback<typename RPCContext::StatusType>
+{
+    using Status = typename RPCContext::StatusType;
+    ReactorTrigger * trigger = nullptr;
+    Status status = RPCContext::getStatusOK();
+
+    explicit FinishCallback(ReactorTrigger * trigger_) : trigger(trigger_) {}
+
+    void execute(Status & res) override
+    {
+        status = res;
+        trigger->trigger();
+    }
+};
+
+enum class AsyncRequestStage
+{
+    NEED_INIT,
+    WAIT_MAKE_READER,
+    WAIT_BATCH_READ,
+    WAIT_FINISH,
+    WAIT_RETRY,
+    FINISHED,
+};
+
+using Clock = std::chrono::system_clock;
+using TimePoint = Clock::time_point;
+
+static constexpr Int32 MAX_RETRY_TIMES = 10;
+static constexpr Int32 BATCH_PACKET_COUNT = 16;
+
+template <typename RPCContext>
 struct AsyncRequestStat
 {
+    using Status = typename RPCContext::StatusType;
+    using Request = typename RPCContext::RequestType;
+    using Reader = typename RPCContext::ReaderType;
+
+    std::shared_ptr<RPCContext> rpc_context;
+    const Request * request = nullptr;
+    MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel = nullptr;
+
+    String req_info;
+    bool meet_error = false;
+    bool has_data = false;
+    String err_msg;
+    int retry_times = 0;
+    TimePoint start_waiting_retry_ts{Clock::duration::zero()};
+    AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
+
+    ReactorTrigger trigger;
+    MakeReaderCallback<RPCContext> make_reader_callback;
+    BatchReadCallback batch_read_callback;
+    FinishCallback<RPCContext> finish_callback;
+
+    AsyncRequestStat(
+        MPMCQueue<size_t> * queue,
+        MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel_,
+        const std::shared_ptr<RPCContext> & context,
+        const Request & req)
+        : rpc_context(context)
+        , request(&req)
+        , msg_channel(msg_channel_)
+        , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
+        , trigger(queue, req.source_index)
+        , make_reader_callback(&trigger)
+        , batch_read_callback(&trigger, BATCH_PACKET_COUNT)
+        , finish_callback(&trigger)
+    {
+    }
+
+    void handle()
+    {
+        switch (stage)
+        {
+        case AsyncRequestStage::NEED_INIT:
+            start();
+            break;
+        case AsyncRequestStage::WAIT_MAKE_READER:
+            if (auto * reader = getReader())
+            {
+                reader->batchRead(getPackets(), &batch_read_callback);
+                stage = AsyncRequestStage::WAIT_BATCH_READ;
+            }
+            else if (retriable())
+                waitForRetry();
+            else
+                setDone("Send async stream request fail");
+            break;
+        case AsyncRequestStage::WAIT_BATCH_READ:
+            if (getPacketCount() > 0)
+            {
+                has_data = true;
+                if (sendPackets())
+                    getReader()->batchRead(getPackets(), &batch_read_callback);
+                else
+                    setDone("push packets fail");
+            }
+            else
+            {
+                getReader()->finish(&finish_callback);
+                stage = AsyncRequestStage::WAIT_FINISH;
+            }
+            break;
+        case AsyncRequestStage::WAIT_FINISH:
+            if (getStatus().ok())
+                setDone("");
+            else if (retriable())
+                waitForRetry();
+            else
+                setDone(getStatus().error_message());
+            break;
+        case AsyncRequestStage::WAIT_RETRY:
+            throw Exception("Can't call handle() when WAIT_RETRY");
+        case AsyncRequestStage::FINISHED:
+            throw Exception("Can't call handle() when FINISHED");
+        }
+    }
+
+    bool finished() const
+    {
+        return stage == AsyncRequestStage::FINISHED;
+    }
+
+    Reader * getReader() const
+    {
+        return make_reader_callback.reader.get();
+    }
+
+    MPPDataPacketPtrs & getPackets()
+    {
+        return batch_read_callback.packets;
+    }
+
+    size_t getPacketCount() const
+    {
+        return batch_read_callback.packet_cnt;
+    }
+
+    const Status & getStatus() const
+    {
+        return finish_callback.status;
+    }
+
+    bool retriable() const
+    {
+        return !has_data && retry_times + 1 < MAX_RETRY_TIMES;
+    }
+
+    bool waitingForRetry() const
+    {
+        return stage == AsyncRequestStage::WAIT_RETRY;
+    }
+
+    void setDone(String msg)
+    {
+        if (!msg.empty())
+        {
+            meet_error = true;
+            err_msg = msg;
+        }
+        stage = AsyncRequestStage::FINISHED;
+    }
+
+    void start()
+    {
+        rpc_context->makeAsyncReader(*request, &make_reader_callback);
+        stage = AsyncRequestStage::WAIT_MAKE_READER;
+    }
+
+    bool retry()
+    {
+        if (Clock::now() - start_waiting_retry_ts >= std::chrono::seconds(1))
+        {
+            ++retry_times;
+            start();
+            return true;
+        }
+        return false;
+    }
+
+    void waitForRetry()
+    {
+        start_waiting_retry_ts = Clock::now();
+        stage = AsyncRequestStage::WAIT_RETRY;
+    }
+
+    bool sendPackets()
+    {
+        for (const auto & packet : getPackets())
+        {
+            auto recv_msg = std::make_shared<ReceivedMessage>();
+            recv_msg->packet = packet;
+            recv_msg->source_index = request->source_index;
+            recv_msg->req_info = req_info;
+            if (!msg_channel->push(std::move(recv_msg)))
+                return false;
+        }
+        return true;
+    }
 };
 } // namespace
 
@@ -45,7 +295,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , source_num(source_num_)
     , max_streams(max_streams_)
     , max_buffer_size(std::max(source_num, max_streams_) * 2)
-    , res_buffer(max_buffer_size)
+    , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
@@ -57,24 +307,18 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        state = ExchangeReceiverState::CLOSED;
-        cv.notify_all();
-    }
+    setState(ExchangeReceiverState::CLOSED);
+    msg_channel.finish();
 
     for (auto & worker : workers)
-    {
         worker.join();
-    }
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-    std::unique_lock<std::mutex> lk(mu);
-    state = ExchangeReceiverState::CANCELED;
-    cv.notify_all();
+    setState(ExchangeReceiverState::CANCELED);
+    msg_channel.finish();
 }
 
 template <typename RPCContext>
@@ -99,7 +343,49 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::reactor(std::vector<Request> async_requests)
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    UNUSED(async_requests);
+
+    size_t alive_async_connections = async_requests.size();
+    MPMCQueue<size_t> ready_requests(alive_async_connections * 2);
+    std::vector<size_t> waiting_for_retry_requests;
+
+    std::vector<AsyncRequestStat<RPCContext>> stats;
+    stats.reserve(alive_async_connections);
+    for (const auto & req : async_requests)
+    {
+        stats.emplace_back(&ready_requests, &msg_channel, rpc_context, req);
+        stats.back().start();
+    }
+
+    static constexpr auto timeout = std::chrono::milliseconds(10);
+
+    while (alive_async_connections > 0)
+    {
+        size_t source_index = 0;
+        if (ready_requests.tryPop(source_index, timeout))
+        {
+            auto & stat = stats[source_index];
+            stat.handle();
+            if (stat.finished())
+            {
+                --alive_async_connections;
+                connectionDone(*stat.request, stat.meet_error, stat.err_msg);
+            }
+            else if (stat.waitingForRetry())
+            {
+                waiting_for_retry_requests.push_back(source_index);
+            }
+        }
+        else if (!waiting_for_retry_requests.empty())
+        {
+            std::vector<size_t> tmp;
+            for (auto i : waiting_for_retry_requests)
+            {
+                if (!stats[i].retry())
+                    tmp.push_back(i);
+            }
+            waiting_for_retry_requests.swap(tmp);
+        }
+    }
 }
 
 template <typename RPCContext>
@@ -109,7 +395,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
     bool meet_error = false;
     String local_err_msg;
 
-    static const Int32 MAX_RETRY_TIMES = 10;
     try
     {
         String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
@@ -117,58 +402,28 @@ void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
         for (int i = 0; i < MAX_RETRY_TIMES; i++)
         {
             auto reader = rpc_context->makeReader(req);
-            reader->initialize();
-            std::shared_ptr<ReceivedMessage> recv_msg;
             bool has_data = false;
             for (;;)
             {
                 LOG_TRACE(log, "begin next ");
-                {
-                    std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.hasEmpty() || state != ExchangeReceiverState::NORMAL; });
-                    if (state == ExchangeReceiverState::NORMAL)
-                    {
-                        res_buffer.popEmpty(recv_msg);
-                        cv.notify_all();
-                    }
-                    else
-                    {
-                        meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                        LOG_WARNING(log, local_err_msg);
-                        break;
-                    }
-                }
+                auto recv_msg = std::make_shared<ReceivedMessage>();
+                recv_msg->packet = std::make_shared<MPPDataPacket>();
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = req.source_index;
                 bool success = reader->read(recv_msg->packet);
                 if (!success)
-                {
-                    /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.
-                    returnEmptyMsg(recv_msg);
                     break;
-                }
-                else
-                    has_data = true;
+                has_data = true;
                 if (recv_msg->packet->has_error())
-                {
                     throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
-                }
+
+                if (!msg_channel.push(std::move(recv_msg)))
                 {
-                    std::unique_lock<std::mutex> lock(mu);
-                    cv.wait(lock, [&] { return res_buffer.canPush() || state != ExchangeReceiverState::NORMAL; });
-                    if (state == ExchangeReceiverState::NORMAL)
-                    {
-                        res_buffer.pushObject(recv_msg);
-                        cv.notify_all();
-                    }
-                    else
-                    {
-                        meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
-                        LOG_WARNING(log, local_err_msg);
-                        break;
-                    }
+                    meet_error = true;
+                    auto local_state = getState();
+                    local_err_msg = "receiver's state is " + getReceiverStateStr(local_state) + ", exit from readLoop";
+                    LOG_WARNING(log, local_err_msg);
+                    break;
                 }
             }
             // if meet error, such as decode packect fails, it will not retry.
@@ -185,10 +440,13 @@ void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
             else
             {
                 bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
-                LOG_WARNING(
+                LOG_FMT_WARNING(
                     log,
-                    "EstablishMPPConnectionRequest meets rpc fail for req " << req_info << ". Err code = " << status.error_code()
-                                                                            << ", err msg = " << status.error_message() << ", retriable = " << retriable);
+                    "EstablishMPPConnectionRequest meets rpc fail for req {}. Err code = {}, err msg = {}, retriable = {}",
+                    req_info,
+                    status.error_code(),
+                    status.error_message(),
+                    retriable);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
@@ -218,40 +476,14 @@ void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
         meet_error = true;
         local_err_msg = "fatal error";
     }
-    Int32 copy_live_conn = -1;
-    {
-        std::unique_lock<std::mutex> lock(mu);
-        live_connections--;
-        if (meet_error && state == ExchangeReceiverState::NORMAL)
-            state = ExchangeReceiverState::ERROR;
-        if (meet_error && err_msg.empty())
-            err_msg = local_err_msg;
-        copy_live_conn = live_connections;
-        cv.notify_all();
-    }
-    LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", req.send_task_id, req.recv_task_id, copy_live_conn));
-
-    if (copy_live_conn == 0)
-        LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
-    else if (copy_live_conn < 0)
-        throw Exception("live_connections should not be less than 0!");
+    connectionDone(req, meet_error, local_err_msg);
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg)
-{
-    if (recv_msg == nullptr)
-        return;
-    if (recv_msg->packet != nullptr)
-        recv_msg->packet->Clear();
-    std::unique_lock<std::mutex> lock(mu);
-    cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
-    res_buffer.pushEmpty(std::move(recv_msg));
-    cv.notify_all();
-}
-
-template <typename RPCContext>
-Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types)
+Int64 ExchangeReceiverBase<RPCContext>::decodeChunks(
+    const std::shared_ptr<ReceivedMessage> & recv_msg,
+    std::queue<Block> & block_queue,
+    const DataTypes & expected_types)
 {
     assert(recv_msg != nullptr);
     Int64 rows = 0;
@@ -277,9 +509,9 @@ template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types)
 {
     std::shared_ptr<ReceivedMessage> recv_msg;
+    if (!msg_channel.pop(recv_msg))
     {
-        std::unique_lock<std::mutex> lock(mu);
-        cv.wait(lock, [&] { return res_buffer.hasObjects() || live_connections == 0 || state != ExchangeReceiverState::NORMAL; });
+        std::unique_lock lock(mu);
 
         if (state != ExchangeReceiverState::NORMAL)
         {
@@ -294,12 +526,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 msg = "Unknown error";
             return {nullptr, 0, "ExchangeReceiver", true, msg, false};
         }
-        else if (res_buffer.hasObjects())
-        {
-            res_buffer.popObject(recv_msg);
-            cv.notify_all();
-        }
-        else /// live_connections == 0, res_buffer is empty, and state is NORMAL, that is the end.
+        else /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
         {
             return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
@@ -340,8 +567,52 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
             result.rows = decodeChunks(recv_msg, block_queue, expected_types);
         }
     }
-    returnEmptyMsg(recv_msg);
     return result;
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setState(ExchangeReceiverState new_state)
+{
+    std::unique_lock lock(mu);
+    state = new_state;
+}
+
+template <typename RPCContext>
+ExchangeReceiverState ExchangeReceiverBase<RPCContext>::getState()
+{
+    std::unique_lock lock(mu);
+    return state;
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::connectionDone(
+    const Request & req,
+    bool meet_error,
+    const String & local_err_msg)
+{
+    Int32 copy_live_conn = -1;
+    {
+        std::unique_lock lock(mu);
+        if (meet_error)
+        {
+            if (state == ExchangeReceiverState::NORMAL)
+                state = ExchangeReceiverState::ERROR;
+            if (err_msg.empty())
+                err_msg = local_err_msg;
+        }
+        copy_live_conn = --live_connections;
+    }
+    LOG_FMT_DEBUG(log, "{} -> {} end! current alive connections: {}", req.send_task_id, req.recv_task_id, copy_live_conn);
+
+    if (copy_live_conn == 0)
+    {
+        LOG_FMT_DEBUG(log, "All threads end in ExchangeReceiver");
+    }
+    else if (copy_live_conn < 0)
+        throw Exception("live_connections should not be less than 0!");
+
+    if (meet_error || copy_live_conn == 0)
+        msg_channel.finish();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

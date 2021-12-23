@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/RecyclableBuffer.h>
+#include <Common/MPMCQueue.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -19,10 +19,6 @@ namespace DB
 {
 struct ReceivedMessage
 {
-    ReceivedMessage()
-    {
-        packet = std::make_shared<mpp::MPPDataPacket>();
-    }
     std::shared_ptr<mpp::MPPDataPacket> packet;
     size_t source_index = 0;
     String req_info;
@@ -89,19 +85,30 @@ public:
 
     ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types);
 
-    void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
-
-    Int64 decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types);
-
     size_t getSourceNum() { return source_num; }
     String getName() { return "ExchangeReceiver"; }
 
-private:
+    using Status = typename RPCContext::StatusType;
     using Request = typename RPCContext::RequestType;
+    using Reader = typename RPCContext::ReaderType;
 
+private:
     void setUpConnection();
     void readLoop(Request req);
     void reactor(std::vector<Request> async_requests);
+
+    void setState(ExchangeReceiverState new_state);
+    ExchangeReceiverState getState();
+
+    Int64 decodeChunks(
+        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        std::queue<Block> & block_queue,
+        const DataTypes & expected_types);
+
+    void connectionDone(
+        const Request & req,
+        bool meet_error,
+        const String & local_err_msg);
 
     std::shared_ptr<RPCContext> rpc_context;
 
@@ -114,10 +121,10 @@ private:
     std::vector<std::thread> workers;
     DAGSchema schema;
 
+    MPMCQueue<std::shared_ptr<ReceivedMessage>> msg_channel;
+
     std::mutex mu;
-    std::condition_variable cv;
     /// should lock `mu` when visit these members
-    RecyclableBuffer<ReceivedMessage> res_buffer;
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
