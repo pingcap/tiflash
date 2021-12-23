@@ -1182,7 +1182,7 @@ public:
     {
         if (arguments.size() < 1)
             throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed, should be at least 1.", getName(), arguments.size()),
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 1.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
