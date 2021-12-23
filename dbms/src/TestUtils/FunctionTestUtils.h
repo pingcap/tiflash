@@ -456,6 +456,5 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
-
 } // namespace tests
 } // namespace DB
