@@ -32,7 +32,6 @@ ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCP
 BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
-# TODO: remove -DENABLE_TIFLASH_DTWORKLOAD=OFF once fixed
 cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
       -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
@@ -46,7 +45,6 @@ cmake "${SRCPATH}" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DUSE_LLVM_COMPILER_RT=ON \
       -DTIFLASH_ENABLE_RUNTIME_RPATH=ON \
       -DRUN_HAVE_STD_REGEX=0 \
-      -DENABLE_TIFLASH_DTWORKLOAD=OFF \
       -GNinja
 
 ninja tiflash
