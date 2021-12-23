@@ -637,18 +637,23 @@ BlockInputStreams StorageDeltaMerge::read(
     if (unlikely(log->trace()))
     {
         std::stringstream ss; // todo ywq
+        FmtBuffer fmt_buf;
         for (const auto & region : mvcc_query_info.regions_query_info)
         {
             if (!region.required_handle_ranges.empty())
             {
-                for (const auto & range : region.required_handle_ranges)
-                    ss << region.region_id << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range) << ",";
+                fmt_buf.joinStr(
+                    region.required_handle_ranges.begin(),
+                    region.required_handle_ranges.end(),
+                    [&region](const auto & arg, FmtBuffer & fb) {
+                        fb.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(arg));
+                    },
+                    ",");
             }
             else
             {
                 /// only used for test cases
-                const auto & range = region.range_in_table;
-                ss << region.region_id << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range) << ",";
+                fmt_buf.fmtAppend("{}{},", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region.range_in_table));
             }
         }
         str_query_ranges = ss.str();
