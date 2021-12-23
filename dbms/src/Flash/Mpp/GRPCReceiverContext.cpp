@@ -40,7 +40,7 @@ namespace
 {
 struct MakeReaderCallbackProxy : public UnaryCallback<bool>
 {
-    UnaryCallback<std::unique_ptr<ExchangePacketReader>> * callback = nullptr;
+    UnaryCallback<std::shared_ptr<ExchangePacketReader>> * callback = nullptr;
     std::shared_ptr<ExchangePacketReader> reader;
 
     void execute(bool & ok) override
