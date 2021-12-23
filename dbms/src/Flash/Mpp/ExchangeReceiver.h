@@ -69,6 +69,11 @@ class ExchangeReceiverBase
 {
 public:
     static constexpr bool is_streaming_reader = true;
+    static constexpr auto name = "ExchangeReceiver";
+
+    using Status = typename RPCContext::StatusType;
+    using Request = typename RPCContext::RequestType;
+    using Reader = typename RPCContext::ReaderType;
 
 public:
     ExchangeReceiverBase(
@@ -83,14 +88,11 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types);
+    ExchangeReceiverResult nextResult(
+        std::queue<Block> & block_queue,
+        const Block & header);
 
-    size_t getSourceNum() { return source_num; }
-    String getName() { return "ExchangeReceiver"; }
-
-    using Status = typename RPCContext::StatusType;
-    using Request = typename RPCContext::RequestType;
-    using Reader = typename RPCContext::ReaderType;
+    size_t getSourceNum() const { return source_num; }
 
 private:
     void setUpConnection();
