@@ -161,7 +161,7 @@ def runTest(label, testPath, tidbBranch) {
 
 def runUTCoverTICS(CURWS, NPROC) {
     def NPROC_UT = NPROC * 2
-    runWithTiCSFull("ut-tics", CURWS) {
+    runWithTiCSFull("ut-tics-llvm", CURWS) {
         dir("${CURWS}/tics") {
             stage("Build") {
                 timeout(time: 70, unit: 'MINUTES') {
