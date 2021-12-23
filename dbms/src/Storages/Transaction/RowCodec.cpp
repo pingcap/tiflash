@@ -390,9 +390,13 @@ bool appendRowV2ToBlockImpl(
                 column_ids_iter++;
                 block_column_pos++;
                 if (is_null)
+                {
                     id_null++;
+                }
                 else
+                {
                     id_not_null++;
+                }
                 continue;
             }
 
