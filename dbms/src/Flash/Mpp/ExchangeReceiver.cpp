@@ -46,16 +46,16 @@ struct ReactorTrigger
 };
 
 template <typename RPCContext>
-struct MakeReaderCallback : public UnaryCallback<std::shared_ptr<typename RPCContext::ReaderType>>
+struct MakeReaderCallback : public UnaryCallback<std::shared_ptr<typename RPCContext::AsyncReader>>
 {
     ReactorTrigger * trigger = nullptr;
-    std::shared_ptr<typename RPCContext::ReaderType> reader;
+    std::shared_ptr<typename RPCContext::AsyncReader> reader;
 
     explicit MakeReaderCallback(ReactorTrigger * trigger_)
         : trigger(trigger_)
     {}
 
-    void execute(std::shared_ptr<typename RPCContext::ReaderType> & res) override
+    void execute(std::shared_ptr<typename RPCContext::AsyncReader> & res) override
     {
         reader = std::move(res);
         trigger->trigger();
@@ -84,9 +84,9 @@ struct BatchReadCallback : public UnaryCallback<size_t>
 };
 
 template <typename RPCContext>
-struct FinishCallback : public UnaryCallback<typename RPCContext::StatusType>
+struct FinishCallback : public UnaryCallback<typename RPCContext::Status>
 {
-    using Status = typename RPCContext::StatusType;
+    using Status = typename RPCContext::Status;
     ReactorTrigger * trigger = nullptr;
     Status status = RPCContext::getStatusOK();
 
@@ -120,9 +120,9 @@ static constexpr Int32 BATCH_PACKET_COUNT = 16;
 template <typename RPCContext>
 struct AsyncRequestStat
 {
-    using Status = typename RPCContext::StatusType;
-    using Request = typename RPCContext::RequestType;
-    using Reader = typename RPCContext::ReaderType;
+    using Status = typename RPCContext::Status;
+    using Request = typename RPCContext::Request;
+    using AsyncReader = typename RPCContext::AsyncReader;
 
     std::shared_ptr<RPCContext> rpc_context;
     const Request * request = nullptr;
@@ -210,7 +210,7 @@ struct AsyncRequestStat
         return stage == AsyncRequestStage::FINISHED;
     }
 
-    Reader * getReader() const
+    AsyncReader * getReader() const
     {
         return make_reader_callback.reader.get();
     }

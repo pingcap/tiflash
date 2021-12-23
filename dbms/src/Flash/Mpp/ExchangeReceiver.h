@@ -71,10 +71,6 @@ public:
     static constexpr bool is_streaming_reader = true;
     static constexpr auto name = "ExchangeReceiver";
 
-    using Status = typename RPCContext::StatusType;
-    using Request = typename RPCContext::RequestType;
-    using Reader = typename RPCContext::ReaderType;
-
 public:
     ExchangeReceiverBase(
         std::shared_ptr<RPCContext> rpc_context_,
@@ -95,6 +91,8 @@ public:
     size_t getSourceNum() const { return source_num; }
 
 private:
+    using Request = typename RPCContext::Request;
+
     void setUpConnection();
     void readLoop(Request req);
     void reactor(std::vector<Request> async_requests);
