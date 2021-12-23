@@ -42,11 +42,11 @@ private:
     /// common
     const MPPTaskId id;
     const String host;
-    Timestamp task_init_timestamp;
-    Timestamp task_start_timestamp;
-    Timestamp task_end_timestamp;
-    Timestamp compile_start_timestamp;
-    Timestamp compile_end_timestamp;
+    Timestamp task_init_timestamp{Clock::duration::zero()};
+    Timestamp task_start_timestamp{Clock::duration::zero()};
+    Timestamp task_end_timestamp{Clock::duration::zero()};
+    Timestamp compile_start_timestamp{Clock::duration::zero()};
+    Timestamp compile_end_timestamp{Clock::duration::zero()};
     Timestamp read_wait_index_start_timestamp{Clock::duration::zero()};
     Timestamp read_wait_index_end_timestamp{Clock::duration::zero()};
     TaskStatus status;
