@@ -285,7 +285,7 @@ String DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
 
 UInt64 GetJsonLength(std::string_view raw_value)
 {
-    if (raw_value.length() == 0)
+    if (raw_value.empty())
     {
         return 0;
     }
