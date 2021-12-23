@@ -84,6 +84,8 @@ public:
         const Block & header,
         const DAGSchema & schema)
     {
+        if (resp->has_error())
+            return 0;
         Int64 rows = 0;
         int chunk_size = resp->chunks_size();
         if (chunk_size == 0)
@@ -131,7 +133,7 @@ public:
         auto resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(result.data()))
         {
-            if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock)
+            if (has_enforce_encode_type && !resp->has_error() && resp->encode_type() != tipb::EncodeType::TypeCHBlock && resp->chunks_size() > 0)
                 return {
                     nullptr,
                     true,
