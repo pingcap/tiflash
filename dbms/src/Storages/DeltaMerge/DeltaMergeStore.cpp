@@ -759,7 +759,6 @@ void DeltaMergeStore::ingestFiles(
 
     {
         // Add some logging about the ingested file ids and updated segments
-        std::stringstream ss;
         FmtBuffer fmt_buf;
         // Example: "ingest dmf_1001,1002,1003 into segment [1,3]"
         //          "ingest <empty> into segment [1,3]"
@@ -774,7 +773,7 @@ void DeltaMergeStore::ingestFiles(
                 file_ids.begin(),
                 file_ids.end(),
                 [](const auto & arg, FmtBuffer & fb) {
-                    fb.append(DB::toString(arg));
+                    fb.fmtAppend("{}", arg);
                 },
                 ",");
         }
@@ -784,7 +783,7 @@ void DeltaMergeStore::ingestFiles(
             updated_segments.begin(),
             updated_segments.end(),
             [](const auto & arg, FmtBuffer & fb) {
-                fb.fmtAppend(DB::toString(arg->segmentId()));
+                fb.fmtAppend("{}", arg->segmentId());
             },
             ",");
 
@@ -1440,7 +1439,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         FmtBuffer fmt_buf;
         fmt_buf.fmtAppend("Task {} on Segment [{}", toString(task.type), task.segment->segmentId());
-        if ((bool)task.next_segment)
+        if (task.next_segment)
             fmt_buf.fmtAppend("] and [{}", task.next_segment->segmentId());
         fmt_buf.fmtAppend("] failed. Error msg: {}", e.message());
         LOG_FMT_ERROR(log, fmt_buf.toString());

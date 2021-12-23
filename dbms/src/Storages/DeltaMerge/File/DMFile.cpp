@@ -10,7 +10,6 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
-#include <fmt/core.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -104,7 +103,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     if (file.exists())
     {
         file.remove(true);
-        LOG_FMT_WARNING(log, "{}: Existing dmfile, removed: ", __PRETTY_FUNCTION__, path);
+        LOG_FMT_WARNING(log, "{}: Existing dmfile, removed: {}", __PRETTY_FUNCTION__, path);
     }
     if (single_file_mode)
     {

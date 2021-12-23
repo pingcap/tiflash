@@ -14,7 +14,6 @@
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
-#include <fmt/core.h>
 
 namespace ProfileEvents
 {

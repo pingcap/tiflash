@@ -21,7 +21,6 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
-#include <fmt/core.h>
 
 #include <ext/scope_guard.h>
 #include <numeric>
@@ -326,7 +325,7 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
 bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
-    LOG_FMT_TRACE(log, "Segment [{}] write region snapshot: ", segment_id, new_range.toDebugString());
+    LOG_FMT_TRACE(log, "Segment [{}] write region snapshot: {}", segment_id, new_range.toDebugString());
 
     return delta->ingestPacks(dm_context, range, packs, clear_data_in_range);
 }
@@ -952,7 +951,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
                                                                 const SegmentSnapshotPtr & segment_snap,
                                                                 WriteBatches & wbs) const
 {
-    LOG_FMT_INFO(log, "Segment [] prepare split physical start", segment_id);
+    LOG_FMT_INFO(log, "Segment [{}] prepare split physical start", segment_id);
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
