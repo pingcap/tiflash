@@ -2170,16 +2170,20 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnDateTime)
+TEST_P(DeltaMergeStore_RWTest, DDLAddColumnMyDateTime)
 try
 {
     const String col_name_to_add = "dt";
     const ColId col_id_to_add = 2;
-    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("DateTime");
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("MyDateTime");
+
+    MyDateTime mydatetime_val(1999, 9, 9, 12, 34, 56, 0);
+    const UInt64 mydatetime_uint = mydatetime_val.toPackedUInt();
 
     // write some rows before DDL
+    size_t num_rows_write = 1;
     {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 1, false);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
@@ -2193,17 +2197,12 @@ try
             com.column_name = col_name_to_add;
 
             // mock default value
-            // actual ddl is like: ADD COLUMN `date` DateTime DEFAULT '1999-09-09 12:34:56'
-            auto cast = std::make_shared<ASTFunction>();
-            {
-                cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(toField(String("1999-09-09 12:34:56")));
-                cast->arguments = std::make_shared<ASTExpressionList>();
-                cast->children.push_back(cast->arguments);
-                cast->arguments->children.push_back(arg);
-                cast->arguments->children.push_back(ASTPtr()); // dummy alias
-            }
-            com.default_expression = cast;
+            // actual ddl is like: ADD COLUMN `date` MyDateTime DEFAULT '<packed int of mydatetime>'
+            com.default_expression = makeASTFunction(
+                "CAST",
+                std::make_shared<ASTLiteral>(toField(mydatetime_uint)),
+                ASTPtr() // dummy alias
+            );
             commands.emplace_back(std::move(com));
         }
         ColumnID _col_to_add = col_id_to_add;
@@ -2221,23 +2220,22 @@ try
                               EMPTY_FILTER,
                               /* expected_block_size= */ 1024)[0];
 
+        size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
         {
-            for (auto & itr : block)
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); i++)
             {
-                auto c = itr.column;
-                for (size_t i = 0; i < c->size(); i++)
-                {
-                    if (itr.name == "dt")
-                    {
-                        // Timestamp for '1999-09-09 12:34:56'
-                        EXPECT_EQ(c->getUInt(i), 936851696UL);
-                    }
-                }
+                EXPECT_EQ((*col.column)[i].get<UInt64>(), mydatetime_uint); // Timestamp for '1999-09-09 12:34:56'
             }
         }
         in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
     }
 }
 CATCH
