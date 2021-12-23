@@ -11,8 +11,6 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
-#include <fmt/core.h>
-#include <fmt/format.h>
 
 #include <random>
 #include <set>
@@ -339,7 +337,7 @@ Strings StableDiskDelegator::listPaths() const
     std::vector<String> paths;
     for (auto & main_path_info : pool.main_path_infos)
     {
-        paths.push_back(main_path_info.path + "/" + StoragePathPool::STABLE_FOLDER_NAME);
+        paths.push_back(fmt::format("{}/{}", main_path_info.path, StoragePathPool::STABLE_FOLDER_NAME));
     }
     return paths;
 }
@@ -348,9 +346,9 @@ String StableDiskDelegator::choosePath() const
 {
     std::function<String(const StoragePathPool::MainPathInfos & paths, size_t idx)> path_generator
         = [](const StoragePathPool::MainPathInfos & paths, size_t idx) -> String {
-        return paths[idx].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
+        return fmt::format("{}/{}", paths[idx].path, StoragePathPool::STABLE_FOLDER_NAME);
     };
-    const String log_msg = "[type=stable] [database=" + pool.database + "] [table=" + pool.table + "]";
+    const String log_msg = fmt::format("[type=stable] [database={}] [table={}]", pool.database, pool.table);
     return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
 }
 

@@ -37,6 +37,8 @@
 
 #include <random>
 
+#include "DataTypes/DataTypesNumber.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -247,7 +249,6 @@ void StorageDeltaMerge::updateTableColumnInfo()
             // fallover
         }
         // Unknown bug, throw an exception.
-        std::stringstream ss;
         FmtBuffer fmt_buf;
         fmt_buf.append("Can not create table without primary key. Primary keys should be:");
         fmt_buf.append("[");
@@ -433,7 +434,7 @@ private:
 
 BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settings & settings)
 {
-    auto & insert_query = typeid_cast<const ASTInsertQuery &>(*query);
+    const auto & insert_query = typeid_cast<const ASTInsertQuery &>(*query);
     auto decorator = [&](const Block & block) { //
         return this->buildInsertBlock(insert_query.is_import, insert_query.is_delete, block);
     };
@@ -572,7 +573,7 @@ BlockInputStreams StorageDeltaMerge::read(
     // failed to parsed.
     ColumnDefines columns_to_read;
     auto header = store->getHeader();
-    for (auto & n : column_names)
+    for (const auto & n : column_names)
     {
         ColumnDefine col_define;
         if (n == EXTRA_HANDLE_COLUMN_NAME)
@@ -626,9 +627,9 @@ BlockInputStreams StorageDeltaMerge::read(
                 /* ignore_cache= */ false,
                 global_context.getSettingsRef().safe_point_update_interval_seconds);
             if (read_tso < safe_point)
-                throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + DB::toString(read_tso)
-                                    + " is smaller than tidb gc safe point: " + DB::toString(safe_point),
-                                ErrorCodes::LOGICAL_ERROR);
+                throw Exception(
+                    fmt::format("query id: {}, read tso: {} is smaller than tidb gc safe point: {}", context.getCurrentQueryId(), read_tso, safe_point),
+                    ErrorCodes::LOGICAL_ERROR);
         }
     };
     check_read_tso(mvcc_query_info.read_tso);
@@ -893,14 +894,14 @@ void StorageDeltaMerge::releaseDecodingBlock(Int64 schema_version, BlockUPtr blo
 //==========================================================================================
 void StorageDeltaMerge::alterFromTiDB(
     const TableLockHolder &,
-    const AlterCommands & params,
+    const AlterCommands & commands,
     const String & database_name,
     const TiDB::TableInfo & table_info,
     const SchemaNameMapper & name_mapper,
     const Context & context)
 {
     alterImpl(
-        params,
+        commands,
         database_name,
         name_mapper.mapTableName(table_info),
         std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info),
@@ -930,7 +931,7 @@ static void updateDeltaMergeTableCreateStatement(
     const SortDescription & pk_names,
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,
-    const OptionTableInfoConstRef table_info,
+    OptionTableInfoConstRef table_info,
     Timestamp tombstone,
     const Context & context);
 
@@ -980,14 +981,15 @@ try
         if (command.type == AlterCommand::MODIFY_PRIMARY_KEY)
         {
             // check that add primary key is forbidden
-            throw Exception("Storage engine " + getName() + " doesn't support modify primary key.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(fmt::format("Storage engine {} doesn't support modify primary key.", getName()), ErrorCodes::BAD_ARGUMENTS);
         }
         else if (command.type == AlterCommand::DROP_COLUMN)
         {
             // check that drop hidden columns is forbidden
             if (cols_drop_forbidden.count(command.column_name) > 0)
-                throw Exception("Storage engine " + getName() + " doesn't support drop hidden column: " + command.column_name,
-                                ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    fmt::format("Storage engine {} doesn't support drop hidden column: {}", getName(), command.column_name),
+                    ErrorCodes::BAD_ARGUMENTS);
         }
         else if (command.type == AlterCommand::TOMBSTONE)
         {
@@ -1015,23 +1017,28 @@ try
                 // this exception and avoid of reading broken data, they have truncate that table.
                 if (table_info && table_info.value().get().replica_info.count == 0)
                 {
-                    LOG_FMT_WARNING(log,
-                                    "Accept lossy column data type modification. Table (id:{})"
-                                    " modify column {}({}) from {} to {}",
-                                    table_info.value().get().id,
-                                    command.column_name,
-                                    command.column_id,
-                                    col_iter->type->getName(),
-                                    command.data_type->getName());
+                    LOG_FMT_WARNING(
+                        log,
+                        "Accept lossy column data type modification. Table (id:{})"
+                        " modify column {}({}) from {} to {}",
+                        table_info.value().get().id,
+                        command.column_name,
+                        command.column_id,
+                        col_iter->type->getName(),
+                        command.data_type->getName());
                 }
                 else
                 {
                     // check that lossy changes is forbidden
                     // check that changing the UNSIGNED attribute is forbidden
-                    throw Exception("Storage engine " + getName() + " doesn't support lossy data type modification. Try to modify column "
-                                        + command.column_name + "(" + DB::toString(command.column_id) + ") from " + col_iter->type->getName() + " to "
-                                        + command.data_type->getName(),
-                                    ErrorCodes::NOT_IMPLEMENTED);
+                    throw Exception(
+                        fmt::format("Storage engine {} doesn't support lossy data type modification. Try to modify column {}({}) from {} to {}",
+                                    getName(),
+                                    command.column_name,
+                                    command.column_id,
+                                    col_iter->type->getName(),
+                                    command.data_type->getName()),
+                        ErrorCodes::NOT_IMPLEMENTED);
                 }
             }
         }
@@ -1075,12 +1082,7 @@ try
 }
 catch (Exception & e)
 {
-    String table_info_msg;
-    if (table_info)
-        table_info_msg = " table name: " + table_name_ + ", table id: " + DB::toString(table_info.value().get().id);
-    else
-        table_info_msg = " table name: " + table_name_ + ", table id: unknown";
-    e.addMessage(table_info_msg);
+    e.addMessage(fmt::format(" table name: {}, table id: {}", table_name_, table_info.has_value() ? DB::toString(table_info.value().get().id) : "unknown"));
     throw;
 }
 
@@ -1151,8 +1153,9 @@ void StorageDeltaMerge::rename(
     const String new_path = new_path_to_db + "/" + new_table_name;
 
     if (Poco::File{new_path}.exists())
-        throw Exception{"Target path already exists: " + new_path,
-                        ErrorCodes::DIRECTORY_ALREADY_EXISTS};
+        throw Exception(
+            fmt::format("Target path already exists: {}", new_path),
+            ErrorCodes::DIRECTORY_ALREADY_EXISTS);
 
     // flush store and then reset store to new path
     store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size));
@@ -1244,7 +1247,7 @@ void updateDeltaMergeTableCreateStatement(
             }
             else
             {
-                throw Exception("Try to update table(" + database_name + "." + table_name + ") statement with no primary key. ");
+                throw Exception(fmt::format("Try to update table({}.{}) statement with no primary key. ", database_name, table_name));
             }
         }
 
@@ -1274,8 +1277,11 @@ void updateDeltaMergeTableCreateStatement(
             args.children.back() = tombstone_ast;
         }
         else
-            throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name
-                                + " with engine=" + MutableSupport::delta_tree_storage_name,
+            throw Exception(fmt::format(
+                                "Wrong arguments num:{} in table: {} with engine={}",
+                                args.children.size(),
+                                table_name,
+                                MutableSupport::delta_tree_storage_name),
                             ErrorCodes::BAD_ARGUMENTS);
     };
 
@@ -1299,7 +1305,7 @@ void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::T
         args->children.at(1) = literal;
     else
         throw Exception(
-            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + this->getTableName() + " in modifyASTStorage",
+            fmt::format("Wrong arguments num: {} in table: {} in modifyASTStorage", args->children.size(), this->getTableName()),
             ErrorCodes::BAD_ARGUMENTS);
 }
 
