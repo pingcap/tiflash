@@ -18,113 +18,134 @@ public:
 TEST_F(StringTiDBConcatWS, TwoArgsTest)
 try
 {
+    std::vector<String> not_null_strings = {"", "www.pingcap", "中文.测.试。。。"};
+
     /// column, column
-    for (const auto * separator : {"", "www.pingcap", "中文.测.试。。。"})
-    {
+    auto test_not_null_column_column = [&](const String & value) {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", ""}),
             executeFunction(
                 StringTiDBConcatWS::func_name,
-                createColumn<Nullable<String>>({separator, separator, separator, separator}),
+                createColumn<Nullable<String>>({value, value, value, value}),
                 createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
-    }
+    };
+    for (const auto & not_null_string : not_null_strings)
+        test_not_null_column_column(not_null_string);
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, {}, {}, {}}),
         executeFunction(
             StringTiDBConcatWS::func_name,
             createColumn<Nullable<String>>({{}, {}, {}, {}}),
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumn(4),
-        executeFunction(
-            StringTiDBConcatWS::func_name,
-            createOnlyNullColumn(4),
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"", "", "", {}}),
-        executeFunction(
-            StringTiDBConcatWS::func_name,
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}),
-            createOnlyNullColumn(4)));
 
     /// column, const
-    for (const auto * value : {"", "www.pingcap", "中文.测.试。。。"})
-    {
-        ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({value, value, value, {}}),
-            executeFunction(
-                StringTiDBConcatWS::func_name,
-                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}),
-                createConstColumn<Nullable<String>>(4, value)));
-    }
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"", "", "", {}}),
-        executeFunction(
-            StringTiDBConcatWS::func_name,
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}),
-            createOnlyNullColumnConst(4)));
-
-    /// const, column
-    for (const auto * separator : {"", "www.pingcap", "中文.测.试。。。"})
-    {
+    auto test_not_null_column_const = [&](const String & value) {
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", ""}),
             executeFunction(
                 StringTiDBConcatWS::func_name,
-                createConstColumn<Nullable<String>>(4, separator),
+                createColumn<Nullable<String>>({value, value, value, value}),
                 createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
-    }
+    };
+    for (const auto & not_null_string : not_null_strings)
+        test_not_null_column_const(not_null_string);
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({{}, {}, {}, {}}),
+        executeFunction(
+            StringTiDBConcatWS::func_name,
+            createColumn<Nullable<String>>({{}, {}, {}, {}}),
+            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
+
+    /// const, column
+    auto test_not_null_const_column = [&](const String & value) {
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", ""}),
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                createConstColumn<Nullable<String>>(4, value),
+                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
+    };
+    for (const auto & not_null_string : not_null_strings)
+        test_not_null_const_column(not_null_string);
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, {}, {}, {}}),
         executeFunction(
             StringTiDBConcatWS::func_name,
             createConstColumn<Nullable<String>>(4, {}),
             createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(4),
-        executeFunction(
-            StringTiDBConcatWS::func_name,
-            createOnlyNullColumnConst(4),
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
 
     /// const, const
-    for (const auto * separator : {"", "www.pingcap", "中文.测.试。。。"})
+    auto test_const_const = [&](const InferredFieldType<Nullable<String>> & separator, const InferredFieldType<Nullable<String>> & value, const InferredFieldType<Nullable<String>> & result) {
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Nullable<String>>(1, result),
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                createConstColumn<Nullable<String>>(1, separator),
+                createConstColumn<Nullable<String>>(1, value)));
+    };
+    for (const auto & separator : not_null_strings)
     {
-        for (const auto * value : {"", "www.pingcap", "中文.测.试。。。"})
+        for (const auto & value : not_null_strings)
         {
-            ASSERT_COLUMN_EQ(
-                createConstColumn<Nullable<String>>(1, value),
-                executeFunction(
-                    StringTiDBConcatWS::func_name,
-                    createConstColumn<Nullable<String>>(1, separator),
-                    createConstColumn<Nullable<String>>(1, value)));
+            test_const_const(separator, value, value);
         }
     }
-    auto null_consts = {createOnlyNullColumn(1), createConstColumn<Nullable<String>>(1, {})};
-    for (auto & null_const : null_consts)
-    {
+
+    test_const_const({}, "中文.测.试。。。", {});
+    test_const_const({}, {}, {});
+    test_const_const("中文.测.试。。。", {}, "");
+
+    /// only null
+    auto test_const_only_null = [&](const ColumnWithTypeAndName & only_null) {
         ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<String>>(1, ""),
+            only_null.column->isColumnConst() ? createConstColumn<Nullable<String>>(1, "") : createColumn<Nullable<String>>({""}),
             executeFunction(
                 StringTiDBConcatWS::func_name,
                 createConstColumn<Nullable<String>>(1, "中文.测.试。。。"),
-                null_const));
+                only_null));
+    };
+    test_const_only_null(createOnlyNullColumn(1));
+    test_const_only_null(createOnlyNullColumnConst(1));
+
+    auto test_column_only_null = [&](const ColumnWithTypeAndName & only_null) {
         ASSERT_COLUMN_EQ(
-            null_const,
+            createColumn<Nullable<String>>({"", "", "", {}}),
             executeFunction(
                 StringTiDBConcatWS::func_name,
-                null_const,
+                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}),
+                only_null));
+    };
+    test_column_only_null(createOnlyNullColumn(4));
+    test_column_only_null(createOnlyNullColumnConst(4));
+
+    auto test_only_null_const = [&](const ColumnWithTypeAndName & only_null) {
+        ASSERT_COLUMN_EQ(
+            createOnlyNullColumnConst(1),
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                only_null,
                 createConstColumn<Nullable<String>>(1, "中文.测.试。。。")));
-        for (auto & null_const_ : null_consts)
-        {
-            ASSERT_COLUMN_EQ(
-                null_const,
-                executeFunction(
-                    StringTiDBConcatWS::func_name,
-                    null_const,
-                    null_const_));
-        }
-    }
+    };
+    test_only_null_const(createOnlyNullColumn(1));
+    test_only_null_const(createOnlyNullColumnConst(1));
+
+    auto test_only_null_column = [&](const ColumnWithTypeAndName & only_null) {
+        ASSERT_COLUMN_EQ(
+            createOnlyNullColumnConst(4),
+            executeFunction(
+                StringTiDBConcatWS::func_name,
+                only_null,
+                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
+    };
+    test_only_null_column(createOnlyNullColumn(4));
+    test_only_null_column(createOnlyNullColumnConst(4));
+
+    auto test_only_null_only_null = [&](const ColumnWithTypeAndName & left, const ColumnWithTypeAndName & right) {
+        ASSERT_COLUMN_EQ(createOnlyNullColumnConst(left.column->size()), executeFunction(StringTiDBConcatWS::func_name, left, right));
+    };
+    test_only_null_only_null(createOnlyNullColumnConst(1), createOnlyNullColumn(1));
+    test_only_null_only_null(createOnlyNullColumn(1), createOnlyNullColumn(1));
+    test_only_null_only_null(createOnlyNullColumnConst(1), createOnlyNullColumnConst(1));
 }
 CATCH
 

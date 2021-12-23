@@ -1258,15 +1258,36 @@ public:
             }
         }
 
-        return makeNullable(std::make_shared<DataTypeString>());
+        return arguments[0]->onlyNull()
+            ? makeNullable(std::make_shared<DataTypeNothing>())
+            : makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
+        // if separator is only null, return only null const
+        auto & separator_column = block.getByPosition(arguments[0]);
+        if (separator_column.type->onlyNull())
+        {
+            DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
+            block.getByPosition(result).column = data_type->createColumnConst(separator_column.column->size(), Null());
+            return;
+        }
+
         Block nested_block = createBlockWithNestedColumns(block, arguments, result);
-        StringSources sources(arguments.size());
-        for (size_t i = 0; i < arguments.size(); ++i)
-            sources[i] = createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column);
+        ColumnNumbers not_only_null_args;
+        StringSources sources;
+
+        not_only_null_args.push_back(0);
+        sources.push_back(createDynamicStringSource(*nested_block.getByPosition(arguments[0]).column));
+        for (size_t i = 1; i < arguments.size(); ++i)
+        {
+            if (!block.getByPosition(arguments[i]).type->onlyNull())
+            {
+                not_only_null_args.push_back(i);
+                sources.push_back(createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column));
+            }
+        }
 
         size_t rows = block.rows();
         auto result_null_map = ColumnUInt8::create(rows);
@@ -1284,9 +1305,9 @@ public:
                 result_null_map->getData()[row] = false;
 
                 bool has_not_null = false;
-                for (size_t col = 1; col < arguments.size(); ++col)
+                for (size_t col = 1; col < not_only_null_args.size(); ++col)
                 {
-                    if (!block.getByPosition(arguments[col]).column->isNullAt(row))
+                    if (!block.getByPosition(not_only_null_args[col]).column->isNullAt(row))
                     {
                         if (has_not_null)
                             writeSlice(sources[0]->getWhole(), sink);
@@ -1296,8 +1317,8 @@ public:
                     }
                 }
             }
-            for (size_t col = 0; col < arguments.size(); ++col)
-                sources[col]->next();
+            for (auto & source : sources)
+                source->next();
             sink.next();
         }
 
