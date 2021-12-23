@@ -299,7 +299,7 @@ grpc::Status FlashService::BatchCommands(
             GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
         });
 
-        LOG_FMT_DEBUG(log, "{}: Handling batch commands: {} {:d}", __PRETTY_FUNCTION__, request.DebugString(), 100, 200); // just for test
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());
 
         BatchCommandsContext batch_commands_context(
             *context,
