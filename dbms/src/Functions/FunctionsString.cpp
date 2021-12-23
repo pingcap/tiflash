@@ -1275,17 +1275,18 @@ public:
         }
 
         Block nested_block = createBlockWithNestedColumns(block, arguments, result);
-        ColumnNumbers not_only_null_args;
+        ColumnNumbers not_only_null_arguments;
         StringSources sources;
 
-        not_only_null_args.push_back(0);
-        sources.push_back(createDynamicStringSource(*nested_block.getByPosition(arguments[0]).column));
+        not_only_null_arguments.push_back(arguments[0]);
+        sources.push_back(createDynamicStringSource(*nested_block.getByPosition(not_only_null_arguments[0]).column));
         for (size_t i = 1; i < arguments.size(); ++i)
         {
-            if (!block.getByPosition(arguments[i]).type->onlyNull())
+            auto column_number = arguments[i];
+            if (!block.getByPosition(column_number).type->onlyNull())
             {
-                not_only_null_args.push_back(i);
-                sources.push_back(createDynamicStringSource(*nested_block.getByPosition(arguments[i]).column));
+                not_only_null_arguments.push_back(column_number);
+                sources.push_back(createDynamicStringSource(*nested_block.getByPosition(column_number).column));
             }
         }
 
@@ -1296,7 +1297,7 @@ public:
 
         for (size_t row = 0; row < rows; ++row)
         {
-            if (block.getByPosition(arguments[0]).column->isNullAt(row))
+            if (block.getByPosition(not_only_null_arguments[0]).column->isNullAt(row))
             {
                 result_null_map->getData()[row] = true;
             }
@@ -1305,9 +1306,9 @@ public:
                 result_null_map->getData()[row] = false;
 
                 bool has_not_null = false;
-                for (size_t col = 1; col < not_only_null_args.size(); ++col)
+                for (size_t col = 1; col < not_only_null_arguments.size(); ++col)
                 {
-                    if (!block.getByPosition(not_only_null_args[col]).column->isNullAt(row))
+                    if (!block.getByPosition(not_only_null_arguments[col]).column->isNullAt(row))
                     {
                         if (has_not_null)
                             writeSlice(sources[0]->getWhole(), sink);
