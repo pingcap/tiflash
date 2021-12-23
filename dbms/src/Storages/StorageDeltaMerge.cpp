@@ -250,8 +250,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
         // Unknown bug, throw an exception.
         FmtBuffer fmt_buf;
-        fmt_buf.append("Can not create table without primary key. Primary keys should be:");
-        fmt_buf.append("[");
+        fmt_buf.append("Can not create table without primary key. Primary keys should be:[");
         fmt_buf.joinStr(pks.begin(), pks.end(), ",");
         fmt_buf.append("], but only these columns are found:[");
         fmt_buf.joinStr(
@@ -637,7 +636,7 @@ BlockInputStreams StorageDeltaMerge::read(
     String str_query_ranges;
     if (unlikely(log->trace()))
     {
-        std::stringstream ss;
+        std::stringstream ss; // todo ywq
         for (const auto & region : mvcc_query_info.regions_query_info)
         {
             if (!region.required_handle_ranges.empty())

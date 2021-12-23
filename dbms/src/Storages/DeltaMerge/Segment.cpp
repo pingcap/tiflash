@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <ext/scope_guard.h>
 #include <numeric>
@@ -576,7 +577,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
         log,
         "Segment [{}] prepare merge delta start. delta packs: {}, delta total rows: {}",
         segment_id,
-        DB::toString(segment_snap->delta->getPackCount()),
+        segment_snap->delta->getPackCount(),
         segment_snap->delta->getRows());
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
@@ -861,7 +862,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
         {
             LOG_FMT_INFO(
                 log,
-                "Got bad split point [{}] for segment {{{}}}, fall back to split physical.",
+                "Got bad split point [{}] for segment {{ {} }}, fall back to split physical.",
                 (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value"),
                 info());
             return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
@@ -1293,16 +1294,20 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
 
 String Segment::simpleInfo() const
 {
-    return "{" + DB::toString(segment_id) + ":" + rowkey_range.toDebugString() + "}";
+    return fmt::format("{{{}:{}}}", segment_id, rowkey_range.toDebugString());
 }
 
 String Segment::info() const
 {
-    std::stringstream s;
-    s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << rowkey_range.toDebugString()
-      << "], [rowkey_range:" << rowkey_range.toDebugString() << "], [delta rows:" << delta->getRows()
-      << "], [delete ranges:" << delta->getDeletes() << "], [stable(" << stable->getDMFilesString() << "):" << stable->getRows() << "]}";
-    return s.str();
+    return fmt::format("{{[id:{0}], [next: {1}], [epoch:{2}], [range:{3}], [rowkey_range:{3}], [delta rows:{4}], [delete ranges:{5}], [stable({6}):{7}]}}",
+                       segment_id,
+                       next_segment_id,
+                       epoch,
+                       rowkey_range.toDebugString(),
+                       delta->getRows(),
+                       delta->getDeletes(),
+                       stable->getDMFilesString(),
+                       stable->getRows());
 }
 
 Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,

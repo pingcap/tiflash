@@ -11,6 +11,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <random>
 #include <set>
@@ -264,9 +265,9 @@ void StoragePathPool::drop(bool recursive, bool must_success)
 String StoragePathPool::getStorePath(const String & extra_path_root, const String & database_name, const String & table_name) const
 {
     if (likely(!path_need_database_name))
-        return getNormalizedPath(extra_path_root + "/" + escapeForFileName(table_name));
+        return getNormalizedPath(fmt::format("{}/{}", extra_path_root, escapeForFileName(table_name)));
     else
-        return getNormalizedPath(extra_path_root + "/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name));
+        return getNormalizedPath(fmt::format("{}/{}/{}", extra_path_root, escapeForFileName(database_name), escapeForFileName(table_name)));
 }
 
 void StoragePathPool::renamePath(const String & old_path, const String & new_path)
@@ -357,7 +358,7 @@ String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exis
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
     if (likely(iter != pool.dt_file_path_map.end()))
-        return pool.main_path_infos[iter->second].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
+        return fmt::format("{}/{}", pool.main_path_infos[iter->second].path, StoragePathPool::STABLE_FOLDER_NAME);
     if (likely(throw_on_not_exist))
         throw Exception(fmt::format("Can not find path for DMFile [id={}]", file_id));
     return "";
@@ -419,7 +420,7 @@ size_t PSDiskDelegatorMulti::numPaths() const
 
 String PSDiskDelegatorMulti::defaultPath() const
 {
-    return pool.latest_path_infos[default_path_index].path + "/" + path_prefix;
+    return fmt::format("{}/{}", pool.latest_path_infos[default_path_index].path, path_prefix);
 }
 
 Strings PSDiskDelegatorMulti::listPaths() const
@@ -428,7 +429,7 @@ Strings PSDiskDelegatorMulti::listPaths() const
     std::vector<String> paths;
     for (auto & latest_path_info : pool.latest_path_infos)
     {
-        paths.push_back(latest_path_info.path + "/" + path_prefix);
+        paths.push_back(fmt::format("{}/{}", latest_path_info.path, path_prefix));
     }
     return paths;
 }
@@ -437,7 +438,7 @@ String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
     std::function<String(const StoragePathPool::LatestPathInfos & paths, size_t idx)> path_generator =
         [this](const StoragePathPool::LatestPathInfos & paths, size_t idx) -> String {
-        return paths[idx].path + "/" + this->path_prefix;
+        return fmt::format("{}/{}", paths[idx].path, this->path_prefix);
     };
 
     {
@@ -487,7 +488,7 @@ String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) 
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = page_path_map.find(id_lvl);
     if (likely(iter != page_path_map.end()))
-        return pool.latest_path_infos[iter->second].path + "/" + path_prefix;
+        return fmt::format("{}/{}", pool.latest_path_infos[iter->second].path, path_prefix);
     throw Exception(fmt::format("Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second));
 }
 
@@ -522,20 +523,20 @@ size_t PSDiskDelegatorSingle::numPaths() const
 
 String PSDiskDelegatorSingle::defaultPath() const
 {
-    return pool.latest_path_infos[0].path + "/" + path_prefix;
+    return fmt::format("{}/{}", pool.latest_path_infos[0].path, path_prefix);
 }
 
 Strings PSDiskDelegatorSingle::listPaths() const
 {
     // only stored in the first path.
     std::vector<String> paths;
-    paths.push_back(pool.latest_path_infos[0].path + "/" + path_prefix);
+    paths.push_back(fmt::format("{}/{}", pool.latest_path_infos[0].path, path_prefix));
     return paths;
 }
 
 String PSDiskDelegatorSingle::choosePath(const PageFileIdAndLevel & /*id_lvl*/)
 {
-    return pool.latest_path_infos[0].path + "/" + path_prefix;
+    return fmt::format("{}/{}", pool.latest_path_infos[0].path, path_prefix);
 }
 
 size_t PSDiskDelegatorSingle::addPageFileUsedSize(
@@ -552,7 +553,7 @@ size_t PSDiskDelegatorSingle::addPageFileUsedSize(
 
 String PSDiskDelegatorSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
 {
-    return pool.latest_path_infos[0].path + "/" + path_prefix;
+    return fmt::format("{}/{}", pool.latest_path_infos[0].path, path_prefix);
 }
 
 void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size, bool /*meta_left*/, bool /*remove_from_default_path*/)

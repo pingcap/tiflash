@@ -26,6 +26,8 @@
 #include <atomic>
 #include <ext/scope_guard.h>
 
+#include "IO/WriteHelpers.h"
+
 
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
@@ -1437,12 +1439,13 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     }
     catch (const Exception & e)
     {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend("Task {} on Segment [{}", toString(task.type), task.segment->segmentId());
-        if (task.next_segment)
-            fmt_buf.fmtAppend("] and [{}", task.next_segment->segmentId());
-        fmt_buf.fmtAppend("] failed. Error msg: {}", e.message());
-        LOG_FMT_ERROR(log, fmt_buf.toString());
+        LOG_FMT_ERROR(
+            log,
+            fmt::format("Task {} on Segment [{}{}] failed. Error msg: {}",
+                        toString(task.type),
+                        task.segment->segmentId(),
+                        task.next_segment ? "] and [" + DB::toString(task.next_segment->segmentId()) : "",
+                        e.message()));
         e.rethrow();
     }
     catch (...)
@@ -2067,7 +2070,10 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
         }
         if (compare(last_end.data, last_end.size, range.getStart().data, range.getStart().size) != 0)
             throw Exception(
-                fmt::format("Segment [{}:{}] is expected to have the same start edge value like the end edge value in {}", segment_id, range.toDebugString(), last_range.toDebugString()));
+                fmt::format("Segment [{}:{}] is expected to have the same start edge value like the end edge value in {}",
+                            segment_id,
+                            range.toDebugString(),
+                            last_range.toDebugString()));
 
         last_range = range;
         last_end = last_range.getEnd();
@@ -2333,7 +2339,10 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
 
     if (seg_it == segments.end())
     {
-        throw Exception(fmt::format("Failed to locate segment begin with start in range: {}", range_it->toDebugString()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("Failed to locate segment begin with start in range: {}",
+                        range_it->toDebugString()),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     while (range_it != sorted_ranges.end() && seg_it != segments.end())

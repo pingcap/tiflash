@@ -178,10 +178,7 @@ FsStats PathCapacityMetrics::getFsStats()
     if (avail_rate <= 0.2)
         LOG_FMT_WARNING(
             log,
-            "Available space is only {:.2f}% "
-            "of capacity size. Avail size: {}"
-            ", used size: {}"
-            ", capacity size: {}",
+            "Available space is only {:.2f}% of capacity size. Avail size: {}, used size: {}, capacity size: {}",
             avail_rate * 100.0,
             formatReadableSizeWithBinarySuffix(total_stat.avail_size),
             formatReadableSizeWithBinarySuffix(total_stat.used_size),
