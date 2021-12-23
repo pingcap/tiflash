@@ -41,7 +41,7 @@ namespace
 struct MakeReaderCallbackProxy : public UnaryCallback<bool>
 {
     UnaryCallback<std::unique_ptr<ExchangePacketReader>> * callback = nullptr;
-    std::unique_ptr<ExchangePacketReader> reader;
+    std::shared_ptr<ExchangePacketReader> reader;
 
     void execute(bool & ok) override
     {
@@ -173,19 +173,19 @@ std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const Exch
 
 void GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
-    UnaryCallback<std::unique_ptr<ExchangePacketReader>> * callback) const
+    UnaryCallback<std::shared_ptr<ExchangePacketReader>> * callback) const
 {
+    auto reader = std::make_shared<AsyncGrpcExchangePacketReader>(request);
     auto proxy = std::make_unique<MakeReaderCallbackProxy>();
     proxy->callback = callback;
+    proxy->reader = reader
 
-    auto reader = std::make_unique<AsyncGrpcExchangePacketReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequestAsync(
         request.req->sender_meta().address(),
         &reader->client_context,
         *reader->call,
         GRPCCompletionQueuePool::Instance()->pickQueue(),
         proxy.get());
-    proxy->reader = std::move(reader);
     proxy.release();
 }
 

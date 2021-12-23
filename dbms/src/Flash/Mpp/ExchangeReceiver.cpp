@@ -46,16 +46,16 @@ struct ReactorTrigger
 };
 
 template <typename RPCContext>
-struct MakeReaderCallback : public UnaryCallback<std::unique_ptr<typename RPCContext::ReaderType>>
+struct MakeReaderCallback : public UnaryCallback<std::shared_ptr<typename RPCContext::ReaderType>>
 {
     ReactorTrigger * trigger = nullptr;
-    std::unique_ptr<typename RPCContext::ReaderType> reader;
+    std::shared_ptr<typename RPCContext::ReaderType> reader;
 
     explicit MakeReaderCallback(ReactorTrigger * trigger_)
         : trigger(trigger_)
     {}
 
-    void execute(std::unique_ptr<typename RPCContext::ReaderType> & res) override
+    void execute(std::shared_ptr<typename RPCContext::ReaderType> & res) override
     {
         reader = std::move(res);
         trigger->trigger();

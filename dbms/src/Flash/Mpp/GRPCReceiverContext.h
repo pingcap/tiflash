@@ -121,7 +121,7 @@ public:
 
     std::shared_ptr<ExchangePacketReader> makeReader(const ExchangeRecvRequest & request) const;
 
-    void makeAsyncReader(const ExchangeRecvRequest & request, UnaryCallback<std::unique_ptr<ExchangePacketReader>> * callback) const;
+    void makeAsyncReader(const ExchangeRecvRequest & request, UnaryCallback<std::shared_ptr<ExchangePacketReader>> * callback) const;
 
     static StatusType getStatusOK()
     {
