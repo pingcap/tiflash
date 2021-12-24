@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
@@ -11,6 +12,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -61,10 +63,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
-        std::stringstream ss;
-        ss << "put region #" << region_id << ", range" << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys())
-           << " to table #" << table_id << " with kvstore.onSnapshot";
-        output(ss.str());
+        output(fmt::format("put region #{}, range{} to table #{} with kvstore.onSnapshot", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys()), table_id));
     }
     else
     {
@@ -75,10 +74,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot<RegionPtrWithBlock>(region, nullptr, 0, tmt);
 
-        std::stringstream ss;
-        ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
-           << " to table #" << table_id << " with kvstore.onSnapshot";
-        output(ss.str());
+        output(fmt::format("put region #{}, range[{}, {}) to table #{} with kvstore.onSnapshot", region_id, start, end, table_id));
     }
 }
 
@@ -87,9 +83,7 @@ void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegions();
 
-    std::stringstream ss;
-    ss << "region_table try flush regions";
-    output(ss.str());
+    output("region_table try flush regions");
 }
 
 void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -104,9 +98,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegion(region_id);
 
-    std::stringstream ss;
-    ss << "region_table try flush region " << region_id;
-    output(ss.str());
+    output(fmt::format("region_table try flush region {}", region_id));
 }
 
 void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none, bool dump_status, DBGInvoker::Printer & output)
@@ -114,7 +106,7 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
     size_t size = 0;
     context.getTMTContext().getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         std::ignore = region_id;
-        std::stringstream ss;
+        FmtBuffer fmt_buf;
         auto rawkeys = region->getRange()->rawKeys();
         auto table_info = MockTiDB::instance().getTableInfoByID(table_id);
         bool is_common_handle = false;
@@ -128,24 +120,23 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
             if (range.first >= range.second && ignore_none)
                 return;
 
-            ss << region->toString(dump_status);
+            fmt_buf.append(region->toString(dump_status));
             if (range.first >= range.second)
-                ss << " ranges: [none], ";
+                fmt_buf.append(" ranges: [none], ");
             else
-                ss << " ranges: [" << range.first.toString() << ", " << range.second.toString() << "), ";
+                fmt_buf.fmtAppend(" ranges: [{}, {}), ", range.first.toString(), range.second.toString());
         }
         else
         {
             if (*rawkeys.first >= *rawkeys.second && ignore_none)
                 return;
 
-            ss << region->toString(dump_status);
-            ss << " ranges: " << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(rawkeys) << ", ";
+            fmt_buf.fmtAppend("{} ranges: {}, ", region->toString(dump_status), RecordKVFormat::DecodedTiKVKeyRangeToDebugString(rawkeys));
         }
-        ss << "state: " << raft_serverpb::PeerState_Name(region->peerState());
+        fmt_buf.fmtAppend("state: {}", raft_serverpb::PeerState_Name(region->peerState()));
         if (auto s = region->dataInfo(); s.size() > 2)
-            ss << ", " << s;
-        output(ss.str());
+            fmt_buf.fmtAppend(", {}", s);
+        output(fmt_buf.toString());
     });
     output("total size: " + toString(size));
 }
@@ -192,9 +183,7 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     RegionTable & region_table = tmt.getRegionTable();
     kvstore->mockRemoveRegion(region_id, region_table);
 
-    std::stringstream ss;
-    ss << "remove region #" << region_id;
-    output(ss.str());
+    output(fmt::format("remove region #{}", region_id));
 }
 
 
@@ -274,12 +263,12 @@ void dbgFuncFindRegionByRange(Context & context, const ASTs & args, DBGInvoker::
     output(toString(regions.size()));
     if (mode == ID_LIST)
     {
-        std::stringstream ss;
+        FmtBuffer fmt_buf;
         if (!regions.empty())
-            ss << "regions: ";
+            fmt_buf.append("regions: ");
         for (const auto & region : regions)
-            ss << region.second->id() << ' ';
-        output(ss.str());
+            fmt_buf.fmtAppend("{} ", region.second->id());
+        output(fmt_buf.toString());
     }
 }
 

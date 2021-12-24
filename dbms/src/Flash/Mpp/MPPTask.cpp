@@ -275,8 +275,8 @@ void MPPTask::preprocess()
     executeQuery(dag, *context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-    mpp_task_statistics.compile_start_timestamp = start_time;
-    mpp_task_statistics.compile_end_timestamp = end_time;
+    mpp_task_statistics.setCompileTimestamp(start_time, end_time);
+    mpp_task_statistics.recordReadWaitIndex(*dag_context);
 }
 
 void MPPTask::runImpl()
@@ -318,6 +318,14 @@ void MPPTask::runImpl()
 
         from->readSuffix();
         finishWrite();
+
+        auto return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+        LOG_FMT_DEBUG(
+            log,
+            "finish write with {} rows, {} blocks, {} bytes",
+            return_statistics.rows,
+            return_statistics.blocks,
+            return_statistics.bytes);
     }
     catch (Exception & e)
     {
@@ -343,7 +351,7 @@ void MPPTask::runImpl()
         auto process_info = context->getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
-        mpp_task_statistics.memory_peak = peak_memory;
+        mpp_task_statistics.setMemoryPeak(peak_memory);
     }
     else
     {
