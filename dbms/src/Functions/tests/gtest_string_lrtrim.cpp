@@ -202,6 +202,19 @@ try
         ASSERT_EQ(cnt, result_ltrim.size());
         ASSERT_EQ(cnt, result_rtrim.size());
     }
+    // NULL cases
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, {}),
+        executeFunction("tidbLTrim", createConstColumn<Nullable<String>>(5, {})));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, {}),
+        executeFunction("tidbRTrim", createConstColumn<Nullable<String>>(5, {})));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(5, {}),
+        executeFunction("tidbLTrim", createConstColumn<String>(5, {})));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(5, {}),
+        executeFunction("tidbRTrim", createConstColumn<String>(5, {})));
 }
 CATCH
 
