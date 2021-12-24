@@ -126,6 +126,32 @@ try
         createColumn<String>({"  xx aa", "  xxaa xx", "\t aa \t", "", {}, "", "\n\t"}),
         executeFunction("tidbRTrim", createColumn<String>({"  xx aa", "  xxaa xx ", "\t aa \t", "", {}, " ", "\n\t"})));
 
+    // NULL cases
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction("tidbLTrim", createOnlyNullColumnConst(5)));
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction("tidbRTrim", createOnlyNullColumnConst(5)));
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction("tidbLTrim", createOnlyNullColumn(5)));
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction("tidbRTrim", createOnlyNullColumn(5)));
+
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, {}),
+        executeFunction("tidbLTrim", createConstColumn<Nullable<String>>(5, {})));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<Nullable<String>>(5, {}),
+        executeFunction("tidbRTrim", createConstColumn<Nullable<String>>(5, {})));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(5, {}),
+        executeFunction("tidbLTrim", createConstColumn<String>(5, {})));
+    ASSERT_COLUMN_EQ(
+        createConstColumn<String>(5, {}),
+        executeFunction("tidbRTrim", createConstColumn<String>(5, {})));
 
     // ltrim(column) Nullable<String> ASCII group and non-ASCII group
     ASSERT_COLUMN_EQ(
@@ -202,19 +228,6 @@ try
         ASSERT_EQ(cnt, result_ltrim.size());
         ASSERT_EQ(cnt, result_rtrim.size());
     }
-    // NULL cases
-    ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(5, {}),
-        executeFunction("tidbLTrim", createConstColumn<Nullable<String>>(5, {})));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(5, {}),
-        executeFunction("tidbRTrim", createConstColumn<Nullable<String>>(5, {})));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(5, {}),
-        executeFunction("tidbLTrim", createConstColumn<String>(5, {})));
-    ASSERT_COLUMN_EQ(
-        createConstColumn<String>(5, {}),
-        executeFunction("tidbRTrim", createConstColumn<String>(5, {})));
 }
 CATCH
 
