@@ -16,23 +16,16 @@ ElasticThreadPool::Job ElasticThreadPool::newJob(std::shared_ptr<std::promise<vo
         try
         {
             job();
-            {
-                std::unique_lock<std::mutex> lock(mutex);
-                available_cnt++;
-                history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
-            }
             p->set_value();
         }
         catch (...)
         {
-            try
-            {
-                // store anything thrown in the promise
-                p->set_exception(std::current_exception());
-            }
-            catch (...)
-            {
-            } // set_exception() may throw too
+            p->set_exception(std::current_exception());
+        }
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            available_cnt++;
+            history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
         }
         current_memory_tracker = nullptr;
     };
