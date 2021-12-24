@@ -139,14 +139,12 @@ public:
             }
             else if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock && resp->chunks_size() > 0)
                 return {
-                        nullptr,
-                        true,
-                        "Encode type of coprocessor response is not CHBlock, "
-                        "maybe the version of some TiFlash node in the cluster is not match with this one",
-                        false};
-            else if (resp->chunks_size() == 0)
-                return {resp, false, "", false, 0};
-            Int64 detail = decodeChunks(resp, block_queue, header, schema);
+                    nullptr,
+                    true,
+                    "Encode type of coprocessor response is not CHBlock, "
+                    "maybe the version of some TiFlash node in the cluster is not match with this one",
+                    false};
+            auto detail = decodeChunks(resp, block_queue, header, schema);
             return {resp, false, "", false, detail};
         }
         else
