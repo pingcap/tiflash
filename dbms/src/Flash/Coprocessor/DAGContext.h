@@ -23,6 +23,15 @@ struct ProfileStreamsInfo
     UInt32 qb_id;
     BlockInputStreams input_streams;
 };
+
+class Join;
+using JoinPtr = std::shared_ptr<Join>;
+struct JoinBuildSideInfo
+{
+    String build_side_root_executor_id;
+    JoinPtr join_ptr;
+};
+
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
@@ -86,6 +95,8 @@ public:
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
+    std::unordered_map<String, JoinBuildSideInfo> & getJoinBuildSideInfoMap();
+    std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -126,8 +137,6 @@ public:
     {
         return mpp_task_id;
     }
-
-    BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
     std::pair<bool, double> getTableScanThroughput();
 
@@ -175,7 +184,12 @@ private:
     /// qb_id_to_join_alias_map is a map that maps query block id to all the join_build_subquery_names
     /// in this query block and all its children query block
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
-    BlockInputStreams remote_block_input_streams;
+    /// join_build_side_info_map is a map that maps from join_probe_executor_id to JoinBuildSideInfo
+    /// JoinStatistics gets JoinBuildSideInfo through it.
+    std::unordered_map<std::string, JoinBuildSideInfo> join_build_side_info_map;
+    /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
+    /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
+    std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
