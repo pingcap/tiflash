@@ -779,11 +779,12 @@ struct SubstringUTF8Impl
   */
 struct RightUTF8Impl
 {
-    static void vector(const ColumnString::Chars_t & data,
-                       const ColumnString::Offsets & offsets,
-                       size_t length,
-                       ColumnString::Chars_t & res_data,
-                       ColumnString::Offsets & res_offsets)
+    static void vector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -809,7 +810,7 @@ struct RightUTF8Impl
                 else
                     current += 1;
             }
-            if (start_offsets.size() == 0)
+            if (start_offsets.empty())
             {
                 // null
                 res_data.resize(res_data.size() + 1);
