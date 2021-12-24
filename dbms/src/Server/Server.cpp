@@ -1191,7 +1191,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// setting up elastic thread pool
-    ElasticThreadPool::glb_instance = settings.enable_elastic_threadpool ? std::make_unique<ElasticThreadPool>(200, std::chrono::milliseconds(30000), 50, [] { setThreadName("glb-thd-pool"); }) : nullptr;
+    ElasticThreadPool::glb_instance = settings.enable_elastic_threadpool ? std::make_unique<ElasticThreadPool>(settings.elastic_threadpool_init_cap,
+                                                                                                               std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms),
+                                                                                                               50,
+                                                                                                               [] { setThreadName("glb-thd-pool"); })
+                                                                         : nullptr;
 
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
