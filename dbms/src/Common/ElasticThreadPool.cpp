@@ -97,7 +97,6 @@ bool ElasticThreadPool::shrink(std::chrono::milliseconds wait_interval)
 
     size_t cur_min_available_cnt = history_min_available_cnt;
     history_min_available_cnt = std::numeric_limits<size_t>::max();
-    //    std::cerr << "[ElasticThreadPool] loop_start, history_min_available_cnt: " << cur_min_available_cnt << " available_cnt: " << available_cnt << " alive_cnt: " << alive_cnt << " thread_list_size: " << threads->size() << std::endl;
     if (cur_min_available_cnt > idle_buffer_size)
     {
         size_t old_threads_size = threads->size();
@@ -137,14 +136,13 @@ bool ElasticThreadPool::shrink(std::chrono::milliseconds wait_interval)
             }
             threads = new_threads; //update threads
         }
-        //        std::cerr << "[ElasticThreadPool] loop_end, cnt_to_clean: " << cnt_to_clean << " cnt_cleaned: " << cnt_cleaned << " new_thds: " << new_thds << std::endl;
     }
     return true;
 }
 
 void ElasticThreadPool::backgroundJob()
 {
-    while (!shutdown)
+    while (true)
     {
         try
         {

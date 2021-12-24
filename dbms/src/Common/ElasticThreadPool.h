@@ -73,7 +73,7 @@ protected:
     size_t idle_buffer_size;
     /// init job for the worker, invoked when worker is created
     Job pre_worker;
-    std::atomic<bool> shutdown = false;
+    bool shutdown = false;
 
     /// jobs to schedule
     std::queue<Job> jobs;
