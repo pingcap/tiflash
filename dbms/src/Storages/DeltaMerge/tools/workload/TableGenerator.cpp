@@ -1,6 +1,5 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
 #include <Storages/DeltaMerge/tools/workload/TableGenerator.h>
 #include <fmt/ranges.h>
@@ -37,12 +36,26 @@ public:
         return table_pk_type;
     }
 
-    DMTestEnv::PkType randomPkType()
+    enum class PkType
+    {
+        // If the primary key is composed of multiple columns and non-clustered-index,
+        // or users don't define the primary key, TiDB will add a hidden "_tidb_rowid" column
+        // as the handle column
+        HiddenTiDBRowID,
+        // Common handle for clustered-index since 5.0.0
+        CommonHandle,
+        // If user define the primary key that is compatibility with UInt64, use that column
+        // as the handle column
+        PkIsHandleInt64,
+        PkIsHandleInt32,
+    };
+
+    PkType randomPkType()
     {
         return pk_types[rand_gen() % pk_types.size()].second;
     }
 
-    DMTestEnv::PkType getPkType(const std::string & name)
+    PkType getPkType(const std::string & name)
     {
         for (const auto & pa : pk_types)
         {
@@ -54,6 +67,35 @@ public:
         throw std::invalid_argument(fmt::format("PkType {} is invalid.", name));
     }
 
+    static constexpr const char * pk_name = "_tidb_rowid";
+    static constexpr const char * PK_NAME_PK_IS_HANDLE = "id";
+
+    static ColumnDefinesPtr getDefaultColumns(PkType pk_type = PkType::HiddenTiDBRowID)
+    {
+        // Return [handle, ver, del] column defines
+        ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
+        switch (pk_type)
+        {
+        case PkType::HiddenTiDBRowID:
+            columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
+            break;
+        case PkType::CommonHandle:
+            columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/true));
+            break;
+        case PkType::PkIsHandleInt64:
+            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE});
+            break;
+        case PkType::PkIsHandleInt32:
+            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, DataTypeFactory::instance().get("Int32")});
+            break;
+        default:
+            throw Exception("Unknown pk type for test");
+        }
+        columns->emplace_back(getVersionColumnDefine());
+        columns->emplace_back(getTagColumnDefine());
+        return columns;
+    }
+
 private:
     TablePkType()
         : rand_gen(std::random_device()())
@@ -61,11 +103,11 @@ private:
 
     // CommonHandle is not supported for simplifing data generation and verification.
     // PkIsHandleInt32 is not supported for simplifing verification.
-    const std::vector<std::pair<std::string, DMTestEnv::PkType>> pk_types = {
-        {"tidb_rowid", DMTestEnv::PkType::HiddenTiDBRowID},
-        //{"common_handle", DMTestEnv::PkType::CommonHandle},
-        {"pk_is_handle64", DMTestEnv::PkType::PkIsHandleInt64},
-        //{"pk_is_handle32", DMTestEnv::PkType::PkIsHandleInt32},
+    const std::vector<std::pair<std::string, PkType>> pk_types = {
+        {"tidb_rowid", PkType::HiddenTiDBRowID},
+        //{"common_handle", PkType::CommonHandle},
+        {"pk_is_handle64", PkType::PkIsHandleInt64},
+        //{"pk_is_handle32", PkType::PkIsHandleInt32},
     };
 
     std::mt19937_64 rand_gen;
@@ -191,7 +233,7 @@ public:
         table_info.table_name = fmt::format("random_table_{}", rand_gen());
 
         auto type = getPkType();
-        table_info.columns = DMTestEnv::getDefaultColumns(type);
+        table_info.columns = TablePkType::getDefaultColumns(type);
 
         int cols_cnt = cols_count > 0 ? cols_count : rand_gen() % max_columns_count + 1;
         for (int i = 0; i < cols_cnt; i++)
@@ -202,8 +244,8 @@ public:
             table_info.columns->emplace_back(ColumnDefine(id, name, data_type));
         }
         table_info.handle = (*table_info.columns)[0];
-        table_info.is_common_handle = (type == DMTestEnv::PkType::CommonHandle);
-        if (type != DMTestEnv::PkType::CommonHandle)
+        table_info.is_common_handle = (type == TablePkType::PkType::CommonHandle);
+        if (type != TablePkType::PkType::CommonHandle)
         {
             table_info.rowkey_column_indexes.push_back(0);
         }
@@ -215,7 +257,7 @@ public:
     }
 
 private:
-    DMTestEnv::PkType getPkType()
+    TablePkType::PkType getPkType()
     {
         if (pk_type.empty())
         {
@@ -245,7 +287,7 @@ class ConstantTableGenerator : public TableGenerator
         table_info.db_name = "workload";
         table_info.table_name = "constant";
 
-        table_info.columns = DMTestEnv::getDefaultColumns();
+        table_info.columns = TablePkType::getDefaultColumns();
 
         const std::vector<std::string> data_cols = {
             "UInt8",

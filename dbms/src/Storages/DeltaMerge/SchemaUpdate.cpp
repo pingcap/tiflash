@@ -18,6 +18,8 @@ String astToDebugString(const IAST * const ast)
     return ss.str();
 }
 
+// Set default value from alter command
+// Useless for production env
 void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
     std::function<Field(const Field &, const DataTypePtr &)> castDefaultValue; // for lazy bind
@@ -46,8 +48,7 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
             }
             else
             {
-                throw Exception("Unknown float number literal: " + applyVisitor(FieldVisitorToString(), value)
-                                + ", value type: " + value.getTypeName());
+                throw Exception(fmt::format("Unknown float number literal: {}, value type: {}" + applyVisitor(FieldVisitorToString(), value), value.getTypeName()));
             }
         }
         case TypeIndex::String:
@@ -170,29 +171,27 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
         }
         catch (DB::Exception & e)
         {
-            e.addMessage("(in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get())
-                         + ")");
+            e.addMessage(fmt::format("(in setColumnDefineDefaultValue for default_expression: {})", astToDebugString(command.default_expression.get())));
             throw;
         }
         catch (const Poco::Exception & e)
         {
             DB::Exception ex(e);
-            ex.addMessage("(in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get())
-                          + ")");
+            ex.addMessage(fmt::format("(in setColumnDefineDefaultValue for default_expression: {})", astToDebugString(command.default_expression.get())));
             throw ex;
         }
         catch (std::exception & e)
         {
-            std::stringstream ss;
-            ss << "std::exception: " << e.what()
-               << " (in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get()) << ")";
-            DB::Exception ex(ss.str(), ErrorCodes::LOGICAL_ERROR);
+            DB::Exception ex(
+                fmt::format("std::exception: {} (in setColumnDefineDefaultValue for default_expression: {})", e.what(), astToDebugString(command.default_expression.get())),
+                ErrorCodes::LOGICAL_ERROR);
             throw ex;
         }
     }
 }
 
 
+// Set column default value from TiDB table info
 void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define)
 {
     // Check ConvertColumnType_test.GetDefaultValue for unit test.
@@ -234,9 +233,12 @@ void applyAlter(ColumnDefines & table_columns,
         if (unlikely(!exist_column))
         {
             // Fall back to find column by name, this path should only call by tests.
-            LOG_WARNING(log,
-                        "Try to apply alter to column: " << command.column_name << ", id:" << DB::toString(command.column_id)
-                                                         << ", but not found by id, fall back locating col by name.");
+            LOG_FMT_WARNING(
+                log,
+                "Try to apply alter to column: {}, id: {},"
+                " but not found by id, fall back locating col by name.",
+                command.column_name,
+                command.column_id);
             for (auto && column_define : table_columns)
             {
                 if (column_define.name == command.column_name)
@@ -249,7 +251,7 @@ void applyAlter(ColumnDefines & table_columns,
             }
             if (unlikely(!exist_column))
             {
-                throw Exception(String("Alter column: ") + command.column_name + " is not exists.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(fmt::format("Alter column: {} is not exists.", command.column_name), ErrorCodes::LOGICAL_ERROR);
             }
         }
     }
@@ -295,7 +297,7 @@ void applyAlter(ColumnDefines & table_columns,
     }
     else
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << " receive unknown alter command, type: " << DB::toString(static_cast<Int32>(command.type)));
+        LOG_FMT_WARNING(log, "{} receive unknown alter command, type: {}", __PRETTY_FUNCTION__, static_cast<Int32>(command.type));
     }
 }
 
