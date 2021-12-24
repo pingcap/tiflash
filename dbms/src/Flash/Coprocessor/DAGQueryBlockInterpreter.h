@@ -83,6 +83,8 @@ private:
 
     void recordBuildSideInfo(size_t build_side_index, const JoinPtr & join_ptr);
 
+    void restorePipelineConcurrency(DAGPipeline & pipeline);
+
     void executeRemoteQueryImpl(
         DAGPipeline & pipeline,
         const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
@@ -101,9 +103,6 @@ private:
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
-
-    /// How many streams before aggregation
-    size_t before_agg_streams = 1;
 
     TableLockHolder table_drop_lock;
 
