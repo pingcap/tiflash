@@ -1,3 +1,4 @@
+#include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/dbgFuncSchema.h>
@@ -9,6 +10,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -35,9 +37,7 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
             context.getSchemaSyncService().reset();
     }
 
-    std::stringstream ss;
-    ss << "schema sync service " << (enable ? "enabled" : "disabled");
-    output(ss.str());
+    output(fmt::format("schema sync service {}", (enable ? "enabled" : "disabled")));
 }
 
 void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
@@ -46,9 +46,7 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->syncSchemas(context);
 
-    std::stringstream ss;
-    ss << "schemas refreshed";
-    output(ss.str());
+    output("schemas refreshed");
 }
 
 // Trigger gc on all databases / tables.
@@ -64,9 +62,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     service->gc(gc_safe_point);
 
-    std::stringstream ss;
-    ss << "schemas gc done";
-    output(ss.str());
+    output("schemas gc done");
 }
 
 void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
@@ -75,9 +71,7 @@ void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer ou
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->reset();
 
-    std::stringstream ss;
-    ss << "reset schemas";
-    output(ss.str());
+    output("reset schemas");
 }
 
 void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -86,7 +80,7 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
         throw Exception("Args not matched, should be: database-name[, table-name]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    std::stringstream ss;
+    FmtBuffer fmt_buf;
     if (args.size() == 1)
     {
         auto db = context.getDatabase(database_name);
@@ -94,7 +88,7 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
         if (!tiflash_db)
             throw Exception(database_name + " is not DatabaseTiFlash", ErrorCodes::BAD_ARGUMENTS);
 
-        ss << (tiflash_db->isTombstone() ? "true" : "false");
+        fmt_buf.append((tiflash_db->isTombstone() ? "true" : "false"));
     }
     else if (args.size() == 2)
     {
@@ -104,9 +98,9 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
         if (!managed_storage)
             throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
 
-        ss << (managed_storage->isTombstone() ? "true" : "false");
+        fmt_buf.append((managed_storage->isTombstone() ? "true" : "false"));
     }
-    output(ss.str());
+    output(fmt_buf.toString());
 }
 
 } // namespace DB
