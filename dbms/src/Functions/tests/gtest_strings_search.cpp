@@ -234,6 +234,25 @@ TEST_F(StringMatch, LikeVectorWithConst)
             toVec(haystack),
             toConst("%aa%")));
 }
-} // namespace tests
 
+TEST_F(StringMatch, LikeConstWithConst)
+{
+    std::vector<std::optional<UInt64>> expectFalse = {0};
+    std::vector<std::optional<UInt64>> expectTrue = {1};
+    ASSERT_COLUMN_EQ(
+        toVec(expectTrue),
+        executeFunction(
+            "like",
+            toConst("resaasfe"),
+            toConst("%aa%")));
+
+    ASSERT_COLUMN_EQ(
+        toVec(expectFalse),
+        executeFunction(
+            "like",
+            toConst("abcde"),
+            toConst("%aa%")));
+}
+
+} // namespace tests
 } // namespace DB
