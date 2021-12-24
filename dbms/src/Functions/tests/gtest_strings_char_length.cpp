@@ -54,8 +54,8 @@ protected:
 
 TEST_F(StringCharLength, charLengthVector)
 {
-    std::vector<std::optional<String>> candidate_strings = {"", "a", "do you know my length?", "你知道我的长度吗？", "你知道我的 length 吗?？"};
-    std::vector<std::optional<UInt64>> expect = {0, 1, 22, 9, 16};
+    std::vector<std::optional<String>> candidate_strings = {"", "a", "do you know the length?", "你知道字符串的长度吗？", "你知道字符串的 length 吗?？"};
+    std::vector<std::optional<UInt64>> expect = {0, 1, 21, 11, 18};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect),
         executeFunction(
@@ -78,22 +78,22 @@ TEST_F(StringCharLength, charLengthConst)
             toConst("")));
 
     ASSERT_COLUMN_EQ(
-        toConst(22),
+        toConst(23),
         executeFunction(
             "lengthUTF8",
-            toConst("do you know my length?")));
+            toConst("do you know the length?")));
 
     ASSERT_COLUMN_EQ(
-        toConst(9),
+        toConst(11),
         executeFunction(
             "lengthUTF8",
-            toConst("你知道我的长度吗？")));
+            toConst("你知道字符串的长度吗？")));
 
     ASSERT_COLUMN_EQ(
-        toConst(16),
+        toConst(18),
         executeFunction(
             "lengthUTF8",
-            toConst("你知道我的 length 吗?？")));
+            toConst("你知道字符串的 length 吗?？")));
 }
 
 } // namespace tests
