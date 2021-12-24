@@ -157,17 +157,17 @@ try
         executeFunction("tidbRTrim", createColumn<String>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
 
     // const cases
-    InferredDataInitializerList<Nullable<String>> inputs[] = {
+    InferredDataInitializerList<String> inputs[] = {
         {"", "/n/t"}, // corner cases
         {"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "}, // ASCII
         {"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "}}; // non-ASCII
 
-    InferredDataInitializerList<Nullable<String>> results_ltrim[] = {
+    InferredDataInitializerList<String> results_ltrim[] = {
         {"", "/n/t"}, // corner cases
         {"a", "b", "c ", "d ", "e f", "g h", "i j ", "k l "}, // ASCII
         {"你", "好", "平 ", "凯 ", "星 辰", "啊 波", "次 得 ", "额 佛 "}}; // non-ASCII
 
-    InferredDataInitializerList<Nullable<String>> results_rtrim[] = {
+    InferredDataInitializerList<String> results_rtrim[] = {
         {"", "/n/t"}, // corner cases
         {"a", " b", "c", " d", "e f", " g h", "i j", " k l"}, // ASCII
         {"你", " 好", "平", " 凯", "星 辰", " 啊 波", "次 得", " 额 佛"}}; // non-ASCII
@@ -190,6 +190,12 @@ try
             ASSERT_COLUMN_EQ(
                 createConstColumn<Nullable<String>>(5, *rres_iter),
                 executeFunction("tidbRTrim", createConstColumn<Nullable<String>>(5, *input_iter)));
+            ASSERT_COLUMN_EQ(
+                createConstColumn<String>(5, *lres_iter),
+                executeFunction("tidbLTrim", createConstColumn<String>(5, *input_iter)));
+            ASSERT_COLUMN_EQ(
+                createConstColumn<String>(5, *rres_iter),
+                executeFunction("tidbRTrim", createConstColumn<String>(5, *input_iter)));
             cnt++;
         }
         ASSERT_EQ(cnt, input.size());
