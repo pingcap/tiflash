@@ -153,8 +153,19 @@ void ElasticThreadPool::backgroundJob()
 {
     while (!shutdown)
     {
-        if (!shrink(recycle_period))
-            break;
+        try
+        {
+            if (!shrink(recycle_period))
+                break;
+        }
+        catch (const std::exception & e)
+        {
+            std::cerr << "[ElasticThreadPool] exception occurred when shrink, cause: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+            std::cerr << "[ElasticThreadPool] other exception occurred when shrink" << std::endl;
+        }
     }
 }
 

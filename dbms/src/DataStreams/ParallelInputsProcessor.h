@@ -107,7 +107,7 @@ public:
     void process()
     {
         if (thd_manager == nullptr)
-            thd_manager = ThreadManager::createThreadManager();
+            thd_manager = ThreadManager::createElasticOrRawThreadManager();
         active_threads = max_threads;
         for (size_t i = 0; i < max_threads; ++i)
         {

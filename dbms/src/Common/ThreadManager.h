@@ -22,7 +22,7 @@ public:
     virtual ~ThreadManager() = default;
     virtual void wait() = 0;
     virtual void schedule(Job job) = 0;
-    static std::shared_ptr<ThreadManager> createThreadManager(bool detach_if_possible = false);
+    static std::shared_ptr<ThreadManager> createElasticOrRawThreadManager(bool detach_if_possible = false);
     static std::shared_ptr<ThreadManager> createElasticOrFixedThreadManager(size_t fixed_thread_pool_size);
 };
 

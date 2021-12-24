@@ -50,7 +50,7 @@ public:
             return;
         read_prefixed = true;
         /// Start reading thread.
-        thd_manager = ThreadManager::createThreadManager();
+        thd_manager = ThreadManager::createElasticOrRawThreadManager();
         thd_manager->schedule([this] { this->fetchBlocks(); });
     }
 
