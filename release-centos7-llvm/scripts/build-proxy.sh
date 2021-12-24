@@ -33,6 +33,10 @@ if [ -f /.dockerenv ]; then
     rm -rf /usr/local/lib/x86_64-unknown-linux-gnu/libc++abi.a
     rm -rf /usr/local/lib/x86_64-unknown-linux-gnu/libc++.a
     rm -rf /usr/local/lib/x86_64-unknown-linux-gnu/libunwind.a
+
+    rm -rf /usr/local/lib/aarch64-unknown-linux-gnu/libc++abi.a
+    rm -rf /usr/local/lib/aarch64-unknown-linux-gnu/libc++.a
+    rm -rf /usr/local/lib/aarch64-unknown-linux-gnu/libunwind.a
 fi
 
 make release
