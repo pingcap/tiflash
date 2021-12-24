@@ -31,13 +31,13 @@ protected:
     template <bool isconst, bool nullable>
     void testEmptyForDateTime()
     {
-        testEmptyFor<isconst, nullable, DataTypeMyDateTime, MyDateTime>();
+        testEmptyFor<isconst, nullable, DataTypeMyDateTime>();
     }
 
     template <bool isconst, bool nullable>
     void testEmptyForDate()
     {
-        testEmptyFor<isconst, nullable, DataTypeMyDate, MyDate>();
+        testEmptyFor<isconst, nullable, DataTypeMyDate>();
     }
 
     void assertDayMonthYear(const ColumnWithTypeAndName & column, const ColumnWithTypeAndName & result_day, const ColumnWithTypeAndName & result_month, const ColumnWithTypeAndName & result_year)
@@ -156,25 +156,25 @@ protected:
             {
                 column = ColumnWithTypeAndName(
                     createColumn<Nullable<typename DT::FieldType>>(
-                        {})
+                        {{}})
                         .column,
                     makeNullable(std::make_shared<DT>()),
                     "result");
-                result_day = createColumn<Nullable<UInt8>>({});
-                result_month = createColumn<Nullable<UInt8>>({});
-                result_year = createColumn<Nullable<UInt16>>({});
+                result_day = createColumn<Nullable<UInt8>>({{}});
+                result_month = createColumn<Nullable<UInt8>>({{}});
+                result_year = createColumn<Nullable<UInt16>>({{}});
             }
             else
             {
                 column = ColumnWithTypeAndName(
                     createColumn<typename DT::FieldType>(
-                        {})
+                        {{}})
                         .column,
                     std::make_shared<DT>(),
                     "result");
-                result_day = createColumn<UInt8>({});
-                result_month = createColumn<UInt8>({});
-                result_year = createColumn<UInt16>({});
+                result_day = createColumn<UInt8>({{}});
+                result_month = createColumn<UInt8>({{}});
+                result_year = createColumn<UInt16>({{}});
             }
         }
 
@@ -185,6 +185,26 @@ protected:
 TEST_F(TestDateTimeDayMonthYear, dayMonthYearTest)
 try
 {
+    //NULL cases
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction(ToDayOfMonthImpl::name, createOnlyNullColumn(5)));
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction(ToMonthImpl::name, createOnlyNullColumn(5)));
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction(ToYearImpl::name, createOnlyNullColumn(5)));
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction(ToDayOfMonthImpl::name, createOnlyNullColumnConst(5)));
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction(ToMonthImpl::name, createOnlyNullColumnConst(5)));
+    ASSERT_COLUMN_EQ(
+        createOnlyNullColumnConst(5),
+        executeFunction(ToYearImpl::name, createOnlyNullColumnConst(5)));
+
     testEmptyForDate<true, true>();
     testEmptyForDate<true, false>();
     testEmptyForDate<false, true>();
