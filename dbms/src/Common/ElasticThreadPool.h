@@ -20,16 +20,24 @@ public:
     static std::unique_ptr<ElasticThreadPool> glb_instance;
     struct Worker
     {
+        enum class State
+        {
+            Idle = 0,
+            Working,
+            Ended,
+        };
+
         explicit Worker(ElasticThreadPool * thd_pool)
             : end_syn(false)
-            , state(0)
+            , state(State::Idle)
             , thd(std::make_shared<std::thread>([this, thd_pool] {
                 thd_pool->pre_worker();
                 thd_pool->work(this);
             }))
         {}
+
         std::atomic_bool end_syn; // someone wants it end
-        std::atomic_int state; // 0.idle 1.working 2.ended
+        std::atomic<State> state; // 0.idle 1.working 2.ended
         std::shared_ptr<std::thread> thd;
     };
 

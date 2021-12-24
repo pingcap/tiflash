@@ -130,7 +130,7 @@ private:
 
     struct ParallelMergeData
     {
-        std::shared_ptr<ThreadManager> thd_manager;
+        std::shared_ptr<ThreadManager> thread_manager;
 
         /// Now one of the merging threads receives next blocks for the merge. This operation must be done sequentially.
         std::mutex get_next_blocks_mutex;
@@ -151,7 +151,7 @@ private:
         std::condition_variable have_space;
 
         explicit ParallelMergeData(size_t max_threads)
-            : thd_manager(ThreadManager::createElasticOrFixedThreadManager(max_threads))
+            : thread_manager(ThreadManager::createElasticOrFixedThreadManager(max_threads))
         {}
     };
 

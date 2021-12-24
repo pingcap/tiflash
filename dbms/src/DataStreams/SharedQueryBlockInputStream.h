@@ -50,8 +50,8 @@ public:
             return;
         read_prefixed = true;
         /// Start reading thread.
-        thd_manager = ThreadManager::createElasticOrRawThreadManager();
-        thd_manager->schedule([this] { this->fetchBlocks(); });
+        thread_manager = ThreadManager::createElasticOrRawThreadManager();
+        thread_manager->schedule([this] { this->fetchBlocks(); });
     }
 
     void readSuffix() override
@@ -61,8 +61,8 @@ public:
         if (read_suffixed)
             return;
         read_suffixed = true;
-        if (thd_manager)
-            thd_manager->wait();
+        if (thread_manager)
+            thread_manager->wait();
         if (!exception_msg.empty())
             throw Exception(exception_msg);
     }
@@ -135,7 +135,7 @@ private:
     bool read_suffixed = false;
 
     std::mutex mutex;
-    std::shared_ptr<ThreadManager> thd_manager;
+    std::shared_ptr<ThreadManager> thread_manager;
 
     std::string exception_msg;
 

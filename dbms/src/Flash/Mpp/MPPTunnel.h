@@ -100,7 +100,7 @@ private:
 
     int input_streams_num;
 
-    std::shared_ptr<ThreadManager> thd_manager;
+    std::shared_ptr<ThreadManager> thread_manager;
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     ConcurrentBoundedQueue<MPPDataPacketPtr> send_queue;

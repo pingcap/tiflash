@@ -106,12 +106,12 @@ public:
     /// Start background threads, start work.
     void process()
     {
-        if (thd_manager == nullptr)
-            thd_manager = ThreadManager::createElasticOrRawThreadManager();
+        if (thread_manager == nullptr)
+            thread_manager = ThreadManager::createElasticOrRawThreadManager();
         active_threads = max_threads;
         for (size_t i = 0; i < max_threads; ++i)
         {
-            thd_manager->schedule(([this, i] { this->thread(i); }));
+            thread_manager->schedule(([this, i] { this->thread(i); }));
         }
     }
 
@@ -145,8 +145,8 @@ public:
     {
         if (joined_threads)
             return;
-        if (thd_manager)
-            thd_manager->wait();
+        if (thread_manager)
+            thread_manager->wait();
         joined_threads = true;
     }
 
@@ -311,7 +311,7 @@ private:
     /// Streams.
     using ThreadsData = std::vector<std::thread>;
     ThreadsData threads;
-    std::shared_ptr<ThreadManager> thd_manager;
+    std::shared_ptr<ThreadManager> thread_manager;
 
     /** A set of available sources that are not currently processed by any thread.
       * Each thread takes one source from this set, takes a block out of the source (at this moment the source does the calculations)

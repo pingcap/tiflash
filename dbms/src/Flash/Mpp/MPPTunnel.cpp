@@ -30,7 +30,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
     , send_loop_msg("")
     , input_streams_num(input_steams_num_)
-    , thd_manager(ThreadManager::createElasticOrRawThreadManager())
+    , thread_manager(ThreadManager::createElasticOrRawThreadManager())
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
     , log(getMPPTaskLog(log_, tunnel_id))
 {
@@ -43,9 +43,9 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         if (!finished)
             writeDone();
-        if (!is_local && thd_manager)
+        if (!is_local && thread_manager)
         {
-            thd_manager->wait();
+            thread_manager->wait();
         }
         /// in abnormal cases, popping all packets out of send_queue to avoid blocking any thread pushes packets into it.
         clearSendQueue();
@@ -238,7 +238,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     writer = writer_;
     if (!is_local)
     {
-        thd_manager->schedule([this] {
+        thread_manager->schedule([this] {
             this->sendLoop();
         });
     }

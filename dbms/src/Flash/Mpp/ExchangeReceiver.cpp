@@ -43,8 +43,8 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         state = ExchangeReceiverState::CLOSED;
         cv.notify_all();
     }
-    if (thd_manager)
-        thd_manager->wait();
+    if (thread_manager)
+        thread_manager->wait();
 }
 
 template <typename RPCContext>
@@ -58,10 +58,10 @@ void ExchangeReceiverBase<RPCContext>::cancel()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
-    thd_manager = ThreadManager::createElasticOrRawThreadManager();
+    thread_manager = ThreadManager::createElasticOrRawThreadManager();
     for (size_t index = 0; index < source_num; ++index)
     {
-        thd_manager->schedule([this, index] {
+        thread_manager->schedule([this, index] {
             this->readLoop(index);
         });
     }

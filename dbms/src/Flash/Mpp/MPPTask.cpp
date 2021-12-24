@@ -72,8 +72,8 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    auto thd_manager = ThreadManager::createElasticOrRawThreadManager(true);
-    thd_manager->schedule([this] { this->shared_from_this()->runImpl(); });
+    auto thread_manager = ThreadManager::createElasticOrRawThreadManager(true);
+    thread_manager->schedule([this] { this->shared_from_this()->runImpl(); });
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)

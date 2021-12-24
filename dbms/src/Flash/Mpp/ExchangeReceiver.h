@@ -117,7 +117,7 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::shared_ptr<ThreadManager> thd_manager;
+    std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
     std::mutex mu;

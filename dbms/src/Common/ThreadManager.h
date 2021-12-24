@@ -12,12 +12,6 @@ namespace DB
 class ThreadManager
 {
 public:
-    enum class Type
-    {
-        ElasticThreadPool,
-        RawThread,
-        FixedThreadPool,
-    };
     using Job = std::function<void()>;
     virtual ~ThreadManager() = default;
     virtual void wait() = 0;

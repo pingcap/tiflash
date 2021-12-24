@@ -116,10 +116,10 @@ bool ElasticThreadPool::shrink(std::chrono::milliseconds wait_interval)
         int cnt_cleaned = 0;
         for (auto & thd_ctx : old_threads)
         {
-            if (thd_ctx->state != 2)
+            if (thd_ctx->state != Worker::State::Ended)
             {
                 new_threads->push_back(thd_ctx);
-                if (cnt_cleaned < cnt_to_clean && !(thd_ctx->end_syn) && thd_ctx->state == 0)
+                if (cnt_cleaned < cnt_to_clean && !(thd_ctx->end_syn) && thd_ctx->state == Worker::State::Idle)
                 {
                     thd_ctx->end_syn = true;
                     cnt_cleaned++;
@@ -180,7 +180,7 @@ void ElasticThreadPool::work(Worker * thdctx)
             {
                 job = std::move(jobs.front());
                 jobs.pop();
-                thdctx->state = 1;
+                thdctx->state = Worker::State::Working;
             }
             else if (shutdown)
                 break;
@@ -189,7 +189,7 @@ void ElasticThreadPool::work(Worker * thdctx)
         }
 
         job();
-        thdctx->state = 0;
+        thdctx->state = Worker::State::Idle;
     }
 
     {
@@ -198,7 +198,7 @@ void ElasticThreadPool::work(Worker * thdctx)
         alive_cnt--;
         history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
     }
-    thdctx->state = 2;
+    thdctx->state = Worker::State::Ended;
 }
 
 size_t ElasticThreadPool::getAvailableCnt() const
