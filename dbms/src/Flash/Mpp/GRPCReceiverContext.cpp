@@ -131,7 +131,8 @@ public:
     {
         auto proxy = std::make_unique<FinishCallbackProxy>();
         proxy->callback = callback;
-        reader->Finish(&proxy->status, proxy.release());
+        reader->Finish(&proxy->status, proxy.get());
+        proxy.release();
     }
 };
 

@@ -275,7 +275,7 @@ struct AsyncRequestStat
 
     bool sendPackets()
     {
-        for (const auto & packet : getPackets())
+        for (auto & packet : getPackets())
         {
             auto recv_msg = std::make_shared<ReceivedMessage>();
             recv_msg->packet = packet;
@@ -283,6 +283,7 @@ struct AsyncRequestStat
             recv_msg->req_info = req_info;
             if (!msg_channel->push(std::move(recv_msg)))
                 return false;
+            packet = std::make_shared<MPPDataPacket>();
         }
         return true;
     }
