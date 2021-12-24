@@ -155,6 +155,47 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<String>({"你", " 好", "平", " 凯", "星 辰", " 啊 波", "次 得", " 额 佛"}),
         executeFunction("tidbRTrim", createColumn<String>({"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "})));
+
+    // const cases
+    InferredDataInitializerList<Nullable<String>> inputs[] = {
+        {"", "/n/t"}, // corner cases
+        {"a", " b", "c ", " d ", "e f", " g h", "i j ", " k l "}, // ASCII
+        {"你", " 好", "平 ", " 凯 ", "星 辰", " 啊 波", "次 得 ", " 额 佛 "}}; // non-ASCII
+
+    InferredDataInitializerList<Nullable<String>> results_ltrim[] = {
+        {"", "/n/t"}, // corner cases
+        {"a", "b", "c ", "d ", "e f", "g h", "i j ", "k l "}, // ASCII
+        {"你", "好", "平 ", "凯 ", "星 辰", "啊 波", "次 得 ", "额 佛 "}}; // non-ASCII
+
+    InferredDataInitializerList<Nullable<String>> results_rtrim[] = {
+        {"", "/n/t"}, // corner cases
+        {"a", " b", "c", " d", "e f", " g h", "i j", " k l"}, // ASCII
+        {"你", " 好", "平", " 凯", "星 辰", " 啊 波", "次 得", " 额 佛"}}; // non-ASCII
+
+
+    //const
+    for (int i = 0; i < 3; i++)
+    {
+        auto & input = inputs[i];
+        auto & result_ltrim = results_ltrim[i];
+        auto & result_rtrim = results_rtrim[i];
+        int cnt = 0;
+        for (auto input_iter = input.begin(), lres_iter = result_ltrim.begin(), rres_iter = result_rtrim.begin();
+             input_iter != input.end() && lres_iter != result_ltrim.end() && rres_iter != result_rtrim.end();
+             input_iter++, lres_iter++, rres_iter++)
+        {
+            ASSERT_COLUMN_EQ(
+                createConstColumn<Nullable<String>>(5, *lres_iter),
+                executeFunction("tidbLTrim", createConstColumn<Nullable<String>>(5, *input_iter)));
+            ASSERT_COLUMN_EQ(
+                createConstColumn<Nullable<String>>(5, *rres_iter),
+                executeFunction("tidbRTrim", createConstColumn<Nullable<String>>(5, *input_iter)));
+            cnt++;
+        }
+        ASSERT_EQ(cnt, input.size());
+        ASSERT_EQ(cnt, result_ltrim.size());
+        ASSERT_EQ(cnt, result_rtrim.size());
+    }
 }
 CATCH
 
