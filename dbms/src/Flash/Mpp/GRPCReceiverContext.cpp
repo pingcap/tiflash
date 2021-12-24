@@ -40,8 +40,8 @@ namespace
 {
 struct MakeReaderCallbackProxy : public UnaryCallback<bool>
 {
-    UnaryCallback<std::shared_ptr<ExchangePacketReader>> * callback = nullptr;
-    std::shared_ptr<ExchangePacketReader> reader;
+    UnaryCallback<std::shared_ptr<AsyncExchangePacketReader>> * callback = nullptr;
+    std::shared_ptr<AsyncExchangePacketReader> reader;
 
     void execute(bool & ok) override
     {
