@@ -188,6 +188,7 @@ struct AsyncRequestStat
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (getPacketCount() > 0)
             {
+                LOG_FMT_TRACE(log, "Received {} packets.", getPacketCount());
                 has_data = true;
                 if (sendPackets())
                     getReader()->batchRead(getPackets(), &batch_read_callback);
