@@ -171,7 +171,10 @@ struct AsyncRequestStat
                 stage = AsyncRequestStage::WAIT_BATCH_READ;
             }
             else if (retriable())
+            {
+                //LOG_FMT_WARNING(log, "MakeReader fail for req {}. Retry time {}", req_info, retry_times);
                 waitForRetry();
+            }
             else
                 setDone("Send async stream request fail");
             break;
@@ -194,7 +197,9 @@ struct AsyncRequestStat
             if (getStatus().ok())
                 setDone("");
             else if (retriable())
+            {
                 waitForRetry();
+            }
             else
                 setDone(getStatus().error_message());
             break;

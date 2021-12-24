@@ -21,17 +21,19 @@ class ExchangePacketReader
 {
 public:
     virtual ~ExchangePacketReader() = default;
-    virtual bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const = 0;
-    virtual ::grpc::Status finish() const = 0;
+    virtual bool read(MPPDataPacketPtr & packet) = 0;
+    virtual ::grpc::Status finish() = 0;
 };
+using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
 
 class AsyncExchangePacketReader
 {
 public:
     virtual ~AsyncExchangePacketReader() = default;
-    virtual void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) const = 0;
-    virtual void finish(UnaryCallback<::grpc::Status> * callback) const = 0;
+    virtual void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) = 0;
+    virtual void finish(UnaryCallback<::grpc::Status> * callback) = 0;
 };
+using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;
 
 struct ExchangeRecvRequest
 {
@@ -64,9 +66,11 @@ public:
 
     bool supportAsync(const ExchangeRecvRequest & request);
 
-    std::shared_ptr<ExchangePacketReader> makeReader(const ExchangeRecvRequest & request) const;
+    ExchangePacketReaderPtr makeReader(const ExchangeRecvRequest & request) const;
 
-    void makeAsyncReader(const ExchangeRecvRequest & request, UnaryCallback<std::shared_ptr<AsyncExchangePacketReader>> * callback) const;
+    void makeAsyncReader(
+        const ExchangeRecvRequest & request,
+        UnaryCallback<AsyncExchangePacketReaderPtr> * callback) const;
 
     static Status getStatusOK()
     {

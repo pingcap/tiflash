@@ -40,8 +40,8 @@ namespace
 {
 struct MakeReaderCallbackProxy : public UnaryCallback<bool>
 {
-    UnaryCallback<std::shared_ptr<AsyncExchangePacketReader>> * callback = nullptr;
-    std::shared_ptr<AsyncExchangePacketReader> reader;
+    UnaryCallback<AsyncExchangePacketReaderPtr> * callback = nullptr;
+    AsyncExchangePacketReaderPtr reader;
 
     void execute(bool & ok) override
     {
@@ -62,12 +62,9 @@ struct BatchReadCallbackProxy : public UnaryCallback<bool>
     void execute(bool & ok) override
     {
         if (!ok || ++read_index == packets->size())
-        {
             callback->execute(read_index);
-            delete this;
-            return;
-        }
-        reader->Read((*packets)[read_index].get(), this);
+        else
+            reader->Read((*packets)[read_index].get(), this);
     }
 };
 
@@ -79,13 +76,11 @@ struct FinishCallbackProxy : public UnaryCallback<bool>
     void execute(bool &) override
     {
         callback->execute(status);
-        delete this;
     }
 };
 
-class GrpcExchangePacketReader : public ExchangePacketReader
+struct GrpcExchangePacketReader : public ExchangePacketReader
 {
-public:
     std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
     grpc::ClientContext client_context;
     std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> reader;
@@ -95,50 +90,47 @@ public:
         call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
     }
 
-    bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override
+    bool read(MPPDataPacketPtr & packet) override
     {
         return reader->Read(packet.get());
     }
 
-    ::grpc::Status finish() const override
+    ::grpc::Status finish() override
     {
         return reader->Finish();
     }
 };
 
-class AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
+struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 {
-public:
     std::shared_ptr<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>> call;
     grpc::ClientContext client_context;
     std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
+    BatchReadCallbackProxy batch_read_callback;
+    FinishCallbackProxy finish_callback;
 
     explicit AsyncGrpcExchangePacketReader(const ExchangeRecvRequest & req)
     {
         call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
     }
 
-    void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) const override
+    void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) override
     {
-        auto proxy = std::make_unique<BatchReadCallbackProxy>();
-        proxy->callback = callback;
-        proxy->packets = &packets;
-        proxy->reader = reader.get();
-        reader->Read(packets[0].get(), proxy.release());
+        batch_read_callback.callback = callback;
+        batch_read_callback.packets = &packets;
+        batch_read_callback.reader = reader.get();
+        reader->Read(packets[0].get(), &batch_read_callback);
     }
 
-    void finish(UnaryCallback<::grpc::Status> * callback) const override
+    void finish(UnaryCallback<::grpc::Status> * callback) override
     {
-        auto proxy = std::make_unique<FinishCallbackProxy>();
-        proxy->callback = callback;
-        reader->Finish(&proxy->status, proxy.get());
-        proxy.release();
+        finish_callback.callback = callback;
+        reader->Finish(&finish_callback.status, &finish_callback);
     }
 };
 
-class LocalExchangePacketReader : public ExchangePacketReader
+struct LocalExchangePacketReader : public ExchangePacketReader
 {
-public:
     MPPTunnelPtr tunnel;
 
     explicit LocalExchangePacketReader(const std::shared_ptr<MPPTunnel> & tunnel_)
@@ -155,7 +147,7 @@ public:
         }
     }
 
-    bool read(std::shared_ptr<mpp::MPPDataPacket> & packet) const override
+    bool read(MPPDataPacketPtr & packet) override
     {
         MPPDataPacketPtr tmp_packet = tunnel->readForLocal();
         bool success = tmp_packet != nullptr;
@@ -164,7 +156,7 @@ public:
         return success;
     }
 
-    ::grpc::Status finish() const override
+    ::grpc::Status finish() override
     {
         return ::grpc::Status::OK;
     }
@@ -236,7 +228,7 @@ bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request)
     return enable_async_grpc && !request.is_local;
 }
 
-std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
+ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
 {
     if (request.is_local)
     {
@@ -260,19 +252,21 @@ std::shared_ptr<ExchangePacketReader> GRPCReceiverContext::makeReader(const Exch
 
 void GRPCReceiverContext::makeAsyncReader(
     const ExchangeRecvRequest & request,
-    UnaryCallback<std::shared_ptr<AsyncExchangePacketReader>> * callback) const
+    UnaryCallback<AsyncExchangePacketReaderPtr> * callback) const
 {
     auto reader = std::make_shared<AsyncGrpcExchangePacketReader>(request);
     auto proxy = std::make_unique<MakeReaderCallbackProxy>();
     proxy->callback = callback;
     proxy->reader = reader;
 
+    // must init reader->reader after assign proxy->reader
     reader->reader = cluster->rpc_client->sendStreamRequestAsync(
         request.req->sender_meta().address(),
         &reader->client_context,
         *reader->call,
         GRPCCompletionQueuePool::Instance()->pickQueue(),
         proxy.get());
+    // must release proxy at the end, proxy will destruct itself after being triggered.
     proxy.release();
 }
 
