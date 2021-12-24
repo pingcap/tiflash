@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Poco/Logger.h>
+#include <common/logger_useful.h>
 
 #include <condition_variable>
 #include <cstdint>
@@ -81,6 +81,7 @@ protected:
     std::shared_ptr<std::vector<std::shared_ptr<Worker>>> threads;
     /// background task for shink threads size
     std::thread bk_thd;
+    Poco::Logger * log;
 
     /// try to shrink threads size, invoked by backgroundJob()
     bool shrink(std::chrono::milliseconds wait_interval);
