@@ -58,6 +58,20 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
     executor_statistics_collector.initialize(dag_context);
 }
 
+BaseRuntimeStatistics MPPTaskStatistics::collectRuntimeStatistics()
+{
+    executor_statistics_collector.collectRuntimeDetails();
+    const auto & executor_statistics_res = executor_statistics_collector.getResult();
+    auto it = executor_statistics_res.find(sender_executor_id);
+    if (it == executor_statistics_res.end())
+    {
+        throw TiFlashException(
+            "Can't find exchange sender statistics after `collectRuntimeStatistics`",
+            Errors::Coprocessor::Internal);
+    }
+    return it->second->getBaseRuntimeStatistics();
+}
+
 void MPPTaskStatistics::logTracingJson()
 {
     LOG_FMT_INFO(

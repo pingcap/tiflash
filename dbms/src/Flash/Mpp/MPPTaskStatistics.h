@@ -30,6 +30,9 @@ public:
 
     void initializeExecutorDAG(DAGContext * dag_context);
 
+    /// return exchange sender runtime statistics
+    BaseRuntimeStatistics collectRuntimeStatistics();
+
     void logTracingJson();
 
     void setMemoryPeak(Int64 memory_peak);
