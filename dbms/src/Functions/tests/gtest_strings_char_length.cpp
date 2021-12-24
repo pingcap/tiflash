@@ -55,7 +55,7 @@ protected:
 TEST_F(StringCharLength, charLengthVector)
 {
     std::vector<std::optional<String>> candidate_strings = {"", "a", "do you know the length?", "你知道字符串的长度吗？", "你知道字符串的 length 吗?？"};
-    std::vector<std::optional<UInt64>> expect = {0, 1, 21, 11, 18};
+    std::vector<std::optional<UInt64>> expect = {0, 1, 23, 11, 18};
     ASSERT_COLUMN_EQ(
         toNullableVec(expect),
         executeFunction(
