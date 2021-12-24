@@ -56,12 +56,23 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
         return;
     /// get executionSummary info from remote input streams
     std::unordered_map<String, std::vector<ExecutionSummary>> merged_remote_execution_summaries;
-    for (auto & streamPtr : dag_context.getRemoteInputStreams())
+    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
     {
-        if (dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get()) != nullptr)
-            mergeRemoteExecuteSummaries(dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get()), merged_remote_execution_summaries);
-        else
-            mergeRemoteExecuteSummaries(dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()), merged_remote_execution_summaries);
+        for (auto & stream_ptr : map_entry.second)
+        {
+            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()))
+            {
+                mergeRemoteExecuteSummaries(exchange_receiver_stream_ptr, merged_remote_execution_summaries);
+            }
+            else if (auto * cop_stream_ptr = dynamic_cast<CoprocessorBlockInputStream *>(stream_ptr.get()))
+            {
+                mergeRemoteExecuteSummaries(cop_stream_ptr, merged_remote_execution_summaries);
+            }
+            else
+            {
+                /// local read input stream
+            }
+        }
     }
 
     /// add execution_summary for local executor
