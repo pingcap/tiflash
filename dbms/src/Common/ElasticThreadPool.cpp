@@ -85,7 +85,7 @@ std::future<void> ElasticThreadPool::schedule(Job job)
 ElasticThreadPool::~ElasticThreadPool()
 {
     {
-        std::unique_lock<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
         shutdown = true;
     }
 
