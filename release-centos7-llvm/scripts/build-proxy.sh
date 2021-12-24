@@ -39,4 +39,14 @@ if [ -f /.dockerenv ]; then
     rm -rf /usr/local/lib/aarch64-unknown-linux-gnu/libunwind.a
 fi
 
+
+# On Aarch64, rustc emit dependency of gcc_s at a very first place; however, we do want
+# to make sure our lib is using libunwind and compiler-rt
+if [[ $(uname -m) == 'aarch64' ]]; then
+    echo '#!/usr/bin/env bash' > /usr/bin/clang 
+    echo '/usr/local/bin/clang -Wl,-l:libunwind.so /usr/local/lib/clang/13.0.0/lib/aarch64-unknown-linux-gnu/libclang_rt.builtins.a ${@//*gcc_s*}' >> /usr/bin/clang
+    chmod +x /usr/bin/clang
+    sed -i -e 's/\/usr\/local\/bin\/clang/\/usr\/bin\/clang/g' $HOME/.cargo/config 
+fi
+
 make release
