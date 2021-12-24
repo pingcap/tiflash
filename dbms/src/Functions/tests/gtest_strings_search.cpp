@@ -46,6 +46,11 @@ protected:
     {
         return createConstColumn<String>(1, s);
     }
+
+    static ColumnWithTypeAndName toConst(const UInt8 i)
+    {
+        return createConstColumn<UInt8>(1, i);
+    }
 };
 
 TEST_F(StringMatch, Like3ArgsVectorWithVector)
@@ -240,14 +245,14 @@ TEST_F(StringMatch, LikeConstWithConst)
     std::vector<std::optional<UInt64>> expectFalse = {0};
     std::vector<std::optional<UInt64>> expectTrue = {1};
     ASSERT_COLUMN_EQ(
-        toVec(expectTrue),
+        toConst(1),
         executeFunction(
             "like",
             toConst("resaasfe"),
             toConst("%aa%")));
 
     ASSERT_COLUMN_EQ(
-        toVec(expectFalse),
+        toConst(0),
         executeFunction(
             "like",
             toConst("abcde"),
