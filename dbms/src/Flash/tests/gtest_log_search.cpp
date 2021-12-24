@@ -16,6 +16,10 @@ public:
 
 TEST_F(LogSearchTest, LogSearch)
 {
+    char * prev_tz = getenv("TZ");
+    setenv("TZ", "Asia/Shanghai", 1);
+    tzset();
+
     std::string s = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
     std::string s_bad1 = "[2020/4/4 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
     std::string s_bad2 = "[2020/04/23 13:11:02.329 +08:00] [\"Application : Load metadata done.\"]\n";
@@ -70,6 +74,16 @@ TEST_F(LogSearchTest, LogSearch)
             ASSERT_FALSE(log.has_value());
         }
     }
+
+    if (prev_tz == nullptr)
+    {
+        unsetenv("TZ");
+    }
+    else
+    {
+        setenv("TZ", prev_tz, 1);
+    }
+    tzset();
 }
 
 TEST_F(LogSearchTest, SearchDir)
