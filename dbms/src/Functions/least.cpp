@@ -243,7 +243,7 @@ template <typename A, typename B>
 struct LeastBaseImpl<A, B, true>
 {
     using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
-    using ResultPrecInferer = ModDecimalInferer;
+    using ResultPrecInferer = PlusDecimalInferer;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)

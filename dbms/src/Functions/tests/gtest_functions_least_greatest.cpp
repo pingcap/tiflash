@@ -7,7 +7,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
-
+#include <iostream>
 #include <cstddef>
 #include <vector>
 
@@ -142,19 +142,22 @@ try
                 {DecimalField64(9244, 3)})));
 
 
-    // decimal if overflow
+    // //decimal if overflow
     // ASSERT_COLUMN_EQ(
-    //     createColumn<Nullable<DecimalField256>>(
-    //         std::make_tuple(65, 0),
-    //         {DecimalField256(99999999999999999999999999999999999999999999999999999999999999999, 0)}),
+    //     createColumn<Nullable<Decimal256>>(std::make_tuple(66, 0), {"999999999999999999999999999999999999999999999999999999999999999998"}),
     //     executeFunction(
     //         func_name,
-    //         createColumn<Nullable<Decimal32>>(
-    //             std::make_tuple(7, 5),
-    //             {DecimalField32(3223456, 5)}),
-    //         createColumn<Nullable<Decimal64>>(
-    //             std::make_tuple(15, 3),
-    //             {DecimalField64(9244, 3)})));
+    //         createColumn<Nullable<Decimal256>>(std::make_tuple(66, 0), {"999999999999999999999999999999999999999999999999999999999999999998"}),
+    //         createColumn<Nullable<Decimal256>>(std::make_tuple(66, 0), {"999999999999999999999999999999999999999999999999999999999999999999"})
+    //         ));
+    
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal256>>(std::make_tuple(65, 0), {"99.999"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Decimal256>>(std::make_tuple(65, 0), {"99999999999999999999999999999999999999999999999999999999999999998"}),
+            createColumn<Nullable<Decimal32>>(std::make_tuple(5, 3), {"99.999"})
+            ));
 
     // real least
     ASSERT_COLUMN_EQ(
