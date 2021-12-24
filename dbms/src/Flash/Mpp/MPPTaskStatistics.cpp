@@ -1,4 +1,5 @@
 #include <Common/FmtUtils.h>
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/getMPPTaskTracingLog.h>
@@ -69,7 +70,13 @@ BaseRuntimeStatistics MPPTaskStatistics::collectRuntimeStatistics()
             "Can't find exchange sender statistics after `collectRuntimeStatistics`",
             Errors::Coprocessor::Internal);
     }
-    return it->second->getBaseRuntimeStatistics();
+    auto return_statistics = it->second->getBaseRuntimeStatistics();
+
+    // record io bytes
+    output_bytes = return_statistics.bytes;
+    recordInputBytes(executor_statistics_collector.getDAGContext());
+
+    return return_statistics;
 }
 
 void MPPTaskStatistics::logTracingJson()
@@ -80,6 +87,7 @@ void MPPTaskStatistics::logTracingJson()
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
         R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
+        R"(,"local_input_bytes":{},"remote_input_bytes":{},"output_bytes":{})"
         R"(,"status":"{}","error_message":"{}","working_time":{},"memory_peak":{}}})",
         id.start_ts,
         id.task_id,
@@ -93,6 +101,9 @@ void MPPTaskStatistics::logTracingJson()
         toNanoseconds(compile_end_timestamp),
         toNanoseconds(read_wait_index_start_timestamp),
         toNanoseconds(read_wait_index_end_timestamp),
+        local_input_bytes,
+        remote_input_bytes,
+        output_bytes,
         taskStatusToString(status),
         error_message,
         working_time,
@@ -108,5 +119,29 @@ void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, c
 {
     compile_start_timestamp = start_timestamp;
     compile_end_timestamp = end_timestamp;
+}
+
+void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
+{
+    // input bytes
+    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+    {
+        for (const auto & io_stream : map_entry.second)
+        {
+            auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get());
+            assert(p_stream);
+            const auto & profile_info = p_stream->getProfileInfo();
+            if (dynamic_cast<ExchangeReceiverInputStream *>(p_stream) || dynamic_cast<CoprocessorBlockInputStream *>(p_stream))
+            {
+                // remote read input stream
+                remote_input_bytes += profile_info.bytes;
+            }
+            else
+            {
+                // local read input stream
+                local_input_bytes += profile_info.bytes;
+            }
+        }
+    }
 }
 } // namespace DB
