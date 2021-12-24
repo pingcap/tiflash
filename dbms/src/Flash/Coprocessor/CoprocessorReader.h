@@ -4,6 +4,7 @@
 #include <DataStreams/Timeline.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -33,19 +34,19 @@ struct CoprocessorReaderResult
     String error_msg;
     bool eof;
     String req_info = "cop request";
-    Int64 rows;
+    DecodeDetail decode_detail;
 
     CoprocessorReaderResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
         bool meet_error_ = false,
         const String & error_msg_ = "",
         bool eof_ = false,
-        Int64 rows_ = 0)
+        DecodeDetail decode_detail_ = {})
         : resp(resp_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
-        , rows(rows_)
+        , decode_detail(decode_detail_)
     {}
 };
 
@@ -79,17 +80,18 @@ public:
 
     void cancel() { resp_iter.cancel(); }
 
-    static Int64 decodeChunks(
+    static DecodeDetail decodeChunks(
         const std::shared_ptr<tipb::SelectResponse> & resp,
         std::queue<Block> & block_queue,
         const Block & header,
         const DAGSchema & schema)
     {
-        Int64 rows = 0;
+        DecodeDetail detail;
         int chunk_size = resp->chunks_size();
         if (chunk_size == 0)
-            return rows;
+            return detail;
 
+        detail.packet_bytes = resp->ByteSizeLong();
         for (int i = 0; i < chunk_size; i++)
         {
             Block block;
@@ -109,7 +111,7 @@ public:
                 throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
 
-            rows += block.rows();
+            detail.rows += block.rows();
 
             if (unlikely(block.rows() == 0))
                 continue;
@@ -118,7 +120,7 @@ public:
                 assertBlockSchema(header, block, "CoprocessorReader decode chunks");
             block_queue.push(std::move(block));
         }
-        return rows;
+        return detail;
     }
 
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, Timeline::Timer & timer)
@@ -134,15 +136,19 @@ public:
         auto resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(result.data()))
         {
-            if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock)
+            if (resp->has_error())
+            {
+                return {nullptr, true, resp->error().DebugString(), false};
+            }
+            else if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock && resp->chunks_size() > 0)
                 return {
                     nullptr,
                     true,
                     "Encode type of coprocessor response is not CHBlock, "
                     "maybe the version of some TiFlash node in the cluster is not match with this one",
                     false};
-            auto rows = decodeChunks(resp, block_queue, header, schema);
-            return {resp, false, "", false, rows};
+            auto detail = decodeChunks(resp, block_queue, header, schema);
+            return {resp, false, "", false, detail};
         }
         else
         {

@@ -5,6 +5,7 @@
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
@@ -24,6 +25,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     std::shared_ptr<RemoteReader> remote_reader;
     size_t source_num;
+    std::vector<ConnectionProfileInfo> connection_profile_infos;
 
     Block sample_block;
 
@@ -129,12 +131,25 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 addRemoteExecutionSummaries(*result.resp, 0, false);
             }
         }
-        total_rows += result.rows;
-        LOG_TRACE(
+
+        const auto & decode_detail = result.decode_detail;
+
+        size_t index = 0;
+        if constexpr (is_streaming_reader)
+            index = result.call_index;
+
+        ++connection_profile_infos[index].packets;
+        connection_profile_infos[index].bytes += decode_detail.packet_bytes;
+
+        total_rows += decode_detail.rows;
+        LOG_FMT_TRACE(
             log,
-            fmt::format("recv {} rows from remote for {}, total recv row num: {}", result.rows, result.req_info, total_rows));
-        if (result.rows == 0)
-            return fetchRemoteResult(timer);
+            "recv {} rows from remote for {}, total recv row num: {}",
+            decode_detail.rows,
+            result.req_info,
+            total_rows);
+        if (decode_detail.rows == 0)
+            return fetchRemoteResult();
         return true;
     }
 
@@ -160,6 +175,7 @@ public:
             execution_summaries_inited[i].store(false);
         }
         execution_summaries.resize(source_num);
+        connection_profile_infos.resize(source_num);
         sample_block = Block(columns);
     }
 
@@ -193,6 +209,7 @@ public:
 
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
+    const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;
