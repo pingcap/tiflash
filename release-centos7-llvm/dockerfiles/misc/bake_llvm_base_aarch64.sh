@@ -3,20 +3,21 @@
 
 # Build CI/CD image
 
-function bake_llvm_base_amd64() {
+function bake_llvm_base_aarch64() {
     export PATH="/opt/cmake/bin:/usr/local/bin/:${PATH}"
-    export LIBRARY_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/:${LIBRARY_PATH:+LIBRARY_PATH:}"
-    export LD_LIBRARY_PATH="/usr/local/lib/x86_64-unknown-linux-gnu/:${LD_LIBRARY_PATH:+LD_LIBRARY_PATH:}"
-    export CPLUS_INCLUDE_PATH="/usr/local/include/x86_64-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH:+CPLUS_INCLUDE_PATH:}"
+    export LIBRARY_PATH="/usr/local/lib/aarch64-unknown-linux-gnu/:${LIBRARY_PATH:+LIBRARY_PATH:}"
+    export LD_LIBRARY_PATH="/usr/local/lib/aarch64-unknown-linux-gnu/:${LD_LIBRARY_PATH:+LD_LIBRARY_PATH:}"
+    export CPLUS_INCLUDE_PATH="/usr/local/include/aarch64-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH:+CPLUS_INCLUDE_PATH:}"
     SCRIPTPATH=$(cd $(dirname "$0"); pwd -P)
 
     # Basic Environment
     source $SCRIPTPATH/prepare_basic.sh
     prepare_basic
+    ln -sf /usr/bin/ninja-build /usr/bin/ninja
     
     # CMake
     source $SCRIPTPATH/install_cmake.sh
-    install_cmake "3.22.1" "x86_64"
+    install_cmake "3.22.1" "aarch64"
 
     # LLVM
     source $SCRIPTPATH/bootstrap_llvm.sh
@@ -32,7 +33,7 @@ function bake_llvm_base_amd64() {
 
     # Go
     source $SCRIPTPATH/install_go.sh
-    install_go "1.17" "amd64"
+    install_go "1.17" "arm64"
     export PATH="$PATH:/usr/local/go/bin"
 
     # Rust
@@ -53,4 +54,4 @@ function bake_llvm_base_amd64() {
     CC=cc prepare_python "1.26.0"
 }
 
-bake_llvm_base_amd64
+bake_llvm_base_aarch64
