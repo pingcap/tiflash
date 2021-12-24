@@ -1099,6 +1099,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,
         pipeline.streams.size());
+    dagContext().final_concurrency = std::max(dagContext().final_concurrency, pipeline.streams.size());
 
     if (res.before_aggregation)
     {
@@ -1220,7 +1221,7 @@ void DAGQueryBlockInterpreter::executeExchangeSender(DAGPipeline & pipeline)
 
 void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
 {
-    restoreConcurrency(pipeline, max_streams, taskLogger());
+    restoreConcurrency(pipeline, dagContext().final_concurrency, taskLogger());
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()
