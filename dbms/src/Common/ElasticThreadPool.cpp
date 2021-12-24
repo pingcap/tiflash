@@ -17,7 +17,7 @@ ElasticThreadPool::Job ElasticThreadPool::newJob(std::shared_ptr<std::promise<vo
         {
             job();
             {
-                std::unique_lock<std::mutex> lock(mutex);
+                std::unique_lock lock(mutex);
                 available_cnt++;
                 history_min_available_cnt = std::min(history_min_available_cnt, available_cnt);
             }
