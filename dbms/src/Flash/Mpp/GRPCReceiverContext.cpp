@@ -275,7 +275,7 @@ void GRPCReceiverContext::makeAsyncReader(
 void GRPCReceiverContext::fillSchema(DAGSchema & schema) const
 {
     schema.clear();
-    for (int i = 0; i < exchange_receiver_meta.field_types_size(); i++)
+    for (int i = 0; i < exchange_receiver_meta.field_types_size(); ++i)
     {
         String name = "exchange_receiver_" + std::to_string(i);
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(exchange_receiver_meta.field_types(i));
