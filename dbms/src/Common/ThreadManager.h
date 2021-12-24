@@ -12,11 +12,11 @@ namespace DB
 class ThreadManager
 {
 public:
-    enum Type
+    enum class Type
     {
-        kElasticThreadPool = 0,
-        kRawThread = 1,
-        kFixedThreadPool = 2,
+        ElasticThreadPool,
+        RawThread,
+        FixedThreadPool,
     };
     using Job = std::function<void()>;
     virtual ~ThreadManager() = default;
