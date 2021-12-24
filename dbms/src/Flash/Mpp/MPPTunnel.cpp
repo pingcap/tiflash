@@ -106,6 +106,8 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
                 throw Exception("write to tunnel which is already closed," + send_loop_msg);
         }
 
+        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.packets += 1;
         send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
         if (close_after_write)
         {
