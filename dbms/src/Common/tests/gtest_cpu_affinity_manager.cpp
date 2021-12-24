@@ -86,18 +86,24 @@ TEST(CPUAffinityManager_test, CPUAffinityManager)
 
     CPUAffinityConfig config;
     config.query_cpu_percent = 60;
-    config.cpu_cores = 40;
+    config.cpu_cores = std::thread::hardware_concurrency();
     cpu_affinity.init(config);
 
     ASSERT_TRUE(cpu_affinity.enable());
-    ASSERT_EQ(cpu_affinity.getOtherCPUCores(), 16);
-    ASSERT_EQ(cpu_affinity.getQueryCPUCores(), 24);
 
-    std::vector<int> except_other_cpu_set{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    std::vector<int> except_other_cpu_set;
+    for (int i = 0; i < cpu_affinity.getOtherCPUCores(); i++)
+    {
+        except_other_cpu_set.push_back(i);
+    }
     auto other_cpu_set = cpu_affinity.cpuSetToVec(cpu_affinity.other_cpu_set);
     ASSERT_EQ(other_cpu_set, except_other_cpu_set);
 
-    std::vector<int> except_query_cpu_set{16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39};
+    std::vector<int> except_query_cpu_set;
+    for (int i = 0; i < cpu_affinity.getQueryCPUCores(); i++)
+    {
+        except_query_cpu_set.push_back(cpu_affinity.getOtherCPUCores() + i);
+    }
     auto query_cpu_set = cpu_affinity.cpuSetToVec(cpu_affinity.query_cpu_set);
     ASSERT_EQ(query_cpu_set, except_query_cpu_set);
 

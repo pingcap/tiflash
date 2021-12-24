@@ -399,6 +399,7 @@ BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, Que
 {
     BlockIO streams;
     std::tie(std::ignore, streams) = executeQueryImpl(dag, context, internal, stage);
+    context.getDAGContext()->attachBlockIO(streams);
     return streams;
 }
 

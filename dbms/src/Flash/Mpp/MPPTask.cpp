@@ -40,7 +40,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
     , log(getMPPTaskLog("MPPTask", id))
-    , mpp_task_statistics(log, id, meta.address())
+    , mpp_task_statistics(id, meta.address())
 {}
 
 MPPTask::~MPPTask()
@@ -265,18 +265,18 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     }
 
     mpp_task_statistics.initializeExecutorDAG(dag_context.get());
-    mpp_task_statistics.logStats();
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     DAGQuerySource dag(*context);
-    io = executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    executeQuery(dag, *context, false, QueryProcessingStage::Complete);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-    mpp_task_statistics.compile_start_timestamp = start_time;
-    mpp_task_statistics.compile_end_timestamp = end_time;
+    mpp_task_statistics.setCompileTimestamp(start_time, end_time);
+    mpp_task_statistics.recordReadWaitIndex(*dag_context);
 }
 
 void MPPTask::runImpl()
@@ -309,7 +309,7 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = io.in;
+        auto from = dag_context->getBlockIO().in;
         from->readPrefix();
         LOG_FMT_DEBUG(log, "begin read ");
 
@@ -318,6 +318,14 @@ void MPPTask::runImpl()
 
         from->readSuffix();
         finishWrite();
+
+        auto return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+        LOG_FMT_DEBUG(
+            log,
+            "finish write with {} rows, {} blocks, {} bytes",
+            return_statistics.rows,
+            return_statistics.blocks,
+            return_statistics.bytes);
     }
     catch (Exception & e)
     {
@@ -343,7 +351,7 @@ void MPPTask::runImpl()
         auto process_info = context->getProcessListElement()->getInfo();
         auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
         GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
-        mpp_task_statistics.memory_peak = peak_memory;
+        mpp_task_statistics.setMemoryPeak(peak_memory);
     }
     else
     {
@@ -358,7 +366,7 @@ void MPPTask::runImpl()
         LOG_FMT_WARNING(log, "finish task which was cancelled before");
 
     mpp_task_statistics.end(status.load(), err_msg);
-    mpp_task_statistics.logStats();
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::writeErrToAllTunnels(const String & e)
