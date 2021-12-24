@@ -102,7 +102,7 @@ bool ElasticThreadPool::shrink(std::chrono::milliseconds wait_interval)
     if (cur_min_available_cnt > idle_buffer_size)
     {
         size_t old_threads_size = threads->size();
-        int max_cnt_to_clean = alive_cnt - init_cap;
+        int max_cnt_to_clean = static_cast<int>(alive_cnt) - init_cap;
         int cnt_to_clean = std::min(max_cnt_to_clean, static_cast<int>(cur_min_available_cnt == std::numeric_limits<size_t>::max() ? available_cnt : cur_min_available_cnt) - idle_buffer_size);
         if (cnt_to_clean <= 0)
         {
