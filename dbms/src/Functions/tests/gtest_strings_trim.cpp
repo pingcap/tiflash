@@ -875,6 +875,83 @@ try
                         createConstColumn<Nullable<String>>(5, "xxax x"),
                         createColumn<Nullable<String>>({"x", "xx", "xxa", " x", {}}),
                         createConstColumn<Nullable<Int8>>(5, 3)));
+
+    //different trim policy
+    for (int i = 0; i < 3; i++)
+    {
+        //test NULL and "" case
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"", "", "", {}, "", "", ""}),
+            executeFunction("tidbTrim",
+                            createColumn<Nullable<String>>({"", "", "", "", "", "", ""}),
+                            createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
+                            createConstColumn<Nullable<Int8>>(7, i)));
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({{}, {}, {}, {}, {}, {}, {}}),
+            executeFunction("tidbTrim",
+                            createColumn<Nullable<String>>({{}, {}, {}, {}, {}, {}, {}}),
+                            createColumn<Nullable<String>>({"", "x", "xx", {}, "啊", "\t", " "}),
+                            createConstColumn<Nullable<Int8>>(7, i)));
+
+        //test repeated pattern: ASCII & non-ASCII
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"", "x", "", "x", "", "x", {}}),
+            executeFunction("tidbTrim",
+                            createColumn<Nullable<String>>({"", "x", "xx", "xxx", "xxxx", "xxxxx", {}}),
+                            createColumn<Nullable<String>>({"xx", "xx", "xx", "xx", "xx", "xx", "xx"}),
+                            createConstColumn<Nullable<Int8>>(7, i)));
+
+
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({"", "啊", "", "啊", "", "啊"}),
+            executeFunction("tidbTrim",
+                            createColumn<Nullable<String>>({"", "啊", "啊啊", "啊啊啊", "啊啊啊啊", "啊啊啊啊啊"}),
+                            createColumn<Nullable<String>>({"啊啊", "啊啊", "啊啊", "啊啊", "啊啊", "啊啊"}),
+                            createConstColumn<Nullable<Int8>>(6, i)));
+    }
+
+    //test non-ASCII cases
+    InferredDataInitializerList<Nullable<String>> results_columns_ws_with_core_text[] = {
+        {" 波 波 ", "啊 波 波 啊", " 波 波 ", "啊 波 波 啊", " 波 波 "}, //default(both)
+        {" 波 波 ", "啊 波 波 啊", " 波 波 ", "啊 波 波 啊", " 波 波 "}, //both
+        {" 波 波 ", "啊 波 波 啊", " 波 波 啊啊", "啊 波 波 啊啊啊", " 波 波 啊啊啊啊"}, //left
+        {" 波 波 ", "啊 波 波 啊", "啊啊 波 波 ", "啊啊啊 波 波 啊", "啊啊啊啊 波 波 "} //right
+    };
+
+    InferredDataInitializerList<Nullable<String>> input_columns_ws_with_core_text = {" 波 波 ", "啊 波 波 啊", "啊啊 波 波 啊啊", "啊啊啊 波 波 啊啊啊", "啊啊啊啊 波 波 啊啊啊啊"};
+
+    //different trim policy
+    for (int i = 0; i < 3; i++)
+    {
+        //non-const
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>(results_columns_ws_with_core_text[i]),
+            executeFunction("tidbTrim",
+                            createColumn<Nullable<String>>(input_columns_ws_with_core_text),
+                            createColumn<Nullable<String>>({"啊啊", "啊啊", "啊啊", "啊啊", "啊啊", "啊啊"}),
+                            createConstColumn<Nullable<Int8>>(6, i)));
+
+        //const
+        for (size_t j = 0; j < results_columns_ws_with_core_text[i].size(); j++)
+        {
+            auto input_itr = input_columns_ws_with_core_text.begin();
+            size_t cnt = 0;
+            for (auto res_itr = results_columns_ws_with_core_text[i].begin();
+                 res_itr != results_columns_ws_with_core_text[i].end() && input_itr != input_columns_ws_with_core_text.end();
+                 res_itr++, input_itr++)
+            {
+                ASSERT_COLUMN_EQ(
+                    createConstColumn<Nullable<String>>(5, *res_itr),
+                    executeFunction("tidbTrim",
+                                    createConstColumn<Nullable<String>>(5, *input_itr),
+                                    createConstColumn<Nullable<String>>(5, "啊啊"),
+                                    createConstColumn<Nullable<Int8>>(5, i)));
+                cnt++;
+            }
+            ASSERT_EQ(cnt, input_columns_ws_with_core_text.size());
+            ASSERT_EQ(cnt, results_columns_ws_with_core_text[i].size());
+        }
+    }
 }
 CATCH
 
