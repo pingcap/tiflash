@@ -17,7 +17,7 @@ public:
 TEST_F(LogSearchTest, LogSearch)
 {
     time_t t = time(NULL);
-    struct tm lt = {0};
+    struct tm lt = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr};
     localtime_r(&t, &lt);
     long offset = 60 * 60 * 8 * 1000 - lt.tm_gmtoff * 1000;
 
@@ -79,6 +79,11 @@ TEST_F(LogSearchTest, LogSearch)
 
 TEST_F(LogSearchTest, SearchDir)
 {
+    time_t t = time(NULL);
+    struct tm lt = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr};
+    localtime_r(&t, &lt);
+    long offset = 60 * 60 * 8 * 1000 - lt.tm_gmtoff * 1000;
+
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"/1/test-err.log"}, 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"", ""}, 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {""}, 0));
@@ -120,7 +125,7 @@ TEST_F(LogSearchTest, SearchDir)
                         auto log = itr.next();
                         ASSERT_TRUE(log.has_value());
                         EXPECT_EQ(log->level(), ::diagnosticspb::LogLevel::Debug);
-                        EXPECT_EQ(log->time(), 1587618662329);
+                        EXPECT_EQ(log->time(), 1587618662329 + offset);
                         EXPECT_EQ(log->message(), "[\"Application : Load metadata done.\"]");
                     }
                 });
