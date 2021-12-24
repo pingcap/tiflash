@@ -134,7 +134,6 @@ private:
     bool read_prefixed = false;
     bool read_suffixed = false;
 
-    std::thread thread;
     std::mutex mutex;
     std::shared_ptr<ThreadManager> thd_manager;
 
