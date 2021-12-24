@@ -117,6 +117,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
     void batchRead(MPPDataPacketPtrs & packets, UnaryCallback<size_t> * callback) override
     {
         batch_read_callback.callback = callback;
+        batch_read_callback.read_index = 0;
         batch_read_callback.packets = &packets;
         batch_read_callback.reader = reader.get();
         reader->Read(packets[0].get(), &batch_read_callback);
@@ -125,6 +126,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
     void finish(UnaryCallback<::grpc::Status> * callback) override
     {
         finish_callback.callback = callback;
+        finish_callback.status = ::grpc::Status::OK;
         reader->Finish(&finish_callback.status, &finish_callback);
     }
 };
