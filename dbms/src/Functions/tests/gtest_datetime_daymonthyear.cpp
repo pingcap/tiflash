@@ -118,7 +118,7 @@ protected:
     }
 
 
-    template <bool isconst, bool nullable, typename DT, typename V>
+    template <bool isconst, bool nullable, typename DT>
     void testEmptyFor()
     {
         ColumnWithTypeAndName column;
