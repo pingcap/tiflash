@@ -123,7 +123,6 @@ void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, c
 
 void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
 {
-    // input bytes
     for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
     {
         for (const auto & io_stream : map_entry.second)
@@ -133,12 +132,10 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
             const auto & profile_info = p_stream->getProfileInfo();
             if (dynamic_cast<ExchangeReceiverInputStream *>(p_stream) || dynamic_cast<CoprocessorBlockInputStream *>(p_stream))
             {
-                // remote read input stream
                 remote_input_bytes += profile_info.bytes;
             }
             else
             {
-                // local read input stream
                 local_input_bytes += profile_info.bytes;
             }
         }
