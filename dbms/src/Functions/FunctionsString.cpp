@@ -1589,22 +1589,14 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        size_t arguments_size = arguments.size();
-        if (arguments_size != 2)
-            throw Exception("Function " + getName()
-                                + " requires from 2 parameters: string, length. Passed "
-                                + toString(arguments.size()) + ".",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
         if (!arguments[1]->isNumber())
-            throw Exception("Illegal type " + arguments[1]->getName()
-                                + " of argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -1615,10 +1607,12 @@ public:
 
         const ColumnPtr column_length = block.getByPosition(arguments[1]).column;
         if (!column_length->isColumnConst())
-            throw Exception("2nd arguments of function " + getName() + " must be constants.");
+            throw Exception(fmt::format("2nd arguments of function {} must be constants.", getName()));
+
         Field length_field = (*block.getByPosition(arguments[1]).column)[0];
         if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
-            throw Exception("2nd argument of function " + getName() + " must have UInt/Int type.");
+            throw Exception(fmt::format("2nd argument of function {} must have UInt/Int type.", getName()));
+
         Int64 length;
         if (length_field.getType() == Field::Types::Int64)
         {
@@ -1629,7 +1623,7 @@ public:
             UInt64 u_start = length_field.get<UInt64>();
             if (u_start >= 0x8000000000000000ULL)
                 throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-            length = (Int64)u_start;
+            length = static_cast<Int64>(u_start);
         }
 
         if (length <= 0)
@@ -1646,7 +1640,7 @@ public:
         }
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
