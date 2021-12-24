@@ -106,9 +106,9 @@ private:
         const Block & header);
 
     void connectionDone(
-        const Request & req,
         bool meet_error,
-        const String & local_err_msg);
+        const String & local_err_msg,
+        const LogWithPrefixPtr & log);
 
     std::shared_ptr<RPCContext> rpc_context;
 
@@ -129,7 +129,7 @@ private:
     ExchangeReceiverState state;
     String err_msg;
 
-    LogWithPrefixPtr log;
+    LogWithPrefixPtr exc_log;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

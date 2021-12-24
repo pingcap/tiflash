@@ -141,11 +141,14 @@ struct AsyncRequestStat
     BatchReadCallback batch_read_callback;
     FinishCallback<RPCContext> finish_callback;
 
+    LogWithPrefixPtr log;
+
     AsyncRequestStat(
         MPMCQueue<size_t> * queue,
         MPMCQueue<std::shared_ptr<ReceivedMessage>> * msg_channel_,
         const std::shared_ptr<RPCContext> & context,
-        const Request & req)
+        const Request & req,
+        const LogWithPrefixPtr & log_)
         : rpc_context(context)
         , request(&req)
         , msg_channel(msg_channel_)
@@ -154,11 +157,13 @@ struct AsyncRequestStat
         , make_reader_callback(&trigger)
         , batch_read_callback(&trigger, BATCH_PACKET_COUNT)
         , finish_callback(&trigger)
+        , log(getMPPTaskLog(log_, req_info))
     {
     }
 
     void handle()
     {
+        LOG_FMT_TRACE(log, "Enter {}. stage: {}", __PRETTY_FUNCTION__, stage);
         switch (stage)
         {
         case AsyncRequestStage::NEED_INIT:
@@ -170,13 +175,15 @@ struct AsyncRequestStat
                 reader->batchRead(getPackets(), &batch_read_callback);
                 stage = AsyncRequestStage::WAIT_BATCH_READ;
             }
-            else if (retriable())
-            {
-                //LOG_FMT_WARNING(log, "MakeReader fail for req {}. Retry time {}", req_info, retry_times);
-                waitForRetry();
-            }
             else
-                setDone("Send async stream request fail");
+            {
+                LOG_FMT_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
+
+                if (retriable())
+                    waitForRetry();
+                else
+                    setDone("Exchange receiver meet error : send async stream request fail");
+            }
             break;
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (getPacketCount() > 0)
@@ -185,7 +192,7 @@ struct AsyncRequestStat
                 if (sendPackets())
                     getReader()->batchRead(getPackets(), &batch_read_callback);
                 else
-                    setDone("push packets fail");
+                    setDone("Exchange receiver state abnormal : push packets fail");
             }
             else
             {
@@ -196,12 +203,20 @@ struct AsyncRequestStat
         case AsyncRequestStage::WAIT_FINISH:
             if (getStatus().ok())
                 setDone("");
-            else if (retriable())
-            {
-                waitForRetry();
-            }
             else
-                setDone(getStatus().error_message());
+            {
+                LOG_FMT_WARNING(
+                    log,
+                    "Finish fail. err code: {}, err msg: {}, retry time {}",
+                    getStatus().error_code(),
+                    getStatus().error_message(),
+                    retry_times);
+
+                if (retriable())
+                    waitForRetry();
+                else
+                    setDone("Exchange receiver meet error : " + getStatus().error_message());
+            }
             break;
         case AsyncRequestStage::WAIT_RETRY:
             throw Exception("Can't call handle() when WAIT_RETRY");
@@ -308,7 +323,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , msg_channel(max_buffer_size)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , log(getMPPTaskLog(log_, "ExchangeReceiver"))
+    , exc_log(getMPPTaskLog(log_, "ExchangeReceiver"))
 {
     rpc_context->fillSchema(schema);
     setUpConnection();
@@ -362,7 +377,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(std::vector<Request> async_reques
     stats.reserve(alive_async_connections);
     for (const auto & req : async_requests)
     {
-        stats.emplace_back(&ready_requests, &msg_channel, rpc_context, req);
+        stats.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log);
         stats.back().start();
     }
 
@@ -378,7 +393,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(std::vector<Request> async_reques
             if (stat.finished())
             {
                 --alive_async_connections;
-                connectionDone(*stat.request, stat.meet_error, stat.err_msg);
+                connectionDone(stat.meet_error, stat.err_msg, stat.log);
             }
             else if (stat.waitingForRetry())
             {
@@ -404,10 +419,12 @@ void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
     CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
+    String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+
+    LogWithPrefixPtr log = getMPPTaskLog(exc_log, req_info);
 
     try
     {
-        String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
         auto status = RPCContext::getStatusOK();
         for (int i = 0; i < MAX_RETRY_TIMES; ++i)
         {
@@ -452,8 +469,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
                 bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
                 LOG_FMT_WARNING(
                     log,
-                    "EstablishMPPConnectionRequest meets rpc fail for req {}. Err code = {}, err msg = {}, retriable = {}",
-                    req_info,
+                    "EstablishMPPConnectionRequest meets rpc fail. Err code = {}, err msg = {}, retriable = {}",
                     status.error_code(),
                     status.error_message(),
                     retriable);
@@ -486,7 +502,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(Request req)
         meet_error = true;
         local_err_msg = "fatal error";
     }
-    connectionDone(req, meet_error, local_err_msg);
+    connectionDone(meet_error, local_err_msg, log);
 }
 
 template <typename RPCContext>
@@ -596,9 +612,9 @@ ExchangeReceiverState ExchangeReceiverBase<RPCContext>::getState()
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::connectionDone(
-    const Request & req,
     bool meet_error,
-    const String & local_err_msg)
+    const String & local_err_msg,
+    const LogWithPrefixPtr & log)
 {
     Int32 copy_live_conn = -1;
     {
@@ -612,7 +628,12 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         }
         copy_live_conn = --live_connections;
     }
-    LOG_FMT_DEBUG(log, "{} -> {} end! current alive connections: {}", req.send_task_id, req.recv_task_id, copy_live_conn);
+    LOG_FMT_DEBUG(
+        log,
+        "connection end. meet error: {}, err msg: {}, current alive connections: {}",
+        meet_error,
+        local_err_msg,
+        copy_live_conn);
 
     if (copy_live_conn == 0)
     {
