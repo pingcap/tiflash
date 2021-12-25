@@ -192,30 +192,32 @@ def runUnitTests(label, CURWS, NPROC) {
                 }
             }
             stage("Show UT Coverage") {
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 20, unit: 'MINUTES') {
                     container("builder-llvm") {
-                        sh "NPROC=${NPROC} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
+                        sh "NPROC=${NPROC} BUILD_NUMBER=${BUILD_NUMBER} BUILD_BRANCH=${ghprbTargetBranch} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
                         sh """
-                        cp /tmp/tiflash_gcovr_coverage.xml ./
-                        cp /tmp/tiflash_gcovr_coverage.res ./
-                        chown -R 1000:1000 tiflash_gcovr_coverage.xml tiflash_gcovr_coverage.res
+                        cp /tiflash/profile/diff-coverage ./
+                        cp /tiflash/coverage-report.tar.gz ./
+			chown -R 1000:1000 diff-coverage coverage-report.tar.gz
                         """
-                        ut_coverage_result = sh(script: "cat tiflash_gcovr_coverage.res", returnStdout: true).trim()
+                        ut_coverage_result = sh(script: "cat diff-coverage", returnStdout: true).trim()
                         sh """
                         rm -f comment-pr
                         curl -O http://fileserver.pingcap.net/download/comment-pr
                         chmod +x comment-pr
-                        set +x
-                        ./comment-pr --token=$TOKEN --owner=pingcap --repo=tics --number=${ghprbPullId} --comment="Coverage detail: ${CI_COVERAGE_BASE_URL}/${BUILD_NUMBER}/cobertura/  \n(Coverage detail url is limited office network access)   \n\n ${ut_coverage_result}"
+			set +x
+                        ./comment-pr \
+                           --token=$TOKEN \
+                           --owner=pingcap \
+                           --repo=tics \
+                           --number=${ghprbPullId} \
+                           --comment='${ut_coverage_result}'
                         set -x
                         """
                     }
                 }
-
-                cobertura autoUpdateHealth: false, autoUpdateStability: false, 
-                    coberturaReportFile: "tiflash_gcovr_coverage.xml", 
-                    lineCoverageTargets: "${COVERAGE_RATE}, ${COVERAGE_RATE}, ${COVERAGE_RATE}", 
-                    maxNumberOfBuilds: 10, onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
+	
+        	archiveArtifacts artifacts: 'coverage-report.tar.gz', fingerprint: true        
             }
         }
     }
