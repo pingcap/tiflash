@@ -6,11 +6,19 @@ SRCPATH=/build/tics
 BUILD_DIR=/build/release-centos7-llvm/build-release
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 
-gcovr --xml -r ${SRCPATH} \
-    -e "/usr/include/*" -e "/usr/local/*" -e "/usr/lib/*" \
-    -e "${SRCPATH}/contrib/*" \
-    -e "${SRCPATH}/dbms/src/Debug/*" \
-    -e "${SRCPATH}/dbms/src/Client/*" \
-    --object-directory=${BUILD_DIR} -o /tmp/tiflash_gcovr_coverage.xml -j ${NPROC} -s >/tmp/tiflash_gcovr_coverage.res
+llvm-profdata merge -sparse /tiflash/profile/*.profraw -o /tiflash/profile/merged.profdata 
 
-cat /tmp/tiflash_gcovr_coverage.res
+llvm-cov export \
+    /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon \
+    --format=lcov \
+    --instr-profile /tiflash/profile/merged.profdata \
+    --ignore-filename-regex "/usr/include/.*" \
+    --ignore-filename-regex "/usr/local/.*" \
+    --ignore-filename-regex "/usr/lib/.*" \
+    --ignore-filename-regex "${SRCPATH}/contrib/.*" \
+    --ignore-filename-regex "${SRCPATH}/dbms/src/Debug/.*" \
+    --ignore-filename-regex "${SRCPATH}/dbms/src/Client/.*" \
+    > /tiflash/profile/lcov.info
+
+mkdir -p /tiflash/report
+genhtml /tiflash/profile/lcov.info -o /tiflash/report

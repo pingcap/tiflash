@@ -11,16 +11,16 @@ else
   echo "ccache has been installed"
 fi
 
-command -v gcovr >/dev/null 2>&1
+command -v lcov >/dev/null 2>&1
 if [[ $? != 0 ]]; then
-  echo "try to install gcovr"
+  echo "try to install lcov"
   pushd /tmp
-  curl -o /tmp/gcovr.tar http://fileserver.pingcap.net/download/builds/pingcap/tiflash/ci-cache/gcovr.tar
-  rm -rf gcovr && tar xf gcovr.tar && rm -rf gcovr.tar
-  rm -rf /usr/bin/gcovr && ln -s /tmp/gcovr/gcovr /usr/bin/gcovr
+  wget https://github.com/linux-test-project/lcov/releases/download/v1.15/lcov-1.15-1.noarch.rpm
+  rpm -i lcov-1.15-1.noarch.rpm
+  rm -rf lcov-1.15-1.noarch.rpm
   popd
 else
-  echo "gcovr has been installed"
+  echo "lcov has been installed"
 fi
 
 set -ueox pipefail
@@ -108,8 +108,7 @@ cmake "${SRCPATH}" \
   -DENABLE_TESTS=ON \
   -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
   -DUSE_CCACHE=${USE_CCACHE} \
-  -DTEST_COVERAGE=ON \
-  -DTEST_COVERAGE_XML=ON \
+  -DTEST_LLVM_COVERAGE=ON \
   -DDEBUG_WITHOUT_DEBUG_INFO=ON \
   -DLINKER_NAME=lld \
   -DUSE_LIBCXX=ON \
