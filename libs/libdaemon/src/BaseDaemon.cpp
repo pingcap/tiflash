@@ -81,6 +81,10 @@ using Poco::Message;
 using Poco::Path;
 using Poco::Util::AbstractConfiguration;
 
+#if !USE_UNWIND
+using unw_context_t = ucontext_t;
+#endif
+
 
 constexpr char BaseDaemon::DEFAULT_GRAPHITE_CONFIG_NAME[];
 
@@ -151,7 +155,9 @@ static const size_t buf_size
     = sizeof(int)
     + sizeof(siginfo_t)
     + sizeof(ucontext_t)
+#if USE_UNWIND
     + sizeof(unw_context_t)
+#endif
     + sizeof(ThreadNumber);
 
 using signal_function = void(int, siginfo_t *, void *);
@@ -189,15 +195,19 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
     char buf[buf_size];
     DB::WriteBufferFromFileDescriptor out(signal_pipe.write_fd, buf_size, buf);
 
+#if USE_UNWIND
     // different arch, different unwinder will have different definition for unwind
     // context; therefore, we catpure unw_context_t instead of ucontext_t
     unw_context_t unw_context;
     unw_getcontext(&unw_context);
+#endif
 
     DB::writeBinary(sig, out);
     DB::writePODBinary(*info, out);
     DB::writePODBinary(*reinterpret_cast<const ucontext_t *>(context), out);
+#if USE_UNWIND
     DB::writePODBinary(unw_context, out);
+#endif
     DB::writeBinary(Poco::ThreadNumber::get(), out);
 
     out.next();
@@ -313,7 +323,9 @@ public:
 
                 DB::readPODBinary(info, in);
                 DB::readPODBinary(context, in);
+#if USE_UNWIND
                 DB::readPODBinary(unw_context, in);
+#endif
                 DB::readBinary(thread_num, in);
 
                 onFault(sig, info, context, unw_context, thread_num);
