@@ -549,7 +549,7 @@ TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
                 auto selected = SimdWord{};
                 auto lower_bounds = SimdWord::fromSingle(not_case_lower_bound);
                 auto upper_bounds = SimdWord::fromSingle(not_case_upper_bound);
-                range_check.as_int8 = (word.as_int8 >= lower_bounds.as_int8) & (word.as_int8 <= upper_bounds.as_int8); 
+                range_check.as_int8 = (word.as_int8 >= lower_bounds.as_int8) & (word.as_int8 <= upper_bounds.as_int8);
                 selected.as_int8 = range_check.as_int8 & flip_mask.as_int8;
                 word.as_int8 ^= selected.as_int8;
                 word.toUnaligned(dst);
