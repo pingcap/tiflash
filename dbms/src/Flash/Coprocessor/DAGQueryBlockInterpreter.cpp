@@ -15,6 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -412,7 +413,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     ASTTableJoin::Kind kind = join_type_it->second;
     bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin ||
-            join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
+            join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
     if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
@@ -495,11 +496,11 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
-//    if (kind == ASTTableJoin::Kind::Cross_AntiLeftSemi)
-//    {
-//        columns_added_by_join.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
-//        join_output_columns.emplace_back("non-matched", std::make_shared<DataTypeInt8>());
-//    }
+    if (kind == ASTTableJoin::Kind::LeftSemi)
+    {
+        columns_added_by_join.emplace_back("matched", std::make_shared<DataTypeUInt8>());
+        join_output_columns.emplace_back("matched", std::make_shared<DataTypeUInt8>());
+    }
 
     DataTypes join_key_types;
     getJoinKeyTypes(join, join_key_types);
@@ -587,7 +588,11 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = join_ptr;
-    right_query.join->setSampleBlock(right_query.source->getHeader());
+
+    auto sample_block = right_query.source->getHeader();
+    if (kind == ASTTableJoin::Kind::LeftSemi)
+        sample_block.insert(ColumnWithTypeAndName(std::make_shared<DataTypeUInt8>(), "matched"));
+    right_query.join->setSampleBlock(sample_block);
     dagContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;

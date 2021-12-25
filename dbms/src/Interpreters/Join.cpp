@@ -890,6 +890,24 @@ struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
     }
 };
 
+template <typename Map>
+struct Adder<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::Any, Map>
+{
+    static void addFound(const typename Map::SegmentType::HashTable::ConstLookupResult & /*it*/, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/, const std::vector<size_t> & /*right_indexes*/)
+    {
+        (*filter)[i] = 1;
+        for (size_t j = 0; j < num_columns_to_add; ++j)
+            added_columns[j]->insertDefault();
+    }
+
+    static void addNotFound(size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/)
+    {
+        (*filter)[i] = 0;
+        for (size_t j = 0; j < num_columns_to_add; ++j)
+            added_columns[j]->insertDefault();
+    }
+};
+
 template <ASTTableJoin::Kind KIND, typename Map>
 struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 {
@@ -1281,7 +1299,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     std::unique_ptr<IColumn::Filter> filter;
 
     if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
-        || kind == ASTTableJoin::Kind::Anti)
+        || kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::LeftSemi)
         filter = std::make_unique<IColumn::Filter>(rows);
 
     /// Used with ALL ... JOIN
@@ -1321,10 +1339,23 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
 
-    /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
-    if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
-        for (size_t i = 0; i < existing_columns; ++i)
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
+
+    if (filter)
+    {
+        /// If LeftSemi/LeftAnti JOIN - Put filter into block
+        if (kind == ASTTableJoin::Kind::LeftSemi /*|| kind == ASTTableJoin::Kind::LeftAnti*/)
+        {
+            auto col_res = ColumnUInt8::create();
+            col_res->getData() = std::move(*filter);
+            block.getByName("matched").column = std::move(col_res);
+        }
+        /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
+        else
+        {
+            for (size_t i = 0; i < existing_columns; ++i)
+                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
+        }
+    }
 
     /// If ALL ... JOIN - we replicate all the columns except the new ones.
     if (offsets_to_replicate)
@@ -1650,6 +1681,7 @@ void Join::joinBlock(Block & block) const
     constexpr auto Anti = ASTTableJoin::Kind::Anti;
     constexpr auto Cross_Left = ASTTableJoin::Kind::Cross_Left;
     constexpr auto Cross_Anti = ASTTableJoin::Kind::Cross_Anti;
+    constexpr auto LeftSemi = ASTTableJoin::Kind::LeftSemi;
 
     if (kind == Left && strictness == Any) joinBlockImpl<Left, Any>(block, maps_any);
     else if (kind == Left && strictness == All) joinBlockImpl<Left, All>(block, maps_all);
@@ -1661,6 +1693,7 @@ void Join::joinBlock(Block & block) const
     else if (kind == Right && strictness == All) joinBlockImpl<Inner, All>(block, maps_all);
     else if (kind == Anti && strictness == Any) joinBlockImpl<Anti, Any>(block, maps_any);
     else if (kind == Anti && strictness == All) joinBlockImpl<Anti, All>(block, maps_all);
+    else if (kind == LeftSemi && strictness == Any) joinBlockImpl<LeftSemi, Any>(block, maps_any);
     else if (kind == Cross && strictness == Any) joinBlockImplCross<Cross, Any>(block);
     else if (kind == Cross && strictness == All) joinBlockImplCross<Cross, All>(block);
     else if (kind == Cross_Left && strictness == Any) joinBlockImplCross<Cross_Left, Any>(block);
