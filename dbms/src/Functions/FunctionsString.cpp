@@ -1614,20 +1614,18 @@ public:
         if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
             throw Exception(fmt::format("2nd argument of function {} must have UInt/Int type.", getName()));
 
-        Int64 length;
+        UInt64 length;
         if (length_field.getType() == Field::Types::Int64)
         {
-            length = length_field.get<Int64>();
+            Int64 signed_length = length_field.get<Int64>();
+            length = signed_length < 0 ? 0 : signed_length;
         }
         else
         {
-            UInt64 u_start = length_field.get<UInt64>();
-            if (u_start >= 0x8000000000000000ULL)
-                throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-            length = static_cast<Int64>(u_start);
+            length = length_field.get<UInt64>();
         }
 
-        if (length <= 0)
+        if (0 == length)
         {
             block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
             return;
