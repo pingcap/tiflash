@@ -520,7 +520,6 @@ struct SimdImpl<Generic::WORD_SIZE>
     TIFLASH_AVX512_NAMESPACE(__VA_ARGS__)      \
     TIFLASH_SSE4_NAMESPACE(__VA_ARGS__)        \
     TIFLASH_GENERIC_NAMESPACE(__VA_ARGS__)
-
 } // namespace DB::TargetSpecific
 
 
@@ -550,6 +549,38 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         DECLARE_TYPE(uint32);
         DECLARE_TYPE(uint64);
 
+        template <typename First, typename Second>
+        struct TypePair
+        {
+            using FirstType = First;
+            using SecondType = Second;
+        };
+
+        template <typename Key, typename Head, typename... Tail>
+        struct TypeMatch
+        {
+            using MatchedType = std::conditional_t<std::is_same_v<Key, typename Head::FirstType>, typename Head::SecondType, typename TypeMatch<Key, Tail...>::MatchedType>;
+        };
+
+        template <typename Key, typename Head>
+        struct TypeMatch<Key, Head>
+        {
+            using MatchedType = typename Head::SecondType;
+        };
+
+        template <typename Key>
+        using MatchedVectorType =
+            typename TypeMatch<
+                Key,
+                TypePair<int8_t, int8vec_t>,
+                TypePair<int16_t, int16vec_t>,
+                TypePair<int32_t, int32vec_t>,
+                TypePair<int64_t, int64vec_t>,
+                TypePair<uint8_t, uint8vec_t>,
+                TypePair<uint16_t, uint16vec_t>,
+                TypePair<uint32_t, uint32vec_t>,
+                TypePair<uint64_t, uint64vec_t>>::MatchedType;
+
         union
         {
             typename Detail::SimdImpl<LENGTH>::InternalType as_internal;
@@ -564,7 +595,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         };
 
         template <class T>
-        __attribute__((always_inline)) auto & get()
+        __attribute__((always_inline)) MatchedVectorType<T> & get()
         {
             GET_TYPE(int8);
             GET_TYPE(int16);
@@ -578,7 +609,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         }
 
         template <class T>
-        __attribute__((always_inline)) const auto & get() const
+        __attribute__((always_inline)) const MatchedVectorType<T> & get() const
         {
             GET_TYPE(int8);
             GET_TYPE(int16);
