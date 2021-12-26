@@ -30,5 +30,6 @@ cd /tiflash
 tar -czf coverage-report.tar.gz report
 
 cd $SRCPATH
-SOURCE_DELTA=$(git diff --name-only origin/HEAD | grep -E '.*\.(cpp|h|hpp|cc|c)$')
+COMMIT_HASH_BASE=$(git merge-base origin/${BUILD_BRANCH} HEAD)
+SOURCE_DELTA=$(git diff --name-only ${COMMIT_HASH_BASE} | grep -E '.*\.(cpp|h|hpp|cc|c)$')
 llvm-cov report /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon -instr-profile /tiflash/profile/merged.profdata $SOURCE_DELTA > /tiflash/profile/diff-coverage

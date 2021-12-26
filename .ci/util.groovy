@@ -180,7 +180,7 @@ def runUTCoverTICS(CURWS, NPROC) {
             stage("Show UT Coverage") {
                 timeout(time: 20, unit: 'MINUTES') {
                     container("builder-llvm") {
-                        sh "NPROC=${NPROC} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
+                        sh "NPROC=${NPROC} BUILD_BRANCH=${ghprbTargetBranch} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
                         sh """
                         cp /tiflash/profile/diff-coverage ./
                         chown -R 1000:1000 diff-coverage
