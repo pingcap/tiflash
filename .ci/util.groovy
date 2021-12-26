@@ -178,7 +178,7 @@ def runUTCoverTICS(CURWS, NPROC) {
                 }
             }
             stage("Show UT Coverage") {
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 20, unit: 'MINUTES') {
                     container("builder-llvm") {
                         sh "NPROC=${NPROC} /build/tics/release-centos7-llvm/scripts/upload-ut-coverage.sh"
                         sh """
