@@ -54,11 +54,26 @@ public:
 TEST_F(LoggerUsefulTest, Log)
 {
     auto * log = getLogger();
+#if KEEP_STRINGSTREAM_FOR_LOG
+    LOG_TRACE(log, "Trace log, num: " << 1);
+    LOG_DEBUG(log, "Debug log, num: " << 1);
+    LOG_INFO(log, "Info log, num: " << 1);
+    LOG_WARNING(log, "Warning log, num: " << 1);
+    LOG_ERROR(log, "Error log, num: " << 1);
+#else
     LOG_TRACE(log, "Trace log");
     LOG_DEBUG(log, "Debug log");
     LOG_INFO(log, "Info log");
     LOG_WARNING(log, "Warning log");
     LOG_ERROR(log, "Error log");
+
+    // Do not accept more than one parameter
+    // LOG_ERROR(log, "Error log, num: ", 1);
+#endif
+
+    std::string msg_in_log;
+    msg_in_log = "hello tiflash";
+    LOG_DEBUG(log, msg_in_log);
 }
 
 TEST_F(LoggerUsefulTest, LogFmt)
@@ -69,6 +84,11 @@ TEST_F(LoggerUsefulTest, LogFmt)
     LOG_FMT_INFO(log, "Info log");
     LOG_FMT_WARNING(log, "Warning log");
     LOG_FMT_ERROR(log, "Error log");
+
+    // Error! Do not accept a variable as format string.
+    // std::string msg_in_log;
+    // msg_in_log = "hello tiflash";
+    // LOG_FMT_DEBUG(log, msg_in_log);
 }
 
 } // namespace tests
