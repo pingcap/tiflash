@@ -149,7 +149,12 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         {
             iter->second = std::make_shared<VersionedPageEntries>();
         }
-        updating_locks.emplace(r.page_id, iter->second->acquireLock());
+
+        if (auto update_it = updating_locks.find(r.page_id); update_it == updating_locks.end())
+        {
+            updating_locks.emplace(r.page_id, iter->second->acquireLock());
+        }
+
         updating_pages.emplace_back(iter->second);
     }
 
