@@ -358,11 +358,11 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         if (rpc_context->supportAsync(req))
             async_requests.push_back(std::move(req));
         else
-            workers.push_back(ThreadFactory(true, "Receiver").newThread(&ExchangeReceiverBase<RPCContext>::readLoop, this, std::move(req)));
+            workers.push_back(ThreadFactory::newThread("Receiver", &ExchangeReceiverBase<RPCContext>::readLoop, this, std::move(req)));
     }
 
     if (!async_requests.empty())
-        workers.push_back(ThreadFactory(true, "RecvReactor").newThread(&ExchangeReceiverBase<RPCContext>::reactor, this, std::move(async_requests)));
+        workers.push_back(ThreadFactory::newThread("RecvReactor", &ExchangeReceiverBase<RPCContext>::reactor, this, std::move(async_requests)));
 }
 
 template <typename RPCContext>
