@@ -1168,7 +1168,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
     if (kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti)
     {
-        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByPosition(block.columns() - 1).column.get());
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName("match-helper").column.get());
         const auto & old_vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
 
         auto col_matched = ColumnInt8::create(offsets_to_replicate->size());
@@ -1196,9 +1196,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             prev_offset = current_offset;
         }
 
-        for (size_t i = 0; i < block.columns() - 1; i++)
+        for (size_t i = 0; i < block.columns(); i++)
             block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
-        block.getByPosition(block.columns() - 1).column = makeNullable(std::move(col_matched));
+        block.getByName("match-helper").column = makeNullable(std::move(col_matched));
         return;
     }
 
@@ -1421,7 +1421,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     /// for antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == ASTTableJoin::Kind::LeftAnti)
     {
-        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByPosition(block.columns() - 1).column.get());
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName("match-helper").column.get());
         const auto & vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
 
         auto col_non_matched = ColumnInt8::create(rows);
@@ -1430,7 +1430,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
         for (size_t i = 0; i < rows; ++i)
             vec_non_matched[i] = !vec_matched[i];
 
-        block.getByPosition(block.columns() - 1).column = makeNullable(std::move(col_non_matched));
+        block.getByName("match-helper").column = makeNullable(std::move(col_non_matched));
     }
 }
 
