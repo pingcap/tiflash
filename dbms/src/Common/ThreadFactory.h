@@ -31,7 +31,7 @@ public:
     }
 
     template <typename F, typename... Args>
-    static ThreadPool::Job newJob(F && f, Args &&... args)
+    static auto newJob(F && f, Args &&... args)
     {
         auto memory_tracker = current_memory_tracker;
         /// Use std::tuple to workaround the limit on the lambda's init-capture of C++17.

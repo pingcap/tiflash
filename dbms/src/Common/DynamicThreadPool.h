@@ -18,12 +18,17 @@ private:
     using Queue = MPMCQueue<TaskPtr>;
 
     // used for dynamic threads
-    struct DynamicNode;
+    struct DynamicNode : public SimpleIntrusiveNode<DynamicNode>
+    {
+        std::condition_variable cv;
+        TaskPtr task;
+    };
 
 public:
     template <typename Duration>
     DynamicThreadPool(size_t initial_size, Duration auto_shrink_cooldown)
         : dynamic_auto_shrink_cooldown(std::chrono::duration_cast<std::chrono::nanoseconds>(auto_shrink_cooldown))
+        , idle_fixed_queues(initial_size)
     {
         init(initial_size);
     }
@@ -54,8 +59,8 @@ private:
     bool scheduledToExistedDynamicThread(TaskPtr & task);
     void scheduledToNewDynamicThread(TaskPtr & task);
 
-    void fixed_work(size_t index);
-    void dynamic_work(TaskPtr initial_task);
+    void fixedWork(size_t index);
+    void dynamicWork(TaskPtr initial_task);
 
     const std::chrono::nanoseconds dynamic_auto_shrink_cooldown;
 
@@ -65,7 +70,7 @@ private:
     boost::lockfree::queue<Queue *> idle_fixed_queues;
 
     std::mutex dynamic_mutex;
-    std::unique_ptr<DynamicNode> dynamic_idle_head;
+    DynamicNode dynamic_idle_head;
     bool in_destructing = false;
 
     std::atomic<Int64> alive_dynamic_threads = 0;

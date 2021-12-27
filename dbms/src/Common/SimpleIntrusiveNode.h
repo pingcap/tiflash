@@ -48,13 +48,18 @@ struct SimpleIntrusiveNode : private boost::noncopyable
 
     bool isSingle() const
     {
-        return next == prev;
+        return next == getThis();
     }
 
 protected:
     ALWAYS_INLINE Node * getThis()
     {
         return static_cast<Node *>(this);
+    }
+
+    ALWAYS_INLINE const Node * getThis() const
+    {
+        return static_cast<const Node *>(this);
     }
 };
 

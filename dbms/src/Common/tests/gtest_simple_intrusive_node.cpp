@@ -65,6 +65,15 @@ TEST(SimpleIntrusiveNode, testAppendTo)
 
     ASSERT_EQ(getElems(&n0, getValue), vec({0, 1, 2}));
 }
+
+TEST(SimpleIntrusiveNode, testPrependTo)
+{
+    IntNode n0(0), n1(1), n2(2);
+    n1.prependTo(&n0);
+    n2.prependTo(&n1);
+
+    ASSERT_EQ(getElems(&n0, getValue), vec({0, 2, 1}));
+}
 } // namespace
 } // namespace DB::tests
 

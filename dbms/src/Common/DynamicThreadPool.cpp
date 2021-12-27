@@ -2,12 +2,6 @@
 
 namespace DB
 {
-struct DynamicThreadPool::DynamicNode : public SimpleIntrusiveNode<DynamicThreadPool::DynamicNode>
-{
-    std::condition_variable cv;
-    TaskPtr task;
-};
-
 DynamicThreadPool::~DynamicThreadPool()
 {
     for (auto & queue : fixed_queues)
@@ -20,7 +14,7 @@ DynamicThreadPool::~DynamicThreadPool()
         std::unique_lock lock(dynamic_mutex);
         in_destructing = true;
         // do not need to detach node here
-        for (auto * node = dynamic_idle_head->next; node != dynamic_idle_head.get(); node = node->next)
+        for (auto * node = dynamic_idle_head.next; node != &dynamic_idle_head; node = node->next)
             node->cv.notify_one();
     }
 
@@ -39,13 +33,11 @@ DynamicThreadPool::ThreadCount DynamicThreadPool::threadCount() const
 
 void DynamicThreadPool::init(size_t initial_size)
 {
-    dynamic_idle_head = std::make_unique<DynamicNode>();
+    for (size_t i = 0; i < initial_size; ++i)
+        fixed_queues.emplace_back(std::make_unique<Queue>(2));
 
     for (size_t i = 0; i < initial_size; ++i)
-        fixed_queues.emplace_back(std::make_unique<Queue>(2)); // reserve 2 slots to avoid blocking: one schedule, one dtor.
-
-    for (size_t i = 0; i < initial_size; ++i)
-        fixed_threads.emplace_back(ThreadFactory(true, "FixedThread").newThread(&DynamicThreadPool::fixed_work, this, i));
+        fixed_threads.emplace_back(ThreadFactory::newThread("FixedThread", &DynamicThreadPool::fixedWork, this, i));
 }
 
 void DynamicThreadPool::scheduleTask(TaskPtr task)
@@ -68,9 +60,9 @@ bool DynamicThreadPool::scheduledToFixedThread(TaskPtr & task)
 bool DynamicThreadPool::scheduledToExistedDynamicThread(TaskPtr & task)
 {
     std::unique_lock lock(dynamic_mutex);
-    if (dynamic_idle_head->isSingle())
+    if (dynamic_idle_head.isSingle())
         return false;
-    DynamicNode * node = dynamic_idle_head->next;
+    DynamicNode * node = dynamic_idle_head.next;
     // detach node to avoid assigning two tasks to node.
     node->detach();
     node->task = std::move(task);
@@ -81,11 +73,11 @@ bool DynamicThreadPool::scheduledToExistedDynamicThread(TaskPtr & task)
 void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
 {
     alive_dynamic_threads.fetch_add(1);
-    std::thread t = ThreadFactory(true, "DynamicThread").newThread(&DynamicThreadPool::dynamic_work, this, std::move(task));
+    std::thread t = ThreadFactory::newThread("DynamicThread", &DynamicThreadPool::dynamicWork, this, std::move(task));
     t.detach();
 }
 
-void DynamicThreadPool::fixed_work(size_t index)
+void DynamicThreadPool::fixedWork(size_t index)
 {
     Queue * queue = fixed_queues[index].get();
     while (true)
@@ -99,7 +91,7 @@ void DynamicThreadPool::fixed_work(size_t index)
     }
 }
 
-void DynamicThreadPool::dynamic_work(TaskPtr initial_task)
+void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
     initial_task->execute();
 
@@ -111,7 +103,7 @@ void DynamicThreadPool::dynamic_work(TaskPtr initial_task)
             if (in_destructing)
                 break;
             // attach to just after head to reuse hot threads so that cold threads have chance to exit
-            node.appendTo(dynamic_idle_head.get());
+            node.appendTo(&dynamic_idle_head);
             node.cv.wait_for(lock, dynamic_auto_shrink_cooldown);
             node.detach();
         }
