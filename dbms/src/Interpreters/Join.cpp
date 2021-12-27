@@ -924,6 +924,8 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         current_offset += rows_joined;
         (*offsets)[i] = current_offset;
+        if (KIND == ASTTableJoin::Kind::LeftSemi)
+            (*filter)[i] = 1;
         if (KIND == ASTTableJoin::Kind::Anti)
             /// anti join with other condition is very special: if the row is matched during probe stage, we can not throw it
             /// away because it might failed in other condition, so we add the matched rows to the result, but set (*filter)[i] = 0
@@ -939,6 +941,8 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
         }
         else
         {
+            if (KIND == ASTTableJoin::Kind::LeftSemi)
+                (*filter)[i] = 0;
             if (KIND == ASTTableJoin::Kind::Anti)
                 (*filter)[i] = 1;
             ++current_offset;
@@ -1163,7 +1167,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         if (prev_offset < current_offset)
         {
             /// for outer join, at least one row must be kept
-            if (isLeftJoin(kind) && !has_row_kept)
+            if ((isLeftJoin(kind) || kind == ASTTableJoin::Kind::LeftSemi) && !has_row_kept)
                 row_filter[prev_offset] = 1;
             if (isAntiJoin(kind))
             {
@@ -1179,6 +1183,12 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             }
         }
         prev_offset = current_offset;
+    }
+    if (kind == ASTTableJoin::Kind::LeftSemi)
+    {
+        for (size_t i = 0; i < block.columns(); i++)
+            block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
+        return;
     }
     if (isLeftJoin(kind))
     {
@@ -1343,14 +1353,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     if (filter)
     {
         /// If LeftSemi/LeftAnti JOIN - Put filter into block
-        if (kind == ASTTableJoin::Kind::LeftSemi /*|| kind == ASTTableJoin::Kind::LeftAnti*/)
-        {
-            auto col_res = ColumnUInt8::create();
-            col_res->getData() = std::move(*filter);
-            block.getByName("matched").column = std::move(col_res);
-        }
-        /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
-        else
+        if (kind != ASTTableJoin::Kind::LeftSemi /*&& kind != ASTTableJoin::Kind::LeftAnti*/)
         {
             for (size_t i = 0; i < existing_columns; ++i)
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
@@ -1368,6 +1371,14 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
+    }
+
+    /// If LeftSemi/LeftAnti JOIN - Put filter into block
+    if (kind == ASTTableJoin::Kind::LeftSemi /*|| kind == ASTTableJoin::Kind::LeftAnti*/)
+    {
+        auto col_res = ColumnUInt8::create();
+        col_res->getData() = std::move(*filter);
+        block.getByName("matched").column = std::move(col_res);
     }
 }
 
@@ -1694,6 +1705,7 @@ void Join::joinBlock(Block & block) const
     else if (kind == Anti && strictness == Any) joinBlockImpl<Anti, Any>(block, maps_any);
     else if (kind == Anti && strictness == All) joinBlockImpl<Anti, All>(block, maps_all);
     else if (kind == LeftSemi && strictness == Any) joinBlockImpl<LeftSemi, Any>(block, maps_any);
+    else if (kind == LeftSemi && strictness == All) joinBlockImpl<LeftSemi, All>(block, maps_all);
     else if (kind == Cross && strictness == Any) joinBlockImplCross<Cross, Any>(block);
     else if (kind == Cross && strictness == All) joinBlockImplCross<Cross, All>(block);
     else if (kind == Cross_Left && strictness == Any) joinBlockImplCross<Cross_Left, Any>(block);
