@@ -71,7 +71,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    auto worker = ThreadFactory(true, "MPPTask").newThread(&MPPTask::runImpl, this->shared_from_this());
+    auto worker = ThreadFactory::newThread("MPPTask", &MPPTask::runImpl, this->shared_from_this());
     worker.detach();
 }
 
