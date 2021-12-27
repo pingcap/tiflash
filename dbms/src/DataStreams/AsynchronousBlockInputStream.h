@@ -122,7 +122,7 @@ protected:
     void next()
     {
         ready.reset();
-        pool.schedule(ThreadFactory(false, "AsyncBlockInput").newJob([this] { calculate(); }));
+        pool.schedule(ThreadFactory::newJob([this] { calculate(); }));
     }
 
 
