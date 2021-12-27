@@ -13,8 +13,9 @@ class StringTidbConcat : public DB::tests::FunctionTest
 public:
     static constexpr auto func_name = "tidbConcat";
 
-    // FunctionTiDBConcat.useDefaultImplementationForNulls() = true, no need to test null.
-    std::vector<String> test_strings = {"", "www.pingcap", "中文.测.试。。。"};
+    using Type = Nullable<String>;
+
+    InferredDataVector<Type> test_strings = {"", "www.pingcap", "中文.测.试。。。", {}};
 };
 
 TEST_F(StringTidbConcat, OneArgTest)
@@ -24,16 +25,16 @@ try
     {
         // column
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({value}),
+            createColumn<Type>({value}),
             executeFunction(
                 StringTidbConcat::func_name,
-                createColumn<Nullable<String>>({value})));
+                createColumn<Type>({value})));
         // const
         ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<String>>(1, value),
+            createConstColumn<Type>(1, value),
             executeFunction(
                 StringTidbConcat::func_name,
-                createConstColumn<Nullable<String>>(1, value)));
+                createConstColumn<Type>(1, value)));
     }
 }
 CATCH
@@ -41,20 +42,23 @@ CATCH
 TEST_F(StringTidbConcat, TwoArgsTest)
 try
 {
-    auto two_args_test = [&](const String & value1, const String & value2) {
-        String result = value1 + value2;
+    auto two_args_test = [&](const InferredFieldType<Type> & value1, const InferredFieldType<Type> & value2) {
+        // one of value is null, result is null.
+        bool is_result_not_null = value1.has_value() && value2.has_value();
+        InferredFieldType<Type> result = is_result_not_null ? (value1.value() + value2.value()) : std::optional<String>{};
         auto inner_test = [&](bool is_value1_const, bool is_value2_const) {
-            auto is_result_const = is_value1_const && is_value2_const;
+            // all args is const or has only null const
+            auto is_result_const = (is_value1_const && is_value2_const) || (!value1.has_value() && is_value1_const) || (!value2.has_value() && is_value2_const);
             ASSERT_COLUMN_EQ(
-                is_result_const ? createConstColumn<Nullable<String>>(1, result) : createColumn<Nullable<String>>({result}),
+                is_result_const ? createConstColumn<Type>(1, result) : createColumn<Type>({result}),
                 executeFunction(
                     StringTidbConcat::func_name,
-                    is_value1_const ? createConstColumn<Nullable<String>>(1, value1) : createColumn<Nullable<String>>({value1}),
-                    is_value2_const ? createConstColumn<Nullable<String>>(1, value2) : createColumn<Nullable<String>>({value2})));
+                    is_value1_const ? createConstColumn<Type>(1, value1) : createColumn<Type>({value1}),
+                    is_value2_const ? createConstColumn<Type>(1, value2) : createColumn<Type>({value2})));
         };
         std::vector<bool> is_consts = {true, false};
-        for (const auto & is_value1_const : is_consts)
-            for (const auto & is_value2_const : is_consts)
+        for (bool is_value1_const : is_consts)
+            for (bool is_value2_const : is_consts)
                 inner_test(is_value1_const, is_value2_const);
     };
 
@@ -67,13 +71,13 @@ CATCH
 TEST_F(StringTidbConcat, MoreArgsTest)
 try
 {
-    auto more_args_test = [&](std::vector<String> values, const String & result) {
+    auto more_args_test = [&](const std::vector<String> & values, const String & result) {
         ColumnsWithTypeAndName args;
         for (const auto & value : values)
-            args.push_back(createColumn<Nullable<String>>({value}));
+            args.push_back(createColumn<String>({value}));
 
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>({result}),
+            createColumn<String>({result}),
             executeFunction(StringTidbConcat::func_name, args));
     };
 
