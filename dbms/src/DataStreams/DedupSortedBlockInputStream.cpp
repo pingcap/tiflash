@@ -1,33 +1,34 @@
-#include <DataStreams/DedupSortedBlockInputStream.h>
-
-#include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/ThreadFactory.h>
+#include <Common/setThreadName.h>
+#include <DataStreams/DedupSortedBlockInputStream.h>
 
 // #define DEDUP_TRACER
 #ifndef DEDUP_TRACER
-    #define TRACER(message)
+#define TRACER(message)
 #else
-    #define TRACER(message) LOG_TRACE(log, message)
+#define TRACER(message) LOG_TRACE(log, message)
 #endif
 
 namespace CurrentMetrics
 {
-    // TODO: increase it
-    extern const Metric QueryThread;
-}
+// TODO: increase it
+extern const Metric QueryThread;
+} // namespace CurrentMetrics
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 namespace DB
 {
-
 DedupSortedBlockInputStream::DedupSortedBlockInputStream(BlockInputStreams & inputs_, const SortDescription & description_)
-    : description(description_), queue_max(1), source_blocks(inputs_.size(), queue_max),
-        output_block(inputs_.size() * queue_max), readers(inputs_.size())
+    : description(description_)
+    , queue_max(1)
+    , source_blocks(inputs_.size(), queue_max)
+    , output_block(inputs_.size() * queue_max)
+    , readers(inputs_.size())
 {
     log = &Poco::Logger::get("DedupSorted");
 
@@ -234,8 +235,7 @@ void DedupSortedBlockInputStream::asyncDedupByQueue()
         }
     }
 
-    LOG_DEBUG(log, "P All Done. Bounds " << bounds.str() << " Queue " << queue.str() <<
-        "Streams finished " << finished_streams << "/" << cursors.size());
+    LOG_DEBUG(log, "P All Done. Bounds " << bounds.str() << " Queue " << queue.str() << "Streams finished " << finished_streams << "/" << cursors.size());
 }
 
 
@@ -282,4 +282,4 @@ void DedupSortedBlockInputStream::pushBlockBounds(const DedupingBlockPtr & block
 }
 
 
-}
+} // namespace DB

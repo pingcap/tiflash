@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/MemoryTracker.h>
+
 #include <boost/noncopyable.hpp>
 
 namespace DB
@@ -26,5 +27,4 @@ private:
     bool enable;
     MemoryTracker * old_memory_tracker;
 };
-} // namespace
-
+} // namespace DB
