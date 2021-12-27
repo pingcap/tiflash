@@ -270,7 +270,6 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
-    target_include_directories(gtests_dbms BEFORE PRIVATE ${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest/include)
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
     target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions tiflash-dttool-lib)
