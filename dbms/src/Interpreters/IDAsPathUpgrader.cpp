@@ -140,7 +140,7 @@ void renamePath(const String & old_path, const String & new_path, Poco::Logger *
         if (must_success)
             throw Exception(err_msg);
         else
-            LOG_FMT_WARNING(log, err_msg);
+            LOG_WARNING(log, err_msg);
     }
 }
 

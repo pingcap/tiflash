@@ -210,7 +210,7 @@ grpc::Status FlashService::Coprocessor(
         }
         if (tunnel == nullptr)
         {
-            LOG_FMT_ERROR(log, err_msg);
+            LOG_ERROR(log, err_msg);
             if (writer->Write(getPacketWithError(err_msg)))
             {
                 return grpc::Status::OK;

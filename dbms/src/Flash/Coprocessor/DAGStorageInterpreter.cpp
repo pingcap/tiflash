@@ -531,7 +531,7 @@ std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> DAGStorage
         buffer.append(")");
         return buffer.toString();
     };
-    LOG_FMT_INFO(log, print_retry_regions());
+    LOG_INFO(log, print_retry_regions());
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;

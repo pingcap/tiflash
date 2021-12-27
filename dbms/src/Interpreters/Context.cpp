@@ -610,7 +610,7 @@ void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & co
             settings.set(key, config_value);
         }
     }
-    LOG_FMT_INFO(shared->log, dt_config_reload_log);
+    LOG_INFO(shared->log, dt_config_reload_log);
 }
 
 void Context::calculateUserSettings()

@@ -366,7 +366,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 std::stringstream log_str;
                 log_str << "Query pipeline:\n";
                 res.in->dumpTree(log_str);
-                LOG_FMT_DEBUG(&Poco::Logger::get("executeQuery"), log_str.str());
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), log_str.str());
             }
         }
     }

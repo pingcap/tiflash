@@ -518,7 +518,7 @@ std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fna
     if (ifs.fail())
     {
         auto msg = fmt::format("open {} fail: {}", fname, strerror(errno));
-        LOG_FMT_ERROR(log, msg);
+        LOG_ERROR(log, msg);
         throw Exception(msg, ErrorCodes::UNKNOWN_EXCEPTION);
     }
     std::string s;
@@ -551,7 +551,7 @@ std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fna
     if (read_bytes == -1 || write_bytes == -1)
     {
         auto msg = fmt::format("read_bytes: {} write_bytes: {} Invalid result.", read_bytes, write_bytes);
-        LOG_FMT_ERROR(log, msg);
+        LOG_ERROR(log, msg);
         throw Exception(msg, ErrorCodes::UNKNOWN_EXCEPTION);
     }
     return {read_bytes, write_bytes};
@@ -662,7 +662,7 @@ void IORateLimiter::autoTune()
     }
     catch (DB::Exception & e)
     {
-        LOG_FMT_ERROR(log, e.message());
+        LOG_ERROR(log, e.message());
     }
 }
 
