@@ -252,7 +252,7 @@ if (ENABLE_TESTS)
         add_subdirectory(${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
         target_compile_definitions (gtest INTERFACE GTEST_HAS_POSIX_RE=0)
-        target_include_directories (gtest INTERFACE ${ClickHouse_SOURCE_DIR}/contrib/googletest/include)
+        target_include_directories (gtest INTERFACE ${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest/include)
     endif ()
 
     macro(grep_gtest_sources BASE_DIR DST_VAR)
@@ -270,6 +270,7 @@ if (ENABLE_TESTS)
         ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+    target_include_directories(gtests_dbms BEFORE PRIVATE ${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest/include)
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
     target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions tiflash-dttool-lib)

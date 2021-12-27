@@ -2,39 +2,8 @@
 
 namespace DB
 {
-struct DynamicThreadPool::DynamicNode
+struct DynamicThreadPool::DynamicNode : public SimpleIntrusiveNode<DynamicThreadPool::DynamicNode>
 {
-    DynamicNode()
-    {
-        next = this;
-        prev = this;
-    }
-
-    /// valid when call on a single node whose next and prev is itself.
-    void prepend(DynamicNode * head)
-    {
-        next = head->next;
-        prev = head;
-        head->next->prev = this;
-        head->next = this;
-    }
-
-    /// valid when call on a single node whose next and prev is itself.
-    void detach()
-    {
-        prev->next = next;
-        next->prev = prev;
-        next = this;
-        prev = this;
-    }
-
-    bool noFollowers() const
-    {
-        return next == prev;
-    }
-
-    DynamicNode * next;
-    DynamicNode * prev;
     std::condition_variable cv;
     TaskPtr task;
 };
@@ -99,7 +68,7 @@ bool DynamicThreadPool::scheduledToFixedThread(TaskPtr & task)
 bool DynamicThreadPool::scheduledToExistedDynamicThread(TaskPtr & task)
 {
     std::unique_lock lock(dynamic_mutex);
-    if (dynamic_idle_head->noFollowers())
+    if (dynamic_idle_head->isSingle())
         return false;
     DynamicNode * node = dynamic_idle_head->next;
     // detach node to avoid assigning two tasks to node.
@@ -141,7 +110,8 @@ void DynamicThreadPool::dynamic_work(TaskPtr initial_task)
             std::unique_lock lock(dynamic_mutex);
             if (in_destructing)
                 break;
-            node.prepend(dynamic_idle_head.get()); // prepend to reuse hot threads so that cold threads have chance to exit
+            // attach to just after head to reuse hot threads so that cold threads have chance to exit
+            node.appendTo(dynamic_idle_head.get());
             node.cv.wait_for(lock, dynamic_auto_shrink_cooldown);
             node.detach();
         }
