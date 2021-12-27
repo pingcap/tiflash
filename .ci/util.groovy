@@ -196,13 +196,13 @@ def runUTCoverTICS(CURWS, NPROC) {
                            --owner=pingcap \
                            --repo=tics \
                            --number=${ghprbPullId} \
-                           --comment="Coverage detail: \n```\n${ut_coverage_result}\n```"
+                           --comment="Coverage:\n${ut_coverage_result}\nSee unit-test artifacts for detailed coverage report."
                         set -x
                         """
                     }
                 }
 	
-        	archiveArtifacts artifacts: '/tiflash/artifacts', fingerprint: true        
+        	archiveArtifacts artifacts: '/tiflash/coverage-report.tar.gz', fingerprint: true        
             }
         }
     }
