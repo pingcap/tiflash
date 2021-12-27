@@ -177,7 +177,7 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         case WriteBatch::WriteType::REF:
         {
             // Put/upsert/ref all should append a new version for this page
-            updating_pages[idx]->createNewVersion(last_sequence + 1, records[idx].entry);
+            updating_pages[idx]->createNewVersion(last_sequence + 1, r.entry);
             break;
         }
         case WriteBatch::WriteType::DEL:
@@ -187,10 +187,10 @@ void PageDirectory::apply(PageEntriesEdit && edit)
         }
         }
 
-        auto update_it = updating_locks.find(r.page_id);
-        update_it->second.second -= 1;
-        if (update_it->second.second == 0)
-            updating_locks.erase(records[idx].page_id);
+        auto locks_it = updating_locks.find(r.page_id);
+        locks_it->second.second -= 1;
+        if (locks_it->second.second == 0)
+            updating_locks.erase(r.page_id);
     }
 
     if (!updating_locks.empty())
