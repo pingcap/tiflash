@@ -1278,6 +1278,10 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
 
     /// Add new columns to the block.
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
+
+    if (kind == ASTTableJoin::Kind::LeftSemi /*|| kind == ASTTableJoin::Kind::LeftAnti*/)
+        num_columns_to_add--;
+
     MutableColumns added_columns;
     added_columns.reserve(num_columns_to_add);
 
@@ -1376,9 +1380,11 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     /// If LeftSemi/LeftAnti JOIN - Put filter into block
     if (kind == ASTTableJoin::Kind::LeftSemi /*|| kind == ASTTableJoin::Kind::LeftAnti*/)
     {
-        auto col_res = ColumnUInt8::create();
-        col_res->getData() = std::move(*filter);
-        block.getByName("matched").column = std::move(col_res);
+        auto col_res = ColumnInt8::create(rows);
+        auto & col_data = col_res->getData();
+        for (size_t i = 0; i < rows; ++i)
+            col_data[i] = static_cast<Int8>((*filter)[i]);
+        block.getByName("matched").column = makeNullable(std::move(col_res));
     }
 }
 

@@ -498,8 +498,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     if (kind == ASTTableJoin::Kind::LeftSemi)
     {
-        columns_added_by_join.emplace_back("matched", std::make_shared<DataTypeUInt8>());
-        join_output_columns.emplace_back("matched", std::make_shared<DataTypeUInt8>());
+        columns_added_by_join.emplace_back("matched", makeNullable(std::make_shared<DataTypeInt8>()));
+        join_output_columns.emplace_back("matched", makeNullable(std::make_shared<DataTypeInt8>()));
     }
 
     DataTypes join_key_types;
@@ -591,7 +591,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
 
     auto sample_block = right_query.source->getHeader();
     if (kind == ASTTableJoin::Kind::LeftSemi)
-        sample_block.insert(ColumnWithTypeAndName(std::make_shared<DataTypeUInt8>(), "matched"));
+        sample_block.insert(ColumnWithTypeAndName(makeNullable(std::make_shared<DataTypeInt8>()), "matched"));
     right_query.join->setSampleBlock(sample_block);
     dagContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
