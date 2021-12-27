@@ -48,7 +48,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
     // we also log the content of dmfile checksum config
     if (auto conf = dmfile->getConfiguration())
     {
-        LOG_FMT_INFO(logger, "with new checksum: true\n");
+        LOG_FMT_INFO(logger, "with new checksum: true");
         switch (conf->getChecksumAlgorithm())
         {
         case DB::ChecksumAlgo::None:
