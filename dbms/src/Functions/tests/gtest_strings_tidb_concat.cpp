@@ -12,119 +12,87 @@ class StringTidbConcat : public DB::tests::FunctionTest
 {
 public:
     static constexpr auto func_name = "tidbConcat";
+
+    // FunctionTiDBConcat.useDefaultImplementationForNulls() = true, no need to test null.
+    std::vector<String> test_strings = {"", "www.pingcap", "中文.测.试。。。"};
 };
 
 TEST_F(StringTidbConcat, OneArgTest)
 try
 {
-    /// column
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}),
-        executeFunction(
-            StringTidbConcat::func_name,
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
-
-    /// const
-    auto test_const = [&](const InferredFieldType<Nullable<String>> & value) {
+    for (const auto & value : test_strings)
+    {
+        // column
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<String>>({value}),
+            executeFunction(
+                StringTidbConcat::func_name,
+                createColumn<Nullable<String>>({value})));
+        // const
         ASSERT_COLUMN_EQ(
             createConstColumn<Nullable<String>>(1, value),
             executeFunction(
                 StringTidbConcat::func_name,
                 createConstColumn<Nullable<String>>(1, value)));
-    };
-    test_const("");
-    test_const("www.pingcap");
-    test_const("中文.测.试。。。");
-    test_const({});
-
-    /// only null
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(1),
-        executeFunction(
-            StringTidbConcat::func_name,
-            createOnlyNullColumn(1)));
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(1),
-        executeFunction(
-            StringTidbConcat::func_name,
-            createOnlyNullColumnConst(1)));
+    }
 }
 CATCH
 
 TEST_F(StringTidbConcat, TwoArgsTest)
 try
 {
-    /// column, column
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"", "www.pingcapwww.pingcap", "中文.测.试。。。中文.测.试。。。", {}, "中文.测.试。。。", "中文.测.试。。。www.pingcap", {}, {}}),
-        executeFunction(
-            StringTidbConcat::func_name,
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}, "中文.测.试。。。", "中文.测.试。。。", "www.pingcap", {}}),
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}, "", "www.pingcap", {}, "www.pingcap"})));
-    ASSERT_COLUMN_EQ(
-        createOnlyNullColumnConst(4),
-        executeFunction(
-            StringTidbConcat::func_name,
-            createOnlyNullColumnConst(4),
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}})));
+    auto two_args_test = [&](const String & value1, const String & value2) {
+        String result = value1 + value2;
+        auto inner_test = [&](bool is_value1_const, bool is_value2_const) {
+            auto is_result_const = is_value1_const && is_value2_const;
+            ASSERT_COLUMN_EQ(
+                is_result_const ? createConstColumn<Nullable<String>>(1, result) : createColumn<Nullable<String>>({result}),
+                executeFunction(
+                    StringTidbConcat::func_name,
+                    is_value1_const ? createConstColumn<Nullable<String>>(1, value1) : createColumn<Nullable<String>>({value1}),
+                    is_value2_const ? createConstColumn<Nullable<String>>(1, value2) : createColumn<Nullable<String>>({value2})));
+        };
+        std::vector<bool> is_consts = {true, false};
+        for (const auto & is_value1_const : is_consts)
+            for (const auto & is_value2_const : is_consts)
+                inner_test(is_value1_const, is_value2_const);
+    };
 
-    /// const, const
-    auto test_const_const_not_null = [&](const String & left, const String & right, const String & result) {
+    for (const auto & value1 : test_strings)
+        for (const auto & value2 : test_strings)
+            two_args_test(value1, value2);
+}
+CATCH
+
+TEST_F(StringTidbConcat, MoreArgsTest)
+try
+{
+    auto more_args_test = [&](std::vector<String> values, const String & result) {
+        ColumnsWithTypeAndName args;
+        for (const auto & value : values)
+            args.push_back(createColumn<Nullable<String>>({value}));
+
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({result}),
-            executeFunction(
-                StringTidbConcat::func_name,
-                createConstColumn<Nullable<String>>(1, left),
-                createConstColumn<Nullable<String>>(1, right)));
+            executeFunction(StringTidbConcat::func_name, args));
     };
-    test_const_const_not_null("", "", "");
-    test_const_const_not_null("www.pingcap", "www.pingcap", "www.pingcapwww.pingcap");
-    test_const_const_not_null("中文.测.试。。。", "中文.测.试。。。", "中文.测.试。。。中文.测.试。。。");
-    test_const_const_not_null("中文.测.试。。。", "", "中文.测.试。。。");
-    test_const_const_not_null("中文.测.试。。。", "www.pingcap", "中文.测.试。。。www.pingcap");
-    auto test_const_const_has_null = [&](const InferredFieldType<Nullable<String>> & left, const InferredFieldType<Nullable<String>> & right) {
-        ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<String>>(1, {}),
-            executeFunction(
-                StringTidbConcat::func_name,
-                createConstColumn<Nullable<String>>(1, left),
-                createConstColumn<Nullable<String>>(1, right)));
-    };
-    test_const_const_has_null("中文.测.试。。。", {});
-    test_const_const_has_null({}, "中文.测.试。。。");
-    test_const_const_has_null({}, {});
 
-    /// column, const
-    auto test_const_not_null_column = [&](const InferredFieldType<Nullable<String>> & const_value, const InferredDataVector<Nullable<String>> & result) {
-        ASSERT_COLUMN_EQ(
-            createColumn<Nullable<String>>(result),
-            executeFunction(
-                StringTidbConcat::func_name,
-                createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}),
-                createConstColumn<Nullable<String>>(4, const_value)));
-    };
-    test_const_not_null_column("", {"", "www.pingcap", "中文.测.试。。。", {}});
-    test_const_not_null_column("www.pingcap", {"www.pingcap", "www.pingcapwww.pingcap", "中文.测.试。。。www.pingcap", {}});
-    test_const_not_null_column("中文.测.试。。。", {"中文.测.试。。。", "www.pingcap中文.测.试。。。", "中文.测.试。。。中文.测.试。。。", {}});
-    ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(4, {}),
-        executeFunction(
-            StringTidbConcat::func_name,
-            createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}),
-            createConstColumn<Nullable<String>>(4, {})));
-
-    /// only null
-    auto test_only_null = [&](const ColumnWithTypeAndName & left, const ColumnWithTypeAndName & right) {
-        assert(left.column->size() == right.column->size());
-        ASSERT_COLUMN_EQ(createOnlyNullColumnConst(left.column->size()), executeFunction(StringTidbConcat::func_name, left, right));
-    };
-    test_only_null(createConstColumn<Nullable<String>>(1, "中文.测.试。。。"), createOnlyNullColumn(1));
-    test_only_null(createConstColumn<Nullable<String>>(1, "中文.测.试。。。"), createOnlyNullColumnConst(1));
-    test_only_null(createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}), createOnlyNullColumnConst(4));
-    test_only_null(createColumn<Nullable<String>>({"", "www.pingcap", "中文.测.试。。。", {}}), createOnlyNullColumn(4));
-    test_only_null(createOnlyNullColumnConst(1), createOnlyNullColumn(1));
-    test_only_null(createOnlyNullColumnConst(1), createOnlyNullColumnConst(1));
-    test_only_null(createOnlyNullColumn(1), createOnlyNullColumn(1));
+    // 3
+    more_args_test({"大家好", ",", "hello word"}, "大家好,hello word");
+    // 4
+    more_args_test({"这是中文", "C'est français", "これが日本の", "This is English"}, "这是中文C'est françaisこれが日本のThis is English");
+    // 5
+    more_args_test({"", "", "", "", ""}, "");
+    // 100
+    std::string unit = "a*b=c";
+    std::string res;
+    std::vector<String> values;
+    for (size_t i = 0; i < 100; ++i)
+    {
+        values.push_back(unit);
+        res += unit;
+    }
+    more_args_test(values, res);
 }
 CATCH
 
