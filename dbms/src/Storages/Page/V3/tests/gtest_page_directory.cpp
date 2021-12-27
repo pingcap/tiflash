@@ -291,7 +291,7 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryTest, ApplyPutsInSamePage)
+TEST_F(PageDirectoryTest, ApplyPutWithIdenticalPages)
 try
 {
     PageId page_id = 50;
@@ -335,13 +335,12 @@ try
 
         // Should not be dead-lock
         dir.apply(std::move(edit));
-
-        auto snap3 = dir.createSnapshot();
-
-        PageIds ids{page_id};
-        PageIDAndEntriesV3 expected_entries{{page_id, entry3}};
-        EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap3);
     }
+    auto snap3 = dir.createSnapshot();
+
+    PageIds ids{page_id};
+    PageIDAndEntriesV3 expected_entries{{page_id, entry3}};
+    EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap3);
 }
 CATCH
 
