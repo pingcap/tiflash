@@ -400,7 +400,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, DAGPipeline 
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right},
         {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
         {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_AntiLeftSemi}};
+        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftSemi},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftAnti}};
 
     if (input_streams_vec.size() != 2)
     {

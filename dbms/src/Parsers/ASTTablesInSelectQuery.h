@@ -93,7 +93,8 @@ struct ASTTableJoin : public IAST
         Cross_Left, /// cartesian left out join, used by TiFlash
         Cross_Right, /// cartesian right out join, used by TiFlash, in the implementation, it will be converted to cartesian left out join
         Cross_Anti, /// cartesian anti join, used by TiFlash
-        Cross_AntiLeftSemi, /// cartesian anti left semi join, used by TiFlash, it means if row a in table A matches some rows in B, output (a, false), otherwise, output (a, true).
+        Cross_LeftSemi, /// cartesian version of left semi join, used by TiFlash.
+        Cross_LeftAnti, /// cartesian version of left anti join, used by TiFlash.
     };
 
     Locality locality = Locality::Unspecified;
