@@ -55,7 +55,6 @@ inline ::testing::AssertionResult RowKeyRangeCompare(
     (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." \
      + ::testing::UnitTest::GetInstance()->current_test_info()->name())
 
-
 inline Strings createNumberStrings(size_t beg, size_t end)
 {
     Strings values;

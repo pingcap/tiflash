@@ -3,7 +3,6 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
 #include <Storages/DeltaMerge/tools/workload/DataGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/Handle.h>
@@ -14,7 +13,7 @@
 #include <Storages/DeltaMerge/tools/workload/TableGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/TimestampGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/Utils.h>
-#include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <cpptoml.h>
 
 namespace DB::DM::tests
@@ -180,7 +179,7 @@ void DTWorkload::verifyHandle(uint64_t r)
     int stream_count = read_cols_gen->streamCount();
 
     std::atomic<uint64_t> read_count = 0;
-    auto verify = [r, &read_count, &columns, &handle_table = handle_table, &log = log](BlockInputStreamPtr in, uint64_t read_ts) {
+    auto verify = [r, &read_count, &handle_table = handle_table, &log = log](BlockInputStreamPtr in, uint64_t read_ts) {
         while (Block block = in->read())
         {
             read_count.fetch_add(block.rows(), std::memory_order_relaxed);

@@ -98,6 +98,16 @@ std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAlias
     return qb_id_to_join_alias_map;
 }
 
+std::unordered_map<String, JoinBuildSideInfo> & DAGContext::getJoinBuildSideInfoMap()
+{
+    return join_build_side_info_map;
+}
+
+std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
+{
+    return inbound_io_input_streams_map;
+}
+
 void DAGContext::handleTruncateError(const String & msg)
 {
     if (!(flags & Flag::IGNORE_TRUNCATE || flags & Flag::TRUNCATE_AS_WARNING))
@@ -182,6 +192,11 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
 
     // convert to bytes per second
     return std::make_pair(true, num_produced_bytes / (static_cast<double>(time_processed_ns) / 1000000000ULL));
+}
+
+void DAGContext::attachBlockIO(const BlockIO & io_)
+{
+    io = io_;
 }
 
 } // namespace DB
